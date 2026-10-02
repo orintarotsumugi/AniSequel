@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -170,6 +172,28 @@ class UpdateController(private val updateManager: UpdateManager) {
     /** Back to the untouched state, for the "Check again" affordance. */
     fun reset() {
         state = UpdateUiState.Idle
+    }
+}
+
+/**
+ * Opens a release's page on GitHub.
+ *
+ * The manifest has carried a `release_url` since the first version, and nothing
+ * read it. It is the only way to reach the release notes written by the
+ * workflow, which are the ones that explain what a build actually changed - the
+ * `notes` field is a build number and a commit hash, which is not something to
+ * show a user deciding whether to update.
+ *
+ * Failures are swallowed deliberately: a device with no browser at all should
+ * lose the link, not crash the dialog.
+ */
+fun openReleasePage(context: Context, url: String?) {
+    if (url.isNullOrBlank()) return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 }
 

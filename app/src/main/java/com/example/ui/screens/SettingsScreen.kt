@@ -84,6 +84,7 @@ import com.example.ui.components.ExpressiveTabBar
 import com.example.ui.components.RedirectUrlHint
 import com.example.ui.components.SegmentedOption
 import com.example.ui.components.UpdateUiState
+import com.example.ui.components.openReleasePage
 import com.example.ui.components.rememberUpdateController
 import com.example.ui.theme.supportsDynamicColor
 import com.example.ui.viewmodel.AuthUiState
@@ -477,6 +478,25 @@ private fun UpdateSettingsCard() {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Download")
+                    }
+                }
+
+                // The release page is where the notes the workflow wrote
+                // actually are. Without this the dialog offers a version bump
+                // and a build number, which is not a reason to install one.
+                state.manifest.releaseUrl?.takeIf { it.isNotBlank() }?.let { releaseUrl ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(
+                        onClick = { openReleasePage(context, releaseUrl) },
+                        modifier = Modifier.testTag("release_notes_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("What's changed in ${state.manifest.version}")
                     }
                 }
             }
