@@ -218,6 +218,22 @@ fun SequelDetailSheet(
             // "Episode…" in a third of the width.
             InfoGrid(sequel = sequel)
 
+            // Mean score as its own block: it is the number people compare
+            // across franchises, and it was previously only on the card.
+            sequel.sequelMedia.averageScore?.let { score ->
+                Spacer(modifier = Modifier.height(10.dp))
+                InfoBlock(
+                    label = "Community Score",
+                    value = "$score / 100",
+                    valueColor = when {
+                        score >= 80 -> AniSequelTheme.statusColors.success
+                        score < 50 -> AniSequelTheme.statusColors.warning
+                        else -> null
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             sequel.studioName?.let { studio ->
                 Spacer(modifier = Modifier.height(10.dp))
                 InfoBlock(label = "Animation Studio", value = studio, modifier = Modifier.fillMaxWidth())
@@ -364,10 +380,13 @@ fun SequelDetailSheet(
                         shape = MaterialTheme.shapes.small
                     ) {
                         if (sequel.isAddingToPlanning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
+                            // The morphing contained indicator instead of a
+                            // static arc, so the busy state belongs to the same
+                            // design language as the rest of the app.
+                            ExpressiveContainedLoadingIndicator(
+                                modifier = Modifier.size(22.dp),
+                                containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                                indicatorColor = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
                             Icon(
@@ -427,11 +446,71 @@ private fun InfoGrid(sequel: MissedSequel) {
             )
 
             val nextEpisode = sequel.nextEpisodeNumber
+            val countdown = sequel.nextAiringCountdown()
             InfoBlock(
                 label = "Next Episode",
-                value = if (nextEpisode != null) "Episode $nextEpisode" else "—",
+                // "Episode 14 - in 3d" rather than just the number: for an entry
+                // that is still airing, when it lands is the question, not which
+                // episode it is.
+                value = when {
+                    nextEpisode == null -> "—"
+                    countdown != null -> "Episode $nextEpisode · $countdown"
+                    else -> "Episode $nextEpisode"
+                },
                 valueColor = if (nextEpisode != null) statusColors.info else null,
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        // How far in the viewer already is, with the wave bar that makes it
+        // readable at a glance.
+        val progress = sequel.watchProgress()
+        val progressLabel = sequel.watchProgressLabel()
+        if (progress != null && progressLabel != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Your progress",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = progressLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = statusColors.info,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    WavyProgressBar(
+                        progress = { progress },
+                        color = statusColors.info,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Franchise context: which entry of the run this is, when AniList knows
+        // the season number. This is the detail that separates "a sequel exists"
+        // from "this is season 3 and you are on season 1".
+        val season = sequel.sequelMedia.season
+        if (season != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            InfoBlock(
+                label = "Season",
+                value = if (season == 1) "Season 1" else "Season $season",
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

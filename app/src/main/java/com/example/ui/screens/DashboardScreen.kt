@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -51,6 +52,8 @@ import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AniTopAppBar
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.ExpressiveCountBadge
+import com.example.ui.components.ExpressiveLoadingIndicator
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.FilterSortSheet
 import com.example.ui.components.QuickFilterBar
@@ -120,7 +123,13 @@ fun DashboardScreen(
                 onOpenFilter = { showFilterSheet = true },
                 onRefresh = { dashboardViewModel.refresh() },
                 onOpenSettings = { onOpenSettings(currentViewer) },
-                isRefreshing = successState?.isRefreshing == true
+                isRefreshing = successState?.isRefreshing == true,
+                hasActiveFilters = filterCriteria.statusFilter != StatusFilter.ALL ||
+                    filterCriteria.selectedFormat != null ||
+                    filterCriteria.searchQuery.isNotBlank() ||
+                    !filterCriteria.includeUnreleased ||
+                    filterCriteria.hideAlreadyPlanned ||
+                    filterCriteria.includedRelations.size > 1
             )
         }
     ) { paddingValues ->
@@ -133,6 +142,10 @@ fun DashboardScreen(
         ) {
             when (val state = uiState) {
                 is DashboardUiState.Loading -> {
+                    // The morphing expressive indicator over the skeleton. The
+                    // old full-screen CircularProgressIndicator could not say
+                    // *which* stage it was on - "Connecting to AniList" and
+                    // "Scanning 476 entries" looked identical for seconds each.
                     LoadingList(message = state.message)
                 }
 
@@ -215,7 +228,8 @@ fun DashboardScreen(
                                 QuickFilterBar(
                                     filterCriteria = filterCriteria,
                                     onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
-                                    onFormatSelected = { dashboardViewModel.selectFormat(it) }
+                                    onFormatSelected = { dashboardViewModel.selectFormat(it) },
+                                    onClearAll = { dashboardViewModel.resetFilters() }
                                 )
                             }
 
@@ -229,10 +243,12 @@ fun DashboardScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Missed Sequels (${state.missedSequels.size})",
+                                        text = "Missed Sequels",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    ExpressiveCountBadge(count = state.missedSequels.size)
                                     Text(
                                         text = filterCriteria.sortOption.displayName,
                                         style = MaterialTheme.typography.labelMedium,
@@ -332,13 +348,11 @@ private fun LoadingList(message: String) {
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Tv,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp)
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                    Spacer(modifier = Modifier.size(10.dp))
+                    Spacer(modifier = Modifier.size(12.dp))
                     Text(
                         text = message,
                         style = MaterialTheme.typography.bodyMedium,

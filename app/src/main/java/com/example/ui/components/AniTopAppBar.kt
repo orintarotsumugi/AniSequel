@@ -39,6 +39,7 @@ fun AniTopAppBar(
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     isRefreshing: Boolean = false,
+    hasActiveFilters: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Hides on scroll so a long sequel list gets the full screen, and returns the
@@ -86,7 +87,11 @@ fun AniTopAppBar(
             ) {
                 BadgedBox(
                     badge = {
-                        if (missedCount > 0) {
+                        // Only when filters are actually narrowing something. It
+                        // used to show the total missed count permanently, which
+                        // is not what the badge is for - it read as an
+                        // unread-notification count and stayed put forever.
+                        if (missedCount > 0 && hasActiveFilters) {
                             Badge(
                                 containerColor = MaterialTheme.colorScheme.tertiary,
                                 contentColor = MaterialTheme.colorScheme.onTertiary
@@ -104,17 +109,17 @@ fun AniTopAppBar(
             }
 
             // The refresh button used to stay idle while a refresh ran, so a
-            // second tap queued another identical request. It now spins and
-            // disables itself for the duration.
+            // second tap queued another identical request. It now shows the
+            // morphing expressive indicator and disables itself for the
+            // duration, so "busy" is unambiguous rather than a static arc.
             IconButton(
                 onClick = onRefresh,
                 enabled = !isRefreshing,
                 modifier = Modifier.testTag("refresh_button")
             ) {
                 if (isRefreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(22.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 } else {

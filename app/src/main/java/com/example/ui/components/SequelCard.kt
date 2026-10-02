@@ -21,21 +21,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -57,57 +52,55 @@ fun SequelCard(
 ) {
     val status = AniSequelTheme.statusColors
 
-    Card(
+    androidx.compose.material3.Card(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .testTag("sequel_card_${sequel.sequelId}"),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
+        colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        elevation = CardDefaults.cardElevation(
+        elevation = androidx.compose.material3.CardDefaults.cardElevation(
             defaultElevation = 0.dp,
             pressedElevation = 1.dp
         ),
-        border = CardDefaults.outlinedCardBorder()
+        border = androidx.compose.material3.CardDefaults.outlinedCardBorder()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Which show you already finished led here.
-            Surface(
-                shape = MaterialTheme.shapes.extraSmall,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.SequelArrow,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        // "Sequel to", "Prequel to", "Side story of"... derived from
-                        // AniList's own relation type so a prequel is never
-                        // described as a sequel.
-                        text = sequel.relationLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = sequel.parentTitle,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Icon(
+                    imageVector = AppVectorIcons.SequelArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    // "Sequel to", "Prequel to", "Side story of"... derived from
+                    // AniList's own relation type so a prequel is never
+                    // described as a sequel.
+                    text = sequel.relationLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = sequel.parentTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -150,10 +143,13 @@ fun SequelCard(
                             }
                         }
 
-                        // The one thing the card did not say before: for something
-                        // mid-season, *when* the next episode lands.
-                        val nextEpisode = sequel.nextEpisodeNumber
-                        if (sequel.isAiring && nextEpisode != null) {
+                        // An airing entry: when the next episode lands, not just
+                        // that one exists. Previously this said only "Next:
+                        // Episode 14" with no date attached, which is the one
+                        // piece of information someone deciding whether to start
+                        // a show mid-season actually wants.
+                        val countdown = sequel.nextAiringCountdown()
+                        if (sequel.isAiring && countdown != null) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -164,10 +160,36 @@ fun SequelCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Next: Episode $nextEpisode",
+                                    text = sequel.nextEpisodeNumber?.let { "Next: Episode $it $countdown" }
+                                        ?: "Airing $countdown",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = status.success,
                                     fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // Partly-watched entries say how far in they are. The app
+                        // is for finding things you have *started and left*, and
+                        // "6 / 12 eps" is the difference between resuming a show
+                        // and restarting it.
+                        val progressLabel = sequel.watchProgressLabel()
+                        val progress = sequel.watchProgress()
+                        if (progressLabel != null && progress != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                WavyProgressBar(
+                                    progress = { progress },
+                                    color = status.info,
+                                    modifier = Modifier
+                                        .width(52.dp)
+                                        .height(6.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = progressLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -196,8 +218,23 @@ fun SequelCard(
     }
 }
 
+/**
+ * The poster.
+ *
+ * Three things the card did not do before, each for a reason visible on screen:
+ *
+ *  - The placeholder is tinted with AniList's own `coverImage.color`. A grey
+ *    box reads as a broken image; the right hue reads as loading.
+ *  - The image is given an explicit `size`, so Coil can pick a source that
+ *    matches 96dp instead of the `extraLarge` original.
+ *  - The format badge sits at the top *trailing* edge, over the scrim, so it
+ *    never collides with the title that wraps underneath it.
+ */
 @Composable
 private fun Poster(sequel: MissedSequel) {
+    // AniList's dominant colour for this entry, used to tint the placeholder.
+    val coverColor = sequel.coverColor.toCoverColorOrNull()
+
     Box(
         modifier = Modifier
             .width(96.dp)
@@ -205,30 +242,62 @@ private fun Poster(sequel: MissedSequel) {
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
     ) {
+        // Under the image, so art that has loaded covers it and art that has not
+        // leaves the show's own colour showing rather than a grey rectangle.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .background(
+                    if (coverColor != null) {
+                        Brush.verticalGradient(listOf(coverColor, coverColor.copy(alpha = 0.55f)))
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        )
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Movie,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.55f)
+            )
+        }
+
         if (sequel.sequelCoverUrl != null) {
             AsyncImage(
                 model = sequel.sequelCoverUrl,
                 contentDescription = null, // the title is right next to it
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
                 contentScale = ContentScale.Crop
             )
-        } else {
-            Box(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Movie,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
         }
 
-        Surface(
-            shape = RoundedCornerShape(bottomEnd = 8.dp),
+        // Scrim behind the badge only, so the badge stays readable on a bright
+        // poster without darkening the artwork as a whole.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .fillMaxWidth(0.5f)
+                .height(28.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
+                    )
+                )
+        )
+
+        androidx.compose.material3.Surface(
+            shape = RoundedCornerShape(bottomStart = 8.dp),
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.align(Alignment.TopStart)
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Text(
                 text = sequel.format,
@@ -238,7 +307,52 @@ private fun Poster(sequel: MissedSequel) {
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
             )
         }
+
+        // A score the viewer would weigh highly is worth seeing on the card.
+        val score = sequel.sequelMedia.averageScore
+        if (score != null && score >= 80) {
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(topStart = 8.dp),
+                color = AniSequelTheme.statusColors.success,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 4.dp, bottom = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Star,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "$score",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
+}
+
+/**
+ * Parses AniList's `#RRGGBB` cover colour.
+ *
+ * Returns null rather than a wrong colour on anything unexpected: a malformed
+ * value must fall back to the theme surface, never to a colour that failed to
+ * parse and was then treated as opaque black.
+ */
+private fun String?.toCoverColorOrNull(): Color? {
+    val hex = this?.removePrefix("#")?.takeIf { it.length == 6 } ?: return null
+    if (!hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
+    val value = hex.toLongOrNull(16) ?: return null
+    return Color(0xFF000000 or value)
 }
 
 @Composable
@@ -262,7 +376,7 @@ private fun PlanningButton(
         label = "planning_button_state"
     ) { isPlanned ->
         if (isPlanned) {
-            OutlinedButton(
+            androidx.compose.material3.OutlinedButton(
                 onClick = {},
                 enabled = false,
                 modifier = Modifier
@@ -271,7 +385,7 @@ private fun PlanningButton(
                     .clearAndSetSemantics { contentDescription = "Already on your Planning list" }
                     .testTag("planned_button_${sequel.sequelId}"),
                 shape = MaterialTheme.shapes.small,
-                colors = ButtonDefaults.outlinedButtonColors(
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                     disabledContentColor = statusColors.success,
                     disabledContainerColor = statusColors.successContainer
                 )
@@ -285,7 +399,7 @@ private fun PlanningButton(
                 Text(text = label, style = MaterialTheme.typography.labelLarge)
             }
         } else {
-            Button(
+            androidx.compose.material3.Button(
                 onClick = onAddToPlanning,
                 enabled = !sequel.isAddingToPlanning,
                 modifier = Modifier
@@ -295,10 +409,10 @@ private fun PlanningButton(
                 shape = MaterialTheme.shapes.small
             ) {
                 if (sequel.isAddingToPlanning) {
-                    CircularProgressIndicator(
+                    ExpressiveContainedLoadingIndicator(
                         modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                        indicatorColor = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
                     Icon(
@@ -350,7 +464,7 @@ private fun StatusChip(
         )
     }
 
-    Surface(
+    androidx.compose.material3.Surface(
         shape = MaterialTheme.shapes.extraSmall,
         color = bgColor,
         modifier = modifier
@@ -377,7 +491,7 @@ private fun InfoChip(
         label = "chip_tint"
     )
 
-    Surface(
+    androidx.compose.material3.Surface(
         shape = MaterialTheme.shapes.extraSmall,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier

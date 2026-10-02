@@ -98,6 +98,8 @@ data class MediaNode(
     val format: String? = null,
     val status: String? = null,
     val episodes: Int? = null,
+    /** Season number within the franchise - what distinguishes "season 3" from "the sequel". */
+    val season: Int? = null,
     val averageScore: Int? = null,
     val popularity: Int? = null,
     val description: String? = null,
@@ -204,7 +206,10 @@ data class MediaRelationEdge(
 data class SimpleMediaListEntry(
     val id: Int? = null,
     val status: String? = null,
-    val mediaId: Int? = null
+    val mediaId: Int? = null,
+    /** Episodes watched. Lets a card say "you're 4 episodes in" rather than only "not on your list". */
+    val progress: Int? = null,
+    val score: Double? = null
 )
 
 @JsonClass(generateAdapter = true)

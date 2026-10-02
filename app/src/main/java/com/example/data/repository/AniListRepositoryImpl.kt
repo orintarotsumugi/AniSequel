@@ -12,12 +12,31 @@ import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.network.aniListHttpError
 import com.example.data.network.GraphQLQueries
+import com.example.data.network.RequestCoalescer
 import retrofit2.HttpException
 import java.io.IOException
+
+/** Matches `mutation X` at the start of a GraphQL document. */
+private val MUTATION_PATTERN = Regex("""\bmutation\b""")
 
 class AniListRepositoryImpl(
     private val apiService: AniListApiService
 ) : AniListRepository {
+
+    /**
+     * Identical read queries that arrive while one is already running share its
+     * response instead of each issuing their own POST.
+     *
+     * This is the one form of request de-duplication available on a POST-only,
+     * no-cache-header API: rotating the device or re-entering the app used to
+     * fire the same multi-megabyte `MediaListCollection` twice in quick
+     * succession, spending two of AniList's ~30 requests a minute to learn
+     * nothing new the second time.
+     *
+     * Keyed on operation + variables, so the list query and the detail query
+     * never collide.
+     */
+    private val readCoalescer = RequestCoalescer<String>()
 
     override suspend fun getViewer(): Result<ViewerProfile> =
         execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
@@ -94,7 +113,11 @@ class AniListRepositoryImpl(
         call: suspend (GraphQLRequest) -> GraphQLResponse<T>
     ): Result<T> {
         return try {
-            val response = call(request)
+            val response = if (isReadOnly(request)) {
+                readCoalescer.coalesce(coalescingKey(request)) { call(request) }
+            } else {
+                call(request)
+            }
             response.errors?.firstOrNull()?.let { throw it.toAniListException() }
             Result.success(
                 response.data ?: throw AniListException(
@@ -127,6 +150,32 @@ class AniListRepositoryImpl(
 
     private fun <T : Any> T?.require(message: String): T =
         this ?: throw AniListException(AniListErrorKind.NOT_FOUND, message)
+
+    /**
+     * Reads only. A mutation must never be shared: collapsing two
+     * `SaveMediaListEntry` calls into one would silently drop a write the user
+     * asked for.
+     */
+    private fun isReadOnly(request: GraphQLRequest): Boolean =
+        MUTATION_PATTERN.containsMatchIn(request.query)
+
+    /**
+     * The cache key.
+     *
+     * Variables are part of it because the list and detail queries share an
+     * operation name shape but not their arguments; coalescing them would hand
+     * one user's request another's response.
+     */
+    private fun coalescingKey(request: GraphQLRequest): String =
+        buildString {
+            append(request.query)
+            append('|')
+            // Sorted so two logically identical variable maps always produce the
+            // same key regardless of insertion order.
+            request.variables.entries.sortedBy { it.key }.forEach { (key, value) ->
+                append(key).append('=').append(value).append(';')
+            }
+        }
 
     private fun HttpException.toAniListException(): AniListException =
         aniListHttpError(

@@ -9,7 +9,23 @@ lifecycleViewmodelCompose = "2.8.7"
 lifecycleRuntimeCompose = "2.8.7"
 activityCompose = "1.10.1"
 kotlin = "2.2.10"
-composeBom = "2024.09.00"
+# 2025.11.01 is the first BOM that resolves androidx.compose.material3 to
+# 1.4.0 - the first stable Material 3 Expressive release.
+composeBom = "2025.11.01"
+# 1.4.0 stable ships the *theming* half of Expressive (MaterialExpressiveTheme,
+# MotionScheme, MaterialShapes) but not the component set. LoadingIndicator,
+# ContainedLoadingIndicator, the Wavy*ProgressIndicators, SplitButton and the
+# morphing ButtonGroup are only in 1.5.0-alpha, so material3 is pinned above the
+# BOM deliberately. The BOM still governs everything else in the Compose stack.
+#
+# alpha14 specifically, not a later alpha: from alpha16 onward material3 depends
+# on Compose UI 1.11+ / 1.12+, which require compileSdk 37. This app compiles
+# against 36.1, so every later alpha fails AAR metadata checking. alpha14 is the
+# newest one still on the Compose 1.8 line.
+#
+# Verified by extracting each artifact and compiling against the real signatures,
+# not by reading release notes.
+material3 = "1.5.0-alpha14"
 googleDevtoolsKsp = "2.3.5"
 navigationCompose = "2.8.9"
 roomRuntime = "2.7.0"
@@ -30,7 +46,7 @@ cameraLifecycle = "1.5.0"
 cameraView = "1.5.0"
 cameraCore = "1.5.0"
 loggingInterceptor = "4.10.0"
-okhttp = "4.10.0"
+okhttp = "4.12.0"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
 datastorePreferences = "1.1.7"
@@ -66,9 +82,14 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
-androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+# Backs MaterialShapes.toShape/toPath - the morphing polygons the Expressive
+# loading indicators and buttons animate between. Material3 1.5 pulls it in
+# transitively; depending on it directly is what makes the graphics-shapes types
+# in our own signatures resolvable.
+androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version = "1.0.1" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }

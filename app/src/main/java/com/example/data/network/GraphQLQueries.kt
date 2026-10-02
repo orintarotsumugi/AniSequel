@@ -73,10 +73,15 @@ object GraphQLQueries {
      * Fields for a related node, rendered in the card list.
      *
      * Omitted on purpose: `description`, `bannerImage`, `studios` (see
-     * [GET_MEDIA_DETAIL]), `coverImage.extraLarge` (the cards render 96dp
+     * [GET_MEDIA_DETAIL]) and `coverImage.extraLarge` (the cards render 96dp
      * posters - the 2x asset is invisible at that size and is the largest
-     * string on the node), `coverImage.color` and `nextAiringEpisode.airingAt`
-     * (nothing reads either).
+     * string on the node).
+     *
+     * Kept, against that rule, because they are tiny and they are rendered:
+     * `coverImage.color` paints the placeholder behind a poster that has not
+     * arrived yet (without it a loading card is a grey box), and
+     * `nextAiringEpisode.airingAt` turns "Airing" into "next episode in 3
+     * days". Both are a few bytes per node against a `description` at hundreds.
      */
     private const val RELATED_NODE_FIELDS = """
                 id
@@ -84,14 +89,15 @@ object GraphQLQueries {
                 format
                 status
                 episodes
+                season
                 averageScore
                 popularity
                 genres
                 siteUrl
                 startDate { year month day }
-                coverImage { large }
-                nextAiringEpisode { episode }
-                mediaListEntry { status }
+                coverImage { large color }
+                nextAiringEpisode { episode airingAt }
+                mediaListEntry { status progress }
     """
 
     /**

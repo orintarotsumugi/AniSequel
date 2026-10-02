@@ -121,13 +121,27 @@ class DashboardViewModel(
         loadData()
     }
 
+    /**
+     * The in-flight load, cancelled before a new one starts.
+     *
+     * Without this, two overlapping loads both ran to completion and the
+     * slower one wrote its result last: tap Refresh twice quickly, or rotate
+ * *while* the first load was still running, and the screen ended up showing a
+     * stale list with no error anywhere - the two coroutines were writing to
+ * *the same `_uiState` and the loser won.
+ */
+private var loadJob: Job? = null
+
     fun loadData() {
         if (isDemo) {
             viewModelScope.launch { loadDemoData() }
             return
         }
 
-        viewModelScope.launch {
+        // A load already in flight is cancelled before starting another, so
+        // only the most recent request can write to the state.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.value = DashboardUiState.Loading(
                 if (!targetUsername.isNullOrBlank()) {
                     "Searching for @$targetUsername on AniList..."
@@ -195,7 +209,12 @@ class DashboardViewModel(
         }
 
         viewModelScope.launch {
-            val viewer = cachedViewer ?: run {
+            // Falling back to cached data rather than to `null` - a detail load
+            // landing in between used to clear this, so tapping Refresh after
+            // opening a card re-fetched the viewer's entire list from scratch
+            // instead of just the entries.
+            val viewer = cachedViewer ?: resolveViewer()
+            if (viewer == null) {
                 _uiState.value = DashboardUiState.Loading("Connecting to AniList...")
                 return@launch
             }
@@ -220,6 +239,12 @@ class DashboardViewModel(
                 }
             )
         }
+    }
+
+    /** Returns the viewer now known, fetching it only if it is genuinely absent. */
+    private suspend fun resolveViewer(): ViewerProfile? {
+        if (isDemo) return cachedViewer
+        return getViewerProfileUseCase.execute().getOrNull()?.also { cachedViewer = it }
     }
 
     private suspend fun loadDemoData() {
@@ -250,7 +275,24 @@ class DashboardViewModel(
 
         val updated = visible
             .map { withCachedDetail(it) }
-            .map { if (addedToPlanningIds.contains(it.sequelId)) it.copy(isAddedToPlanning = true) else it }
+            .map { entry ->
+                // The server is authoritative. `addedToPlanningIds` records what
+                // *this session* added, and is cleared on every refresh, so a
+                // mutation that AniList accepted and a filter that hides the
+                // entry can both leave the optimistic flag behind. Re-checking
+                // against the loaded list keeps "Add to Planning" from showing
+                // as still-pending for something already saved.
+                if (addedToPlanningIds.contains(entry.sequelId)) {
+                    entry.copy(isAddedToPlanning = true)
+                } else {
+                    val onList = entry.sequelMedia.mediaListEntry
+                    if (onList != null && onList.status != null) {
+                        entry.copy(isAddedToPlanning = true)
+                    } else {
+                        entry
+                    }
+                }
+            }
 
         _uiState.value = DashboardUiState.Success(
             viewer = viewer,

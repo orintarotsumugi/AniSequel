@@ -36,30 +36,23 @@ fun EmptyStateView(
             .testTag("empty_state_view"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isSearching) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        AniSequelTheme.statusColors.successContainer
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isSearching) AppVectorIcons.Search else AppVectorIcons.CheckCircle,
-                contentDescription = null,
-                tint = if (isSearching) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    AniSequelTheme.statusColors.success
-                },
-                modifier = Modifier.size(34.dp)
-            )
-        }
+        // A Material 3 Expressive polygon rather than a plain circle. It is the one
+        // moment the screen has nothing to show, so it is the one place a
+        // non-circular silhouette earns its keep.
+        ExpressiveEmptyOrb(
+            icon = if (isSearching) AppVectorIcons.Search else AppVectorIcons.CheckCircle,
+            modifier = Modifier,
+            containerColor = if (isSearching) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                AniSequelTheme.statusColors.successContainer
+            },
+            iconTint = if (isSearching) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                AniSequelTheme.statusColors.success
+            }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -85,12 +78,12 @@ fun EmptyStateView(
 
         if (isSearching) {
             Spacer(modifier = Modifier.height(20.dp))
-            Button(
+            ExpressivePrimaryButton(
+                text = "Clear search and filters",
                 onClick = onResetFilters,
+                icon = AppVectorIcons.Close,
                 modifier = Modifier.testTag("reset_filters_button")
-            ) {
-                Text("Clear search and filters")
-            }
+            )
         }
     }
 }
