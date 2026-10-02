@@ -28,6 +28,16 @@ enum class AniListErrorKind {
     /** The server rejected the query or the mutation. */
     INVALID_REQUEST,
 
+    /**
+     * AniList answered successfully with a body this build cannot parse.
+     *
+     * Its own kind because it is neither a dead session nor a transport
+     * failure: retrying re-sends the same request and gets the same body, and
+     * "Sign in again" cannot help. What helps is a build whose models match
+     * the API.
+     */
+    MALFORMED_RESPONSE,
+
     UNKNOWN
 }
 

@@ -6,15 +6,20 @@ import com.example.data.model.GraphQLResponse
 import com.example.data.model.MediaDetailData
 import com.example.data.model.MediaListCollectionData
 import com.example.data.model.SaveMediaListEntryData
+import com.example.data.model.SimpleMediaListEntry
 import com.example.data.model.UserByNameData
 import com.example.data.model.ViewerData
+import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListApiService
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.network.aniListHttpError
 import com.example.data.repository.AniListRepositoryImpl
+import com.squareup.moshi.JsonDataException
+import kotlinx.coroutines.async
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -116,7 +121,153 @@ class AniListErrorMappingTest {
 
         assertEquals(AniListErrorKind.RATE_LIMITED, error.kind)
     }
+
+    /**
+     * A body this build cannot parse is neither a dead session nor a network
+     * blip, and the raw Moshi message names no field a user knows about:
+     *
+     *     Expected an int but was WINTER at path $.data.MediaListCollection
+     *     .lists[0].entries[1].media.relations.edges[2].node.season
+     *
+     * That was the entire text of the error screen. It is now a sentence, and
+     * it keeps its own kind so the UI does not offer "Sign in again" for it -
+     * re-authenticating cannot make an unparseable response parse.
+     */
+    @Test
+    fun `an unparseable body is neither a dead session nor a raw Moshi message`() =
+        kotlinx.coroutines.test.runTest {
+            val error = failureOf(
+                FakeService {
+                    throw JsonDataException(
+                        "Expected an int but was WINTER at path " +
+                            "\$.data.MediaListCollection.lists[0].entries[1].media" +
+                            ".relations.edges[2].node.season"
+                    )
+                }
+            ) as AniListException
+
+            assertEquals(AniListErrorKind.MALFORMED_RESPONSE, error.kind)
+            assertFalse(
+                "the JSON path must not be shown to the user: ${error.message}",
+                error.message.orEmpty().contains("\$.data")
+            )
+            assertTrue(
+                "the message should say what to do: ${error.message}",
+                error.message.orEmpty().contains("Update AniSequel")
+            )
+        }
 }
 
 private fun errorGraphQL(message: String, status: Int? = null) =
     GraphQLResponse<ViewerData>(null, listOf(GraphQLError(message, status)))
+
+/**
+ * Which requests may share a response.
+ *
+ * `isReadOnly` was `MUTATION_PATTERN.containsMatchIn(...)` with no negation, so
+ * it returned `true` for mutations and `false` for queries. Two real bugs fell
+ * out of that one missing `!`: reads were never coalesced (the feature did
+ * nothing), and two concurrent `SaveMediaListEntry` calls collapsed into one,
+ * silently dropping a write the user had asked for.
+ *
+ * A dropped Planning entry is the worst kind of bug for this app to have - the
+ * UI confirms the save, AniList never receives it, and nothing reports a
+ * failure.
+ */
+class RequestCoalescingPolicyTest {
+
+    private class CountingService : AniListApiService {
+        val viewerCalls = mutableListOf<GraphQLRequest>()
+        val saveCalls = mutableListOf<GraphQLRequest>()
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+        override suspend fun getViewer(request: GraphQLRequest): GraphQLResponse<ViewerData> {
+            viewerCalls += request
+            release.await()
+            return GraphQLResponse(ViewerData(ViewerProfile(id = 1, name = "Tester")))
+        }
+
+        override suspend fun saveMediaListEntry(
+            request: GraphQLRequest
+        ): GraphQLResponse<SaveMediaListEntryData> {
+            saveCalls += request
+            release.await()
+            return GraphQLResponse(SaveMediaListEntryData(SimpleMediaListEntry(id = 1)))
+        }
+
+        override suspend fun getUserByName(request: GraphQLRequest): GraphQLResponse<UserByNameData> =
+            GraphQLResponse(null)
+
+        override suspend fun getMediaListCollection(
+            request: GraphQLRequest
+        ): GraphQLResponse<MediaListCollectionData> = GraphQLResponse(null)
+
+        override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
+            GraphQLResponse(null)
+    }
+
+    @Test
+    fun `identical concurrent reads cost one request`() = kotlinx.coroutines.test.runTest {
+        val service = CountingService()
+        val repository = AniListRepositoryImpl(service)
+
+        val reads = List(3) { async { repository.getViewer() } }
+        testScheduler.advanceUntilIdle()
+        service.release.complete(Unit)
+        reads.forEach { it.await() }
+
+        assertEquals(
+            "concurrent identical reads must share one response",
+            1,
+            service.viewerCalls.size
+        )
+    }
+
+    @Test
+    fun `concurrent writes are never collapsed into one`() = kotlinx.coroutines.test.runTest {
+        val service = CountingService()
+        val repository = AniListRepositoryImpl(service)
+
+        // The same entry, twice, concurrently - two taps of the same card while the
+        // first is still in flight. Different ids would not prove anything here:
+        // the coalescing key includes the variables, so two different ids can
+        // never collide and would pass even with the policy inverted. Only an
+        // identical concurrent mutation actually exercises it.
+        val writes = listOf(
+            async { repository.addToPlanning(111) },
+            async { repository.addToPlanning(111) }
+        )
+        testScheduler.advanceUntilIdle()
+        service.release.complete(Unit)
+        writes.forEach { it.await() }
+
+        assertEquals(
+            "a mutation must never be collapsed into another request",
+            2,
+            service.saveCalls.size
+        )
+        assertTrue(
+            service.saveCalls.all { it.variables["mediaId"] == 111 }
+        )
+    }
+
+    @Test
+    fun `a sequential repeat of a read is not served from the previous one`() =
+        kotlinx.coroutines.test.runTest {
+            val service = CountingService()
+            val repository = AniListRepositoryImpl(service)
+
+            // Released up front so each call returns immediately: this test is
+            // about two *sequential* requests, not about overlapping ones.
+            service.release.complete(Unit)
+
+            repository.getViewer()
+            repository.getViewer()
+
+            assertEquals(
+                "an explicit refresh must reach the server",
+                2,
+                service.viewerCalls.size
+            )
+        }
+}

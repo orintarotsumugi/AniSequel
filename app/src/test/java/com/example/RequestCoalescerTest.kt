@@ -119,4 +119,65 @@ class RequestCoalescerTest {
 
         assertEquals(3, calls)
     }
+
+    /**
+     * Claiming the in-flight slot has to be atomic.
+     *
+     * It used to read the map under the lock, then write the new deferred under
+     * a *second* acquisition. Between the two, a second coroutine also read
+     * null, also considered itself first, and also ran the block - so two
+     * callers produced two requests, which is the one thing this class exists
+     * to prevent.
+     *
+     * Many coroutines are launched at once so the window is hit even on a
+     * single-threaded test dispatcher.
+     */
+    @Test
+    fun `many simultaneous callers still produce exactly one request`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+        var calls = 0
+        val release = CompletableDeferred<Unit>()
+
+        val waiters = List(50) {
+            async {
+                coalescer.coalesce("GetUserAnimeList") {
+                    calls++
+                    release.await()
+                    "response"
+                }
+            }
+        }
+
+        testScheduler.advanceUntilIdle()
+        release.complete(Unit)
+
+        waiters.forEach { assertEquals("response", it.await()) }
+        assertEquals(
+            "the in-flight slot must be claimed in one critical section",
+            1,
+            calls
+        )
+    }
+
+    @Test
+    fun `the in-flight entry is released once the request settles`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+
+        coalescer.coalesce("GetViewer") { "viewer" }
+
+        assertEquals(
+            "a settled request must not stay registered",
+            0,
+            coalescer.inFlightCount()
+        )
+    }
+
+    @Test
+    fun `a failed request also releases its slot`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+
+        runCatching { coalescer.coalesce("GetViewer") { error("boom") } }
+
+        assertEquals(0, coalescer.inFlightCount())
+    }
 }

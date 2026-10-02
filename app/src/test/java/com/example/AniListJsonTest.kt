@@ -153,4 +153,81 @@ class AniListJsonTest {
 
         assertNull(user)
     }
+
+    /**
+     * The failure that made the app unusable, reproduced exactly.
+     *
+     * `Media.season` is the `MediaSeason` enum, so AniList answers `"WINTER"`.
+     * `MediaNode.season` was declared `Int?`, and Moshi threw:
+     *
+     *     Expected an int but was WINTER at path $.data.MediaListCollection
+     *     .lists[0].entries[1].media.relations.edges[2].node.season
+     *
+     * It was not one bad entry that failed - the whole list response failed to
+     * parse, so the dashboard showed an error screen instead of any sequels.
+     * The payload below carries the enum on a relation node, which is where it
+     * appeared.
+     */
+    @Test
+    fun `a list whose relations carry an enum season parses`() {
+        val json = """
+            {
+              "data": {
+                "MediaListCollection": {
+                  "lists": [
+                    {
+                      "name": "Completed",
+                      "status": "COMPLETED",
+                      "entries": [
+                        {
+                          "status": "COMPLETED",
+                          "progress": 26,
+                          "media": {
+                            "id": 101922,
+                            "title": { "english": "Season 1" },
+                            "episodes": 26,
+                            "relations": {
+                              "edges": [
+                                { "relationType": "SIDE_STORY", "node": { "id": 1, "season": "WINTER", "seasonYear": 2019 } },
+                                { "relationType": "SIDE_STORY", "node": { "id": 2, "season": "SPRING", "seasonYear": 2020 } },
+                                { "relationType": "SEQUEL", "node": { "id": 3, "season": "FALL", "seasonYear": 2023 } }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "status": "COMPLETED",
+                          "media": {
+                            "id": 102000,
+                            "title": { "english": "Another Show" },
+                            "episodes": 12,
+                            "relations": {
+                              "edges": [
+                                { "relationType": "SEQUEL", "node": { "id": 4, "season": null, "seasonYear": null } }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val entries = parse(MediaListCollectionData::class.java, json)
+            .data!!.collection!!.lists!!.single().entries!!
+
+        assertEquals(2, entries.size)
+
+        val edges = entries[0].media.relations!!.edges!!
+        assertEquals(listOf("WINTER", "SPRING", "FALL"), edges.map { it.node.season })
+        assertEquals(listOf(2019, 2020, 2023), edges.map { it.node.seasonYear })
+
+        // An entry with no airing season is normal, not an error.
+        val unknown = entries[1].media.relations!!.edges!!.single().node
+        assertNull(unknown.season)
+        assertNull(unknown.seasonYear)
+    }
 }

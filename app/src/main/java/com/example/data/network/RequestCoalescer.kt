@@ -36,12 +36,20 @@ class RequestCoalescer<K : Any> {
      */
     @Suppress("UNCHECKED_CAST")
     suspend fun <V : Any> coalesce(key: K, block: suspend () -> V): V {
-        val existing = mutex.withLock { inFlight[key] }
-
-        if (existing != null) return existing.await() as V
-
+        // Claiming the slot is one critical section, not two.
+        //
+        // Reading `inFlight[key]` and then *separately* writing the new deferred
+        // left a window between the two lock acquisitions in which a second
+        // coroutine also read null, also decided it was first, and also ran
+        // `block()`. Two callers asking for the same request both issued it -
+        // precisely the duplicate this class exists to prevent, and it only
+        // showed up under real concurrency rather than in the single-threaded
+        // tests.
         val deferred = CompletableDeferred<Any>()
-        mutex.withLock { inFlight[key] = deferred }
+        val existing = mutex.withLock { inFlight.getOrPut(key) { deferred } }
+        val isLeader = existing === deferred
+
+        if (!isLeader) return existing.await() as V
 
         return try {
             val value = block()
@@ -54,7 +62,13 @@ class RequestCoalescer<K : Any> {
             // Removed in a finally rather than on success only: a failure that
             // left the entry behind would make the next caller await a
             // permanently failed deferred instead of retrying.
-            mutex.withLock { inFlight.remove(key) }
+            //
+            // Only the leader removes it, and only if the entry is still its own
+            // deferred - a leader whose slot was replaced must not evict the
+            // successor's request.
+            mutex.withLock {
+                if (inFlight[key] === deferred) inFlight.remove(key)
+            }
         }
     }
 

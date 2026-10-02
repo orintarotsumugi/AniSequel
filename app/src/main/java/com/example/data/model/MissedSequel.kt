@@ -120,6 +120,20 @@ data class MissedSequel(
         return "$watched / $total eps"
     }
 
+    /**
+     * "Winter 2019", from AniList's `season` and `seasonYear`.
+     *
+     * AniList reports the two separately and `season` is an enum string, so the
+     * pair is joined here rather than in the UI. Null unless AniList knows both
+     * - an unannounced entry has neither.
+     */
+    val airingSeason: String?
+        get() {
+            val name = sequelMedia.season?.takeIf { it.isNotBlank() } ?: return null
+            val readable = name.lowercase().replaceFirstChar { it.uppercase() }
+            return sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
+        }
+
     val isUnreleased: Boolean
         get() = status == "NOT_YET_RELEASED"
 

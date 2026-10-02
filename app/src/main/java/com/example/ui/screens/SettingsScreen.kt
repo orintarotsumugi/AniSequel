@@ -60,6 +60,49 @@ import com.example.ui.viewmodel.AuthViewModel
 
 private val MaxContentWidth = 640.dp
 
+/** One entry in the "What's new" list rendered by [SettingsScreen]. */
+private data class ChangelogEntry(val title: String, val detail: String)
+
+/**
+ * What this build actually changed.
+ *
+ * Written out rather than generated because each line is a bug that reached a
+ * user, and the wording that explains what went wrong is the point: a list of
+ * "various fixes" would not have told anyone what the AniList connection error
+ * on the dashboard was, or that their saved Planning entries could be dropped.
+ */
+private val changelog = listOf(
+    ChangelogEntry(
+        title = "Your anime list loads again",
+        detail = "AniSequel asked AniList for each entry's season and read the " +
+                "answer as a number. AniList returns a season name (\"WINTER\"), " +
+                "so the whole list failed to load and the app showed a connection " +
+                "error instead of your sequels."
+    ),
+    ChangelogEntry(
+        title = "Nothing gets lost when you add to Planning",
+        detail = "Two adds tapped in quick succession were collapsed into a single " +
+                "request, so the second entry was never sent to AniList. Every add " +
+                "now reaches AniList on its own."
+    ),
+    ChangelogEntry(
+        title = "Sign-in no longer bounces back to the login screen",
+        detail = "Returning from AniList's approval page could finish reading your " +
+                "saved session after the new sign-in had already landed, undoing it."
+    ),
+    ChangelogEntry(
+        title = "The filter badge means something again",
+        detail = "It showed a count on every launch, before you had filtered " +
+                "anything. It now appears only while filters are actually narrowing " +
+                "the list."
+    ),
+    ChangelogEntry(
+        title = "Errors you can act on",
+        detail = "A response AniSequel could not read now explains that plainly, " +
+                "instead of printing an internal field path."
+    )
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -190,6 +233,43 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+
+                SectionCard(title = "What's new in ${BuildConfig.VERSION_NAME}") {
+                    Text(
+                        text = "Fixes in this build. If you hit the AniList connection error below, this is the list that explains it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    changelog.forEachIndexed { index, entry ->
+                        if (index > 0) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                        Row(verticalAlignment = Alignment.Top) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 6.dp, end = 10.dp)
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Column {
+                                Text(
+                                    text = entry.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = entry.detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
 
                 OutlinedButton(

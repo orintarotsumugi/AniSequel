@@ -98,8 +98,25 @@ data class MediaNode(
     val format: String? = null,
     val status: String? = null,
     val episodes: Int? = null,
-    /** Season number within the franchise - what distinguishes "season 3" from "the sequel". */
-    val season: Int? = null,
+    /**
+     * AniList's airing season: `WINTER`, `SPRING`, `SUMMER` or `FALL`.
+     *
+     * A **string**, not a number. This was declared `Int?` on the assumption
+     * that it was the "season number within the franchise", which is not a
+     * field AniList exposes at all. The list query asks for `season`, the
+     * server answers `"WINTER"`, and Moshi - correctly - refuses to read an
+     * enum string as an int:
+     *
+     *     Expected an int but was WINTER at path
+     *     $.data.MediaListCollection.lists[0].entries[1].media.relations.edges[2].node.season
+     *
+     * That threw out of the *only* call that fetches the user's list, so the
+     * app could not render anything for anyone whose list contained such an
+     * entry. The type has to match what the server actually sends.
+     */
+    val season: String? = null,
+    /** The year of [season]. AniList reports these separately, not combined. */
+    val seasonYear: Int? = null,
     val averageScore: Int? = null,
     val popularity: Int? = null,
     val description: String? = null,

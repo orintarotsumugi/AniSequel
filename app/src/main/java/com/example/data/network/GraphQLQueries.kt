@@ -90,6 +90,7 @@ object GraphQLQueries {
                 status
                 episodes
                 season
+                seasonYear
                 averageScore
                 popularity
                 genres

@@ -13,11 +13,17 @@ import com.example.data.network.AniListException
 import com.example.data.network.aniListHttpError
 import com.example.data.network.GraphQLQueries
 import com.example.data.network.RequestCoalescer
+import com.squareup.moshi.JsonDataException
 import retrofit2.HttpException
 import java.io.IOException
 
-/** Matches `mutation X` at the start of a GraphQL document. */
-private val MUTATION_PATTERN = Regex("""\bmutation\b""")
+/**
+ * Matches the `mutation` keyword of a GraphQL document.
+ *
+ * Anchored so a `mutation` appearing inside a string or comment in a *query*
+ * cannot flip the classification.
+ */
+private val MUTATION_PATTERN = Regex("""^\s*mutation\b""")
 
 class AniListRepositoryImpl(
     private val apiService: AniListApiService
@@ -137,6 +143,24 @@ class AniListRepositoryImpl(
                     cause = e
                 )
             )
+        } catch (e: JsonDataException) {
+            // A response we cannot parse is neither an auth problem nor a
+            // network blip, and the raw Moshi message is unusable to a reader:
+            //
+            //   "Expected an int but was WINTER at path
+            //    $.data.MediaListCollection.lists[0].entries[1]....node.season"
+            //
+            // That is what the error screen was showing. It names no field a
+            // user knows about and offers no way forward, so it gets a plain
+            // sentence here. The cause is kept for logcat.
+            Result.failure(
+                AniListException(
+                    kind = AniListErrorKind.MALFORMED_RESPONSE,
+                    message = "AniList sent data this version of the app couldn't read. " +
+                            "Update AniSequel, or try again in a moment.",
+                    cause = e
+                )
+            )
         } catch (e: Exception) {
             Result.failure(
                 AniListException(
@@ -155,9 +179,18 @@ class AniListRepositoryImpl(
      * Reads only. A mutation must never be shared: collapsing two
      * `SaveMediaListEntry` calls into one would silently drop a write the user
      * asked for.
+     *
+     * This was `MUTATION_PATTERN.containsMatchIn(...)` with no negation, so it
+     * answered `true` for mutations and `false` for queries - exactly backwards.
+     * The consequences were both real and both invisible:
+     *
+     *  - Two concurrent "Add to Planning" taps collapsed into one write, and the
+     *    second entry the user asked for was silently never saved.
+     *  - Reads were never coalesced at all, so the whole feature - and the
+     *    request budget it exists to protect - was doing nothing.
      */
     private fun isReadOnly(request: GraphQLRequest): Boolean =
-        MUTATION_PATTERN.containsMatchIn(request.query)
+        !MUTATION_PATTERN.containsMatchIn(request.query)
 
     /**
      * The cache key.

@@ -29,7 +29,8 @@ class MissedSequelDetailTest {
         airingAt: Long? = null,
         status: String = "RELEASING",
         description: String? = null,
-        season: Int? = null,
+        season: String? = null,
+        seasonYear: Int? = null,
         score: Int? = null
     ) = MissedSequel(
         parentId = 1,
@@ -40,6 +41,7 @@ class MissedSequelDetailTest {
             title = MediaTitle(english = "Season 2"),
             episodes = episodes,
             season = season,
+            seasonYear = seasonYear,
             status = status,
             averageScore = score,
             description = description,
@@ -123,6 +125,28 @@ class MissedSequelDetailTest {
         // An empty string is not the same as absent: the sheet checks for blank
         // to decide whether to show the "Read more" affordance.
         assertNull(sequel(description = null).description)
+    }
+
+    /**
+     * AniList's `season` is the enum `WINTER`/`SPRING`/`SUMMER`/`FALL`, not a
+     * franchise season number, and `seasonYear` is a separate field. The model
+     * once declared `season` as `Int?`, which threw while parsing the real list
+     * response and took the whole dashboard down with it.
+     */
+    @Test
+    fun `the airing season reads as a name and a year`() {
+        assertEquals(
+            "Winter 2019",
+            sequel(season = "WINTER", seasonYear = 2019).airingSeason
+        )
+        assertEquals("Summer", sequel(season = "SUMMER").airingSeason)
+        assertEquals("Fall 2023", sequel(season = "FALL", seasonYear = 2023).airingSeason)
+    }
+
+    @Test
+    fun `an entry with no airing season reports none rather than a placeholder`() {
+        assertNull(sequel().airingSeason)
+        assertNull(sequel(season = null, seasonYear = 2019).airingSeason)
     }
 
     @Test

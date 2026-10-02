@@ -501,15 +501,16 @@ private fun InfoGrid(sequel: MissedSequel) {
             }
         }
 
-        // Franchise context: which entry of the run this is, when AniList knows
-        // the season number. This is the detail that separates "a sequel exists"
-        // from "this is season 3 and you are on season 1".
-        val season = sequel.sequelMedia.season
-        if (season != null) {
+        // Airing season: "Winter 2019". Rendered from `airingSeason` rather than
+        // from the raw field, because `season` is an enum *string* (WINTER) and
+        // `seasonYear` is a separate field - this used to interpolate the season
+        // as if it were a number and label the block "Season".
+        val airingSeason = sequel.airingSeason
+        if (airingSeason != null) {
             Spacer(modifier = Modifier.height(10.dp))
             InfoBlock(
-                label = "Season",
-                value = if (season == 1) "Season 1" else "Season $season",
+                label = "Aired in",
+                value = airingSeason,
                 modifier = Modifier.fillMaxWidth()
             )
         }

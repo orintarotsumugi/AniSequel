@@ -41,6 +41,15 @@ class AuthViewModel(
     private val _clientId = MutableStateFlow(AuthRepositoryImpl.DEFAULT_CLIENT_ID)
     val clientId: StateFlow<String> = _clientId.asStateFlow()
 
+    /**
+     * Set once a real OAuth callback has been processed.
+     *
+     * Guards the one write in this class that must not be clobbered by the
+     * stored-token read racing it - see [checkCurrentAuth].
+     */
+    @Volatile
+    private var hasHandledRedirect = false
+
     init {
         checkCurrentAuth()
     }
@@ -52,32 +61,50 @@ class AuthViewModel(
                 _clientId.value = currentClientId
 
                 val token = authRepository.accessTokenFlow.first()
+
+                // A redirect can land while this is still reading from disk -
+                // MainActivity hands the deep link to the ViewModel in onCreate,
+                // and the stored-token read is on another dispatcher. When the
+                // two finished in the wrong order this coroutine wrote
+                // Unauthenticated *after* the redirect had already written
+                // Authenticated, so a successful sign-in silently dropped back
+                // to the login screen. The redirect wins if it arrived first.
+                if (hasHandledRedirect) return@launch
+
                 if (!token.isNullOrBlank()) {
                     _uiState.value = AuthUiState.Authenticated(token)
                 } else {
                     _uiState.value = AuthUiState.Unauthenticated
                 }
             } catch (e: Exception) {
-                _uiState.value = AuthUiState.Unauthenticated
+                if (!hasHandledRedirect) {
+                    _uiState.value = AuthUiState.Unauthenticated
+                }
             }
         }
     }
 
     fun handleAuthRedirect(uri: Uri?) {
         when (val result = AniListOAuth.parseRedirect(uri)) {
-            is RedirectResult.Success -> saveToken(result.accessToken)
+            is RedirectResult.Success -> {
+                hasHandledRedirect = true
+                saveToken(result.accessToken)
+            }
 
-            is RedirectResult.Error -> _uiState.value = AuthUiState.Error(
-                // AniList sends `error=access_denied` when the user backs out of
-                // the consent screen. That is not a failure worth alarming them
-                // about, so it gets a plain sentence.
-                if (result.code.equals("access_denied", ignoreCase = true)) {
-                    "AniList access was cancelled."
-                } else {
-                    result.description?.takeIf { it.isNotBlank() }
-                        ?: "AniList returned an error during sign-in (${result.code})."
-                }
-            )
+            is RedirectResult.Error -> {
+                hasHandledRedirect = true
+                _uiState.value = AuthUiState.Error(
+                    // AniList sends `error=access_denied` when the user backs out
+                    // of the consent screen. That is not a failure worth
+                    // alarming them about, so it gets a plain sentence.
+                    if (result.code.equals("access_denied", ignoreCase = true)) {
+                        "AniList access was cancelled."
+                    } else {
+                        result.description?.takeIf { it.isNotBlank() }
+                            ?: "AniList returned an error during sign-in (${result.code})."
+                    }
+                )
+            }
 
             // A launch from the launcher, not a callback. Treating this as an
             // error is what produced "No access token found in redirect" for a

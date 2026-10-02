@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.data.model.RelationKind
 import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AniTopAppBar
@@ -124,12 +125,17 @@ fun DashboardScreen(
                 onRefresh = { dashboardViewModel.refresh() },
                 onOpenSettings = { onOpenSettings(currentViewer) },
                 isRefreshing = successState?.isRefreshing == true,
+                // Compared against the *default* value of each switch. Reading
+                // `filterCriteria.hideAlreadyPlanned` directly was a permanent
+                // true - it defaults to true - so the filter badge showed a
+                // count on every launch, before the user had filtered anything,
+                // which is what the badge is supposed to mean.
                 hasActiveFilters = filterCriteria.statusFilter != StatusFilter.ALL ||
                     filterCriteria.selectedFormat != null ||
                     filterCriteria.searchQuery.isNotBlank() ||
                     !filterCriteria.includeUnreleased ||
-                    filterCriteria.hideAlreadyPlanned ||
-                    filterCriteria.includedRelations.size > 1
+                    !filterCriteria.hideAlreadyPlanned ||
+                    filterCriteria.includedRelations != setOf(RelationKind.SEQUEL)
             )
         }
     ) { paddingValues ->
@@ -259,11 +265,18 @@ fun DashboardScreen(
 
                             if (state.missedSequels.isEmpty()) {
                                 item(key = "empty_state") {
-                                    EmptyStateView(
-                                        isSearching = filterCriteria.searchQuery.isNotBlank() ||
-                                                filterCriteria.selectedFormat != null ||
-                                                filterCriteria.statusFilter != StatusFilter.ALL ||
-                                                !filterCriteria.includeUnreleased,
+                                EmptyStateView(
+                                    // Also counts the relation and planning
+                                    // switches: an empty list caused purely by
+                                    // those said "All caught up" and offered no
+                                    // way back, which is the one thing an empty
+                                    // state has to do.
+                                    isSearching = filterCriteria.searchQuery.isNotBlank() ||
+                                            filterCriteria.selectedFormat != null ||
+                                            filterCriteria.statusFilter != StatusFilter.ALL ||
+                                            !filterCriteria.includeUnreleased ||
+                                            !filterCriteria.hideAlreadyPlanned ||
+                                            filterCriteria.includedRelations != setOf(RelationKind.SEQUEL),
                                         onResetFilters = { dashboardViewModel.resetFilters() }
                                     )
                                 }
