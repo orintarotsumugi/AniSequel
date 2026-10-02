@@ -3,6 +3,8 @@ package com.example.ui.viewmodel
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.network.AniListOAuth
+import com.example.data.network.RedirectResult
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,35 +53,26 @@ class AuthViewModel(
     }
 
     fun handleAuthRedirect(uri: Uri?) {
-        if (uri == null) return
-        val fragment = uri.fragment ?: ""
-        val urlString = uri.toString()
+        when (val result = AniListOAuth.parseRedirect(uri)) {
+            is RedirectResult.Success -> saveToken(result.accessToken)
 
-        val token = extractTokenFromUrl(fragment, urlString)
-        if (!token.isNullOrBlank()) {
-            saveToken(token)
-        } else {
-            // AniList sends `error=access_denied` when the user backs out of the
-            // consent screen. That is not a failure worth alarming them about.
-            val declined = fragment.contains("error=", ignoreCase = true) ||
-                    urlString.contains("error=", ignoreCase = true)
-            _uiState.value = AuthUiState.Error(
-                if (declined) "AniList access was cancelled." else "No access token found in redirect"
+            is RedirectResult.Error -> _uiState.value = AuthUiState.Error(
+                // AniList sends `error=access_denied` when the user backs out of
+                // the consent screen. That is not a failure worth alarming them
+                // about, so it gets a plain sentence.
+                if (result.code.equals("access_denied", ignoreCase = true)) {
+                    "AniList access was cancelled."
+                } else {
+                    result.description?.takeIf { it.isNotBlank() }
+                        ?: "AniList returned an error during sign-in (${result.code})."
+                }
             )
+
+            // A launch from the launcher, not a callback. Treating this as an
+            // error is what produced "No access token found in redirect" for a
+            // perfectly normal cold start.
+            RedirectResult.NoCallback -> Unit
         }
-    }
-
-    private fun extractTokenFromUrl(fragment: String, fullUrl: String): String? {
-        val target = if (fragment.isNotBlank()) fragment else fullUrl.substringAfter("#", "")
-        if (target.isBlank()) return null
-
-        // `split("=")` truncated any token containing base64 padding at the first
-        // '=', producing a token that looked pasted but silently failed every
-        // request afterwards. substringAfter keeps the value whole.
-        return target.split("&")
-            .firstOrNull { it.substringBefore("=") == "access_token" }
-            ?.substringAfter("=", "")
-            ?.takeIf { it.isNotBlank() }
     }
 
     fun saveToken(token: String) {
@@ -118,8 +111,16 @@ class AuthViewModel(
         }
     }
 
-    fun getAuthorizationUrl(): String {
-        val currentClientId = _clientId.value.ifBlank { AuthRepositoryImpl.DEFAULT_CLIENT_ID }
-        return "https://anilist.co/api/v2/oauth/authorize?client_id=$currentClientId&response_type=token"
-    }
+    /**
+     * The URL opened in the browser.
+     *
+     * Carries only `client_id` and `response_type`: AniList rejects the request
+     * with `unsupported_grant_type` when a `redirect_uri` or `state` is also
+     * sent, and it sends the token to whatever Redirect URL is registered for
+     * the client. See [AniListOAuth] before changing this.
+     */
+    fun getAuthorizationUrl(): String =
+        AniListOAuth.authorizationUrl(
+            _clientId.value.ifBlank { AuthRepositoryImpl.DEFAULT_CLIENT_ID }
+        )
 }

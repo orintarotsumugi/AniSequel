@@ -55,6 +55,7 @@ import coil.compose.AsyncImage
 import com.example.BuildConfig
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.RedirectUrlHint
 import com.example.ui.viewmodel.AuthViewModel
 
 private val MaxContentWidth = 640.dp
@@ -146,6 +147,8 @@ fun SettingsScreen(
                         singleLine = true,
                         shape = MaterialTheme.shapes.small
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    RedirectUrlHint()
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         horizontalArrangement = Arrangement.End,

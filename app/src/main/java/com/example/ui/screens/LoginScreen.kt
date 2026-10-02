@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.RedirectUrlHint
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 
@@ -219,6 +220,17 @@ fun LoginScreen(
                                 Text("Client ID")
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // The single most common reason sign-in "does nothing":
+                        // after approving, the browser tries to load the Redirect
+                        // URL registered at anilist.co/developer. If that is
+                        // something like http://localhost, the browser opens a
+                        // dead page and the token never reaches the app. The app
+                        // cannot detect that - it never gets the callback - so it
+                        // spells out what to register instead.
+                        RedirectUrlHint(modifier = Modifier.fillMaxWidth())
                     }
                 } else {
                     // Public Username Scan Tab
