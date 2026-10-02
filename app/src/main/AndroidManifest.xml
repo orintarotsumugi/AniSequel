@@ -5,6 +5,23 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+        Lets the in-app updater hand a downloaded release to the system package
+        installer.
+
+        The declaration alone does nothing: from Android 8 the permission is
+        granted per-app in Settings, which is why UpdateManager.canInstallPackages()
+        asks packageManager rather than assuming the manifest entry is enough.
+        The user still sees, and has to confirm, the system install dialog - no
+        version of this app can install itself silently.
+
+        Google Play treats this as a sensitive permission and restricts it to
+        apps whose core function is installing software. AniSequel is not
+        distributed through the Play Store, so that does not apply; a Play build
+        would need this removed and the download handed off to the browser.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".AniSequelApplication"
         android:allowBackup="true"
@@ -39,6 +56,24 @@
                     android:host="oauth" />
             </intent-filter>
         </activity>
+
+        <!--
+            Hands the downloaded APK to the system installer as a content:// URI.
+
+            A bare file:// URI cannot be used: since Android 7 that throws
+            FileUriExposedException, so an updater without a provider fails at
+            exactly the moment it has already downloaded the thing the user
+            asked for.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
     </application>
 
 </manifest>

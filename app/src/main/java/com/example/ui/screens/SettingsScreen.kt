@@ -23,7 +23,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,13 +40,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -58,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -74,14 +76,36 @@ import com.example.data.network.AniListOAuth
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.data.repository.ThemeMode
 import com.example.data.repository.ThemePreferences
+import com.example.data.update.formatBytes
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.DownloadProgress
+import com.example.ui.components.ExpressivePolygonSegmentedBar
+import com.example.ui.components.ExpressiveTabBar
 import com.example.ui.components.RedirectUrlHint
+import com.example.ui.components.SegmentedOption
+import com.example.ui.components.UpdateUiState
+import com.example.ui.components.rememberUpdateController
 import com.example.ui.theme.supportsDynamicColor
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 
 private val MaxContentWidth = 640.dp
+
+/**
+ * The icon that carries a theme mode without reading its label.
+ *
+ * Defined here rather than on [ThemeMode] itself: the enum lives in the data
+ * layer, next to the DataStore code, and a `data` class that imports
+ * `androidx.compose.ui.graphics.vector.ImageVector` cannot be tested without
+ * the Compose UI on the classpath, for a mapping that is purely a display
+ * decision.
+ */
+private fun ThemeMode.icon(): ImageVector = when (this) {
+    ThemeMode.SYSTEM -> Icons.Outlined.BrightnessAuto
+    ThemeMode.LIGHT -> Icons.Outlined.LightMode
+    ThemeMode.DARK -> Icons.Outlined.DarkMode
+}
 
 /** One entry in the "What's new" list. */
 private data class ChangelogEntry(val title: String, val detail: String)
@@ -129,6 +153,25 @@ private val changelog = listOf(
         detail = "Reading the app and changing it are now separate tabs, and " +
                 "appearance is a setting you can actually change - including " +
                 "theming from your wallpaper."
+    ),
+    ChangelogEntry(
+        title = "AniSequel updates itself",
+        detail = "On launch the app checks GitHub for a newer build and " +
+                "offers it here. Downloading and installing takes two taps; " +
+                "Android still asks you to confirm the install, and it has to " +
+                "be one time granted in Settings first."
+    ),
+    ChangelogEntry(
+        title = "Material 3 shapes on the tabs and theme picker",
+        detail = "The two tabs are shaped pills that grow when selected instead " +
+                "of an underline, and the light/dark picker lost the oversized " +
+                "segmented buttons."
+    ),
+    ChangelogEntry(
+        title = "Saving your Client ID sticks",
+        detail = "The Save button's confirmation was cleared the instant you " +
+                "pressed it, because saving your own value looked like someone " +
+                "else changing it."
     )
 )
 
@@ -181,24 +224,19 @@ fun SettingsScreen(
                     )
                 )
 
-                PrimaryScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    modifier = Modifier.testTag("settings_tabs"),
-                    edgePadding = 12.dp
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Info", fontWeight = FontWeight.SemiBold) },
-                        modifier = Modifier.testTag("settings_tab_info")
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Edit", fontWeight = FontWeight.SemiBold) },
-                        modifier = Modifier.testTag("settings_tab_edit")
-                    )
-                }
+                // Material 3 Expressive shapes rather than `TabRow`. The
+                // Material tab row marks the selection with a 3dp underline,
+                // which in a settings header reads as a link rather than as a
+                // tab - the two tabs here sit on the same row as the back
+                // arrow and the title, and an underline there looks like a
+                // hyperlink on "Info".
+                HorizontalDivider()
+                ExpressiveTabBar(
+                    tabs = listOf("Info", "Edit"),
+                    selectedIndex = selectedTab,
+                    onSelect = { selectedTab = it },
+                    modifier = Modifier.testTag("settings_tabs")
+                )
             }
         }
     ) { paddingValues ->
@@ -279,6 +317,8 @@ private fun InfoSettingsTab(
             )
         }
 
+        UpdateSettingsCard()
+
         SectionCard(title = "What's new in ${BuildConfig.VERSION_NAME}") {
             Text(
                 text = "Fixes in this build. If you hit the AniList connection error, this is the list that explains it.",
@@ -349,6 +389,154 @@ private fun InfoSettingsTab(
 }
 
 /**
+ * Check for a newer AniSequel, download it, and hand it to the installer.
+ *
+ * On the Info tab rather than Edit because an update is a *fact about the
+ * build*, not a preference - this is the panel that reports the version, the
+ * package and what changed, and "is this the newest one?" belongs beside it.
+ *
+ * The same check runs silently at launch and prompts there if it finds
+ * something, so this card is the manual retry: for when the launch check
+ * happened on a train, or was dismissed with "Later".
+ */
+@Composable
+private fun UpdateSettingsCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val controller = rememberUpdateController()
+    val state = controller.state
+
+    // Checking here too would race the launch check that is already in flight
+    // and could put a second dialog in front of the user.
+    LaunchedEffect(Unit) {
+        if (state == UpdateUiState.Idle) controller.check(scope)
+    }
+
+    SectionCard(title = "Updates") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.SystemUpdate,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = when (state) {
+                    UpdateUiState.Idle, UpdateUiState.Checking ->
+                        "Checking GitHub for a newer build…"
+
+                    is UpdateUiState.UpToDate ->
+                        "You're on ${state.installedVersion}, the latest release."
+
+                    is UpdateUiState.Available ->
+                        "AniSequel ${state.manifest.version} is available " +
+                                "(${formatBytes(state.manifest.sizeBytes)})."
+
+                    is UpdateUiState.ReadyToInstall ->
+                        "Downloaded. Ready to install."
+
+                    is UpdateUiState.NeedsInstallPermission ->
+                        "Downloaded. AniSequel needs permission to install apps."
+
+                    is UpdateUiState.Failed ->
+                        state.message
+
+                    is UpdateUiState.Downloading -> "Downloading…"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        when (state) {
+            is UpdateUiState.Downloading -> {
+                Spacer(modifier = Modifier.height(12.dp))
+                DownloadProgress(state = state)
+            }
+
+            is UpdateUiState.Available -> {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { controller.reset() },
+                        modifier = Modifier.testTag("dismiss_update_button")
+                    ) { Text("Not now") }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = { controller.download(scope) },
+                        modifier = Modifier.testTag("download_update_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Download")
+                    }
+                }
+            }
+
+            is UpdateUiState.ReadyToInstall -> {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { controller.install(context) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("install_update_button")
+                ) { Text("Install now") }
+            }
+
+            is UpdateUiState.NeedsInstallPermission -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Android will not let AniSequel open the installer " +
+                            "until you allow it to install apps. This is a " +
+                            "one-time permission in Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { controller.requestInstallPermission(context) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("grant_install_permission_button")
+                ) { Text("Open Settings") }
+            }
+
+            else -> Unit
+        }
+
+        when (state) {
+            // A check that finished is worth repeating, whichever way it went.
+            is UpdateUiState.UpToDate, is UpdateUiState.Failed -> {
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(
+                    onClick = { controller.check(scope) },
+                    modifier = Modifier.testTag("check_updates_button")
+                ) { Text("Check again") }
+            }
+
+            else -> Unit
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "AniSequel checks github.com/LOST-4EVER/AniSequel for new " +
+                    "releases. Nothing about your AniList account is sent - the " +
+                    "check is a single request for a public file.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
  * Everything you can change.
  *
  * Two sections only, both of which change how the app behaves rather than what
@@ -383,23 +571,22 @@ private fun EditSettingsTab(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth().testTag("theme_mode_row")
-            ) {
-                ThemeMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = themeSettings.themeMode == mode,
-                        onClick = { scope.launch { themePreferences.setThemeMode(mode) } },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = ThemeMode.entries.size
-                        ),
-                        modifier = Modifier.testTag("theme_mode_${mode.storageValue}")
-                    ) {
-                        Text(mode.displayName, maxLines = 1)
-                    }
-                }
-            }
+            // Expressive polygons rather than `SingleChoiceSegmentedButtonRow`.
+            // The Material segmented control is a 48dp outlined pill that, at
+            // full width on a phone, is a very large target for a three-way
+            // choice - and the checkmark it draws in the selected segment
+            // repeats information the fill colour already carries. The icons
+            // are what make Light vs Dark readable without relying on colour.
+            ExpressivePolygonSegmentedBar(
+                options = ThemeMode.entries.map { mode ->
+                    SegmentedOption(label = mode.displayName, icon = mode.icon())
+                },
+                selectedIndex = ThemeMode.entries.indexOf(themeSettings.themeMode),
+                onSelect = { index ->
+                    scope.launch { themePreferences.setThemeMode(ThemeMode.entries[index]) }
+                },
+                modifier = Modifier.testTag("theme_mode_row")
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
@@ -494,12 +681,23 @@ private fun ClientIdEditor(
     var editingClientId by rememberSaveable { mutableStateOf(currentClientId) }
     var hasSavedClientId by rememberSaveable { mutableStateOf(false) }
 
-    // A Client ID changed elsewhere (the login screen's dialog) has to replace
-    // whatever is in the field, or the user is shown a stale value that the Save
-    // button then refuses to act on because it no longer differs.
+    // A Client ID changed *elsewhere* (the login screen's dialog) has to
+    // replace whatever is in the field, or the user is shown a stale value that
+    // the Save button then refuses to act on because it no longer differs.
+    //
+    // The `savedValue` guard is the fix for a bug this effect caused: saving
+    // your own Client ID changes `currentClientId`, which re-ran the effect,
+    // which cleared `hasSavedClientId` - so the button flipped from "Saved"
+    // straight back to "Save" on the very tap that saved it. Tracking the last
+    // value we saved means the effect only fires for a change we did not make.
+    var savedValue by rememberSaveable { mutableStateOf<String?>(null) }
+
     LaunchedEffect(currentClientId) {
-        editingClientId = currentClientId
-        hasSavedClientId = false
+        if (currentClientId != savedValue) {
+            editingClientId = currentClientId
+            hasSavedClientId = false
+        }
+        savedValue = null
     }
 
     val trimmed = editingClientId.trim()
@@ -547,12 +745,21 @@ private fun ClientIdEditor(
 
         Button(
             onClick = {
+                savedValue = trimmed
                 onSave(trimmed)
                 hasSavedClientId = true
             },
             enabled = canSave,
             modifier = Modifier.testTag("save_client_id_button")
         ) {
+            if (hasSavedClientId) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircleOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
             Text(if (hasSavedClientId) "Saved" else "Save")
         }
     }

@@ -7,8 +7,16 @@ on:
       - master
     tags:
       - 'v*'
-    # The manifest-sync workflow commits update.json back to main; skip the full
+    # The manifest-sync step commits update.json back to main; skip the full
     # APK build for that commit so publishing a release cannot loop.
+    #
+    # Note that this list is belt-and-braces rather than the actual guard. The
+    # sync step pushes with GITHUB_TOKEN, and GitHub deliberately does not start
+    # workflow runs for pushes made with that token - which is why no run exists
+    # for any "Update manifest for v..." commit. update.json alone would cover
+    # it; gradle.properties and app/build.gradle.kts are NOT listed, because they
+    # are ordinary source files that a human may legitimately change, and a
+    # filter that skips a real build is a worse bug than the loop it prevents.
     paths-ignore:
       - 'update.json'
       - '**.md'
@@ -471,16 +479,42 @@ jobs:
           # build reports can never trail the published one by more than a single
           # commit. Rewriting both lines here - rather than leaving them to be
           # bumped by hand - is what stops this file drifting again.
+          #
+          # app/build.gradle.kts has to be rewritten in the SAME commit. Its
+          # BASELINE_VERSION_NAME/BASELINE_VERSION_CODE are a second, separate
+          # copy of the version (Gradle cannot read project properties from
+          # inside the script body), and VersionBaselineTest asserts the two
+          # agree. Syncing only gradle.properties left the copy a version
+          # behind after every single release, which is what turned main red and
+          # failed every pull request opened against it - the manifest step
+          # passed its own build, because that build ran before the manifest was
+          # rewritten, and the mismatch only surfaced on the *next* run.
           sed -i -E "s/^anisequelVersionName=.*/anisequelVersionName=${VERSION_NAME}/" gradle.properties
           sed -i -E "s/^anisequelVersionCode=.*/anisequelVersionCode=${GITHUB_RUN_NUMBER}/" gradle.properties
+          sed -i -E "s/^val BASELINE_VERSION_NAME = .*/val BASELINE_VERSION_NAME = \"${VERSION_NAME}\"/" app/build.gradle.kts
+          sed -i -E "s/^val BASELINE_VERSION_CODE = .*/val BASELINE_VERSION_CODE = ${GITHUB_RUN_NUMBER}/" app/build.gradle.kts
+
+          # Refuse to publish a state the next run would fail on. Cheaper than
+          # discovering it as a red build on someone else's pull request.
+          if ! grep -qE "^val BASELINE_VERSION_NAME = \"${VERSION_NAME}\"$" app/build.gradle.kts \
+             || ! grep -qE "^val BASELINE_VERSION_CODE = ${GITHUB_RUN_NUMBER}$" app/build.gradle.kts; then
+            echo "::error::Could not sync BASELINE_* in app/build.gradle.kts;" \
+                 "VersionBaselineTest will fail on the next build."
+            exit 1
+          fi
 
           cat update.json
           grep '^anisequelVersion' gradle.properties
+          grep '^val BASELINE_VERSION' app/build.gradle.kts
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json gradle.properties
+          git add update.json gradle.properties app/build.gradle.kts
           # --quiet: this runs on every main build, and a no-op commit must not
           # produce an empty commit that would loop the workflow.
+          #
+          # The loop is already impossible regardless of paths-ignore: this
+          # pushes with GITHUB_TOKEN, and GitHub does not start workflow runs
+          # for token-authenticated pushes.
           git commit --quiet -m "Update manifest for ${TAG}" || echo "Manifest already current."
           git pull --rebase --quiet origin "${GITHUB_REF_NAME}" 2>/dev/null || true
           git push --quiet origin "HEAD:${GITHUB_REF_NAME}" || echo "Nothing to push."

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the update downloads are exposed.
+
+    A FileProvider that was given a broad path - "everything under the app's
+    own files" - would let any app that could name our authority read the user's
+    cached data. This exposes one subdirectory of the *cache*, which the system
+    is free to delete at any time, and which holds nothing but APKs this app
+    downloaded from the project's own GitHub releases.
+-->
+<paths>
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

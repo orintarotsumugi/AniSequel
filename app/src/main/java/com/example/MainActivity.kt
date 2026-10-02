@@ -8,8 +8,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -19,6 +21,8 @@ import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.data.repository.ThemeMode
 import com.example.data.repository.ThemePreferences
+import com.example.ui.components.UpdatePromptHost
+import com.example.ui.components.rememberUpdateController
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.AniSequelTheme
 import com.example.ui.viewmodel.AuthViewModel
@@ -76,11 +80,27 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = themeSettings.useDynamicColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    val scope = rememberCoroutineScope()
+                    val updateController = rememberUpdateController()
+
+                    // One check per launch, after the first frame.
+                    //
+                    // Keyed on a constant so it runs exactly once rather than on
+                    // every recomposition, and deliberately *after* the app is
+                    // usable: a dialog that blocks the first screen while
+                    // GitHub is slow is a worse experience than one that
+                    // arrives a moment later.
+                    LaunchedEffect(Unit) {
+                        updateController.check(scope)
+                    }
+
                     AppNavigation(
                         authRepository = authRepository,
                         authViewModel = authViewModel,
                         themePreferences = themePreferences
                     )
+
+                    UpdatePromptHost(controller = updateController)
                 }
             }
         }

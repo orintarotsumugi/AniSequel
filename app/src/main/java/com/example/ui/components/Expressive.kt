@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +32,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -62,6 +68,10 @@ import androidx.compose.ui.unit.dp
  * 13. [ExpressiveEmptyOrb] - a [MaterialShapes] orb for empty states.
  * 14. [ExpressiveButtonGroup] - a connected button group whose segments morph
  *     their corners as the group is pressed.
+ * 15. [ExpressiveTabBar] - a tab bar whose selected tab is a MaterialShapes
+ *     polygon that scales in, rather than an underline.
+ * 16. [ExpressivePolygonSegmentedBar] - a segmented control drawn with
+ *     MaterialShapes polygons and an outlined track.
  *
  * Every one of these is built on an API verified to exist in the pinned
  * material3 version by compiling against it.
@@ -187,7 +197,206 @@ object ExpressiveShapes {
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val diamond: androidx.graphics.shapes.RoundedPolygon get() = MaterialShapes.Diamond
+
+    /**
+     * The stadium. Used for anything that sits inline and reads as a control -
+     * a selected tab, a segmented track - because it is the one expressive
+     * polygon that still reads correctly when the box is much wider than it is
+     * tall. The higher-sided cookies look like deliberate ornament at icon size
+     * and like a rendering bug stretched across a full-width row.
+     */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val pill: androidx.graphics.shapes.RoundedPolygon get() = MaterialShapes.Pill
+
+    /** A softer, more obviously polygonal pill for selected segments. */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val pillSoft: androidx.graphics.shapes.RoundedPolygon get() = MaterialShapes.Cookie7Sided
 }
+
+/**
+ * The tab bar, with Material 3 Expressive shapes.
+ *
+ * Replaces `PrimaryScrollableTabRow`. The Material tab row draws the selection
+ * as a 3dp underline under the label - a shape designed for a row of text at the
+ * top of a screen, and one that reads as a hyperlink in a settings header. The
+ * selected tab is here a filled [MaterialShapes.Pill] that scales in, so the
+ * selection is an object rather than a mark, and it is legible without relying
+ * on colour alone.
+ *
+ * Equal-width rather than scrollable: the app's only tab row has two tabs with
+ * short labels, and a scrollable row adds a nested-scroll container and an
+ * edge fade that can only ever be in the way here.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ExpressiveTabBar(
+    tabs: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .testTag("${EXPRESSIVE_TAG}tab_bar"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        tabs.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+
+            // Springs rather than tweens: an expressive component that eases
+            // between shapes and sizes is the one place a slight overshoot is
+            // the intended reading, not a wobble.
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.94f,
+                animationSpec = spring(dampingRatio = 0.55f, stiffness = 700f),
+                label = "tab_scale_$label"
+            )
+            val container by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
+                animationSpec = spring(),
+                label = "tab_container_$label"
+            )
+            val content by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = spring(),
+                label = "tab_content_$label"
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
+                    // Scale before the clip so the shape grows rather than
+                    // being cropped: clipping first would clip the polygon to a
+                    // smaller rounded rect, which is the old look.
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .clip(expressiveShape(ExpressiveShapes.pill))
+                    .background(container)
+                    .rippleClickable { onSelect(index) }
+                    .semantics {
+                        this.selected = selected
+                        role = Role.Tab
+                    }
+                    .testTag("${EXPRESSIVE_TAG}tab_$label"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = content,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A segmented control drawn with expressive shapes.
+ *
+ * The Material `SingleChoiceSegmentedButtonRow` used on the appearance settings
+ * is a 48dp-tall outlined pill divided into three boxes. At full width on a
+ * phone that is a very large target for a three-way choice, and the checkmark
+ * that Material draws in the selected segment duplicates the fill colour that
+ * already says which one is selected.
+ *
+ * This is shorter, uses expressive polygons for the track and the selected
+ * segment, and lets every segment carry an icon as well as a label - which is
+ * what makes "Light / Dark" readable at a glance without colour.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ExpressivePolygonSegmentedBar(
+    options: List<SegmentedOption>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(expressiveShape(ExpressiveShapes.pill))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(4.dp)
+            .testTag("${EXPRESSIVE_TAG}polygon_segmented_bar"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+
+            val container by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Transparent
+                },
+                animationSpec = spring(),
+                label = "segment_container_${option.label}"
+            )
+            val content by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = spring(),
+                label = "segment_content_${option.label}"
+            )
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clip(expressiveShape(ExpressiveShapes.pillSoft))
+                    .background(container)
+                    .rippleClickable { onSelect(index) }
+                    .semantics {
+                        this.selected = selected
+                        role = Role.RadioButton
+                    }
+                    .testTag("${EXPRESSIVE_TAG}polygon_segment_${option.label}"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (option.icon != null) {
+                    Icon(
+                        imageVector = option.icon,
+                        contentDescription = null,
+                        tint = content,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = content,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** One segment of [ExpressivePolygonSegmentedBar]. */
+data class SegmentedOption(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+)
 
 /**
  * A chip whose corner shape morphs as it is selected.
