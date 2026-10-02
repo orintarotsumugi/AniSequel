@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -15,6 +17,8 @@ import com.example.data.network.NetworkClient
 import com.example.data.repository.AniListRepositoryImpl
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
+import com.example.data.repository.ThemeMode
+import com.example.data.repository.ThemePreferences
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.AniSequelTheme
 import com.example.ui.viewmodel.AuthViewModel
@@ -22,6 +26,7 @@ import com.example.ui.viewmodel.AuthViewModel
 class MainActivity : ComponentActivity() {
 
     private lateinit var authRepository: AuthRepository
+    private lateinit var themePreferences: ThemePreferences
 
     private val authViewModel: AuthViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -43,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         authRepository = AuthRepositoryImpl(applicationContext)
+        themePreferences = ThemePreferences(applicationContext)
 
         enableEdgeToEdge()
 
@@ -50,11 +56,30 @@ class MainActivity : ComponentActivity() {
         handleDeepLinkIntent(intent)
 
         setContent {
-            AniSequelTheme {
+            // Collected here rather than inside the theme so the whole tree
+            // recomposes when the preference changes. Reading it inside
+            // AniSequelTheme would restart only the theme's own subtree, and the
+            // settings screen's switch would sit next to a preview that had
+            // already repainted.
+            //
+            // Seeded from the defaults so the first frame has a real theme
+            // instead of flashing the light one before the read completes.
+            val themeSettings by themePreferences.settings.collectAsState(
+                initial = ThemePreferences.ThemeSettings(
+                    themeMode = ThemeMode.DEFAULT,
+                    useDynamicColor = false
+                )
+            )
+
+            AniSequelTheme(
+                themeMode = themeSettings.themeMode,
+                dynamicColor = themeSettings.useDynamicColor
+            ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppNavigation(
                         authRepository = authRepository,
-                        authViewModel = authViewModel
+                        authViewModel = authViewModel,
+                        themePreferences = themePreferences
                     )
                 }
             }

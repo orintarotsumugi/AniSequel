@@ -17,6 +17,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.example.data.repository.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
     primary = AniBlueLight,
@@ -113,19 +114,28 @@ data class StatusColors(
     val infoContainer: Color,
 )
 
-private val LocalStatusColors = staticCompositionLocalOf {
-    StatusColors(
-        success = StatusSuccessLight,
-        onSuccessContainer = StatusSuccessLight,
-        successContainer = StatusSuccessContainerLight,
-        warning = StatusWarningLight,
-        onWarningContainer = StatusWarningLight,
-        warningContainer = StatusWarningContainerLight,
-        info = StatusInfoLight,
-        onInfoContainer = StatusInfoLight,
-        infoContainer = StatusInfoContainerLight,
-    )
-}
+/**
+ * The light-theme status colours, and the fallback for anything rendering
+ * outside [AniSequelTheme].
+ *
+ * Named rather than inlined: the light set was previously spelled out twice -
+ * once here as the CompositionLocal's default and once implicitly by
+ * `else LocalStatusColors.current`, which read the local it was providing.
+ * That second read happened to return the right thing and was pure accident.
+ */
+private val LightStatusColors = StatusColors(
+    success = StatusSuccessLight,
+    onSuccessContainer = StatusSuccessLight,
+    successContainer = StatusSuccessContainerLight,
+    warning = StatusWarningLight,
+    onWarningContainer = StatusWarningLight,
+    warningContainer = StatusWarningContainerLight,
+    info = StatusInfoLight,
+    onInfoContainer = StatusInfoLight,
+    infoContainer = StatusInfoContainerLight,
+)
+
+private val LocalStatusColors = staticCompositionLocalOf { LightStatusColors }
 
 object AniSequelTheme {
     val statusColors: StatusColors
@@ -146,17 +156,47 @@ private val DarkStatusColors = StatusColors(
     infoContainer = StatusInfoContainerDark,
 )
 
+/**
+ * Whether this device can theme itself from the user's wallpaper.
+ *
+ * Material You arrived in Android 12. Exposed as a function of the platform
+ * rather than as a stored preference so the Settings switch can disable itself
+ * on an older device instead of storing a choice that can never take effect.
+ */
+val supportsDynamicColor: Boolean
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
 @Composable
 fun AniSequelTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Material You stays opt-in: the app's blue is its identity, and letting a
-    // wallpaper repaint every status chip made the two greens and the coral
-    // unreadable on some OEM palettes.
+    /**
+     * Light, dark, or follow the device.
+     *
+     * Takes a [ThemeMode] rather than a `darkTheme: Boolean` because the
+     * settings screen has to offer "follow system" as a third choice, and
+     * folding that into a boolean would mean the theme re-deriving which
+     * system value to use from a flag it was never given.
+     */
+    themeMode: ThemeMode = ThemeMode.DEFAULT,
+    /**
+     * Material You - derive the palette from the user's wallpaper.
+     *
+     * Opt-in rather than automatic. The brand blue is the app's identity, and
+     * a wallpaper-derived palette can leave the two status greens and the
+     * coral unreadable against an arbitrary background. The user decides, and
+     * the decision is remembered.
+     */
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor && supportsDynamicColor -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
@@ -165,7 +205,7 @@ fun AniSequelTheme(
     }
 
     CompositionLocalProvider(
-        LocalStatusColors provides if (darkTheme) DarkStatusColors else LocalStatusColors.current
+        LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors
     ) {
         // MaterialExpressiveTheme rather than MaterialTheme: the difference that
         // matters is the motion scheme it installs, which is what every
@@ -193,10 +233,12 @@ private fun ExpressiveThemeHost(
     )
 }
 
-// Backward compatibility alias
-@Composable
-fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
-    content: @Composable () -> Unit
-) = AniSequelTheme(darkTheme, dynamicColor, content)
+/*
+ * The old `MyApplicationTheme(darkTheme: Boolean, ...)` alias is gone rather
+ * than adapted. Nothing in the app called it - `MainActivity` has used
+ * `AniSequelTheme` since the theme was introduced - and adapting it would have
+ * meant keeping a second public entry point whose `darkTheme: Boolean` cannot
+ * express "follow the system", which is now the default. A compatibility alias
+ * that silently cannot represent the default is a trap for the next person who
+ * reaches for it.
+ */

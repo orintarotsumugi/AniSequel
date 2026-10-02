@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-</resources>
+<!--
+    Colours available to the Android view layer.
+
+    This file used to hold `purple_200`, `purple_500`, `purple_700`, `teal_200`,
+    `teal_700`, `black` and `white` - the stock palette Android Studio writes
+    into a new project. Nothing referenced any of them: every colour the app
+    draws comes from Color.kt through the Compose theme, and the launcher icon
+    carries its own values. They were dead weight from a template that predated
+    the Compose theming, and they are gone.
+
+    It is now deliberately empty.
+
+    The launcher icon's blues were briefly duplicated here as `anilist_blue` &
+    friends, on the theory that a vector should read them from a colour
+    resource. It cannot: a `<vector>` resolves `@color/...` through the
+    resource table, but a *gradient* inside it is compiled into the drawable at
+    build time and AAPT will not follow a reference into an `<item>` inside a
+    `<gradient>`. Lint reported all three as unused, which is the accurate
+    verdict - the values had to be literals in the vector regardless. Duplicating
+    them here would have created a second copy of the brand palette that could
+    drift with nothing to catch it.
+
+    So the palette lives in exactly two places, both of which are literals and
+    both of which are commented as such: Color.kt for the running app, and
+    ic_launcher_background.xml for the icon.
+-->
+<resources />

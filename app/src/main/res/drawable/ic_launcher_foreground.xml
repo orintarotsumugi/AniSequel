@@ -1,9 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/app_launcher_icon"
-        android:gravity="center" />
-</layer-list>
+<!--
+    Launcher icon foreground.
 
+    ## Why this is a vector
+
+    It used to be a layer-list pointing at `app_launcher_icon.webp` - a 512x512
+    *lossy* raster, 13KB, decoded and scaled by the launcher for every icon in
+    the system tray. That is the opposite of what an icon should be: blocky on
+    any density above the one it was drawn at, and it cannot be recoloured, so
+    the themed-icon layer below had nothing but a colour photograph to tint.
+
+    Everything here is a path, so it is one drawable at every density, sharp at
+    every size, and tintable.
+
+    ## Geometry
+
+    The mark sits inside the 72dp adaptive-icon safe zone (the 66dp circle
+    centred in the 108dp canvas). A launcher's mask - circle, squircle, rounded
+    square - can crop as much as 18dp off each side, so anything drawn to the
+    full canvas gets its corners shaved.
+
+    The shape is a television with a play triangle inside: "a show you watch",
+    which is what the app does, in a form that reads at 48dp without detail.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Screen body: a rounded rectangle with the corners cut. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M32,30 L76,30 A10,10 0 0 1 86,40 L86,68 A10,10 0 0 1 76,78 L32,78 A10,10 0 0 1 22,68 L22,40 A10,10 0 0 1 32,30 Z" />
+
+    <!--
+        Screen interior, knocked out in the mid brand blue so the play triangle
+        reads against it. Drawn as a second path rather than an even-odd fill on
+        the first so each shape carries its own colour and the whole thing can
+        still be recoloured by tinting the two fills.
+    -->
+    <path
+        android:fillColor="#FF1673D6"
+        android:pathData="M35,36 L73,36 A5,5 0 0 1 78,41 L78,67 A5,5 0 0 1 73,72 L35,72 A5,5 0 0 1 30,67 L30,41 A5,5 0 0 1 35,36 Z" />
+
+    <!-- Play triangle, optically centred rather than mathematically. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48,44 L66,54 L48,64 Z" />
+
+    <!--
+        Antennae. Two strokes from the top corners of the screen, which is what
+        separates a television silhouette from a plain rounded rectangle - the
+        single cheapest way to make the mark read as "TV" at launcher size.
+    -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M42,30 L34,20" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M66,30 L74,20" />
+</vector>

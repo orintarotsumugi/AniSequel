@@ -2,5 +2,11 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <!--
+        Its own silhouette rather than the foreground. The system tints this
+        layer with a single wallpaper colour, so reusing the three-colour
+        foreground flattened all three fills to one shade and the icon became a
+        solid blob. See ic_launcher_monochrome.xml.
+    -->
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

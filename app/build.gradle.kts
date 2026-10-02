@@ -1,3 +1,14 @@
+/**
+ * The version a build falls back to when gradle.properties is unreadable.
+ *
+ * Mirrors the `anisequelVersion*` entries there. Gradle evaluates project
+ * properties before this file's own body runs, so the values cannot be read
+ * from gradle.properties here - they are asserted to match by
+ * `VersionBaselineTest`, which is what keeps the two copies honest.
+ */
+val BASELINE_VERSION_NAME = "1.0.6"
+val BASELINE_VERSION_CODE = 14
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -13,12 +24,18 @@ android {
     applicationId = "com.aistudio.anisequel.app"
     minSdk = 24
     targetSdk = 36
-    // Resolved from gradle.properties so the release workflow, the release tag and
-    // the APK itself always agree. Overridable with -PanisequelVersionCode /
-    // -PanisequelVersionName on the command line.
+    // Read from gradle.properties, overridable with -PanisequelVersionCode /
+    // -PanisequelVersionName (which is how the release workflow injects the
+    // version it derived from the newest published release).
+    //
+    // The fallbacks are the *same strings* as gradle.properties rather than
+    // independent literals. They used to be a second, separate copy of the
+    // version ("1.0.0" and 1), which is a second place for the version to go
+    // stale - and gradle.properties is the file that actually gets updated, so
+    // the copy is what a local build falls back to.
     versionCode =
-      (project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: 1)
-    versionName = project.findProperty("anisequelVersionName")?.toString() ?: "1.0.0"
+      (project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: BASELINE_VERSION_CODE)
+    versionName = project.findProperty("anisequelVersionName")?.toString() ?: BASELINE_VERSION_NAME
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

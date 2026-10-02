@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Themed-icon (monochrome) layer, used by Android 13+ when the user turns on
+    "Themed icons".
+
+    ## Why this is its own file
+
+    The adaptive icon previously declared `monochrome` as the *full-colour*
+    foreground. The system tints that layer with a single colour from the
+    wallpaper palette, so every one of those three fills - white, brand blue,
+    white - collapsed to the same shade and the result was a solid blob with a
+    play triangle barely distinguishable from the screen around it.
+
+    A monochrome layer has to be a *silhouette*: shapes separated by negative
+    space, because there is no second colour to separate them. The screen is
+    therefore drawn as a thick outline with the play triangle punched out of the
+    hole, which survives being flattened to one colour.
+
+    Everything is `#FF000000` and the system supplies the colour, so there is
+    deliberately no `android:tint` here: the platform sets its own tint on this
+    layer, and setting one would only be something for it to overwrite.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Antennae first, so the screen outline sits on top of their feet. -->
+    <path
+        android:pathData="M42,30 L34,20"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M66,30 L74,20"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!--
+        Screen as a filled shape with an interior hole, using the even-odd fill
+        type so the hole is genuinely cut out rather than painted over. That is
+        what keeps the play triangle legible once the whole layer is one colour.
+    -->
+    <path
+        android:fillType="evenOdd"
+        android:fillColor="#FF000000"
+        android:pathData="M32,28 L76,28 A12,12 0 0 1 88,40 L88,68 A12,12 0 0 1 76,80 L32,80 A12,12 0 0 1 20,68 L20,40 A12,12 0 0 1 32,28 Z
+                          M35,38 L35,70 L73,70 L73,38 Z" />
+
+    <!-- Play triangle, sitting in the hole so it reads as its own shape. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M47,44 L67,54 L47,64 Z" />
+</vector>

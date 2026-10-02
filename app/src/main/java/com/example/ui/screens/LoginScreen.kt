@@ -29,12 +29,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -134,12 +135,15 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Mode Tabs: OAuth vs Public Username
-                TabRow(
+                // PrimaryScrollableTabRow rather than TabRow: TabRow is
+                // deprecated in favour of the Primary/Secondary pair, and this
+                // now matches the tab row Settings uses, so both are built from
+                // one API.
+                PrimaryScrollableTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
+                    edgePadding = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Tab(
                         selected = selectedTab == 0,
@@ -294,12 +298,21 @@ fun LoginScreen(
     }
 
     if (showClientIdDialog) {
+        // Collected, not read via `.value`. Reading a StateFlow's value directly
+        // inside composition does not subscribe to it, so this label was frozen
+        // at whatever the value happened to be when the dialog first composed:
+        // open it before the stored id had loaded and it showed the default,
+        // and saving a custom id in Settings did not update it either. The
+        // dialog is told what the current value is by composing here, in the
+        // scope of the screen, so it recomposes with it.
+        val currentClientId by authViewModel.clientId.collectAsState()
+
         AlertDialog(
             onDismissRequest = { showClientIdDialog = false },
             title = { Text("Configure AniList Client ID") },
             text = {
                 Column {
-                    Text("AniList OAuth Client ID (default: ${authViewModel.clientId.value}):", style = MaterialTheme.typography.bodySmall)
+                    Text("AniList OAuth Client ID (default: ${currentClientId}):", style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = inputClientId,

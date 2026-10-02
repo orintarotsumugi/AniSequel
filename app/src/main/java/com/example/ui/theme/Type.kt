@@ -1,6 +1,5 @@
 package com.example.ui.theme
 
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
@@ -58,13 +57,14 @@ val AniSequelTypography = Typography(
 /** Backwards-compatible alias for the theme's typography. */
 val Typography: Typography = AniSequelTypography
 
-// Cards, sheets and fields used to hardcode their own corner radius at every
-// call site (12, 14, 16 and 22 dp all appear in the old code). One scale means
-// the app's roundness can be tuned in one place.
-val AniSequelShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
-)
+/**
+ * Alias for the app's one shape scale, which lives in `ExpressiveTheme.kt`.
+ *
+ * This file used to declare a *second* `Shapes` with different values - medium
+ * at 16dp here against 18dp there, extraLarge 28dp against 34dp. Two scales
+ * meant "the app's roundness" was whichever one a file happened to import, and
+ * tuning the theme changed some surfaces and not others. `ExpressiveShapes` is
+ * the one the theme installs, so this points at it rather than restating it.
+ */
+val AniSequelShapes: Shapes
+    get() = ExpressiveShapes

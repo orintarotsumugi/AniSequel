@@ -18,6 +18,7 @@ import androidx.navigation.navArgument
 import com.example.data.network.NetworkClient
 import com.example.data.repository.AniListRepositoryImpl
 import com.example.data.repository.AuthRepository
+import com.example.data.repository.ThemePreferences
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.SettingsScreen
@@ -40,6 +41,7 @@ object AppRoutes {
 fun AppNavigation(
     authRepository: AuthRepository,
     authViewModel: AuthViewModel,
+    themePreferences: ThemePreferences,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
@@ -181,6 +183,7 @@ fun AppNavigation(
         composable(AppRoutes.SETTINGS) {
             SettingsScreen(
                 authViewModel = authViewModel,
+                themePreferences = themePreferences,
                 viewer = signedInViewer,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToLogin = {

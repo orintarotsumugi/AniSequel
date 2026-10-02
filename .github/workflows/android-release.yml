@@ -155,6 +155,53 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Releasing as ${TAG}"
 
+      - name: Warn when the baseline version has drifted
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # gradle.properties is what a build made *outside* CI reports as its
+          # version, and Settings > About reads BuildConfig. It is not what names
+          # the release - the step above derives that from the newest published
+          # release - so it used to sit at 1.0.0 while releases reached 1.0.6,
+          # with nothing failing in between.
+          #
+          # The comparison is against the newest *published* release, NOT against
+          # the version this build is about to publish. Those are different
+          # numbers by construction: the resolver always advances the patch, so a
+          # perfectly healthy build publishing v1.0.7 from a baseline of 1.0.6
+          # would warn every single time. A step that cries wolf on healthy
+          # builds is worse than no step - it is noise people learn to ignore.
+          # A real drift is the baseline trailing the newest release by more
+          # than the one version the sync is allowed to be behind.
+          BASELINE=$(grep '^anisequelVersionName=' gradle.properties | cut -d= -f2 | tr -d ' \r' || true)
+          BASELINE=${BASELINE:-0.0.0}
+
+          LATEST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo '')
+          if ! echo "${LATEST:-}" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "No published release to compare against; skipping."
+            exit 0
+          fi
+          LATEST=${LATEST#v}
+
+          # Compare patch components as integers. String comparison gets this
+          # wrong: "1.0.9" sorts *above* "1.0.10", so a project past patch 9 would
+          # look infinitely out of date.
+          BASELINE_PATCH=$(echo "$BASELINE" | cut -d. -f3)
+          LATEST_PATCH=$(echo "$LATEST" | cut -d. -f3)
+          if [ -z "${BASELINE_PATCH}" ] || [ -z "${LATEST_PATCH}" ]; then
+            echo "Could not read patch numbers ('${BASELINE}' vs '${LATEST}'); skipping."
+            exit 0
+          fi
+
+          if [ "$((LATEST_PATCH - BASELINE_PATCH))" -gt 1 ]; then
+            echo "::warning::gradle.properties says ${BASELINE} but ${LATEST} is " \
+                 "published - ${BASELINE} trails it by more than one release, so " \
+                 "the manifest sync has not been running. Local builds report the " \
+                 "wrong version in Settings > About."
+          else
+            echo "Baseline ${BASELINE} is in step with the newest release (${LATEST})."
+          fi
+
       - name: Android Lint
         run: |
           echo "::group::Running Android Lint"
@@ -420,10 +467,18 @@ jobs:
           }
           JSON
 
+          # Bring the baseline forward in the same commit, so the version a local
+          # build reports can never trail the published one by more than a single
+          # commit. Rewriting both lines here - rather than leaving them to be
+          # bumped by hand - is what stops this file drifting again.
+          sed -i -E "s/^anisequelVersionName=.*/anisequelVersionName=${VERSION_NAME}/" gradle.properties
+          sed -i -E "s/^anisequelVersionCode=.*/anisequelVersionCode=${GITHUB_RUN_NUMBER}/" gradle.properties
+
           cat update.json
+          grep '^anisequelVersion' gradle.properties
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json
+          git add update.json gradle.properties
           # --quiet: this runs on every main build, and a no-op commit must not
           # produce an empty commit that would loop the workflow.
           git commit --quiet -m "Update manifest for ${TAG}" || echo "Manifest already current."
