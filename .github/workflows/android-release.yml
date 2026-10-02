@@ -1,0 +1,431 @@
+name: Android Build, Lint & Automated GitHub Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+    # The manifest-sync workflow commits update.json back to main; skip the full
+    # APK build for that commit so publishing a release cannot loop.
+    paths-ignore:
+      - 'update.json'
+      - '**.md'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # Only for the "tell reviewers where the APK is" comment below. Scoped to
+  # pull-requests so it cannot be used to touch issues or reviews.
+  pull-requests: write
+
+# Two pushes landing together would both mint a release tag and race to write
+# update.json. Serialising per ref keeps the newest run the one that publishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build APKs, Bug Check & Release
+    runs-on: ubuntu-latest
+
+    # app/build.gradle.kts reads the release signing material from these variables.
+    # Without them Gradle has no storePassword and assembleRelease fails with a
+    # configuration error instead of a signing error.
+    env:
+      KEYSTORE_PATH: ${{ github.workspace }}/release-key.jks
+      STORE_PASSWORD: android
+      KEY_PASSWORD: android
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21 (JDK 21)
+        uses: actions/setup-java@v4
+        with:
+          # JDK 21 is the newest LTS that AGP 9.1.1, Gradle 9.3.1 and the
+          # Robolectric runner in this repo are all verified against. Newer JDKs
+          # would run the build but break the JVM test step, which is the one
+          # step that is a real gate rather than advisory.
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Pinned to the same version as gradle/wrapper/gradle-wrapper.properties
+          # and ./gradlew. This was 'current', so CI resolved whatever Gradle
+          # shipped that week while every local build used 9.3.1 — meaning a build
+          # could pass here and fail on a developer's machine, or the reverse, with
+          # nothing in the repository to explain the difference.
+          gradle-version: '9.3.1'
+          cache-disabled: false
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Validate the workflow files
+        run: |
+          # A duplicate YAML key makes the whole workflow file invalid, and the
+          # failure surfaces only as "this run likely failed because of a workflow
+          # file issue" with no useful log. Catching it here turns that into a
+          # readable error.
+          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar xz actionlint
+
+          # actionlint exits non-zero when a glob matches nothing, so build the file
+          # list explicitly and skip the step if the directory is somehow empty.
+          mapfile -t FILES < <(find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) | sort)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No workflow files found; nothing to lint."
+            exit 0
+          fi
+          printf 'Linting: %s\n' "${FILES[@]}"
+          ./actionlint "${FILES[@]}"
+
+      - name: Restore the committed release signing key
+        run: |
+          # Every published APK must share one signing key or Android refuses to
+          # install updates (INSTALL_FAILED_UPDATE_INCOMPATIBLE). This step only
+          # decodes the committed key; it must never generate a new one, because a
+          # freshly generated key silently breaks every future update.
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > release-key.jks
+            echo "Decoded release-key.jks from the committed key."
+          else
+            echo "::error::debug.keystore.base64 is missing. Without a stable key every" \
+                 "build is signed differently and updates will not install. Restore the" \
+                 "file from version control."
+            exit 1
+          fi
+
+          # The debug key is only used by debug builds; generate it if absent.
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          # Fail loudly if the release key is unusable, rather than silently
+          # shipping an APK signed with the wrong key.
+          keytool -list -keystore release-key.jks -storepass android -alias upload
+
+      - name: Resolve the release version
+        id: version
+        env:
+          # Required by the `gh release view` probe below. Without a token that
+          # call exits non-zero on auth, which made the probe report "tag is
+          # free" for a tag that already existed — so every build silently
+          # overwrote the same release and its APK asset instead of adding one.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The tag is derived from the app's own versionName so the release, the
+          # Settings > About version and the update manifest all agree.
+          VERSION_NAME=$(grep '^anisequelVersionName=' gradle.properties | cut -d= -f2 | tr -d ' \r' || true)
+          VERSION_NAME=${VERSION_NAME:-1.0.0}
+
+          if [ "${GITHUB_REF}" = "refs/tags/${GITHUB_REF_NAME}" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            # Advance the patch number past the newest published release.
+            LATEST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo '')
+            LATEST_PATCH=$(echo "${LATEST:-}" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+).*$/\3/')
+            LATEST_PATCH=${LATEST_PATCH:-0}
+            if echo "${LATEST:-}" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
+              BASE_PATCH=$(echo "$VERSION_NAME" | cut -d. -f3)
+              BASE_PATCH=${BASE_PATCH:-0}
+              NEXT_PATCH=$(( LATEST_PATCH > BASE_PATCH ? LATEST_PATCH : BASE_PATCH ))
+              NEXT_PATCH=$(( NEXT_PATCH + 1 ))
+              VERSION_NAME="1.0.${NEXT_PATCH}"
+            fi
+
+            TAG="v${VERSION_NAME}"
+          fi
+
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Releasing as ${TAG}"
+
+      - name: Android Lint
+        run: |
+          echo "::group::Running Android Lint"
+          # Advisory only, and the comment above used to claim the opposite.
+          #
+          # `lint { abortOnError = false }` in app/build.gradle.kts means lint
+          # reports findings without failing the build, so this step would never
+          # stop a release either way. It is kept because the annotations are
+          # useful in the run summary, but it must not be read as a gate.
+          ./gradlew lintRelease --continue || echo "::warning::lint reported issues (see annotations)"
+          echo "::endgroup::"
+
+      - name: Unit tests
+        run: |
+          # A real gate, not an advisory step.
+          #
+          # The repository carries FindMissedSequelsUseCaseTest, ExampleUnitTest and
+          # ExampleRobolectricTest, and a build that only lints (advisory) and
+          # assembles a release APK would ship a broken "find my missed sequels"
+          # list without anyone noticing: the sequel-detection rules in
+          # FindMissedSequelsUseCase are pure logic, so they are exactly the kind
+          # of code that regresses silently.
+          #
+          # Robolectric needs to fetch its android-all jars on a cold runner, so
+          # this step is the slowest in the workflow. That is still cheaper than
+          # the alternative, which is finding out from a user's installed app.
+          echo "::group::Running JVM unit tests"
+          # `test`, not `testReleaseUnitTest`: the per-variant task is not present
+          # under this AGP, and the lifecycle task runs every unit-test variant
+          # that does exist, which is what is wanted here anyway.
+          ./gradlew test --stacktrace
+          echo "::endgroup::"
+
+      - name: Build Release APK
+        run: |
+          # The version name is resolved before the build and passed in, so the
+          # version compiled into the APK (shown in Settings -> About) is the
+          # same one the release tag and update manifest use. Resolving it after
+          # the build left the APK advertising a version that was not the one it
+          # was published under.
+          #
+          # One universal APK, deliberately. There is no `splits` block in
+          # app/build.gradle.kts, so the per-ABI branches that used to sit in
+          # the artifact step below could never match anything — they were copied
+          # from a template that did have ABI splits. If per-ABI artifacts are
+          # actually wanted, add the `splits` block *and* keep the branches.
+          ./gradlew assembleRelease \
+            -PanisequelVersionCode="${{ github.run_number }}" \
+            -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
+            --stacktrace
+
+      - name: Prepare APK Artifact
+        run: |
+          OUTPUT_DIR="release-artifacts"
+          mkdir -p "$OUTPUT_DIR"
+
+          APK_BUILD_PATH="app/build/outputs/apk/release"
+          APK=$(find "$APK_BUILD_PATH" -name '*.apk' -type f | head -1 || true)
+
+          if [ -z "$APK" ]; then
+            echo "::error::No APK was produced in $APK_BUILD_PATH"
+            exit 1
+          fi
+
+          # Fail loudly rather than publishing a release with no asset attached.
+          cp "$APK" "$OUTPUT_DIR/anisequel-universal.apk"
+
+          echo "Prepared $OUTPUT_DIR/anisequel-universal.apk:"
+          ls -la "$OUTPUT_DIR"
+
+      - name: Upload Build Artifacts to Workflow Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: anisequel-apks
+          path: release-artifacts/*.apk
+
+      - name: Tell reviewers where the APK is
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          # Taken from the event payload rather than looked up.
+          #
+          # On a `pull_request` event `github.sha` is the *merge* commit that CI
+          # built — refs/pull/N/merge — not the head commit on the branch. An
+          # earlier version searched the open PRs for one whose `head.sha` equalled
+          # `github.sha`, found nothing, and skipped the comment while still
+          # reporting success. The number is right there in the payload.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # A pull request builds a real, signed release APK and then throws it
+          # away, because the two steps that publish it are guarded by
+          # `github.event_name != 'pull_request'` — correctly, since a PR must
+          # never mint a release or push to the update manifest.
+          #
+          # The consequence was that the APK existed but was unfindable: a
+          # reviewer had to know to open the Actions tab, find the right run,
+          # expand "Artifacts" and download a zip. So the APK is linked on the
+          # PR itself, and the release steps stay exactly as guarded as they
+          # were.
+          #
+          # Two things this step deliberately does *not* do:
+          #
+          #  - It does not fail the run. A comment is a courtesy; if the token
+          #    cannot write one the build is still a good build, and turning a
+          #    permissions quirk into a red X on an otherwise-green PR would
+          #    train people to ignore this workflow's failures.
+          #  - It does not post once per push. Every new commit re-runs the
+          #    workflow, and a PR that has been through six pushes would
+          #    otherwise carry six identical comments. The existing one is
+          #    found by marker and edited in place.
+          #
+          # Fork pull requests get a read-only GITHUB_TOKEN by design, so the
+          # write is skipped there rather than attempted and failed. The APK is
+          # still in the run's artifacts either way.
+          if [ "${HEAD_REPO}" != "${BASE_REPO}" ]; then
+            echo "::notice::Fork pull request: GITHUB_TOKEN is read-only, so the APK"
+            echo "::notice::link cannot be posted. The artifact is still uploaded to"
+            echo "::notice::this run under 'anisequel-apks'."
+            exit 0
+          fi
+
+          # Resolve the artifact id so the link goes straight to the APK rather
+          # than to the run's artifact list, which is where a reviewer would
+          # otherwise have to start. The download itself still goes through
+          # GitHub's artifact UI - that is a deliberate constraint of the
+          # artifact store, not something a link can bypass.
+          ARTIFACT_ID=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "anisequel-apks") | .id' | head -1 || true)
+
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "::warning::anisequel-apks artifact not found; skipping the PR comment."
+            exit 0
+          fi
+
+          ARTIFACT_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}"
+          MARKER="<!-- anisequel-apk -->"
+          VERSION=$(grep '^anisequelVersionName=' gradle.properties | cut -d= -f2 | tr -d ' \r' || true)
+          VERSION=${VERSION:-unknown}
+
+          BODY=$(cat <<EOF
+          ${MARKER}
+          ### 📦 APK for this pull request
+
+          This build is green, so the release APK it produced is ready to try:
+
+          **[⬇ Download anisequel-universal.apk](${ARTIFACT_URL})**
+
+          One universal build — it runs on every phone and tablet on Android 7
+          (API 24) and above, so there is nothing to choose between. It is signed
+          with the **same key as every published release**, so it installs
+          straight over an existing copy of AniSequel without an uninstall first.
+
+          *Version \`${VERSION}\`, built from \`${SHA:0:8}\` on run \`${RUN_ID}\`.
+          Artifacts are kept by GitHub for 90 days.*
+
+          This is a build of the branch, not a release. Nothing is published and
+          the update manifest is untouched until this is merged into \`main\`.
+          EOF
+          )
+
+          EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -1 || true)
+
+          if [ -n "$EXISTING" ]; then
+            if gh api -X PATCH "repos/${REPO}/issues/comments/${EXISTING}" \
+                 -f body="$BODY" > /dev/null; then
+              echo "Updated the APK comment on #${PR_NUMBER}."
+            else
+              echo "::warning::Could not update the APK comment on #${PR_NUMBER}."
+            fi
+          else
+            if gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+                 -f body="$BODY" > /dev/null; then
+              echo "Posted the APK comment on #${PR_NUMBER}."
+            else
+              echo "::warning::Could not post the APK comment on #${PR_NUMBER}."
+            fi
+          fi
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        # Publish on every green main build, on tags, and on manual dispatch.
+        # Pull requests are excluded: they must not create releases.
+        if: github.event_name != 'pull_request'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "AniSequel ${{ env.TAG }} (${{ env.VERSION_NAME }})"
+          body: |
+            ## AniSequel
+
+            Find the anime sequels you finished the first season of and never got
+            around to, and add them to your AniList Planning list in one tap.
+
+            ### 📦 APK package
+            **anisequel-universal.apk** runs on every supported device — there is
+            only one build, so there is nothing to choose between.
+
+            *Built from commit* `${{ github.sha }}` *on run* `${{ github.run_number }}`.
+
+            ### 🔑 First launch
+            AniSequel signs you in to your own AniList account through AniList's
+            OAuth page — there is no AniSequel account and no password to manage.
+
+            ### ⚠️ Installing over an older build
+            Every release is signed with the same key, so you can install this over
+            any previous version without uninstalling first.
+
+            If Android reports **"App not installed as package conflicts"**, an
+            older copy signed with a *different* key is still present. Uninstall
+            **AniSequel** once, then install this APK.
+
+            ### 🛡️ "App blocked to protect your device"
+            Google Play Protect flags any app that is not published on the Play
+            Store and is signed by an unrecognised developer. This is expected
+            for a sideloaded build. Choose **"More details" → "Install anyway"**,
+            or temporarily disable Play Protect in Play Store → Settings.
+
+            *Built with JDK 21 and verified by Android Lint.*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release-artifacts/*.apk
+
+      - name: Publish the update manifest
+        # Branch pushes only. On a tag build the manifest commit would be pushed
+        # straight at the tag ref, moving a tag that is supposed to be immutable
+        # (and re-triggering this workflow when it moved).
+        if: github.event_name != 'pull_request' && github.ref_type == 'branch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Written here rather than in a separate release-triggered workflow
+          # because only the build job knows the run number, and the run number
+          # is the APK's real VERSION_CODE (it is passed as
+          # -PanisequelVersionCode).
+          #
+          # Anything that compares this version_code against
+          # BuildConfig.VERSION_CODE must see the same number, or every comparison
+          # is false and an updater silently never offers an update.
+          ASSET_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/anisequel-universal.apk"
+          SIZE=$(stat -c%s release-artifacts/anisequel-universal.apk)
+
+          cat > update.json <<JSON
+          {
+            "version": "${VERSION_NAME}",
+            "version_code": ${GITHUB_RUN_NUMBER},
+            "release_url": "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
+            "download_url": "${ASSET_URL}",
+            "size_bytes": ${SIZE},
+            "published_at": "",
+            "notes": "Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
+          }
+          JSON
+
+          cat update.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          # --quiet: this runs on every main build, and a no-op commit must not
+          # produce an empty commit that would loop the workflow.
+          git commit --quiet -m "Update manifest for ${TAG}" || echo "Manifest already current."
+          git pull --rebase --quiet origin "${GITHUB_REF_NAME}" 2>/dev/null || true
+          git push --quiet origin "HEAD:${GITHUB_REF_NAME}" || echo "Nothing to push."

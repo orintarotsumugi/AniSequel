@@ -16,3 +16,11 @@
 local.properties
 .env
 debug.keystore
+
+# Release signing key material. The keystore itself is decoded from the committed
+# debug.keystore.base64 by the release workflow, so only that base64 file is
+# tracked - never the raw .jks, and never a freshly generated replacement.
+*.jks
+release-key.jks
+my-upload-key.jks
+release-artifacts/

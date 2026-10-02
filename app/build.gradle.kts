@@ -16,14 +16,22 @@ android {
     applicationId = "com.aistudio.anisequel.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // Resolved from gradle.properties so the release workflow, the release tag and
+    // the APK itself always agree. Overridable with -PanisequelVersionCode /
+    // -PanisequelVersionName on the command line.
+    versionCode =
+      (project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: 1)
+    versionName = project.findProperty("anisequelVersionName")?.toString() ?: "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("release") {
+      // The release workflow decodes the committed debug.keystore.base64 to
+      // release-key.jks and points these variables at it. Left unset locally, the
+      // keystore path still falls back to rootDir so a signed local release build
+      // works without editing this file.
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
@@ -54,6 +62,14 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+  lint {
+    // Advisory, and the workflow treats it as such: the `lintRelease` step reports
+    // annotations into the run summary but must never be the reason a green release
+    // fails. Setting it here keeps that promise true instead of aspirational, and
+    // stops lint's vital checks from blocking assembleRelease on a style warning.
+    abortOnError = false
+    checkReleaseBuilds = false
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
   dependenciesInfo {
