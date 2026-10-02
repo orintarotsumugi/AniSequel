@@ -4,5 +4,6 @@ plugins {
   alias(libs.plugins.kotlin.compose) apply false
   alias(libs.plugins.google.devtools.ksp) apply false
   alias(libs.plugins.secrets) apply false
-  alias(libs.plugins.google.services) apply false
+  // alias(libs.plugins.google.services) apply false - only needed if a Firebase
+  // dependency is switched back on in app/build.gradle.kts.
 }

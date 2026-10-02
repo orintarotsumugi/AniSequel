@@ -54,12 +54,15 @@ class FindMissedSequelsUseCase {
                     val alreadyInUserList = allUserListMediaIds.contains(sequelId)
                     val isPlanned = plannedMediaIds.contains(sequelId) ||
                             sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
-                    
-                    val isMissed = if (filterCriteria.hideAlreadyPlanned) {
-                        !alreadyInUserList && !isPlanned
-                    } else {
-                        !alreadyInUserList || isPlanned
-                    }
+
+                    // "Hide already planned" off means *show everything*, including
+                    // the entries the user has already saved. The old expression,
+                    // `!alreadyInUserList || isPlanned`, could never do that: an
+                    // entry the user had on a non-planning list was filtered out by
+                    // both halves of the disjunction, so turning the switch off
+                    // only ever added back the planning entries it already showed.
+                    val isMissed = !filterCriteria.hideAlreadyPlanned ||
+                            (!alreadyInUserList && !isPlanned)
 
                     if (isMissed) {
                         missedSequels.add(
@@ -88,8 +91,12 @@ class FindMissedSequelsUseCase {
                     sequel.sequelTitle.lowercase().contains(query) ||
                     sequel.parentTitle.lowercase().contains(query)
 
-            // Release filter
-            val matchesRelease = filterCriteria.includeUnreleased || !sequel.isUnreleased
+            // Release filter. Skipped when a specific status was chosen,
+            // otherwise picking "Upcoming" while "Include unreleased" was off
+            // returned an empty list with nothing on screen to explain why.
+            val matchesRelease = filterCriteria.statusFilter != StatusFilter.ALL ||
+                    filterCriteria.includeUnreleased ||
+                    !sequel.isUnreleased
 
             // Status filter
             val matchesStatus = when (filterCriteria.statusFilter) {

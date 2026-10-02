@@ -41,8 +41,11 @@ fun FilterSortSheet(
     filterCriteria: FilterCriteria,
     onSortSelected: (SequelSortOption) -> Unit,
     onStatusSelected: (StatusFilter) -> Unit,
-    onToggleUnreleased: () -> Unit,
-    onToggleHidePlanned: () -> Unit,
+    // The switches pass the value they are about to hold, not a bare toggle, so
+    // assistive technology announcing the new state and the callback cannot
+    // disagree.
+    onToggleUnreleased: (Boolean) -> Unit,
+    onToggleHidePlanned: (Boolean) -> Unit,
     onFormatSelected: (String?) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -166,7 +169,14 @@ fun FilterSortSheet(
                 )
             )
             Spacer(modifier = Modifier.height(8.dp))
-            val formats = listOf("All" to null, "TV" to "TV", "Movie" to "MOVIE", "OVA" to "OVA", "ONA" to "ONA", "Special" to "SPECIAL")
+            val formats = listOf(
+                    "All" to null,
+                    "TV" to "TV",
+                    "Movies" to "MOVIE",
+                    "OVA" to "OVA",
+                    "ONA" to "ONA",
+                    "Special" to "SPECIAL"
+                )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -214,7 +224,7 @@ fun FilterSortSheet(
                 }
                 Switch(
                     checked = filterCriteria.includeUnreleased,
-                    onCheckedChange = { onToggleUnreleased() },
+                    onCheckedChange = onToggleUnreleased,
                     modifier = Modifier.testTag("toggle_unreleased_switch")
                 )
             }
@@ -238,7 +248,7 @@ fun FilterSortSheet(
                 }
                 Switch(
                     checked = filterCriteria.hideAlreadyPlanned,
-                    onCheckedChange = { onToggleHidePlanned() },
+                    onCheckedChange = onToggleHidePlanned,
                     modifier = Modifier.testTag("toggle_hide_planned_switch")
                 )
             }

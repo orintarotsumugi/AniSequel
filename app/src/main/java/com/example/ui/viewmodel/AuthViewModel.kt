@@ -59,7 +59,13 @@ class AuthViewModel(
         if (!token.isNullOrBlank()) {
             saveToken(token)
         } else {
-            _uiState.value = AuthUiState.Error("No access token found in redirect")
+            // AniList sends `error=access_denied` when the user backs out of the
+            // consent screen. That is not a failure worth alarming them about.
+            val declined = fragment.contains("error=", ignoreCase = true) ||
+                    urlString.contains("error=", ignoreCase = true)
+            _uiState.value = AuthUiState.Error(
+                if (declined) "AniList access was cancelled." else "No access token found in redirect"
+            )
         }
     }
 
@@ -67,14 +73,13 @@ class AuthViewModel(
         val target = if (fragment.isNotBlank()) fragment else fullUrl.substringAfter("#", "")
         if (target.isBlank()) return null
 
-        val params = target.split("&")
-        for (param in params) {
-            val parts = param.split("=")
-            if (parts.size >= 2 && parts[0] == "access_token") {
-                return parts[1]
-            }
-        }
-        return null
+        // `split("=")` truncated any token containing base64 padding at the first
+        // '=', producing a token that looked pasted but silently failed every
+        // request afterwards. substringAfter keeps the value whole.
+        return target.split("&")
+            .firstOrNull { it.substringBefore("=") == "access_token" }
+            ?.substringAfter("=", "")
+            ?.takeIf { it.isNotBlank() }
     }
 
     fun saveToken(token: String) {
@@ -91,11 +96,13 @@ class AuthViewModel(
 
     fun updateClientId(newClientId: String) {
         viewModelScope.launch {
+            val trimmed = newClientId.trim()
+            if (trimmed.isBlank()) return@launch
             try {
-                authRepository.saveClientId(newClientId)
-                _clientId.value = newClientId
+                authRepository.saveClientId(trimmed)
+                _clientId.value = trimmed
             } catch (e: Exception) {
-                // handle error if needed
+                _clientId.value = authRepository.clientIdFlow.first()
             }
         }
     }

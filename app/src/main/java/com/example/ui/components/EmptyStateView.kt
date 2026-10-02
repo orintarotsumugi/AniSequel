@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.ui.theme.AniSequelTheme
 
 @Composable
 fun EmptyStateView(
@@ -32,7 +32,7 @@ fun EmptyStateView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(32.dp)
+            .padding(horizontal = 32.dp, vertical = 40.dp)
             .testTag("empty_state_view"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -40,25 +40,33 @@ fun EmptyStateView(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                .background(
+                    if (isSearching) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    } else {
+                        AniSequelTheme.statusColors.successContainer
+                    }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = if (isSearching) AppVectorIcons.Search else AppVectorIcons.CheckCircle,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp)
+                tint = if (isSearching) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    AniSequelTheme.statusColors.success
+                },
+                modifier = Modifier.size(34.dp)
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (isSearching) "No matching sequels found" else "All Caught Up!",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            ),
+            text = if (isSearching) "Nothing matches those filters" else "All caught up",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
@@ -66,13 +74,12 @@ fun EmptyStateView(
 
         Text(
             text = if (isSearching) {
-                "Try adjusting your search terms or relaxing the filters in the filter sheet."
+                "Try a different search term, or reset the filters to see everything you are missing."
             } else {
-                "Great job! You don't have any missed sequels for your completed anime list."
+                "Nothing in your completed lists has an unreleased sequel. That is genuinely rare - enjoy it."
             },
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
@@ -82,7 +89,7 @@ fun EmptyStateView(
                 onClick = onResetFilters,
                 modifier = Modifier.testTag("reset_filters_button")
             ) {
-                Text("Clear Filters & Search")
+                Text("Clear search and filters")
             }
         }
     }

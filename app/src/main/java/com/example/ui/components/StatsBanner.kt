@@ -7,11 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -26,7 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.ui.theme.AniSequelTheme
 
 @Composable
 fun StatsBanner(
@@ -34,6 +33,8 @@ fun StatsBanner(
     missedCount: Int,
     modifier: Modifier = Modifier
 ) {
+    val status = AniSequelTheme.statusColors
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -41,11 +42,11 @@ fun StatsBanner(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         StatCard(
-            title = "Watched Anime",
+            title = "Completed",
             count = "$totalWatched",
             icon = AppVectorIcons.CheckCircle,
-            iconBg = Color(0xFF10B981).copy(alpha = 0.15f),
-            iconTint = Color(0xFF10B981),
+            iconBg = status.successContainer,
+            iconTint = status.success,
             modifier = Modifier.weight(1f)
         )
 
@@ -53,8 +54,16 @@ fun StatsBanner(
             title = "Missed Sequels",
             count = "$missedCount",
             icon = AppVectorIcons.Warning,
-            iconBg = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-            iconTint = MaterialTheme.colorScheme.tertiary,
+            iconBg = if (missedCount > 0) {
+                status.warningContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
+            iconTint = if (missedCount > 0) {
+                status.onWarningContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             modifier = Modifier.weight(1f)
         )
     }
@@ -71,10 +80,12 @@ private fun StatCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = CardDefaults.outlinedCardBorder()
     ) {
         Row(
             modifier = Modifier
@@ -84,7 +95,7 @@ private fun StatCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(iconBg),
                 contentAlignment = Alignment.Center
@@ -93,27 +104,22 @@ private fun StatCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column {
                 Text(
                     text = count,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp
-                    )
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

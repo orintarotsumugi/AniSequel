@@ -44,10 +44,13 @@ object GraphQLQueries {
         }
     """.trimIndent()
 
+    // MediaListCollection returns the user's whole list in one response (up to
+    // AniList's 11,000-entry cap), so there is nothing to paginate and
+    // `hasNextChunk` - a leftover from the old chunked API - was only ever
+    // asking the server to send a field nothing read.
     val GET_USER_ANIME_LIST = """
         query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String) {
           MediaListCollection(userId: ${'$'}userId, userName: ${'$'}userName, type: ANIME) {
-            hasNextChunk
             lists {
               name
               status

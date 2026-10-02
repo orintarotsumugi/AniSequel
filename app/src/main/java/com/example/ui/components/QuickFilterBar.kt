@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.model.FilterCriteria
 import com.example.data.model.StatusFilter
 
@@ -45,10 +44,10 @@ fun QuickFilterBar(
                 onStatusSelected(StatusFilter.ALL)
                 onFormatSelected(null)
             },
-            label = { Text("All", fontSize = 13.sp) },
+            label = { Text("All") },
             colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
             )
         )
 
@@ -59,7 +58,7 @@ fun QuickFilterBar(
             onClick = {
                 if (isAiring) onStatusSelected(StatusFilter.ALL) else onStatusSelected(StatusFilter.RELEASING)
             },
-            label = { Text("Airing Now", fontSize = 13.sp) },
+            label = { Text("Airing now") },
             leadingIcon = if (isAiring) {
                 { Icon(imageVector = AppVectorIcons.Done, contentDescription = null, modifier = Modifier.size(14.dp)) }
             } else null
@@ -72,7 +71,7 @@ fun QuickFilterBar(
             onClick = {
                 if (isFinished) onStatusSelected(StatusFilter.ALL) else onStatusSelected(StatusFilter.FINISHED)
             },
-            label = { Text("Finished", fontSize = 13.sp) },
+            label = { Text("Finished") },
             leadingIcon = if (isFinished) {
                 { Icon(imageVector = AppVectorIcons.Done, contentDescription = null, modifier = Modifier.size(14.dp)) }
             } else null
@@ -85,7 +84,7 @@ fun QuickFilterBar(
             onClick = {
                 if (isUpcoming) onStatusSelected(StatusFilter.ALL) else onStatusSelected(StatusFilter.NOT_YET_RELEASED)
             },
-            label = { Text("Upcoming", fontSize = 13.sp) },
+            label = { Text("Upcoming") },
             leadingIcon = if (isUpcoming) {
                 { Icon(imageVector = AppVectorIcons.Done, contentDescription = null, modifier = Modifier.size(14.dp)) }
             } else null
@@ -98,7 +97,7 @@ fun QuickFilterBar(
             onClick = {
                 if (isTv) onFormatSelected(null) else onFormatSelected("TV")
             },
-            label = { Text("TV Series", fontSize = 13.sp) },
+            label = { Text("TV series") },
             leadingIcon = if (isTv) {
                 { Icon(imageVector = AppVectorIcons.Done, contentDescription = null, modifier = Modifier.size(14.dp)) }
             } else null
@@ -111,7 +110,7 @@ fun QuickFilterBar(
             onClick = {
                 if (isMovie) onFormatSelected(null) else onFormatSelected("MOVIE")
             },
-            label = { Text("Movies", fontSize = 13.sp) },
+            label = { Text("Movies") },
             leadingIcon = if (isMovie) {
                 { Icon(imageVector = AppVectorIcons.Done, contentDescription = null, modifier = Modifier.size(14.dp)) }
             } else null

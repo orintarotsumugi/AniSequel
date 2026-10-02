@@ -102,13 +102,13 @@ fun LoginScreen(
                 Box(
                     modifier = Modifier
                         .size(88.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(MaterialTheme.shapes.large)
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Tv,
-                        contentDescription = "AniSequel Logo",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(46.dp)
                     )
@@ -118,11 +118,7 @@ fun LoginScreen(
 
                 Text(
                     text = "AniSequel",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 30.sp,
-                        letterSpacing = (-0.5).sp
-                    ),
+                    style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
 
@@ -139,10 +135,10 @@ fun LoginScreen(
                 // Mode Tabs: OAuth vs Public Username
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(MaterialTheme.shapes.small)
                 ) {
                     Tab(
                         selected = selectedTab == 0,
@@ -162,9 +158,9 @@ fun LoginScreen(
                     // Sign in with OAuth Tab
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -187,7 +183,7 @@ fun LoginScreen(
                     if (authState is AuthUiState.Error) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.small,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                         ) {
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -203,13 +199,13 @@ fun LoginScreen(
                     } else {
                         Button(
                             onClick = { openCustomTab(context, authViewModel.getAuthorizationUrl()) },
+                            enabled = (authState as? AuthUiState.Error) == null,
                             modifier = Modifier.fillMaxWidth().height(52.dp).testTag("connect_anilist_button"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            shape = MaterialTheme.shapes.small
                         ) {
                             Icon(imageVector = AppVectorIcons.Login, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text("Connect AniList Account", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Text("Connect AniList Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -228,8 +224,8 @@ fun LoginScreen(
                     // Public Username Scan Tab
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
@@ -259,7 +255,7 @@ fun LoginScreen(
                                 },
                                 enabled = publicUsernameInput.isNotBlank(),
                                 modifier = Modifier.fillMaxWidth().height(48.dp).testTag("scan_username_button"),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = MaterialTheme.shapes.small
                             ) {
                                 Icon(imageVector = AppVectorIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -275,11 +271,11 @@ fun LoginScreen(
                 OutlinedButton(
                     onClick = onStartDemo,
                     modifier = Modifier.fillMaxWidth().height(48.dp).testTag("explore_demo_button"),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = MaterialTheme.shapes.small
                 ) {
                     Icon(imageVector = AppVectorIcons.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Explore Sample Demo Mode", fontWeight = FontWeight.SemiBold)
+                    Text("Explore with sample data", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -365,11 +361,15 @@ private fun FeatureRow(
 }
 
 private fun openCustomTab(context: Context, url: String) {
-    try {
+    // Custom Tabs first, plain browser second. The old fallback called
+    // startActivity outside a runCatching, so a device with no browser at all
+    // crashed the app instead of failing visibly.
+    runCatching {
         val customTabsIntent = CustomTabsIntent.Builder().setShowTitle(true).build()
         customTabsIntent.launchUrl(context, Uri.parse(url))
-    } catch (e: Exception) {
+    }.recoverCatching {
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
     }
 }

@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules for AniSequel.
+
+   The DataStore file that holds the AniList OAuth access token is excluded on
+   purpose. With the default (empty) rules the whole app data directory is
+   uploaded to the user's Google backup and copied to any device they restore
+   onto, which means a signed-in AniList session travels with the backup and
+   lands on hardware the user has not protected the way they protected this one.
+
+   Excluding it costs nothing: signing in again is one tap, and the token is
+   scoped to the device that requested it anyway.
+
+   Note: this file is ignored for devices older than API 31, which use
+   data_extraction_rules.xml.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude
+        domain="file"
+        path="datastore/" />
 </full-backup-content>

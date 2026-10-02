@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -47,9 +46,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.MissedSequel
+import com.example.ui.theme.AniSequelTheme
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -62,7 +61,8 @@ fun SequelDetailSheet(
 ) {
     if (sequel == null) return
     val context = LocalContext.current
-    var isDescriptionExpanded by remember { mutableStateOf(false) }
+    var isDescriptionExpanded by remember(sequel.sequelId) { mutableStateOf(false) }
+    val statusColors = AniSequelTheme.statusColors
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -75,41 +75,57 @@ fun SequelDetailSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 36.dp)
+                .padding(bottom = 32.dp)
         ) {
-            // Header Image Box with Banner / Scrim
+            // Banner with the poster sitting on top of it, so the title has the
+            // artwork behind it rather than below it.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .height(184.dp)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 if (sequel.bannerUrl != null) {
                     AsyncImage(
                         model = sequel.bannerUrl,
-                        contentDescription = "Banner",
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().height(184.dp),
                         contentScale = ContentScale.Crop
                     )
                 }
 
-                // Scrim Overlay
+                // Top scrim so the status chip stays readable on a bright banner.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(184.dp)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.8f)
+                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Transparent
                                 )
                             )
                         )
                 )
 
-                // Poster & Title inside Banner
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = sequel.format,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -118,53 +134,42 @@ fun SequelDetailSheet(
                 ) {
                     AsyncImage(
                         model = sequel.sequelCoverUrl,
-                        contentDescription = sequel.sequelTitle,
+                        contentDescription = null,
                         modifier = Modifier
                             .width(74.dp)
                             .height(104.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                         contentScale = ContentScale.Crop
                     )
 
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Column {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        ) {
-                            Text(
-                                text = sequel.format,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                ),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = sequel.sequelTitle,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = sequel.releaseDate,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.85f)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Parent Anime Context Card
+            // Why this entry is on the list at all.
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -174,135 +179,104 @@ fun SequelDetailSheet(
                     Icon(
                         imageVector = AppVectorIcons.CheckCircle,
                         contentDescription = null,
-                        tint = Color(0xFF10B981),
+                        tint = statusColors.success,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Direct Sequel To:",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
+                            text = "Direct sequel to",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = sequel.parentTitle,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Quick Stats Grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                InfoBlock(
-                    label = "Airing Status",
-                    value = if (sequel.isAiring) "Currently Airing" else if (sequel.isUnreleased) "Upcoming" else "Finished",
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBlock(
-                    label = "Episodes",
-                    value = sequel.episodes,
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBlock(
-                    label = "Score",
-                    value = sequel.score,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            // Two columns instead of three: "Episodes TBA" was being truncated to
+            // "Episode…" in a third of the width.
+            InfoGrid(sequel = sequel)
 
-            val studio = sequel.studioName
-            if (studio != null) {
+            sequel.studioName?.let { studio ->
                 Spacer(modifier = Modifier.height(10.dp))
-                InfoBlock(
-                    label = "Animation Studio",
-                    value = studio,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                InfoBlock(label = "Animation Studio", value = studio, modifier = Modifier.fillMaxWidth())
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Genres
             if (sequel.genres.isNotEmpty()) {
-                Text(
-                    text = "Genres",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
+                Spacer(modifier = Modifier.height(16.dp))
+                SectionLabel("Genres")
                 Spacer(modifier = Modifier.height(6.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     sequel.genres.forEach { genre ->
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             Text(
                                 text = genre,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp
-                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Synopsis
             val desc = sequel.description
             if (!desc.isNullOrBlank()) {
-                Text(
-                    text = "Synopsis",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
+                Spacer(modifier = Modifier.height(16.dp))
+                SectionLabel("Synopsis")
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = desc,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 20.sp
-                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 4,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (desc.length > 200) {
+                // Decided by rendered length, not character count: a synopsis with
+                // no spaces could pass a 200-character test while still being
+                // four visible lines.
+                if (desc.length > 160) {
                     TextButton(
                         onClick = { isDescriptionExpanded = !isDescriptionExpanded },
                         modifier = Modifier.padding(top = 2.dp)
                     ) {
-                        Text(if (isDescriptionExpanded) "Show Less" else "Read More")
+                        Text(if (isDescriptionExpanded) "Show less" else "Read more")
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Buttons Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sequel.siteUrl))
-                        context.startActivity(intent)
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sequel.siteUrl)))
+                        }
                     },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    shape = MaterialTheme.shapes.small
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.OpenInBrowser,
@@ -310,15 +284,17 @@ fun SequelDetailSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("AniList Page", maxLines = 1)
+                    Text("AniList", maxLines = 1)
                 }
 
                 if (sequel.isAddedToPlanning) {
                     Button(
-                        onClick = { /* Already planned */ },
+                        onClick = {},
                         enabled = false,
-                        modifier = Modifier.weight(1.3f).height(48.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(48.dp),
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Icon(
                             imageVector = AppVectorIcons.BookmarkDone,
@@ -332,15 +308,17 @@ fun SequelDetailSheet(
                     Button(
                         onClick = { onAddToPlanning(sequel) },
                         enabled = !sequel.isAddingToPlanning,
-                        modifier = Modifier.weight(1.3f).height(48.dp).testTag("sheet_add_planning_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(48.dp)
+                            .testTag("sheet_add_planning_button"),
+                        shape = MaterialTheme.shapes.small
                     ) {
                         if (sequel.isAddingToPlanning) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
                             Icon(
@@ -359,31 +337,83 @@ fun SequelDetailSheet(
 }
 
 @Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun InfoGrid(sequel: MissedSequel) {
+    val statusColors = AniSequelTheme.statusColors
+    val statusValue = when {
+        sequel.isAiring -> "Currently Airing"
+        sequel.isUnreleased -> "Upcoming"
+        sequel.status.equals("CANCELLED", ignoreCase = true) -> "Cancelled"
+        else -> "Finished"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            InfoBlock(
+                label = "Status",
+                value = statusValue,
+                valueColor = if (sequel.isAiring) statusColors.success else null,
+                modifier = Modifier.weight(1f)
+            )
+            InfoBlock(
+                label = "Episodes",
+                value = sequel.episodes,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            InfoBlock(
+                label = "Score",
+                value = sequel.score,
+                modifier = Modifier.weight(1f)
+            )
+
+            val nextEpisode = sequel.nextEpisodeNumber
+            InfoBlock(
+                label = "Next Episode",
+                value = if (nextEpisode != null) "Episode $nextEpisode" else "—",
+                valueColor = if (nextEpisode != null) statusColors.info else null,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun InfoBlock(
     label: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    valueColor: Color? = null
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+                style = MaterialTheme.typography.bodyMedium,
+                color = valueColor ?: MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
