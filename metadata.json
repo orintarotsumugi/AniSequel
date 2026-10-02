@@ -1,0 +1,6 @@
+{
+  "name": "AniSequel",
+  "description": "Discover missed anime sequels from your AniList account and easily add them to your planning list.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
