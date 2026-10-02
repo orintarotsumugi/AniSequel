@@ -44,6 +44,8 @@ class AuthRedirectTest {
         override val accessTokenFlow: Flow<String?> = token
         override val clientIdFlow: Flow<String> = clientId
 
+        override fun cachedAccessToken(): String? = token.value
+
         override suspend fun saveAccessToken(token: String) {
             this.token.value = token
         }

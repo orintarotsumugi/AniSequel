@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.FilterCriteria
+import com.example.data.model.RelationKind
 import com.example.data.model.SequelSortOption
 import com.example.data.model.StatusFilter
 
@@ -47,6 +48,7 @@ fun FilterSortSheet(
     onToggleUnreleased: (Boolean) -> Unit,
     onToggleHidePlanned: (Boolean) -> Unit,
     onFormatSelected: (String?) -> Unit,
+    onToggleRelation: (RelationKind) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -251,6 +253,52 @@ fun FilterSortSheet(
                     onCheckedChange = onToggleHidePlanned,
                     modifier = Modifier.testTag("toggle_hide_planned_switch")
                 )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // What counts as a gap worth surfacing. Sequels is the historical
+            // behaviour and stays on by default; the rest widen the results
+            // considerably, so they are opt-in rather than switched on silently.
+            Text(
+                text = "Include Franchise Gaps",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Prequels surface a season you finished without, side stories and spin-offs the franchise branched into.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                RelationKind.entries.forEach { relation ->
+                    val selected = relation in filterCriteria.includedRelations
+                    FilterChip(
+                        selected = selected,
+                        onClick = { onToggleRelation(relation) },
+                        label = { Text(relation.displayName) },
+                        leadingIcon = if (selected) {
+                            {
+                                Icon(
+                                    imageVector = AppVectorIcons.Done,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        } else null,
+                        modifier = Modifier.testTag("relation_chip_${relation.name}")
+                    )
+                }
             }
         }
     }

@@ -91,7 +91,10 @@ fun SequelCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Sequel to",
+                        // "Sequel to", "Prequel to", "Side story of"... derived from
+                        // AniList's own relation type so a prequel is never
+                        // described as a sequel.
+                        text = sequel.relationLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold

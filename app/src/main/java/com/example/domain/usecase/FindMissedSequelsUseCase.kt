@@ -3,90 +3,110 @@ package com.example.domain.usecase
 import com.example.data.model.FilterCriteria
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MissedSequel
+import com.example.data.model.RelationKind
 import com.example.data.model.SequelSortOption
 import com.example.data.model.StatusFilter
 
+/**
+ * Works out which franchise entries are missing from a user's AniList list.
+ *
+ * Split into [discover] and [applyFilters] on purpose. [discover] walks every
+ * entry and every relation edge in the list - for a large account that is
+ * hundreds of entries and well over a thousand edges - while [applyFilters] only
+ * touches the candidates it is given. They used to be one function, so typing
+ * in the search box re-walked the entire list on every keystroke.
+ */
 class FindMissedSequelsUseCase {
 
-    fun execute(
+    /**
+     * Everything the user's list is missing, before any filter or sort.
+     *
+     * Depends only on the list itself and on [FilterCriteria.hideAlreadyPlanned],
+     * so its result is worth caching between filter changes.
+     */
+    fun discover(
         collection: MediaListCollection,
         filterCriteria: FilterCriteria = FilterCriteria()
     ): List<MissedSequel> {
         val lists = collection.lists ?: return emptyList()
         val allUserEntries = lists.flatMap { it.entries ?: emptyList() }
-        
-        // Collect all media IDs that the user already has in any of their lists
+
+        // Every media the user already tracks, in any list.
         val allUserListMediaIds = mutableSetOf<Int>()
+        // ...and the subset sitting in Planning, which the switch is named after.
         val plannedMediaIds = mutableSetOf<Int>()
-        
+
         for (entry in allUserEntries) {
             val mediaId = entry.media.id
             allUserListMediaIds.add(mediaId)
-            
+
             val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
             if (entryStatus.equals("PLANNING", ignoreCase = true)) {
                 plannedMediaIds.add(mediaId)
             }
         }
 
-        // Completed or watched anime entries
-        val watchedEntries = allUserEntries.filter { entry ->
-            val status = entry.status ?: entry.media.mediaListEntry?.status
-            status.equals("COMPLETED", ignoreCase = true) ||
-                    (entry.progress != null && entry.media.episodes != null && entry.progress >= entry.media.episodes && entry.media.episodes > 0)
-        }
+        val includedRelations = filterCriteria.includedRelations
+            .map { it.apiValue }
+            .toSet()
 
         val missedSequels = mutableListOf<MissedSequel>()
 
-        for (entry in watchedEntries) {
+        for (entry in allUserEntries) {
+            if (!isWatched(entry.status, entry.media.episodes, entry.progress)) continue
+
             val parentMedia = entry.media
             val parentTitle = parentMedia.title?.displayTitle ?: "Anime #${parentMedia.id}"
-            val parentCover = parentMedia.coverImage?.bestUrl
-            val parentStatus = parentMedia.status
 
-            val relationEdges = parentMedia.relations?.edges ?: emptyList()
-            for (edge in relationEdges) {
-                if (edge.relationType.equals("SEQUEL", ignoreCase = true)) {
-                    val sequelNode = edge.node
-                    val sequelId = sequelNode.id
-                    
-                    // Check if the user already has this sequel on ANY list
-                    val alreadyInUserList = allUserListMediaIds.contains(sequelId)
-                    val isPlanned = plannedMediaIds.contains(sequelId) ||
-                            sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
+            for (edge in parentMedia.relations?.edges ?: emptyList()) {
+                val relationType = edge.relationType
+                if (relationType == null || !includedRelations.contains(relationType.uppercase())) continue
 
-                    // "Hide already planned" off means *show everything*, including
-                    // the entries the user has already saved. The old expression,
-                    // `!alreadyInUserList || isPlanned`, could never do that: an
-                    // entry the user had on a non-planning list was filtered out by
-                    // both halves of the disjunction, so turning the switch off
-                    // only ever added back the planning entries it already showed.
-                    val isMissed = !filterCriteria.hideAlreadyPlanned ||
-                            (!alreadyInUserList && !isPlanned)
+                val sequelNode = edge.node
+                val sequelId = sequelNode.id
 
-                    if (isMissed) {
-                        missedSequels.add(
-                            MissedSequel(
-                                parentId = parentMedia.id,
-                                parentTitle = parentTitle,
-                                parentCoverUrl = parentCover,
-                                parentStatus = parentStatus,
-                                sequelMedia = sequelNode,
-                                isAddedToPlanning = isPlanned
-                            )
+                val alreadyInUserList = allUserListMediaIds.contains(sequelId)
+                val isPlanned = plannedMediaIds.contains(sequelId) ||
+                        sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
+
+                // "Hide already planned" off means *show everything*, including
+                // the entries the user has already saved. The old expression,
+                // `!alreadyInUserList || isPlanned`, could never do that: an
+                // entry the user had on a non-planning list was filtered out by
+                // both halves of the disjunction, so turning the switch off
+                // only ever added back the planning entries it already showed.
+                val isMissed = !filterCriteria.hideAlreadyPlanned ||
+                        (!alreadyInUserList && !isPlanned)
+
+                if (isMissed) {
+                    missedSequels.add(
+                        MissedSequel(
+                            parentId = parentMedia.id,
+                            parentTitle = parentTitle,
+                            sequelMedia = sequelNode,
+                            relationType = RelationKind.fromApi(relationType).apiValue,
+                            isAddedToPlanning = isPlanned
                         )
-                    }
+                    )
                 }
             }
         }
 
-        // Distinct by sequel ID so identical sequels across multi-season parents don't duplicate
-        val distinctMissed = missedSequels.distinctBy { it.sequelId }
+        // The same sequel reachable from two parents is one gap, not two.
+        return missedSequels.distinctBy { it.sequelId }
+    }
 
-        // Apply filters
-        val filtered = distinctMissed.filter { sequel ->
-            // Search query filter
-            val query = filterCriteria.searchQuery.trim().lowercase()
+    /**
+     * Filters and orders candidates. Cheap enough to re-run on every keystroke,
+     * which is exactly why it is separate from [discover].
+     */
+    fun applyFilters(
+        candidates: List<MissedSequel>,
+        filterCriteria: FilterCriteria
+    ): List<MissedSequel> {
+        val query = filterCriteria.searchQuery.trim().lowercase()
+
+        val filtered = candidates.filter { sequel ->
             val matchesQuery = query.isEmpty() ||
                     sequel.sequelTitle.lowercase().contains(query) ||
                     sequel.parentTitle.lowercase().contains(query)
@@ -98,7 +118,6 @@ class FindMissedSequelsUseCase {
                     filterCriteria.includeUnreleased ||
                     !sequel.isUnreleased
 
-            // Status filter
             val matchesStatus = when (filterCriteria.statusFilter) {
                 StatusFilter.ALL -> true
                 StatusFilter.FINISHED -> sequel.status.equals("FINISHED", ignoreCase = true)
@@ -106,14 +125,12 @@ class FindMissedSequelsUseCase {
                 StatusFilter.NOT_YET_RELEASED -> sequel.isUnreleased
             }
 
-            // Format filter
             val matchesFormat = filterCriteria.selectedFormat == null ||
                     sequel.format.equals(filterCriteria.selectedFormat, ignoreCase = true)
 
             matchesQuery && matchesRelease && matchesStatus && matchesFormat
         }
 
-        // Apply sorting
         return when (filterCriteria.sortOption) {
             SequelSortOption.RELEASE_DATE_DESC -> filtered.sortedWith(
                 compareByDescending<MissedSequel> { it.sequelMedia.startDate?.year ?: -1 }
@@ -130,4 +147,18 @@ class FindMissedSequelsUseCase {
             SequelSortOption.SCORE -> filtered.sortedByDescending { it.sequelMedia.averageScore ?: 0 }
         }
     }
+
+    /** One-shot path, for callers that do not hold on to the candidates. */
+    fun execute(
+        collection: MediaListCollection,
+        filterCriteria: FilterCriteria = FilterCriteria()
+    ): List<MissedSequel> = applyFilters(discover(collection, filterCriteria), filterCriteria)
+
+    /**
+     * An entry counts as watched when the user marked it complete, or when their
+     * progress reached the last episode without them ever setting a status.
+     */
+    private fun isWatched(status: String?, episodes: Int?, progress: Int?): Boolean =
+        status.equals("COMPLETED", ignoreCase = true) ||
+                (progress != null && episodes != null && episodes > 0 && progress >= episodes)
 }

@@ -63,6 +63,12 @@ data class MediaListCollectionData(
     @Json(name = "MediaListCollection") val collection: MediaListCollection?
 )
 
+/** Payload of the on-demand detail query for a single media. */
+@JsonClass(generateAdapter = true)
+data class MediaDetailData(
+    @Json(name = "Media") val media: MediaNode? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class MediaListCollection(
     val lists: List<MediaListGroup>? = null,
@@ -104,7 +110,25 @@ data class MediaNode(
     val relations: MediaRelations? = null,
     val mediaListEntry: SimpleMediaListEntry? = null,
     val nextAiringEpisode: NextAiringEpisode? = null
-)
+) {
+    /**
+     * Overlay of the lazily-fetched detail onto this node.
+     *
+     * The list query deliberately leaves `description`, `bannerImage` and
+     * `studios` unset, so those arrive later in a much smaller response. Null
+     * fields in [detail] must not erase what the list query already found -
+     * that is what this merge is for.
+     */
+    fun withDetail(detail: MediaNode): MediaNode = copy(
+        description = detail.description ?: description,
+        bannerImage = detail.bannerImage ?: bannerImage,
+        studios = detail.studios ?: studios,
+        coverImage = when {
+            detail.coverImage?.large != null -> coverImage?.copy(large = detail.coverImage.large) ?: detail.coverImage
+            else -> coverImage
+        }
+    )
+}
 
 @JsonClass(generateAdapter = true)
 data class StudioConnection(

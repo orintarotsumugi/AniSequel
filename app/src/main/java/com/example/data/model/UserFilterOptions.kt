@@ -21,5 +21,11 @@ data class FilterCriteria(
     val statusFilter: StatusFilter = StatusFilter.ALL,
     val includeUnreleased: Boolean = true,
     val selectedFormat: String? = null,
-    val hideAlreadyPlanned: Boolean = true
+    val hideAlreadyPlanned: Boolean = true,
+    /**
+     * Which kinds of franchise gap to surface. Defaults to sequels only, which
+     * is what the app has always meant; prequels, side stories and spin-offs are
+     * opt-in because they widen the result set considerably.
+     */
+    val includedRelations: Set<RelationKind> = setOf(RelationKind.SEQUEL)
 )

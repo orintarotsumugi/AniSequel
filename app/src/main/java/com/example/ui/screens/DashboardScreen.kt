@@ -83,6 +83,7 @@ fun DashboardScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
+    val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
 
     LaunchedEffect(Unit) {
         dashboardViewModel.eventFlow.collectLatest { event ->
@@ -105,6 +106,9 @@ fun DashboardScreen(
     val selectedSequel = selectedSequelId?.let { id ->
         successState?.missedSequels?.firstOrNull { it.sequelId == id }
     }
+
+    val isDetailLoading = selectedSequelId != null &&
+        selectedSequelId in loadingDetailIds
 
     Scaffold(
         modifier = modifier.fillMaxSize().testTag("dashboard_screen"),
@@ -288,6 +292,7 @@ fun DashboardScreen(
             onToggleUnreleased = { dashboardViewModel.toggleIncludeUnreleased(it) },
             onToggleHidePlanned = { dashboardViewModel.toggleHideAlreadyPlanned(it) },
             onFormatSelected = { dashboardViewModel.selectFormat(it) },
+            onToggleRelation = { dashboardViewModel.toggleRelation(it) },
             onDismiss = { showFilterSheet = false }
         )
     }
@@ -297,7 +302,10 @@ fun DashboardScreen(
             sequel = selectedSequel,
             sheetState = detailSheetState,
             onDismiss = { selectedSequelId = null },
-            onAddToPlanning = { dashboardViewModel.addToPlanning(it) }
+            onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
+            onLoadDetail = { dashboardViewModel.loadDetail(it) },
+            isDetailLoading = isDetailLoading,
+            canWriteToAniList = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
         )
     }
 }

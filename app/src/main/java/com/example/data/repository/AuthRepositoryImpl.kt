@@ -22,6 +22,14 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
         const val DEFAULT_CLIENT_ID = "23668"
     }
 
+    /**
+     * Mirror of the stored token so [AuthInterceptor] can read it without
+     * touching the disk. Written on every read and on every write, so it can
+     * never hand out a token that a sign-out has already revoked.
+     */
+    @Volatile
+    private var cachedToken: String? = null
+
     override val accessTokenFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[KEY_ACCESS_TOKEN]?.takeIf { it.isNotBlank() }
     }
@@ -30,9 +38,13 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
         preferences[KEY_CLIENT_ID]?.takeIf { it.isNotBlank() } ?: DEFAULT_CLIENT_ID
     }
 
+    override fun cachedAccessToken(): String? = cachedToken
+
     override suspend fun saveAccessToken(token: String) {
+        val trimmed = token.trim()
+        cachedToken = trimmed
         context.dataStore.edit { preferences ->
-            preferences[KEY_ACCESS_TOKEN] = token.trim()
+            preferences[KEY_ACCESS_TOKEN] = trimmed
         }
     }
 
@@ -43,13 +55,14 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     }
 
     override suspend fun clearAccessToken() {
+        cachedToken = null
         context.dataStore.edit { preferences ->
             preferences.remove(KEY_ACCESS_TOKEN)
         }
     }
 
     override suspend fun getAccessToken(): String? {
-        return accessTokenFlow.first()
+        return accessTokenFlow.first().also { cachedToken = it }
     }
 
     override suspend fun getClientId(): String {

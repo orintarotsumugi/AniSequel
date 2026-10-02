@@ -3,6 +3,7 @@ package com.example.data.network
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.MediaListCollectionData
+import com.example.data.model.MediaDetailData
 import com.example.data.model.SaveMediaListEntryData
 import com.example.data.model.UserByNameData
 import com.example.data.model.ViewerData
@@ -35,4 +36,11 @@ interface AniListApiService {
     suspend fun saveMediaListEntry(
         @Body request: GraphQLRequest
     ): GraphQLResponse<SaveMediaListEntryData>
+
+    /** Fetches the fields the list query leaves out, for one entry only. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getMediaDetail(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MediaDetailData>
 }

@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,12 +58,22 @@ fun SequelDetailSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
+    onLoadDetail: (MissedSequel) -> Unit,
+    isDetailLoading: Boolean,
+    canWriteToAniList: Boolean,
     modifier: Modifier = Modifier
 ) {
     if (sequel == null) return
     val context = LocalContext.current
     var isDescriptionExpanded by remember(sequel.sequelId) { mutableStateOf(false) }
     val statusColors = AniSequelTheme.statusColors
+
+    // Synopsis, banner and studio are fetched for this entry only, the moment
+    // it is opened. Asking AniList for them across every entry in the list is
+    // what makes it answer HTTP 500 on a large account.
+    LaunchedEffect(sequel.sequelId) {
+        onLoadDetail(sequel)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -185,7 +196,9 @@ fun SequelDetailSheet(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Direct sequel to",
+                            // Matches the card's label, so a prequel is not
+                            // introduced as a sequel on this screen either.
+                            text = sequel.relationLabel,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
@@ -208,6 +221,13 @@ fun SequelDetailSheet(
             sequel.studioName?.let { studio ->
                 Spacer(modifier = Modifier.height(10.dp))
                 InfoBlock(label = "Animation Studio", value = studio, modifier = Modifier.fillMaxWidth())
+            }
+
+            // Placeholder while the one-off detail query is in flight, so the
+            // sheet does not simply omit a section and then pop it in.
+            if (isDetailLoading && sequel.studioName == null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                InfoBlock(label = "Animation Studio", value = "Loading...", modifier = Modifier.fillMaxWidth())
             }
 
             if (sequel.genres.isNotEmpty()) {
@@ -235,7 +255,16 @@ fun SequelDetailSheet(
             }
 
             val desc = sequel.description
-            if (!desc.isNullOrBlank()) {
+            if (isDetailLoading && desc.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                SectionLabel("Synopsis")
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Loading synopsis...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (!desc.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 SectionLabel("Synopsis")
                 Spacer(modifier = Modifier.height(6.dp))
@@ -287,7 +316,27 @@ fun SequelDetailSheet(
                     Text("AniList", maxLines = 1)
                 }
 
-                if (sequel.isAddedToPlanning) {
+                if (!canWriteToAniList && !sequel.isAddedToPlanning) {
+                    // Demo mode and public-profile scans cannot write to the
+                    // viewer's list. Offering the button anyway meant tapping it
+                    // produced a mutation AniList was always going to reject.
+                    OutlinedButton(
+                        onClick = { onAddToPlanning(sequel) },
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(48.dp)
+                            .testTag("sheet_sign_in_to_add_button"),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Login,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Sign in to add")
+                    }
+                } else if (sequel.isAddedToPlanning) {
                     Button(
                         onClick = {},
                         enabled = false,

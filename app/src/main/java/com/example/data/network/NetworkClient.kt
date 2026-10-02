@@ -16,6 +16,8 @@ object NetworkClient {
     fun createApiService(authRepository: AuthRepository): AniListApiService {
         val clientBuilder = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(authRepository))
+            // Before AuthInterceptor so a retried request re-reads the token.
+            .addInterceptor(RateLimitInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
