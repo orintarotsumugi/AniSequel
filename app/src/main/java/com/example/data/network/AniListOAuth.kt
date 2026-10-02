@@ -97,6 +97,52 @@ object AniListOAuth {
             .toMap()
     }
 
+    /**
+     * Recovers a usable token from whatever the user pasted.
+     *
+     * The "Paste Token" dialog exists for the manual copy flow, and people
+     * paste all of these:
+     *
+     *  - `access_token=eyJ...` - the parameter copied with its name
+     *  - `eyJ...&token_type=Bearer` - the whole redirect fragment
+     *  - `anilist.co/api/v2/oauth/null#access_token=eyJ...` - the entire URL
+     *  - `"eyJ..."` or `'eyJ...'` - with quotes, straight from the address bar
+     *  - `Bearer eyJ...` - with the scheme
+     *
+     * Every one of those stored verbatim is a token AniList rejects, and the
+     * app then reports "Session expired" for a session that was never invalid.
+     * Saving the extracted value instead means a sloppy paste still works.
+     */
+    fun extractToken(pasted: String): String? {
+        var value = pasted.trim()
+
+        // A whole URL, or the fragment copied out of one.
+        value = value.substringAfterLast('#')
+
+        if (value.startsWith("access_token", ignoreCase = true) && '=' in value) {
+            // '=' is also base64 padding, so only the FIRST one separates the
+            // parameter name from the value. Splitting on all of them is what
+            // silently produced a truncated, unusable token.
+            value = value.substringAfter('=')
+        } else if (value.startsWith("bearer", ignoreCase = true) && ' ' in value) {
+            value = value.substringAfter(' ').trimStart()
+        }
+
+        value = value.substringBefore('&')
+            .substringBefore('?')
+            .trim()
+            .trim('"', '\'')
+
+        // A token is a single unbroken run of base64url characters. Whitespace
+        // inside it means prose was pasted; trimming at the first space would
+        // turn "I think it worked?" into "I", which stores cleanly and then
+        // fails every request as a "Session expired".
+        val looksLikeToken = value.isNotBlank() &&
+            value.none { character -> character.isWhitespace() || character == '/' || character == ':' }
+
+        return value.takeIf { looksLikeToken }
+    }
+
     fun openDeveloperSettings(context: Context) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DEVELOPER_SETTINGS_URL))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

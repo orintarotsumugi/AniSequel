@@ -6,8 +6,10 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.network.AniListOAuth
 import com.example.data.network.RedirectResult
+import com.example.data.repository.AuthRepositoryImpl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,6 +41,26 @@ class AniListOAuthTest {
         // how this screen breaks.
         assertFalse("a redirect_uri makes AniList reject the request", url.contains("redirect_uri"))
         assertFalse("a state makes AniList reject the request", url.contains("state="))
+    }
+
+    @Test
+    fun `authorization uses this app's own AniList client`() {
+        // AniList delivers the token to whatever Redirect URL is registered
+        // against the client named in the authorize request. Authorizing
+        // against a borrowed client id sends the token to somebody else's app,
+        // so sign-in can never complete no matter how the Redirect URL here is
+        // configured - it is the wrong client's redirect that is used.
+        assertEquals(
+            "the shipped client id must be AniSequel's own AniList app",
+            "52542",
+            AuthRepositoryImpl.DEFAULT_CLIENT_ID
+        )
+
+        val url = AniListOAuth.authorizationUrl(AuthRepositoryImpl.DEFAULT_CLIENT_ID)
+        assertTrue(
+            "the authorize request must name our own client, was $url",
+            url.contains("client_id=52542")
+        )
     }
 
     @Test
@@ -105,5 +127,44 @@ class AniListOAuthTest {
         // Launching the app normally delivers no data at all; treating that as a
         // failed redirect put "No access token found in redirect" on screen.
         assertEquals(RedirectResult.NoCallback, AniListOAuth.parseRedirect(null))
+    }
+
+    /**
+     * People paste every shape of token value, and storing any of them verbatim
+     * produces a session AniList rejects - which the app then reports as
+     * "Session expired", pointing at the wrong thing entirely.
+     */
+    @Test
+    fun `recovers a token from the things people actually paste`() {
+        val token = "eyJhbGciOiJIUzI1NiJ9.payload.signature"
+
+        assertEquals(token, AniListOAuth.extractToken(token))
+        assertEquals(token, AniListOAuth.extractToken("access_token=$token"))
+        assertEquals(token, AniListOAuth.extractToken("access_token=$token&token_type=Bearer"))
+        assertEquals(token, AniListOAuth.extractToken("  access_token=$token  "))
+        assertEquals(token, AniListOAuth.extractToken("Bearer $token"))
+        assertEquals(token, AniListOAuth.extractToken("\"$token\""))
+        assertEquals(token, AniListOAuth.extractToken("'$token'"))
+        assertEquals(
+            token,
+            AniListOAuth.extractToken("https://anilist.co/api/v2/oauth/null#access_token=$token&token_type=Bearer")
+        )
+    }
+
+    @Test
+    fun `base64 padding in a token survives`() {
+        // '=' is padding, not a separator, and splitting on it produced a token
+        // that looked pasted correctly and then failed every request.
+        val padded = "eyJhbGciOiJIUzI1NiJ9.payload=="
+
+        assertEquals(padded, AniListOAuth.extractToken("access_token=$padded"))
+        assertEquals(padded, AniListOAuth.extractToken("access_token=$padded&token_type=Bearer"))
+    }
+
+    @Test
+    fun `something that is not a token is rejected rather than stored`() {
+        assertNull(AniListOAuth.extractToken(""))
+        assertNull(AniListOAuth.extractToken("   "))
+        assertNull(AniListOAuth.extractToken("I think it worked?"))
     }
 }

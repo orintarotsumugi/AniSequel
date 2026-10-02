@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.data.network.NetworkClient
+import com.example.data.repository.AniListRepositoryImpl
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.ui.navigation.AppNavigation
@@ -25,7 +27,15 @@ class MainActivity : ComponentActivity() {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return AuthViewModel(authRepository) as T
+                return AuthViewModel(
+                    authRepository = authRepository,
+                    // So a pasted token is checked against AniList before the app
+                    // navigates to a dashboard that will only report "Session
+                    // expired" if it is wrong.
+                    aniListRepository = AniListRepositoryImpl(
+                        NetworkClient.createApiService(authRepository)
+                    )
+                ) as T
             }
         }
     }

@@ -18,8 +18,20 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
         private val KEY_ACCESS_TOKEN = stringPreferencesKey("anilist_access_token")
         private val KEY_CLIENT_ID = stringPreferencesKey("anilist_client_id")
         
-        // Default AniList OAuth Client ID (or placeholder ready for user)
-        const val DEFAULT_CLIENT_ID = "23668"
+        /**
+         * The AniList OAuth client AniSequel authorizes against.
+         *
+         * This is *our own* AniList developer client, not a borrowed one. It
+         * matters that it is this app's client: AniList sends the token to
+         * whatever Redirect URL is registered against the client the authorize
+         * request names, so authorizing against anyone else's id delivers the
+         * token to their app and sign-in can never complete - the app just
+         * waits for a callback that goes elsewhere.
+         *
+         * Fork owners can override this in Settings, which is persisted
+         * separately and always wins over the value here.
+         */
+        const val DEFAULT_CLIENT_ID = "52542"
     }
 
     /**

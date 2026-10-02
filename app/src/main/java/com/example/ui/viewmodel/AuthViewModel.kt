@@ -3,8 +3,11 @@ package com.example.ui.viewmodel
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.network.AniListErrorKind
+import com.example.data.network.AniListException
 import com.example.data.network.AniListOAuth
 import com.example.data.network.RedirectResult
+import com.example.data.repository.AniListRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +24,15 @@ sealed interface AuthUiState {
 }
 
 class AuthViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    /**
+     * Used to check a pasted token against AniList before it is believed.
+     *
+     * Optional so tests and any caller that only has the token store can still
+     * construct this; when it is absent the token is stored unchecked, exactly
+     * as it used to be.
+     */
+    private val aniListRepository: AniListRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
@@ -75,11 +86,50 @@ class AuthViewModel(
         }
     }
 
-    fun saveToken(token: String) {
+    /**
+     * Stores a token, however it arrived.
+     *
+     * The value is run through [AniListOAuth.extractToken] first: the paste
+     * dialog is a documented path, and people paste `access_token=...`, the
+     * whole redirect URL, or a quoted value. Storing any of those verbatim
+     * produces a session that fails every request with "Session expired".
+     */
+    fun saveToken(rawToken: String) {
+        val token = AniListOAuth.extractToken(rawToken)
+        if (token == null) {
+            _uiState.value = AuthUiState.Error(
+                "That doesn't look like an AniList token. Copy everything after " +
+                    "access_token= in the sign-in URL."
+            )
+            return
+        }
+
         viewModelScope.launch {
             try {
                 _uiState.value = AuthUiState.Loading
+
+                // Store first, because the check itself has to authenticate.
+                // Anything that does not already hold the new token - the auth
+                // interceptor's in-memory copy - would call AniList without it
+                // and "reject" a perfectly good token.
                 authRepository.saveAccessToken(token)
+
+                val rejection = aniListRepository?.getViewer()?.exceptionOrNull()
+                    ?.takeIf { it is AniListException && it.kind == AniListErrorKind.INVALID_SESSION }
+
+                if (rejection != null) {
+                    // Undo the save: leaving a token AniList has just refused in
+                    // place is what produced a dashboard that says "Session
+                    // expired" for a session that never worked.
+                    authRepository.clearAccessToken()
+                    _uiState.value = AuthUiState.Error(
+                        "AniList rejected that token. Copy the part after " +
+                            "access_token= in the sign-in URL - the whole URL, " +
+                            "the token_type, or the client Secret will not work."
+                    )
+                    return@launch
+                }
+
                 _uiState.value = AuthUiState.Authenticated(token)
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Error(e.message ?: "Failed to save token")
