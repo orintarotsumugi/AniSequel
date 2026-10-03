@@ -30,13 +30,13 @@ class UpdateManifestTest {
      */
     private val publishedManifest = """
         {
-          "version": "1.0.7",
-          "version_code": 16,
-          "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.7",
-          "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.7/anisequel-universal.apk",
-          "size_bytes": 2375396,
-          "published_at": "",
-          "notes": "Build 16 from b85470e4."
+          "version": "1.0.9",
+          "version_code": 22,
+          "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.9",
+          "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.9/anisequel-universal.apk",
+          "size_bytes": 2410756,
+          "published_at": "2026-10-03T07:38:15Z",
+          "notes": "  * Restore the release signing key dropped by the history rewrite\n  * Add \"Not interested\" per card\n\nBuild 22 from a4171424."
         }
     """.trimIndent()
 
@@ -44,11 +44,30 @@ class UpdateManifestTest {
     fun `parses the manifest the release workflow publishes`() {
         val manifest = adapter.fromJson(publishedManifest)!!
 
-        assertEquals("1.0.7", manifest.version)
-        assertEquals(16L, manifest.versionCode)
-        assertEquals(2375396L, manifest.sizeBytes)
+        assertEquals("1.0.9", manifest.version)
+        assertEquals(22L, manifest.versionCode)
+        assertEquals(2410756L, manifest.sizeBytes)
         assertTrue(manifest.downloadUrl!!.endsWith("anisequel-universal.apk"))
         assertTrue(manifest.isUsable)
+    }
+
+    /**
+     * The notes are now GitHub's generated release body rather than a build
+     * identifier, so they carry newlines, quotes and markdown.
+     *
+     * This is the reason the manifest is built with jq rather than interpolated
+     * into a heredoc: the body is free text, and a quote or a backslash in it
+     * would otherwise produce a manifest that does not parse - which the app
+     * reports as a failed update check rather than as a corrupt file.
+     */
+    @Test
+    fun `survives release notes containing quotes and newlines`() {
+        val manifest = adapter.fromJson(publishedManifest)!!
+
+        val notes = manifest.notes!!
+        assertTrue("release notes must not be a bare build id: $notes", notes.contains("Not interested"))
+        assertTrue("the build id is still useful for reporting: $notes", notes.contains("Build 22"))
+        assertEquals("2026-10-03T07:38:15Z", manifest.publishedAt)
     }
 
     @Test

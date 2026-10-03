@@ -243,7 +243,10 @@ private var loadJob: Job? = null
                 return@launch
             }
 
-            aniListRepository.getUserAnimeList(viewer.id).fold(
+            // forceRefresh, or this would be served from the list cache and the
+            // gesture would do nothing at all - the list would look stuck
+            // while the spinner dutifully ran.
+            aniListRepository.getUserAnimeList(viewer.id, forceRefresh = true).fold(
                 onSuccess = { collection ->
                     cachedCollection = collection
                     // The server is the source of truth for what is already

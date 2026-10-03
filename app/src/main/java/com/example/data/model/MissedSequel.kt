@@ -21,6 +21,21 @@ enum class RelationKind(val apiValue: String, val displayName: String) {
 data class MissedSequel(
     val parentId: Int,
     val parentTitle: String,
+
+    /**
+     * The watched entry's cover, so a card can show what this is a sequel *to*.
+     *
+     * Free, and deliberately so: the parent is the entry the relation edge was
+     * walked from, and it is already in hand when this is built. The shape
+     * previously carried only the parent's id and title, so the UI had to
+     * render "Sequel to Some Show" with nothing to look at - and the obvious
+     * fix, a second query for the parent's cover, would have spent AniList
+     * budget on a picture it already sent us.
+     */
+    val parentCoverUrl: String? = null,
+
+    /** AniList's dominant colour for the parent's key visual. */
+    val parentCoverColor: String? = null,
     val sequelMedia: MediaNode,
     /** AniList's own relation name: SEQUEL, PREQUEL, SIDE_STORY, SPIN_OFF... */
     val relationType: String = RelationKind.SEQUEL.apiValue,

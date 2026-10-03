@@ -29,6 +29,22 @@ class AniListRepositoryImpl(
     private val apiService: AniListApiService
 ) : AniListRepository {
 
+    private companion object {
+        /**
+         * How long a completed list response is reused.
+         *
+         * An hour, because the query is large and AniList allows only ~30
+         * requests a minute: without this, every rotation, back-navigation and
+         * return to the app re-bought the same answer. Nothing that matters
+         * moves on an hour timescale - the list changes when the user finishes
+         * something, which they can force with refresh.
+         *
+         * That is the trade this only works because [forceRefresh] exists. See
+         * [AniListRepository.getUserAnimeList].
+         */
+        const val LIST_CACHE_TTL_MILLIS = 60 * 60 * 1000L
+    }
+
     /**
      * Identical read queries that arrive while one is already running share its
      * response instead of each issuing their own POST.
@@ -45,6 +61,44 @@ class AniListRepositoryImpl(
     private val readCoalescer = RequestCoalescer<String>()
     private val detailCache = java.util.concurrent.ConcurrentHashMap<Int, MediaNode>()
 
+    /**
+     * Completed list responses, kept briefly so re-entering the app does not
+     * re-buy the same multi-megabyte answer.
+     *
+     * [readCoalescer] already stops two *simultaneous* identical queries from
+     * both being sent, but it does nothing for the common case of one finishing
+     * before the next is asked for. AniList allows roughly 30 requests a
+     * minute, and this query is the single most expensive one the app makes, so
+     * leaving it uncached meant rotating the device or leaving and returning
+     * could spend two of those on identical data - and hit the limit exactly
+     * when someone was already having a bad time.
+     *
+     * Deliberately short-lived. The whole point of the list is to notice what
+     * the user has finished watching, and that changes; a long cache would show
+     * a stale gap list that quietly refused to update. Five minutes covers
+     * every navigation the app actually does while making a manual refresh the
+     * way to force a real re-fetch.
+     *
+     * Keyed on the user, not on the query, so one account's list can never be
+     * served to another.
+     */
+    private val listCache = java.util.concurrent.ConcurrentHashMap<String, CachedList>()
+
+    private class CachedList(val collection: MediaListCollection, val storedAtMillis: Long)
+
+    private fun cachedList(key: String): MediaListCollection? {
+        val entry = listCache[key] ?: return null
+        if (System.currentTimeMillis() - entry.storedAtMillis > LIST_CACHE_TTL_MILLIS) {
+            listCache.remove(key)
+            return null
+        }
+        return entry.collection
+    }
+
+    private fun storeList(key: String, collection: MediaListCollection) {
+        listCache[key] = CachedList(collection, System.currentTimeMillis())
+    }
+
     override suspend fun getViewer(): Result<ViewerProfile> =
         execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
             .map { it.viewer.require("Viewer data not found") }
@@ -60,23 +114,39 @@ class AniListRepositoryImpl(
         ).map { it.user.require("No AniList user called \"$name\".") }
     }
 
-    override suspend fun getUserAnimeList(userId: Int): Result<MediaListCollection> =
-        execute(
+    override suspend fun getUserAnimeList(
+        userId: Int,
+        forceRefresh: Boolean
+    ): Result<MediaListCollection> {
+        val key = "user:$userId"
+        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+
+        return execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_USER_ANIME_LIST,
                 variables = mapOf("userId" to userId)
             ),
             apiService::getMediaListCollection
         ).map { it.collection.require("Media list collection is empty") }
+            .onSuccess { storeList(key, it) }
+    }
 
-    override suspend fun getUserAnimeListByUsername(userName: String): Result<MediaListCollection> =
-        execute(
+    override suspend fun getUserAnimeListByUsername(
+        userName: String,
+        forceRefresh: Boolean
+    ): Result<MediaListCollection> {
+        val key = "userName:${userName.trim()}"
+        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+
+        return execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_USER_ANIME_LIST,
                 variables = mapOf("userName" to userName.trim())
             ),
             apiService::getMediaListCollection
         ).map { it.collection.require("Media list collection is empty") }
+            .onSuccess { storeList(key, it) }
+    }
 
     /**
      * The heavy per-entry fields, fetched for the one sequel the user opens.
@@ -115,6 +185,10 @@ class AniListRepositoryImpl(
 
     override fun clearDetailCache() {
         detailCache.clear()
+        // The list is per-person data, so it has to go when the session does.
+        // A TTL alone would leave another person's finished list sitting in
+        // memory for up to five minutes after sign-out.
+        listCache.clear()
     }
 
     /**

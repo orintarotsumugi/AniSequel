@@ -24,12 +24,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
+import androidx.compose.foundation.shape.RoundedCornerShape
+import coil.compose.AsyncImage
 import com.example.ui.components.expressive.WavyProgressBar
 import com.example.ui.theme.AniSequelTheme
 
@@ -76,6 +79,26 @@ fun SequelCard(
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // The parent's own artwork, so "Sequel to X" points at something
+                // rather than asserting a title the reader may not know. Cheap
+                // to draw: the list query already returns the parent's cover,
+                // so this is a decode of bytes already in the response.
+                if (sequel.parentCoverUrl != null) {
+                    AsyncImage(
+                        model = sequel.parentCoverUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(
+                                sequel.parentCoverColor.toCoverColorOrNull()
+                                    ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
                 Icon(
                     imageVector = AppVectorIcons.SequelJump,
                     contentDescription = null,

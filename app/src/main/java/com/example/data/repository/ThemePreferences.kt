@@ -62,10 +62,20 @@ class ThemePreferences(private val context: Context) {
         val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
     }
 
-    /** Both preferences at once, so the theme can apply them in a single read. */
+    /**
+     * Both preferences at once, so the theme can apply them in a single read.
+     *
+     * [isLoaded] is what makes the difference between "the user chose the light
+     * theme" and "we have not read their choice yet" - and DataStore reports
+     * both as the same value. Without it, every cold start for someone who
+     * picked a non-default theme painted the whole app in the default one and
+     * then repainted it, which is the flash that reads as a bug.
+     */
     data class ThemeSettings(
         val themeMode: ThemeMode,
-        val useDynamicColor: Boolean
+        val useDynamicColor: Boolean,
+        /** False only until the stored values have actually been read once. */
+        val isLoaded: Boolean = false
     )
 
     val settings: Flow<ThemeSettings> = context.themeDataStore.data.map { preferences ->
@@ -73,7 +83,8 @@ class ThemePreferences(private val context: Context) {
             themeMode = ThemeMode.fromStorage(preferences[Keys.THEME_MODE]),
             // Absent means off, which keeps the brand palette the default on
             // upgrade rather than repainting everyone's app unasked.
-            useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: false
+            useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: false,
+            isLoaded = true
         )
     }
 

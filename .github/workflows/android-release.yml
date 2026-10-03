@@ -463,17 +463,54 @@ jobs:
           ASSET_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/anisequel-universal.apk"
           SIZE=$(stat -c%s release-artifacts/anisequel-universal.apk)
 
-          cat > update.json <<JSON
-          {
-            "version": "${VERSION_NAME}",
-            "version_code": ${GITHUB_RUN_NUMBER},
-            "release_url": "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
-            "download_url": "${ASSET_URL}",
-            "size_bytes": ${SIZE},
-            "published_at": "",
-            "notes": "Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
-          }
-          JSON
+          # The release's own body, which GitHub generated from the commits and
+          # merged PRs since the last release. This is what the in-app update
+          # prompt shows, so it has to be prose a person can act on - the old
+          # value was "Build 22 from a4171424", which tells a user deciding
+          # whether to update nothing at all.
+          #
+          # The release step above has already run, so the body exists by now.
+          # A failure here must not sink the release: fall back to the build
+          # identifier that was there before.
+          RELEASE_BODY=$(gh release view "${TAG}" --json body --jq '.body' 2>/dev/null || echo "")
+          PUBLISHED_AT=$(gh release view "${TAG}" --json publishedAt --jq '.publishedAt' 2>/dev/null || echo "")
+
+          if [ -z "${RELEASE_BODY//[[:space:]]/}" ]; then
+            NOTES="Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
+          else
+            # Trailing whitespace stripped, and capped: this lands in a dialog
+            # on a phone, and an unbounded generated changelog would push the
+            # useful first line off the screen.
+            NOTES=$(printf '%s' "${RELEASE_BODY}" \
+              | tr '\r' ' ' \
+              | sed -e 's/[[:space:]]*$//' -e '/./,$!d' \
+              | head -c 1200)
+            NOTES="${NOTES}
+
+          Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
+          fi
+
+          # Built with jq rather than a heredoc. Release notes are free text from
+          # GitHub and routinely contain quotes, backslashes and newlines; a
+          # heredoc interpolation of them produces malformed JSON, and the app
+          # treats a manifest it cannot parse as a failed update check.
+          jq -n \
+            --arg version "${VERSION_NAME}" \
+            --argjson version_code "${GITHUB_RUN_NUMBER}" \
+            --arg release_url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --arg download_url "${ASSET_URL}" \
+            --argjson size_bytes "${SIZE}" \
+            --arg published_at "${PUBLISHED_AT}" \
+            --arg notes "${NOTES}" \
+            '{
+              version: $version,
+              version_code: $version_code,
+              release_url: $release_url,
+              download_url: $download_url,
+              size_bytes: $size_bytes,
+              published_at: $published_at,
+              notes: $notes
+            }' > update.json
 
           # Bring the baseline forward in the same commit, so the version a local
           # build reports can never trail the published one by more than a single

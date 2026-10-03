@@ -8,8 +8,26 @@ import com.example.data.model.ViewerProfile
 interface AniListRepository {
     suspend fun getViewer(): Result<ViewerProfile>
     suspend fun getUserByName(userName: String): Result<ViewerProfile>
-    suspend fun getUserAnimeList(userId: Int): Result<MediaListCollection>
-    suspend fun getUserAnimeListByUsername(userName: String): Result<MediaListCollection>
+    /**
+     * The user's full anime list.
+     *
+     * [forceRefresh] skips the short-lived response cache and re-asks AniList.
+     * It exists because a cache that every caller can bypass is not a cache, it
+     * is a stale-data generator: pull-to-refresh went through the cached copy
+     * and silently did nothing, which is the exact opposite of what the gesture
+     * promises. Default values live here and not on the overrides, which is
+     * where Kotlin requires them for an interface method.
+     */
+    suspend fun getUserAnimeList(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection>
+
+    /** As [getUserAnimeList], for a profile looked up by name. */
+    suspend fun getUserAnimeListByUsername(
+        userName: String,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection>
 
     /**
      * Description, banner and studio for one entry, fetched on demand because

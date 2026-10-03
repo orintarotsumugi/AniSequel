@@ -180,10 +180,16 @@ class AuthRedirectTest {
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> =
             Result.failure(UnsupportedOperationException())
 
-        override suspend fun getUserAnimeList(userId: Int): Result<MediaListCollection> =
+        override suspend fun getUserAnimeList(
+            userId: Int,
+            forceRefresh: Boolean
+        ): Result<MediaListCollection> =
             Result.failure(UnsupportedOperationException())
 
-        override suspend fun getUserAnimeListByUsername(userName: String): Result<MediaListCollection> =
+        override suspend fun getUserAnimeListByUsername(
+            userName: String,
+            forceRefresh: Boolean
+        ): Result<MediaListCollection> =
             Result.failure(UnsupportedOperationException())
 
         override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> =

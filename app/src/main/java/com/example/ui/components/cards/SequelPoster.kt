@@ -146,7 +146,14 @@ fun SequelPoster(
     }
 }
 
-private fun String?.toCoverColorOrNull(): Color? {
+/**
+ * Parses an AniList `#RRGGBB` cover colour, or null if it is missing or junk.
+ *
+ * `internal` rather than `private` so the parent-cover thumbnails in
+ * [com.example.ui.components.cards.SequelCard] and the detail sheet can tint
+ * their placeholders the same way instead of each re-implementing the parse.
+ */
+internal fun String?.toCoverColorOrNull(): Color? {
     val hex = this?.removePrefix("#")?.takeIf { it.length == 6 } ?: return null
     if (!hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
     val value = hex.toLongOrNull(16) ?: return null

@@ -22,6 +22,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.example.ui.components.cards.toCoverColorOrNull
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
@@ -123,6 +129,27 @@ fun SequelDetailSheet(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
+                                // The watched entry this one hangs off, with its own artwork. This is the
+                                // relationship that explains why the entry is on the
+                                // screen at all, so it gets an image rather than a
+                                // bare title - and it costs nothing, because the list
+                                // query already returned the parent's cover.
+                                if (sequel.parentCoverUrl != null) {
+                                    AsyncImage(
+                                        model = sequel.parentCoverUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                sequel.parentCoverColor.toCoverColorOrNull()
+                                                    ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                }
+
                                 Column {
                                     Text(
                                         text = sequel.relationLabel,

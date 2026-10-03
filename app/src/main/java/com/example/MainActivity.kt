@@ -79,6 +79,14 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = themeSettings.useDynamicColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    // Held on the themed background until the stored theme is in.
+                    // The Surface already paints colorScheme.background, so this
+                    // shows the right colour from the first frame rather than a
+                    // default-themed app that repaints a moment later.
+                    if (!themeSettings.isLoaded) {
+                        return@Surface
+                    }
+
                     val updateController = rememberUpdateController()
 
                     // One check per launch, after the first frame.
