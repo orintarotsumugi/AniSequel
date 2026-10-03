@@ -121,11 +121,13 @@ jobs:
           # The DN names it explicitly so this key can never be mistaken for
           # the release key in a report or an apksigner dump.
           keytool -genkeypair -v -keystore release-key.jks \
-            -storepass ci -keypass ci -alias upload \
+            -storepass ci-throwaway -keypass ci-throwaway -alias upload \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=CI Throwaway Not The Release Key, O=AniSequel, C=US"
-          echo "STORE_PASSWORD=ci" >> "$GITHUB_ENV"
-          echo "KEY_PASSWORD=ci" >> "$GITHUB_ENV"
+          # keytool refuses a key password under 6 characters, so the throwaway
+          # value is long enough to be accepted.
+          echo "STORE_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
 
       - name: Restore the release signing key from secrets
         if: github.event_name != 'pull_request'
