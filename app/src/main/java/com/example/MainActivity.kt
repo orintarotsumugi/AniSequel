@@ -11,7 +11,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -80,7 +79,6 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = themeSettings.useDynamicColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val scope = rememberCoroutineScope()
                     val updateController = rememberUpdateController()
 
                     // One check per launch, after the first frame.
@@ -91,7 +89,7 @@ class MainActivity : ComponentActivity() {
                     // GitHub is slow is a worse experience than one that
                     // arrives a moment later.
                     LaunchedEffect(Unit) {
-                        updateController.check(scope)
+                        updateController.check()
                     }
 
                     AppNavigation(

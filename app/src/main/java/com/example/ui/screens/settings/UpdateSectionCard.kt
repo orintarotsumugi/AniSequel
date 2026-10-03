@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,12 +34,14 @@ import com.example.ui.components.rememberUpdateController
 @Composable
 fun UpdateSectionCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val controller = rememberUpdateController()
     val state = controller.state
 
+    // `rememberUpdateController()` hands back the process-wide controller, which
+    // the launch prompt already checked. So this only fires on a genuinely cold
+    // start that never got that far, and reopening Settings does not re-check.
     LaunchedEffect(Unit) {
-        if (state == UpdateUiState.Idle) controller.check(scope)
+        if (controller.state == UpdateUiState.Idle) controller.check()
     }
 
     SectionCard(title = "Updates", modifier = modifier) {
@@ -110,7 +111,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Button(
-                        onClick = { controller.download(scope) },
+                        onClick = { controller.download() },
                         modifier = Modifier.testTag("download_update_button")
                     ) {
                         Icon(
@@ -173,7 +174,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             is UpdateUiState.UpToDate, is UpdateUiState.Failed -> {
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
-                    onClick = { controller.check(scope) },
+                    onClick = { controller.check() },
                     modifier = Modifier.testTag("check_updates_button")
                 ) {
                     Icon(

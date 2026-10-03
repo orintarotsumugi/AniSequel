@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +30,8 @@ import com.example.data.update.UpdateManager
 import com.example.data.update.UpdateManifest
 import com.example.data.update.formatBytes
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -85,11 +86,27 @@ sealed interface UpdateUiState {
  */
 class UpdateController(private val updateManager: UpdateManager) {
 
+    /**
+     * The scope the updater runs its work in.
+     *
+     * Deliberately not a `rememberCoroutineScope()` handed in by the caller.
+     * Those scopes are cancelled when the composable that created them leaves
+     * the composition, so a download started from the Settings row was killed
+     * the moment the user navigated away - leaving [state] stuck on
+     * `Downloading`, with no download running and no way out of it but a
+     * process restart. The work belongs to the updater, not to whichever screen
+     * happened to start it.
+     *
+     * `SupervisorJob` so that one failed check cannot cancel the updater's
+     * scope and take every later attempt with it.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     var state: UpdateUiState by mutableStateOf(UpdateUiState.Idle)
         private set
 
     /** Asks GitHub whether anything newer exists. */
-    fun check(scope: CoroutineScope) {
+    fun check() {
         if (state is UpdateUiState.Checking) return
         state = UpdateUiState.Checking
 
@@ -116,7 +133,7 @@ class UpdateController(private val updateManager: UpdateManager) {
      * "now go grant a permission" is a better outcome than refusing to start
      * over a setting they may have already granted since last launch.
      */
-    fun download(scope: CoroutineScope) {
+    fun download() {
         val manifest = (state as? UpdateUiState.Available)?.manifest ?: return
 
         state = UpdateUiState.Downloading(manifest, bytesRead = 0, totalBytes = manifest.sizeBytes ?: 0)
@@ -197,12 +214,51 @@ fun openReleasePage(context: Context, url: String?) {
     }
 }
 
-/** A controller for the current composition. */
+/**
+ * The one [UpdateController] for this process.
+ *
+ * There is exactly one update to make and one APK to download, so the state
+ * behind that is process-wide. It used to be `remember`ed per call site, which
+ * quietly produced *two* of them: one in `MainActivity` driving the launch
+ * prompt, and another inside `UpdateSectionCard` driving the Settings row.
+ *
+ * That was not just a duplicate. Because the two never saw each other's state,
+ * starting a download from the Settings row left the launch prompt still sitting
+ * on `Available`, so it went on offering an update the user was already
+ * downloading - and reopening Settings showed `Idle` and checked GitHub again.
+ * It also meant two [UpdateManager]s, and therefore two OkHttp clients, each
+ * with its own connection pool and thread pool.
+ *
+ * Held in a field rather than in composition state so it survives the Settings
+ * screen being torn down and rebuilt, and so the launch prompt and the Settings
+ * row are reading the same object. Doubly-checked locking, because the launch
+ * check and the Settings row can both reach this on first composition.
+ */
+@Volatile
+private var sharedUpdateController: UpdateController? = null
+
+private val updateControllerLock = Any()
+
+private fun obtainUpdateController(context: Context): UpdateController {
+    sharedUpdateController?.let { return it }
+    return synchronized(updateControllerLock) {
+        sharedUpdateController
+            ?: UpdateController(UpdateManager(context.applicationContext))
+                .also { sharedUpdateController = it }
+    }
+}
+
+/**
+ * The shared update controller.
+ *
+ * Prefer this over constructing an [UpdateController] directly: a second one
+ * will hold a second, contradictory idea of what the updater is doing.
+ */
 @Composable
 fun rememberUpdateController(
     context: Context = LocalContext.current
 ): UpdateController = remember(context) {
-    UpdateController(UpdateManager(context.applicationContext))
+    obtainUpdateController(context)
 }
 
 /**
@@ -219,7 +275,6 @@ fun rememberUpdateController(
 @Composable
 fun UpdatePromptHost(controller: UpdateController) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val state = controller.state
 
     // Nothing to say in any of these, so nothing is drawn - critically including
@@ -273,7 +328,7 @@ fun UpdatePromptHost(controller: UpdateController) {
             TextButton(
                 onClick = {
                     when (state) {
-                        is UpdateUiState.Available -> controller.download(scope)
+                        is UpdateUiState.Available -> controller.download()
                         is UpdateUiState.ReadyToInstall -> controller.install(context)
                         is UpdateUiState.NeedsInstallPermission -> controller.requestInstallPermission(context)
                         else -> Unit

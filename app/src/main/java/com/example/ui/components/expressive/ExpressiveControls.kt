@@ -98,7 +98,7 @@ fun ExpressiveTabBar(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .clip(expressiveShape(ExpressiveShapes.pill))
+                    .clip(ExpressiveShapes.pill)
                     .background(container)
                     .clickable { onSelect(index) }
                     .semantics {
@@ -132,7 +132,7 @@ fun ExpressivePolygonSegmentedBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(expressiveShape(ExpressiveShapes.pill))
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(4.dp)
             .testTag("${EXPRESSIVE_TAG}polygon_segmented_bar"),
@@ -164,7 +164,7 @@ fun ExpressivePolygonSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(40.dp)
-                    .clip(expressiveShape(ExpressiveShapes.pillSoft))
+                    .clip(ExpressiveShapes.pillSoft)
                     .background(container)
                     .clickable { onSelect(index) }
                     .semantics {

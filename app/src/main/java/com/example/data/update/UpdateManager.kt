@@ -177,6 +177,31 @@ class UpdateManager(private val context: Context) {
                         }
                     }
 
+                    // A 200 response is not proof the body is an APK. A redirect
+                    // that lands on an HTML error page, or a rate-limit notice,
+                    // is still a successful HTTP response, and the size guard
+                    // above only catches bodies that are too *large* - so that
+                    // page would be written out as anisequel-<version>.apk and
+                    // handed to the package installer, which fails with an
+                    // opaque parse error and nothing on screen to explain it.
+                    // Every APK is a zip and every zip opens with a local file
+                    // header, so four bytes are enough to tell them apart.
+                    val looksLikeApk = partFile.inputStream().use { stream ->
+                        val magic = ByteArray(4)
+                        stream.read(magic) == 4 &&
+                            magic[0] == 0x50.toByte() &&
+                            magic[1] == 0x4B.toByte() &&
+                            magic[2] == 0x03.toByte() &&
+                            magic[3] == 0x04.toByte()
+                    }
+
+                    if (!looksLikeApk) {
+                        partFile.delete()
+                        return@withContext UpdateDownloadResult.Failed(
+                            "That download was not an APK, so nothing was installed."
+                        )
+                    }
+
                     if (!partFile.renameTo(target)) {
                         partFile.delete()
                         return@withContext UpdateDownloadResult.Failed(
