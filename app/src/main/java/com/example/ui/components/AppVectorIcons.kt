@@ -30,6 +30,14 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Api
+import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Tune
 import com.example.ui.components.icons.AppCustomVectors
 
 /**
@@ -72,4 +80,18 @@ object AppVectorIcons {
     val SystemUpdate = Icons.Default.SystemUpdate
     val Download = Icons.Default.Download
     val Pause = Icons.Default.PauseCircle
+
+    // Settings section headers. All from the extended set, which R8 prunes to
+    // whatever is actually reachable - adding names here costs nothing in the
+    // release APK, and it keeps every Settings header in one reviewable list.
+    val SectionAppearance = Icons.Outlined.ColorLens
+    val SectionAniList = Icons.Outlined.Api
+    val SectionAbout = Icons.Outlined.Contrast
+    val SectionUpdates = Icons.Default.SystemUpdate
+    val SectionHelp = Icons.AutoMirrored.Filled.MenuBook
+    val ThemeLight = Icons.Outlined.LightMode
+    val ThemeDark = Icons.Outlined.DarkMode
+    val Restore = Icons.Outlined.RestartAlt
+    val Tune = Icons.Outlined.Tune
+    val NewReleases = Icons.Outlined.NewReleases
 }

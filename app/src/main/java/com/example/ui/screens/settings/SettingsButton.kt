@@ -95,11 +95,27 @@ fun SettingsButton(
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
+            // Filled and tonal are the variants that have to shout across a
+            // card; outlined and text are already quiet, and bolding them too
+            // makes a row of them look like a row of commands.
+            fontWeight = if (variant == SettingsButtonVariant.Text) {
+                FontWeight.Medium
+            } else {
+                FontWeight.SemiBold
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
+
+    // M3's disabled container is `surface` at 12% alpha over whatever is
+    // behind it. Inside a `surfaceContainerLow` card that lands within a couple
+    // of points of the card's own colour, so a disabled button stops reading as
+    // a button and starts reading as a rendering mistake - which is exactly how
+    // "Save" looked next to its field. Naming the disabled container explicitly
+    // keeps the shape legible and still clearly inert.
+    val disabledContainer = MaterialTheme.colorScheme.surfaceContainerHighest
+    val disabledContent = MaterialTheme.colorScheme.onSurfaceVariant
 
     when (variant) {
         SettingsButtonVariant.Filled -> Button(
@@ -107,6 +123,10 @@ fun SettingsButton(
             enabled = enabled,
             modifier = baseModifier,
             shape = shape,
+            colors = ButtonDefaults.buttonColors(
+                disabledContainerColor = disabledContainer,
+                disabledContentColor = disabledContent
+            ),
             content = label
         )
 
@@ -117,7 +137,9 @@ fun SettingsButton(
             shape = shape,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                disabledContainerColor = disabledContainer,
+                disabledContentColor = disabledContent
             ),
             content = label
         )
@@ -127,6 +149,9 @@ fun SettingsButton(
             enabled = enabled,
             modifier = baseModifier,
             shape = shape,
+            colors = ButtonDefaults.outlinedButtonColors(
+                disabledContentColor = disabledContent
+            ),
             content = label
         )
 

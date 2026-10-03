@@ -3,7 +3,10 @@ package com.example.ui.screens.settings
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -12,18 +15,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -33,10 +40,28 @@ import androidx.compose.ui.unit.dp
 
 val MaxSettingsContentWidth = 640.dp
 
+/**
+ * One titled block of the Settings screen.
+ *
+ * The header used to be a bare [Text] in `titleMedium` at `FontWeight.Bold`, which
+ * is the same weight a screen title uses - so "Appearance & Theme" and "AniList
+ * API Configuration" read as headings for the page rather than as labels for
+ * what is directly below them, and two cards' worth of bold 16sp in a scrolling
+ * column became a wall of shouting.
+ *
+ * Now it is an icon tile plus a title, optionally with a one-line subtitle that
+ * says what the card is for. The tile is `secondaryContainer` rather than
+ * `primary` on purpose: under Material You the primary role follows the user's
+ * wallpaper, and a saturated wallpaper-derived tile next to a wall icon reads as
+ * a coloured sticker. `secondaryContainer` is the quiet role, which is what a
+ * 34dp decoration wants to be.
+ */
 @Composable
 fun SectionCard(
     title: String,
     modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    subtitle: String? = null,
     content: @Composable () -> Unit
 ) {
     Card(
@@ -49,15 +74,62 @@ fun SectionCard(
         border = CardDefaults.outlinedCardBorder()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (subtitle != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
             content()
         }
     }
+}
+
+/**
+ * The caption above a control that has no label of its own.
+ *
+ * `OutlinedTextField` draws its `label` by notching the top stroke, so a label
+ * and a section header end up competing for the same horizontal line and the
+ * label appears to collide with the border. Rendering the name here instead
+ * keeps the field's outline intact and reads the same at a glance.
+ */
+@Composable
+fun SettingsFieldLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -69,10 +141,15 @@ fun SwitchRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    Row(
+    // The whole row is the target, not just the 52dp switch: a settings row whose
+// label does nothing when tapped is the most common way a screen like this
+// feels broken, and Android has trained people to expect the label to work.
+Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .clip(MaterialTheme.shapes.small)
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

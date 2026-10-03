@@ -51,7 +51,9 @@ fun ExpressiveTabBar(
     tabs: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Optional icon per tab, drawn before the label. Shorter lists are fine. */
+    icons: List<ImageVector?> = List(tabs.size) { null }
 ) {
     Row(
         modifier = modifier
@@ -108,12 +110,24 @@ fun ExpressiveTabBar(
                     .testTag("${EXPRESSIVE_TAG}tab_$label"),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = content,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                )
+                val icon = icons.getOrNull(index)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = content,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = content,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -141,9 +155,15 @@ fun ExpressivePolygonSegmentedBar(
         options.forEachIndexed { index, option ->
             val selected = index == selectedIndex
 
+            // `secondaryContainer`, not `primary`. The theme-mode bar sits on a
+            // card, and under Material You `primary` is whatever the user's
+            // wallpaper made it - a light salmon pill on a dark surface reads as
+            // a bug rather than a selection, and it is the single loudest thing
+            // on the screen. `secondaryContainer`/`onSecondaryContainer` is the
+            // tonal pair Material You keeps readable on both light and dark.
             val container by animateColorAsState(
                 targetValue = if (selected) {
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.secondaryContainer
                 } else {
                     Color.Transparent
                 },
@@ -152,18 +172,33 @@ fun ExpressivePolygonSegmentedBar(
             )
             val content by animateColorAsState(
                 targetValue = if (selected) {
-                    MaterialTheme.colorScheme.onPrimary
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 animationSpec = spring(),
                 label = "segment_content_${option.label}"
             )
+            // The tab bar above already springs its selection, so a bar that
+            // only cross-fades colour reads as two different control families
+            // stacked on one screen.
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.95f,
+                animationSpec = spring(
+                    dampingRatio = 0.65f,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "segment_scale_${option.label}"
+            )
 
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(44.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
                     .clip(ExpressiveShapes.pillSoft)
                     .background(container)
                     .clickable { onSelect(index) }

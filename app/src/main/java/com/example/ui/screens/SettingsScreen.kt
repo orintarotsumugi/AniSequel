@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import com.example.data.model.ViewerProfile
 import com.example.data.repository.ThemePreferences
+import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
 import com.example.ui.screens.settings.EditSettingsTab
 import com.example.ui.screens.settings.InfoSettingsTab
@@ -72,6 +73,9 @@ fun SettingsScreen(
                     tabs = listOf("Info", "Edit"),
                     selectedIndex = selectedTab,
                     onSelect = { selectedTab = it },
+                    // "Info"/"Edit" as bare words left the reader guessing which
+                    // was which; the icons say it before the labels are read.
+                    icons = listOf(AppVectorIcons.Info, AppVectorIcons.Tune),
                     modifier = Modifier.testTag("settings_tabs")
                 )
             }

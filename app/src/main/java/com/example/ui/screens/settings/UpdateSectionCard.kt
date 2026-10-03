@@ -41,7 +41,12 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
         if (controller.state == UpdateUiState.Idle) controller.check()
     }
 
-    SectionCard(title = "Updates", modifier = modifier) {
+    SectionCard(
+        title = "Updates",
+        icon = AppVectorIcons.SectionUpdates,
+        subtitle = "Check for a newer build",
+        modifier = modifier
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
