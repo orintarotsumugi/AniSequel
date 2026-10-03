@@ -55,17 +55,59 @@ class KeystoreIntegrityTest {
         "keystore.jks"
     )
 
+    /**
+     * Every path git currently tracks, or fails the test if git cannot answer.
+     *
+     * Failing rather than returning an empty list matters: a git failure here
+     * would otherwise look exactly like a clean repository, and the test would
+     * pass without having checked anything.
+     */
+    private fun trackedFiles(): List<String> {
+        val process = ProcessBuilder("git", "ls-files")
+            .directory(root)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val exit = process.waitFor()
+
+        assertTrue(
+            "could not list tracked files (git exited $exit): ${output.take(200)}",
+            exit == 0
+        )
+
+        // One path per line. A path containing a space survives this intact,
+        // and the only thing this test does with the names is match their
+        // extensions.
+        return output.split('\n').map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    /**
+     * Asserts on what git *tracks*, not on what is on disk.
+     *
+     * The distinction is load-bearing: the release workflow decodes
+     * `release-key.jks` into the workspace before the test task runs, and a
+     * pull request generates a throwaway key in the same place. Both files are
+     * expected to exist on disk during a run - they are just never committed.
+     * Checking for their absence on disk therefore fails every real release
+     * build while telling us nothing about the one thing that matters.
+     */
     @Test
-    fun `no signing key material is committed in the repository root`() {
-        for (name in forbiddenKeyFiles) {
-            val file = File(root, name)
-            assertFalse(
-                "$name must not exist in the repository. The release signing key belongs " +
-                    "in the KEYSTORE_BASE64 secret, not in version control - a committed key " +
-                    "lets anyone sign an update APK that the in-app updater accepts.",
-                file.exists()
-            )
+    fun `no signing key material is committed to the repository`() {
+        val leaked = trackedFiles().filter { path ->
+            val name = path.substringAfterLast('/')
+            name in forbiddenKeyFiles ||
+                name.endsWith(".jks") ||
+                name.endsWith(".p12") ||
+                name.endsWith(".pfx") ||
+                name.endsWith(".keystore")
         }
+
+        assertTrue(
+            "Signing key material must never be committed - found: $leaked. The release " +
+                "key belongs in the KEYSTORE_BASE64 secret, because a committed key lets " +
+                "anyone sign an update APK that the in-app updater accepts.",
+            leaked.isEmpty()
+        )
     }
 
     @Test
@@ -97,8 +139,9 @@ class KeystoreIntegrityTest {
         // all - the password is as much a part of the secret as the key bytes.
         //
         // Checked line by line rather than with a regex: a negative lookahead
-        // here is easy to get wrong, because `\s*` can match zero characters and
-        // then the lookahead sees the space before `${{` and wrongly succeeds.
+        // here is easy to get wrong, because whitespace can match zero
+        // characters and then the lookahead sees the space before the
+        // expression and wrongly succeeds.
         for (variable in listOf("STORE_PASSWORD", "KEY_PASSWORD")) {
             val hardcoded = workflow.lineSequence().filter { line ->
                 val trimmed = line.trim()
