@@ -113,6 +113,25 @@ class DashboardViewModel(
     private var searchJob: Job? = null
 
     /**
+     * The in-flight recompute, and a token identifying the newest request.
+     *
+     * Every filter control - sort, status, format, relations, the two switches -
+     * used to `launch { recompute() }` independently, with no relationship
+     * between the jobs. `recompute` suspends on [Dispatchers.Default], so two
+     * quick taps produced two overlapping runs, and whichever *finished* last
+     * wrote `_uiState` - not whichever was asked for last. Tapping "Newest
+     * First" then "Title (A-Z)" could leave the list sorted by the first, with
+     * the header claiming the second.
+     *
+     * Both halves of the fix matter: [recomputeJob] cancels the previous run so
+     * the wasted sort never happens, and [recomputeGeneration] is the guard that
+     * makes the *result* order correct even when a cancelled run has already
+     * passed its last suspension point and cannot be stopped.
+     */
+    private var recomputeJob: Job? = null
+    private var recomputeGeneration = 0
+
+    /**
      * Everything the list is missing, before filtering.
      *
      * Walking the relations of a few hundred entries is the expensive half of
@@ -126,6 +145,20 @@ class DashboardViewModel(
 
     /** Description, banner and studio per media, fetched only when opened. */
     private val detailCache = mutableMapOf<Int, MediaNode>()
+
+    /**
+     * The completed count for [cachedCollection], and the collection it was
+     * computed from.
+     *
+     * [countWatched] walks every list entry and is a pure function of the
+     * collection - but [recompute] runs on every filter change, so typing in the
+     * search box re-counted the whole account (a 476-entry account means ~476
+     * status comparisons) on every debounced keystroke, to produce a number that
+     * cannot have changed. Keyed on the collection *identity*, which is what the
+     * refresh and demo paths replace it with.
+     */
+    private var watchedCountCache: Int? = null
+    private var watchedCountSource: MediaListCollection? = null
 
     /**
      * Ids whose one-off detail query is in flight.
@@ -152,9 +185,9 @@ class DashboardViewModel(
      * slower one wrote its result last: tap Refresh twice quickly, or rotate
  * *while* the first load was still running, and the screen ended up showing a
      * stale list with no error anywhere - the two coroutines were writing to
- * *the same `_uiState` and the loser won.
- */
-private var loadJob: Job? = null
+     * the same `_uiState` and the loser won.
+     */
+    private var loadJob: Job? = null
 
     fun loadData() {
         if (isDemo) {
@@ -294,10 +327,14 @@ private var loadJob: Job? = null
         val collection = cachedCollection ?: return
         val criteria = _filterCriteria.value
 
+        // Claim a token for this run. See [recomputeGeneration].
+        val generation = ++recomputeGeneration
+
         val candidates = discoverOnce(collection, criteria)
 
-        val (watchedCount, visible) = withContext(Dispatchers.Default) {
-            countWatched(collection) to findMissedSequelsUseCase.applyFilters(candidates, criteria)
+        val watchedCount = countWatched(collection)
+        val visible = withContext(Dispatchers.Default) {
+            findMissedSequelsUseCase.applyFilters(candidates, criteria)
         }
 
         val updated = visible
@@ -321,6 +358,12 @@ private var loadJob: Job? = null
                 }
             }
 
+        // A run that has been superseded must not publish. Without this an
+        // older recompute that happened to finish last overwrote the newer list
+        // with a stale sort or filter - the control and the content disagreeing
+        // with nothing on screen to explain it.
+        if (generation != recomputeGeneration) return
+
         _uiState.value = DashboardUiState.Success(
             viewer = viewer,
             missedSequels = updated,
@@ -330,6 +373,20 @@ private var loadJob: Job? = null
             isDemoMode = isDemo,
             canWriteToAniList = canWriteToAniList
         )
+    }
+
+    /**
+     * Recomputes on behalf of a filter change, cancelling any run already in
+     * flight.
+     *
+     * A cancelled recompute still bumps [recomputeGeneration] when it starts, so
+     * the generation guard alone would be enough for correctness; cancelling on
+     * top of it is what stops a rapid sequence of taps from paying for a sort
+     * per tap when only the last one is ever drawn.
+     */
+    private fun requestRecompute() {
+        recomputeJob?.cancel()
+        recomputeJob = viewModelScope.launch { recompute() }
     }
 
     private suspend fun discoverOnce(
@@ -357,7 +414,18 @@ private var loadJob: Job? = null
         return discovered
     }
 
+    /** The completed count, recomputed only when the collection itself changes. */
     private fun countWatched(collection: MediaListCollection): Int {
+        watchedCountCache?.let { cached ->
+            if (watchedCountSource === collection) return cached
+        }
+        val computed = countWatchedUncached(collection)
+        watchedCountSource = collection
+        watchedCountCache = computed
+        return computed
+    }
+
+    private fun countWatchedUncached(collection: MediaListCollection): Int {
         val lists = collection.lists ?: return 0
         val entries = lists.flatMap { group -> group.entries.orEmpty() }
         return entries.count { entry ->
@@ -414,7 +482,7 @@ private var loadJob: Job? = null
 
     fun updateSortOption(sortOption: SequelSortOption) {
         _filterCriteria.value = _filterCriteria.value.copy(sortOption = sortOption)
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     fun updateStatusFilter(status: StatusFilter) {
@@ -428,17 +496,17 @@ private var loadJob: Job? = null
         } else {
             criteria.copy(statusFilter = status)
         }
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     fun toggleIncludeUnreleased(include: Boolean = !_filterCriteria.value.includeUnreleased) {
         _filterCriteria.value = _filterCriteria.value.copy(includeUnreleased = include)
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     fun toggleHideAlreadyPlanned(hide: Boolean = !_filterCriteria.value.hideAlreadyPlanned) {
         _filterCriteria.value = _filterCriteria.value.copy(hideAlreadyPlanned = hide)
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     /** Widens the results to prequels, side stories and spin-offs. */
@@ -452,12 +520,12 @@ private var loadJob: Job? = null
         _filterCriteria.value = _filterCriteria.value.copy(
             includedRelations = next.ifEmpty { setOf(RelationKind.SEQUEL) }
         )
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     fun selectFormat(format: String?) {
         _filterCriteria.value = _filterCriteria.value.copy(selectedFormat = format)
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     fun resetFilters() {
@@ -469,7 +537,7 @@ private var loadJob: Job? = null
         _filterCriteria.value = FilterCriteria(
             hiddenMediaIds = _filterCriteria.value.hiddenMediaIds
         )
-        viewModelScope.launch { recompute() }
+        requestRecompute()
     }
 
     /**

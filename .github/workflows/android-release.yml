@@ -438,7 +438,12 @@ jobs:
 
             *Built with JDK 21 and verified by Android Lint.*
           draft: false
-          prerelease: false
+          # Anything published from a branch other than main is a pre-release;
+          # only main produces the stable builds that update.json points at.
+          # Hardcoding `true` here would leave every future main release
+          # flagged as a pre-release too, which is what happened the first
+          # time this branch needed one.
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
           generate_release_notes: true
           files: release-artifacts/*.apk
 

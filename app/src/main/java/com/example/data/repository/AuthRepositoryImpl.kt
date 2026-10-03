@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "anisequel_auth_prefs")
 
@@ -42,9 +43,24 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     @Volatile
     private var cachedToken: String? = null
 
-    override val accessTokenFlow: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_ACCESS_TOKEN]?.takeIf { it.isNotBlank() }
-    }
+    /**
+     * The stored token, mirrored into [cachedToken] as it is read.
+     *
+     * The `onEach` is what keeps the in-memory copy warm without a blocking
+     * disk read: `AuthViewModel` collects this once at startup, and the moment
+     * it does, [AuthInterceptor] can attach a token from memory instead of
+     * falling back to `runBlocking { getAccessToken() }` on an OkHttp thread for
+     * the first request of the session - which is the very request that draws
+     * the dashboard.
+     *
+     * `onEach` rather than a side effect inside `map`: it must fire for every
+     * collector, and it has to run even for a null value so a cleared token
+     * clears the cache too. Sign-out clears it explicitly as well; this is the
+     * second line of defence against handing out a revoked token.
+     */
+    override val accessTokenFlow: Flow<String?> = context.dataStore.data
+        .map { preferences -> preferences[KEY_ACCESS_TOKEN]?.takeIf { it.isNotBlank() } }
+        .onEach { token -> cachedToken = token }
 
     override val clientIdFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_CLIENT_ID]?.takeIf { it.isNotBlank() } ?: DEFAULT_CLIENT_ID

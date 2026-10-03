@@ -46,23 +46,21 @@ fun SequelPoster(
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
     ) {
-        // Underlying tinted container
+        // Placeholder artwork, shown only until the real cover arrives.
+        //
+        // This used to be a full-bleed `verticalGradient` painted on *every*
+        // poster whether or not a cover loaded - and since `AsyncImage` draws
+        // the cover over the whole box, the gradient was then completely
+        // overdrawn. Every poster in the list was therefore drawn twice, the
+        // second pass entirely hidden: exactly the kind of per-pixel waste a
+        // scrolling wall of 96dp covers notices. A single solid colour, tinted
+        // from AniList's dominant cover colour when it is known, is one draw and
+        // reads the same behind a not-yet-loaded poster.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .background(
-                    if (coverColor != null) {
-                        Brush.verticalGradient(listOf(coverColor, coverColor.copy(alpha = 0.45f)))
-                    } else {
-                        Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceContainerHighest,
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        )
-                    }
-                ),
+                .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
             Icon(

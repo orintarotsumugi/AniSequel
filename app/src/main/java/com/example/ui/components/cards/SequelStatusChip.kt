@@ -1,7 +1,5 @@
 package com.example.ui.components.cards
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -15,7 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,11 +96,14 @@ fun SequelInfoChip(
     label: String,
     modifier: Modifier = Modifier
 ) {
-    val tint by animateColorAsState(
-        targetValue = MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(150),
-        label = "chip_tint"
-    )
+    // No `animateColorAsState` here, deliberately. The target was
+    // `onSurfaceVariant` - a value that never changes - so the animation could
+    // never run: it only allocated an animation state, subscribed to the frame
+    // clock and recomposed on every frame change, forever, to draw a constant
+    // colour. And this chip is inside `SequelCard`, which recomposes for every
+    // visible row on every scroll frame, so that cost was paid a few hundred
+    // times a second to do nothing.
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         shape = MaterialTheme.shapes.extraSmall,

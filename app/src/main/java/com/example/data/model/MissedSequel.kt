@@ -42,6 +42,49 @@ data class MissedSequel(
     val isAddingToPlanning: Boolean = false,
     val isAddedToPlanning: Boolean = false
 ) {
+    // Derived values that walk the whole media node, memoised per instance.
+    //
+    // These are read inside `SequelCard`, which is the single hottest composable
+    // in the app - it runs for every visible row, on every recomposition, and a
+    // recomposition happens on every scroll frame and every keystroke while the
+    // filter chips animate. Recomputing them from scratch each time meant the
+    // description's regex ran twice, the tag list was filtered, sorted and
+    // mapped again, and the ranking and season strings were rebuilt - per card,
+    // per frame. `by lazy` computes each exactly once per instance and the
+    // result is reused until the entry itself changes (a detail load, a status
+    // toggle), at which point it is a new instance anyway.
+    //
+    // `by lazy` on a data class is safe here because every one of these reads
+    // only `val` fields and is therefore genuinely immutable. SYNCHRONIZED is
+    // the default and is what keeps this correct when a detail load patches a
+    // card from a background dispatcher while the main thread is drawing it.
+
+    /** The synopsis, with AniList's HTML stripped. See [description]. */
+    private val cachedDescription: String? by lazy { buildDescription() }
+
+    /** The most relevant thematic tags, highest ranked first. */
+    private val cachedTopTags: List<String> by lazy {
+        sequelMedia.tags
+            ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
+            ?.sortedByDescending { it.rank ?: 0 }
+            ?.mapNotNull { it.name }
+            ?.take(MAX_TAGS) ?: emptyList()
+    }
+
+    /** AniList's best ranking for this entry, formatted, or null. */
+    private val cachedTopRanking: String? by lazy {
+        val best = rankings.firstOrNull { it.rank != null } ?: return@lazy null
+        val rankNum = best.rank ?: return@lazy null
+        val context = best.context?.takeIf { it.isNotBlank() } ?: "Ranked"
+        "#$rankNum $context"
+    }
+
+    /** "Winter 2019", from AniList's `season` and `seasonYear`. */
+    private val cachedAiringSeason: String? by lazy {
+        val name = sequelMedia.season?.takeIf { it.isNotBlank() } ?: return@lazy null
+        val readable = name.lowercase().replaceFirstChar { it.uppercase() }
+        sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
+    }
     val sequelId: Int get() = sequelMedia.id
     val sequelTitle: String get() = sequelMedia.title?.displayTitle ?: "Unknown Sequel"
     val sequelCoverUrl: String? get() = sequelMedia.coverImage?.bestUrl
@@ -75,10 +118,14 @@ data class MissedSequel(
      * each time rather than reusing one.
      */
     val description: String?
-        get() = sequelMedia.description
+        get() = cachedDescription
+
+    private fun buildDescription(): String? =
+        sequelMedia.description
             ?.replace(TAG_PATTERN, "")
             ?.replace(WHITESPACE_PATTERN, " ")
             ?.trim()
+            ?.takeIf { it.isNotEmpty() }
 
     /**
      * AniList's dominant colour for this entry's artwork, as `#RRGGBB`.
@@ -154,11 +201,7 @@ data class MissedSequel(
      * - an unannounced entry has neither.
      */
     val airingSeason: String?
-        get() {
-            val name = sequelMedia.season?.takeIf { it.isNotBlank() } ?: return null
-            val readable = name.lowercase().replaceFirstChar { it.uppercase() }
-            return sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
-        }
+        get() = cachedAiringSeason
 
     val isUnreleased: Boolean
         get() = status == "NOT_YET_RELEASED"
@@ -173,19 +216,10 @@ data class MissedSequel(
         get() = sequelMedia.rankings ?: emptyList()
 
     val topRanking: String?
-        get() {
-            val best = rankings.firstOrNull { it.rank != null } ?: return null
-            val rankNum = best.rank ?: return null
-            val context = best.context?.takeIf { it.isNotBlank() } ?: "Ranked"
-            return "#$rankNum $context"
-        }
+        get() = cachedTopRanking
 
     val topTags: List<String>
-        get() = sequelMedia.tags
-            ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
-            ?.sortedByDescending { it.rank ?: 0 }
-            ?.mapNotNull { it.name }
-            ?.take(8) ?: emptyList()
+        get() = cachedTopTags
 
     /**
      * How this entry relates to the one the user watched.
@@ -216,5 +250,8 @@ data class MissedSequel(
 
         /** Runs of whitespace left behind once the tags are gone. */
         val WHITESPACE_PATTERN = Regex("\\s+")
+
+        /** How many thematic tags the detail sheet renders. */
+        const val MAX_TAGS = 8
     }
 }

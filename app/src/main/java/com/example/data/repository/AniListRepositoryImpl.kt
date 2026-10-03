@@ -73,11 +73,17 @@ class AniListRepositoryImpl(
      * could spend two of those on identical data - and hit the limit exactly
      * when someone was already having a bad time.
      *
-     * Deliberately short-lived. The whole point of the list is to notice what
-     * the user has finished watching, and that changes; a long cache would show
-     * a stale gap list that quietly refused to update. Five minutes covers
-     * every navigation the app actually does while making a manual refresh the
-     * way to force a real re-fetch.
+     * Deliberately bounded. The whole point of the list is to notice what the
+     * user has finished watching, and that changes; an unbounded cache would
+     * show a stale gap list that quietly refused to update. The window is
+     * [LIST_CACHE_TTL_MILLIS] - one hour, which covers every navigation the app
+     * actually does while making a manual refresh the way to force a real
+     * re-fetch.
+     *
+     * (This comment used to say "five minutes", and `clearDetailCache` repeated
+     * it. The constant was an hour in both cases, so the prose was the only
+     * thing wrong - but a reader trusting it would have reasoned about the
+     * wrong staleness window entirely.)
      *
      * Keyed on the user, not on the query, so one account's list can never be
      * served to another.
@@ -187,7 +193,7 @@ class AniListRepositoryImpl(
         detailCache.clear()
         // The list is per-person data, so it has to go when the session does.
         // A TTL alone would leave another person's finished list sitting in
-        // memory for up to five minutes after sign-out.
+        // memory for up to an hour after sign-out.
         listCache.clear()
     }
 
