@@ -1,9 +1,9 @@
 {
-  "version": "1.0.12",
-  "version_code": 30,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.12",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.12/anisequel-universal.apk",
-  "size_bytes": 2427144,
-  "published_at": "",
-  "notes": "Build 30 from 0ce840a9."
+  "version": "1.0.13",
+  "version_code": 32,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.13",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.13/anisequel-universal.apk",
+  "size_bytes": 2427148,
+  "published_at": "2026-10-03T08:23:54Z",
+  "notes": "## AniSequel\n\nFind the anime sequels you finished the first season of and never got\naround to, and add them to your AniList Planning list in one tap.\n\n### 📦 APK package\n**anisequel-universal.apk** runs on every supported device — there is\nonly one build, so there is nothing to choose between.\n\n*Built from commit* `07fdb7786d085119a1ae5fffb09d01f1006d1264` *on run* `32`.\n\n### 🔑 First launch\nAniSequel signs you in to your own AniList account through AniList's\nOAuth page — there is no AniSequel account and no password to manage.\n\n### ⚠️ Installing over an older build\nEvery release is signed with the same key, so you can install this over\nany previous version without uninstalling first.\n\nIf Android reports **\"App not installed as package conflicts\"**, an\nolder copy signed with a *different* key is still present. Uninstall\n**AniSequel** once, then install this APK.\n\n### 🛡️ \"App blocked to protect your device\"\nGoogle Play Protect flags any app that is not published on the Play\nStore and is signed by an unrecognised developer. This is expected\nfor a sideloaded build. Choose **\"More details\" → \"Install anyway\"**,\nor temporarily disable Play Protect in Play Store → Se\n\nBuild 32 from 07fdb778."
 }
