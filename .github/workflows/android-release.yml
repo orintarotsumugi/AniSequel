@@ -46,10 +46,15 @@ jobs:
     # app/build.gradle.kts reads the release signing material from these variables.
     # Without them Gradle has no storePassword and assembleRelease fails with a
     # configuration error instead of a signing error.
+    #
+    # Only the keystore *location* is a literal. The keystore itself and both
+    # passwords come from repository secrets - see the restore step below. They
+    # must never be committed or hardcoded here: this file is public, so a
+    # literal password would hand every reader the key to sign updates.
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/release-key.jks
-      STORE_PASSWORD: android
-      KEY_PASSWORD: android
+      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Checkout Repository
@@ -100,19 +105,41 @@ jobs:
           printf 'Linting: %s\n' "${FILES[@]}"
           ./actionlint "${FILES[@]}"
 
-      - name: Restore the committed release signing key
+      - name: Restore the release signing key from secrets
+        env:
+          # Scoped to this step only: the rest of the job needs the decoded
+          # keystore, never the encoded secret itself.
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           # Every published APK must share one signing key or Android refuses to
           # install updates (INSTALL_FAILED_UPDATE_INCOMPATIBLE). This step only
-          # decodes the committed key; it must never generate a new one, because a
+          # decodes the key from a secret; it must never generate a new one, because a
           # freshly generated key silently breaks every future update.
-          if [ -f "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > release-key.jks
-            echo "Decoded release-key.jks from the committed key."
-          else
-            echo "::error::debug.keystore.base64 is missing. Without a stable key every" \
-                 "build is signed differently and updates will not install. Restore the" \
-                 "file from version control."
+          #
+          # The key deliberately does NOT live in the repository. It was committed
+          # in plaintext through v1.0.16, which meant anyone who cloned the repo
+          # could decode it and sign an "update" APK that the in-app updater
+          # accepts. It now lives only in repository secrets.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is not set. Add the base64 of the"
+            echo "       release keystore under Settings -> Secrets and variables ->"
+            echo "       Actions. The key is deliberately not in version control, so"
+            echo "       restore it from your own backup - never regenerate it."
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
+
+          if [ ! -s release-key.jks ]; then
+            echo "::error::KEYSTORE_BASE64 did not decode to a keystore."
+            exit 1
+          fi
+          echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
+
+          # The passwords are secrets too. Checking them here means the error
+          # says which secret is missing, instead of keytool failing obscurely.
+          if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::STORE_PASSWORD and KEY_PASSWORD secrets must both be set."
             exit 1
           fi
 
@@ -125,7 +152,7 @@ jobs:
 
           # Fail loudly if the release key is unusable, rather than silently
           # shipping an APK signed with the wrong key.
-          keytool -list -keystore release-key.jks -storepass android -alias upload
+          keytool -list -keystore release-key.jks -storepass "$STORE_PASSWORD" -alias upload
 
       - name: Resolve the release version
         id: version
@@ -438,8 +465,14 @@ jobs:
             OAuth page — there is no AniSequel account and no password to manage.
 
             ### ⚠️ Installing over an older build
-            Every release is signed with the same key, so you can install this over
-            any previous version without uninstalling first.
+            Every release from this one onward is signed with the same key, so you
+            can install future updates over the top without uninstalling first.
+
+            If you are upgrading from **v1.0.16 or earlier**, the signing key has
+            changed and Android will refuse the install — a new key can never
+            update an app signed with an old one. Uninstall **AniSequel** once,
+            then install this APK. This wipes the app's local data, so expect to
+            sign in to AniList again.
 
             If Android reports **"App not installed as package conflicts"**, an
             older copy signed with a *different* key is still present. Uninstall

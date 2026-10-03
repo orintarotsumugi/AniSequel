@@ -42,10 +42,14 @@ android {
 
   signingConfigs {
     create("release") {
-      // The release workflow decodes the committed debug.keystore.base64 to
-      // release-key.jks and points these variables at it. Left unset locally, the
-      // keystore path still falls back to rootDir so a signed local release build
-      // works without editing this file.
+      // The release workflow decodes the keystore from the KEYSTORE_BASE64
+      // secret and points these variables at it. The key is deliberately not in
+      // the repository: it used to be committed as debug.keystore.base64, which
+      // let anyone who cloned the repo sign an update APK.
+      //
+      // Left unset locally, the keystore path still falls back to rootDir so a
+      // developer with their own release key in the expected place can still
+      // produce a signed local build without editing this file.
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")

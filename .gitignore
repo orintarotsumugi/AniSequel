@@ -17,10 +17,17 @@ local.properties
 .env
 debug.keystore
 
-# Release signing key material. The keystore itself is decoded from the committed
-# debug.keystore.base64 by the release workflow, so only that base64 file is
-# tracked - never the raw .jks, and never a freshly generated replacement.
+# Release signing key material. The release keystore NEVER belongs in version
+# control: it used to be committed as debug.keystore.base64, which meant anyone
+# who cloned the repo could decode it and sign an "update" APK that the in-app
+# updater would accept. It now lives only in the KEYSTORE_BASE64 / STORE_PASSWORD
+# / KEY_PASSWORD repository secrets, and these patterns exist to stop it ever
+# being committed again by accident.
 *.jks
+*.keystore
+*.p12
+*.pfx
 release-key.jks
 my-upload-key.jks
+debug.keystore.base64
 release-artifacts/
