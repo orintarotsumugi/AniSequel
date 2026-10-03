@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.FilterCriteria
+import com.example.data.model.MissedSequel
 import com.example.data.model.RelationKind
 import com.example.data.model.SequelSortOption
 import com.example.data.model.StatusFilter
@@ -49,6 +50,14 @@ fun FilterSortSheet(
     onToggleHidePlanned: (Boolean) -> Unit,
     onFormatSelected: (String?) -> Unit,
     onToggleRelation: (RelationKind) -> Unit,
+    /**
+     * The entries the user chose to stop being reminded about, and the two ways
+     * back out. Empty until the ViewModel has split its candidates, which is
+     * why the section hides itself rather than rendering an empty list.
+     */
+    hiddenSequels: List<MissedSequel> = emptyList(),
+    onRestoreHidden: (MissedSequel) -> Unit = {},
+    onRestoreAllHidden: () -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -300,6 +309,20 @@ fun FilterSortSheet(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Last, and after every filter, because it is the one section that
+            // is not a filter. The rest of this sheet changes what is on screen;
+            // this is the list of decisions the user has already made, and the
+            // only place in the app that can take one back.
+            HiddenSequelsSection(
+                hiddenSequels = hiddenSequels,
+                onRestoreOne = onRestoreHidden,
+                onRestoreAll = onRestoreAllHidden
+            )
         }
     }
 }

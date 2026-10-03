@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.data.model.MissedSequel
 import com.example.data.model.RelationKind
 import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
@@ -71,12 +73,25 @@ fun DashboardScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
+    val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
+
+    // The most recently hidden entry, so the snackbar's Undo can put it back.
+    // Held here rather than inside the ViewModel because the snackbar is what
+    // owns the gesture: the action belongs to the message that offered it.
+    var lastHiddenSequel by remember { mutableStateOf<MissedSequel?>(null) }
 
     LaunchedEffect(Unit) {
         dashboardViewModel.eventFlow.collectLatest { event ->
             when (event) {
                 is DashboardEvent.ShowSnackbar -> {
-                    snackbarHostState.showSnackbar(event.message)
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message,
+                        actionLabel = event.actionLabel
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        lastHiddenSequel?.let(dashboardViewModel::restoreHiddenSequel)
+                        lastHiddenSequel = null
+                    }
                 }
             }
         }
@@ -216,7 +231,10 @@ fun DashboardScreen(
                                         sequel = item,
                                         onClick = { selectedSequelId = item.sequelId },
                                         onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
-                                        onHide = { dashboardViewModel.toggleHideSequel(item) },
+                                        onHide = {
+                                            lastHiddenSequel = item
+                                            dashboardViewModel.toggleHideSequel(item)
+                                        },
                                         modifier = Modifier
                                             .widthIn(max = MaxContentWidth)
                                             .padding(horizontal = 16.dp)
@@ -247,6 +265,9 @@ fun DashboardScreen(
             onToggleHidePlanned = { dashboardViewModel.toggleHideAlreadyPlanned(it) },
             onFormatSelected = { dashboardViewModel.selectFormat(it) },
             onToggleRelation = { dashboardViewModel.toggleRelation(it) },
+            hiddenSequels = hiddenSequels,
+            onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
+            onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },
             onDismiss = { showFilterSheet = false }
         )
     }
