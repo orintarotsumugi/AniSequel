@@ -57,7 +57,16 @@ sealed interface DashboardUiState {
 }
 
 sealed interface DashboardEvent {
-    data class ShowSnackbar(val message: String) : DashboardEvent
+    /**
+     * [actionLabel] adds a button to the snackbar and the screen runs it when
+     * tapped. Hiding an entry is the one gesture in the app that is easy to do
+     * by accident and tedious to undo by hand, so it carries an undo rather
+     * than only telling the user where the list lives.
+     */
+    data class ShowSnackbar(
+        val message: String,
+        val actionLabel: String? = null
+    ) : DashboardEvent
 }
 
 class DashboardViewModel(
@@ -90,6 +99,17 @@ class DashboardViewModel(
 
     private val _eventFlow = MutableSharedFlow<DashboardEvent>()
     val eventFlow: SharedFlow<DashboardEvent> = _eventFlow.asSharedFlow()
+
+    /**
+     * What the user has chosen to stop being reminded about.
+     *
+     * A separate stream from [uiState] because it is not filtered, sorted or
+     * searched - it is a settings-style list of decisions, and it has to survive
+     * a search box that is filtering everything else out. Without it the only
+     * route back to a hidden anime was to clear app data.
+     */
+    private val _hiddenSequels = MutableStateFlow<List<MissedSequel>>(emptyList())
+    val hiddenSequels: StateFlow<List<MissedSequel>> = _hiddenSequels.asStateFlow()
 
     init {
         // The hidden set outlives the process, so it is re-read on every launch
@@ -132,16 +152,25 @@ class DashboardViewModel(
     private var recomputeGeneration = 0
 
     /**
-     * Everything the list is missing, before filtering.
+     * Everything the list is missing, before filtering - *including* the entries
+     * the user has hidden.
      *
      * Walking the relations of a few hundred entries is the expensive half of
-     * this screen and it only depends on three things: whether already-planned
-     * entries are hidden, which relation kinds are included, and which entries
-     * the user has hidden outright. Caching on those means sorting, searching
-     * and changing status or format no longer re-walk the whole list.
+     * this screen, and it only depends on two things: whether already-planned
+     * entries are hidden, and which relation kinds are included. Caching on
+     * those means sorting, searching and changing status or format no longer
+     * re-walk the whole list.
+     *
+     * The hidden set is deliberately *not* part of the key, and hiding no longer
+     * rebuilds this list. It used to be, because `discover` dropped hidden
+     * entries - so hiding one entry re-walked every relation edge in the
+     * account, on the UI thread's critical path, for a change that is really a
+     * set membership test. The hidden half is now a partition of this same list
+     * (see [FindMissedSequelsUseCase.splitHidden]), which makes hide and
+     * unhide instant *and* is what gives the hidden list something to render.
      */
     private var discoveredCandidates: List<MissedSequel>? = null
-    private var discoveryKey: Triple<Boolean, Set<RelationKind>, Set<Int>>? = null
+    private var discoveryKey: Pair<Boolean, Set<RelationKind>>? = null
 
     /** Description, banner and studio per media, fetched only when opened. */
     private val detailCache = mutableMapOf<Int, MediaNode>()
@@ -332,9 +361,15 @@ class DashboardViewModel(
 
         val candidates = discoverOnce(collection, criteria)
 
+        // Partition before filtering: the hidden half must be published even
+        // when a search or a status filter has emptied the visible one,
+        // otherwise the settings list of hidden anime would vanish the moment
+        // someone typed into the search box.
+        val split = findMissedSequelsUseCase.splitHidden(candidates, criteria.hiddenMediaIds)
+
         val watchedCount = countWatched(collection)
         val visible = withContext(Dispatchers.Default) {
-            findMissedSequelsUseCase.applyFilters(candidates, criteria)
+            findMissedSequelsUseCase.applyFilters(split.visible, criteria)
         }
 
         val updated = visible
@@ -363,6 +398,8 @@ class DashboardViewModel(
         // with a stale sort or filter - the control and the content disagreeing
         // with nothing on screen to explain it.
         if (generation != recomputeGeneration) return
+
+        _hiddenSequels.value = split.hidden
 
         _uiState.value = DashboardUiState.Success(
             viewer = viewer,
@@ -393,21 +430,26 @@ class DashboardViewModel(
         collection: MediaListCollection,
         criteria: FilterCriteria
     ): List<MissedSequel> {
-        // Every input [discover] actually reads has to be in this key. It was keyed on
-        // two fields while `discover` depended on three, so hiding an entry hit
-        // the cached list and the entry stayed on screen - the gesture worked and
-        // did nothing, which is worse than not offering it at all.
-        val key = Triple(
+        // Every input [FindMissedSequelsUseCase.discover] actually reads has to
+        // be in this key. `hiddenMediaIds` used to be here while `discover`
+        // dropped hidden entries; it is gone now because the walk includes them
+        // and the split happens afterwards, so it is no longer an input.
+        val key = Pair(
             criteria.hideAlreadyPlanned,
-            criteria.includedRelations,
-            criteria.hiddenMediaIds
+            criteria.includedRelations
         )
         discoveredCandidates?.let { cached ->
             if (discoveryKey == key) return cached
         }
 
         val discovered = withContext(Dispatchers.Default) {
-            findMissedSequelsUseCase.discover(collection, criteria)
+            // Empty hidden set plus `includeHidden`: the walk returns the whole
+            // picture and the split decides what the user sees.
+            findMissedSequelsUseCase.discover(
+                collection = collection,
+                filterCriteria = criteria.copy(hiddenMediaIds = emptySet()),
+                includeHidden = true
+            )
         }
         discoveredCandidates = discovered
         discoveryKey = key
@@ -546,32 +588,92 @@ class DashboardViewModel(
      * The result is persisted rather than kept in memory: this is the one thing
      * in [FilterCriteria] the user made on purpose, and losing it on next
      * launch would make it a gesture with no effect.
+     *
+     * The in-memory set is updated as well as the store, and *first*. The store
+     * write re-emits through [init]'s collector, which is what would otherwise
+     * be the only thing to update the set - and that path is skipped whenever
+     * there is no store at all. Demo mode builds this ViewModel without one, so
+     * "Not interested" there used to return before doing anything at all: the
+     * gesture looked broken rather than unsupported.
      */
     fun toggleHideSequel(sequel: MissedSequel) {
-        val preferences = hiddenSequelsPreferences ?: return
-        val wasHidden = sequel.sequelId in _filterCriteria.value.hiddenMediaIds
+        val nowHidden = sequel.sequelId !in _filterCriteria.value.hiddenMediaIds
+        setHidden(sequel.sequelId, hidden = nowHidden)
 
         viewModelScope.launch {
-            preferences.toggle(sequel.sequelId)
+            hiddenSequelsPreferences?.let { preferences ->
+                preferences.toggle(sequel.sequelId)
+            }
             _eventFlow.emit(
-                DashboardEvent.ShowSnackbar(
-                    if (wasHidden) {
-                        "${sequel.sequelTitle} can show up again."
-                    } else {
-                        "Hidden ${sequel.sequelTitle}. Find it under Filters > Hidden."
-                    }
-                )
+                if (nowHidden) {
+                    DashboardEvent.ShowSnackbar(
+                        message = "Hidden \"${sequel.sequelTitle}\".",
+                        actionLabel = "Undo"
+                    )
+                } else {
+                    DashboardEvent.ShowSnackbar("\"${sequel.sequelTitle}\" can show up again.")
+                }
             )
         }
     }
 
-    /** Unhides everything, for the "show all again" affordance. */
-    fun restoreAllHiddenSequels() {
-        val preferences = hiddenSequelsPreferences ?: return
+    /**
+     * Brings one hidden entry back, for the row button in the hidden list.
+     *
+     * The mirror of [toggleHideSequel] rather than a call to it: the hidden list
+     * already knows the entry *is* hidden, so re-deriving that to pick a branch
+     * would only be able to get it wrong.
+     */
+    fun restoreHiddenSequel(sequel: MissedSequel) {
+        setHidden(sequel.sequelId, hidden = false)
+
         viewModelScope.launch {
-            preferences.clear()
+            hiddenSequelsPreferences?.let { preferences ->
+                preferences.toggle(sequel.sequelId)
+            }
+            _eventFlow.emit(
+                DashboardEvent.ShowSnackbar("\"${sequel.sequelTitle}\" can show up again.")
+            )
+        }
+    }
+
+    /**
+ * Unhides everything, for the "show all again" affordance.
+ *
+ * Recomputes explicitly rather than leaning on [setHidden]. The persisted
+ * store used to be the only thing that republished the list - its flow
+ * re-emitted and `init`'s collector recomputed - but that collector returns
+ * early when the stored set already matches, and `clear()` emits exactly the
+ * empty set that was just written to the criteria. So the stored path is silent
+ * here and the rows would sit there looking like the button had done nothing.
+ */
+    fun restoreAllHiddenSequels() {
+        if (_filterCriteria.value.hiddenMediaIds.isEmpty()) return
+        _filterCriteria.value = _filterCriteria.value.copy(hiddenMediaIds = emptySet())
+        requestRecompute()
+
+        viewModelScope.launch {
+            hiddenSequelsPreferences?.let { preferences ->
+                preferences.clear()
+            }
             _eventFlow.emit(DashboardEvent.ShowSnackbar("All hidden anime can show up again."))
         }
+    }
+
+    /**
+     * Applies a change to the hidden set and republishes the list.
+     *
+     * One place for every caller, because forgetting the `recompute` is how the
+     * gesture ends up doing nothing: the list on screen is derived from the
+     * candidates partitioned against this set, so the set moving without a
+     * recompute leaves the card still sitting there.
+     */
+    private fun setHidden(mediaId: Int, hidden: Boolean) {
+        val current = _filterCriteria.value.hiddenMediaIds
+        val updated = if (hidden) current + mediaId else current - mediaId
+        if (updated == current) return
+        _filterCriteria.value = _filterCriteria.value.copy(hiddenMediaIds = updated)
+        requestRecompute()
     }
 
     fun addToPlanning(sequel: MissedSequel) {

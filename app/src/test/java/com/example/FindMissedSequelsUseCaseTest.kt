@@ -144,6 +144,152 @@ class FindMissedSequelsUseCaseTest {
         assertEquals(200, result[0].sequelId)
     }
 
+    /**
+     * The other half of "an entry the user has hidden is not offered".
+     *
+     * Hiding has to be reversible, and the route back is a list the user can
+     * read. That list cannot be built from the stored preference alone - it
+     * holds bare AniList ids - so the walk has to be able to produce the hidden
+     * entries as well, with the titles and parents the UI renders them from.
+     *
+     * This is the flag that makes that possible, and it defaults to off so the
+     * ordinary path still never builds a hidden entry.
+     */
+    @Test
+    fun `includeHidden surfaces a hidden entry so it can be restored`() {
+        val collection = singleSequelCollection(sequelId = 200)
+
+        val withHidden = useCase.discover(
+            collection = collection,
+            filterCriteria = FilterCriteria(hiddenMediaIds = setOf(200)),
+            includeHidden = true
+        )
+
+        assertEquals(1, withHidden.size)
+        assertEquals(200, withHidden[0].sequelId)
+        assertEquals("Season 2", withHidden[0].sequelTitle)
+    }
+
+    /**
+     * The default is the behaviour the dashboard depends on.
+     *
+     * Pinning it explicitly, because "the walk always includes hidden entries"
+     * and "the walk honours the hidden set" are both defensible readings of
+     * `discover`, and only one of them is what the filter path expects.
+     */
+    @Test
+    fun `discover excludes hidden entries unless asked`() {
+        val collection = singleSequelCollection(sequelId = 200)
+
+        val byDefault = useCase.discover(
+            collection = collection,
+            filterCriteria = FilterCriteria(hiddenMediaIds = setOf(200))
+        )
+
+        assertEquals(0, byDefault.size)
+    }
+
+    /**
+     * The split that feeds the two halves of the screen.
+     *
+     * The visible half must be exactly what the dashboard would have drawn, and
+     * the hidden half must carry the hidden entry rather than dropping it - that
+     * partition is the whole reason a restore is possible at all.
+     */
+    @Test
+    fun `splitHidden separates hidden entries and keeps both halves intact`() {
+        val collection = singleSequelCollection(sequelId = 200)
+
+        val candidates = useCase.discover(collection, FilterCriteria(), includeHidden = true)
+        val split = useCase.splitHidden(candidates, setOf(200))
+
+        assertEquals(0, split.visible.size)
+        assertEquals(1, split.hidden.size)
+        assertEquals(200, split.hidden[0].sequelId)
+    }
+
+    /**
+     * Restoring is the point, so the hidden half must not be silently emptied.
+     *
+     * An empty hidden set is the common case (nobody has hidden anything yet)
+     * and must be a cheap no-op rather than an error path.
+     */
+    @Test
+    fun `splitHidden with nothing hidden returns everything as visible`() {
+        val collection = singleSequelCollection(sequelId = 200)
+
+        val candidates = useCase.discover(collection, FilterCriteria(), includeHidden = true)
+        val split = useCase.splitHidden(candidates, emptySet())
+
+        assertEquals(1, split.visible.size)
+        assertEquals(0, split.hidden.size)
+    }
+
+    /**
+     * The hidden list is a lookup table, so it is sorted by title.
+     *
+     * Someone looking for the one anime they dismissed is far more likely to
+     * half-remember a name than a release date, and this list deliberately
+     * ignores the sort and filter chips - it is not a view of the dashboard.
+     */
+    @Test
+    fun `the hidden half is sorted by title`() {
+        val collection = threeSequelCollection()
+        val candidates = useCase.discover(collection, FilterCriteria(), includeHidden = true)
+
+        val split = useCase.splitHidden(candidates, setOf(200, 300))
+
+        assertEquals(
+            listOf("Apple Season 2", "Cherry Season 4"),
+            split.hidden.map { it.sequelTitle }
+        )
+    }
+
+    /** One completed entry per sequel, each named so sort order is checkable. */
+    private fun threeSequelCollection(): MediaListCollection {
+        fun sequel(id: Int, title: String) = MediaNode(
+            id = id,
+            title = MediaTitle(english = title),
+            format = "TV",
+            status = "FINISHED",
+            episodes = 12
+        )
+
+        return MediaListCollection(
+            lists = listOf(
+                MediaListGroup(
+                    name = "Completed",
+                    status = "COMPLETED",
+                    entries = listOf(200, 300, 400).map { id ->
+                        val title = when (id) {
+                            200 -> "Apple Season 2"
+                            300 -> "Cherry Season 4"
+                            else -> "Banana Season 6"
+                        }
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            media = MediaNode(
+                                id = id + 1000,
+                                title = MediaTitle(english = "Parent $id"),
+                                format = "TV",
+                                status = "FINISHED",
+                                episodes = 12,
+                                relations = MediaRelations(
+                                    edges = listOf(
+                                        MediaRelationEdge(
+                                            relationType = "SEQUEL",
+                                            node = sequel(id, title)
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    }
+                )
+            )
+        )
+    }
+
     /** One completed entry with one missing sequel, id [sequelId]. */
     private fun singleSequelCollection(sequelId: Int): MediaListCollection {
         val sequelMedia = MediaNode(

@@ -26,7 +26,22 @@ class FindMissedSequelsUseCase {
      */
     fun discover(
         collection: MediaListCollection,
-        filterCriteria: FilterCriteria = FilterCriteria()
+        filterCriteria: FilterCriteria = FilterCriteria(),
+        /**
+         * Build the entries the user has hidden as well as the ones they have not.
+         *
+         * Off by default, and that default is what every caller wants: hiding an
+         * entry is meant to stop it costing anything in the sort that runs on
+         * every keystroke, so the ordinary path never builds one.
+         *
+         * It exists for the opposite question - "what did I hide?" - which
+         * [DashboardViewModel] answers by discovering with this on and keeping
+         * the hidden half. That answer needs a title, a poster and a parent, and
+         * all three only exist on a built [MissedSequel]; the stored preference
+         * is bare AniList ids. Without this the hidden list could only ever have
+         * been rendered as a row of numbers.
+         */
+        includeHidden: Boolean = false
     ): List<MissedSequel> {
         val lists = collection.lists ?: return emptyList()
         val allUserEntries = lists.flatMap { it.entries ?: emptyList() }
@@ -74,7 +89,7 @@ class FindMissedSequelsUseCase {
                 // here rather than in [applyFilters] so a hidden entry is never
                 // built in the first place, and so it stops costing anything in
                 // the sort that runs on every keystroke.
-                if (filterCriteria.hiddenMediaIds.contains(sequelId)) continue
+                if (!includeHidden && filterCriteria.hiddenMediaIds.contains(sequelId)) continue
 
                 val isPlanned = plannedMediaIds.contains(sequelId) ||
                         sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
@@ -163,6 +178,35 @@ class FindMissedSequelsUseCase {
         collection: MediaListCollection,
         filterCriteria: FilterCriteria = FilterCriteria()
     ): List<MissedSequel> = applyFilters(discover(collection, filterCriteria), filterCriteria)
+
+    /**
+     * Splits a full candidate list into what is still on offer and what the user hid.
+     *
+     * Takes candidates discovered with `includeHidden = true`, so both halves
+     * carry the titles, posters and parents the UI needs to render them. The
+     * hidden half is sorted by title because it is a settings-style list of
+     * decisions rather than a ranked feed - "the one I am looking for" is far
+     * more likely to be a name someone half-remembers than a date.
+     */
+    fun splitHidden(
+        candidates: List<MissedSequel>,
+        hiddenMediaIds: Set<Int>
+    ): HiddenSplit {
+        if (hiddenMediaIds.isEmpty()) return HiddenSplit(candidates, emptyList())
+        val visible = ArrayList<MissedSequel>(candidates.size)
+        val hidden = ArrayList<MissedSequel>()
+        for (candidate in candidates) {
+            if (candidate.sequelId in hiddenMediaIds) hidden.add(candidate) else visible.add(candidate)
+        }
+        hidden.sortBy { it.sequelTitle.lowercase() }
+        return HiddenSplit(visible, hidden)
+    }
+
+    /** The two halves of [splitHidden]. */
+    data class HiddenSplit(
+        val visible: List<MissedSequel>,
+        val hidden: List<MissedSequel>
+    )
 
     /**
      * An entry counts as watched when the user marked it complete, or when their
