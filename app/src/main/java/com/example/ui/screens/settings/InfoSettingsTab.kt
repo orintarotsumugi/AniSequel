@@ -31,24 +31,24 @@ private data class ChangelogEntry(val title: String, val detail: String)
 
 private val changelog = listOf(
     ChangelogEntry(
+        title = "Hidden list is back",
+        detail = "Hiding a sequel is reversible now - find them under Filters, Hidden."
+    ),
+    ChangelogEntry(
         title = "Redesigned Material 3 Expressive UI",
-        detail = "Enjoy fluid spring physics, dynamic morphing shapes, and tactile responsive controls."
+        detail = "Spring physics, morphing shapes, and responsive controls throughout."
     ),
     ChangelogEntry(
-        title = "Modern Anime Card Visuals",
-        detail = "Featuring high-resolution posters, glowing status tags, sinusoidal watch progress, and 1-tap planning."
+        title = "Faster, steadier list loads",
+        detail = "Optimised GraphQL batching and season mapping prevent connection failures."
     ),
     ChangelogEntry(
-        title = "Your anime list loads quickly & reliably",
-        detail = "Optimized GraphQL coalescing and smart season mapping prevent connection failures."
+        title = "Planning syncs straight to AniList",
+        detail = "Every addition lands on your account with instant confirmation."
     ),
     ChangelogEntry(
-        title = "Seamless Planning Sync",
-        detail = "Every addition to Planning syncs directly to your AniList account with real-time feedback."
-    ),
-    ChangelogEntry(
-        title = "Automatic In-App Updates",
-        detail = "Checks for official GitHub releases and updates your app safely with two taps."
+        title = "In-app updates",
+        detail = "Checks GitHub releases and installs them in two taps."
     )
 )
 
@@ -70,17 +70,24 @@ fun InfoSettingsTab(
                 }
             )
         } else {
-            SectionCard(title = "Not signed in") {
+            SectionCard(
+                title = "Not signed in",
+                icon = AppVectorIcons.Login,
+                subtitle = "Demo mode"
+            ) {
                 Text(
-                    text = "You are currently browsing AniSequel in read-only / demo mode. " +
-                            "Sign in with your AniList account to scan your completed lists and add sequels to your Planning list.",
+                    text = "You are browsing in read-only demo mode. Sign in with your AniList account to scan your completed list and plan sequels.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        SectionCard(title = "About AniSequel") {
+        SectionCard(
+            title = "About",
+            icon = AppVectorIcons.SectionAbout,
+            subtitle = "Build and data source"
+        ) {
             InfoRow(label = "Version", value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             Spacer(modifier = Modifier.height(10.dp))
             InfoRow(label = "Package", value = BuildConfig.APPLICATION_ID)
@@ -92,7 +99,7 @@ fun InfoSettingsTab(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "AniSequel scans franchise relations from your completed anime list and discovers sequels you haven't started yet. Your credentials and data stay directly on your device.",
+                text = "AniSequel reads your completed list, follows franchise relations, and finds sequels you haven't started. Your credentials never leave this device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -100,14 +107,11 @@ fun InfoSettingsTab(
 
         UpdateSectionCard()
 
-        SectionCard(title = "What's new in ${BuildConfig.VERSION_NAME}") {
-            Text(
-                text = "Recent improvements, performance fixes, and enhancements:",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
+        SectionCard(
+            title = "What's new",
+            icon = AppVectorIcons.NewReleases,
+            subtitle = BuildConfig.VERSION_NAME
+        ) {
             changelog.forEachIndexed { index, entry ->
                 if (index > 0) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -118,7 +122,7 @@ fun InfoSettingsTab(
                             .padding(top = 6.dp, end = 10.dp)
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(MaterialTheme.colorScheme.secondary)
                     )
                     Column {
                         Text(
@@ -137,15 +141,19 @@ fun InfoSettingsTab(
             }
         }
 
-        SectionCard(title = "Help & Links") {
+        SectionCard(
+            title = "Help & links",
+            icon = AppVectorIcons.SectionHelp,
+            subtitle = "Docs and support"
+        ) {
             Text(
-                text = "AniSequel requires read permissions to check your lists and write permission only when you tap 'Add to Planning'.",
+                text = "AniSequel asks for read access to your lists, and write access only when you tap Add to Planning.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsButton(
-                text = "AniList API Documentation",
+                text = "AniList API documentation",
                 onClick = { openExternalUrl(context, AniListOAuth.DEVELOPER_SETTINGS_URL) },
                 icon = Icons.AutoMirrored.Filled.OpenInNew,
                 variant = SettingsButtonVariant.Text,

@@ -22,7 +22,7 @@ private val Context.themeDataStore: DataStore<Preferences> by preferencesDataSto
  * one regardless of what their phone is set to.
  */
 enum class ThemeMode(val storageValue: String, val displayName: String) {
-    SYSTEM("system", "Follow system"),
+    SYSTEM("system", "System"),
     LIGHT("light", "Light"),
     DARK("dark", "Dark");
 

@@ -55,8 +55,14 @@ fun ExpressiveProgressRow(label: String, detail: String, progress: Float, modifi
 fun expressiveShape(polygon: RoundedPolygon) = com.example.ui.components.expressive.expressiveShape(polygon)
 
 @Composable
-fun ExpressiveTabBar(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) =
-    com.example.ui.components.expressive.ExpressiveTabBar(tabs, selectedIndex, onSelect, modifier)
+fun ExpressiveTabBar(
+    tabs: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    icons: List<androidx.compose.ui.graphics.vector.ImageVector?> = List(tabs.size) { null }
+) =
+    com.example.ui.components.expressive.ExpressiveTabBar(tabs, selectedIndex, onSelect, modifier, icons)
 
 @Composable
 fun ExpressivePolygonSegmentedBar(options: List<SegmentedOption>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) =
