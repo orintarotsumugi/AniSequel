@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.cards.toCoverColorOrNull
@@ -80,16 +81,19 @@ fun HiddenSequelsSection(
     // otherwise leave an open, empty section behind.
     AnimatedVisibility(
         visible = hiddenSequels.isNotEmpty(),
+        // `IntSize` explicitly, not left to inference: passing a Dp threshold
+        // pins the spring to SpringSpec<Dp>, which is not the
+        // FiniteAnimationSpec<IntSize> these two transitions take.
         enter = expandVertically(
-            animationSpec = spring(
+            animationSpec = spring<IntSize>(
                 stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = 0.dp
+                visibilityThreshold = 0
             )
         ) + fadeIn(tween(200)),
         exit = shrinkVertically(
-            animationSpec = spring(
+            animationSpec = spring<IntSize>(
                 stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = 0.dp
+                visibilityThreshold = 0
             )
         ) + fadeOut(tween(150))
     ) {
@@ -110,15 +114,15 @@ fun HiddenSequelsSection(
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(
-                    animationSpec = spring(
+                    animationSpec = spring<IntSize>(
                         stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = 0.dp
+                        visibilityThreshold = 0
                     )
                 ) + fadeIn(tween(180)),
                 exit = shrinkVertically(
-                    animationSpec = spring(
+                    animationSpec = spring<IntSize>(
                         stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = 0.dp
+                        visibilityThreshold = 0
                     )
                 ) + fadeOut(tween(120))
             ) {
