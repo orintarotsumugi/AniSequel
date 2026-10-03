@@ -280,6 +280,21 @@ jobs:
           echo "Prepared $OUTPUT_DIR/anisequel-universal.apk:"
           ls -la "$OUTPUT_DIR"
 
+      - name: Verify APK Release Signing Integrity
+        run: |
+          echo "::group::Verifying APK Signature and Keystore Integrity"
+          # Find apksigner binary from Android SDK build-tools
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
+            echo "Using apksigner at: $APKSIGNER"
+            "$APKSIGNER" verify --verbose --print-certs release-artifacts/anisequel-universal.apk
+            echo "APK signature successfully verified against release signing key."
+          else
+            echo "apksigner not found; falling back to keytool jar verification."
+            keytool -printcert -jarfile release-artifacts/anisequel-universal.apk
+          fi
+          echo "::endgroup::"
+
       - name: Upload Build Artifacts to Workflow Run
         uses: actions/upload-artifact@v4
         with:

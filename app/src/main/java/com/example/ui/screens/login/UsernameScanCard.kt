@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.expressive.bouncyPress
 
 @Composable
 fun UsernameScanCard(
@@ -37,7 +39,7 @@ fun UsernameScanCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -62,6 +64,7 @@ fun UsernameScanCard(
                 label = { Text("AniList Username") },
                 placeholder = { Text("e.g. MyAnimeList") },
                 singleLine = true,
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("username_scan_input")
@@ -77,9 +80,10 @@ fun UsernameScanCard(
                 enabled = publicUsernameInput.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(50.dp)
+                    .bouncyPress(pressedScale = 0.96f)
                     .testTag("scan_username_button"),
-                shape = MaterialTheme.shapes.small
+                shape = RoundedCornerShape(14.dp)
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Search,

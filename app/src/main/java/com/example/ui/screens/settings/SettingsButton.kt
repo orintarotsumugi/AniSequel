@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.expressive.bouncyPress
 
 /** How much weight a settings action carries. */
 enum class SettingsButtonVariant {
@@ -79,6 +80,7 @@ fun SettingsButton(
     val shape = MaterialTheme.shapes.large
 
     val baseModifier = modifier
+        .bouncyPress(pressedScale = 0.96f)
         .height(height)
         .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
         .then(testTag?.let { Modifier.testTag(it) } ?: Modifier)

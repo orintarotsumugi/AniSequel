@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -23,8 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.expressive.AnimatedCounterText
 import com.example.ui.theme.AniSequelTheme
 
 @Composable
@@ -43,8 +44,8 @@ fun StatsBanner(
     ) {
         StatCard(
             title = "Completed",
-            count = "$totalWatched",
-            icon = AppVectorIcons.CheckCircle,
+            count = totalWatched,
+            icon = AppVectorIcons.CheckDouble,
             iconBg = status.successContainer,
             iconTint = status.success,
             modifier = Modifier.weight(1f)
@@ -52,7 +53,7 @@ fun StatsBanner(
 
         StatCard(
             title = "Missed Sequels",
-            count = "$missedCount",
+            count = missedCount,
             icon = AppVectorIcons.SequelJump,
             iconBg = if (missedCount > 0) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -72,7 +73,7 @@ fun StatsBanner(
 @Composable
 private fun StatCard(
     title: String,
-    count: String,
+    count: Int,
     icon: ImageVector,
     iconBg: Color,
     iconTint: Color,
@@ -80,7 +81,7 @@ private fun StatCard(
 ) {
     Card(
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -90,13 +91,13 @@ private fun StatCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(iconBg),
                 contentAlignment = Alignment.Center
             ) {
@@ -104,22 +105,24 @@ private fun StatCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(19.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            Column {
-                Text(
-                    text = count,
-                    style = MaterialTheme.typography.headlineSmall,
+            Column(modifier = Modifier.weight(1f)) {
+                AnimatedCounterText(
+                    count = count,
+                    style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
         }

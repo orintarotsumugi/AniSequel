@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.graphics.shapes.RoundedPolygon
 import com.example.ui.components.expressive.ExpressiveArtworkPlaceholder
-import com.example.ui.components.expressive.ExpressiveButtonGroup
 import com.example.ui.components.expressive.ExpressiveContainedLoadingIndicator
 import com.example.ui.components.expressive.ExpressiveCountBadge
 import com.example.ui.components.expressive.ExpressiveEmptyOrb
@@ -60,7 +59,7 @@ fun ExpressiveTabBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    icons: List<androidx.compose.ui.graphics.vector.ImageVector?> = List(tabs.size) { null }
+    icons: List<ImageVector?> = List(tabs.size) { null }
 ) =
     com.example.ui.components.expressive.ExpressiveTabBar(tabs, selectedIndex, onSelect, modifier, icons)
 
@@ -127,4 +126,4 @@ fun ExpressiveEmptyOrb(
 
 @Composable
 fun ExpressiveButtonGroup(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) =
-    com.example.ui.components.expressive.ExpressiveButtonGroup(labels, selectedIndex, onSelect, modifier)
+    com.example.ui.components.expressive.ExpressiveSegmentedBar(labels, selectedIndex, onSelect, modifier)

@@ -44,7 +44,7 @@ data class SegmentedOption(
 )
 
 /**
- * Material 3 Expressive tab bar with spring physics and morphing pill shapes.
+ * Material 3 Expressive tab bar with lively spring physics and morphing pill shapes.
  */
 @Composable
 fun ExpressiveTabBar(
@@ -52,7 +52,6 @@ fun ExpressiveTabBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    /** Optional icon per tab, drawn before the label. Shorter lists are fine. */
     icons: List<ImageVector?> = List(tabs.size) { null }
 ) {
     Row(
@@ -66,10 +65,10 @@ fun ExpressiveTabBar(
             val selected = index == selectedIndex
 
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.94f,
+                targetValue = if (selected) 1f else 0.93f,
                 animationSpec = spring(
-                    dampingRatio = 0.65f,
-                    stiffness = Spring.StiffnessMediumLow
+                    dampingRatio = 0.55f,
+                    stiffness = Spring.StiffnessLow
                 ),
                 label = "tab_scale_$label"
             )
@@ -79,7 +78,10 @@ fun ExpressiveTabBar(
                 } else {
                     Color.Transparent
                 },
-                animationSpec = spring(),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
                 label = "tab_container_$label"
             )
             val content by animateColorAsState(
@@ -134,7 +136,7 @@ fun ExpressiveTabBar(
 }
 
 /**
- * A segmented bar styled with MaterialShapes polygons and vector icons.
+ * A segmented bar styled with MaterialShapes polygons and vector icons with playful bounciness.
  */
 @Composable
 fun ExpressivePolygonSegmentedBar(
@@ -155,19 +157,13 @@ fun ExpressivePolygonSegmentedBar(
         options.forEachIndexed { index, option ->
             val selected = index == selectedIndex
 
-            // `secondaryContainer`, not `primary`. The theme-mode bar sits on a
-            // card, and under Material You `primary` is whatever the user's
-            // wallpaper made it - a light salmon pill on a dark surface reads as
-            // a bug rather than a selection, and it is the single loudest thing
-            // on the screen. `secondaryContainer`/`onSecondaryContainer` is the
-            // tonal pair Material You keeps readable on both light and dark.
             val container by animateColorAsState(
                 targetValue = if (selected) {
                     MaterialTheme.colorScheme.secondaryContainer
                 } else {
                     Color.Transparent
                 },
-                animationSpec = spring(dampingRatio = 0.7f),
+                animationSpec = spring(dampingRatio = 0.65f),
                 label = "segment_container_${option.label}"
             )
             val content by animateColorAsState(
@@ -179,13 +175,10 @@ fun ExpressivePolygonSegmentedBar(
                 animationSpec = spring(),
                 label = "segment_content_${option.label}"
             )
-            // The tab bar above already springs its selection, so a bar that
-            // only cross-fades colour reads as two different control families
-            // stacked on one screen.
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.95f,
+                targetValue = if (selected) 1f else 0.94f,
                 animationSpec = spring(
-                    dampingRatio = 0.65f,
+                    dampingRatio = 0.52f,
                     stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "segment_scale_${option.label}"
@@ -244,14 +237,23 @@ fun ExpressiveSegmentedBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(3.dp)
+            .padding(4.dp)
             .testTag("${EXPRESSIVE_TAG}segmented_bar"),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.95f,
+                animationSpec = spring(
+                    dampingRatio = 0.54f,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "segmented_scale_$label"
+            )
+
             val shape = when {
                 index == 0 && options.size > 1 -> RoundedCornerShape(
                     topStart = 14.dp, bottomStart = 14.dp, topEnd = 6.dp, bottomEnd = 6.dp
@@ -266,6 +268,10 @@ fun ExpressiveSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(38.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
                     .clip(shape)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary
@@ -311,9 +317,18 @@ fun ExpressiveStateChip(
         animationSpec = spring(),
         label = "chip_content"
     )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.96f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        label = "chip_scale"
+    )
 
     Box(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(if (selected) RoundedCornerShape(14.dp) else RoundedCornerShape(9.dp))
             .background(background)
             .clickable(onClick = onClick)
@@ -327,60 +342,5 @@ fun ExpressiveStateChip(
             color = foreground,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
         )
-    }
-}
-
-/**
- * Connected group of buttons sharing an outline and animated states.
- */
-@Composable
-fun ExpressiveButtonGroup(
-    labels: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .testTag("${EXPRESSIVE_TAG}button_group"),
-        horizontalArrangement = Arrangement.spacedBy(0.dp)
-    ) {
-        labels.forEachIndexed { index, label ->
-            val selected = index == selectedIndex
-            val radius = 12.dp
-            val shape = when {
-                labels.size < 2 -> RoundedCornerShape(radius)
-                index == 0 -> RoundedCornerShape(
-                    topStart = radius, bottomStart = radius, topEnd = 0.dp, bottomEnd = 0.dp
-                )
-                index == labels.lastIndex -> RoundedCornerShape(
-                    topStart = 0.dp, bottomStart = 0.dp, topEnd = radius, bottomEnd = radius
-                )
-                else -> RoundedCornerShape(0.dp)
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .clip(shape)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.secondaryContainer
-                        else Color.Transparent
-                    )
-                    .clickable { onSelect(index) }
-                    .testTag("${EXPRESSIVE_TAG}group_item_$label"),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                )
-            }
-        }
     }
 }

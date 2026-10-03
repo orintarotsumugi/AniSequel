@@ -1,5 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,10 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,13 +26,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.ViewerProfile
+import com.example.ui.components.expressive.bouncyPress
+import com.example.ui.components.expressive.ExpressiveLoadingIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +49,7 @@ fun AniTopAppBar(
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
     modifier: Modifier = Modifier
 ) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val haptic = LocalHapticFeedback.current
 
     TopAppBar(
         modifier = modifier.testTag("ani_top_app_bar"),
@@ -83,7 +89,9 @@ fun AniTopAppBar(
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                     onOpenFilter()
                 },
-                modifier = Modifier.testTag("filter_button")
+                modifier = Modifier
+                    .bouncyPress()
+                    .testTag("filter_button")
             ) {
                 BadgedBox(
                     badge = {
@@ -110,7 +118,9 @@ fun AniTopAppBar(
                     onRefresh()
                 },
                 enabled = !isRefreshing,
-                modifier = Modifier.testTag("refresh_button")
+                modifier = Modifier
+                    .bouncyPress()
+                    .testTag("refresh_button")
             ) {
                 if (isRefreshing) {
                     ExpressiveLoadingIndicator(
@@ -130,7 +140,9 @@ fun AniTopAppBar(
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                     onOpenSettings()
                 },
-                modifier = Modifier.testTag("settings_button")
+                modifier = Modifier
+                    .bouncyPress()
+                    .testTag("settings_button")
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Settings,
@@ -151,7 +163,7 @@ private fun Avatar(viewer: ViewerProfile?) {
             contentDescription = null,
             modifier = Modifier
                 .size(36.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentScale = ContentScale.Crop
         )
@@ -159,7 +171,7 @@ private fun Avatar(viewer: ViewerProfile?) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {

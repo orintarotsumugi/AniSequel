@@ -94,7 +94,7 @@ fun DetailHeader(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = sequel.sequelTitle,
                     style = MaterialTheme.typography.titleMedium,
@@ -107,7 +107,9 @@ fun DetailHeader(
                 Text(
                     text = sequel.releaseDate,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

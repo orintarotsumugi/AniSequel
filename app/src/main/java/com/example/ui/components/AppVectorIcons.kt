@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Tune
 import com.example.ui.components.icons.AppCustomVectors
+import com.example.ui.components.icons.AppExtraVectors
 
 /**
  * Central vector icon repository for AniSequel to avoid emoji usage
@@ -55,6 +56,9 @@ object AppVectorIcons {
     val Tv = Icons.Default.Tv
     val SequelArrow = Icons.AutoMirrored.Filled.ArrowForward
     val SequelJump = AppCustomVectors.SequelJump
+    val FranchiseBranch = AppExtraVectors.FranchiseBranch
+    val CheckDouble = AppExtraVectors.CheckDouble
+    val CalendarClock = AppExtraVectors.CalendarClock
     val BookmarkAdd = Icons.Default.BookmarkAdd
     val BookmarkDone = Icons.Default.Bookmark
     val CheckCircle = Icons.Default.CheckCircle

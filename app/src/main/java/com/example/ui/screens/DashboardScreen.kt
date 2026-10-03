@@ -108,6 +108,17 @@ fun DashboardScreen(
     val isDetailLoading = selectedSequelId != null && selectedSequelId in loadingDetailIds
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
+    val hasActiveFilters by remember(filterCriteria) {
+        androidx.compose.runtime.derivedStateOf {
+            filterCriteria.statusFilter != StatusFilter.ALL ||
+                filterCriteria.selectedFormat != null ||
+                filterCriteria.searchQuery.isNotBlank() ||
+                !filterCriteria.includeUnreleased ||
+                !filterCriteria.hideAlreadyPlanned ||
+                filterCriteria.includedRelations != setOf(RelationKind.SEQUEL)
+        }
+    }
+
     Scaffold(
         modifier = modifier
             .fillMaxSize()
@@ -122,12 +133,7 @@ fun DashboardScreen(
                 onRefresh = { dashboardViewModel.refresh() },
                 onOpenSettings = { onOpenSettings(currentViewer) },
                 isRefreshing = successState?.isRefreshing == true,
-                hasActiveFilters = filterCriteria.statusFilter != StatusFilter.ALL ||
-                    filterCriteria.selectedFormat != null ||
-                    filterCriteria.searchQuery.isNotBlank() ||
-                    !filterCriteria.includeUnreleased ||
-                    !filterCriteria.hideAlreadyPlanned ||
-                    filterCriteria.includedRelations != setOf(RelationKind.SEQUEL),
+                hasActiveFilters = hasActiveFilters,
                 scrollBehavior = scrollBehavior
             )
         }
@@ -240,9 +246,13 @@ fun DashboardScreen(
                                             .padding(horizontal = 16.dp)
                                             .animateItem(
                                                 placementSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioLowBouncy,
                                                     stiffness = Spring.StiffnessMediumLow
                                                 ),
-                                                fadeInSpec = tween(220),
+                                                fadeInSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                ),
                                                 fadeOutSpec = tween(120)
                                             )
                                     )

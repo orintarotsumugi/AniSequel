@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.RedirectUrlHint
+import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.viewmodel.AuthUiState
 
 @Composable
@@ -55,7 +56,7 @@ fun OAuthCard(
     Column(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
@@ -63,7 +64,7 @@ fun OAuthCard(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 FeatureRow(
-                    icon = AppVectorIcons.CheckCircle,
+                    icon = AppVectorIcons.CheckDouble,
                     title = "Personal List Sync",
                     desc = "Detect missed seasons from your personal completed lists"
                 )
@@ -86,7 +87,7 @@ fun OAuthCard(
             if (authState is AuthUiState.Error) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = MaterialTheme.shapes.small,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
@@ -132,9 +133,10 @@ fun OAuthCard(
                 enabled = authState !is AuthUiState.Error,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(50.dp)
+                    .bouncyPress(pressedScale = 0.96f)
                     .testTag("connect_anilist_button"),
-                shape = MaterialTheme.shapes.small
+                shape = RoundedCornerShape(14.dp)
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Login,
@@ -191,8 +193,8 @@ private fun FeatureRow(
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
@@ -200,7 +202,7 @@ private fun FeatureRow(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
         Spacer(modifier = Modifier.width(12.dp))

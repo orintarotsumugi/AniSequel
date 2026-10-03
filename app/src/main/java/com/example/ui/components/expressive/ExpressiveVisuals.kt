@@ -1,5 +1,11 @@
 package com.example.ui.components.expressive
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,10 +20,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -99,7 +107,7 @@ fun ExpressiveLoadingOverlay(
 }
 
 /**
- * Expressive shape orb for empty state graphics.
+ * Expressive shape orb for empty state graphics with subtle breathing motion.
  */
 @Composable
 fun ExpressiveEmptyOrb(
@@ -108,6 +116,17 @@ fun ExpressiveEmptyOrb(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "orb_pulse_transition")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb_pulse_scale"
+    )
+
     Box(
         modifier = modifier
             .size(80.dp)
@@ -119,7 +138,12 @@ fun ExpressiveEmptyOrb(
             imageVector = icon,
             contentDescription = null,
             tint = iconTint,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier
+                .size(36.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
         )
     }
 }

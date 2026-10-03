@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveContainedLoadingIndicator
+import com.example.ui.components.expressive.bouncyPress
 
 @Composable
 fun DetailActionRow(
@@ -45,7 +46,8 @@ fun DetailActionRow(
             },
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp),
+                .height(48.dp)
+                .bouncyPress(pressedScale = 0.96f),
             shape = MaterialTheme.shapes.small
         ) {
             Icon(
@@ -63,6 +65,7 @@ fun DetailActionRow(
                 modifier = Modifier
                     .weight(1.3f)
                     .height(48.dp)
+                    .bouncyPress(pressedScale = 0.96f)
                     .testTag("sheet_sign_in_to_add_button"),
                 shape = MaterialTheme.shapes.small
             ) {
@@ -101,6 +104,7 @@ fun DetailActionRow(
                 modifier = Modifier
                     .weight(1.3f)
                     .height(48.dp)
+                    .bouncyPress(pressedScale = 0.96f)
                     .testTag("sheet_add_planning_button"),
                 shape = MaterialTheme.shapes.small
             ) {

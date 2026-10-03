@@ -1,12 +1,19 @@
 package com.example.ui.screens.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -31,6 +39,8 @@ fun DashboardSearchBar(
     maxWidth: Dp,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -41,20 +51,24 @@ fun DashboardSearchBar(
             .testTag("anime_search_bar"),
         placeholder = { Text("Search franchise or sequel") },
         singleLine = true,
-        shape = MaterialTheme.shapes.small,
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
         ),
         leadingIcon = {
             Icon(
                 imageVector = AppVectorIcons.Search,
-                contentDescription = null
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
             )
         },
         trailingIcon = {
-            if (query.isNotBlank()) {
-                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            AnimatedVisibility(
+                visible = query.isNotBlank(),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
@@ -63,7 +77,8 @@ fun DashboardSearchBar(
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Close,
-                        contentDescription = "Clear search"
+                        contentDescription = "Clear search",
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
