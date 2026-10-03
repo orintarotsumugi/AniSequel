@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -14,14 +13,10 @@ import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.network.AniListOAuth
 import com.example.data.repository.AuthRepositoryImpl
@@ -118,10 +112,13 @@ fun EditSettingsTab(
 
             if (appearanceIsCustom) {
                 Spacer(modifier = Modifier.height(6.dp))
-                TextButton(
+                SettingsButton(
+                    text = "Reset to default appearance",
                     onClick = { scope.launch { themePreferences.reset() } },
-                    modifier = Modifier.testTag("reset_appearance_button")
-                ) { Text("Reset to default appearance") }
+                    variant = SettingsButtonVariant.Text,
+                    fillWidth = true,
+                    testTag = "reset_appearance_button"
+                )
             }
         }
 
@@ -142,20 +139,17 @@ fun EditSettingsTab(
             RedirectUrlHint()
 
             Spacer(modifier = Modifier.height(8.dp))
-            TextButton(
-                onClick = { openExternalUrl(context, AniListOAuth.DEVELOPER_SETTINGS_URL) }
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Manage AniList Developer Clients")
-            }
+            SettingsButton(
+                text = "Manage AniList Developer Clients",
+                onClick = { openExternalUrl(context, AniListOAuth.DEVELOPER_SETTINGS_URL) },
+                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                variant = SettingsButtonVariant.Text,
+                fillWidth = true
+            )
         }
 
-        OutlinedButton(
+        SettingsButton(
+            text = if (authState is AuthUiState.Authenticated) "Sign out" else "Back to sign in",
             onClick = {
                 if (authState is AuthUiState.Authenticated) {
                     onNavigateBack()
@@ -163,24 +157,11 @@ fun EditSettingsTab(
                     onNavigateToLogin()
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .testTag("logout_button"),
-            shape = MaterialTheme.shapes.small
-        ) {
-            Icon(
-                imageVector = if (authState is AuthUiState.Authenticated) AppVectorIcons.Logout else AppVectorIcons.Login,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (authState is AuthUiState.Authenticated) "Sign out" else "Back to sign in",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+            icon = if (authState is AuthUiState.Authenticated) AppVectorIcons.Logout else AppVectorIcons.Login,
+            variant = SettingsButtonVariant.Outlined,
+            fillWidth = true,
+            testTag = "logout_button"
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -235,31 +216,26 @@ private fun ClientIdEditor(
         modifier = Modifier.fillMaxWidth()
     ) {
         if (!isDefault) {
-            TextButton(
+            SettingsButton(
+                text = "Use default",
                 onClick = { editingClientId = AuthRepositoryImpl.DEFAULT_CLIENT_ID },
-                modifier = Modifier.testTag("reset_client_id_button")
-            ) { Text("Use default") }
+                variant = SettingsButtonVariant.Text,
+                testTag = "reset_client_id_button"
+            )
             Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Button(
+        SettingsButton(
+            text = if (hasSavedClientId) "Saved" else "Save",
             onClick = {
                 savedValue = trimmed
                 onSave(trimmed)
                 hasSavedClientId = true
             },
+            icon = if (hasSavedClientId) Icons.Filled.CheckCircleOutline else null,
             enabled = canSave,
-            modifier = Modifier.testTag("save_client_id_button")
-        ) {
-            if (hasSavedClientId) {
-                Icon(
-                    imageVector = Icons.Filled.CheckCircleOutline,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Text(if (hasSavedClientId) "Saved" else "Save")
-        }
+            variant = if (hasSavedClientId) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
+            testTag = "save_client_id_button"
+        )
     }
 }

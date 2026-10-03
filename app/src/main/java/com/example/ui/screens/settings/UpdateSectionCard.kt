@@ -9,13 +9,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -103,52 +100,52 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             is UpdateUiState.Available -> {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
+                    SettingsButton(
+                        text = "Not now",
                         onClick = { controller.reset() },
-                        modifier = Modifier.testTag("dismiss_update_button")
-                    ) { Text("Not now") }
+                        // Equal halves. These two were laid out at their labels'
+                        // natural widths, so "Not now" came out visibly narrower
+                        // than "Download" and the pair looked like a ragged edge
+                        // rather than a decision.
+                        modifier = Modifier.weight(1f),
+                        variant = SettingsButtonVariant.Outlined,
+                        testTag = "dismiss_update_button"
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    SettingsButton(
+                        text = "Download",
                         onClick = { controller.download() },
-                        modifier = Modifier.testTag("download_update_button")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download")
-                    }
+                        icon = AppVectorIcons.Download,
+                        modifier = Modifier.weight(1f),
+                        variant = SettingsButtonVariant.Filled,
+                        testTag = "download_update_button"
+                    )
                 }
 
                 state.manifest.releaseUrl?.takeIf { it.isNotBlank() }?.let { releaseUrl ->
                     Spacer(modifier = Modifier.height(4.dp))
-                    TextButton(
+                    SettingsButton(
+                        text = "What's changed in v${state.manifest.version}",
                         onClick = { openReleasePage(context, releaseUrl) },
-                        modifier = Modifier.testTag("release_notes_button")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.OpenInNew,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("What's changed in v${state.manifest.version}")
-                    }
+                        icon = AppVectorIcons.OpenInNew,
+                        variant = SettingsButtonVariant.Text,
+                        fillWidth = true,
+                        testTag = "release_notes_button"
+                    )
                 }
             }
 
             is UpdateUiState.ReadyToInstall -> {
                 Spacer(modifier = Modifier.height(12.dp))
-                Button(
+                SettingsButton(
+                    text = "Install now",
                     onClick = { controller.install(context) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("install_update_button")
-                ) { Text("Install now") }
+                    icon = AppVectorIcons.Download,
+                    fillWidth = true,
+                    testTag = "install_update_button"
+                )
             }
 
             is UpdateUiState.NeedsInstallPermission -> {
@@ -159,12 +156,13 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
+                SettingsButton(
+                    text = "Open Settings",
                     onClick = { controller.requestInstallPermission(context) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("grant_install_permission_button")
-                ) { Text("Open Settings") }
+                    icon = AppVectorIcons.Settings,
+                    fillWidth = true,
+                    testTag = "grant_install_permission_button"
+                )
             }
 
             else -> Unit
@@ -173,18 +171,14 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
         when (state) {
             is UpdateUiState.UpToDate, is UpdateUiState.Failed -> {
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
+                SettingsButton(
+                    text = "Check again",
                     onClick = { controller.check() },
-                    modifier = Modifier.testTag("check_updates_button")
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Check again")
-                }
+                    icon = AppVectorIcons.Refresh,
+                    variant = SettingsButtonVariant.Tonal,
+                    fillWidth = true,
+                    testTag = "check_updates_button"
+                )
             }
 
             else -> Unit
