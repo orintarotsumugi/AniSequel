@@ -22,7 +22,18 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.anisequel.app"
-    minSdk = 24
+    // Android 10 (API 29) is the floor, raised from 24 (Android 7).
+    //
+    // API 29 is also the level from which every device understands APK
+    // Signature Scheme v3 key rotation. Below it, a build signed with a
+    // rotated key can never be installed over the previous one, so raising
+    // the floor is what keeps a future key rotation from permanently
+    // stranding installs on older devices.
+    //
+    // Raising this drops support for Android 7, 8 and 9. Devices already
+    // running an older AniSequel cannot install later builds; they stay on
+    // the last version that supported them.
+    minSdk = 29
     targetSdk = 36
     // Read from gradle.properties, overridable with -PanisequelVersionCode /
     // -PanisequelVersionName (which is how the release workflow injects the
