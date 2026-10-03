@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.0.8"
-val BASELINE_VERSION_CODE = 19
+val BASELINE_VERSION_NAME = "1.0.9"
+val BASELINE_VERSION_CODE = 22
 
 plugins {
   alias(libs.plugins.android.application)
