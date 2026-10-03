@@ -1,21 +1,39 @@
 package com.example
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.util.Base64
 
 /**
- * Asserts that the committed release signing key material (`debug.keystore.base64`)
- * is always present, valid, and uncorrupted in the repository root.
+ * Guards the release signing key against the two ways it can leak.
  *
- * Android app upgrades require consecutive builds to be signed with the identical
- * certificate (otherwise failing with INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+ * The key used to be committed to the repository as `debug.keystore.base64`.
+ * Base64 is an encoding, not encryption, so every clone of the repo could
+ * decode it and sign an arbitrary "update" APK. That matters more than it
+ * sounds, because `UpdateManager` accepts a downloaded APK whenever its
+ * certificate matches the running app's - a check an attacker with the key can
+ * satisfy. The same key also has to stay *stable* forever: Android refuses to
+ * update an app signed with a different key
+ * (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+ *
+ * Those two requirements pull in opposite directions, so this test pins both
+ * ends: no key material in the repository, and no way to accidentally sign with
+ * a substitute.
+ *
+ * The key itself now lives only in the `KEYSTORE_BASE64`, `STORE_PASSWORD` and
+ * `KEY_PASSWORD` repository secrets. This test cannot check those - they are
+ * not readable from a build - so it checks everything around them instead.
  */
 class KeystoreIntegrityTest {
 
     private val root: File = findProjectRoot()
 
+    /**
+     * The Gradle test task runs with the project directory as the working
+     * directory, but resolve upward anyway so the test does not depend on which
+     * module is running it.
+     */
     private fun findProjectRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".")
         var candidate: File? = start
@@ -23,39 +41,143 @@ class KeystoreIntegrityTest {
             if (File(candidate, "gradle.properties").isFile) return candidate
             candidate = candidate.parentFile
         }
-        error("could not locate project root from $start")
+        error("could not locate gradle.properties from $start")
     }
 
-    @Test
-    fun `debug keystore base64 file exists and is not empty`() {
-        val keystoreFile = File(root, "debug.keystore.base64")
+    private fun read(vararg parts: String): String = File(root, parts.joinToString("/")).readText()
+
+    /** Key-shaped files that must never be committed, checked at the repo root. */
+    private val forbiddenKeyFiles = listOf(
+        "debug.keystore.base64",
+        "release-key.jks",
+        "my-upload-key.jks",
+        "anisequel-release.jks",
+        "keystore.jks"
+    )
+
+    /**
+     * Every path git currently tracks, or fails the test if git cannot answer.
+     *
+     * Failing rather than returning an empty list matters: a git failure here
+     * would otherwise look exactly like a clean repository, and the test would
+     * pass without having checked anything.
+     */
+    private fun trackedFiles(): List<String> {
+        val process = ProcessBuilder("git", "ls-files")
+            .directory(root)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val exit = process.waitFor()
+
         assertTrue(
-            "debug.keystore.base64 must exist in project root to ensure consistent release signing across CI builds",
-            keystoreFile.exists() && keystoreFile.isFile
+            "could not list tracked files (git exited $exit): ${output.take(200)}",
+            exit == 0
         )
-        assertTrue(
-            "debug.keystore.base64 must not be empty",
-            keystoreFile.length() > 100
-        )
+
+        // One path per line. A path containing a space survives this intact,
+        // and the only thing this test does with the names is match their
+        // extensions.
+        return output.split('\n').map { it.trim() }.filter { it.isNotBlank() }
     }
 
+    /**
+     * Asserts on what git *tracks*, not on what is on disk.
+     *
+     * The distinction is load-bearing: the release workflow decodes
+     * `release-key.jks` into the workspace before the test task runs, and a
+     * pull request generates a throwaway key in the same place. Both files are
+     * expected to exist on disk during a run - they are just never committed.
+     * Checking for their absence on disk therefore fails every real release
+     * build while telling us nothing about the one thing that matters.
+     */
     @Test
-    fun `debug keystore base64 is valid decodable bytes`() {
-        val keystoreFile = File(root, "debug.keystore.base64")
-        val content = keystoreFile.readText().trim()
-        val decoded = try {
-            Base64.getMimeDecoder().decode(content)
-        } catch (e: Exception) {
-            null
+    fun `no signing key material is committed to the repository`() {
+        val leaked = trackedFiles().filter { path ->
+            val name = path.substringAfterLast('/')
+            name in forbiddenKeyFiles ||
+                name.endsWith(".jks") ||
+                name.endsWith(".p12") ||
+                name.endsWith(".pfx") ||
+                name.endsWith(".keystore")
         }
 
         assertTrue(
-            "debug.keystore.base64 must decode to valid binary keystore bytes",
-            decoded != null && decoded.isNotEmpty()
+            "Signing key material must never be committed - found: $leaked. The release " +
+                "key belongs in the KEYSTORE_BASE64 secret, because a committed key lets " +
+                "anyone sign an update APK that the in-app updater accepts.",
+            leaked.isEmpty()
+        )
+    }
+
+    @Test
+    fun `gitignore blocks keystore extensions from being committed again`() {
+        val ignored = read(".gitignore")
+        for (pattern in listOf("*.jks", "*.keystore", "*.p12", "*.pfx")) {
+            assertTrue(
+                ".gitignore must contain '$pattern' so a keystore cannot be committed by " +
+                    "accident and silently re-expose the release signing key.",
+                ignored.lineSequence().any { it.trim() == pattern }
+            )
+        }
+    }
+
+    @Test
+    fun `release workflow reads the key and passwords from secrets`() {
+        val workflow = read(".github", "workflows", "android-release.yml")
+
+        for (secret in listOf("KEYSTORE_BASE64", "STORE_PASSWORD", "KEY_PASSWORD")) {
+            assertTrue(
+                "android-release.yml must reference secrets.$secret. Without it the release " +
+                    "build has no signing material and cannot produce an installable APK.",
+                workflow.contains("secrets.$secret")
+            )
+        }
+
+        // The hardcoded values this workflow used to carry. These are public in
+        // a public repo, so each one on its own defeats having a secret key at
+        // all - the password is as much a part of the secret as the key bytes.
+        //
+        // Checked line by line rather than with a regex: a negative lookahead
+        // here is easy to get wrong, because whitespace can match zero
+        // characters and then the lookahead sees the space before the
+        // expression and wrongly succeeds.
+        for (variable in listOf("STORE_PASSWORD", "KEY_PASSWORD")) {
+            val hardcoded = workflow.lineSequence().filter { line ->
+                val trimmed = line.trim()
+                trimmed.startsWith("$variable:") && !trimmed.contains("\${")
+            }.toList()
+            assertTrue(
+                "android-release.yml must not hardcode $variable (found: $hardcoded). A " +
+                    "password in a public workflow file makes the keystore secret pointless.",
+                hardcoded.isEmpty()
+            )
+        }
+
+        assertFalse(
+            "android-release.yml must not reference the deleted debug.keystore.base64.",
+            workflow.contains("debug.keystore.base64")
+        )
+    }
+
+    @Test
+    fun `release signing config reads the key from the environment`() {
+        val buildScript = read("app", "build.gradle.kts")
+
+        assertTrue(
+            "app/build.gradle.kts must read the keystore path from KEYSTORE_PATH so CI and a " +
+                "local signed build agree on one key.",
+            buildScript.contains("KEYSTORE_PATH")
         )
         assertTrue(
-            "Decoded keystore must have a realistic file size (> 1KB)",
-            decoded!!.size > 1024
+            "app/build.gradle.kts must read the store password from the environment rather " +
+                "than embedding it.",
+            buildScript.contains("System.getenv(\"STORE_PASSWORD\")")
+        )
+        assertTrue(
+            "app/build.gradle.kts must read the key password from the environment rather " +
+                "than embedding it.",
+            buildScript.contains("System.getenv(\"KEY_PASSWORD\")")
         )
     }
 }

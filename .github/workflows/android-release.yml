@@ -43,13 +43,21 @@ jobs:
     name: Build APKs, Bug Check & Release
     runs-on: ubuntu-latest
 
-    # app/build.gradle.kts reads the release signing material from these variables.
-    # Without them Gradle has no storePassword and assembleRelease fails with a
-    # configuration error instead of a signing error.
+    # Only the keystore *location* is a literal. The keystore itself and both
+    # passwords come from repository secrets, and are exported into the step
+    # environment by the "Restore the release signing key from secrets" step
+    # below via $GITHUB_ENV.
+    #
+    # They are deliberately NOT set here. A pull request must never need the
+    # release key - GitHub withholds secrets from fork pull requests, so
+    # requiring them here would make every pull request fail before it could
+    # run a single test. The two signing steps below pick a key by event type
+    # and export the matching passwords.
+    #
+    # Nothing here may hardcode a password: this file is public, so a literal
+    # would hand every reader the key to sign updates.
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/release-key.jks
-      STORE_PASSWORD: android
-      KEY_PASSWORD: android
 
     steps:
       - name: Checkout Repository
@@ -100,22 +108,78 @@ jobs:
           printf 'Linting: %s\n' "${FILES[@]}"
           ./actionlint "${FILES[@]}"
 
-      - name: Restore the committed release signing key
+      # A pull request gets a throwaway key generated inside the runner, never
+      # the real one. GitHub does not expose secrets to fork pull requests, and
+      # a review build has no reason to hold the key that can update every
+      # installed copy of the app. This is safe because every step that
+      # publishes - creating the release and updating update.json - is gated on
+      # `github.event_name != 'pull_request'`, so nothing signed here is ever
+      # shipped to a user.
+      - name: Use an ephemeral signing key for pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          # The DN names it explicitly so this key can never be mistaken for
+          # the release key in a report or an apksigner dump.
+          keytool -genkeypair -v -keystore release-key.jks \
+            -storepass ci-throwaway -keypass ci-throwaway -alias upload \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=CI Throwaway Not The Release Key, O=AniSequel, C=US"
+          # keytool refuses a key password under 6 characters, so the throwaway
+          # value is long enough to be accepted.
+          echo "STORE_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
+
+      - name: Restore the release signing key from secrets
+        if: github.event_name != 'pull_request'
+        env:
+          # Scoped to this step only: the rest of the job needs the decoded
+          # keystore, never the encoded secret itself.
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           # Every published APK must share one signing key or Android refuses to
           # install updates (INSTALL_FAILED_UPDATE_INCOMPATIBLE). This step only
-          # decodes the committed key; it must never generate a new one, because a
+          # decodes the key from a secret; it must never generate a new one, because a
           # freshly generated key silently breaks every future update.
-          if [ -f "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > release-key.jks
-            echo "Decoded release-key.jks from the committed key."
-          else
-            echo "::error::debug.keystore.base64 is missing. Without a stable key every" \
-                 "build is signed differently and updates will not install. Restore the" \
-                 "file from version control."
+          #
+          # The key deliberately does NOT live in the repository. It was committed
+          # in plaintext through v1.0.16, which meant anyone who cloned the repo
+          # could decode it and sign an "update" APK that the in-app updater
+          # accepts. It now lives only in repository secrets.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is not set. Add the base64 of the"
+            echo "       release keystore under Settings -> Secrets and variables ->"
+            echo "       Actions. The key is deliberately not in version control, so"
+            echo "       restore it from your own backup - never regenerate it."
             exit 1
           fi
 
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
+
+          if [ ! -s release-key.jks ]; then
+            echo "::error::KEYSTORE_BASE64 did not decode to a keystore."
+            exit 1
+          fi
+          echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
+
+          # The passwords are secrets too. Checking them here means the error
+          # says which secret is missing, instead of keytool failing obscurely.
+          if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::STORE_PASSWORD and KEY_PASSWORD secrets must both be set."
+            exit 1
+          fi
+
+          # Exported so every later step - assembleRelease above all - sees
+          # the passwords without this file ever containing them.
+          echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      # Runs for both event types. The keystore is already on disk by now -
+      # either decoded from the secret or generated above - and the passwords
+      # come from $GITHUB_ENV, so this works without knowing which path ran.
+      - name: Validate the signing key
+        run: |
           # The debug key is only used by debug builds; generate it if absent.
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android \
@@ -123,9 +187,9 @@ jobs:
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # Fail loudly if the release key is unusable, rather than silently
+          # Fail loudly if the signing key is unusable, rather than silently
           # shipping an APK signed with the wrong key.
-          keytool -list -keystore release-key.jks -storepass android -alias upload
+          keytool -list -keystore release-key.jks -storepass "$STORE_PASSWORD" -alias upload
 
       - name: Resolve the release version
         id: version
@@ -438,8 +502,14 @@ jobs:
             OAuth page — there is no AniSequel account and no password to manage.
 
             ### ⚠️ Installing over an older build
-            Every release is signed with the same key, so you can install this over
-            any previous version without uninstalling first.
+            Every release from this one onward is signed with the same key, so you
+            can install future updates over the top without uninstalling first.
+
+            If you are upgrading from **v1.0.16 or earlier**, the signing key has
+            changed and Android will refuse the install — a new key can never
+            update an app signed with an old one. Uninstall **AniSequel** once,
+            then install this APK. This wipes the app's local data, so expect to
+            sign in to AniList again.
 
             If Android reports **"App not installed as package conflicts"**, an
             older copy signed with a *different* key is still present. Uninstall

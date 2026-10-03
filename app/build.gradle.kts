@@ -22,7 +22,18 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.anisequel.app"
-    minSdk = 24
+    // Android 10 (API 29) is the floor, raised from 24 (Android 7).
+    //
+    // API 29 is also the level from which every device understands APK
+    // Signature Scheme v3 key rotation. Below it, a build signed with a
+    // rotated key can never be installed over the previous one, so raising
+    // the floor is what keeps a future key rotation from permanently
+    // stranding installs on older devices.
+    //
+    // Raising this drops support for Android 7, 8 and 9. Devices already
+    // running an older AniSequel cannot install later builds; they stay on
+    // the last version that supported them.
+    minSdk = 29
     targetSdk = 36
     // Read from gradle.properties, overridable with -PanisequelVersionCode /
     // -PanisequelVersionName (which is how the release workflow injects the
@@ -42,10 +53,14 @@ android {
 
   signingConfigs {
     create("release") {
-      // The release workflow decodes the committed debug.keystore.base64 to
-      // release-key.jks and points these variables at it. Left unset locally, the
-      // keystore path still falls back to rootDir so a signed local release build
-      // works without editing this file.
+      // The release workflow decodes the keystore from the KEYSTORE_BASE64
+      // secret and points these variables at it. The key is deliberately not in
+      // the repository: it used to be committed as debug.keystore.base64, which
+      // let anyone who cloned the repo sign an update APK.
+      //
+      // Left unset locally, the keystore path still falls back to rootDir so a
+      // developer with their own release key in the expected place can still
+      // produce a signed local build without editing this file.
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
