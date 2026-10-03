@@ -128,7 +128,14 @@ data class MediaNode(
     val studios: StudioConnection? = null,
     val relations: MediaRelations? = null,
     val mediaListEntry: SimpleMediaListEntry? = null,
-    val nextAiringEpisode: NextAiringEpisode? = null
+    val nextAiringEpisode: NextAiringEpisode? = null,
+    val source: String? = null,
+    val duration: Int? = null,
+    val trailer: MediaTrailer? = null,
+    val synonyms: List<String>? = null,
+    val meanScore: Int? = null,
+    val rankings: List<MediaRanking>? = null,
+    val tags: List<MediaTag>? = null
 ) {
     /**
      * Overlay of the lazily-fetched detail onto this node.
@@ -142,11 +149,49 @@ data class MediaNode(
         description = detail.description ?: description,
         bannerImage = detail.bannerImage ?: bannerImage,
         studios = detail.studios ?: studios,
+        source = detail.source ?: source,
+        duration = detail.duration ?: duration,
+        trailer = detail.trailer ?: trailer,
+        synonyms = detail.synonyms ?: synonyms,
+        meanScore = detail.meanScore ?: meanScore,
+        rankings = detail.rankings ?: rankings,
+        tags = detail.tags ?: tags,
         coverImage = when {
             detail.coverImage?.large != null -> coverImage?.copy(large = detail.coverImage.large) ?: detail.coverImage
             else -> coverImage
         }
     )
+}
+
+@JsonClass(generateAdapter = true)
+data class MediaRanking(
+    val id: Int? = null,
+    val rank: Int? = null,
+    val type: String? = null,
+    val context: String? = null,
+    val year: Int? = null,
+    val season: String? = null,
+    val allTime: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaTag(
+    val id: Int? = null,
+    val name: String? = null,
+    val rank: Int? = null,
+    val isMediaSpoiler: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaTrailer(
+    val id: String? = null,
+    val site: String? = null,
+    val thumbnail: String? = null
+) {
+    val youtubeUrl: String?
+        get() = if (site.equals("youtube", ignoreCase = true) && !id.isNullOrBlank()) {
+            "https://www.youtube.com/watch?v=$id"
+        } else null
 }
 
 @JsonClass(generateAdapter = true)

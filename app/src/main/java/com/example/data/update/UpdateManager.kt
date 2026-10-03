@@ -152,43 +152,48 @@ class UpdateManager(private val context: Context) {
                     )
                 }
 
-                val directory = File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }
-                val target = File(directory, "anisequel-${manifest.version ?: "update"}.apk")
-                val partial = File(directory, "${target.name}.part")
+                var partial: File? = null
+                try {
+                    val directory = File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }
+                    val target = File(directory, "anisequel-${manifest.version ?: "update"}.apk")
+                    val partFile = File(directory, "${target.name}.part")
+                    partial = partFile
 
-                // Start from zero every time rather than resuming. A partial
-                // resume needs a Range request and a matching ETag; getting
-                // that wrong silently produces a corrupt APK, which is a much
-                // worse outcome than re-downloading 2.5 MB.
-                body.byteStream().use { input ->
-                    partial.outputStream().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        val total = body.contentLength().takeIf { it > 0 } ?: declaredSize
-                        var read: Long = 0
+                    body.byteStream().use { input ->
+                        partFile.outputStream().use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            val total = body.contentLength().takeIf { it > 0 } ?: declaredSize
+                            var read: Long = 0
 
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count == -1) break
-                            output.write(buffer, 0, count)
-                            read += count
-                            onProgress(read, total)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count == -1) break
+                                output.write(buffer, 0, count)
+                                read += count
+                                onProgress(read, total)
+                            }
+
+                            output.flush()
                         }
-
-                        output.flush()
                     }
-                }
 
-                if (!partial.renameTo(target)) {
-                    partial.delete()
-                    return@withContext UpdateDownloadResult.Failed(
-                        "Could not save the download."
-                    )
-                }
+                    if (!partFile.renameTo(target)) {
+                        partFile.delete()
+                        return@withContext UpdateDownloadResult.Failed(
+                            "Could not save the download."
+                        )
+                    }
 
-                UpdateDownloadResult.Success(target, manifest)
+                    UpdateDownloadResult.Success(target, manifest)
+                } catch (e: Exception) {
+                    partial?.delete()
+                    throw e
+                }
             }
-        } catch (e: IOException) {
-            UpdateDownloadResult.Failed("The download failed. Check your connection.")
+        } catch (e: Exception) {
+            UpdateDownloadResult.Failed(
+                e.message?.takeIf { it.isNotBlank() } ?: "The download failed. Check your connection."
+            )
         }
     }
 

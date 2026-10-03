@@ -53,14 +53,14 @@ fun StatsBanner(
         StatCard(
             title = "Missed Sequels",
             count = "$missedCount",
-            icon = AppVectorIcons.Warning,
+            icon = AppVectorIcons.SequelJump,
             iconBg = if (missedCount > 0) {
-                status.warningContainer
+                MaterialTheme.colorScheme.primaryContainer
             } else {
                 MaterialTheme.colorScheme.surfaceContainerHigh
             },
             iconTint = if (missedCount > 0) {
-                status.onWarningContainer
+                MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },

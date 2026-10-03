@@ -40,16 +40,13 @@ fun AniTopAppBar(
     onOpenSettings: () -> Unit,
     isRefreshing: Boolean = false,
     hasActiveFilters: Boolean = false,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
     modifier: Modifier = Modifier
 ) {
-    // Hides on scroll so a long sequel list gets the full screen, and returns the
-    // moment the user scrolls up to find the search field.
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     TopAppBar(
-        modifier = modifier
-            .testTag("ani_top_app_bar")
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier.testTag("ani_top_app_bar"),
         scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -82,15 +79,14 @@ fun AniTopAppBar(
         },
         actions = {
             IconButton(
-                onClick = onOpenFilter,
+                onClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    onOpenFilter()
+                },
                 modifier = Modifier.testTag("filter_button")
             ) {
                 BadgedBox(
                     badge = {
-                        // Only when filters are actually narrowing something. It
-                        // used to show the total missed count permanently, which
-                        // is not what the badge is for - it read as an
-                        // unread-notification count and stayed put forever.
                         if (missedCount > 0 && hasActiveFilters) {
                             Badge(
                                 containerColor = MaterialTheme.colorScheme.tertiary,
@@ -108,12 +104,11 @@ fun AniTopAppBar(
                 }
             }
 
-            // The refresh button used to stay idle while a refresh ran, so a
-            // second tap queued another identical request. It now shows the
-            // morphing expressive indicator and disables itself for the
-            // duration, so "busy" is unambiguous rather than a static arc.
             IconButton(
-                onClick = onRefresh,
+                onClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onRefresh()
+                },
                 enabled = !isRefreshing,
                 modifier = Modifier.testTag("refresh_button")
             ) {
@@ -131,7 +126,10 @@ fun AniTopAppBar(
             }
 
             IconButton(
-                onClick = onOpenSettings,
+                onClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    onOpenSettings()
+                },
                 modifier = Modifier.testTag("settings_button")
             ) {
                 Icon(
@@ -166,10 +164,10 @@ private fun Avatar(viewer: ViewerProfile?) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = AppVectorIcons.Tv,
+                imageVector = AppVectorIcons.SequelJump,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }

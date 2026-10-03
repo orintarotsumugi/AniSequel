@@ -43,12 +43,25 @@ object DemoDataProvider {
             status = "FINISHED",
             episodes = 11,
             averageScore = 88,
+            meanScore = 89,
+            source = "MANGA",
+            duration = 24,
             popularity = 340000,
             description = "Tanjiro, Zenitsu, and Inosuke accompany the Sound Hashira, Tengen Uzui, on a perilous mission inside Yoshiwara's Entertainment District.",
             genres = listOf("Action", "Fantasy", "Supernatural"),
             coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx142329-3L1p5rR0kZ0H.jpg"),
             startDate = FuzzyDate(2021, 12, 5),
-            studios = ufotable
+            studios = ufotable,
+            trailer = com.example.data.model.MediaTrailer(id = "VQGCKyvzIM4", site = "youtube"),
+            rankings = listOf(
+                com.example.data.model.MediaRanking(rank = 15, context = "Highest Rated All Time", allTime = true)
+            ),
+            tags = listOf(
+                com.example.data.model.MediaTag(name = "Demons", rank = 96),
+                com.example.data.model.MediaTag(name = "Historical", rank = 92),
+                com.example.data.model.MediaTag(name = "Swordplay", rank = 90),
+                com.example.data.model.MediaTag(name = "Shounen", rank = 88)
+            )
         )
 
         val kimetsuS1 = MediaNode(
@@ -80,7 +93,17 @@ object DemoDataProvider {
             genres = listOf("Action", "Supernatural", "Drama"),
             coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx145064-7O1F9aQhFz4C.jpg"),
             startDate = FuzzyDate(2023, 7, 6),
-            studios = mappa
+            studios = mappa,
+            trailer = com.example.data.model.MediaTrailer(id = "O6qVieflwqs", site = "youtube"),
+            rankings = listOf(
+                com.example.data.model.MediaRanking(rank = 8, context = "Most Popular 2023", year = 2023)
+            ),
+            tags = listOf(
+                com.example.data.model.MediaTag(name = "Urban Fantasy", rank = 95),
+                com.example.data.model.MediaTag(name = "Curse", rank = 90),
+                com.example.data.model.MediaTag(name = "Martial Arts", rank = 86),
+                com.example.data.model.MediaTag(name = "Shounen", rank = 85)
+            )
         )
 
         val jjkS1 = MediaNode(

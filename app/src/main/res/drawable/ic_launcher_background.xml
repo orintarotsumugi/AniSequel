@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Launcher icon background.
-
-    A vector, and a gradient, rather than the flat #0F172A rectangle this used
-    to be. The old value was close enough to black that the icon read as an
-    empty dark square on a launcher - no branding at all, and the only thing
-    distinguishing the app from a placeholder was the mark in the middle.
-
-    The gradient runs through the two brand blues from Color.kt, so the icon and
-    the app agree without either importing the other's values at build time.
--->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
@@ -17,24 +6,51 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Deep Cosmic Midnight Base -->
     <path android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108"
+                android:startX="10"
+                android:startY="10"
+                android:endX="98"
+                android:endY="98"
                 android:type="linear">
-                <item
-                    android:offset="0"
-                    android:color="#FF1E7FE0" />
-                <item
-                    android:offset="0.55"
-                    android:color="#FF1673D6" />
-                <item
-                    android:offset="1"
-                    android:color="#FF0B4F9E" />
+                <item android:offset="0.0" android:color="#FF0B0F19" />
+                <item android:offset="0.35" android:color="#FF0F172A" />
+                <item android:offset="0.75" android:color="#FF1E1B4B" />
+                <item android:offset="1.0" android:color="#FF312E81" />
             </gradient>
         </aapt:attr>
     </path>
+
+    <!-- Ambient Electric Indigo/Cyan Glow Circle -->
+    <path android:pathData="M54,54m-42,0a42,42 0 1,0 84,0a42,42 0 1,0 -84,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="50"
+                android:startY="46"
+                android:endX="78"
+                android:endY="78"
+                android:type="radial"
+                android:gradientRadius="44">
+                <item android:offset="0.0" android:color="#3D38BDF8" />
+                <item android:offset="0.5" android:color="#206366F1" />
+                <item android:offset="1.0" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Anime Sequel Discovery Radar Arc (outer) -->
+    <path
+        android:pathData="M34,54 A20,20 0 0,1 74,54"
+        android:strokeColor="#2238BDF8"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- Subtle Anime Sequel Discovery Radar Arc (inner) -->
+    <path
+        android:pathData="M40,54 A14,14 0 0,1 68,54"
+        android:strokeColor="#33818CF8"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round" />
 </vector>

@@ -20,10 +20,10 @@ package com.example.data.network
  *     returns HTTP 500 "Internal Server Error" and the app shows an error
  *     screen instead of the user's list.
  *
- * `GET_MEDIA_DETAIL` exists because of rule 1. `description`, `bannerImage`
- * and `studios` are only ever rendered for the one entry a user taps open, so
- * they are fetched on demand (718 bytes) rather than shipped for all ~1,500
- * relation nodes on every load.
+ * `GET_MEDIA_DETAIL` exists because of rule 1. `description`, `bannerImage`,
+ * `studios`, `trailer`, and `synonyms` are only ever rendered for the one entry
+ * a user taps open, so they are fetched on demand rather than shipped for all
+ * ~1,500 relation nodes on every load.
  */
 object GraphQLQueries {
 
@@ -71,17 +71,6 @@ object GraphQLQueries {
 
     /**
      * Fields for a related node, rendered in the card list.
-     *
-     * Omitted on purpose: `description`, `bannerImage`, `studios` (see
-     * [GET_MEDIA_DETAIL]) and `coverImage.extraLarge` (the cards render 96dp
-     * posters - the 2x asset is invisible at that size and is the largest
-     * string on the node).
-     *
-     * Kept, against that rule, because they are tiny and they are rendered:
-     * `coverImage.color` paints the placeholder behind a poster that has not
-     * arrived yet (without it a loading card is a grey box), and
-     * `nextAiringEpisode.airingAt` turns "Airing" into "next episode in 3
-     * days". Both are a few bytes per node against a `description` at hundreds.
      */
     private const val RELATED_NODE_FIELDS = """
                 id
@@ -104,11 +93,7 @@ object GraphQLQueries {
     /**
      * `episodes` is the only parent field the detector needs: an entry counts as
      * watched when its progress reaches the parent's episode count even if the
-     * user never set a status. The parent's own cover, description, studios and
-     * banner are never rendered - only its title is - so they are not requested.
-     *
-     * MediaListCollection is *not* paginated: it returns the whole list in one
-     * response unless `chunk`/`perChunk` are passed, which this app does not do.
+     * user never set a status.
      */
     val GET_USER_ANIME_LIST = """
         query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String) {
@@ -149,6 +134,29 @@ object GraphQLQueries {
             bannerImage
             studios(isMain: true) {
               nodes { name }
+            }
+            source
+            duration
+            trailer {
+              id
+              site
+            }
+            synonyms
+            meanScore
+            rankings {
+              id
+              rank
+              type
+              context
+              year
+              season
+              allTime
+            }
+            tags {
+              id
+              name
+              rank
+              isMediaSpoiler
             }
           }
         }

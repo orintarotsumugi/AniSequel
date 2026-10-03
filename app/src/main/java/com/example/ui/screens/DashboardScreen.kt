@@ -6,33 +6,18 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -44,31 +29,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.model.RelationKind
 import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AniTopAppBar
-import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.ExpressiveCountBadge
-import com.example.ui.components.ExpressiveLoadingIndicator
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.FilterSortSheet
 import com.example.ui.components.QuickFilterBar
 import com.example.ui.components.SequelCard
 import com.example.ui.components.SequelDetailSheet
-import com.example.ui.components.ShimmerCard
 import com.example.ui.components.StatsBanner
+import com.example.ui.screens.dashboard.DashboardDemoBanner
+import com.example.ui.screens.dashboard.DashboardErrorView
+import com.example.ui.screens.dashboard.DashboardLoadingView
+import com.example.ui.screens.dashboard.DashboardSearchBar
+import com.example.ui.screens.dashboard.DashboardSectionHeader
 import com.example.ui.viewmodel.DashboardEvent
 import com.example.ui.viewmodel.DashboardUiState
 import com.example.ui.viewmodel.DashboardViewModel
 import kotlinx.coroutines.flow.collectLatest
 
-// Cards stay legible on a tablet and in landscape instead of stretching the
-// poster and the text to opposite edges of a 1200dp-wide row.
 private val MaxContentWidth = 640.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,19 +86,18 @@ fun DashboardScreen(
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
 
-    // The sheet is looked up by id on every recomposition rather than being
-    // handed a snapshot. It used to receive the MissedSequel captured when the
-    // card was tapped, so after "Add to Planning" the sheet kept showing that
-    // stale copy: spinner on the button, forever, with no way out but dismissal.
     val selectedSequel = selectedSequelId?.let { id ->
         successState?.missedSequels?.firstOrNull { it.sequelId == id }
     }
 
-    val isDetailLoading = selectedSequelId != null &&
-        selectedSequelId in loadingDetailIds
+    val isDetailLoading = selectedSequelId != null && selectedSequelId in loadingDetailIds
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
-        modifier = modifier.fillMaxSize().testTag("dashboard_screen"),
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            .testTag("dashboard_screen"),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AniTopAppBar(
@@ -125,17 +107,13 @@ fun DashboardScreen(
                 onRefresh = { dashboardViewModel.refresh() },
                 onOpenSettings = { onOpenSettings(currentViewer) },
                 isRefreshing = successState?.isRefreshing == true,
-                // Compared against the *default* value of each switch. Reading
-                // `filterCriteria.hideAlreadyPlanned` directly was a permanent
-                // true - it defaults to true - so the filter badge showed a
-                // count on every launch, before the user had filtered anything,
-                // which is what the badge is supposed to mean.
                 hasActiveFilters = filterCriteria.statusFilter != StatusFilter.ALL ||
                     filterCriteria.selectedFormat != null ||
                     filterCriteria.searchQuery.isNotBlank() ||
                     !filterCriteria.includeUnreleased ||
                     !filterCriteria.hideAlreadyPlanned ||
-                    filterCriteria.includedRelations != setOf(RelationKind.SEQUEL)
+                    filterCriteria.includedRelations != setOf(RelationKind.SEQUEL),
+                scrollBehavior = scrollBehavior
             )
         }
     ) { paddingValues ->
@@ -148,15 +126,14 @@ fun DashboardScreen(
         ) {
             when (val state = uiState) {
                 is DashboardUiState.Loading -> {
-                    // The morphing expressive indicator over the skeleton. The
-                    // old full-screen CircularProgressIndicator could not say
-                    // *which* stage it was on - "Connecting to AniList" and
-                    // "Scanning 476 entries" looked identical for seconds each.
-                    LoadingList(message = state.message)
+                    DashboardLoadingView(
+                        message = state.message,
+                        maxWidth = MaxContentWidth
+                    )
                 }
 
                 is DashboardUiState.Error -> {
-                    ErrorState(
+                    DashboardErrorView(
                         state = state,
                         onRetry = { dashboardViewModel.loadData() },
                         onSignInAgain = onSignInAgain
@@ -179,7 +156,7 @@ fun DashboardScreen(
                         ) {
                             if (state.isDemoMode) {
                                 item(key = "demo_banner") {
-                                    DemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
+                                    DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
                                 }
                             }
 
@@ -194,39 +171,10 @@ fun DashboardScreen(
                             }
 
                             item(key = "search_bar") {
-                                OutlinedTextField(
-                                    value = filterCriteria.searchQuery,
-                                    onValueChange = { dashboardViewModel.updateSearchQuery(it) },
-                                    modifier = Modifier
-                                        .widthIn(max = MaxContentWidth)
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                        .testTag("anime_search_bar"),
-                                    placeholder = { Text("Search franchise or sequel") },
-                                    singleLine = true,
-                                    shape = MaterialTheme.shapes.small,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                                    ),
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = AppVectorIcons.Search,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (filterCriteria.searchQuery.isNotBlank()) {
-                                            IconButton(
-                                                onClick = { dashboardViewModel.updateSearchQuery("") }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Clear,
-                                                    contentDescription = "Clear search"
-                                                )
-                                            }
-                                        }
-                                    }
+                                DashboardSearchBar(
+                                    query = filterCriteria.searchQuery,
+                                    onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
+                                    maxWidth = MaxContentWidth
                                 )
                             }
 
@@ -240,38 +188,17 @@ fun DashboardScreen(
                             }
 
                             item(key = "section_header") {
-                                Row(
-                                    modifier = Modifier
-                                        .widthIn(max = MaxContentWidth)
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Missed Sequels",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    ExpressiveCountBadge(count = state.missedSequels.size)
-                                    Text(
-                                        text = filterCriteria.sortOption.displayName,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                                DashboardSectionHeader(
+                                    count = state.missedSequels.size,
+                                    filterCriteria = filterCriteria,
+                                    maxWidth = MaxContentWidth
+                                )
                             }
 
                             if (state.missedSequels.isEmpty()) {
                                 item(key = "empty_state") {
-                                EmptyStateView(
-                                    // Also counts the relation and planning
-                                    // switches: an empty list caused purely by
-                                    // those said "All caught up" and offered no
-                                    // way back, which is the one thing an empty
-                                    // state has to do.
-                                    isSearching = filterCriteria.searchQuery.isNotBlank() ||
+                                    EmptyStateView(
+                                        isSearching = filterCriteria.searchQuery.isNotBlank() ||
                                             filterCriteria.selectedFormat != null ||
                                             filterCriteria.statusFilter != StatusFilter.ALL ||
                                             !filterCriteria.includeUnreleased ||
@@ -292,9 +219,6 @@ fun DashboardScreen(
                                         modifier = Modifier
                                             .widthIn(max = MaxContentWidth)
                                             .padding(horizontal = 16.dp)
-                                            // Cards fade and slide into place as
-                                            // filters change the list, instead of
-                                            // the whole screen snapping.
                                             .animateItem(
                                                 placementSpec = spring(
                                                     stiffness = Spring.StiffnessMediumLow
@@ -336,140 +260,5 @@ fun DashboardScreen(
             isDetailLoading = isDetailLoading,
             canWriteToAniList = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
         )
-    }
-}
-
-@Composable
-private fun LoadingList(message: String) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-            .testTag("dashboard_loading"),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        item {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier
-                    .widthIn(max = MaxContentWidth)
-                    .fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.size(12.dp))
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        items(5) {
-            ShimmerCard(modifier = Modifier.widthIn(max = MaxContentWidth))
-        }
-    }
-}
-
-@Composable
-private fun DemoBanner(modifier: Modifier = Modifier) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Visibility,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                text = "Sample data • sign in any time to scan your own list",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun ErrorState(
-    state: DashboardUiState.Error,
-    onRetry: () -> Unit,
-    onSignInAgain: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp)
-            .testTag("dashboard_error"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.Warning,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(52.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = if (state.isAuthError) "Session expired" else "AniList connection error",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = state.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // An expired token cannot be fixed by retrying. Before, this screen only
-        // offered Retry, which re-sent the same rejected request forever and left
-        // no way back to the login screen.
-        if (state.isAuthError) {
-            Button(
-                onClick = onSignInAgain,
-                modifier = Modifier.testTag("sign_in_again_button")
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Login,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Sign in again")
-            }
-        } else if (state.canRetry) {
-            Button(
-                onClick = onRetry,
-                modifier = Modifier.testTag("retry_button")
-            ) {
-                Text("Try again")
-            }
-        }
     }
 }

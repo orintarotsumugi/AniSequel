@@ -181,6 +181,7 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 authRepository.clearAccessToken()
+                aniListRepository?.clearDetailCache()
                 _uiState.value = AuthUiState.Unauthenticated
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Unauthenticated

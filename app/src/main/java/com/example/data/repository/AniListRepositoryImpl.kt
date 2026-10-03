@@ -43,6 +43,7 @@ class AniListRepositoryImpl(
      * never collide.
      */
     private val readCoalescer = RequestCoalescer<String>()
+    private val detailCache = java.util.concurrent.ConcurrentHashMap<Int, MediaNode>()
 
     override suspend fun getViewer(): Result<ViewerProfile> =
         execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
@@ -84,14 +85,20 @@ class AniListRepositoryImpl(
      * 500 for large accounts, and it means opening a card no longer re-parses
      * 1,500 nodes' worth of synopses.
      */
-    override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> =
-        execute(
+    override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> {
+        detailCache[mediaId]?.let { return Result.success(it) }
+        return execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_MEDIA_DETAIL,
                 variables = mapOf("id" to mediaId)
             ),
             apiService::getMediaDetail
-        ).map { it.media.require("That entry is no longer available on AniList.") }
+        ).map {
+            val node = it.media.require("That entry is no longer available on AniList.")
+            detailCache[mediaId] = node
+            node
+        }
+    }
 
     override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> =
         execute(
@@ -105,6 +112,10 @@ class AniListRepositoryImpl(
     override fun getDemoProfile(): ViewerProfile = DemoDataProvider.getDemoViewer()
 
     override fun getDemoAnimeList(): MediaListCollection = DemoDataProvider.getDemoMediaList()
+
+    override fun clearDetailCache() {
+        detailCache.clear()
+    }
 
     /**
      * One call, every failure classified.

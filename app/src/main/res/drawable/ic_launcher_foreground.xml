@@ -1,67 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Launcher icon foreground.
-
-    ## Why this is a vector
-
-    It used to be a layer-list pointing at `app_launcher_icon.webp` - a 512x512
-    *lossy* raster, 13KB, decoded and scaled by the launcher for every icon in
-    the system tray. That is the opposite of what an icon should be: blocky on
-    any density above the one it was drawn at, and it cannot be recoloured, so
-    the themed-icon layer below had nothing but a colour photograph to tint.
-
-    Everything here is a path, so it is one drawable at every density, sharp at
-    every size, and tintable.
-
-    ## Geometry
-
-    The mark sits inside the 72dp adaptive-icon safe zone (the 66dp circle
-    centred in the 108dp canvas). A launcher's mask - circle, squircle, rounded
-    square - can crop as much as 18dp off each side, so anything drawn to the
-    full canvas gets its corners shaved.
-
-    The shape is a television with a play triangle inside: "a show you watch",
-    which is what the app does, in a form that reads at 48dp without detail.
--->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Screen body: a rounded rectangle with the corners cut. -->
+    <!-- Ambient Shadow beneath media frame -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M32,30 L76,30 A10,10 0 0 1 86,40 L86,68 A10,10 0 0 1 76,78 L32,78 A10,10 0 0 1 22,68 L22,40 A10,10 0 0 1 32,30 Z" />
+        android:pathData="M34,36 L74,36 A12,12 0 0 1 86,48 L86,76 A12,12 0 0 1 74,88 L34,88 A12,12 0 0 1 22,76 L22,48 A12,12 0 0 1 34,36 Z"
+        android:fillColor="#38000000" />
 
-    <!--
-        Screen interior, knocked out in the mid brand blue so the play triangle
-        reads against it. Drawn as a second path rather than an even-odd fill on
-        the first so each shape carries its own colour and the whole thing can
-        still be recoloured by tinting the two fills.
-    -->
+    <!-- Main Anime Media Frame (elevated squircle) -->
     <path
-        android:fillColor="#FF1673D6"
-        android:pathData="M35,36 L73,36 A5,5 0 0 1 78,41 L78,67 A5,5 0 0 1 73,72 L35,72 A5,5 0 0 1 30,67 L30,41 A5,5 0 0 1 35,36 Z" />
+        android:pathData="M33,33 L75,33 A12,12 0 0 1 87,45 L87,75 A12,12 0 0 1 75,87 L33,87 A12,12 0 0 1 21,75 L21,45 A12,12 0 0 1 33,33 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="21"
+                android:startY="33"
+                android:endX="87"
+                android:endY="87"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF1E293B" />
+                <item android:offset="0.5" android:color="#FF0F172A" />
+                <item android:offset="1.0" android:color="#FF030712" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- Play triangle, optically centred rather than mathematically. -->
+    <!-- Glowing Cyan/Indigo Border Rim -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M48,44 L66,54 L48,64 Z" />
+        android:pathData="M33,33 L75,33 A12,12 0 0 1 87,45 L87,75 A12,12 0 0 1 75,87 L33,87 A12,12 0 0 1 21,75 L21,45 A12,12 0 0 1 33,33 Z"
+        android:strokeWidth="1.75">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="21"
+                android:startY="33"
+                android:endX="87"
+                android:endY="87"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#9938BDF8" />
+                <item android:offset="0.6" android:color="#44818CF8" />
+                <item android:offset="1.0" android:color="#1AFFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!--
-        Antennae. Two strokes from the top corners of the screen, which is what
-        separates a television silhouette from a plain rounded rectangle - the
-        single cheapest way to make the mark read as "TV" at launcher size.
-    -->
+    <!-- Inner Viewport Frame Grid Line (subtle anime cinema format) -->
     <path
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="4"
+        android:pathData="M27,41 L81,41 M27,79 L81,79"
+        android:strokeColor="#1FFFFFFF"
+        android:strokeWidth="1" />
+
+    <!-- First Franchise Chevron (Electric Cyan ») -->
+    <path
+        android:pathData="M40,46 L50,56 L40,66"
+        android:strokeColor="#FF38BDF8"
+        android:strokeWidth="4.5"
         android:strokeLineCap="round"
-        android:pathData="M42,30 L34,20" />
+        android:strokeLineJoin="round" />
+
+    <!-- Second Franchise Chevron (Pure White ») -->
     <path
+        android:pathData="M52,46 L62,56 L52,66"
         android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="4"
+        android:strokeWidth="4.5"
         android:strokeLineCap="round"
-        android:pathData="M66,30 L74,20" />
+        android:strokeLineJoin="round" />
+
+    <!-- Sparkling Anime Star at the Leading Tip (coordinates around (71, 48)) -->
+    <path
+        android:pathData="M71,43 Q71,48 66,48 Q71,48 71,53 Q71,48 76,48 Q71,48 71,43 Z"
+        android:fillColor="#FF38BDF8" />
+
+    <path
+        android:pathData="M71,44.5 Q71,48 67.5,48 Q71,48 71,51.5 Q71,48 74.5,48 Q71,48 71,44.5 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Sequel Notification Glow Beacon (top-right alert dot) -->
+    <path
+        android:pathData="M80,39m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"
+        android:fillColor="#FF38BDF8" />
 </vector>

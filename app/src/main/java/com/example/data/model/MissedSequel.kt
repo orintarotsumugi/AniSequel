@@ -39,6 +39,17 @@ data class MissedSequel(
     val genres: List<String> get() = sequelMedia.genres ?: emptyList()
     val studioName: String? get() = sequelMedia.studios?.nodes?.firstOrNull()?.name
     val siteUrl: String get() = sequelMedia.siteUrl ?: "https://anilist.co/anime/$sequelId"
+    val source: String?
+        get() = sequelMedia.source?.replace('_', ' ')?.lowercase()?.split(' ')
+            ?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+    val duration: String?
+        get() = sequelMedia.duration?.let { "$it mins / ep" }
+    val trailerUrl: String?
+        get() = sequelMedia.trailer?.youtubeUrl
+    val synonyms: List<String>
+        get() = sequelMedia.synonyms?.filter { it.isNotBlank() } ?: emptyList()
+    val meanScore: String?
+        get() = sequelMedia.meanScore?.let { "$it%" }
 
     /**
      * The synopsis, with AniList's HTML stripped.
@@ -139,6 +150,27 @@ data class MissedSequel(
 
     val isAiring: Boolean
         get() = status == "RELEASING"
+
+    val isHiatus: Boolean
+        get() = status.equals("HIATUS", ignoreCase = true)
+
+    val rankings: List<MediaRanking>
+        get() = sequelMedia.rankings ?: emptyList()
+
+    val topRanking: String?
+        get() {
+            val best = rankings.firstOrNull { it.rank != null } ?: return null
+            val rankNum = best.rank ?: return null
+            val context = best.context?.takeIf { it.isNotBlank() } ?: "Ranked"
+            return "#$rankNum $context"
+        }
+
+    val topTags: List<String>
+        get() = sequelMedia.tags
+            ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
+            ?.sortedByDescending { it.rank ?: 0 }
+            ?.mapNotNull { it.name }
+            ?.take(8) ?: emptyList()
 
     /**
      * How this entry relates to the one the user watched.

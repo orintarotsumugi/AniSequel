@@ -40,7 +40,7 @@ fun EmptyStateView(
         // moment the screen has nothing to show, so it is the one place a
         // non-circular silhouette earns its keep.
         ExpressiveEmptyOrb(
-            icon = if (isSearching) AppVectorIcons.Search else AppVectorIcons.CheckCircle,
+            icon = if (isSearching) AppVectorIcons.Search else AppVectorIcons.AnimeSparkle,
             modifier = Modifier,
             containerColor = if (isSearching) {
                 MaterialTheme.colorScheme.surfaceContainerHigh
@@ -57,7 +57,7 @@ fun EmptyStateView(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (isSearching) "Nothing matches those filters" else "All caught up",
+            text = if (isSearching) "Nothing matches those filters" else "All caught up!",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
@@ -69,7 +69,7 @@ fun EmptyStateView(
             text = if (isSearching) {
                 "Try a different search term, or reset the filters to see everything you are missing."
             } else {
-                "Nothing in your completed lists has an unreleased sequel. That is genuinely rare - enjoy it."
+                "None of your completed anime has a missed sequel. You are completely caught up across all franchises!"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

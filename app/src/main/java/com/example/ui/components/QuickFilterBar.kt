@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +19,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.model.FilterCriteria
 import com.example.data.model.StatusFilter
+import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.expressive.ExpressiveSegmentedBar
 
 /**
  * The one-tap filters.
@@ -50,6 +50,8 @@ fun QuickFilterBar(
     // claims to represent.
     val selectedIndex = statuses.indexOf(filterCriteria.statusFilter).coerceAtLeast(0)
 
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -59,7 +61,10 @@ fun QuickFilterBar(
         ExpressiveSegmentedBar(
             options = statusLabels,
             selectedIndex = selectedIndex,
-            onSelect = { onStatusSelected(statuses[it]) }
+            onSelect = {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                onStatusSelected(statuses[it])
+            }
         )
 
         val activeFormats = listOf("TV" to "TV series", "MOVIE" to "Movies")
@@ -91,17 +96,17 @@ fun QuickFilterBar(
                     )
                 }
 
-                // Without this, picking a filter was a one-way door: the chips
-                // could be changed back one at a time but there was no single
-                // way to return to "everything".
                 IconButton(
-                    onClick = onClearAll,
+                    onClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onClearAll()
+                    },
                     modifier = Modifier
                         .size(28.dp)
                         .testTag("clear_filters_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = AppVectorIcons.Close,
                         contentDescription = "Clear all filters",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)

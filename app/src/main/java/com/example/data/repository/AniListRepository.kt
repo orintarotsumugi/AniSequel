@@ -20,4 +20,5 @@ interface AniListRepository {
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
     fun getDemoProfile(): ViewerProfile
     fun getDemoAnimeList(): MediaListCollection
+    fun clearDetailCache() {}
 }

@@ -31,18 +31,19 @@ class FindMissedSequelsUseCase {
         val lists = collection.lists ?: return emptyList()
         val allUserEntries = lists.flatMap { it.entries ?: emptyList() }
 
-        // Every media the user already tracks, in any list.
-        val allUserListMediaIds = mutableSetOf<Int>()
-        // ...and the subset sitting in Planning, which the switch is named after.
+        // Every media the user already tracks in an active or completed list
+        // (Completed, Watching, Paused, Dropped). These can never be missed.
+        val activeOrCompletedMediaIds = mutableSetOf<Int>()
+        // ...and the subset sitting in Planning, which the switch controls.
         val plannedMediaIds = mutableSetOf<Int>()
 
         for (entry in allUserEntries) {
             val mediaId = entry.media.id
-            allUserListMediaIds.add(mediaId)
-
             val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
             if (entryStatus.equals("PLANNING", ignoreCase = true)) {
                 plannedMediaIds.add(mediaId)
+            } else {
+                activeOrCompletedMediaIds.add(mediaId)
             }
         }
 
@@ -65,30 +66,25 @@ class FindMissedSequelsUseCase {
                 val sequelNode = edge.node
                 val sequelId = sequelNode.id
 
-                val alreadyInUserList = allUserListMediaIds.contains(sequelId)
+                // If the user already watched or is actively tracking this franchise entry,
+                // it is never a "missed" entry.
+                if (activeOrCompletedMediaIds.contains(sequelId)) continue
+
                 val isPlanned = plannedMediaIds.contains(sequelId) ||
                         sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
 
-                // "Hide already planned" off means *show everything*, including
-                // the entries the user has already saved. The old expression,
-                // `!alreadyInUserList || isPlanned`, could never do that: an
-                // entry the user had on a non-planning list was filtered out by
-                // both halves of the disjunction, so turning the switch off
-                // only ever added back the planning entries it already showed.
-                val isMissed = !filterCriteria.hideAlreadyPlanned ||
-                        (!alreadyInUserList && !isPlanned)
+                // If it is on the planning list and the user chose to hide planned entries, skip.
+                if (isPlanned && filterCriteria.hideAlreadyPlanned) continue
 
-                if (isMissed) {
-                    missedSequels.add(
-                        MissedSequel(
-                            parentId = parentMedia.id,
-                            parentTitle = parentTitle,
-                            sequelMedia = sequelNode,
-                            relationType = RelationKind.fromApi(relationType).apiValue,
-                            isAddedToPlanning = isPlanned
-                        )
+                missedSequels.add(
+                    MissedSequel(
+                        parentId = parentMedia.id,
+                        parentTitle = parentTitle,
+                        sequelMedia = sequelNode,
+                        relationType = RelationKind.fromApi(relationType).apiValue,
+                        isAddedToPlanning = isPlanned
                     )
-                }
+                )
             }
         }
 
@@ -109,7 +105,11 @@ class FindMissedSequelsUseCase {
         val filtered = candidates.filter { sequel ->
             val matchesQuery = query.isEmpty() ||
                     sequel.sequelTitle.lowercase().contains(query) ||
-                    sequel.parentTitle.lowercase().contains(query)
+                    sequel.parentTitle.lowercase().contains(query) ||
+                    sequel.sequelMedia.title?.romaji?.lowercase()?.contains(query) == true ||
+                    sequel.sequelMedia.title?.english?.lowercase()?.contains(query) == true ||
+                    sequel.sequelMedia.title?.native?.lowercase()?.contains(query) == true ||
+                    sequel.synonyms.any { it.lowercase().contains(query) }
 
             // Release filter. Skipped when a specific status was chosen,
             // otherwise picking "Upcoming" while "Include unreleased" was off

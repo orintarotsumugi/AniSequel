@@ -1,13 +1,14 @@
 package com.example.ui.screens
 
-import android.content.Context
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,24 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,16 +32,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.RedirectUrlHint
+import com.example.ui.components.expressive.ExpressiveTabBar
+import com.example.ui.screens.login.ClientIdDialog
+import com.example.ui.screens.login.LoginHero
+import com.example.ui.screens.login.ManualTokenDialog
+import com.example.ui.screens.login.OAuthCard
+import com.example.ui.screens.login.UsernameScanCard
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 
@@ -64,13 +56,11 @@ fun LoginScreen(
     onScanUsername: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
-    var publicUsernameInput by remember { mutableStateOf("") }
     var showClientIdDialog by remember { mutableStateOf(false) }
     var showManualTokenDialog by remember { mutableStateOf(false) }
-    var inputClientId by remember { mutableStateOf("") }
-    var inputToken by remember { mutableStateOf("") }
+    val currentClientId by authViewModel.clientId.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     Scaffold(
         modifier = modifier
@@ -98,186 +88,40 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Hero App Icon
-                Box(
-                    modifier = Modifier
-                        .size(88.dp)
-                        .clip(MaterialTheme.shapes.large)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Tv,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(46.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Text(
-                    text = "AniSequel",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Text(
-                    text = "Find anime sequels you forgot to watch",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    textAlign = TextAlign.Center
-                )
+                LoginHero()
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Mode Tabs: OAuth vs Public Username
-                // PrimaryScrollableTabRow rather than TabRow: TabRow is
-                // deprecated in favour of the Primary/Secondary pair, and this
-                // now matches the tab row Settings uses, so both are built from
-                // one API.
-                PrimaryScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    edgePadding = 0.dp,
+                ExpressiveTabBar(
+                    tabs = listOf("Sign In", "Username Scan"),
+                    selectedIndex = selectedTab,
+                    onSelect = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedTab = it
+                    },
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Sign In", fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Username Scan", fontWeight = FontWeight.Bold) }
-                    )
-                }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                if (selectedTab == 0) {
-                    // Sign in with OAuth Tab
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                    label = "login_tab_content"
+                ) { tab ->
+                    if (tab == 0) {
+                        OAuthCard(
+                            authState = authState,
+                            authUrl = authViewModel.getAuthorizationUrl(),
+                            onShowManualToken = { showManualTokenDialog = true },
+                            onShowClientId = { showClientIdDialog = true }
                         )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            FeatureRow(
-                                icon = AppVectorIcons.CheckCircle,
-                                title = "Personal List Sync",
-                                desc = "Detect missed seasons from your personal completed lists"
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            FeatureRow(
-                                icon = AppVectorIcons.BookmarkAdd,
-                                title = "1-Tap Add to Planning",
-                                desc = "Add missing entries directly to your AniList account"
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    if (authState is AuthUiState.Error) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                            shape = MaterialTheme.shapes.small,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                        ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = AppVectorIcons.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = authState.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                            }
-                        }
-                    }
-
-                    if (authState is AuthUiState.Loading) {
-                        CircularProgressIndicator(modifier = Modifier.size(36.dp), color = MaterialTheme.colorScheme.primary)
                     } else {
-                        Button(
-                            onClick = { openCustomTab(context, authViewModel.getAuthorizationUrl()) },
-                            enabled = (authState as? AuthUiState.Error) == null,
-                            modifier = Modifier.fillMaxWidth().height(52.dp).testTag("connect_anilist_button"),
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Icon(imageVector = AppVectorIcons.Login, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Connect AniList Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = { showManualTokenDialog = true }, modifier = Modifier.testTag("paste_token_button")) {
-                                Text("Paste Token")
-                            }
-                            Text("•", modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            TextButton(onClick = { showClientIdDialog = true }, modifier = Modifier.testTag("custom_client_id_button")) {
-                                Text("Client ID")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // The single most common reason sign-in "does nothing":
-                        // after approving, the browser tries to load the Redirect
-                        // URL registered at anilist.co/developer. If that is
-                        // something like http://localhost, the browser opens a
-                        // dead page and the token never reaches the app. The app
-                        // cannot detect that - it never gets the callback - so it
-                        // spells out what to register instead.
-                        RedirectUrlHint(modifier = Modifier.fillMaxWidth())
-                    }
-                } else {
-                    // Public Username Scan Tab
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Scan Any Public AniList Profile",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Enter any AniList username to detect missed sequels in read-only mode without logging in.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                            Spacer(modifier = Modifier.height(14.dp))
-                            OutlinedTextField(
-                                value = publicUsernameInput,
-                                onValueChange = { publicUsernameInput = it },
-                                label = { Text("AniList Username") },
-                                placeholder = { Text("e.g. MyAnimeList") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth().testTag("username_scan_input")
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    if (publicUsernameInput.isNotBlank()) {
-                                        onScanUsername(publicUsernameInput.trim())
-                                    }
-                                },
-                                enabled = publicUsernameInput.isNotBlank(),
-                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("scan_username_button"),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Icon(imageVector = AppVectorIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scan Username", fontWeight = FontWeight.Bold)
-                            }
-                        }
+                        UsernameScanCard(
+                            onScanUsername = onScanUsername
+                        )
                     }
                 }
 
@@ -285,11 +129,21 @@ fun LoginScreen(
 
                 // Instant Demo Preview Button
                 OutlinedButton(
-                    onClick = onStartDemo,
-                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("explore_demo_button"),
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onStartDemo()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("explore_demo_button"),
                     shape = MaterialTheme.shapes.small
                 ) {
-                    Icon(imageVector = AppVectorIcons.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        imageVector = AppVectorIcons.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Explore with sample data", fontWeight = FontWeight.SemiBold)
                 }
@@ -298,103 +152,17 @@ fun LoginScreen(
     }
 
     if (showClientIdDialog) {
-        // Collected, not read via `.value`. Reading a StateFlow's value directly
-        // inside composition does not subscribe to it, so this label was frozen
-        // at whatever the value happened to be when the dialog first composed:
-        // open it before the stored id had loaded and it showed the default,
-        // and saving a custom id in Settings did not update it either. The
-        // dialog is told what the current value is by composing here, in the
-        // scope of the screen, so it recomposes with it.
-        val currentClientId by authViewModel.clientId.collectAsState()
-
-        AlertDialog(
-            onDismissRequest = { showClientIdDialog = false },
-            title = { Text("Configure AniList Client ID") },
-            text = {
-                Column {
-                    Text("AniList OAuth Client ID (default: ${currentClientId}):", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = inputClientId,
-                        onValueChange = { inputClientId = it },
-                        label = { Text("Client ID") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("client_id_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (inputClientId.isNotBlank()) authViewModel.updateClientId(inputClientId)
-                        showClientIdDialog = false
-                    }
-                ) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showClientIdDialog = false }) { Text("Cancel") } }
+        ClientIdDialog(
+            currentClientId = currentClientId,
+            onSave = { authViewModel.updateClientId(it) },
+            onDismiss = { showClientIdDialog = false }
         )
     }
 
     if (showManualTokenDialog) {
-        AlertDialog(
-            onDismissRequest = { showManualTokenDialog = false },
-            title = { Text("Enter AniList Token") },
-            text = {
-                Column {
-                    Text("Paste your Bearer access token:", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = inputToken,
-                        onValueChange = { inputToken = it },
-                        label = { Text("Access Token") },
-                        modifier = Modifier.fillMaxWidth().testTag("token_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (inputToken.isNotBlank()) authViewModel.saveToken(inputToken.trim())
-                        showManualTokenDialog = false
-                    }
-                ) { Text("Login") }
-            },
-            dismissButton = { TextButton(onClick = { showManualTokenDialog = false }) { Text("Cancel") } }
+        ManualTokenDialog(
+            onSave = { authViewModel.saveToken(it) },
+            onDismiss = { showManualTokenDialog = false }
         )
-    }
-}
-
-@Composable
-private fun FeatureRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    desc: String
-) {
-    Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            Text(text = desc, style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
-        }
-    }
-}
-
-private fun openCustomTab(context: Context, url: String) {
-    // Custom Tabs first, plain browser second. The old fallback called
-    // startActivity outside a runCatching, so a device with no browser at all
-    // crashed the app instead of failing visibly.
-    runCatching {
-        val customTabsIntent = CustomTabsIntent.Builder().setShowTitle(true).build()
-        customTabsIntent.launchUrl(context, Uri.parse(url))
-    }.recoverCatching {
-        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
     }
 }
