@@ -1,9 +1,9 @@
 {
-  "version": "1.0.11",
-  "version_code": 27,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.11",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.11/anisequel-universal.apk",
-  "size_bytes": 2410764,
+  "version": "1.0.12",
+  "version_code": 30,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.12",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.12/anisequel-universal.apk",
+  "size_bytes": 2427144,
   "published_at": "",
-  "notes": "Build 27 from f5e42d74."
+  "notes": "Build 30 from 0ce840a9."
 }
