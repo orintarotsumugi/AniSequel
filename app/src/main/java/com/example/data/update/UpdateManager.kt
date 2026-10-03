@@ -2,6 +2,8 @@ package com.example.data.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -202,6 +204,26 @@ class UpdateManager(private val context: Context) {
                         )
                     }
 
+                    // Being a zip is not the same as being *our* app. Until this
+                    // existed, whatever the URL served was handed straight to the
+                    // package installer: a release asset replaced at the CDN, a
+                    // hijacked mirror, or a future mistake in the manifest's
+                    // download_url would all install, and the failure mode is a
+                    // successful install of someone else's code.
+                    //
+                    // Android will not let a different key update an existing
+                    // app, so this mostly protects against a first install from
+                    // a tampered manifest rather than a silent upgrade - but it
+                    // also catches a mismatched build *before* the user reaches a
+                    // system dialog that says only "App not installed".
+                    if (!isSignedByThisApp(partFile)) {
+                        partFile.delete()
+                        return@withContext UpdateDownloadResult.Failed(
+                            "That APK is not signed with AniSequel's key, so it was not " +
+                                "installed. The release may have been tampered with."
+                        )
+                    }
+
                     if (!partFile.renameTo(target)) {
                         partFile.delete()
                         return@withContext UpdateDownloadResult.Failed(
@@ -267,6 +289,54 @@ class UpdateManager(private val context: Context) {
             Uri.parse("package:${context.packageName}")
         )
     }
+
+    /**
+     * Whether [apk] is signed by the same key as the running copy of the app.
+     *
+     * Both sides are read through [PackageManager] rather than parsed by hand,
+     * so this follows the platform's own idea of a signature - including the
+     * signing-key-rotation rules on API 28+.
+     *
+     * Compared with `contentEquals` on each certificate rather than by putting
+     * them in a `Set`: [ByteArray] equality is identity in Kotlin, so a set of
+     * byte arrays would report two identical certificates as different.
+     */
+    private fun isSignedByThisApp(apk: File): Boolean {
+        val packageManager = context.packageManager
+
+        val archiveInfo = try {
+            packageManager.getPackageArchiveInfo(
+                apk.absolutePath,
+                PackageManager.GET_SIGNING_CERTIFICATES
+            )
+        } catch (e: Exception) {
+            return false
+        } ?: return false
+
+        val installedInfo = try {
+            packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        } catch (e: Exception) {
+            return false
+        }
+
+        val theirs = signerCertificates(archiveInfo) ?: return false
+        val ours = signerCertificates(installedInfo) ?: return false
+
+        return ours.isNotEmpty() &&
+            ours.size == theirs.size &&
+            ours.zip(theirs).all { (mine, other) -> mine.contentEquals(other) }
+    }
+
+    /** The certificates a package is signed with, or null if there are none. */
+    private fun signerCertificates(info: PackageInfo): List<ByteArray>? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        } else {
+            // Pre-28 there is no signingInfo and no key rotation, so the flat
+            // signatures array is the whole story.
+            @Suppress("DEPRECATION")
+            info.signatures?.map { it.toByteArray() }
+        }
 
     /** Releases the last downloaded APK, if any. Called before a fresh download. */
     fun clearDownloadedApk() {

@@ -216,6 +216,7 @@ fun DashboardScreen(
                                         sequel = item,
                                         onClick = { selectedSequelId = item.sequelId },
                                         onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
+                                        onHide = { dashboardViewModel.toggleHideSequel(item) },
                                         modifier = Modifier
                                             .widthIn(max = MaxContentWidth)
                                             .padding(horizontal = 16.dp)

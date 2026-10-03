@@ -17,6 +17,26 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed interface AuthUiState {
+    /**
+     * The stored session has not been read from disk yet, so nothing is known.
+     *
+     * Distinct from [Loading] on purpose. [Loading] means "we know who you are
+     * and are doing something to them" - it is what the sign-in card shows a
+     * spinner for - and it happens *after* the app already knows what to draw.
+     * [Restoring] means the opposite: the answer is not known yet, and anything
+     * that branches on it would be guessing.
+     *
+     * It used to be [Loading] that filled this role, and `AppNavigation` chose
+     * its start destination with `is Authenticated ? DASHBOARD : LOGIN` - so
+     * "not known yet" fell into the LOGIN branch. The result was a login screen
+     * on every cold start, and - because the OAuth round trip sends the app to
+     * the browser long enough for the process to be killed - a login screen
+     * every time the user came back *from* signing in, which read as the app
+     * forgetting they had asked to sign in.
+     */
+    data object Restoring : AuthUiState
+
+    /** We know who the user is, and are currently acting on their behalf. */
     data object Loading : AuthUiState
     data object Unauthenticated : AuthUiState
     data class Authenticated(val token: String) : AuthUiState
@@ -35,7 +55,7 @@ class AuthViewModel(
     private val aniListRepository: AniListRepository? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
+    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Restoring)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private val _clientId = MutableStateFlow(AuthRepositoryImpl.DEFAULT_CLIENT_ID)

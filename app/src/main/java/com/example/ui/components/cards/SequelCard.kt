@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +39,8 @@ fun SequelCard(
     sequel: MissedSequel,
     onClick: () -> Unit,
     onAddToPlanning: () -> Unit,
+    /** Stops offering this entry again. Persisted by the ViewModel. */
+    onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
@@ -203,10 +208,35 @@ fun SequelCard(
                         }
                     }
 
-                    SequelPlanningButton(
-                        sequel = sequel,
-                        onAddToPlanning = onAddToPlanning
-                    )
+                    // Stacked rather than side by side: the planning button already fills its slot,
+                    // so a second sibling in this Row would have had to share the
+                    // width with it and squeeze both.
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        SequelPlanningButton(
+                            sequel = sequel,
+                            onAddToPlanning = onAddToPlanning
+                        )
+
+                        // Secondary, and deliberately quiet: most people will
+                        // never press this, and the AniList action is the one
+                        // that belongs at a glance.
+                        TextButton(
+                            onClick = onHide,
+                            modifier = Modifier.testTag("hide_sequel_${sequel.sequelId}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.VisibilityOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Not interested",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }

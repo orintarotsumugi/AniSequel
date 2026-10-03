@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import com.example.data.repository.HiddenSequelsPreferences
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,7 +66,13 @@ class DashboardViewModel(
     private val isDemo: Boolean = false,
     private val getViewerProfileUseCase: GetViewerProfileUseCase = GetViewerProfileUseCase(aniListRepository),
     private val saveToPlanningUseCase: SaveToPlanningUseCase = SaveToPlanningUseCase(aniListRepository),
-    private val findMissedSequelsUseCase: FindMissedSequelsUseCase = FindMissedSequelsUseCase()
+    private val findMissedSequelsUseCase: FindMissedSequelsUseCase = FindMissedSequelsUseCase(),
+    /**
+     * Optional so the demo and public-profile dashboards - which have no reason
+     * to remember anything - construct without one, and so existing call sites
+     * keep compiling.
+     */
+    private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null
 ) : ViewModel() {
 
     companion object {
@@ -83,6 +91,22 @@ class DashboardViewModel(
     private val _eventFlow = MutableSharedFlow<DashboardEvent>()
     val eventFlow: SharedFlow<DashboardEvent> = _eventFlow.asSharedFlow()
 
+    init {
+        // The hidden set outlives the process, so it is re-read on every launch
+        // rather than held in memory. Guarded on Success because the stored
+        // value usually arrives before the list has been fetched, and
+        // recomputing against an unloaded list would just throw it away.
+        hiddenSequelsPreferences?.let { preferences ->
+            viewModelScope.launch {
+                preferences.hiddenIds.collectLatest { ids ->
+                    if (ids == _filterCriteria.value.hiddenMediaIds) return@collectLatest
+                    _filterCriteria.value = _filterCriteria.value.copy(hiddenMediaIds = ids)
+                    if (_uiState.value is DashboardUiState.Success) recompute()
+                }
+            }
+        }
+    }
+
     private var cachedViewer: ViewerProfile? = null
     private var cachedCollection: MediaListCollection? = null
     private val addedToPlanningIds = mutableSetOf<Int>()
@@ -92,13 +116,13 @@ class DashboardViewModel(
      * Everything the list is missing, before filtering.
      *
      * Walking the relations of a few hundred entries is the expensive half of
-     * this screen and it only depends on two things: whether already-planned
-     * entries are hidden, and which relation kinds are included. Caching on that
-     * pair means sorting, searching and changing status or format no longer
-     * re-walk the whole list.
+     * this screen and it only depends on three things: whether already-planned
+     * entries are hidden, which relation kinds are included, and which entries
+     * the user has hidden outright. Caching on those means sorting, searching
+     * and changing status or format no longer re-walk the whole list.
      */
     private var discoveredCandidates: List<MissedSequel>? = null
-    private var discoveryKey: Pair<Boolean, Set<RelationKind>>? = null
+    private var discoveryKey: Triple<Boolean, Set<RelationKind>, Set<Int>>? = null
 
     /** Description, banner and studio per media, fetched only when opened. */
     private val detailCache = mutableMapOf<Int, MediaNode>()
@@ -309,7 +333,15 @@ private var loadJob: Job? = null
         collection: MediaListCollection,
         criteria: FilterCriteria
     ): List<MissedSequel> {
-        val key = criteria.hideAlreadyPlanned to criteria.includedRelations
+        // Every input [discover] actually reads has to be in this key. It was keyed on
+        // two fields while `discover` depended on three, so hiding an entry hit
+        // the cached list and the entry stayed on screen - the gesture worked and
+        // did nothing, which is worse than not offering it at all.
+        val key = Triple(
+            criteria.hideAlreadyPlanned,
+            criteria.includedRelations,
+            criteria.hiddenMediaIds
+        )
         discoveredCandidates?.let { cached ->
             if (discoveryKey == key) return cached
         }
@@ -427,8 +459,48 @@ private var loadJob: Job? = null
 
     fun resetFilters() {
         searchJob?.cancel()
-        _filterCriteria.value = FilterCriteria()
+        // Hidden entries are deliberately carried across a filter reset. They are
+        // not a view of the list, they are a standing decision about particular
+        // anime - resetting the search box should not quietly put back something
+        // the user asked never to see again.
+        _filterCriteria.value = FilterCriteria(
+            hiddenMediaIds = _filterCriteria.value.hiddenMediaIds
+        )
         viewModelScope.launch { recompute() }
+    }
+
+    /**
+     * Stops offering [sequel] again, or brings it back if it is already hidden.
+     *
+     * The result is persisted rather than kept in memory: this is the one thing
+     * in [FilterCriteria] the user made on purpose, and losing it on next
+     * launch would make it a gesture with no effect.
+     */
+    fun toggleHideSequel(sequel: MissedSequel) {
+        val preferences = hiddenSequelsPreferences ?: return
+        val wasHidden = sequel.sequelId in _filterCriteria.value.hiddenMediaIds
+
+        viewModelScope.launch {
+            preferences.toggle(sequel.sequelId)
+            _eventFlow.emit(
+                DashboardEvent.ShowSnackbar(
+                    if (wasHidden) {
+                        "${sequel.sequelTitle} can show up again."
+                    } else {
+                        "Hidden ${sequel.sequelTitle}. Find it under Filters > Hidden."
+                    }
+                )
+            )
+        }
+    }
+
+    /** Unhides everything, for the "show all again" affordance. */
+    fun restoreAllHiddenSequels() {
+        val preferences = hiddenSequelsPreferences ?: return
+        viewModelScope.launch {
+            preferences.clear()
+            _eventFlow.emit(DashboardEvent.ShowSnackbar("All hidden anime can show up again."))
+        }
     }
 
     fun addToPlanning(sequel: MissedSequel) {
@@ -504,14 +576,16 @@ private var loadJob: Job? = null
     class Factory(
         private val aniListRepository: AniListRepository,
         private val targetUsername: String? = null,
-        private val isDemo: Boolean = false
+        private val isDemo: Boolean = false,
+        private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return DashboardViewModel(
                 aniListRepository = aniListRepository,
                 targetUsername = targetUsername,
-                isDemo = isDemo
+                isDemo = isDemo,
+                hiddenSequelsPreferences = hiddenSequelsPreferences
             ) as T
         }
     }

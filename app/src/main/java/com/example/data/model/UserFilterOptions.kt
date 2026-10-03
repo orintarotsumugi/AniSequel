@@ -27,5 +27,20 @@ data class FilterCriteria(
      * is what the app has always meant; prequels, side stories and spin-offs are
      * opt-in because they widen the result set considerably.
      */
-    val includedRelations: Set<RelationKind> = setOf(RelationKind.SEQUEL)
+    val includedRelations: Set<RelationKind> = setOf(RelationKind.SEQUEL),
+
+    /**
+     * AniList media ids the user has chosen not to be reminded about again.
+     *
+     * Distinct from every other field here, because those are *how* to narrow
+     * the list and this is *which entries to remove from it*. Nothing else in
+     * this class can express "I do not want to ever see this one again" - a
+     * search query is forgotten when you type something else, and a status or
+     * format filter is a property of the anime rather than a decision about it.
+     *
+     * Matched on the sequel's id, not the parent's: the same franchise can be
+     * reached from several watched entries, and hiding it once has to hide it
+     * from all of them.
+     */
+    val hiddenMediaIds: Set<Int> = emptySet()
 )

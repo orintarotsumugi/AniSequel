@@ -70,6 +70,12 @@ class FindMissedSequelsUseCase {
                 // it is never a "missed" entry.
                 if (activeOrCompletedMediaIds.contains(sequelId)) continue
 
+                // The user's own "do not remind me about this one again". Checked
+                // here rather than in [applyFilters] so a hidden entry is never
+                // built in the first place, and so it stops costing anything in
+                // the sort that runs on every keystroke.
+                if (filterCriteria.hiddenMediaIds.contains(sequelId)) continue
+
                 val isPlanned = plannedMediaIds.contains(sequelId) ||
                         sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
 
