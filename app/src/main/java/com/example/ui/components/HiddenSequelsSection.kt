@@ -83,17 +83,19 @@ fun HiddenSequelsSection(
         visible = hiddenSequels.isNotEmpty(),
         // `IntSize` explicitly, not left to inference: passing a Dp threshold
         // pins the spring to SpringSpec<Dp>, which is not the
-        // FiniteAnimationSpec<IntSize> these two transitions take.
+        // FiniteAnimationSpec<IntSize> these two transitions take. The
+        // threshold itself is an IntSize too, hence IntSize.Zero rather than
+        // a bare 0.
         enter = expandVertically(
             animationSpec = spring<IntSize>(
                 stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = 0
+                visibilityThreshold = IntSize.Zero
             )
         ) + fadeIn(tween(200)),
         exit = shrinkVertically(
             animationSpec = spring<IntSize>(
                 stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = 0
+                visibilityThreshold = IntSize.Zero
             )
         ) + fadeOut(tween(150))
     ) {
@@ -116,13 +118,13 @@ fun HiddenSequelsSection(
                 enter = expandVertically(
                     animationSpec = spring<IntSize>(
                         stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = 0
+                        visibilityThreshold = IntSize.Zero
                     )
                 ) + fadeIn(tween(180)),
                 exit = shrinkVertically(
                     animationSpec = spring<IntSize>(
                         stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = 0
+                        visibilityThreshold = IntSize.Zero
                     )
                 ) + fadeOut(tween(120))
             ) {
