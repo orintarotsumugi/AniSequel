@@ -46,6 +46,19 @@ class KeystoreIntegrityTest {
 
     private fun read(vararg parts: String): String = File(root, parts.joinToString("/")).readText()
 
+    /**
+     * Drops whole-line `#` comments from a shell script embedded in YAML.
+     *
+     * These steps carry long explanations of what used to go wrong, and those
+     * explanations have to quote the old command in order to be useful. Reading
+     * them back as code would report `keytool -genkeypair` as still being run
+     * by a step whose only job is to prove it is not.
+     */
+    private fun stripShellComments(script: String): String =
+        script.lineSequence()
+            .filterNot { it.trimStart().startsWith("#") }
+            .joinToString("\n")
+
     /** Key-shaped files that must never be committed, checked at the repo root. */
     private val forbiddenKeyFiles = listOf(
         "debug.keystore.base64",
@@ -164,6 +177,113 @@ class KeystoreIntegrityTest {
         assertFalse(
             "android-release.yml must not reference the deleted debug.keystore.base64.",
             workflow.contains("debug.keystore.base64")
+        )
+    }
+
+    /**
+     * The gap that let this happen.
+     *
+     * The test above checks that the workflow *references* `secrets.STORE_PASSWORD`
+     * and that no YAML `env:` key hardcodes it. It passed throughout, because the
+     * real defect was neither of those: both call sites fell back to a literal -
+     * `${STORE_PASSWORD:-anisequel123r}` in the workflow and
+     * `System.getenv("STORE_PASSWORD") ?: "anisequel123r"` in the build script.
+     *
+     * The literal was also *wrong*, so it could not have opened the real keystore
+     * even had the secret been present. What it did instead was push the workflow
+     * down its own fallback branch, which generated a fresh random signing key on
+     * every run - three consecutive releases, three different keys, none of them
+     * installable over the last. Every run was green.
+     */
+    @Test
+    fun `no signing password is guessed when the secret is absent`() {
+        val workflow = read(".github", "workflows", "android-release.yml")
+        val buildScript = read("app", "build.gradle.kts")
+
+        val leakedLiteral = "anisequel123r"
+
+        assertFalse(
+            "a signing password is still committed in android-release.yml",
+            workflow.contains(leakedLiteral)
+        )
+        assertFalse(
+            "a signing password is still committed in app/build.gradle.kts",
+            buildScript.contains(leakedLiteral)
+        )
+
+        // `$` and `{` are escaped because a raw string still interpolates.
+        for (variable in listOf("STORE_PASSWORD", "KEY_PASSWORD")) {
+            assertFalse(
+                "android-release.yml must not fall back to a literal for " +
+                    "\${$variable:-default}; a guessed password can only produce a " +
+                    "keystore that does not open, or the wrong key entirely",
+                workflow.contains("\${$variable:-")
+            )
+            assertFalse(
+                "app/build.gradle.kts must not fall back to a literal for " +
+                    "System.getenv(\"$variable\") ?: ... - leave it null and let AGP " +
+                    "fail the release build instead",
+                buildScript.contains("System.getenv(\"$variable\") ?:")
+            )
+        }
+    }
+
+    /**
+     * A release key must never be invented.
+     *
+     * `keytool -genkeypair` is legitimate for the throwaway key a pull request
+     * build uses - that one is never shipped. It is not legitimate in the step
+     * that restores the *release* key, because a generated key is a new key, and
+     * a new key produces an APK no existing install can accept.
+     */
+    @Test
+    fun `the release key is never generated as a fallback`() {
+        val workflow = read(".github", "workflows", "android-release.yml")
+
+        val restoreStep = stripShellComments(
+            workflow
+                .substringAfter("name: Restore the release signing key from secrets")
+                .substringBefore("- name: Validate the signing key")
+        )
+
+        assertFalse(
+            "the release-signing step must not generate a key. If KEYSTORE_BASE64 " +
+                "is missing the build has to fail: a generated key signs a release " +
+                "that cannot be installed over the previous one.",
+            restoreStep.contains("-genkeypair")
+        )
+
+        assertTrue(
+            "the release-signing step must fail loudly when a secret is missing " +
+                "rather than carrying on",
+            restoreStep.contains("::error::")
+        )
+    }
+
+    /**
+     * The signer is checked, not merely printed.
+     *
+     * This step used to run `apksigner verify --print-certs`, which exits zero
+     * for any well-formed signature and just prints the digest. A release signed
+     * with the wrong key passed it exactly as readily as the right one - which is
+     * why three keys in a row shipped without a single red build.
+     */
+    @Test
+    fun `the release signer is asserted, not just printed`() {
+        val workflow = read(".github", "workflows", "android-release.yml")
+
+        val verifyStep = workflow
+            .substringAfter("name: Verify APK Release Signing Integrity")
+            .substringBefore("- name: Upload Build Artifacts")
+
+        assertTrue(
+            "the verification step must compare the signer against a pinned " +
+                "fingerprint, not only print it",
+            verifyStep.contains("EXPECTED_SIGNER_SHA256")
+        )
+        assertTrue(
+            "a mismatched signer must fail the job",
+            verifyStep.contains("exit 1")
         )
     }
 

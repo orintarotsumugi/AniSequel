@@ -58,14 +58,24 @@ android {
       // the repository: it used to be committed as debug.keystore.base64, which
       // let anyone who cloned the repo sign an update APK.
       //
-      // Left unset locally, the keystore path still falls back to rootDir so a
-      // developer with their own release key in the expected place can still
-      // produce a signed local build without editing this file.
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      // The passwords are read from the environment and nothing else. This used
+      // to fall back to a literal, and that literal was *wrong* - it could not
+      // open the real keystore - so the only thing it could ever produce was a
+      // build that either failed obscurely or, worse, signed with whatever
+      // keystore happened to match it. Guessing a password is never the right
+      // fallback for signing material; failing is.
+      //
+      // Null rather than an exception on purpose. This block is evaluated for
+      // every Gradle invocation, including `testDebugUnitTest` and the debug
+      // build, neither of which needs the release key and neither of which has
+      // the secrets. AGP only actually opens the keystore while signing a
+      // release, so leaving these null keeps those tasks working and makes
+      // `assembleRelease` fail with its own message when the secrets are absent.
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/release-key.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: "anisequel123r"
+      storePassword = System.getenv("STORE_PASSWORD")
       keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: "anisequel123r"
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
