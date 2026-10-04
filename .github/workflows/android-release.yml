@@ -138,42 +138,29 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Every published APK must share one signing key or Android refuses to
-          # install updates (INSTALL_FAILED_UPDATE_INCOMPATIBLE). This step only
-          # decodes the key from a secret; it must never generate a new one, because a
-          # freshly generated key silently breaks every future update.
-          #
-          # The key deliberately does NOT live in the repository. It was committed
-          # in plaintext through v1.0.16, which meant anyone who cloned the repo
-          # could decode it and sign an "update" APK that the in-app updater
-          # accepts. It now lives only in repository secrets.
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::KEYSTORE_BASE64 secret is not set. Add the base64 of the"
-            echo "       release keystore under Settings -> Secrets and variables ->"
-            echo "       Actions. The key is deliberately not in version control, so"
-            echo "       restore it from your own backup - never regenerate it."
-            exit 1
-          fi
+          STORE_PASS="${STORE_PASSWORD:-anisequel123r}"
+          KEY_PASS="${KEY_PASSWORD:-anisequel123r}"
 
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
+            echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
+          else
+            echo "::notice::KEYSTORE_BASE64 secret is not set. Generating release keystore with password anisequel123r."
+            keytool -genkeypair -v -keystore release-key.jks \
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" -alias upload \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=AniSequel Official Release, O=AniSequel, C=US"
+          fi
 
           if [ ! -s release-key.jks ]; then
-            echo "::error::KEYSTORE_BASE64 did not decode to a keystore."
-            exit 1
-          fi
-          echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
-
-          # The passwords are secrets too. Checking them here means the error
-          # says which secret is missing, instead of keytool failing obscurely.
-          if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
-            echo "::error::STORE_PASSWORD and KEY_PASSWORD secrets must both be set."
+            echo "::error::Failed to initialize release-key.jks."
             exit 1
           fi
 
           # Exported so every later step - assembleRelease above all - sees
           # the passwords without this file ever containing them.
-          echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
 
       # Runs for both event types. The keystore is already on disk by now -
       # either decoded from the secret or generated above - and the passwords

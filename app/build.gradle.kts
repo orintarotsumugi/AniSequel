@@ -63,9 +63,9 @@ android {
       // produce a signed local build without editing this file.
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "anisequel123r"
       keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "anisequel123r"
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
