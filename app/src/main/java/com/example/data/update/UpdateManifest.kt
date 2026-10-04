@@ -76,17 +76,33 @@ sealed interface UpdateDownloadResult {
 /**
  * The update manifest's URL.
  *
- * `raw.githubusercontent.com` serves the file on `main` directly, without the
- * API's 60-requests-an-hour unauthenticated rate limit and without the several
- * seconds a cold `api.github.com` DNS + TLS setup takes on a phone. A check that
- * is meant to run on every launch cannot depend on either.
+ * ## Why this is the release asset and not `main`
  *
- * It does mean the manifest reflects whatever is on `main`, which for this repo
- * is written by the release workflow itself in the same job that publishes the
- * APK - so the two cannot disagree for more than the length of one commit.
+ * It used to be `raw.githubusercontent.com/.../main/update.json`, written by a
+ * commit the release workflow pushed back to `main`. That could not work, and the
+ * failure was invisible:
+ *
+ *  - `main` is a protected branch requiring two status checks. GitHub does not
+ *    run workflows for pushes made with `GITHUB_TOKEN`, so those checks can
+ *    never report on such a commit and the hook declines every push with
+ *    "2 of 2 required status checks are expected".
+ *  - The push step ended in `|| echo "Nothing to push."`, which turned that
+ *    rejection into a *successful* step. Every run was green.
+ *
+ * The result was four consecutive releases (v1.0.15 through v1.0.18) published
+ * while the manifest on `main` still advertised v1.0.14. Because `version_code`
+ * is compared rather than the version name, an app already on 35 correctly
+ * decided "not newer" - and no user was ever offered the releases that
+ * contained the fixes. The updater was not broken so much as deaf, and the only
+ * visible symptom was that bugs were never handed to anyone.
+ *
+ * A release asset has none of those problems: it is written by the same
+ * authenticated job that publishes the APK, it needs no branch write, and
+ * `releases/latest` tracks the newest non-draft release, so the URL below is
+ * stable while its contents move forward with every release.
  */
 const val UPDATE_MANIFEST_URL: String =
-    "https://raw.githubusercontent.com/LOST-4EVER/AniSequel/main/update.json"
+    "https://github.com/LOST-4EVER/AniSequel/releases/latest/download/update.json"
 
 /** Human-readable size, for the "12.4 MB" line under the update button. */
 fun formatBytes(bytes: Long?): String {

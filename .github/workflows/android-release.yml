@@ -623,12 +623,38 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update.json gradle.properties app/build.gradle.kts
-          # --quiet: this runs on every main build, and a no-op commit must not
-          # produce an empty commit that would loop the workflow.
+          # The manifest is published as an asset on the release itself, and it is
+          # what UPDATE_MANIFEST_URL in the app reads. This is the only write in
+          # the job that actually reaches users, so it is allowed to fail loudly:
+          # a silent skip here is what shipped four releases to GitHub while the
+          # manifest still advertised v1.0.14, so no user was ever offered the
+          # releases containing the fixes.
           #
-          # The loop is already impossible regardless of paths-ignore: this
-          # pushes with GITHUB_TOKEN, and GitHub does not start workflow runs
-          # for token-authenticated pushes.
-          git commit --quiet -m "Update manifest for ${TAG}" || echo "Manifest already current."
-          git pull --rebase --quiet origin "${GITHUB_REF_NAME}" 2>/dev/null || true
-          git push --quiet origin "HEAD:${GITHUB_REF_NAME}" || echo "Nothing to push."
+          # --clobber because this step re-runs on every build, and the tag may
+          # already carry an asset from an earlier attempt.
+          gh release upload "${TAG}" update.json --clobber
+
+          # Keeping the working tree in step still helps anyone building from a
+          # checkout, but `main` is protected and requires two status checks, and
+          # GitHub deliberately does not run workflows for pushes made with
+          # GITHUB_TOKEN - so those checks never report on such a commit and the
+          # hook rejects the push. That is a repository setting this step cannot
+          # work around.
+          #
+          # So the outcome is reported rather than swallowed. The `|| echo "Nothing
+          # to push."` that used to end this step turned a rejected push into a
+          # green step, which is exactly how a stale manifest stayed invisible.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json gradle.properties app/build.gradle.kts
+          git commit --quiet -m "Update manifest for ${TAG}" \
+            || echo "Nothing to commit; the manifest was already current."
+          if git push --quiet origin "HEAD:${GITHUB_REF_NAME}"; then
+            echo "Committed the manifest and version baseline to ${GITHUB_REF_NAME}."
+          else
+            echo "::warning title=Manifest not committed to ${GITHUB_REF_NAME}::" \
+                 "The release asset is published and is what the app reads, so updates" \
+                 "are unaffected. The branch is protected and rejects pushes made with" \
+                 "GITHUB_TOKEN, so gradle.properties and update.json will trail the" \
+                 "published release until someone commits them by hand."
+          fi

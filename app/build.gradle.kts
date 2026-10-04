@@ -113,6 +113,28 @@ android {
     includeInBundle = true
   }
   packaging {
+    dex {
+      // Compress `classes.dex` instead of storing it verbatim.
+      //
+      // When minSdk >= 28 the Android Gradle Plugin deliberately stores dex
+      // *uncompressed* so the runtime can map it straight out of the APK without
+      // extracting it. That optimisation is invisible until the numbers move:
+      // raising minSdk from 24 to 29 in v1.0.17 switched it on, and the APK went
+      // from 2.31 MB to 4.15 MB in one release. The code itself had got
+      // *smaller* - `classes.dex` fell from 4,028,848 to 3,953,880 uncompressed
+      // bytes - and was simply being shipped at 3.95 MB instead of the 2.0 MB it
+      // deflates to. Every entry in the APK was checked; this one accounts for
+      // the entire increase.
+      //
+      // The trade-off is real and deliberate: compressing means the installer
+      // has to decompress the dex into a second copy on disk, so the *installed*
+      // footprint grows and installing takes marginally longer. This app is
+      // distributed as a sideloaded APK from a GitHub release, so the download
+      // is what every user waits on and the device's own storage is not the
+      // constraint - "APK small, installed size large" is the right way round
+      // here. Set this to false to go back to the mapped-dex behaviour.
+      useLegacyPackaging = true
+    }
     resources {
       excludes += listOf(
         "/META-INF/{AL2.0,LGPL2.1}",

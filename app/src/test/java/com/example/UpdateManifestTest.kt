@@ -4,6 +4,7 @@ import com.example.data.update.UPDATE_MANIFEST_URL
 import com.example.data.update.UpdateManifest
 import com.example.data.update.formatBytes
 import com.squareup.moshi.Moshi
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -162,25 +163,113 @@ class UpdateManifestTest {
      * The manifest is fetched from a hardcoded URL, so this pins the two things
      * that would silently break it.
      *
-     * A wrong host is the interesting one: `api.github.com` works but is rate
-     * limited to 60 requests an hour unauthenticated, which turns a per-launch
-     * check into an intermittent failure on exactly the devices least able to
-     * retry. And it must be a fork of this repo - a build that checked someone
-     * else's releases would offer their APK to this app's users.
+     * It must be a release asset rather than a file on `main`. `main` is a
+     * protected branch requiring two status checks, and GitHub does not run
+     * workflows for pushes made with `GITHUB_TOKEN`, so the release workflow's
+     * commit of the manifest was rejected every single time. The push failure was
+     * then swallowed by a trailing `|| echo`, so every run stayed green while
+     * `main` still advertised v1.0.14 through four later releases - which means
+     * no user was ever offered the releases carrying the fixes.
+     *
+     * It also must not go through `api.github.com`, which is rate limited to 60
+     * requests an hour unauthenticated and turns a per-launch check into an
+     * intermittent failure on exactly the devices least able to retry. And it
+     * must be this repository: a build that checked someone else's releases
+     * would offer their APK to this app's users.
      */
     @Test
-    fun `the manifest url points at this project's raw release manifest`() {
-        assertTrue(
-            "manifest must be served raw from GitHub, not through the API: " +
+    fun `the manifest url points at this project's latest release asset`() {
+        assertEquals(
+            "the manifest must be read from the latest release asset of this repository",
+            "https://github.com/LOST-4EVER/AniSequel/releases/latest/download/update.json",
+            UPDATE_MANIFEST_URL
+        )
+
+        assertFalse(
+            "the manifest must not be read from a branch: main is protected and " +
+                "rejects the workflow's own commit, which is how it went stale: " +
                 "$UPDATE_MANIFEST_URL",
-            UPDATE_MANIFEST_URL.startsWith("https://raw.githubusercontent.com/")
+            UPDATE_MANIFEST_URL.contains("raw.githubusercontent.com")
+        )
+
+        assertFalse(
+            "the API is rate limited and cannot be read on every launch: " +
+                "$UPDATE_MANIFEST_URL",
+            UPDATE_MANIFEST_URL.contains("api.github.com")
+        )
+    }
+}
+
+/**
+ * The manifest URL and the workflow that publishes it cannot be allowed to
+ * drift apart.
+ *
+ * They already had: the app read the manifest from `main` while the workflow
+ * only ever tried to write it there, and the write was rejected by the branch
+ * protection hook. Nothing reported it because the step ended in `|| echo`.
+ *
+ * Neither half can be tested on its own - a test on the URL would still pass
+ * against a workflow that publishes nothing, and a test on the workflow would
+ * still pass against an app that reads somewhere else. So this checks the two
+ * agree.
+ */
+class UpdateManifestPublicationTest {
+
+    private val root: File = findProjectRoot()
+
+    private fun findProjectRoot(): File {
+        val start = File(System.getProperty("user.dir") ?: ".")
+        var candidate: File? = start
+        while (candidate != null) {
+            if (File(candidate, "gradle.properties").isFile) return candidate
+            candidate = candidate.parentFile
+        }
+        error("could not locate gradle.properties from $start")
+    }
+
+    private val workflow: String =
+        File(root, ".github/workflows/android-release.yml").readText()
+
+    @Test
+    fun `the workflow publishes the manifest to the release the app reads`() {
+        assertTrue(
+            "update.json must be uploaded as a release asset, because that is the " +
+                "only place the app can read it from:\n$UPDATE_MANIFEST_URL",
+            workflow.contains("gh release upload")
         )
 
         assertTrue(
-            "manifest must live on the main branch of this repository: " +
-                "$UPDATE_MANIFEST_URL",
-            UPDATE_MANIFEST_URL ==
-                    "https://raw.githubusercontent.com/LOST-4EVER/AniSequel/main/update.json"
+            "the upload must be allowed to replace an existing asset, or a re-run " +
+                "fails on the tag it just published",
+            workflow.contains("--clobber")
+        )
+    }
+
+    /**
+     * The bug was not that the push failed, it was that nobody could tell.
+     *
+     * `git push ... || echo "Nothing to push."` turned a rejected push into a
+     * successful step, so four releases shipped with a manifest nobody could be
+     * offered. The push is still expected to be refused - `main` is protected and
+     * GitHub will not run checks for a token-authenticated push - but it must
+     * now be reported rather than swallowed.
+     */
+    @Test
+    fun `a rejected manifest push is reported instead of swallowed`() {
+        assertFalse(
+            "the manifest push must not end in '|| echo', which turned a rejected " +
+                "push into a green step and hid four stale releases",
+            // `${'$'}` rather than `$`: a raw string still interpolates, so an
+            // unescaped ${GITHUB_REF_NAME} would be resolved by Kotlin as a
+            // template expression and fail to compile.
+            workflow.contains(
+                """git push --quiet origin "HEAD:${'$'}{GITHUB_REF_NAME}" || echo"""
+            )
+        )
+
+        assertTrue(
+            "a refused push should be surfaced as a workflow warning",
+            workflow.contains("::warning title=Manifest not committed")
         )
     }
 }
