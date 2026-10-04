@@ -126,8 +126,10 @@ jobs:
             -dname "CN=CI Throwaway Not The Release Key, O=AniSequel, C=US"
           # keytool refuses a key password under 6 characters, so the throwaway
           # value is long enough to be accepted.
-          echo "STORE_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
-          echo "KEY_PASSWORD=ci-throwaway" >> "$GITHUB_ENV"
+          {
+            echo "STORE_PASSWORD=ci-throwaway"
+            echo "KEY_PASSWORD=ci-throwaway"
+          } >> "$GITHUB_ENV"
 
       - name: Restore the release signing key from secrets
         if: github.event_name != 'pull_request'
@@ -155,9 +157,11 @@ jobs:
               -dname "CN=AniSequel Official Release, O=AniSequel, C=US" 2>/dev/null || true
           fi
 
-          echo "STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
-          echo "KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
-          echo "HAS_KEYSTORE_SECRET=${KEYSTORE_BASE64:+true}" >> "$GITHUB_ENV"
+          {
+            echo "STORE_PASSWORD=$STORE_PASS"
+            echo "KEY_PASSWORD=$KEY_PASS"
+            echo "HAS_KEYSTORE_SECRET=${KEYSTORE_BASE64:+true}"
+          } >> "$GITHUB_ENV"
 
       # Runs for both event types. The keystore is already on disk by now -
       # either decoded from the secret or generated above - and the passwords
@@ -206,8 +210,10 @@ jobs:
             TAG="v${VERSION_NAME}"
           fi
 
-          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          {
+            echo "version_name=${VERSION_NAME}"
+            echo "tag=${TAG}"
+          } >> "$GITHUB_OUTPUT"
           echo "Releasing as ${TAG}"
 
       - name: Warn when the baseline version has drifted
