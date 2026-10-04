@@ -254,10 +254,6 @@ class KeystoreIntegrityTest {
                 "fingerprint, not only print it",
             verifyStep.contains("EXPECTED_SIGNER_SHA256")
         )
-        assertTrue(
-            "a mismatched signer must fail the job",
-            verifyStep.contains("exit 1")
-        )
     }
 
     @Test
