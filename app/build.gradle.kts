@@ -87,9 +87,12 @@ android {
       isShrinkResources = true
       isCrunchPngs = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // Keystore requirement commented out - using default debug signing so builds never fail on missing keystore:
-      // signingConfig = signingConfigs.getByName("release")
-      signingConfig = signingConfigs.getByName("debugConfig")
+      val releaseConfig = signingConfigs.getByName("release")
+      signingConfig = if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
+        releaseConfig
+      } else {
+        signingConfigs.getByName("debugConfig")
+      }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
