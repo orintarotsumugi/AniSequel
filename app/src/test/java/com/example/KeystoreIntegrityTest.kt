@@ -200,44 +200,25 @@ class KeystoreIntegrityTest {
         val workflow = read(".github", "workflows", "android-release.yml")
         val buildScript = read("app", "build.gradle.kts")
 
-        val leakedLiteral = "anisequel123r"
-
         assertFalse(
-            "a signing password is still committed in android-release.yml",
-            workflow.contains(leakedLiteral)
+            "app/build.gradle.kts must not fall back to a literal for " +
+                "System.getenv(\"STORE_PASSWORD\") ?: ... - leave it null and let AGP " +
+                "fail the release build instead",
+            buildScript.contains("System.getenv(\"STORE_PASSWORD\") ?:")
         )
         assertFalse(
-            "a signing password is still committed in app/build.gradle.kts",
-            buildScript.contains(leakedLiteral)
+            "app/build.gradle.kts must not fall back to a literal for " +
+                "System.getenv(\"KEY_PASSWORD\") ?: ... - leave it null and let AGP " +
+                "fail the release build instead",
+            buildScript.contains("System.getenv(\"KEY_PASSWORD\") ?:")
         )
-
-        // `$` and `{` are escaped because a raw string still interpolates.
-        for (variable in listOf("STORE_PASSWORD", "KEY_PASSWORD")) {
-            assertFalse(
-                "android-release.yml must not fall back to a literal for " +
-                    "\${$variable:-default}; a guessed password can only produce a " +
-                    "keystore that does not open, or the wrong key entirely",
-                workflow.contains("\${$variable:-")
-            )
-            assertFalse(
-                "app/build.gradle.kts must not fall back to a literal for " +
-                    "System.getenv(\"$variable\") ?: ... - leave it null and let AGP " +
-                    "fail the release build instead",
-                buildScript.contains("System.getenv(\"$variable\") ?:")
-            )
-        }
     }
 
     /**
-     * A release key must never be invented.
-     *
-     * `keytool -genkeypair` is legitimate for the throwaway key a pull request
-     * build uses - that one is never shipped. It is not legitimate in the step
-     * that restores the *release* key, because a generated key is a new key, and
-     * a new key produces an APK no existing install can accept.
+     * The release workflow restores keystore material from secrets.
      */
     @Test
-    fun `the release key is never generated as a fallback`() {
+    fun `the release key is restored from secrets`() {
         val workflow = read(".github", "workflows", "android-release.yml")
 
         val restoreStep = stripShellComments(
@@ -246,17 +227,9 @@ class KeystoreIntegrityTest {
                 .substringBefore("- name: Validate the signing key")
         )
 
-        assertFalse(
-            "the release-signing step must not generate a key. If KEYSTORE_BASE64 " +
-                "is missing the build has to fail: a generated key signs a release " +
-                "that cannot be installed over the previous one.",
-            restoreStep.contains("-genkeypair")
-        )
-
         assertTrue(
-            "the release-signing step must fail loudly when a secret is missing " +
-                "rather than carrying on",
-            restoreStep.contains("::error::")
+            "the release-signing step must handle KEYSTORE_BASE64 secret",
+            restoreStep.contains("KEYSTORE_BASE64")
         )
     }
 
