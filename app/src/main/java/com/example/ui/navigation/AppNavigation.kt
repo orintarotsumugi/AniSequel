@@ -68,11 +68,36 @@ fun AppNavigation(
         AniListRepositoryImpl(NetworkClient.createApiService(authRepository))
     }
 
+    // Nothing is loaded until the stored session has actually been read.
+    //
+    // Picking a start destination from an unresolved state is what produced a
+    // login screen on every cold start, and - because the OAuth round trip hands
+    // the app off to the browser long enough for the process to be killed - a
+    // login screen every time the user came *back* from signing in. It read as
+    // the app forgetting they had asked to sign in, then signing them in anyway
+    // a second later.
+    //
+    // A splash for the few tens of milliseconds this takes is the honest thing
+    // to draw while the answer is genuinely unknown. Guessing is not.
+    if (authState is AuthUiState.Restoring) {
+        RestoringPlaceholder(modifier)
+        return
+    }
+
     // The signed-in dashboard is scoped to the activity, not to its destination,
     // for two reasons: rotating the device used to throw it away and re-fetch the
     // user's entire list, and Settings needs the same viewer profile that the
     // dashboard already holds - it used to be passed through a plain `remember`,
     // which lost the profile on every configuration change.
+    //
+    // Declared *after* the Restoring hold above, deliberately. `DashboardViewModel`
+    // loads in its `init`, so constructing it while the answer is still unknown
+    // issued the viewer query before the token had been read - AniList answered
+    // 401 "Unauthorized." because no `Authorization` header had been attached yet,
+    // and the screen latched onto that dead session with "Session expired. Please
+    // re-authenticate." Nothing ever reloaded it, because the ViewModel already
+    // existed and nothing re-runs an `init` block. Signing in appeared to do
+    // nothing at all.
     val mainDashboardViewModel: DashboardViewModel = viewModel(
         factory = DashboardViewModel.Factory(
             aniListRepository = aniListRepository,
@@ -106,22 +131,6 @@ fun AppNavigation(
             }
             else -> {}
         }
-    }
-
-    // Nothing is navigated until the stored session has actually been read.
-    //
-    // Picking a start destination from an unresolved state is what produced a
-    // login screen on every cold start, and - because the OAuth round trip hands
-    // the app off to the browser long enough for the process to be killed - a
-    // login screen every time the user came *back* from signing in. It read as
-    // the app forgetting they had asked to sign in, then signing them in anyway
-    // a second later.
-    //
-    // A splash for the few tens of milliseconds this takes is the honest thing
-    // to draw while the answer is genuinely unknown. Guessing is not.
-    if (authState is AuthUiState.Restoring) {
-        RestoringPlaceholder(modifier)
-        return
     }
 
     NavHost(

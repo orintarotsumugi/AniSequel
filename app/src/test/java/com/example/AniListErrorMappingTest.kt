@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.model.AniListErrorEnvelope
 import com.example.data.model.GraphQLError
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
@@ -14,12 +15,16 @@ import com.example.data.network.AniListApiService
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.network.aniListHttpError
+import com.example.data.network.parseAniListErrorBody
 import com.example.data.repository.AniListRepositoryImpl
 import com.squareup.moshi.JsonDataException
+import com.squareup.moshi.Moshi
 import kotlinx.coroutines.async
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -270,4 +275,118 @@ class RequestCoalescingPolicyTest {
                 service.viewerCalls.size
             )
         }
+}
+
+/**
+ * The classification of the responses AniList *actually* returns.
+ *
+ * Recorded verbatim against `https://graphql.anilist.co` rather than written
+ * from the docs, because the docs do not list status codes at all and the whole
+ * failure here was a disagreement between the status and the body:
+ *
+ *   bad token   -> 400 {"errors":[{"message":"Invalid token","status":400}]}
+ *   no token    -> 401 {"errors":[{"message":"Unauthorized.","status":401}]}
+ *   no such user-> 404 {"errors":[{"message":"Not Found.","status":404}]}
+ *   bad query   -> 400 {"errors":[{"message":"Cannot query field ...","status":400}]}
+ *
+ * AniList uses **400 for a rejected token**, which is the same status it uses
+ * for a malformed query. Classifying on the status alone therefore made every
+ * dead session an "unknown error": the dashboard offered a Retry button that
+ * could never succeed rather than "Sign in again", and `AuthViewModel` - which
+ * only discards a token AniList refused - stored the refused token anyway.
+ */
+class AniListLiveResponseClassificationTest {
+
+    private val moshi = Moshi.Builder().build()
+    private val envelopeAdapter = moshi.adapter(AniListErrorEnvelope::class.java)
+
+    private fun httpErrorOf(status: Int, body: String): AniListException {
+        val rawBody = body.toResponseBody("application/json".toMediaType())
+        val exception = HttpException(retrofit2.Response.error<Any>(status, rawBody))
+
+        // The repository's own path: Retrofit throws away the body, so the
+        // reason is recovered from it before the status is classified.
+        val reported = parseAniListErrorBody(rawBody.string())?.errors?.firstOrNull()
+        return aniListHttpError(code = status, cause = exception, reportedError = reported)
+    }
+
+    @Test
+    fun `an invalid token reported as HTTP 400 is a dead session`() {
+        val error = httpErrorOf(
+            400,
+            """{"data":null,"errors":[{"message":"Invalid token","status":400}]}"""
+        )
+
+        assertEquals(
+            "AniList answers a refused token with 400, not 401 - without reading the " +
+                "body this is indistinguishable from a malformed query",
+            AniListErrorKind.INVALID_SESSION,
+            error.kind
+        )
+        assertTrue(
+            "the paste dialog needs to be able to name the failure",
+            error.message.orEmpty().contains("Session expired")
+        )
+    }
+
+    @Test
+    fun `a missing token reported as HTTP 401 is a dead session`() {
+        val error = httpErrorOf(
+            401,
+            """{"errors":[{"message":"Unauthorized.","status":401}],"data":{"Viewer":null}}"""
+        )
+
+        assertEquals(AniListErrorKind.INVALID_SESSION, error.kind)
+    }
+
+    @Test
+    fun `an unknown user is still a missing resource rather than a dead session`() {
+        val error = httpErrorOf(
+            404,
+            """{"errors":[{"message":"Not Found.","status":404}],"data":{"User":null}}"""
+        )
+
+        assertEquals(AniListErrorKind.NOT_FOUND, error.kind)
+    }
+
+    @Test
+    fun `a genuinely malformed query is not blamed on the session`() {
+        // Same HTTP 400 as a refused token. Reading only the status would sign a
+        // working user out over a typo in a query.
+        val error = httpErrorOf(
+            400,
+            // A raw string passes backslashes through verbatim, so the JSON
+            // escape for the embedded quotes is a single backslash each - `\\"`
+            // would be an escaped *backslash* and then a bare quote, which is
+            // not JSON at all.
+            """{"errors":[{"message":"Cannot query field \"Nope\" on type \"Query\".","status":400}],"data":null}"""
+        )
+
+        assertEquals(
+            "a typo in a query must not be reported as a dead session",
+            AniListErrorKind.INVALID_REQUEST,
+            error.kind
+        )
+    }
+
+    @Test
+    fun `a body that is missing or unreadable does not replace the real failure`() {
+        // Retrofit hands over an empty body for some failures; classifying must
+        // never throw or invent a reason.
+        assertNull(parseAniListErrorBody(null))
+        assertNull(parseAniListErrorBody(""))
+        assertNull(parseAniListErrorBody("<html>502 Bad Gateway</html>"))
+
+        val error = aniListHttpError(code = 500, reportedError = null)
+        assertEquals(AniListErrorKind.SERVER, error.kind)
+    }
+
+    @Test
+    fun `the envelope AniList sends parses into the error it describes`() {
+        val envelope = envelopeAdapter.fromJson(
+            """{"data":null,"errors":[{"message":"Invalid token","status":400}]}"""
+        )
+
+        assertEquals(listOf(GraphQLError("Invalid token", 400)), envelope?.errors)
+    }
 }

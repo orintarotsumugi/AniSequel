@@ -21,6 +21,21 @@ data class GraphQLError(
     val status: Int? = null
 )
 
+/**
+ * The shape AniList uses for an **error** response body.
+ *
+ * AniList answers a GraphQL error with a non-2xx status *and* the same
+ * `{"errors": [...]}` envelope it uses on success, so the body is the only place
+ * the reason is written down. Retrofit never hands that body to a suspend
+ * function whose return type is not `Response<T>`, though - it throws
+ * `HttpException` first - so the repository has to parse this itself to find out
+ * what AniList actually objected to.
+ */
+@JsonClass(generateAdapter = true)
+data class AniListErrorEnvelope(
+    val errors: List<GraphQLError>? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class ViewerData(
     @Json(name = "Viewer") val viewer: ViewerProfile?

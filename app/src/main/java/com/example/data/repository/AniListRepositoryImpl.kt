@@ -2,7 +2,6 @@ package com.example.data.repository
 
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
-import com.example.data.model.GraphQLError
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.SimpleMediaListEntry
@@ -12,7 +11,9 @@ import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.network.aniListHttpError
 import com.example.data.network.GraphQLQueries
+import com.example.data.network.parseAniListErrorBody
 import com.example.data.network.RequestCoalescer
+import com.example.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
 import retrofit2.HttpException
 import java.io.IOException
@@ -301,29 +302,23 @@ class AniListRepositoryImpl(
             }
         }
 
+    /**
+     * Classifies a failed HTTP call, reading the reason out of the body.
+     *
+     * AniList answers a rejected token with HTTP 400 and
+     * `{"errors":[{"message":"Invalid token","status":400}]}` - the same status
+     * it uses for a malformed query. Retrofit discards that body before the
+     * repository ever sees it, so it is read here; without it every dead session
+     * looked like an unknown error and the dashboard offered a Retry button that
+     * could never succeed instead of "Sign in again".
+     */
     private fun HttpException.toAniListException(): AniListException =
         aniListHttpError(
             code = code(),
             retryAfterSeconds = response()?.headers()?.get("Retry-After")?.toIntOrNull(),
-            cause = this
+            cause = this,
+            reportedError = parseAniListErrorBody(
+                runCatching { response()?.errorBody()?.string() }.getOrNull()
+            )?.errors?.firstOrNull()
         )
-
-    private fun GraphQLError.toAniListException(): AniListException {
-        val text = message.orEmpty()
-        return when {
-            status == 429 -> AniListException(
-                kind = AniListErrorKind.RATE_LIMITED,
-                message = "AniList is rate limiting this device. Try again in a moment."
-            )
-            text.contains("invalid", ignoreCase = true) ||
-                text.contains("token", ignoreCase = true) ||
-                text.contains("unauthorized", ignoreCase = true) -> AniListException(
-                kind = AniListErrorKind.INVALID_SESSION,
-                message = "Session expired. Please re-authenticate."
-            )
-            text.contains("not found", ignoreCase = true) ->
-                AniListException(AniListErrorKind.NOT_FOUND, text)
-            else -> AniListException(AniListErrorKind.INVALID_REQUEST, text)
-        }
-    }
 }
