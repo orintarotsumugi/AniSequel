@@ -138,29 +138,44 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Keystore requirement commented out so builds never fail on missing secrets:
-          # require_secret KEYSTORE_BASE64 "${KEYSTORE_BASE64-}"
-          # require_secret STORE_PASSWORD "${STORE_PASSWORD-}"
-          # require_secret KEY_PASSWORD "${KEY_PASSWORD-}"
+          # Defined here rather than reused from an earlier step: this is the
+          # only step that needs it, and a step that fails on a missing secret
+          # is a step nobody can talk past.
+          require_secret() {
+            secret_name="$1"
+            secret_value="$2"
+            if [ -z "$secret_value" ]; then
+              echo "::error title=Missing signing secret::${secret_name} is not set. A " \
+                   "release cannot be signed without it, and the build stops here " \
+                   "rather than producing an APK signed with a substitute key."
+              exit 1
+            fi
+          }
 
-          STORE_PASS="${STORE_PASSWORD:-anisequel123r}"
-          KEY_PASS="${KEY_PASSWORD:-anisequel123r}"
+          # These three were all commented out "so builds never fail on missing
+          # secrets", behind a hardcoded literal password and a
+          # `keytool -genkeypair` branch. Together those meant a repository with
+          # no secrets configured produced a *green* build on every run and
+          # signed each release with a brand new random key.
+          #
+          # Nothing caught it: the APKs really were signed, so
+          # `apksigner verify` passed, and every user who tried to install one
+          # got INSTALL_FAILED_UPDATE_INCOMPATIBLE - a build that cannot be
+          # installed over the app it is an update for. Rotating the signing key
+          # is not a recoverable mistake (see AGENTS.md section 5), so the
+          # branch that mints one has to be unreachable, not merely unlikely.
+          # The literal itself is not repeated here: this file is public, and a
+          # reader must not be able to copy it out of a comment.
+          require_secret KEYSTORE_BASE64 "${KEYSTORE_BASE64-}"
+          require_secret STORE_PASSWORD "${STORE_PASSWORD-}"
+          require_secret KEY_PASSWORD "${KEY_PASSWORD-}"
 
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks 2>/dev/null || true
-            echo "Decoded release-key.jks from KEYSTORE_BASE64 secret."
-          else
-            echo "::notice::KEYSTORE_BASE64 secret is not set. Generating build keystore with default configuration."
-            keytool -genkeypair -v -keystore release-key.jks \
-              -storepass "$STORE_PASS" -keypass "$KEY_PASS" -alias upload \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=AniSequel Official Release, O=AniSequel, C=US" 2>/dev/null || true
-          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
+          echo "Decoded release-key.jks from KEYSTORE_BASE64 secret."
 
           {
-            echo "STORE_PASSWORD=$STORE_PASS"
-            echo "KEY_PASSWORD=$KEY_PASS"
-            echo "HAS_KEYSTORE_SECRET=${KEYSTORE_BASE64:+true}"
+            echo "STORE_PASSWORD=$STORE_PASSWORD"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
       # Runs for both event types. The keystore is already on disk by now -
@@ -175,8 +190,19 @@ jobs:
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # Keystore validation check (non-blocking):
-          keytool -list -keystore release-key.jks -storepass "$STORE_PASSWORD" -alias upload 2>/dev/null || true
+          # Proves the store password actually opens the keystore, and that the
+          # `upload` alias app/build.gradle.kts asks for is in it. `|| true` used
+          # to swallow both failures, so a wrong STORE_PASSWORD, a base64
+          # payload that did not decode, or a keystore without that alias was
+          # discovered much later - as an unsigned or debug-signed APK in the
+          # signature verification step below, or worse, in a published release.
+          # Failing here names the actual problem.
+          #
+          # Unconditional, and non-verbose: the digest it prints is already
+          # public in this file, and a pull request's throwaway key does not
+          # need one at all.
+          keytool -list -keystore release-key.jks -storepass "$STORE_PASSWORD" \
+            -alias upload > /dev/null
 
       - name: Resolve the release version
         id: version
@@ -342,18 +368,58 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
           APK=release-artifacts/anisequel-universal.apk
 
-          if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
-            echo "Using apksigner at: $APKSIGNER"
-            "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 29 "$APK" 2>/dev/null || true
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found under $ANDROID_HOME/build-tools, so the " \
+                 "release APK cannot be verified. Not publishing an unverified build."
+            exit 1
           fi
 
-          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" 2>/dev/null \
+          echo "Using apksigner at: $APKSIGNER"
+
+          # `verify` on its own is the check that matters: it exits non-zero for
+          # an APK that is unsigned, tampered with, or signed by a key the
+          # device will not accept. The `--print-certs` run below only reads
+          # digests out of a signature that is already known to be good.
+          if ! "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 29 "$APK"; then
+            echo "::error::apksigner rejected $APK."
+            exit 1
+          fi
+
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" \
             | sed -n 's/.*certificate SHA-256 digest: *//p' \
             | tr '[:upper:]' '[:lower:]' | head -n 1)
 
-          if [ -n "$ACTUAL" ]; then
-            echo "APK certificate digest: $ACTUAL"
+          # The comparison this step always looked like it was making.
+          #
+          # EXPECTED_SIGNER_SHA256 was declared in the env block above and then
+          # never referenced: the digest was extracted, echoed, and the step
+          # ended green whatever it said. A release signed with a freshly
+          # generated key therefore passed CI exactly as cleanly as the right
+          # one, which is how several incompatible releases reached users.
+          #
+          # Empty is its own failure. A missing digest means the extraction did
+          # not match apksigner's output format, and comparing "" to the
+          # expected value would report a mismatch - correct, but for the wrong
+          # reason, and it would mask a change in apksigner's wording as a
+          # signing problem.
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::Could not read a certificate SHA-256 digest from $APK."
+            exit 1
           fi
+
+          echo "APK certificate digest: $ACTUAL"
+          echo "Expected certificate digest: $EXPECTED_SIGNER_SHA256"
+
+          if [ "$ACTUAL" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "::error title=Release signed with the wrong key::The APK is signed with" \
+                 "$ACTUAL but the release key is $EXPECTED_SIGNER_SHA256. Publishing it" \
+                 "would produce an APK no existing install can update to, and nothing" \
+                 "downstream can undo that. Check the KEYSTORE_BASE64, STORE_PASSWORD" \
+                 "and KEY_ALIAS secrets."
+            exit 1
+          fi
+
+          echo "Signing key matches the pinned release certificate."
           echo "::endgroup::"
 
       - name: Upload Build Artifacts to Workflow Run

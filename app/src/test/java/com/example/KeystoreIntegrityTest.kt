@@ -59,6 +59,19 @@ class KeystoreIntegrityTest {
             .filterNot { it.trimStart().startsWith("#") }
             .joinToString("\n")
 
+    /**
+     * The `run:` body of a workflow step, with the comments removed.
+     *
+     * Reading the whole step back is not good enough for anything that has to
+     * be *used*: a step's `env:` block sits above its `run:` block, so a
+     * substring check for a variable name is satisfied by the line that merely
+     * declares it. That is exactly how
+     * [the release signer is asserted, not just printed] passed for a step that
+     * printed the digest and never compared it.
+     */
+    private fun runScriptOf(stepYaml: String): String =
+        stripShellComments(stepYaml.substringAfter("run: |", ""))
+
     /** Key-shaped files that must never be committed, checked at the repo root. */
     private val forbiddenKeyFiles = listOf(
         "debug.keystore.base64",
@@ -194,6 +207,11 @@ class KeystoreIntegrityTest {
      * down its own fallback branch, which generated a fresh random signing key on
      * every run - three consecutive releases, three different keys, none of them
      * installable over the last. Every run was green.
+     *
+     * The workflow half came back. The same shape - a `${VAR:-literal}` default
+     * and a `keytool -genkeypair` behind it - was reintroduced in the restore
+     * step with its three `require_secret` calls commented out "so builds never
+     * fail on missing secrets", so both halves are asserted here.
      */
     @Test
     fun `no signing password is guessed when the secret is absent`() {
@@ -212,6 +230,39 @@ class KeystoreIntegrityTest {
                 "fail the release build instead",
             buildScript.contains("System.getenv(\"KEY_PASSWORD\") ?:")
         )
+
+        val restoreStep = workflow
+            .substringAfter("name: Restore the release signing key from secrets")
+            .substringBefore("- name: Validate the signing key")
+
+        val restoreScript = runScriptOf(restoreStep)
+
+        for (variable in listOf("KEYSTORE_BASE64", "STORE_PASSWORD", "KEY_PASSWORD")) {
+            assertFalse(
+                "the restore step must not default \$$variable to a literal " +
+                    "(`\${$variable:-...}`). A repository with no secrets configured " +
+                    "then signs every release with a substitute key, and Android refuses " +
+                    "to install it over the app it is meant to update.",
+                Regex("""\$\{${variable}:-""").containsMatchIn(restoreScript)
+            )
+        }
+
+        assertFalse(
+            "the restore step must not generate a replacement signing key. Rotating " +
+                "the release key is unrecoverable for anyone who already installed the " +
+                "app, so a missing secret has to fail the build instead. A throwaway " +
+                "key belongs only in the pull-request step, which never publishes.",
+            restoreScript.contains("keytool -genkeypair")
+        )
+
+        for (variable in listOf("KEYSTORE_BASE64", "STORE_PASSWORD", "KEY_PASSWORD")) {
+            assertTrue(
+                "the restore step must call require_secret $variable, not merely " +
+                    "reference secrets.$variable. A reference proves the value can be " +
+                    "read; it does not prove the build stops when it is empty.",
+                restoreScript.contains("require_secret $variable")
+            )
+        }
     }
 
     /**
@@ -240,6 +291,13 @@ class KeystoreIntegrityTest {
      * for any well-formed signature and just prints the digest. A release signed
      * with the wrong key passed it exactly as readily as the right one - which is
      * why three keys in a row shipped without a single red build.
+     *
+     * Pinning the expected digest in the `env:` block fixed that and then hid
+     * the next one: the name went unused in the script, so the digest was
+     * extracted, echoed, and the step ended green whatever it was. Because the
+     * `env:` block is part of the step's text, a check for the name alone was
+     * satisfied by the declaration. The assertions below therefore read the
+     * `run:` body only, and require an actual comparison that can fail the job.
      */
     @Test
     fun `the release signer is asserted, not just printed`() {
@@ -249,10 +307,37 @@ class KeystoreIntegrityTest {
             .substringAfter("name: Verify APK Release Signing Integrity")
             .substringBefore("- name: Upload Build Artifacts")
 
+        val verifyScript = runScriptOf(verifyStep)
+
         assertTrue(
             "the verification step must compare the signer against a pinned " +
                 "fingerprint, not only print it",
-            verifyStep.contains("EXPECTED_SIGNER_SHA256")
+            verifyScript.contains("EXPECTED_SIGNER_SHA256")
+        )
+
+        assertTrue(
+            "the verification step must read the digest it is going to compare " +
+                "(no \$ACTUAL means nothing is being checked)",
+            verifyScript.contains("ACTUAL")
+        )
+
+        val comparesSigner = verifyScript.lineSequence().any { line ->
+            line.contains("ACTUAL") &&
+                line.contains("EXPECTED_SIGNER_SHA256") &&
+                (line.contains("!=") || line.contains("=="))
+        }
+        assertTrue(
+            "the verification step must compare the digest it extracted against " +
+                "EXPECTED_SIGNER_SHA256 on one line. Declaring the expected value and " +
+                "then never using it leaves the step green for any key at all.",
+            comparesSigner
+        )
+
+        assertTrue(
+            "the verification step must fail the job on a mismatch (exit 1). Without " +
+                "a failing exit a mismatch is only a log line, and a release signed with " +
+                "the wrong key is still published.",
+            verifyScript.lineSequence().any { it.trim() == "exit 1" }
         )
     }
 

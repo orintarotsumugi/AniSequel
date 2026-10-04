@@ -296,7 +296,10 @@ class UpdateManager(private val context: Context) {
      * Validates against:
      * 1. AniSequel's pinned official release signing certificate SHA-256
      * 2. The currently installed app's signing certificates or rotation history
-     * 3. Fallback for debug/development builds and OEM signature extraction limitations
+     *
+     * A debug build additionally accepts anything, so a locally signed APK can
+     * be exercised end to end. A release build accepts nothing it could not
+     * positively identify.
      */
     private fun isSignedByThisApp(apk: File): Boolean {
         val packageManager = context.packageManager
@@ -364,12 +367,23 @@ class UpdateManager(private val context: Context) {
             return true
         }
 
-        // 4. If package archive signatures could not be extracted (known OEM Android OS limitation on uninstalled APKs),
-        // let the Android system package installer perform the final cryptographic verification
-        if (theirs.isNullOrEmpty()) {
-            return true
-        }
-
+        // 4. A release must not fall through here.
+        //
+        // `getPackageArchiveInfo` returns null - and so leaves `theirs` empty -
+        // for anything it cannot parse as an installed package: a zip that is
+        // not an APK, an APK with no signature block, or an unreadable one. The
+        // previous version returned `true` in that case for *every* build, on
+        // the strength of a comment about OEM limitations extracting signatures
+        // from uninstalled APKs. That claim is not a reason to trust a release
+        // APK: the one thing this function exists to establish is that the
+        // download carries AniSequel's key, and "we could not read a key off
+        // it" is the absence of that proof rather than a substitute for it.
+        //
+        // The cost of being strict is a refused update on the rare device that
+        // cannot be read, and the message says so. The cost of being lenient is
+        // an app whose update channel accepts an APK whose signature was never
+        // checked - the exact outcome the pinned fingerprint above exists to
+        // prevent.
         return false
     }
 

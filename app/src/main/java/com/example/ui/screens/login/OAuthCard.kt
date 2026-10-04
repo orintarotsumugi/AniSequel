@@ -46,6 +46,7 @@ import com.example.ui.viewmodel.AuthUiState
 fun OAuthCard(
     authState: AuthUiState,
     authUrl: String,
+    onRetry: () -> Unit,
     onShowManualToken: () -> Unit,
     onShowClientId: () -> Unit,
     modifier: Modifier = Modifier
@@ -128,9 +129,19 @@ fun OAuthCard(
             Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    // Clear the error before leaving for the browser. The card
+                    // above the button explained why the last attempt failed,
+                    // and that explanation has to go before the user can try
+                    // again - it described a *previous* attempt, not this one.
+                    //
+                    // This button used to be `enabled = authState !is Error`,
+                    // which combined with `Error` being a state nothing could
+                    // leave to make a failed sign-in a dead end: declining the
+                    // AniList consent screen - the single most likely outcome -
+                    // disabled the only control that could restart the flow.
+                    onRetry()
                     openCustomTab(context, authUrl)
                 },
-                enabled = authState !is AuthUiState.Error,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)

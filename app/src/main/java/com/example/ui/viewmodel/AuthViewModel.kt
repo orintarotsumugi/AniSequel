@@ -184,6 +184,28 @@ class AuthViewModel(
         }
     }
 
+    /**
+     * Returns to [AuthUiState.Unauthenticated] from an [AuthUiState.Error].
+     *
+     * `Error` used to be terminal, and the sign-in card disabled its "Connect
+     * AniList Account" button whenever the state was an `Error`. The two
+     * together meant the most common way of *reaching* that state - backing out
+     * of AniList's consent screen - left the user with no way to try again:
+     * the only button that can restart the flow was the one that had just been
+     * switched off, and the process had to be killed to get it back. The same
+     * held after pasting a token AniList refused, which is the exact moment
+     * somebody most wants to try again with a better copy.
+     *
+     * Deliberately only ever moves *away* from `Error`. A stored token read in
+     * progress is not something to clear, and [Authenticated] is the state the
+     * user actually wants to keep.
+     */
+    fun dismissAuthError() {
+        if (_uiState.value is AuthUiState.Error) {
+            _uiState.value = AuthUiState.Unauthenticated
+        }
+    }
+
     fun updateClientId(newClientId: String) {
         viewModelScope.launch {
             val trimmed = newClientId.trim()

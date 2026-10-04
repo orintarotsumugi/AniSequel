@@ -115,6 +115,7 @@ fun LoginScreen(
                         OAuthCard(
                             authState = authState,
                             authUrl = authViewModel.getAuthorizationUrl(),
+                            onRetry = authViewModel::dismissAuthError,
                             onShowManualToken = { showManualTokenDialog = true },
                             onShowClientId = { showClientIdDialog = true }
                         )
