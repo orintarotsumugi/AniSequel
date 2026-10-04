@@ -53,29 +53,19 @@ android {
 
   signingConfigs {
     create("release") {
-      // The release workflow decodes the keystore from the KEYSTORE_BASE64
-      // secret and points these variables at it. The key is deliberately not in
-      // the repository: it used to be committed as debug.keystore.base64, which
-      // let anyone who cloned the repo sign an update APK.
-      //
-      // The passwords are read from the environment and nothing else. This used
-      // to fall back to a literal, and that literal was *wrong* - it could not
-      // open the real keystore - so the only thing it could ever produce was a
-      // build that either failed obscurely or, worse, signed with whatever
-      // keystore happened to match it. Guessing a password is never the right
-      // fallback for signing material; failing is.
-      //
-      // Null rather than an exception on purpose. This block is evaluated for
-      // every Gradle invocation, including `testDebugUnitTest` and the debug
-      // build, neither of which needs the release key and neither of which has
-      // the secrets. AGP only actually opens the keystore while signing a
-      // release, so leaving these null keeps those tasks working and makes
-      // `assembleRelease` fail with its own message when the secrets are absent.
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/release-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      val envPath = System.getenv("KEYSTORE_PATH")
+      val targetFile = when {
+        envPath != null && file(envPath).exists() -> file(envPath)
+        file("${rootDir}/release-key.jks").exists() -> file("${rootDir}/release-key.jks")
+        file("${rootDir}/my-upload-key.jks").exists() -> file("${rootDir}/my-upload-key.jks")
+        else -> null
+      }
+      if (targetFile != null) {
+        storeFile = targetFile
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyPassword = System.getenv("KEY_PASSWORD")
+      }
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -124,25 +114,6 @@ android {
   }
   packaging {
     dex {
-      // Compress `classes.dex` instead of storing it verbatim.
-      //
-      // When minSdk >= 28 the Android Gradle Plugin deliberately stores dex
-      // *uncompressed* so the runtime can map it straight out of the APK without
-      // extracting it. That optimisation is invisible until the numbers move:
-      // raising minSdk from 24 to 29 in v1.0.17 switched it on, and the APK went
-      // from 2.31 MB to 4.15 MB in one release. The code itself had got
-      // *smaller* - `classes.dex` fell from 4,028,848 to 3,953,880 uncompressed
-      // bytes - and was simply being shipped at 3.95 MB instead of the 2.0 MB it
-      // deflates to. Every entry in the APK was checked; this one accounts for
-      // the entire increase.
-      //
-      // The trade-off is real and deliberate: compressing means the installer
-      // has to decompress the dex into a second copy on disk, so the *installed*
-      // footprint grows and installing takes marginally longer. This app is
-      // distributed as a sideloaded APK from a GitHub release, so the download
-      // is what every user waits on and the device's own storage is not the
-      // constraint - "APK small, installed size large" is the right way round
-      // here. Set this to false to go back to the mapped-dex behaviour.
       useLegacyPackaging = true
     }
     resources {
