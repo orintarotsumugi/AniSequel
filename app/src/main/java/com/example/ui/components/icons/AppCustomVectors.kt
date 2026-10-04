@@ -285,4 +285,40 @@ object AppCustomVectors {
             }
         }.build()
     }
+
+    /**
+     * Expand to fullscreen vector icon.
+     */
+    val FullscreenExpand: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "FullscreenExpand",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 2.2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(3f, 9f)
+                lineTo(3f, 3f)
+                lineTo(9f, 3f)
+
+                moveTo(15f, 3f)
+                lineTo(21f, 3f)
+                lineTo(21f, 9f)
+
+                moveTo(21f, 15f)
+                lineTo(21f, 21f)
+                lineTo(15f, 21f)
+
+                moveTo(9f, 21f)
+                lineTo(3f, 21f)
+                lineTo(3f, 15f)
+            }
+        }.build()
+    }
 }

@@ -98,4 +98,5 @@ object AppVectorIcons {
     val Restore = Icons.Outlined.RestartAlt
     val Tune = Icons.Outlined.Tune
     val NewReleases = Icons.Outlined.NewReleases
+    val FullscreenExpand = AppCustomVectors.FullscreenExpand
 }

@@ -119,6 +119,27 @@ fun DetailInfoGrid(sequel: MissedSequel, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth()
             )
         }
+
+        val romaji = sequel.romajiTitle
+        val english = sequel.englishTitle
+        if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (!romaji.isNullOrBlank()) {
+                    InfoBlock(
+                        label = "Romaji Title",
+                        value = romaji,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (!english.isNullOrBlank()) {
+                    InfoBlock(
+                        label = "English Title",
+                        value = english,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
     }
 }
 

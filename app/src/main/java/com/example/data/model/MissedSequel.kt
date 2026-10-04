@@ -87,6 +87,9 @@ data class MissedSequel(
     }
     val sequelId: Int get() = sequelMedia.id
     val sequelTitle: String get() = sequelMedia.title?.displayTitle ?: "Unknown Sequel"
+    val englishTitle: String? get() = sequelMedia.title?.english?.takeIf { it.isNotBlank() }
+    val romajiTitle: String? get() = sequelMedia.title?.romaji?.takeIf { it.isNotBlank() }
+    val nativeTitle: String? get() = sequelMedia.title?.native?.takeIf { it.isNotBlank() }
     val sequelCoverUrl: String? get() = sequelMedia.coverImage?.bestUrl
     val bannerUrl: String? get() = sequelMedia.bannerImage
     val format: String get() = sequelMedia.format ?: "ANIME"

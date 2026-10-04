@@ -6,14 +6,19 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
  * Standardized Material 3 Expressive motion tokens and physics specifications.
@@ -112,4 +117,46 @@ fun Modifier.expressiveBounceClick(
             indication = null,
             onClick = onClick
         )
+}
+
+/**
+ * Modifier that adds an expressive spring-physics press animation and triggers onHold on long press.
+ */
+fun Modifier.expressiveHoldGesture(
+    onHold: () -> Unit,
+    onClick: (() -> Unit)? = null
+): Modifier = composed {
+    val haptic = LocalHapticFeedback.current
+    val isPressed = remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed.value) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.55f,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "expressive_hold_scale"
+    )
+
+    this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed.value = true
+                    tryAwaitRelease()
+                    isPressed.value = false
+                },
+                onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onHold()
+                },
+                onTap = {
+                    onClick?.invoke()
+                }
+            )
+        }
 }

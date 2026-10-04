@@ -120,6 +120,29 @@ fun DetailSpecsView(
             )
         }
 
+        val romaji = sequel.romajiTitle
+        val english = sequel.englishTitle
+        if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (!romaji.isNullOrBlank()) {
+                    SpecCard(
+                        icon = AppVectorIcons.SourceBook,
+                        title = "Romaji Title",
+                        value = romaji,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (!english.isNullOrBlank()) {
+                    SpecCard(
+                        icon = AppVectorIcons.Tv,
+                        title = "English Title",
+                        value = english,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SpecCard(
                 icon = AppVectorIcons.Schedule,

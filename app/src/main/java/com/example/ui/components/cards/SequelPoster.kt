@@ -1,6 +1,7 @@
 package com.example.ui.components.cards
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,15 +11,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -27,10 +34,13 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.detail.FullScreenCoverViewer
+import com.example.ui.components.expressive.expressiveHoldGesture
 import com.example.ui.theme.AniSequelTheme
 
 /**
  * Modern poster component with dynamic background hue, format badge, and score indicator.
+ * Supports holding (long press) to expand into an immersive full-screen artwork viewer.
  */
 @Composable
 fun SequelPoster(
@@ -38,13 +48,34 @@ fun SequelPoster(
     modifier: Modifier = Modifier
 ) {
     val coverColor = sequel.coverColor.toCoverColorOrNull()
+    var showFullScreen by remember { mutableStateOf(false) }
+
+    if (showFullScreen) {
+        FullScreenCoverViewer(
+            sequel = sequel,
+            onDismiss = { showFullScreen = false }
+        )
+    }
 
     Box(
         modifier = modifier
             .width(104.dp)
             .height(152.dp)
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = coverColor ?: Color.Black
+            )
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .border(
+                1.dp,
+                Color.White.copy(alpha = 0.15f),
+                RoundedCornerShape(14.dp)
+            )
+            .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
+            .expressiveHoldGesture(
+                onHold = { showFullScreen = true }
+            )
     ) {
         // Placeholder artwork, shown only until the real cover arrives.
         //
