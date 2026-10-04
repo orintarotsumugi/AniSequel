@@ -90,22 +90,34 @@ fun AppNavigation(
     // dashboard already holds - it used to be passed through a plain `remember`,
     // which lost the profile on every configuration change.
     //
-    // Declared *after* the Restoring hold above, deliberately. `DashboardViewModel`
-    // loads in its `init`, so constructing it while the answer is still unknown
-    // issued the viewer query before the token had been read - AniList answered
-    // 401 "Unauthorized." because no `Authorization` header had been attached yet,
-    // and the screen latched onto that dead session with "Session expired. Please
-    // re-authenticate." Nothing ever reloaded it, because the ViewModel already
-    // existed and nothing re-runs an `init` block. Signing in appeared to do
-    // nothing at all.
-    val mainDashboardViewModel: DashboardViewModel = viewModel(
-        factory = DashboardViewModel.Factory(
-            aniListRepository = aniListRepository,
-            hiddenSequelsPreferences = hiddenSequelsPreferences
+    // Built only when there is a session, and keyed on the token. Both halves are
+    // load-bearing:
+    //
+    // `DashboardViewModel` loads in its `init`, so constructing it while
+    // unauthenticated issued the viewer query with no `Authorization` header at
+    // all. AniList answers that 401 "Unauthorized.", the repository classified it
+    // as a dead session, and because the ViewModel is activity-scoped the screen
+    // kept that error for good - so signing in landed the user on "Session
+    // expired. Please re-authenticate." having just been told their sign-in
+    // succeeded. Nothing re-ran the `init`, so no retry could clear it. It read
+    // as the app refusing the login it had just accepted.
+    //
+    // Keying on the token means signing out and back in produces a fresh
+    // ViewModel whose `init` runs against the token actually in force, instead of
+    // re-showing whatever the previous session left behind.
+    val authenticated = authState as? AuthUiState.Authenticated
+
+    val mainDashboardViewModel: DashboardViewModel? = if (authenticated != null) {
+        viewModel(
+            key = "dashboard_${authenticated.token}",
+            factory = DashboardViewModel.Factory(
+                aniListRepository = aniListRepository,
+                hiddenSequelsPreferences = hiddenSequelsPreferences
+            )
         )
-    )
-    val mainDashboardState by mainDashboardViewModel.uiState.collectAsState()
-    val signedInViewer = (mainDashboardState as? DashboardUiState.Success)?.viewer
+    } else {
+        null
+    }
 
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
@@ -176,13 +188,18 @@ fun AppNavigation(
         }
 
         composable(AppRoutes.DASHBOARD) {
-            DashboardScreen(
-                dashboardViewModel = mainDashboardViewModel,
-                onSignInAgain = authViewModel::logout,
-                onOpenSettings = {
-                    navController.navigate(AppRoutes.SETTINGS)
-                }
-            )
+            // Null until a session exists; the route is only reachable once one
+            // does, and a brief hold beats rendering a dashboard that cannot
+            // possibly have a token behind it.
+            mainDashboardViewModel?.let { dashboardViewModel ->
+                DashboardScreen(
+                    dashboardViewModel = dashboardViewModel,
+                    onSignInAgain = authViewModel::logout,
+                    onOpenSettings = {
+                        navController.navigate(AppRoutes.SETTINGS)
+                    }
+                )
+            }
         }
 
         composable(AppRoutes.DASHBOARD_DEMO) {
@@ -230,6 +247,13 @@ fun AppNavigation(
         }
 
         composable(AppRoutes.SETTINGS) {
+            // Collected here rather than at the top of AppNavigation: the viewer
+            // profile only exists once a dashboard has actually loaded, and
+            // `collectAsState` needs a flow that is known to be non-null.
+            val dashboardState = mainDashboardViewModel?.uiState?.collectAsState()
+            val signedInViewer =
+                (dashboardState?.value as? DashboardUiState.Success)?.viewer
+
             SettingsScreen(
                 authViewModel = authViewModel,
                 themePreferences = themePreferences,

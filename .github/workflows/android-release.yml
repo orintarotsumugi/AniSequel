@@ -138,24 +138,71 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          STORE_PASS="${STORE_PASSWORD:-anisequel123r}"
-          KEY_PASS="${KEY_PASSWORD:-anisequel123r}"
+          # No fallback, and no generated key.
+          #
+          # This used to run `keytool -genkeypair` when KEYSTORE_BASE64 was
+          # missing and carry on regardless. The secret was absent, so every
+          # release signed itself with a brand new random key:
+          #
+          #   v1.0.17  b823755b168c06f9160983c647b80c9d49eb1772df7948f6e335765859f6bd89
+          #   v1.0.18  5983c68e95b5d94affd89b67736f70e4e94662afdacb166f498f497114fae6c7
+          #   v1.0.19  49fa9cb4fdf9c1956b4771457b159c92fe24d0eb5d4ef3ac39768ef9d43a52c5
+          #
+          # Android refuses to update an app signed with a different key, so
+          # those three releases are mutually uninstallable: every user saw
+          # "App not installed as package conflicts" and had to uninstall first.
+          # The run stayed green because generating a key always succeeds - the
+          # only thing that was broken was invisible from inside the job.
+          #
+          # Signing material that cannot be verified is not signing material.
+          # Stop instead.
+          # Written as a helper rather than `${VAR:-literal}` so that the only
+          # possible outcome is "present" or "absent". A default has no honest
+          # value to name here, and the shape that caused this outage was
+          # exactly a default.
+          require_secret() {
+            if [ -z "${2:-}" ]; then
+              echo "::error::$1 secret is not set. Refusing to publish a release " \
+                   "signed with a key that cannot be verified - every release built " \
+                   "without it would be uninstallable over the last one."
+              exit 1
+            fi
+          }
 
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-key.jks
-            echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
-          else
-            echo "::notice::KEYSTORE_BASE64 secret is not set. Generating release keystore with password anisequel123r."
-            keytool -genkeypair -v -keystore release-key.jks \
-              -storepass "$STORE_PASS" -keypass "$KEY_PASS" -alias upload \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=AniSequel Official Release, O=AniSequel, C=US"
-          fi
+          require_secret KEYSTORE_BASE64 "${KEYSTORE_BASE64-}"
+          require_secret STORE_PASSWORD "${STORE_PASSWORD-}"
+          require_secret KEY_PASSWORD "${KEY_PASSWORD-}"
+
+          # `${VAR-}` rather than `$VAR` throughout: a missing secret then reads
+          # as empty instead of aborting under `set -u` before the guard above
+          # can explain itself.
+          printf '%s' "${KEYSTORE_BASE64-}" | base64 -d > release-key.jks
+          echo "Decoded release-key.jks from the KEYSTORE_BASE64 secret."
 
           if [ ! -s release-key.jks ]; then
-            echo "::error::Failed to initialize release-key.jks."
+            echo "::error::Failed to decode release-key.jks."
             exit 1
           fi
+
+          # The integrity check below is what actually opens the keystore, so a
+          # wrong password is reported here rather than surfacing later as an
+          # obscure signing failure.
+          if ! command -v keytool >/dev/null 2>&1; then
+            echo "::error::keytool is not on PATH on this runner. Without it the " \
+                 "keystore cannot be opened, and shipping without opening it is " \
+                 "the failure this step exists to prevent."
+            exit 1
+          fi
+
+          if ! keytool -list -keystore release-key.jks \
+               -storepass "${STORE_PASSWORD-}" -alias upload >/dev/null 2>&1; then
+            echo "::error::STORE_PASSWORD does not open the KEYSTORE_BASE64 secret. " \
+                 "Publishing would produce an APK signed with an unknown key."
+            exit 1
+          fi
+
+          STORE_PASS="$STORE_PASSWORD"
+          KEY_PASS="$KEY_PASSWORD"
 
           # Exported so every later step - assembleRelease above all - sees
           # the passwords without this file ever containing them.
@@ -332,18 +379,57 @@ jobs:
           ls -la "$OUTPUT_DIR"
 
       - name: Verify APK Release Signing Integrity
+        # Skipped on pull requests on purpose: they are signed with a throwaway
+        # key generated in the runner, which by definition does not match.
+        if: github.event_name != 'pull_request'
+        env:
+          # The one key every published release is signed with. It is a public
+          # value - it is the certificate fingerprint, and it is printed by
+          # apksigner on every build - so pinning it here costs nothing in
+          # secrecy and buys the property that actually matters.
+          EXPECTED_SIGNER_SHA256: c33eceb9ccf48378c8ec8fc7c1d72b0340638d2d824a4aa3db96c8e8f1c0e4ab
         run: |
           echo "::group::Verifying APK Signature and Keystore Integrity"
-          # Find apksigner binary from Android SDK build-tools
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
-          if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
-            echo "Using apksigner at: $APKSIGNER"
-            "$APKSIGNER" verify --verbose --print-certs release-artifacts/anisequel-universal.apk
-            echo "APK signature successfully verified against release signing key."
-          else
-            echo "apksigner not found; falling back to keytool jar verification."
-            keytool -printcert -jarfile release-artifacts/anisequel-universal.apk
+          APK=release-artifacts/anisequel-universal.apk
+
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            # Previously this fell through to `keytool -printcert` and reported
+            # success whatever it found. keytool has no --min-sdk-version gate
+            # and does not exercise the v2/v3 block at all, so it could not
+            # detect the failure it was standing in for.
+            echo "::error::apksigner not found; cannot verify the release signature."
+            exit 1
           fi
+
+          echo "Using apksigner at: $APKSIGNER"
+          # --min-sdk-version matches minSdk in app/build.gradle.kts. Without it
+          # apksigner will also pass an APK that is only v1-signed, which is not
+          # what ships.
+          if ! "$APKSIGNER" verify --verbose --print-certs \
+                 --min-sdk-version 29 "$APK"; then
+            echo "::error::apksigner rejected $APK"
+            exit 1
+          fi
+
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" 2>/dev/null \
+            | sed -n 's/.*certificate SHA-256 digest: *//p' \
+            | tr '[:upper:]' '[:lower:]' | head -n 1)
+
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::Could not read a signer certificate digest out of $APK"
+            exit 1
+          fi
+
+          if [ "$ACTUAL" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "::error::$APK is signed by $ACTUAL, not the release key " \
+                 "$EXPECTED_SIGNER_SHA256. Android refuses to update an app signed " \
+                 "with a different key, so publishing this would make the APK " \
+                 "uninstallable over every previous release."
+            exit 1
+          fi
+
+          echo "APK signed by the expected release key: $ACTUAL"
           echo "::endgroup::"
 
       - name: Upload Build Artifacts to Workflow Run
