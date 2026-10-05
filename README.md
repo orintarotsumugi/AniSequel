@@ -280,7 +280,9 @@ than claiming otherwise).
   2.31 MB. `classes.dex` had actually *shrunk*; it was simply being stored
   uncompressed, because `minSdk ≥ 28` makes AGP skip dex compression. One
   flipped setting, ~1.9 MB, and nothing in review would have looked like a size
-  regression.
+  regression. The rule AGP applies is `minSdk >= 28`, so raising the floor to 31
+  does not bring it back — but nothing about that is obvious, which is why the
+  test reads `build.gradle.kts` rather than the build output.
 - **`VersionBaselineTest`** — the version lives in three places, and two of them
   used to drift apart silently.
 - **`KeystoreIntegrityTest`** — see below.
@@ -453,8 +455,36 @@ adding any would be a large, avoidable regression. What that buys:
 - `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see
   `ApkPackagingTest` for the 1.9 MB this is worth.
 - The launcher is a pure adaptive icon (`mipmap-anydpi-v26`). The density-bucket
-  PNGs that Android Studio generates by default were unreachable at
-  `minSdk = 29` and were removed.
+  PNGs that Android Studio generates by default were unreachable on every
+  supported configuration and were removed.
+
+### Minimum Android version
+
+`minSdk = 31` — **Android 12**. Raised from 29 (Android 10) because every API
+branch below 31 in this codebase had stopped describing a device the app can be
+installed on, and the ones that remained were carrying caveat text rather than
+behaviour:
+
+| Was | Now |
+| --- | --- |
+| `supportsDynamicColor = SDK_INT >= S` | removed; dynamic colour exists everywhere |
+| Dynamic-colours switch `enabled = supportsDynamicColor` | removed; always live |
+| `canInstallPackages = SDK_INT < O \|\| canRequestPackageInstalls()` | `canRequestPackageInstalls()` |
+| `installPermissionSettings(): Intent?` | returns `Intent` |
+| `GET_SIGNING_CERTIFICATES or GET_SIGNATURES` | `GET_SIGNING_CERTIFICATES` |
+| deprecated `getPackageInfo(path, int)` on API 33+ | `PackageInfoFlags` |
+| `PackageInfo.signatures` signer fallback | `signingInfo` only |
+
+What 31 buys beyond tidiness: Material You works on every supported device, so
+the wallpaper theming that was previously "unavailable on some phones" is
+universal, and the system splash can be themed without a versioned resource.
+
+Dropping Android 10 and 11 is a real loss of installs. It is accepted deliberately
+— a per-API code path is a path that has to be reasoned about forever, and AGENTS.md
+already asks whether a resource is reachable on `minSdk` at all.
+
+`UpdateManager` still branches on `TIRAMISU` (33) for `PackageInfoFlags` and
+notification permission: those arrived *after* 31 and are still real.
 
 ---
 

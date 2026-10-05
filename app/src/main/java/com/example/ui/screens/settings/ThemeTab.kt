@@ -39,7 +39,6 @@ import com.example.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.example.ui.components.expressive.SegmentedOption
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.theme.ThemePalette
-import com.example.ui.theme.supportsDynamicColor
 import kotlinx.coroutines.launch
 
 private fun ThemeMode.icon(): ImageVector = when (this) {
@@ -136,17 +135,18 @@ fun ThemeTab(
         SectionCard(
             title = "System colour",
             icon = AppVectorIcons.SectionAniList,
-            subtitle = "Material You follows your phone."
+            subtitle = "Material You, always available from Android 12."
         ) {
             SwitchRow(
                 title = "Dynamic colours",
-                subtitle = if (supportsDynamicColor) {
-                    "Match your wallpaper."
-                } else {
-                    "Needs Android 12+. This device is on Android ${android.os.Build.VERSION.RELEASE}."
-                },
+                // Unconditional, where this used to be
+                // `if (supportsDynamicColor) ... else "Needs Android 12+"`.
+                // That branch is now unreachable - minSdk is 31 - so the
+                // fallback text was a lie waiting for the floor to move, and
+                // `enabled = supportsDynamicColor` was a switch that could
+                // never be off on a supported device.
+                subtitle = "Match your wallpaper.",
                 checked = themeSettings.useDynamicColor,
-                enabled = supportsDynamicColor,
                 onCheckedChange = { enabled ->
                     scope.launch { themePreferences.setUseDynamicColor(enabled) }
                 },

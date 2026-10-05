@@ -1,6 +1,5 @@
 package com.example.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -156,16 +155,6 @@ private val DarkStatusColors = StatusColors(
     infoContainer = StatusInfoContainerDark,
 )
 
-/**
- * Whether this device can theme itself from the user's wallpaper.
- *
- * Material You arrived in Android 12. Exposed as a function of the platform
- * rather than as a stored preference so the Settings switch can disable itself
- * on an older device instead of storing a choice that can never take effect.
- */
-val supportsDynamicColor: Boolean
-    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
 @Composable
 fun AniSequelTheme(
     /**
@@ -208,8 +197,13 @@ fun AniSequelTheme(
         ThemeMode.DARK -> true
     }
 
+    // Dynamic colour used to be `dynamicColor && supportsDynamicColor`. The
+    // second half was a runtime SDK_INT check against `S`, and the floor is now
+    // 31, so it can only ever be true. Dropped rather than left in: a guard
+    // that reads as load-bearing and cannot fail is worse than no guard,
+    // because the next reader assumes there is a device class it excludes.
     val colorScheme = when {
-        dynamicColor && supportsDynamicColor -> {
+        dynamicColor -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }

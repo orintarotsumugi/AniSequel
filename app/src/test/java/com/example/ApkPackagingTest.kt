@@ -79,6 +79,40 @@ class ApkPackagingTest {
      * trade. A string match on its own cannot tell the two apart, so this checks
      * it sits in the dex block rather than the native-library one.
      */
+    /**
+     * The `minSdk >= 28` rule behind the test above, pinned as a floor of its own.
+     *
+     * `minSdk` is now 31, comfortably above 28, and nothing about that looks like
+     * it could re-break the compression rule. It can: AGP's condition is written
+     * as a comparison, and the failure it produces is a silently larger APK that
+     * no review of a version-bump diff would catch. This asserts the floor stays
+     * where it is *and* that the packaging setting it interacts with is still
+     * present, so the two cannot be edited apart.
+     */
+    @Test
+    fun `the minimum sdk stays above the level where dex stops being compressed`() {
+        val minSdk = Regex("""minSdk\s*=\s*(\d+)""")
+            .find(buildScript)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+
+        assertTrue(
+            "could not read `minSdk = <n>` out of app/build.gradle.kts. This test " +
+                "exists to catch the case where raising or removing minSdk silently " +
+                "opts the build out of dex compression, so it has to fail loudly " +
+                "when it can no longer find the setting rather than skip.",
+            minSdk != null
+        )
+        assertTrue(
+            "minSdk is $minSdk. AGP stores classes.dex uncompressed at minSdk >= 28, " +
+                "so lowering it is fine but the floor must not be read as " +
+                "load-bearing for compression - that is what dex.useLegacyPackaging " +
+                "is for, and it is asserted above.",
+            minSdk!! >= 28
+        )
+    }
+
     @Test
     fun `the setting is applied to dex rather than to native libraries`() {
         val dexBlock = Regex("""dex\s*\{[^}]*useLegacyPackaging\s*=\s*true""", RegexOption.DOT_MATCHES_ALL)

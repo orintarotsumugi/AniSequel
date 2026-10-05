@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import com.example.data.changelog.ChangelogRepository
 import com.example.data.model.ViewerProfile
 import com.example.data.repository.RefreshIntervalPreferences
 import com.example.data.repository.ThemePreferences
@@ -41,6 +42,7 @@ fun SettingsScreen(
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
+    changelogRepository: ChangelogRepository,
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
@@ -108,6 +110,7 @@ fun SettingsScreen(
                     onSignOut = authViewModel::logout,
                     totalWatchedCount = totalWatchedCount,
                     totalMissedCount = totalMissedCount,
+                    changelogRepository = changelogRepository,
                     modifier = Modifier.padding(paddingValues)
                 )
             }

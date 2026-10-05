@@ -314,12 +314,16 @@ class UpdateManager(private val context: Context) {
     private fun isSignedByThisApp(apk: File): Boolean {
         val packageManager = context.packageManager
 
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
-        } else {
-            @Suppress("DEPRECATION")
-            PackageManager.GET_SIGNATURES
-        }
+        // `GET_SIGNING_CERTIFICATES` alone, with no `GET_SIGNATURES` fallback.
+        // The old code OR'd in the deprecated `GET_SIGNATURES` behind an
+        // `SDK_INT >= P` fork, and P (28) is below the `minSdk = 31` floor, so
+        // that flag described devices this build cannot be installed on.
+        //
+        // The deprecated `int` overload below is still correct to call on API
+        // 31/32: it was only deprecated in 33, and it maps these flags onto
+        // `signingInfo` on 28+. It is the `PackageInfoFlags` branch above that
+        // is still needed - 33 is *above* this floor.
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES
 
         val archiveInfo = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -397,18 +401,21 @@ class UpdateManager(private val context: Context) {
         return false
     }
 
-    /** The certificates a package is signed with, or null if there are none. */
+    /**
+     * The certificates a package is signed with, or null if there are none.
+     *
+     * Reads `signingInfo` only. The deprecated `PackageInfo.signatures` fallback
+     * sat behind the same `SDK_INT >= P` check as the flags above, and P (28) is
+     * below the `minSdk = 31` floor. It is also the wrong field to reach for:
+     * `signingInfo` is what knows about rotation, which is the entire reason this
+     * function exists.
+     */
     private fun signerCertificates(info: PackageInfo): List<ByteArray>? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val signers = info.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
-            if (!signers.isNullOrEmpty()) return signers
+        val signers = info.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        if (!signers.isNullOrEmpty()) return signers
 
-            val history = info.signingInfo?.signingCertificateHistory?.map { it.toByteArray() }
-            if (!history.isNullOrEmpty()) return history
-        }
-        @Suppress("DEPRECATION")
-        val legacy = info.signatures?.map { it.toByteArray() }
-        if (!legacy.isNullOrEmpty()) return legacy
+        val history = info.signingInfo?.signingCertificateHistory?.map { it.toByteArray() }
+        if (!history.isNullOrEmpty()) return history
         return null
     }
 

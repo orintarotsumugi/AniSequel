@@ -10,7 +10,7 @@
         installer.
 
         The declaration alone does nothing: from Android 8 the permission is
-        granted per-app in Settings, which is why UpdateManager.canInstallPackages()
+        granted per-app in Settings, which is why UpdateInstallation.canInstallPackages()
         asks packageManager rather than assuming the manifest entry is enough.
         The user still sees, and has to confirm, the system install dialog - no
         version of this app can install itself silently.

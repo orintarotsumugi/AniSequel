@@ -25,6 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.data.changelog.ChangelogRepository
 import com.example.data.network.NetworkClient
 import com.example.data.repository.AniListRepositoryImpl
 import com.example.data.repository.AuthRepository
@@ -101,6 +102,14 @@ fun AppNavigation(
             apiService = NetworkClient.createApiService(authRepository),
             listCacheTtlMillis = refreshIntervalPreferences::currentStalenessMillis
         )
+    }
+
+    // Application-scoped for the same reason: the notes are a property of the
+    // build, and the release workflow reads the same file to write the release
+    // body. Two readers of two copies is how an app claims a feature the
+    // download page does not mention.
+    val changelogRepository = remember(context) {
+        ChangelogRepository(context.applicationContext)
     }
 
     // Mirrors the stored interval into the plain value the repository reads,
@@ -310,6 +319,7 @@ fun AppNavigation(
                 authViewModel = authViewModel,
                 themePreferences = themePreferences,
                 refreshIntervalPreferences = refreshIntervalPreferences,
+                changelogRepository = changelogRepository,
                 viewer = signedInViewer,
                 totalWatchedCount = successState?.totalWatchedCount,
                 totalMissedCount = successState?.totalMissedCount,

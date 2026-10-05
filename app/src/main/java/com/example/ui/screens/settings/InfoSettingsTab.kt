@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,34 +24,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
+import com.example.data.changelog.ChangelogRepository
 import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListOAuth
 import com.example.ui.components.AppVectorIcons
-
-private data class ChangelogEntry(val title: String, val detail: String)
-
-private val changelog = listOf(
-    ChangelogEntry(
-        title = "Hidden list is back",
-        detail = "Hiding a sequel is reversible now - find them under Filters, Hidden."
-    ),
-    ChangelogEntry(
-        title = "Redesigned Material 3 Expressive UI",
-        detail = "Spring physics, morphing shapes, and responsive controls throughout."
-    ),
-    ChangelogEntry(
-        title = "Faster, steadier list loads",
-        detail = "Optimised GraphQL batching and season mapping prevent connection failures."
-    ),
-    ChangelogEntry(
-        title = "Planning syncs straight to AniList",
-        detail = "Every addition lands on your account with instant confirmation."
-    ),
-    ChangelogEntry(
-        title = "In-app updates",
-        detail = "Checks GitHub releases and installs them in two taps."
-    )
-)
 
 @Composable
 fun InfoSettingsTab(
@@ -60,9 +37,20 @@ fun InfoSettingsTab(
     onSignOut: () -> Unit = {},
     totalWatchedCount: Int? = null,
     totalMissedCount: Int? = null,
+    changelogRepository: ChangelogRepository? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // Newest block in the changelog file, not a lookup by BuildConfig.VERSION_NAME:
+    // the release workflow advances the patch number past the newest published
+    // release, so the version a build reports is not knowable when the notes are
+    // written and an exact match would always miss. See ChangelogRepository.
+    val changelog = remember(changelogRepository) {
+        changelogRepository?.latestWithNotes()
+    }
+    val changelogEntries = changelog?.entries
+        ?.filterNot { it.title.isNullOrBlank() }
+        .orEmpty()
 
     SettingsScrollColumn(modifier) {
         if (viewer != null) {
@@ -130,32 +118,52 @@ fun InfoSettingsTab(
         SectionCard(
             title = "What's new",
             icon = AppVectorIcons.NewReleases,
-            subtitle = BuildConfig.VERSION_NAME
+            // The version the notes were written *for*, which is not always this
+            // build's version - see the comment on `changelog` above. Showing the
+            // app's own version here would claim notes belong to a release they
+            // were never part of.
+            subtitle = changelog?.version?.let { "Up to $it" }
+                ?: BuildConfig.VERSION_NAME
         ) {
-            changelog.forEachIndexed { index, entry ->
-                if (index > 0) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-                Row(verticalAlignment = Alignment.Top) {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 6.dp, end = 10.dp)
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondary)
-                    )
-                    Column {
-                        Text(
-                            text = entry.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
+            if (changelogEntries.isEmpty()) {
+                // Reachable, and not a cosmetic problem: it is what an install
+                // from a build shipped before the notes were added shows.
+                // Previously this card rendered an empty section, because the
+                // notes were a hardcoded list that nothing could be missing from.
+                Text(
+                    text = "No release notes for this version yet. They are on the " +
+                        "download page in the meantime.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                changelogEntries.forEachIndexed { index, entry ->
+                    if (index > 0) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 6.dp, end = 10.dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondary)
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = entry.detail,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column {
+                            Text(
+                                text = entry.title.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }

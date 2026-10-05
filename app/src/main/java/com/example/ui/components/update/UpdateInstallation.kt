@@ -3,7 +3,6 @@ package com.example.ui.components.update
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
@@ -55,29 +54,25 @@ class UpdateInstallation(private val context: Context) {
     /**
      * Whether the system will let this app open the installer right now.
      *
-     * Below Android 8, installing is not gated at all, so the answer is always
-     * yes. From 8 it is a per-app permission the user has to grant once in
-     * Settings.
+     * The per-app install permission arrived in Android 8 (API 26), so with
+     * `minSdk = 31` every device this builds on has it. The
+     * `SDK_INT < O || ...` short-circuit that used to sit in front of this meant
+     * "below Android 8, installing is not gated at all" - a device class the app
+     * can no longer be installed on.
      */
     fun canInstallPackages(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-            context.packageManager.canRequestPackageInstalls()
+        context.packageManager.canRequestPackageInstalls()
 
     /**
      * The Settings screen where the install permission is granted.
      *
-     * Null below Android 8, where there is nothing to grant.
-     *
      * `ACTION_MANAGE_UNKNOWN_APP_SOURCES` is scoped to this package by the data
      * URI, so the user lands on AniSequel's own row rather than a list.
      */
-    fun installPermissionSettings(): Intent? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
-        return Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}")
-        )
-    }
+    fun installPermissionSettings(): Intent = Intent(
+        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+        Uri.parse("package:${context.packageName}")
+    )
 
     /**
      * The intents that can open the system installer on [apk], best first.
@@ -135,7 +130,7 @@ class UpdateInstallation(private val context: Context) {
      * rather than telling the user to look for a screen that never appeared.
      */
     fun openInstallPermissionSettings(): Boolean {
-        val intent = installPermissionSettings() ?: return true
+        val intent = installPermissionSettings()
         return runCatching { context.startActivity(intent) }.isSuccess
     }
 
@@ -143,10 +138,11 @@ class UpdateInstallation(private val context: Context) {
      * Opens a release's page on GitHub.
      *
      * The manifest has carried a `release_url` since the first version, and it is
-     * the only way to reach the release notes written by the workflow - the ones
-     * that explain what a build actually changed. The `notes` field is a build
-     * number and a commit hash, which is not something to show a user deciding
-     * whether to update.
+     * the only way to reach the full release notes - the changelog plus the
+     * installation and signing guidance. `notes` in the manifest now carries the
+     * same changelog entry and is shown in the dialog, but it is capped and has
+     * nowhere to put the install instructions, so the page is still the link
+     * that matters.
      *
      * Failures are swallowed deliberately: a device with no browser at all should
      * lose the link, not crash the dialog.

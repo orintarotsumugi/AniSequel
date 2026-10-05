@@ -1,0 +1,47 @@
+{
+  "versions": [
+    {
+      "version": "1.0.24",
+      "entries": [
+        {
+          "title": "Android 12 and newer only",
+          "detail": "The app now requires Android 12 or newer. Every version check below that was dead code is gone."
+        },
+        {
+          "title": "Your list refreshes itself",
+          "detail": "Pick how often the AniList list is re-read, in Settings > Edit. Default is 30 minutes."
+        },
+        {
+          "title": "Release notes now match the build",
+          "detail": "What's new in the app and on the download page come from one file, so they cannot disagree."
+        }
+      ]
+    },
+    {
+      "version": "1.0.23",
+      "entries": [
+        {
+          "title": "Release signing recovered",
+          "detail": "The signing key was rotated to a recoverable password. Builds from v1.0.17 to v1.0.22 cannot be updated over the top."
+        },
+        {
+          "title": "Faster, steadier list loads",
+          "detail": "Optimised GraphQL batching and season mapping prevent connection failures."
+        },
+        {
+          "title": "Planning syncs straight to AniList",
+          "detail": "Every addition lands on your account with instant confirmation."
+        }
+      ]
+    },
+    {
+      "version": "1.0.22",
+      "entries": [
+        {
+          "title": "In-app updates",
+          "detail": "Checks GitHub releases and installs them in two taps."
+        }
+      ]
+    }
+  ]
+}

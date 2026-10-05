@@ -138,9 +138,11 @@ class ThemePreferences(private val context: Context) {
     /**
      * Turns Material You on or off.
      *
-     * Ignored below Android 12, where there is no dynamic colour to read -
-     * [android.os.Build.VERSION_CODES.S]. The UI disables the switch there
-     * rather than storing a value that cannot do anything.
+     * Unconditional. This used to be documented as ignored below Android 12,
+     * where the UI disabled the switch rather than storing a value that could
+     * do nothing - a guard against exactly the "written but never observed"
+     * failure the refresh interval had. With `minSdk = 31` there is no device
+     * it applies to, so the switch is always live and the caveat is gone.
      */
     suspend fun setUseDynamicColor(enabled: Boolean) {
         context.themeDataStore.edit { preferences ->

@@ -40,9 +40,16 @@ It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
   `res/anim`, no `res/font`.
 - Custom vectors live in `AppVectorIcons.kt`, `AppCustomVectors.kt`,
   `AppExtraVectors.kt`. Name them semantically, not by shape.
-- **Reachability counts.** A resource that no configuration on `minSdk = 29` can
+- **Reachability counts.** A resource that no configuration on `minSdk = 31` can
   load is dead weight in the APK. The five density-bucket launcher PNGs Android
   Studio generates were 30 KB of exactly that.
+- **Raising `minSdk` is not a number change, it is a deletion.** Every
+  `SDK_INT` branch below the new floor describes a device the app can no longer
+  be installed on. Delete the branch and its fallback copy rather than leaving it
+  to rot: a guard that reads as load-bearing and cannot fail is worse than no
+  guard, because the next reader assumes there is a device class it excludes.
+  The `minSdk` comment in `app/build.gradle.kts` has to say what it *buys*, not
+  only which versions it drops.
 
 ---
 

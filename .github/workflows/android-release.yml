@@ -504,8 +504,8 @@ jobs:
 
           **[⬇ Download anisequel-universal.apk](${ARTIFACT_URL})**
 
-          One universal build — it runs on every phone and tablet on Android 10
-          (API 29) and above, so there is nothing to choose between.
+          One universal build — it runs on every phone and tablet on Android 12
+          (API 31) and above, so there is nothing to choose between.
 
           **This build is signed with a throwaway key generated inside the
           runner**, never the release key, so it deliberately will _not_ install
@@ -559,9 +559,15 @@ jobs:
             Find the anime sequels you finished the first season of and never got
             around to, and add them to your AniList Planning list in one tap.
 
+            ### 🎉 What's new in this release
+
+            <!-- anisequel:whats-new -->
+            <!-- anisequel:placeholder -->
+
             ### 📦 APK package
-            **anisequel-universal.apk** runs on every supported device — there is
-            only one build, so there is nothing to choose between.
+            **anisequel-universal.apk** runs on every supported device — Android 12
+            (API 31) and newer — so there is only one build and nothing to choose
+            between.
 
             *Built from commit* `${{ github.sha }}` *on run* `${{ github.run_number }}`.
 
@@ -598,8 +604,115 @@ jobs:
           # flagged as a pre-release too, which is what happened the first
           # time this branch needed one.
           prerelease: ${{ github.ref != 'refs/heads/main' }}
-          generate_release_notes: true
+          # Off deliberately. With an explicit `body`, GitHub appends its
+          # auto-generated list of commit subjects and PR titles *below* it -
+          # which is what made every release page a wall of "Merge pull request
+          # #25 from ... / Fix State import in ShimmerLoading". Those are
+          # changelog entries for a changelog, not for a person deciding whether
+          # to update. The "What's new" section above carries the same
+          # information, written for a reader.
+          generate_release_notes: false
           files: release-artifacts/*.apk
+
+      - name: Fill in the release's What's new section
+        # After the release exists, before the manifest reads its notes. Both the
+        # page and update.json are written from the changelog file, so they agree.
+        if: github.event_name != 'pull_request'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CHANGELOG="app/src/main/assets/changelog.json"
+          MARKER="<!-- anisequel:whats-new -->"
+          PLACEHOLDER="<!-- anisequel:placeholder -->"
+
+          if [ ! -f "${CHANGELOG}" ]; then
+            echo "::warning title=changelog.json missing::${CHANGELOG} not found; the release page keeps its placeholder."
+            exit 0
+          fi
+
+          # Same selection as the manifest step - newest block with usable notes -
+          # so the page and update.json cannot disagree about what changed.
+          # Only the rendering differs: the page bolds the titles, the manifest
+          # cannot.
+          NOTES_VERSION=$(jq -r \
+            '[(.versions // [])[] | select((.entries // []) | map(.title | select(. != null and . != "")) | length > 0)][0].version // ""' \
+            "${CHANGELOG}" 2>/dev/null || echo "")
+          NOTES=$(jq -r \
+            '[(.versions // [])[] | select((.entries // []) | map(.title | select(. != null and . != "")) | length > 0)][0]
+             | (.entries // []) | map(select(.title != null and .title != ""))
+             | map("- **" + (.title // "") + "**" + (if .detail then " " + .detail else "" end))
+             | join("\n")' "${CHANGELOG}" 2>/dev/null || echo "")
+
+          if [ -z "${NOTES//[[:space:]]/}" ]; then
+            echo "::warning title=No changelog notes::" \
+                 "assets/changelog.json has no version with usable notes, so the release" \
+                 "page and the in-app What's new card will not describe what changed."
+            exit 0
+          fi
+
+          # The version the notes were written for is not necessarily this build's
+          # version - see the resolver step. Worth saying out loud when they differ
+          # by more than the one patch the resolver adds on its own, because that
+          # is the case where the page is shipping notes from a release ago.
+          if [ -n "${NOTES_VERSION}" ] && [ "${NOTES_VERSION}" != "${VERSION_NAME}" ]; then
+            echo "::warning::Release notes are written for ${NOTES_VERSION} but this" \
+                 "build publishes as ${VERSION_NAME}. Fine when that is the resolver's" \
+                 "one-patch advance; not fine if it means nobody wrote notes for the" \
+                 "changes in this build."
+          fi
+
+          BODY=$(gh release view "${TAG}" --json body --jq '.body' 2>/dev/null || echo "")
+          if [ -z "${BODY//[[:space:]]/}" ]; then
+            echo "::warning::Could not read the body of ${TAG}; leaving it as written."
+            exit 0
+          fi
+
+          # One awk pass, line-oriented, because both markers are own-line HTML
+          # comments. awk rather than a bash string substitution: the notes are
+          # multi-line and `${BODY/$MARKER/$NOTES}` would mangle them.
+          #
+          # A previous attempt deleted the placeholder with `sed '\|...|d'`, which
+          # is GNU-specific - it fails outright on BusyBox awk/sed, so the step
+          # could not be tested outside CI. Matching both markers in awk keeps the
+          # whole transformation in one portable pass and makes the two
+          # invariants (marker present, placeholder gone) checkable in the same
+          # place.
+          #
+          # The placeholder comment is deleted rather than kept: it is an
+          # instruction to a maintainer and has no business on a page a user reads.
+          printf '%s\n' "${BODY}" \
+            | awk -v marker="${MARKER}" -v placeholder="${PLACEHOLDER}" -v notes="${NOTES}" '
+                $0 == placeholder { dropped = 1; next }
+                { print }
+                $0 == marker { print notes; replaced = 1 }
+                END {
+                  if (!replaced) exit 3
+                  if (!dropped) exit 4
+                }
+              ' > body.md
+          STATUS=$?
+
+          if [ "${STATUS}" -eq 3 ]; then
+            echo "::error::The '${MARKER}' marker is missing from the ${TAG} body;" \
+                 "the What's new section cannot be filled in. Restore it in the" \
+                 "release step of this workflow."
+            exit 1
+          fi
+          if [ "${STATUS}" -eq 4 ]; then
+            echo "::error::The '${PLACEHOLDER}' comment is missing from the ${TAG} body;" \
+                 "it would be published to users. Restore it in the release step of" \
+                 "this workflow."
+            exit 1
+          fi
+          if [ "${STATUS}" -ne 0 ]; then
+            echo "::error::Filling in the What's new section for ${TAG} failed (awk ${STATUS})."
+            exit 1
+          fi
+
+          gh release edit "${TAG}" --notes-file body.md
+          echo "Filled in What's new for ${TAG} from ${CHANGELOG}."
 
       - name: Publish the update manifest
         # Branch pushes only. On a tag build the manifest commit would be pushed
@@ -622,25 +735,61 @@ jobs:
           ASSET_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/anisequel-universal.apk"
           SIZE=$(stat -c%s release-artifacts/anisequel-universal.apk)
 
-          # The release's own body, which GitHub generated from the commits and
-          # merged PRs since the last release. This is what the in-app update
-          # prompt shows, so it has to be prose a person can act on - the old
-          # value was "Build 22 from a4171424", which tells a user deciding
-          # whether to update nothing at all.
+          # The release notes come from app/src/main/assets/changelog.json, the same
+          # file the app bundles and renders in Settings > What's new.
           #
-          # The release step above has already run, so the body exists by now.
-          # A failure here must not sink the release: fall back to the build
-          # identifier that was there before.
-          RELEASE_BODY=$(gh release view "${TAG}" --json body --jq '.body' 2>/dev/null || echo "")
+          # They used to be the release's own body, which is the boilerplate above
+          # plus whatever GitHub generated from commit subjects. So `notes`
+          # published as:
+          #
+          #     ## AniSequel
+          #     Find the anime sequels you finished the first season of and
+          #     never got around to...
+          #
+          # - a description of the app, not a list of changes, and identical in
+          # every release. Nothing in it told a user deciding whether to update
+          # what had actually changed since the build they were running.
+          #
+          # Reading the changelog instead means the updater, the release page and
+          # the in-app card cannot disagree: one file, three consumers.
+          CHANGELOG="app/src/main/assets/changelog.json"
+          CHANGELOG_NOTES=""
+          CHANGELOG_VERSION=""
+          if [ -f "${CHANGELOG}" ]; then
+            # Newest block with usable notes, rather than a lookup by
+            # ${VERSION_NAME}: the resolver above *derives* VERSION_NAME by
+            # advancing past the newest published release, so it does not exist
+            # until this run starts and no changelog can be written ahead of it.
+            CHANGELOG_VERSION=$(jq -r \
+              '[(.versions // [])[] | select((.entries // []) | map(.title | select(. != null and . != "")) | length > 0)][0].version // ""' \
+              "${CHANGELOG}" 2>/dev/null || echo "")
+            CHANGELOG_NOTES=$(jq -r \
+              '[(.versions // [])[] | select((.entries // []) | map(.title | select(. != null and . != "")) | length > 0)][0]
+               | (.entries // []) | map(select(.title != null and .title != ""))
+               | map("- " + (.title // "") + (if .detail then ": " + .detail else "" end))
+               | join("\n")' "${CHANGELOG}" 2>/dev/null || echo "")
+          fi
+
           PUBLISHED_AT=$(gh release view "${TAG}" --json publishedAt --jq '.publishedAt' 2>/dev/null || echo "")
 
-          if [ -z "${RELEASE_BODY//[[:space:]]/}" ]; then
-            NOTES="Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
+          if [ -z "${CHANGELOG_NOTES//[[:space:]]/}" ]; then
+            # Loud, because this is the case that shipped before: a release with no
+            # notes anywhere published a page that described the app rather than
+            # the release. Nothing can catch this after the fact.
+            echo "::warning title=No changelog notes::" \
+                 "assets/changelog.json has no version with usable notes, so this" \
+                 "release's page and update manifest will not describe what changed."
+            NOTES="Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}. No release notes were written for this version."
           else
-            # Trailing whitespace stripped, and capped: this lands in a dialog
-            # on a phone, and an unbounded generated changelog would push the
-            # useful first line off the screen.
-            NOTES=$(printf '%s' "${RELEASE_BODY}" \
+            if [ -n "${CHANGELOG_VERSION}" ] && [ "${CHANGELOG_VERSION}" != "${VERSION_NAME}" ]; then
+              echo "::warning::Release notes are written for ${CHANGELOG_VERSION} but" \
+                   "this build publishes as ${VERSION_NAME}. Expected when that is the" \
+                   "resolver's one-patch advance; not expected if it means no notes" \
+                   "were written for the changes in this build."
+            fi
+            # Capped: this lands in a dialog on a phone, and an unbounded list
+            # would push the first item off the screen.
+            NOTES=$(printf '%s' "${CHANGELOG_NOTES}" \
               | tr '\r' ' ' \
               | sed -e 's/[[:space:]]*$//' -e '/./,$!d' \
               | head -c 1200)
@@ -649,9 +798,8 @@ jobs:
           Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."
           fi
 
-          # Built with jq rather than a heredoc. Release notes are free text from
-          # GitHub and routinely contain quotes, backslashes and newlines; a
-          # heredoc interpolation of them produces malformed JSON, and the app
+          # Built with jq rather than a heredoc. The notes contain quotes and newlines;
+          # a heredoc interpolation of them produces malformed JSON, and the app
           # treats a manifest it cannot parse as a failed update check.
           jq -n \
             --arg version "${VERSION_NAME}" \

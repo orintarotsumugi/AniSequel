@@ -22,18 +22,37 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.anisequel.app"
-    // Android 10 (API 29) is the floor, raised from 24 (Android 7).
+    // Android 12 (API 31) is the floor, raised from 29 (Android 10).
     //
-    // API 29 is also the level from which every device understands APK
-    // Signature Scheme v3 key rotation. Below it, a build signed with a
-    // rotated key can never be installed over the previous one, so raising
-    // the floor is what keeps a future key rotation from permanently
-    // stranding installs on older devices.
+    // API 29 was previously the floor for a specific reason: it is the level
+    // from which every device understands APK Signature Scheme v3 key
+    // rotation, so raising it was what kept a future key rotation from
+    // permanently stranding installs. That reason still holds, and 31 is
+    // above it.
     //
-    // Raising this drops support for Android 7, 8 and 9. Devices already
-    // running an older AniSequel cannot install later builds; they stay on
-    // the last version that supported them.
-    minSdk = 29
+    // What 31 buys, concretely, rather than as a support-policy statement:
+    //
+    //  - `android:windowSplashScreen` is available to this app without a
+    //    versioned resource qualifier, so the system splash is themed the same
+    //    way on every supported device. (There was no pre-31 `windowBackground`
+    //    workaround in this codebase to delete - the theme in res/values is a
+    //    bare `DeviceDefault.NoActionBar` - so nothing was removed here.)
+    //  - Dynamic colour (Material You) exists on *every* supported device.
+    //    `supportsDynamicColor` was a runtime SDK_INT check gating a Settings
+    //    switch; on this floor it can no longer be false, so the switch can
+    //    no longer be disabled and the check is gone with it.
+    //  - `PackageManager.canRequestPackageInstalls` and
+    //    `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` both behave as the
+    //    updater assumes on every supported device (they arrived in API 26).
+    //  - `POST_NOTIFICATIONS` permission prompts arrived in 33, which is why
+    //    [UpdateManager] still branches on TIRAMISU.
+    //
+    // Raising this drops Android 10 and 11. Devices already running an older
+    // AniSequel cannot install later builds; they stay on the last version
+    // that supported them. That is a real loss of installs and is accepted
+    // deliberately - see the "Reachability counts" rule in AGENTS.md: a
+    // per-API code path is a path that has to be reasoned about forever.
+    minSdk = 31
     targetSdk = 36
     // Read from gradle.properties, overridable with -PanisequelVersionCode /
     // -PanisequelVersionName (which is how the release workflow injects the
