@@ -135,7 +135,11 @@ fun EditSettingsTab(
             text = if (authState is AuthUiState.Authenticated) "Sign out" else "Back to sign in",
             onClick = {
                 if (authState is AuthUiState.Authenticated) {
-                    onNavigateBack()
+                    // Clears the token, the detail cache and the viewer
+                    // session. This button used to only navigate back, which
+                    // means "Sign out" signed the user out of nothing - they
+                    // stayed authenticated and only got dropped one screen.
+                    authViewModel.logout()
                 } else {
                     onNavigateToLogin()
                 }

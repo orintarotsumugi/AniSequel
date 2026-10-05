@@ -57,6 +57,7 @@ fun InfoSettingsTab(
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -165,7 +166,11 @@ fun InfoSettingsTab(
             text = if (viewer != null) "Sign out" else "Back to sign in",
             onClick = {
                 if (viewer != null) {
-                    onNavigateBack()
+                    // "Sign out" previously only hopped back to the dashboard
+                    // while the session was still on disk - the one thing a
+                    // button labelled Sign out exists to do was exactly what
+                    // it did not do.
+                    onSignOut()
                 } else {
                     onNavigateToLogin()
                 }

@@ -179,6 +179,12 @@ class AuthViewModel(
 
                 _uiState.value = AuthUiState.Authenticated(token)
             } catch (e: Exception) {
+                // The token stayed on disk precisely because the check never
+                // finished. A session that was never verified by AniList must
+                // not be resurrected as Authenticated on the next cold start,
+                // which would produce a dashboard that only says "Session
+                // expired" and never recover on its own.
+                runCatching { authRepository.clearAccessToken() }
                 _uiState.value = AuthUiState.Error(e.message ?: "Failed to save token")
             }
         }
@@ -226,7 +232,11 @@ class AuthViewModel(
                 aniListRepository?.clearDetailCache()
                 _uiState.value = AuthUiState.Unauthenticated
             } catch (e: Exception) {
-                _uiState.value = AuthUiState.Unauthenticated
+                // Clearing the on-disk session did not succeed, so the session
+                // is still on disk. Claiming "signed out" anyway would leave
+                // the next cold start resurrecting a session this user asked
+                // for to be gone; say that it failed instead.
+                _uiState.value = AuthUiState.Error(e.message ?: "Couldn't sign out. Try again.")
             }
         }
     }

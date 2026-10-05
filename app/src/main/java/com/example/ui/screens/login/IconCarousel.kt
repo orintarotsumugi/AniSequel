@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -31,11 +30,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.delay
 
 /**
@@ -116,18 +121,19 @@ fun IconCarousel(
                 transitionSpec = {
                     // Fade plus a small scale, so the swap reads as a morph
                     // rather than a flicker. Fast on the way out, springy on the
-                    // way in - hand-tuned because this runs continuously rather
-                    // than in response to a user action.
+                    // way in - springs come from the app's ExpressiveMotion
+                    // tokens because this runs continuously rather than in
+                    // response to a user action.
                     (
-                        fadeIn(tween(260)) + scaleIn(
+                        fadeIn(ExpressiveMotion.DefaultEffects) + scaleIn(
                             initialScale = 0.72f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
+                            animationSpec = ExpressiveMotion.BouncySpatial
                         )
                         ) togetherWith (
-                        fadeOut(tween(140)) + scaleOut(targetScale = 0.82f)
+                        fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                            targetScale = 0.82f,
+                            animationSpec = ExpressiveMotion.FastSpatial
+                        )
                         )
                 },
                 label = "login_icon_carousel"
@@ -143,33 +149,41 @@ fun IconCarousel(
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        // Progress dots: four tiny capsules, the active one stretched. Only the
-        // width animates, so the row never re-measures its children - it just
-        // re-lays them out.
+        // Progress dots: four tiny capsules, the active one stretched.
+        // The width is painted, not measured: it animates inside the draw
+        // phase, so every tick of the spring costs a single draw rather than
+        // a layout pass on the row.
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val density = LocalDensity.current
             icons.forEachIndexed { dotIndex, _ ->
                 val selected = dotIndex == index
                 val width by animateFloatAsState(
-                    targetValue = if (selected) 16f else 6f,
+                    targetValue = if (selected) with(density) { 16.dp.toPx() }
+                        else with(density) { 6.dp.toPx() },
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow
                     ),
                     label = "carousel_dot_$dotIndex"
                 )
+                val color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+                }
 
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
-                        .size(width = width.dp, height = 6.dp)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(
-                            if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
-                            }
-                        )
+                        .size(width = 16.dp, height = 6.dp)
+                        .drawBehind {
+                            drawRoundRect(
+                                color = color,
+                                topLeft = Offset.Zero,
+                                size = Size(width = width, height = size.height),
+                                cornerRadius = CornerRadius(size.height / 2f)
+                            )
+                        }
                 )
             }
         }

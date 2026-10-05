@@ -26,9 +26,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import coil.compose.AsyncImage
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.expressive.bouncyPress
 
 @Composable
 fun ProfileCard(
@@ -49,6 +51,10 @@ fun ProfileCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val avatar = viewer.avatar?.large
                 if (avatar != null) {
+                    // Show a visible brand mark while the network is busy and,
+                    // more importantly, instead of an empty circle when the
+                    // avatar URL 404s or the fall-through path cannot fetch it.
+                    val fallbackPainter = rememberVectorPainter(AppVectorIcons.Tv)
                     AsyncImage(
                         model = avatar,
                         contentDescription = null,
@@ -56,7 +62,10 @@ fun ProfileCard(
                             .size(56.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        placeholder = fallbackPainter,
+                        error = fallbackPainter,
+                        fallback = fallbackPainter
                     )
                 } else {
                     Box(
@@ -89,7 +98,10 @@ fun ProfileCard(
                     )
                 }
 
-                IconButton(onClick = onOpenProfile) {
+                IconButton(
+                    onClick = onOpenProfile,
+                    modifier = Modifier.bouncyPress(pressedScale = 0.9f)
+                ) {
                     Icon(
                         imageVector = AppVectorIcons.OpenInBrowser,
                         contentDescription = "Open AniList profile"

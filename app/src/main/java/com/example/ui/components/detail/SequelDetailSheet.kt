@@ -1,7 +1,6 @@
 package com.example.ui.components.detail
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -51,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.theme.AniSequelTheme
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -103,7 +103,10 @@ fun SequelDetailSheet(
 
             AnimatedContent(
                 targetState = detailTab,
-                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                transitionSpec = {
+                    fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                        fadeOut(ExpressiveMotion.FastEffects)
+                },
                 label = "detail_tab_switch"
             ) { tab ->
                 if (tab == 1) {

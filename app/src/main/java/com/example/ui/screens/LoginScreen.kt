@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -40,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
+import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.screens.login.ClientIdDialog
 import com.example.ui.screens.login.LoginHero
 import com.example.ui.screens.login.ManualTokenDialog
@@ -108,7 +109,10 @@ fun LoginScreen(
 
                 AnimatedContent(
                     targetState = selectedTab,
-                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
                     label = "login_tab_content"
                 ) { tab ->
                     if (tab == 0) {
@@ -137,7 +141,8 @@ fun LoginScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
-                        .testTag("explore_demo_button"),
+                        .testTag("explore_demo_button")
+                        .bouncyPress(pressedScale = 0.97f),
                     shape = MaterialTheme.shapes.small
                 ) {
                     Icon(

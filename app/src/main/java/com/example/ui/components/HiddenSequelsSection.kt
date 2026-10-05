@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.cards.toCoverColorOrNull
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.ExpressiveShapes
 
 /**
@@ -91,13 +91,13 @@ fun HiddenSequelsSection(
                 stiffness = Spring.StiffnessMediumLow,
                 visibilityThreshold = IntSize.Zero
             )
-        ) + fadeIn(tween(200)),
+        ) + fadeIn(ExpressiveMotion.FastEffects),
         exit = shrinkVertically(
             animationSpec = spring<IntSize>(
                 stiffness = Spring.StiffnessMediumLow,
                 visibilityThreshold = IntSize.Zero
             )
-        ) + fadeOut(tween(150))
+        ) + fadeOut(ExpressiveMotion.FastEffects)
     ) {
         Column(
             modifier = modifier
@@ -120,13 +120,13 @@ fun HiddenSequelsSection(
                         stiffness = Spring.StiffnessMediumLow,
                         visibilityThreshold = IntSize.Zero
                     )
-                ) + fadeIn(tween(180)),
+                ) + fadeIn(ExpressiveMotion.FastEffects),
                 exit = shrinkVertically(
                     animationSpec = spring<IntSize>(
                         stiffness = Spring.StiffnessMediumLow,
                         visibilityThreshold = IntSize.Zero
                     )
-                ) + fadeOut(tween(120))
+                ) + fadeOut(ExpressiveMotion.FastEffects)
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(4.dp))

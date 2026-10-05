@@ -29,7 +29,7 @@ fun SequelStatusChip(
     val statusColors = AniSequelTheme.statusColors
     val scheme = MaterialTheme.colorScheme
 
-    val (bgColor, textColor, label) = when (status.uppercase()) {
+    val (bgColor, textColor, label) = when (status.uppercase(java.util.Locale.ROOT)) {
         "RELEASING" -> Triple(
             statusColors.successContainer,
             statusColors.onSuccessContainer,
@@ -58,7 +58,7 @@ fun SequelStatusChip(
         else -> Triple(
             scheme.surfaceContainerHighest,
             scheme.onSurfaceVariant,
-            status.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
+            status.replace('_', ' ').lowercase(java.util.Locale.ROOT).replaceFirstChar { it.uppercase(java.util.Locale.ROOT) }
         )
     }
 

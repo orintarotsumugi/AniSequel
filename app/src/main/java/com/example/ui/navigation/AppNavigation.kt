@@ -1,7 +1,9 @@
 package com.example.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -34,6 +37,7 @@ import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.DashboardUiState
 import com.example.ui.viewmodel.DashboardViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 object AppRoutes {
     const val LOGIN = "login"
@@ -44,6 +48,21 @@ object AppRoutes {
 
     fun userDashboard(username: String) = "dashboard_user/$username"
 }
+
+/** A state that never emits a real dashboard, for when there is no session VM. */
+private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
+
+/**
+ * Expressive spatial spring for the cross-route slide transitions.
+ *
+ * A purposeless fixed-duration tween used to fly the screens with no
+ * overshoot; the same bouncy spring physics the rest of the app uses are the
+ * motion routes should use too.
+ */
+private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> = spring(
+    dampingRatio = Spring.DampingRatioMediumBouncy,
+    stiffness = Spring.StiffnessMediumLow
+)
 
 @Composable
 fun AppNavigation(
@@ -152,25 +171,25 @@ fun AppNavigation(
         enterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
+                animationSpec = RouteSlideSpring
             )
         },
         exitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
+                animationSpec = RouteSlideSpring
             )
         },
         popEnterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300)
+                animationSpec = RouteSlideSpring
             )
         },
         popExitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300)
+                animationSpec = RouteSlideSpring
             )
         }
     ) {
@@ -250,9 +269,16 @@ fun AppNavigation(
             // Collected here rather than at the top of AppNavigation: the viewer
             // profile only exists once a dashboard has actually loaded, and
             // `collectAsState` needs a flow that is known to be non-null.
-            val dashboardState = mainDashboardViewModel?.uiState?.collectAsState()
+            // `collectAsState` must see a non-null receiver on every pass:
+            // a null-propagating `?.` hides the call when
+            // `mainDashboardViewModel` is absent, so a session arriving or
+            // the theme rotating after Settings is open would re-enter this
+            // lambda with a different call sequence and crash at runtime.
+            // A stable empty flow keeps the call unconditional.
+            val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
+            val dashboardState by dashboardFlow.collectAsState()
             val signedInViewer =
-                (dashboardState?.value as? DashboardUiState.Success)?.viewer
+                (dashboardState.value as? DashboardUiState.Success)?.viewer
 
             SettingsScreen(
                 authViewModel = authViewModel,

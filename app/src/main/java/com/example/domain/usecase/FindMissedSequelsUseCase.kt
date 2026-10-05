@@ -76,7 +76,7 @@ class FindMissedSequelsUseCase {
 
             for (edge in parentMedia.relations?.edges ?: emptyList()) {
                 val relationType = edge.relationType
-                if (relationType == null || !includedRelations.contains(relationType.uppercase())) continue
+                if (relationType == null || !includedRelations.contains(relationType.uppercase(java.util.Locale.ROOT))) continue
 
                 val sequelNode = edge.node
                 val sequelId = sequelNode.id
@@ -125,16 +125,16 @@ class FindMissedSequelsUseCase {
         candidates: List<MissedSequel>,
         filterCriteria: FilterCriteria
     ): List<MissedSequel> {
-        val query = filterCriteria.searchQuery.trim().lowercase()
+        val query = filterCriteria.searchQuery.trim().lowercase(java.util.Locale.ROOT)
 
         val filtered = candidates.filter { sequel ->
             val matchesQuery = query.isEmpty() ||
-                    sequel.sequelTitle.lowercase().contains(query) ||
-                    sequel.parentTitle.lowercase().contains(query) ||
-                    sequel.sequelMedia.title?.romaji?.lowercase()?.contains(query) == true ||
-                    sequel.sequelMedia.title?.english?.lowercase()?.contains(query) == true ||
-                    sequel.sequelMedia.title?.native?.lowercase()?.contains(query) == true ||
-                    sequel.synonyms.any { it.lowercase().contains(query) }
+                    sequel.sequelTitle.lowercase(java.util.Locale.ROOT).contains(query) ||
+                    sequel.parentTitle.lowercase(java.util.Locale.ROOT).contains(query) ||
+                    sequel.sequelMedia.title?.romaji?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
+                    sequel.sequelMedia.title?.english?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
+                    sequel.sequelMedia.title?.native?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
+                    sequel.synonyms.any { it.lowercase(java.util.Locale.ROOT).contains(query) }
 
             // Release filter. Skipped when a specific status was chosen,
             // otherwise picking "Upcoming" while "Include unreleased" was off
@@ -167,7 +167,7 @@ class FindMissedSequelsUseCase {
                     .thenBy { it.sequelMedia.startDate?.month ?: 99 }
                     .thenBy { it.sequelMedia.startDate?.day ?: 99 }
             )
-            SequelSortOption.TITLE_ASC -> filtered.sortedBy { it.sequelTitle.lowercase() }
+            SequelSortOption.TITLE_ASC -> filtered.sortedBy { it.sequelTitle.lowercase(java.util.Locale.ROOT) }
             SequelSortOption.POPULARITY -> filtered.sortedByDescending { it.sequelMedia.popularity ?: 0 }
             SequelSortOption.SCORE -> filtered.sortedByDescending { it.sequelMedia.averageScore ?: 0 }
         }
@@ -198,7 +198,7 @@ class FindMissedSequelsUseCase {
         for (candidate in candidates) {
             if (candidate.sequelId in hiddenMediaIds) hidden.add(candidate) else visible.add(candidate)
         }
-        hidden.sortBy { it.sequelTitle.lowercase() }
+        hidden.sortBy { it.sequelTitle.lowercase(java.util.Locale.ROOT) }
         return HiddenSplit(visible, hidden)
     }
 

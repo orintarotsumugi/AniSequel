@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.expressive.bouncyPress
 
 @Composable
 fun ClientIdDialog(
@@ -53,11 +54,15 @@ fun ClientIdDialog(
                 onClick = {
                     if (inputClientId.isNotBlank()) onSave(inputClientId.trim())
                     onDismiss()
-                }
+                },
+                modifier = Modifier.bouncyPress(pressedScale = 0.94f)
             ) { Text("Save") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.bouncyPress(pressedScale = 0.94f)
+            ) { Text("Cancel") }
         }
     )
 }
@@ -94,11 +99,15 @@ fun ManualTokenDialog(
                 onClick = {
                     if (inputToken.isNotBlank()) onSave(inputToken.trim())
                     onDismiss()
-                }
+                },
+                modifier = Modifier.bouncyPress(pressedScale = 0.94f)
             ) { Text("Login") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.bouncyPress(pressedScale = 0.94f)
+            ) { Text("Cancel") }
         }
     )
 }
