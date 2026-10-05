@@ -166,10 +166,6 @@ dependencies {
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
-  implementation(libs.androidx.compose.ui.tooling.preview)
-  // ui-tooling is a debug artifact. It was declared as `implementation` as well
-  // as `debugImplementation` below, so the release APK shipped a second copy of
-  // the layout inspector it never uses.
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.browser)
@@ -214,6 +210,11 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
+  // ui-tooling AND ui-tooling-preview are both debug-only. `ui-tooling` was
+  // already moved off `implementation` once, but `ui-tooling-preview` was left
+  // behind on it - so release builds still packaged the @Preview annotation and
+  // its tooling support, for an app with zero @Preview functions in it.
+  debugImplementation(libs.androidx.compose.ui.tooling.preview)
   // "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }

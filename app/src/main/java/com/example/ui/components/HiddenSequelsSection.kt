@@ -185,12 +185,16 @@ private fun HiddenSectionHeader(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Rotation and container colour both animate, and both are read while
+    // composing - `Modifier.rotate` and `Modifier.background` take plain values,
+    // so there is no layer to hand them to. These are two-state changes on a
+    // header the user taps, so the cost is bounded; the container colour uses
+    // `FastEffects` (NoBouncy) rather than a spring that can overshoot, because a
+    // spring on `Color` interpolates componentwise and an overshoot can push a
+    // channel out of gamut mid-flight.
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = ExpressiveMotion.FastSpatial,
         label = "hidden_chevron_rotation"
     )
     val container by animateColorAsState(
@@ -199,7 +203,7 @@ private fun HiddenSectionHeader(
         } else {
             Color.Transparent
         },
-        animationSpec = spring(),
+        animationSpec = ExpressiveMotion.FastColorEffects,
         label = "hidden_header_container"
     )
 
@@ -242,11 +246,14 @@ private fun HiddenSectionHeader(
 /** The badge showing how many entries are hidden. */
 @Composable
 private fun SurfaceCount(count: Int, modifier: Modifier = Modifier) {
-    val container by animateColorAsState(
-        targetValue = MaterialTheme.colorScheme.tertiaryContainer,
-        animationSpec = spring(),
-        label = "hidden_count_container"
-    )
+    // Deliberately *not* an `animateColorAsState`. Its target was a
+    // `MaterialTheme.colorScheme` read with no `if` in front of it, so the
+    // animation was structurally incapable of ever animating: it installed an
+    // `AnimationState` and a running coroutine, settled on the first frame, and
+    // then sat there for the life of the composable doing nothing - while costing
+    // one extra recomposition on every first composition to feed
+    // `.background(container)`.
+    val container = MaterialTheme.colorScheme.tertiaryContainer
 
     Box(
         modifier = modifier

@@ -32,44 +32,22 @@ import com.example.data.repository.HiddenSequelsPreferences
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-sealed interface DashboardUiState {
-    data class Loading(val message: String = "Connecting to AniList...") : DashboardUiState
-
-    data class Success(
-        val viewer: ViewerProfile,
-        val missedSequels: List<MissedSequel>,
-        val totalWatchedCount: Int,
-        val totalMissedCount: Int,
-        val isRefreshing: Boolean = false,
-        val isDemoMode: Boolean = false,
-        /**
-         * Whether "Add to Planning" can actually reach AniList. False in demo
-         * mode and when scanning someone else's public profile: both look
-         * identical to a signed-in user until the mutation is rejected.
-         */
-        val canWriteToAniList: Boolean = true
-    ) : DashboardUiState
-
-    data class Error(
-        val message: String,
-        val canRetry: Boolean = true,
-        val isAuthError: Boolean = false
-    ) : DashboardUiState
-}
-
-sealed interface DashboardEvent {
-    /**
-     * [actionLabel] adds a button to the snackbar and the screen runs it when
-     * tapped. Hiding an entry is the one gesture in the app that is easy to do
-     * by accident and tedious to undo by hand, so it carries an undo rather
-     * than only telling the user where the list lives.
-     */
-    data class ShowSnackbar(
-        val message: String,
-        val actionLabel: String? = null
-    ) : DashboardEvent
-}
-
+/**
+ * Dashboard state holder: load, filter, and mutate the missed-sequel list.
+ *
+ * ## Where the rest of this went
+ *
+ * [DashboardUiState] and [DashboardEvent] live in `DashboardUiState.kt` now -
+ * they are the screen's contract, not this class's internals. This file is
+ * everything that *behaves*: fetching, the recompute pipeline, and the mutations
+ * the UI calls.
+ *
+ * The recompute half in particular - `discoveredCandidates`, `discoveryKey`, the
+ * detail cache, the watched-count memo and the generation guard on the debounced
+ * search - is the part of this class most worth reading, and it is still here
+ * only because it needs the ViewModel's own private state to be coherent. That
+ * coupling is real; see TO-DO.md for the extraction that would let it move.
+ */
 class DashboardViewModel(
     private val aniListRepository: AniListRepository,
     private val targetUsername: String? = null,
@@ -263,11 +241,7 @@ class DashboardViewModel(
                         onSuccess = { collection ->
                             cachedCollection = collection
                             // A new list invalidates everything derived from it.
-                            discoveredCandidates = null
-                            discoveryKey = null
-                            detailCache.clear()
-                            addedToPlanningIds.clear()
-                            recompute()
+                            invalidateDerivedState()
                         },
                         onFailure = { err -> showError(err, fallback = "Failed to fetch anime list") }
                     )
@@ -324,10 +298,12 @@ class DashboardViewModel(
                     cachedCollection = collection
                     // The server is the source of truth for what is already
                     // planned, so the optimistic local set is dropped here.
-                    addedToPlanningIds.clear()
-                    discoveredCandidates = null
-                    discoveryKey = null
-                    recompute()
+                    //
+                    // The detail cache is deliberately kept: a refresh that had to
+                    // re-fetch every entry detail would be slower than the
+                    // gesture is worth, and the entries themselves have not
+                    // changed identity.
+                    invalidateDerivedState(clearDetailCache = false)
                 },
                 onFailure = { err ->
                     val success = _uiState.value as? DashboardUiState.Success
@@ -350,8 +326,37 @@ class DashboardViewModel(
     private suspend fun loadDemoData() {
         cachedViewer = aniListRepository.getDemoProfile()
         cachedCollection = aniListRepository.getDemoAnimeList()
+        // Cleared here for the same reason as a real load: the demo list is a
+        // different collection from whatever was loaded before it, and the
+        // detail cache is keyed by media id. This path used to skip the clear,
+        // so a demo load following a real one could show details fetched for the
+        // previous viewer.
+        invalidateDerivedState()
+    }
+
+    /**
+     * Drops everything derived from the current [cachedCollection] and rebuilds
+     * the screen from it.
+     *
+     * ## Why this is one function
+     *
+     * The reset was written out three times - in `loadData`, `refresh` and
+     * `loadDemoData` - and the three copies had drifted apart. The demo path had
+     * come to omit `detailCache.clear()` and `addedToPlanningIds.clear()`,
+     * which is a latent wrong-data bug rather than a style one: the detail cache
+     * is keyed by media id, so a demo load following a real one could render
+     * entries against details fetched for a different viewer.
+     *
+     * The refresh path omits the detail clear on purpose - re-fetching every
+     * entry detail would make the gesture slower than it is worth - so the two
+     * flags are named at the call site rather than left to be remembered. What
+     * is no longer possible is a *third* path quietly forgetting a step.
+     */
+    private suspend fun invalidateDerivedState(clearDetailCache: Boolean = true) {
         discoveredCandidates = null
         discoveryKey = null
+        addedToPlanningIds.clear()
+        if (clearDetailCache) detailCache.clear()
         recompute()
     }
 

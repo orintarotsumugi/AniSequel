@@ -17,20 +17,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.update.formatBytes
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.DownloadProgress
-import com.example.ui.components.UpdateUiState
-import com.example.ui.components.openReleasePage
-import com.example.ui.components.rememberUpdateController
+import com.example.ui.components.update.DownloadProgress
+import com.example.ui.components.update.UpdateUiState
+import com.example.ui.components.update.rememberUpdateController
 
 @Composable
 fun UpdateSectionCard(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val controller = rememberUpdateController()
     val state = controller.state
 
@@ -133,7 +130,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                     Spacer(modifier = Modifier.height(4.dp))
                     SettingsButton(
                         text = "What's changed in v${state.manifest.version}",
-                        onClick = { openReleasePage(context, releaseUrl) },
+                        onClick = { controller.installation.openReleasePage(releaseUrl) },
                         icon = AppVectorIcons.OpenInNew,
                         variant = SettingsButtonVariant.Text,
                         fillWidth = true,
@@ -146,7 +143,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SettingsButton(
                     text = "Install now",
-                    onClick = { controller.install(context) },
+                    onClick = { controller.install() },
                     icon = AppVectorIcons.Download,
                     fillWidth = true,
                     testTag = "install_update_button"
@@ -156,14 +153,20 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             is UpdateUiState.NeedsInstallPermission -> {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Android will not let AniSequel open the installer until you allow it to install apps.",
+                    text = if (state.sentToSettings) {
+                        "Still not allowed to install apps. Grant it in Settings, then " +
+                            "come back - AniSequel will pick up where it left off."
+                    } else {
+                        "Android will not let AniSequel open the installer until you allow it " +
+                            "to install apps. This only has to be done once."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsButton(
-                    text = "Open Settings",
-                    onClick = { controller.requestInstallPermission(context) },
+                    text = if (state.sentToSettings) "Open settings again" else "Open Settings",
+                    onClick = { controller.requestInstallPermission() },
                     icon = AppVectorIcons.Settings,
                     fillWidth = true,
                     testTag = "grant_install_permission_button"

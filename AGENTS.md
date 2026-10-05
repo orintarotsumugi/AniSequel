@@ -1,54 +1,176 @@
 # AGENTS.md
 
-Developer & AI Agent Guidelines for AniSequel.
+Rules for working in **AniSequel**. Every one of these is here because the
+obvious alternative was tried and cost something. The *why* is the point — if
+you cannot reproduce the failure, do not remove the rule, and do add the missing
+explanation.
+
+Read [README.md](README.md) for how the app is put together; this file is only
+about the constraints.
 
 ---
 
-## 1. Modular Code & File Size Constraints
+## 1. Size and structure
 
-- **File Modularity**: Do not write monolithic Kotlin files. Keep files concise, focused, and ideally under 250–400 lines.
-- **Component Separation**: Separate complex UI components into sub-packages and distinct files (e.g., `ui/components/cards/`, `ui/components/detail/`, `ui/screens/dashboard/`).
-- **Single Responsibility**: Maintain clear separation between Presentation (`ui/`), Domain (`domain/usecase/`), and Data (`data/network/`, `data/repository/`).
+- **Keep files focused, ideally 250–400 lines.** Over that, the file is doing
+  more than one job.
+- **Split by responsibility, not by line count.** Splitting a 700-line class into
+  two arbitrary halves is churn. The split is worth making when the two halves
+  have genuinely different reasons to change, or different owners.
+- **Keep layers separate**: `ui/` (presentation), `domain/usecase/` (pure logic,
+  no Android imports), `data/` (network, repository, update).
+- **Comments explain why, not what.** A comment restating the line below it is
+  noise and rots. A comment recording that something looks wrong but is
+  deliberate is the most valuable thing in the file — those are the traps.
 
----
+### Why `DashboardViewModel` is not 700 lines of helpers by accident
 
-## 2. Iconography & Visual Assets
-
-- **Zero Emoji Dependencies**: Never use raw Unicode emoji characters as UI icons or status indicators.
-- **Vector Icons Only**: Use pure Compose `ImageVector` definitions and SVG path representations (located in `com.example.ui.components.AppVectorIcons`, `AppCustomVectors`, and `AppExtraVectors`).
-- **Semantic Naming**: Name vector assets with descriptive identifiers adhering to Android resource naming conventions.
-
----
-
-## 3. Web Search Requirement
-
-- **Verification First**: Always perform a web search or documentation query prior to introducing new third-party dependencies, Gradle plugins, or experimental APIs to ensure compatibility with Kotlin, AGP, and Android SDK versions.
-
----
-
-## 4. Material 3 Expressive Motion & Animations
-
-- **Spring Physics**: Use physics-based spring specifications from `ExpressiveMotion.kt` (`FastSpatial`, `BouncySpatial`, `SuperBouncy`, `DefaultSpatial`).
-- **Draw Phase Optimizations**: Apply animations and interactive scale/translation transforms within `Modifier.graphicsLayer { ... }` or via `Modifier.bouncyPress(...)` to avoid unnecessary composition and layout passes.
-- **Responsive Shapes**: Use Material 3 Expressive shapes with proper capsule geometries (`RoundedCornerShape(percent = 50)`) rather than stretched polygons.
+Its recompute pipeline (`discoveredCandidates`, `discoveryKey`, the detail cache,
+the watched-count memo, the debounce generation guard) shares about a dozen
+private fields. Splitting it means either passing that state around or making it
+`internal`, and both make the invariants *worse* — they are already hard to hold.
+It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
 
 ---
 
-## 5. Keystore & Release Signing Protocol
+## 2. UI and assets
 
-- **Never Commit Key Material**: The release signing key lives only in the `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD` repository secrets. Never add a `.jks`, `.p12`, `.pfx`, or base64-encoded key to the repository - a committed key lets anyone sign an "update" APK that the in-app updater accepts.
-- **Never Rotate Without Meaning It**: Every published APK must share one signing key, or Android refuses the update (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Rotating means existing installs can never update and must uninstall. There is no undo, and git history does not help: the old key stays compromised forever, so only a new key fixes anything.
-- **Never Rewrite History To Hide A Key**: Commit #9 exists because a history rewrite dropped the key. Purging history hides a key that is already compromised; it does not un-compromise it.
-- **Keystore Tests**: Always ensure `KeystoreIntegrityTest` passes during builds. It guards both halves of the protocol - no key in the repo, and no hardcoded secret in the workflow.
-- **CI Verification**: GitHub Actions workflow automatically verifies the APK signature and certificate fingerprints using `apksigner` prior to releasing.
+- **No emoji as UI icons.** Ever. Vectors only.
+- **Pure Compose `ImageVector`**, no PNG/SVG/XML drawable for app UI, no
+  `res/anim`, no `res/font`.
+- Custom vectors live in `AppVectorIcons.kt`, `AppCustomVectors.kt`,
+  `AppExtraVectors.kt`. Name them semantically, not by shape.
+- **Reachability counts.** A resource that no configuration on `minSdk = 29` can
+  load is dead weight in the APK. The five density-bucket launcher PNGs Android
+  Studio generates were 30 KB of exactly that.
 
 ---
 
-## 6. Version Synchronization Checklist
+## 3. Material 3 Expressive motion
 
-When updating versions, ensure all three locations match:
-1. `anisequelVersionName` & `anisequelVersionCode` in `gradle.properties`
-2. `BASELINE_VERSION_NAME` & `BASELINE_VERSION_CODE` in `app/build.gradle.kts`
-3. `version` & `version_code` in `update.json`
+- **Spring physics only.** Use the shared tokens in `ExpressiveMotion.kt`:
+  `FastSpatial`, `FastSpatialInt`, `FastColorEffects`, `BouncySpatial`,
+  `SuperBouncy`, `DefaultSpatial`, `PressSpatial`. If you need a new feel, add a
+  named token there rather than inlining a literal spring — six copies of the
+  same literal spring is how they drift apart.
+- **Animate transforms in the draw phase.** `Modifier.graphicsLayer { }`,
+  `Modifier.bouncyPress(...)`. Animating a value read by layout re-runs layout
+  on every frame.
+- **Animate toward a settled value.** `animateColorAsState` toward a constant,
+  or an `AnimatedContent` whose target changes every frame, animates forever or
+  restarts constantly. The dashboard counter was doing the latter.
+- **Cap indefinite animations.** One `rememberInfiniteTransition` per screen,
+  and gate it on visibility so a shimmer keeps ticking in the background.
+- **Shapes are capsules, not stretched polygons.** `RoundedPolygon` is authored on
+  a square perimeter and `toShape()` stretches it to the `Size` it is given, so a
+  120×44 tab renders a 120×44 *ellipse* from `MaterialShapes.Pill`. Use
+  `RoundedCornerShape(percent = 50)` for capsules.
+  `ExpressiveShapesTest` guards the geometry.
 
-Verify alignment by executing `VersionBaselineTest`.
+---
+
+## 4. Dependencies and versions
+
+- **Look up the docs before adding a dependency, Gradle plugin, or experimental
+  API.** Check it against *this* repo's Kotlin, AGP, and compileSdk — not against
+  the newest release.
+- **A version pin that looks stale is usually load-bearing.** `material3` is pinned
+  *above* the Compose BOM because Expressive components are alpha-only, and to
+  `1.5.0-alpha14` specifically because alpha16+ requires compileSdk 37 while this
+  app compiles against 36.1. The reasoning lives inline in
+  `gradle/libs.versions.toml`. Read it before "tidying" it.
+- **Scope every dependency.** `ui-tooling-preview` is `debugImplementation`, not
+  `implementation`. A release APK has no business shipping preview tooling.
+- **Do not add `-keep` rules on `androidx.compose`.** R8 and
+  `shrinkResources` are both on precisely because there are none; one keep rule
+  on Compose undoes the size work the app has done.
+
+---
+
+## 5. Release signing — read before touching the keystore
+
+> **Rotating the release key permanently breaks updates for every existing
+> install.** Android refuses to install over an app signed with a different key
+> (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) and there is no undo.
+
+- **Never commit key material.** No `.jks`, `.p12`, `.pfx`, and no base64 key. The
+  key lives only in the `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD`
+  repository secrets. A committed key lets anybody sign an "update" APK that the
+  in-app updater will accept.
+- **Never rewrite history to hide a key.** The old key is in commit history and
+  stays there. Purging it hides a key that is already compromised without
+  un-compromising it, and it has already cost this project one release path.
+- **Never add a keytool fallback in CI.** The workflow has no
+  `keytool -genkeypair` fallback on purpose: those branches turned a repository
+  with no secrets into a green build that signed every release with a fresh
+  random key, and every user who installed one got
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Missing secrets must fail loudly.
+- **`KeystoreIntegrityTest` must pass.** It guards both halves — no key in the
+  repo, and no literal secret in the workflow.
+- **The workflow verifies the signature for real**, with `apksigner verify
+  --print-certs` against the pinned certificate digest, on non-PR runs only.
+
+Full history and the current fingerprint: [README § Release signing](README.md#release-signing).
+
+---
+
+## 6. Version numbers
+
+Version lives in **three** places and all three must agree:
+
+1. `anisequelVersionName` / `anisequelVersionCode` in `gradle.properties`
+2. `BASELINE_VERSION_NAME` / `BASELINE_VERSION_CODE` in `app/build.gradle.kts`
+3. `version` / `version_code` in `update.json`
+
+`VersionBaselineTest` enforces it — run it. After a release, bring 1 and 2
+forward by hand: the workflow's commit is rejected by branch protection because
+GitHub does not run workflows for `GITHUB_TOKEN` pushes.
+
+---
+
+## 7. The updater
+
+- **`REQUEST_INSTALL_PACKAGES` is not a runtime permission.** Declaring it in the
+  manifest does not grant it; it only makes AniSequel allowed to *ask*. The grant
+  is per-app, in Settings, from Android 8.
+- **Never prompt for it at launch.** Only in response to the user asking to
+  update.
+- **Download before checking the permission.** The user already asked. Asking
+  first means refusing to start over a setting they may have granted since the
+  last launch.
+- **The grant is observed via `onResume`, never polled.** Nothing in-process is
+  told when the user flips a switch in another app's Settings screen.
+- **Cache APKs by release version** (`UpdateManager.downloadedApkFor`), so the
+  Settings round trip costs one download instead of two.
+- **Compare `version_code`, never the version string.** "1.0.9" sorts above
+  "1.0.10"; the code is the GitHub run number and is monotonic by construction.
+- **Verify before installing**: zip magic, matching package name, and a signature
+  that is either the pinned release certificate or the running app's own. A
+  release build refuses anything it cannot positively identify.
+
+---
+
+## 8. Verification
+
+- **`./gradlew test` is the gate.** `lintRelease` is advisory
+  (`abortOnError = false`); do not describe it as blocking.
+- **Write the regression test.** If you fix a bug that reached a build, the test
+  that fails without the fix is the deliverable. `ApkPackagingTest`,
+  `VersionBaselineTest`, `KeystoreIntegrityTest` and `ExpressiveShapesTest` all
+  exist because of a specific shipped failure.
+- **CI is the build.** There is no local Android SDK in the development
+  environment; verify by pushing and reading Actions, not by guessing.
+- **Do not add a test that asserts a behaviour you chose rather than one the
+  codebase requires.** Pin requirements, not preferences.
+
+---
+
+## 9. Comments and documentation
+
+- Explain the failure that made the code necessary, not the code.
+- When fixing something that looks wrong, say in a comment that it *was* wrong,
+  what it did, and what it does now — otherwise the next reader "fixes" it back.
+- Keep `gradle/libs.versions.toml`'s inline version reasoning. It is the only
+  record of why a pin exists.
+- Significant architecture or protocol changes get a section in
+  [README.md](README.md), not just a code comment.

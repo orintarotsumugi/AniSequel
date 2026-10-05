@@ -13,29 +13,27 @@ import androidx.graphics.shapes.RoundedPolygon
  *
  * Two families live here, and which one a shape comes from matters:
  *
- *  - The [RoundedPolygon] tokens below are *decorative*. They are authored on a
- *    square perimeter and are only used on elements that are themselves square
- *    (see `ExpressiveEmptyOrb`, which is a fixed `size(80.dp)`).
+ *  - The [RoundedPolygon] token below is *decorative*. It is authored on a
+ *    square perimeter and is only used on an element that is itself square
+ *    (`ExpressiveEmptyOrb`, a fixed `size(80.dp)`).
  *  - The capsule tokens are *structural* - they outline tabs and segmented
  *    controls, which are wide and short and change size with their content.
  *
  * Those two must not be mixed. See [pill].
+ *
+ * ## Why there is only one polygon token
+ *
+ * There used to be five - `orb`, `burst`, `diamond`, `cookie4` and `flower` -
+ * and four of them had no call sites anywhere in the app. Every one is a `get()`
+ * property that calls straight into `MaterialShapes`, so each one is a live
+ * reference the shrinker has to consider reachable, and each one is a shape
+ * somebody could reach for by name without ever learning the square-perimeter
+ * caveat above. The token set is now the smallest set the UI actually draws
+ * with; adding one back means adding a call site, not just a property.
  */
 object ExpressiveShapes {
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val orb: RoundedPolygon get() = MaterialShapes.Cookie9Sided
-
-    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-    val burst: RoundedPolygon get() = MaterialShapes.SoftBurst
-
-    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-    val diamond: RoundedPolygon get() = MaterialShapes.Diamond
-
-    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-    val cookie4: RoundedPolygon get() = MaterialShapes.Cookie4Sided
-
-    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-    val flower: RoundedPolygon get() = MaterialShapes.Flower
 
     /**
      * A true capsule: straight sides, semicircular ends, at any size.

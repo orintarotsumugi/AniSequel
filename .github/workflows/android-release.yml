@@ -504,10 +504,15 @@ jobs:
 
           **[⬇ Download anisequel-universal.apk](${ARTIFACT_URL})**
 
-          One universal build — it runs on every phone and tablet on Android 7
-          (API 24) and above, so there is nothing to choose between. It is signed
-          with the **same key as every published release**, so it installs
-          straight over an existing copy of AniSequel without an uninstall first.
+          One universal build — it runs on every phone and tablet on Android 10
+          (API 29) and above, so there is nothing to choose between.
+
+          **This build is signed with a throwaway key generated inside the
+          runner**, never the release key, so it deliberately will _not_ install
+          over an existing copy of AniSequel — Android rejects that as
+          \`INSTALL_FAILED_UPDATE_INCOMPATIBLE\`. Uninstall first, or ignore it if
+          you already have a working install. Only the key held in repository
+          secrets signs anything a user receives.
 
           *Version \`${VERSION}\`, built from \`${SHA:0:8}\` on run \`${RUN_ID}\`.
           Artifacts are kept by GitHub for 90 days.*
