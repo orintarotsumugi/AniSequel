@@ -176,6 +176,71 @@ class AuthRedirectTest {
         assertTrue(viewModel.uiState.value is AuthUiState.Authenticated)
     }
 
+    /**
+     * A failed attempt must not be a dead end.
+     *
+     * `AuthUiState.Error` had no way out, and the sign-in card disabled its
+     * "Connect AniList Account" button whenever the state was an `Error` - so
+     * declining the consent screen, which is the single most likely outcome and
+     * the one the message above explicitly treats as "not worth alarming them
+     * about", left no way to try again. The process had to be killed.
+     */
+    @Test
+    fun `a declined sign in can be retried without restarting the app`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.handleAuthRedirect(Uri.parse("anisequel://oauth#error=access_denied"))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AuthUiState.Error)
+
+        viewModel.dismissAuthError()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(
+            "the sign-in card offers Connect only while the state is not Error, so " +
+                "dismissing the error is what re-enables it; expected " +
+                "Unauthenticated, got $state",
+            state is AuthUiState.Unauthenticated
+        )
+
+        // And the retry has to work, not just unlock the button.
+        viewModel.handleAuthRedirect(Uri.parse("anisequel://oauth#access_token=abc123&token_type=Bearer"))
+        advanceUntilIdle()
+
+        assertEquals("abc123", repository.getAccessToken())
+        assertTrue(viewModel.uiState.value is AuthUiState.Authenticated)
+    }
+
+    /**
+     * Dismissing must not be able to throw away a working session.
+     *
+     * The retry affordance is a single button, and nothing stops it being
+     * pressed twice, so "go back to Unauthenticated" is only safe while the
+     * state really is an error.
+     */
+    @Test
+    fun `dismissing an error never signs the user out`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.handleAuthRedirect(Uri.parse("anisequel://oauth#access_token=abc123&token_type=Bearer"))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AuthUiState.Authenticated)
+
+        viewModel.dismissAuthError()
+        advanceUntilIdle()
+
+        assertTrue(
+            "a signed-in session must survive dismissAuthError()",
+            viewModel.uiState.value is AuthUiState.Authenticated
+        )
+        assertEquals("abc123", repository.getAccessToken())
+    }
+
     private abstract class StubAniListRepository : AniListRepository {
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> =
             Result.failure(UnsupportedOperationException())

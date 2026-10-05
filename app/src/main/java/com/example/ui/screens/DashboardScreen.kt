@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +43,7 @@ import com.example.ui.components.QuickFilterBar
 import com.example.ui.components.SequelCard
 import com.example.ui.components.SequelDetailSheet
 import com.example.ui.components.StatsBanner
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.screens.dashboard.DashboardDemoBanner
 import com.example.ui.screens.dashboard.DashboardErrorView
 import com.example.ui.screens.dashboard.DashboardLoadingView
@@ -253,7 +253,7 @@ fun DashboardScreen(
                                                     dampingRatio = Spring.DampingRatioMediumBouncy,
                                                     stiffness = Spring.StiffnessMediumLow
                                                 ),
-                                                fadeOutSpec = tween(120)
+                                                fadeOutSpec = ExpressiveMotion.FastEffects
                                             )
                                     )
                                 }

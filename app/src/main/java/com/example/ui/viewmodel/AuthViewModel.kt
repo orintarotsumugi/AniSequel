@@ -179,8 +179,36 @@ class AuthViewModel(
 
                 _uiState.value = AuthUiState.Authenticated(token)
             } catch (e: Exception) {
+                // The token stayed on disk precisely because the check never
+                // finished. A session that was never verified by AniList must
+                // not be resurrected as Authenticated on the next cold start,
+                // which would produce a dashboard that only says "Session
+                // expired" and never recover on its own.
+                runCatching { authRepository.clearAccessToken() }
                 _uiState.value = AuthUiState.Error(e.message ?: "Failed to save token")
             }
+        }
+    }
+
+    /**
+     * Returns to [AuthUiState.Unauthenticated] from an [AuthUiState.Error].
+     *
+     * `Error` used to be terminal, and the sign-in card disabled its "Connect
+     * AniList Account" button whenever the state was an `Error`. The two
+     * together meant the most common way of *reaching* that state - backing out
+     * of AniList's consent screen - left the user with no way to try again:
+     * the only button that can restart the flow was the one that had just been
+     * switched off, and the process had to be killed to get it back. The same
+     * held after pasting a token AniList refused, which is the exact moment
+     * somebody most wants to try again with a better copy.
+     *
+     * Deliberately only ever moves *away* from `Error`. A stored token read in
+     * progress is not something to clear, and [Authenticated] is the state the
+     * user actually wants to keep.
+     */
+    fun dismissAuthError() {
+        if (_uiState.value is AuthUiState.Error) {
+            _uiState.value = AuthUiState.Unauthenticated
         }
     }
 
@@ -204,7 +232,11 @@ class AuthViewModel(
                 aniListRepository?.clearDetailCache()
                 _uiState.value = AuthUiState.Unauthenticated
             } catch (e: Exception) {
-                _uiState.value = AuthUiState.Unauthenticated
+                // Clearing the on-disk session did not succeed, so the session
+                // is still on disk. Claiming "signed out" anyway would leave
+                // the next cold start resurrecting a session this user asked
+                // for to be gone; say that it failed instead.
+                _uiState.value = AuthUiState.Error(e.message ?: "Couldn't sign out. Try again.")
             }
         }
     }

@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.FilterCriteria
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveCountBadge
+import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.components.expressive.bouncyPress
 
 @Composable
 fun DashboardSearchBar(
@@ -66,14 +68,17 @@ fun DashboardSearchBar(
         trailingIcon = {
             AnimatedVisibility(
                 visible = query.isNotBlank(),
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
+                enter = fadeIn(ExpressiveMotion.FastEffects) +
+                    scaleIn(animationSpec = ExpressiveMotion.BouncySpatial),
+                exit = fadeOut(ExpressiveMotion.FastEffects) +
+                    scaleOut(animationSpec = ExpressiveMotion.FastSpatial)
             ) {
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         onQueryChange("")
-                    }
+                    },
+                    modifier = Modifier.bouncyPress(pressedScale = 0.9f)
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Close,

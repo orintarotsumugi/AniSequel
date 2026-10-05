@@ -44,6 +44,13 @@ class AniListRepositoryImpl(
          * [AniListRepository.getUserAnimeList].
          */
         const val LIST_CACHE_TTL_MILLIS = 60 * 60 * 1000L
+
+        /**
+         * Soft bound on the in-memory detail cache. One node per opened card
+         * is held for the lifetime of the VM; without a ceiling, opening a
+         * lot of cards keeps their full cast/studio trees resident.
+         */
+        const val MAX_DETAIL_CACHE_NODES = 128
     }
 
     /**
@@ -172,6 +179,12 @@ class AniListRepositoryImpl(
             apiService::getMediaDetail
         ).map {
             val node = it.media.require("That entry is no longer available on AniList.")
+            if (detailCache.size >= MAX_DETAIL_CACHE_NODES) {
+                // Soft cap: falling back to a fresh fetch on the next open
+                // is cheaper than holding every full cast/studio tree the
+                // user has ever tapped.
+                detailCache.clear()
+            }
             detailCache[mediaId] = node
             node
         }
@@ -185,6 +198,13 @@ class AniListRepositoryImpl(
             ),
             apiService::saveMediaListEntry
         ).map { it.entry.require("No response from planning mutation") }
+            // The completed list has one more "planned" entry than the copy
+            // this add just made. Both cache keys (`user:` for the signed-in
+            // query, `userName:` for the public one) can be holding the
+            // same franchise's entry as "missed", so the safest correct move
+            // is dropping them rather than discovering the gap entry it
+            // added still shows as a missed sequel on the next list recompute.
+            .onSuccess { listCache.clear() }
 
     override fun getDemoProfile(): ViewerProfile = DemoDataProvider.getDemoViewer()
 
@@ -253,6 +273,10 @@ class AniListRepositoryImpl(
                     cause = e
                 )
             )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Cancellation must propagate: treating it as failure reports a
+            // bogus error and leaves the structured-concurrency tree alive.
+            throw e
         } catch (e: Exception) {
             Result.failure(
                 AniListException(

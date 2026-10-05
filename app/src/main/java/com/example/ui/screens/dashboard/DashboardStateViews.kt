@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.ShimmerCard
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
+import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.viewmodel.DashboardUiState
 
 @Composable
@@ -118,7 +119,9 @@ fun DashboardErrorView(
         if (state.isAuthError) {
             Button(
                 onClick = onSignInAgain,
-                modifier = Modifier.testTag("sign_in_again_button")
+                modifier = Modifier
+                    .testTag("sign_in_again_button")
+                    .bouncyPress(pressedScale = 0.96f)
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Login,
@@ -131,7 +134,9 @@ fun DashboardErrorView(
         } else if (state.canRetry) {
             Button(
                 onClick = onRetry,
-                modifier = Modifier.testTag("retry_button")
+                modifier = Modifier
+                    .testTag("retry_button")
+                    .bouncyPress(pressedScale = 0.96f)
             ) {
                 Text("Try again")
             }

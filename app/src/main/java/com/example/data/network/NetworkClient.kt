@@ -44,6 +44,9 @@ object NetworkClient {
     @Volatile
     private var cachedService: AniListApiService? = null
 
+    @Volatile
+    private var cachedClient: OkHttpClient? = null
+
     private val serviceLock = Any()
 
     fun createApiService(authRepository: AuthRepository): AniListApiService {
@@ -56,14 +59,21 @@ object NetworkClient {
                 if (cachedRepository === authRepository) return@synchronized existing
             }
 
-            val service = buildApiService(authRepository)
+            // A previous client pointed at a different repository - or a
+            // race lost scenario - would otherwise leak its dispatcher
+            // thread pool and keep-alive sockets for the whole session.
+            cachedClient?.connectionPool?.evictAll()
+            cachedClient?.dispatcher?.executorService?.shutdown()
+
+            val (service, client) = buildApiService(authRepository)
             cachedRepository = authRepository
             cachedService = service
+            cachedClient = client
             service
         }
     }
 
-    private fun buildApiService(authRepository: AuthRepository): AniListApiService {
+    private fun buildApiService(authRepository: AuthRepository): Pair<AniListApiService, OkHttpClient> {
         val clientBuilder = OkHttpClient.Builder()
             // RateLimitInterceptor first, so it is the *outermost* application
             // interceptor. The comment below has always said the retry has to
@@ -128,7 +138,7 @@ object NetworkClient {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
 
-        return retrofit.create(AniListApiService::class.java)
+        return retrofit.create(AniListApiService::class.java) to okHttpClient
     }
 
     /**

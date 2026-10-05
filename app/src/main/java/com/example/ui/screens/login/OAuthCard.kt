@@ -38,14 +38,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.RedirectUrlHint
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.bouncyPress
+import com.example.ui.components.RedirectUrlHint
 import com.example.ui.viewmodel.AuthUiState
 
 @Composable
 fun OAuthCard(
     authState: AuthUiState,
     authUrl: String,
+    onRetry: () -> Unit,
     onShowManualToken: () -> Unit,
     onShowClientId: () -> Unit,
     modifier: Modifier = Modifier
@@ -81,8 +83,8 @@ fun OAuthCard(
 
         AnimatedVisibility(
             visible = authState is AuthUiState.Error,
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn(ExpressiveMotion.FastEffects),
+            exit = fadeOut(ExpressiveMotion.FastEffects)
         ) {
             if (authState is AuthUiState.Error) {
                 Card(
@@ -128,9 +130,19 @@ fun OAuthCard(
             Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    // Clear the error before leaving for the browser. The card
+                    // above the button explained why the last attempt failed,
+                    // and that explanation has to go before the user can try
+                    // again - it described a *previous* attempt, not this one.
+                    //
+                    // This button used to be `enabled = authState !is Error`,
+                    // which combined with `Error` being a state nothing could
+                    // leave to make a failed sign-in a dead end: declining the
+                    // AniList consent screen - the single most likely outcome -
+                    // disabled the only control that could restart the flow.
+                    onRetry()
                     openCustomTab(context, authUrl)
                 },
-                enabled = authState !is AuthUiState.Error,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -160,7 +172,9 @@ fun OAuthCard(
             ) {
                 TextButton(
                     onClick = onShowManualToken,
-                    modifier = Modifier.testTag("paste_token_button")
+                    modifier = Modifier
+                        .testTag("paste_token_button")
+                        .bouncyPress(pressedScale = 0.94f)
                 ) {
                     Text("Paste Token")
                 }
@@ -171,7 +185,9 @@ fun OAuthCard(
                 )
                 TextButton(
                     onClick = onShowClientId,
-                    modifier = Modifier.testTag("custom_client_id_button")
+                    modifier = Modifier
+                        .testTag("custom_client_id_button")
+                        .bouncyPress(pressedScale = 0.94f)
                 ) {
                     Text("Client ID")
                 }

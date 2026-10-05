@@ -82,7 +82,7 @@ data class MissedSequel(
     /** "Winter 2019", from AniList's `season` and `seasonYear`. */
     private val cachedAiringSeason: String? by lazy {
         val name = sequelMedia.season?.takeIf { it.isNotBlank() } ?: return@lazy null
-        val readable = name.lowercase().replaceFirstChar { it.uppercase() }
+        val readable = name.lowercase(java.util.Locale.ROOT).replaceFirstChar { it.uppercase(java.util.Locale.ROOT) }
         sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
     }
     val sequelId: Int get() = sequelMedia.id
@@ -101,8 +101,8 @@ data class MissedSequel(
     val studioName: String? get() = sequelMedia.studios?.nodes?.firstOrNull()?.name
     val siteUrl: String get() = sequelMedia.siteUrl ?: "https://anilist.co/anime/$sequelId"
     val source: String?
-        get() = sequelMedia.source?.replace('_', ' ')?.lowercase()?.split(' ')
-            ?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+        get() = sequelMedia.source?.replace('_', ' ')?.lowercase(java.util.Locale.ROOT)?.split(' ')
+            ?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase(java.util.Locale.ROOT) } }
     val duration: String?
         get() = sequelMedia.duration?.let { "$it mins / ep" }
     val trailerUrl: String?

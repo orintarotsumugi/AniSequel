@@ -28,6 +28,7 @@ import com.example.data.model.ViewerProfile
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
+import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.screens.settings.EditSettingsTab
 import com.example.ui.screens.settings.InfoSettingsTab
 import com.example.ui.viewmodel.AuthViewModel
@@ -55,7 +56,9 @@ fun SettingsScreen(
                     navigationIcon = {
                         IconButton(
                             onClick = onNavigateBack,
-                            modifier = Modifier.testTag("settings_back_button")
+                            modifier = Modifier
+                                .testTag("settings_back_button")
+                                .bouncyPress(pressedScale = 0.9f)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -94,6 +97,7 @@ fun SettingsScreen(
                     viewer = viewer,
                     onNavigateBack = onNavigateBack,
                     onNavigateToLogin = onNavigateToLogin,
+                    onSignOut = authViewModel::logout,
                     modifier = Modifier.padding(paddingValues)
                 )
             }

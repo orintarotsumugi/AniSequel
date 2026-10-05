@@ -19,6 +19,7 @@ import com.example.domain.usecase.GetViewerProfileUseCase
 import com.example.domain.usecase.SaveToPlanningUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +98,17 @@ class DashboardViewModel(
     private val _filterCriteria = MutableStateFlow(FilterCriteria())
     val filterCriteria: StateFlow<FilterCriteria> = _filterCriteria.asStateFlow()
 
-    private val _eventFlow = MutableSharedFlow<DashboardEvent>()
+    private val _eventFlow = MutableSharedFlow<DashboardEvent>(
+        // Default SharedFlow has no buffer, so emit() used to suspend until a
+        // collector asked for the value. The snackbar collector is briefly
+        // absent on every configuration change and detail sheet, and an undo
+        // emitted during that gap simply vanished - and with `emit` suspending,
+        // the hide persistence that follows it was delayed by the same gap.
+        // Buffer a few events instead, dropping the oldest if a collector never
+        // comes back, so the action and the Undo offer cannot wedge the VM.
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val eventFlow: SharedFlow<DashboardEvent> = _eventFlow.asSharedFlow()
 
     /**
