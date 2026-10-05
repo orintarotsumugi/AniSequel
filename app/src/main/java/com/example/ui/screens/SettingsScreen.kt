@@ -31,6 +31,7 @@ import com.example.ui.components.expressive.ExpressiveTabBar
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.screens.settings.EditSettingsTab
 import com.example.ui.screens.settings.InfoSettingsTab
+import com.example.ui.screens.settings.ThemeTab
 import com.example.ui.viewmodel.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
