@@ -14,6 +14,8 @@ import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.repository.AniListRepository
+import com.example.data.repository.RefreshInterval
+import com.example.data.repository.RefreshIntervalPreferences
 import com.example.domain.usecase.FindMissedSequelsUseCase
 import com.example.domain.usecase.GetViewerProfileUseCase
 import com.example.domain.usecase.SaveToPlanningUseCase
@@ -60,7 +62,15 @@ class DashboardViewModel(
      * to remember anything - construct without one, and so existing call sites
      * keep compiling.
      */
-    private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null
+    private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null,
+    /**
+     * How stale the list is allowed to get before it is re-fetched.
+     *
+     * Optional for the same reason as [hiddenSequelsPreferences]: demo mode has
+     * nothing to refresh, and without a store the app falls back to
+     * [RefreshInterval.DEFAULT] rather than refusing to start.
+     */
+    private val refreshIntervalPreferences: RefreshIntervalPreferences? = null
 ) : ViewModel() {
 
     companion object {
@@ -100,6 +110,23 @@ class DashboardViewModel(
     private val _hiddenSequels = MutableStateFlow<List<MissedSequel>>(emptyList())
     val hiddenSequels: StateFlow<List<MissedSequel>> = _hiddenSequels.asStateFlow()
 
+    /**
+     * The interval the user has chosen, mirrored here from the store.
+     *
+     * Collected rather than read once because [ListFreshnessWatch] asks for it on
+     * every tick: picking "15 min" in Settings has to take effect immediately,
+     * not on the next launch.
+     */
+    private var currentRefreshInterval: RefreshInterval = RefreshInterval.DEFAULT
+
+    private val freshnessWatch = ListFreshnessWatch(
+        scope = viewModelScope,
+        interval = { currentRefreshInterval },
+        // A lambda rather than `::refresh`, so the reference cannot depend on the
+        // declaration order of the members it closes over.
+        onRefresh = { refresh() }
+    )
+
     init {
         // The hidden set outlives the process, so it is re-read on every launch
         // rather than held in memory. Guarded on Success because the stored
@@ -114,6 +141,44 @@ class DashboardViewModel(
                 }
             }
         }
+
+        // Collected rather than read once, so changing the interval in Settings
+        // takes effect on the next check instead of after a restart. The watch
+        // asks for this on every tick precisely so it does not need to be told.
+        refreshIntervalPreferences?.let { preferences ->
+            viewModelScope.launch {
+                preferences.interval.collectLatest { interval ->
+                    currentRefreshInterval = interval
+                }
+            }
+        }
+    }
+
+    /**
+     * The app has come to the foreground.
+     *
+     * Called on every resume and on every return to this destination, which is
+     * the fix for handing back a list that went stale the moment it was fetched:
+     * Android resumes a process rather than restarting it, so reopening AniSequel
+     * used to answer from the same in-memory cache until the hour elapsed.
+     *
+     * Skipped while a load is already in flight. On a cold start this runs
+     * moments after `init`, and the watch would otherwise put a second fetch on
+     * top of the first - which the user pays for in both time and rate limit.
+     */
+    fun onForegrounded() {
+        if (isDemo) return
+        if (loadJob?.isActive == true) return
+
+        // Starting is also the immediate staleness check, so this is the whole of
+        // the reopen behaviour: an overdue list is refetched now, a current one
+        // is left alone until the interval says otherwise.
+        freshnessWatch.start()
+    }
+
+    /** The app has gone to the background; stop spending requests on nobody's screen. */
+    fun onBackgrounded() {
+        freshnessWatch.stop()
     }
 
     private var cachedViewer: ViewerProfile? = null
@@ -240,6 +305,7 @@ class DashboardViewModel(
                     listResult.fold(
                         onSuccess = { collection ->
                             cachedCollection = collection
+                            freshnessWatch.markLoaded()
                             // A new list invalidates everything derived from it.
                             invalidateDerivedState()
                         },
@@ -296,6 +362,12 @@ class DashboardViewModel(
             aniListRepository.getUserAnimeList(viewer.id, forceRefresh = true).fold(
                 onSuccess = { collection ->
                     cachedCollection = collection
+                    // Both a manual refresh and an automatic one land here, so
+                    // this is the single place the freshness clock restarts.
+                    // Without it the interval is measured from the *previous*
+                    // fetch, so a dashboard left open would keep re-fetching on a
+                    // schedule that ignored the ones it had just done.
+                    freshnessWatch.markLoaded()
                     // The server is the source of truth for what is already
                     // planned, so the optimistic local set is dropped here.
                     //
@@ -766,7 +838,8 @@ class DashboardViewModel(
         private val aniListRepository: AniListRepository,
         private val targetUsername: String? = null,
         private val isDemo: Boolean = false,
-        private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null
+        private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null,
+        private val refreshIntervalPreferences: RefreshIntervalPreferences? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -774,7 +847,8 @@ class DashboardViewModel(
                 aniListRepository = aniListRepository,
                 targetUsername = targetUsername,
                 isDemo = isDemo,
-                hiddenSequelsPreferences = hiddenSequelsPreferences
+                hiddenSequelsPreferences = hiddenSequelsPreferences,
+                refreshIntervalPreferences = refreshIntervalPreferences
             ) as T
         }
     }

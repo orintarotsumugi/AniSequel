@@ -168,6 +168,47 @@ Two client interceptors matter:
   recompute triggered by both a filter change and a detail load must not become
   two round trips.
 
+### Keeping the list fresh
+
+The AniList list is the app's whole input, and it is expensive: one
+`MediaListCollection` is the single most expensive request the app makes, against
+an API that allows roughly 30 requests a minute. It is also the thing that goes
+stale while you are not looking — you finish something in a browser, or an
+episode airs, and the dashboard you come back to is wrong.
+
+That collision used to be resolved badly, in the one direction that kept the
+dashboard stale: the list was cached for a flat hour, and nothing observed the
+app coming back. Android **resumes** a process rather than restarting it, so
+closing and reopening AniSequel answered from the same in-memory entry, and the
+ViewModel's one `init` load never ran again. Reopening was not a reload, and the
+only route to fresh data was the refresh button.
+
+Two mechanisms now share one setting, in **Settings → Edit**:
+
+| | |
+| --- | --- |
+| `RefreshIntervalPreferences` | DataStore-backed choice: Always, 15 min, 30 min (default), 1 hour, Manual |
+| `AniListRepositoryImpl` | reuses a completed list response for that long, then re-fetches |
+| `ListFreshnessWatch` | decides *when* to ask, owned by `DashboardViewModel` |
+
+The watch is driven by `LifecycleResumeEffect` in `DashboardScreen`, so it acts
+on every `ON_RESUME` and on every return to the destination, and it runs a timer
+only while the app is actually in the foreground. Two deliberate consequences:
+
+- **A setting changed in Settings takes effect immediately.** Both the repository
+  and the watch read the interval per lookup rather than capturing it, so
+  picking "15 min" does not need a restart.
+- **The timer is foreground-only, and there is no WorkManager job.** WorkManager
+  cannot run periodic work more often than every 15 minutes, is deliberately
+  inexact under doze, and would spend AniList's request budget refreshing a list
+  nobody is looking at.
+
+`Always` and `Manual` schedule no timer at all — `Always` has a zero window, so a
+loop would re-fetch continuously rather than on resume, and `Manual` must not
+re-fetch without the gesture. Both are decided entirely by the resume check.
+After a *failed* automatic fetch the loop waits a five-minute floor before asking
+again, so one dropped request cannot become a tight retry loop.
+
 ---
 
 ## Building it
@@ -225,6 +266,8 @@ BOM. This is not inertia:
 | `ApkPackagingTest` | `dex.useLegacyPackaging` is set, and in the dex block |
 | `UpdateManifestTest` | Manifest parsing, version comparison |
 | `ExpressiveShapesTest` | Capsule geometry is not a stretched polygon |
+| `RefreshIntervalTest`, `ListFreshnessWatchTest` | Staleness boundary, foreground re-fetch, timer, retry floor |
+| `RefreshIntervalPreferencesTest` | The interval survives storage and reaches the repository |
 | `AuthRedirectTest`, `AniListOAuthTest` | OAuth redirect and token handling |
 
 `test` is a **gate**; `lintRelease` is not (`abortOnError = false` in
@@ -244,6 +287,12 @@ than claiming otherwise).
 - **`ExpressiveShapesTest`** — `RoundedPolygon` is authored on a square
   perimeter, and `toShape()` stretches it to whatever `Size` it is handed. On a
   tab measured 120×44, `MaterialShapes.Pill` rendered as a 120×44 *ellipse*.
+- **`ListFreshnessWatchTest`** — the list was cached for an hour and nothing
+  watched for the app returning, so because Android *resumes* a process instead of
+  restarting it, reopening AniSequel produced the identical dashboard every time.
+  The suite pins the three things that fix had to get right: an overdue list is
+  re-fetched on resume, a fresh one is not (twenty resumes inside an interval cost
+  zero requests), and a failed fetch cannot become a tight retry loop.
 
 ---
 

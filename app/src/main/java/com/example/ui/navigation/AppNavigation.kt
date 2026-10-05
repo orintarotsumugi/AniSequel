@@ -29,6 +29,7 @@ import com.example.data.network.NetworkClient
 import com.example.data.repository.AniListRepositoryImpl
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.HiddenSequelsPreferences
+import com.example.data.repository.RefreshIntervalPreferences
 import com.example.data.repository.ThemePreferences
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.LoginScreen
@@ -83,8 +84,31 @@ fun AppNavigation(
         HiddenSequelsPreferences(context.applicationContext)
     }
 
+    // Application-scoped for the same reason: how often the list is re-fetched is
+    // a property of the person, and the repository that caches the list outlives
+    // any one screen. Two instances would mean two DataStore readers disagreeing
+    // about the same preference.
+    val refreshIntervalPreferences = remember(context) {
+        RefreshIntervalPreferences(context.applicationContext)
+    }
+
+    // The cache window is a supplier rather than a value because the user can
+    // change it from Settings while the app is open: reading it per lookup is
+    // what makes "15 min" mean fifteen minutes from the moment it is picked,
+    // rather than from the moment this repository was built.
     val aniListRepository = remember(authRepository) {
-        AniListRepositoryImpl(NetworkClient.createApiService(authRepository))
+        AniListRepositoryImpl(
+            apiService = NetworkClient.createApiService(authRepository),
+            listCacheTtlMillis = refreshIntervalPreferences::currentStalenessMillis
+        )
+    }
+
+    // Mirrors the stored interval into the plain value the repository reads,
+    // since a list-cache lookup cannot suspend. Started here rather than in the
+    // preferences object because that would mean the class owning a CoroutineScope
+    // it has no business having.
+    LaunchedEffect(refreshIntervalPreferences) {
+        refreshIntervalPreferences.observeInterval()
     }
 
     // Nothing is loaded until the stored session has actually been read.
@@ -131,7 +155,8 @@ fun AppNavigation(
             key = "dashboard_${authenticated.token}",
             factory = DashboardViewModel.Factory(
                 aniListRepository = aniListRepository,
-                hiddenSequelsPreferences = hiddenSequelsPreferences
+                hiddenSequelsPreferences = hiddenSequelsPreferences,
+                refreshIntervalPreferences = refreshIntervalPreferences
             )
         )
     } else {
@@ -250,7 +275,8 @@ fun AppNavigation(
                 factory = DashboardViewModel.Factory(
                     aniListRepository = aniListRepository,
                     targetUsername = username,
-                    hiddenSequelsPreferences = hiddenSequelsPreferences
+                    hiddenSequelsPreferences = hiddenSequelsPreferences,
+                    refreshIntervalPreferences = refreshIntervalPreferences
                 )
             )
 
@@ -283,6 +309,7 @@ fun AppNavigation(
             SettingsScreen(
                 authViewModel = authViewModel,
                 themePreferences = themePreferences,
+                refreshIntervalPreferences = refreshIntervalPreferences,
                 viewer = signedInViewer,
                 totalWatchedCount = successState?.totalWatchedCount,
                 totalMissedCount = successState?.totalMissedCount,

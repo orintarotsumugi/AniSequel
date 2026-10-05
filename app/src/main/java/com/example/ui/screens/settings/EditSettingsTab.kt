@@ -1,14 +1,20 @@
 package com.example.ui.screens.settings
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -17,23 +23,34 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.repository.AuthRepositoryImpl
-import com.example.data.repository.ThemePreferences
+import com.example.data.repository.RefreshInterval
+import com.example.data.repository.RefreshIntervalPreferences
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.RedirectUrlHint
+import com.example.ui.components.expressive.ExpressiveShapes
+import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditSettingsTab(
     authViewModel: AuthViewModel,
-    themePreferences: ThemePreferences,
-    onNavigateBack: () -> Unit,
+    refreshIntervalPreferences: RefreshIntervalPreferences,
     onNavigateToLogin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -53,6 +70,8 @@ fun EditSettingsTab(
             Spacer(modifier = Modifier.height(16.dp))
             RedirectUrlHint()
         }
+
+        ListRefreshCard(refreshIntervalPreferences)
 
         SettingsButton(
             text = if (authState is AuthUiState.Authenticated) "Sign out" else "Back to sign in",
@@ -74,6 +93,128 @@ fun EditSettingsTab(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * How often the saved list is re-read from AniList.
+ *
+ * The setting exists because of a bug, not a preference. Nothing used to watch
+ * for the app returning to the foreground, and the list was cached for a flat
+ * hour, so closing and reopening AniSequel - which Android does by resuming the
+ * process rather than restarting it - showed the identical dashboard every time.
+ * Finishing something on AniList in another app changed nothing until an hour
+ * had passed or the refresh button was tapped.
+ *
+ * ## Why chips and not `ExpressivePolygonSegmentedBar`
+ *
+ * The segmented bar is how the Theme tab picks one of two or three values. There
+ * are five here, and every one of them is short but not equally short - "Always",
+ * "15 min", "30 min", "1 hour", "Manual" - squeezed into equal halves of a
+ * phone-width row. A wrapping [FlowRow] of pills is the same interaction with a
+ * layout that cannot clip a label, which is what `PaletteSwatch` does for the
+ * same reason.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferences) {
+    val scope = rememberCoroutineScope()
+    val interval by refreshIntervalPreferences.interval.collectAsState(
+        initial = RefreshInterval.DEFAULT
+    )
+
+    SectionCard(
+        title = "List refresh",
+        icon = AppVectorIcons.Schedule,
+        subtitle = "How fresh your scan stays."
+    ) {
+        Text(
+            text = "AniSequel re-reads your list when you come back to the app if it is " +
+                    "older than this, and on its own while it stays open. Pull down or " +
+                    "use the refresh button any time to check immediately.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.testTag("refresh_interval_row")
+        ) {
+            RefreshInterval.entries.forEach { option ->
+                RefreshIntervalChip(
+                    interval = option,
+                    selected = option == interval,
+                    onClick = { scope.launch { refreshIntervalPreferences.setInterval(option) } }
+                )
+            }
+        }
+
+        if (interval != RefreshInterval.DEFAULT) {
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsButton(
+                text = "Use AniSequel's default",
+                onClick = { scope.launch { refreshIntervalPreferences.reset() } },
+                icon = AppVectorIcons.Restore,
+                variant = SettingsButtonVariant.Text,
+                fillWidth = true,
+                testTag = "reset_refresh_interval_button"
+            )
+        }
+    }
+}
+
+/** One refresh interval, selected or not. */
+@Composable
+private fun RefreshIntervalChip(
+    interval: RefreshInterval,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val container = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val content = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Row(
+        modifier = Modifier
+            .clip(ExpressiveShapes.pill)
+            .background(container)
+            .border(
+                BorderStroke(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    }
+                ),
+                shape = ExpressiveShapes.pill
+            )
+            .bouncyPress(pressedScale = 0.94f)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .semantics {
+                this.selected = selected
+                role = Role.RadioButton
+            }
+            .testTag("refresh_interval_${interval.storageValue}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = interval.displayName,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = content
+        )
     }
 }
 
