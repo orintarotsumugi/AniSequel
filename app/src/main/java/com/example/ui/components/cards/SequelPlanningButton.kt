@@ -46,10 +46,10 @@ fun SequelPlanningButton(
     AnimatedContent(
         targetState = sequel.isAddedToPlanning,
         transitionSpec = {
-            (fadeIn(spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)) +
-                scaleIn(initialScale = 0.85f, animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow))) togetherWith
+            (fadeIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                scaleIn(initialScale = 0.9f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow))) togetherWith
                 (fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
-                    scaleOut(targetScale = 0.85f))
+                    scaleOut(targetScale = 0.9f))
         },
         label = "planning_button_anim",
         modifier = modifier
@@ -91,7 +91,7 @@ fun SequelPlanningButton(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(40.dp)
-                    .bouncyPress(pressedScale = 0.95f)
+                    .bouncyPress(pressedScale = 0.96f)
                     .testTag("add_planning_button_${sequel.sequelId}"),
                 shape = MaterialTheme.shapes.small
             ) {

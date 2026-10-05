@@ -40,15 +40,15 @@ fun SequelCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.98f)
+            .bouncyPress(pressedScale = 0.97f)
             .testTag("sequel_card_${sequel.sequelId}"),
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 1.dp,
-            pressedElevation = 3.dp
+            defaultElevation = 2.dp,
+            pressedElevation = 6.dp
         ),
         border = CardDefaults.outlinedCardBorder()
     ) {

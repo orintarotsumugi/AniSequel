@@ -39,14 +39,14 @@ object ExpressiveMotion {
 
     /** Bouncy spatial spring for celebratory interactions, buttons, and icon reveals. */
     val BouncySpatial: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioLowBouncy,
+        dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessLow
     )
 
     /** Super bouncy spring with noticeable playful oscillation for hero moments. */
     val SuperBouncy: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = 0.45f,
-        stiffness = Spring.StiffnessLow
+        dampingRatio = Spring.DampingRatioHighBouncy,
+        stiffness = Spring.StiffnessVeryLow
     )
 
     /** Fast effects spring for smooth color and opacity transitions without overshoot. */
@@ -67,7 +67,7 @@ object ExpressiveMotion {
  * Does not trigger composition or layout passes for maximum 120fps smoothness.
  */
 fun Modifier.bouncyPress(
-    pressedScale: Float = 0.94f
+    pressedScale: Float = 0.96f
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -75,7 +75,7 @@ fun Modifier.bouncyPress(
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
         animationSpec = spring(
-            dampingRatio = 0.52f,
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "bouncy_press_scale"
@@ -91,7 +91,7 @@ fun Modifier.bouncyPress(
  * Modifier that adds an expressive spring-physics bounce scale and click listener.
  */
 fun Modifier.expressiveBounceClick(
-    pressedScale: Float = 0.93f,
+    pressedScale: Float = 0.95f,
     onClick: () -> Unit
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
@@ -100,7 +100,7 @@ fun Modifier.expressiveBounceClick(
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
         animationSpec = spring(
-            dampingRatio = 0.50f,
+            dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "expressive_bounce_scale"
@@ -129,9 +129,9 @@ fun Modifier.expressiveHoldGesture(
     val isPressed = remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed.value) 0.94f else 1f,
+        targetValue = if (isPressed.value) 0.96f else 1f,
         animationSpec = spring(
-            dampingRatio = 0.55f,
+            dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "expressive_hold_scale"

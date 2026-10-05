@@ -30,8 +30,8 @@ fun AnimatedCounterText(
     val animatedCount by animateIntAsState(
         targetValue = count,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
         label = "animated_counter_val"
     )

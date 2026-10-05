@@ -65,10 +65,10 @@ fun ExpressiveTabBar(
             val selected = index == selectedIndex
 
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.93f,
+                targetValue = if (selected) 1f else 0.95f,
                 animationSpec = spring(
-                    dampingRatio = 0.55f,
-                    stiffness = Spring.StiffnessLow
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "tab_scale_$label"
             )
@@ -176,9 +176,9 @@ fun ExpressivePolygonSegmentedBar(
                 label = "segment_content_${option.label}"
             )
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.94f,
+                targetValue = if (selected) 1f else 0.95f,
                 animationSpec = spring(
-                    dampingRatio = 0.52f,
+                    dampingRatio = Spring.DampingRatioLowBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "segment_scale_${option.label}"
@@ -246,9 +246,9 @@ fun ExpressiveSegmentedBar(
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.95f,
+                targetValue = if (selected) 1f else 0.96f,
                 animationSpec = spring(
-                    dampingRatio = 0.54f,
+                    dampingRatio = Spring.DampingRatioLowBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "segmented_scale_$label"
@@ -318,8 +318,8 @@ fun ExpressiveStateChip(
         label = "chip_content"
     )
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.96f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (selected) 1f else 0.97f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "chip_scale"
     )
 

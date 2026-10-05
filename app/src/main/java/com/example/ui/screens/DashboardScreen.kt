@@ -246,12 +246,12 @@ fun DashboardScreen(
                                             .padding(horizontal = 16.dp)
                                             .animateItem(
                                                 placementSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
                                                     stiffness = Spring.StiffnessMediumLow
                                                 ),
                                                 fadeInSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                    stiffness = Spring.StiffnessMediumLow
+                                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                                    stiffness = Spring.StiffnessMedium
                                                 ),
                                                 fadeOutSpec = ExpressiveMotion.FastEffects
                                             )
