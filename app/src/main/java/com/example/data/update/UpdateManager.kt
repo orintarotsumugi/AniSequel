@@ -1,13 +1,9 @@
 package com.example.data.update
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
@@ -19,27 +15,35 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * Checks GitHub for a newer release, downloads it, and hands it to the system
- * installer.
+ * Fetches the published update manifest, downloads a release, and vets the file
+ * it produced.
  *
  * ## Why this exists as a self-contained piece of app code
  *
  * There is no updater library here, deliberately. The only job is: fetch a
- * small JSON file, compare one integer against `BuildConfig.VERSION_CODE`,
- * stream a ~2.5 MB APK into the cache directory, and fire an intent. A library
- * would add a dependency and a Play Services requirement for that, and the app
- * is deliberately not on the Play Store - which is also why this uses
- * `ACTION_VIEW` on a `FileProvider` URI rather than Play Core's in-app update
- * flow.
+ * small JSON file, compare one integer against `BuildConfig.VERSION_CODE`, and
+ * stream a ~2.5 MB APK into the cache directory. A library would add a
+ * dependency and a Play Services requirement for that, and the app is
+ * deliberately not on the Play Store - which is also why the install handoff
+ * uses `ACTION_VIEW` on a `FileProvider` URI rather than Play Core's in-app
+ * update flow.
  *
  * ## What this cannot do
  *
  * It cannot install silently. Since Android 8 every install is user-confirmed,
- * and since Android 11 the app must hold `REQUEST_INSTALL_PACKAGES` *and* have
+ * and from Android 8 the app must hold `REQUEST_INSTALL_PACKAGES` *and* have
  * that permission granted per-app in Settings before the installer will even
- * open. [canInstallPackages] and [unknownSourcesSettingsIntent] exist so the UI
- * can say so and send the user there, rather than firing an intent that fails
- * with a bare `ActivityNotFoundException`.
+ * open.
+ *
+ * ## What this no longer does
+ *
+ * The permission check, the Settings hand-off and the installer intents used to
+ * live here too. They moved to `UpdateInstallation` in the presentation layer,
+ * because they are all about *this device's* UI and none of them are about
+ * fetching or verifying a release - and because the order they have to be
+ * called in is the actual logic of the install flow, which is easier to read
+ * when the order is the file's shape. What stays here is everything that is
+ * true regardless of which device is asking.
  */
 class UpdateManager(private val context: Context) {
 
@@ -158,8 +162,8 @@ class UpdateManager(private val context: Context) {
 
                 var partial: File? = null
                 try {
-                    val directory = File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }
-                    val target = File(directory, "anisequel-${manifest.version ?: "update"}.apk")
+                    val directory = downloadDirectory()
+                    val target = targetFileFor(directory, manifest)
                     val partFile = File(directory, "${target.name}.part")
                     partial = partFile
 
@@ -249,50 +253,52 @@ class UpdateManager(private val context: Context) {
     }
 
     /**
-     * The intent that opens the system installer on a downloaded APK.
+     * The already-downloaded APK for [manifest], if there is a usable one.
      *
-     * `canInstallPackages` must have been checked first: on Android 8 and
-     * later the intent throws `ActivityNotFoundException` when the app has not
-     * been granted `REQUEST_INSTALL_PACKAGES`, which reads to the user as the
-     * app crashing at the moment they were most expecting progress.
+     * ## Why this exists
+     *
+     * The install flow has a mandatory Settings round trip the first time: from
+     * Android 8 the app has to be granted `REQUEST_INSTALL_PACKAGES` before it
+     * may open the installer at all. The download happens before that check,
+     * deliberately - the user has already asked to update, and refusing to start
+     * over a setting they may have granted since last launch is worse than
+     * downloading and then asking.
+     *
+     * Which means a user who has *not* yet granted it used to pay for the
+     * download, go to Settings, grant it, come back, and then have to press
+     * install again - and pressing "download" at any point started the download
+     * over from zero, because every run wiped the cache directory first. That is
+     * the one flow in the app where the user waits on the network twice for the
+     * same bytes.
+     *
+     * The file name is derived from the manifest's version, so this returns the
+     * right APK or nothing at all. A zero-length file, or one that somehow lost
+     * its zip header, is rejected here rather than at the installer.
      */
-    fun installIntent(apk: File): Intent {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apk
-        )
+    fun downloadedApkFor(manifest: UpdateManifest): File? {
+        val file = targetFileFor(downloadDirectory(), manifest)
+        if (!file.isFile || file.length() <= 0L) return null
 
-        return Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, APK_MIME_TYPE)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val looksLikeApk = runCatching {
+            file.inputStream().use { stream ->
+                val magic = ByteArray(4)
+                stream.read(magic) == 4 &&
+                    magic[0] == 0x50.toByte() &&
+                    magic[1] == 0x4B.toByte() &&
+                    magic[2] == 0x03.toByte() &&
+                    magic[3] == 0x04.toByte()
+            }
+        }.getOrDefault(false)
+
+        return file.takeIf { looksLikeApk }
     }
 
-    /**
-     * Whether the system will let this app open the installer right now.
-     *
-     * Below Android 8, installing is not gated at all, so the answer is always
-     * yes. From 8 it is a per-app permission the user has to grant once in
-     * Settings, and it is *not* granted by the manifest declaration - declaring
-     * it only puts the app in the list of packages that are allowed to ask.
-     */
-    fun canInstallPackages(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
+    /** Where the APK for a release is written, named after the release itself. */
+    private fun targetFileFor(directory: File, manifest: UpdateManifest): File =
+        File(directory, "anisequel-${manifest.version ?: "update"}.apk")
 
-    /**
-     * The Settings screen where that permission is granted, for the case where
-     * [canInstallPackages] is false. Returns null below Android 8, where there
-     * is nothing to grant.
-     */
-    fun unknownSourcesSettingsIntent(): Intent? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
-        return Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}")
-        )
-    }
+    private fun downloadDirectory(): File =
+        File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }
 
     /**
      * Whether [apk] is signed by AniSequel's official key or matches the running app's key.

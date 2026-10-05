@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.ShimmerCard
+import com.example.ui.components.rememberShimmerPhase
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.viewmodel.DashboardUiState
@@ -37,6 +38,12 @@ fun DashboardLoadingView(
     maxWidth: Dp,
     modifier: Modifier = Modifier
 ) {
+    // One shimmer driver for the whole list rather than one per card. Five
+    // `rememberInfiniteTransition`s would mean five independent sweeps running
+    // over the same stack; hoisting it also phase-locks them, so it reads as one
+    // highlight travelling down the skeletons.
+    val shimmerPhase = rememberShimmerPhase()
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -73,7 +80,10 @@ fun DashboardLoadingView(
         }
 
         items(5) {
-            ShimmerCard(modifier = Modifier.widthIn(max = maxWidth))
+            ShimmerCard(
+                modifier = Modifier.widthIn(max = maxWidth),
+                phase = shimmerPhase
+            )
         }
     }
 }

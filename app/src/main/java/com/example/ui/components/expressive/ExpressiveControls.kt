@@ -78,10 +78,7 @@ fun ExpressiveTabBar(
                 } else {
                     Color.Transparent
                 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
+                animationSpec = ExpressiveMotion.FastColorEffects,
                 label = "tab_container_$label"
             )
             val content by animateColorAsState(
@@ -90,7 +87,7 @@ fun ExpressiveTabBar(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                animationSpec = spring(),
+                animationSpec = ExpressiveMotion.FastColorEffects,
                 label = "tab_content_$label"
             )
 
@@ -163,7 +160,7 @@ fun ExpressivePolygonSegmentedBar(
                 } else {
                     Color.Transparent
                 },
-                animationSpec = spring(dampingRatio = 0.65f),
+                animationSpec = ExpressiveMotion.FastColorEffects,
                 label = "segment_container_${option.label}"
             )
             val content by animateColorAsState(
@@ -172,7 +169,7 @@ fun ExpressivePolygonSegmentedBar(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                animationSpec = spring(),
+                animationSpec = ExpressiveMotion.FastColorEffects,
                 label = "segment_content_${option.label}"
             )
             val scale by animateFloatAsState(
@@ -309,12 +306,12 @@ fun ExpressiveStateChip(
 ) {
     val background by animateColorAsState(
         targetValue = if (selected) selectedContainerColor else containerColor,
-        animationSpec = spring(),
+        animationSpec = ExpressiveMotion.FastColorEffects,
         label = "chip_container"
     )
     val foreground by animateColorAsState(
         targetValue = if (selected) selectedContentColor else contentColor,
-        animationSpec = spring(),
+        animationSpec = ExpressiveMotion.FastColorEffects,
         label = "chip_content"
     )
     val scale by animateFloatAsState(

@@ -20,17 +20,34 @@ import com.example.data.repository.AuthRepository
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.data.repository.ThemeMode
 import com.example.data.repository.ThemePreferences
-import com.example.ui.components.UpdatePromptHost
-import com.example.ui.components.rememberUpdateController
+import com.example.ui.components.update.UpdateController
+import com.example.ui.components.update.UpdatePromptHost
+import com.example.ui.components.update.rememberUpdateController
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.AniSequelTheme
 import com.example.ui.theme.ThemePalette
 import com.example.ui.viewmodel.AuthViewModel
+import java.lang.ref.WeakReference
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
+
+    /**
+     * Held so [onResume] can reach the updater.
+     *
+     * The controller is process-wide and created inside the composition, so it
+     * does not exist at the time `onCreate` starts. Assigning it during
+     * composition and reading it here is what lets returning from the
+     * install-permission Settings screen continue straight into the installer.
+     *
+     * Weakly held on purpose: this field is only ever a way to reach the shared
+     * singleton, never its owner. A strong reference from the Activity to a
+     * process-scoped object that outlives it would keep a rotated-away Activity
+     * alive, which is the leak this whole controller design exists to avoid.
+     */
+    private var updateControllerRef: WeakReference<UpdateController>? = null
 
     private val authViewModel: AuthViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -92,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val updateController = rememberUpdateController()
+                    updateControllerRef = WeakReference(updateController)
 
                     // One check per launch, after the first frame.
                     //
@@ -114,6 +132,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * The updater's chance to notice that the install permission arrived.
+     *
+     * From Android 8 an app cannot open the system installer until the user has
+     * granted it `REQUEST_INSTALL_PACKAGES` in Settings, which means the first
+     * update has to leave the app and come back. That return is an `onResume`,
+     * and it is the only place the grant can be observed: nothing in this
+     * process is told when the user flips a switch in another app's settings
+     * screen. So the updater is handed the resume and re-checks, and if the
+     * permission has arrived it opens the installer on the APK it already has
+     * rather than making the user press a third button to get what they asked
+     * for two presses ago.
+     *
+     * A no-op unless an update is actually waiting on the permission.
+     */
+    override fun onResume() {
+        super.onResume()
+        updateControllerRef?.get()?.onAppResumed()
     }
 
     override fun onNewIntent(intent: Intent) {
