@@ -362,7 +362,7 @@ jobs:
       - name: Verify APK Release Signing Integrity
         if: github.event_name != 'pull_request'
         env:
-          EXPECTED_SIGNER_SHA256: 01924c4a7503820489802deb6993e5e030103a1a1a36482ecb5468fa3311f82
+          EXPECTED_SIGNER_SHA256: 01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82
         run: |
           echo "::group::Verifying APK Signature and Keystore Integrity"
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)

@@ -420,6 +420,6 @@ class UpdateManager(private val context: Context) {
     private companion object {
         const val DOWNLOAD_DIR = "updates"
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
-        const val OFFICIAL_SIGNER_SHA256 = "01924c4a7503820489802deb6993e5e030103a1a1a36482ecb5468fa3311f82"
+        const val OFFICIAL_SIGNER_SHA256 = "01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82"
     }
 }
