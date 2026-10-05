@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.data.model.MissedSequel
 import com.example.data.model.RelationKind
 import com.example.data.model.StatusFilter
@@ -79,6 +80,25 @@ fun DashboardScreen(
     // Held here rather than inside the ViewModel because the snackbar is what
     // owns the gesture: the action belongs to the message that offered it.
     var lastHiddenSequel by remember { mutableStateOf<MissedSequel?>(null) }
+
+    // Re-checks freshness every time the app comes back to the foreground.
+    //
+    // `LifecycleResumeEffect` is the documented way to react to ON_RESUME from a
+    // composable, and it is tied to the Activity rather than to this
+    // destination - which is what makes it the right signal. The bug was not
+    // inside the dashboard, it was that Android *resumes* a process rather than
+    // restarting it, so closing and reopening AniSequel used to answer from the
+    // same cached list until an hour had passed. Nothing in the composition was
+    // ever told the app had come back.
+    //
+    // Stopped on pause rather than left running: a timer that keeps re-fetching
+    // a list nobody is looking at spends AniList's ~30 requests a minute for
+    // nobody. The ViewModel owns the decision, and it survives this composable
+    // being disposed on the way to Settings.
+    LifecycleResumeEffect(dashboardViewModel) {
+        dashboardViewModel.onForegrounded()
+        onPauseOrDispose { dashboardViewModel.onBackgrounded() }
+    }
 
     LaunchedEffect(Unit) {
         dashboardViewModel.eventFlow.collectLatest { event ->

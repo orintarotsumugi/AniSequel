@@ -27,24 +27,25 @@ import java.io.IOException
 private val MUTATION_PATTERN = Regex("""^\s*mutation\b""")
 
 class AniListRepositoryImpl(
-    private val apiService: AniListApiService
+    private val apiService: AniListApiService,
+    /**
+     * How long a completed list response may be reused, in milliseconds.
+     *
+     * A supplier rather than a value because the user can change it from
+     * Settings, and the cache has to agree with that choice rather than hold a
+     * second, private opinion about staleness. It used to be a `const val` here
+     * set to an hour, with nothing anywhere else that could express the same
+     * decision - so "always refresh on open" could only ever have meant "always
+     * get the cached hour back", which is the bug [RefreshInterval] exists to fix.
+     *
+     * Called per lookup, not per construction, so a setting changed in Settings
+     * applies to the very next load. The default keeps the previous behaviour
+     * for the call sites that have no store to read (the demo dashboard).
+     */
+    private val listCacheTtlMillis: () -> Long = { RefreshInterval.DEFAULT.staleAfterMillis }
 ) : AniListRepository {
 
     private companion object {
-        /**
-         * How long a completed list response is reused.
-         *
-         * An hour, because the query is large and AniList allows only ~30
-         * requests a minute: without this, every rotation, back-navigation and
-         * return to the app re-bought the same answer. Nothing that matters
-         * moves on an hour timescale - the list changes when the user finishes
-         * something, which they can force with refresh.
-         *
-         * That is the trade this only works because [forceRefresh] exists. See
-         * [AniListRepository.getUserAnimeList].
-         */
-        const val LIST_CACHE_TTL_MILLIS = 60 * 60 * 1000L
-
         /**
          * Soft bound on the in-memory detail cache. One node per opened card
          * is held for the lifetime of the VM; without a ceiling, opening a
@@ -83,10 +84,11 @@ class AniListRepositoryImpl(
      *
      * Deliberately bounded. The whole point of the list is to notice what the
      * user has finished watching, and that changes; an unbounded cache would
-     * show a stale gap list that quietly refused to update. The window is
-     * [LIST_CACHE_TTL_MILLIS] - one hour, which covers every navigation the app
-     * actually does while making a manual refresh the way to force a real
-     * re-fetch.
+     * show a stale gap list that quietly refused to update. The window is the
+     * user's [RefreshInterval] - half an hour by default, and never longer than
+     * the longest choice they can pick - which is what makes a manual refresh
+     * the way to force a re-fetch and, separately, returning to the app enough
+     * of a reason to look for one.
      *
      * (This comment used to say "five minutes", and `clearDetailCache` repeated
      * it. The constant was an hour in both cases, so the prose was the only
@@ -102,7 +104,8 @@ class AniListRepositoryImpl(
 
     private fun cachedList(key: String): MediaListCollection? {
         val entry = listCache[key] ?: return null
-        if (System.currentTimeMillis() - entry.storedAtMillis > LIST_CACHE_TTL_MILLIS) {
+        val ttl = listCacheTtlMillis()
+        if (System.currentTimeMillis() - entry.storedAtMillis > ttl) {
             listCache.remove(key)
             return null
         }

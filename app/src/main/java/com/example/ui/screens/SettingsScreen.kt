@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import com.example.data.model.ViewerProfile
+import com.example.data.repository.RefreshIntervalPreferences
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
@@ -39,6 +40,7 @@ import com.example.ui.viewmodel.AuthViewModel
 fun SettingsScreen(
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
+    refreshIntervalPreferences: RefreshIntervalPreferences,
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
@@ -91,8 +93,7 @@ fun SettingsScreen(
             when (selectedTab) {
                 2 -> EditSettingsTab(
                     authViewModel = authViewModel,
-                    themePreferences = themePreferences,
-                    onNavigateBack = onNavigateBack,
+                    refreshIntervalPreferences = refreshIntervalPreferences,
                     onNavigateToLogin = onNavigateToLogin,
                     modifier = Modifier.padding(paddingValues)
                 )
