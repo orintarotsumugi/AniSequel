@@ -63,14 +63,14 @@ fun SequelPoster(
             .height(152.dp)
             .shadow(
                 elevation = 6.dp,
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.small,
                 ambientColor = coverColor ?: Color.Black
             )
-            .clip(RoundedCornerShape(14.dp))
+            .clip(MaterialTheme.shapes.small)
             .border(
                 1.dp,
                 Color.White.copy(alpha = 0.15f),
-                RoundedCornerShape(14.dp)
+                MaterialTheme.shapes.small
             )
             .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
             .expressiveHoldGesture(

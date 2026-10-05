@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,7 +36,7 @@ fun SequelRelationBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(MaterialTheme.shapes.extraSmall)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -49,7 +48,7 @@ fun SequelRelationBanner(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(22.dp)
-                    .clip(RoundedCornerShape(5.dp))
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .background(
                         sequel.parentCoverColor.toCoverColorOrNull()
                             ?: MaterialTheme.colorScheme.surfaceContainerHighest

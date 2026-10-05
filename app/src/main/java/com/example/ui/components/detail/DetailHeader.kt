@@ -111,12 +111,12 @@ fun DetailHeader(
                     .height(132.dp)
                     .shadow(
                         elevation = 12.dp,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = MaterialTheme.shapes.small,
                         ambientColor = coverBg,
                         spotColor = Color.Black
                     )
-                    .clip(RoundedCornerShape(14.dp))
-                    .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                    .clip(MaterialTheme.shapes.small)
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), MaterialTheme.shapes.small)
                     .background(coverBg)
                     .expressiveHoldGesture(
                         onHold = { showFullScreen = true },
@@ -172,7 +172,7 @@ fun DetailHeader(
                     Spacer(modifier = Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
                         ) {
                             Text(
@@ -198,7 +198,7 @@ fun DetailHeader(
                     Spacer(modifier = Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
                             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
                         ) {
                             Text(

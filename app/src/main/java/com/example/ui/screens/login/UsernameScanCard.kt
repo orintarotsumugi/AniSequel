@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,7 +38,7 @@ fun UsernameScanCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -64,7 +63,7 @@ fun UsernameScanCard(
                 label = { Text("AniList Username") },
                 placeholder = { Text("e.g. MyAnimeList") },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("username_scan_input")
@@ -83,7 +82,7 @@ fun UsernameScanCard(
                     .height(50.dp)
                     .bouncyPress(pressedScale = 0.96f)
                     .testTag("scan_username_button"),
-                shape = RoundedCornerShape(14.dp)
+                shape = MaterialTheme.shapes.small
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Search,

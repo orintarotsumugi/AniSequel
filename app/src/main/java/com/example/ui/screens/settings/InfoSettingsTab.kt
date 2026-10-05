@@ -58,6 +58,8 @@ fun InfoSettingsTab(
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onSignOut: () -> Unit = {},
+    totalWatchedCount: Int? = null,
+    totalMissedCount: Int? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -80,6 +82,23 @@ fun InfoSettingsTab(
                     text = "You are browsing in read-only demo mode. Sign in with your AniList account to scan your completed list and plan sequels.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (totalWatchedCount != null && totalMissedCount != null) {
+            SectionCard(
+                title = "Your list",
+                icon = AppVectorIcons.List,
+                subtitle = "Snapshot of the current scan"
+            ) {
+                InfoRow(label = "Completed", value = totalWatchedCount.toString())
+                Spacer(modifier = Modifier.height(10.dp))
+                InfoRow(label = "Missed sequels", value = totalMissedCount.toString())
+                Spacer(modifier = Modifier.height(10.dp))
+                InfoRow(
+                    label = "Planning sync",
+                    value = if (viewer != null) "Write-enabled" else "Read-only on public profiles"
                 )
             }
         }

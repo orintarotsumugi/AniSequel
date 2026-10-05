@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,7 +57,7 @@ fun OAuthCard(
     Column(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
@@ -89,7 +88,7 @@ fun OAuthCard(
             if (authState is AuthUiState.Error) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
@@ -148,7 +147,7 @@ fun OAuthCard(
                     .height(50.dp)
                     .bouncyPress(pressedScale = 0.96f)
                     .testTag("connect_anilist_button"),
-                shape = RoundedCornerShape(14.dp)
+                shape = MaterialTheme.shapes.small
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Login,
@@ -210,7 +209,7 @@ private fun FeatureRow(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {

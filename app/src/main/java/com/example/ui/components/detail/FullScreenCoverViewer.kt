@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -118,7 +117,7 @@ fun FullScreenCoverViewer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             tonalElevation = 4.dp
                         ) {
@@ -155,11 +154,11 @@ fun FullScreenCoverViewer(
                             .padding(vertical = 12.dp)
                             .shadow(
                                 elevation = 24.dp,
-                                shape = RoundedCornerShape(22.dp),
+                                shape = MaterialTheme.shapes.large,
                                 ambientColor = coverBg,
                                 spotColor = Color.Black
                             )
-                            .clip(RoundedCornerShape(22.dp))
+                            .clip(MaterialTheme.shapes.large)
                             .background(coverBg)
                     ) {
                         AsyncImage(
@@ -174,7 +173,7 @@ fun FullScreenCoverViewer(
 
                     // Bottom Details Card: Titles & Dismiss Hint
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
                         tonalElevation = 8.dp,
                         modifier = Modifier
@@ -207,7 +206,7 @@ fun FullScreenCoverViewer(
                                 ) {
                                     if (!romaji.isNullOrBlank()) {
                                         Surface(
-                                            shape = RoundedCornerShape(10.dp),
+                                            shape = MaterialTheme.shapes.extraSmall,
                                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                             modifier = Modifier.weight(1f)
                                         ) {
@@ -231,7 +230,7 @@ fun FullScreenCoverViewer(
 
                                     if (!english.isNullOrBlank()) {
                                         Surface(
-                                            shape = RoundedCornerShape(10.dp),
+                                            shape = MaterialTheme.shapes.extraSmall,
                                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                             modifier = Modifier.weight(1f)
                                         ) {

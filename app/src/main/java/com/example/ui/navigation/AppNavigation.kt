@@ -277,13 +277,15 @@ fun AppNavigation(
             // A stable empty flow keeps the call unconditional.
             val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
             val dashboardState by dashboardFlow.collectAsState()
-            val signedInViewer =
-                (dashboardState as? DashboardUiState.Success)?.viewer
+            val successState = dashboardState as? DashboardUiState.Success
+            val signedInViewer = successState?.viewer
 
             SettingsScreen(
                 authViewModel = authViewModel,
                 themePreferences = themePreferences,
                 viewer = signedInViewer,
+                totalWatchedCount = successState?.totalWatchedCount,
+                totalMissedCount = successState?.totalMissedCount,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToLogin = {
                     navController.navigate(AppRoutes.LOGIN) {

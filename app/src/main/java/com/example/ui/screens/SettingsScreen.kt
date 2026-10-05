@@ -42,6 +42,8 @@ fun SettingsScreen(
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
+    totalWatchedCount: Int? = null,
+    totalMissedCount: Int? = null,
     modifier: Modifier = Modifier
 ) {
     BackHandler { onNavigateBack() }
@@ -103,6 +105,8 @@ fun SettingsScreen(
                     onNavigateBack = onNavigateBack,
                     onNavigateToLogin = onNavigateToLogin,
                     onSignOut = authViewModel::logout,
+                    totalWatchedCount = totalWatchedCount,
+                    totalMissedCount = totalMissedCount,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
