@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.repository.ThemeMode
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = AniBlueLight,
     onPrimary = Color(0xFF00325F),
     primaryContainer = AniBlueContainerDark,
@@ -56,7 +56,7 @@ private val DarkColorScheme = darkColorScheme(
     scrim = Color(0xFF000000),
 )
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = AniBlue,
     onPrimary = Color.White,
     primaryContainer = AniBlueContainerLight,
@@ -186,6 +186,19 @@ fun AniSequelTheme(
      * the decision is remembered.
      */
     dynamicColor: Boolean = false,
+    /**
+     * The non-dynamic-color palette. Switches which static identity is
+     * shown when `dynamicColor` is off. Defaults to the brand blue, named by
+     * storage id for round-tripping through the preferences file.
+     */
+    palette: ThemePalette = ThemePalette.ANISDK,
+    /** Which compiled motion scheme the app animates with. */
+    motionStyle: com.example.data.repository.MotionStyle = com.example.data.repository.MotionStyle.DEFAULT,
+    /**
+     * Swap the dark theme surfaces to true black. Useful on OLED panels
+     * where [Color.Black] draws zero light instead of a dark navy.
+     */
+    trueBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -200,8 +213,22 @@ fun AniSequelTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> palette.dark
+        else -> palette.light
+    }.let { scheme ->
+        if (trueBlack && darkTheme) {
+            scheme.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = Color(0xFF070707),
+                surfaceContainer = Color(0xFF101010),
+                surfaceContainerHigh = Color(0xFF1A1A1A),
+                surfaceContainerHighest = Color(0xFF262626)
+            )
+        } else {
+            scheme
+        }
     }
 
     CompositionLocalProvider(
@@ -213,6 +240,7 @@ fun AniSequelTheme(
         // and shapes are passed explicitly so this stays the app's identity.
         ExpressiveThemeHost(
             colorScheme = colorScheme,
+            motionStyle = motionStyle,
             content = content,
         )
     }
@@ -222,11 +250,15 @@ fun AniSequelTheme(
 @Composable
 private fun ExpressiveThemeHost(
     colorScheme: androidx.compose.material3.ColorScheme,
+    motionStyle: com.example.data.repository.MotionStyle,
     content: @Composable () -> Unit
 ) {
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
-        motionScheme = MotionScheme.expressive(),
+        motionScheme = when (motionStyle) {
+            com.example.data.repository.MotionStyle.EXPRESSIVE -> MotionScheme.expressive()
+            com.example.data.repository.MotionStyle.STANDARD -> MotionScheme.standard()
+        },
         shapes = ExpressiveShapes,
         typography = AniSequelTypography,
         content = content

@@ -24,6 +24,7 @@ import com.example.ui.components.UpdatePromptHost
 import com.example.ui.components.rememberUpdateController
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.AniSequelTheme
+import com.example.ui.theme.ThemePalette
 import com.example.ui.viewmodel.AuthViewModel
 
 class MainActivity : ComponentActivity() {
@@ -76,7 +77,10 @@ class MainActivity : ComponentActivity() {
 
             AniSequelTheme(
                 themeMode = themeSettings.themeMode,
-                dynamicColor = themeSettings.useDynamicColor
+                dynamicColor = themeSettings.useDynamicColor,
+                palette = ThemePalette.fromStorage(themeSettings.paletteId),
+                motionStyle = themeSettings.motionStyle,
+                trueBlack = themeSettings.trueBlack
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // Held on the themed background until the stored theme is in.
