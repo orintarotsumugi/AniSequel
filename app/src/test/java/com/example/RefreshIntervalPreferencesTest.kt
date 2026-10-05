@@ -4,15 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.repository.RefreshInterval
 import com.example.data.repository.RefreshIntervalPreferences
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -96,30 +89,58 @@ class RefreshIntervalPreferencesTest {
      * the repository reads, or "15 min" keeps meaning whatever the last build's
      * constant said.
      *
-     * Real time rather than a virtual clock, because DataStore does its work on
-     * background threads that a test scheduler cannot advance. Bounded so a
-     * broken store fails instead of hanging the suite.
+     * Driven by awaiting the flow rather than by polling the plain value.
+     *
+     * The first version of this test started a background collector and spun on
+     * `currentStalenessMillis()` until it changed. That is a race with no
+     * happens-before edge between DataStore's thread and the thread reading the
+     * mirror, so it passed on the pull-request run and timed out on the run to
+     * main: the same commit, green once and red once. Awaiting the emission that
+     * carries the value makes the ordering explicit, so the test says what it
+     * means instead of how long it is willing to wait for it.
      */
     @Test
-    fun `the synchronous read follows the stored interval`() {
+    fun `the synchronous read follows the stored interval`() = runTest {
         val preferences = preferences()
-        val observer = CoroutineScope(Dispatchers.Default)
-        observer.launch { preferences.observeInterval() }
 
-        try {
-            runBlocking {
-                preferences.setInterval(RefreshInterval.ONE_HOUR)
+        preferences.setInterval(RefreshInterval.ONE_HOUR)
 
-                withTimeout(10_000L) {
-                    while (preferences.currentStalenessMillis() !=
-                        RefreshInterval.ONE_HOUR.staleAfterMillis
-                    ) {
-                        delay(20)
-                    }
-                }
-            }
-        } finally {
-            observer.cancel()
-        }
+        assertEquals(
+            RefreshInterval.ONE_HOUR,
+            preferences.interval.first()
+        )
+        assertEquals(
+            "a stored interval must reach the value the repository's cache reads, " +
+                    "or the setting changes nothing the user can see",
+            RefreshInterval.ONE_HOUR.staleAfterMillis,
+            preferences.currentStalenessMillis()
+        )
+    }
+
+    /**
+     * The mirror follows whatever the flow last reported, including backwards.
+     *
+     * This is what makes the mirror safe to read from a non-suspending cache
+     * lookup: it can only ever report a value the store has already emitted, never
+     * one inferred from a stale copy of it.
+     */
+    @Test
+    fun `the synchronous read follows an interval changed back`() = runTest {
+        val preferences = preferences()
+
+        preferences.setInterval(RefreshInterval.FIFTEEN_MINUTES)
+        preferences.interval.first()
+        assertEquals(
+            RefreshInterval.FIFTEEN_MINUTES.staleAfterMillis,
+            preferences.currentStalenessMillis()
+        )
+
+        preferences.setInterval(RefreshInterval.MANUAL_ONLY)
+        preferences.interval.first()
+        assertEquals(
+            "a mirror that only ever grows would report a stale window forever",
+            RefreshInterval.MANUAL_ONLY.staleAfterMillis,
+            preferences.currentStalenessMillis()
+        )
     }
 }

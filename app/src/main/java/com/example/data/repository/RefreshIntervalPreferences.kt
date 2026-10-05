@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
 private val Context.refreshIntervalDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "anisequel_refresh_prefs"
@@ -151,19 +152,28 @@ class RefreshIntervalPreferences(private val context: Context) {
     @Volatile
     private var cachedInterval: RefreshInterval = RefreshInterval.DEFAULT
 
+    /**
+     * The mirror is attached to the flow itself, not set by a second collector.
+     *
+     * Reading `data` on one coroutine and publishing the result on another would
+     * make [currentStalenessMillis] depend on a race between DataStore's threads
+     * and whoever asked for the value - and that race is invisible in the app and
+     * a coin flip in a test. `onEach` runs before the value reaches any collector,
+     * so the mirror is updated by the same emission that reports it.
+     */
     val interval: Flow<RefreshInterval> = context.refreshIntervalDataStore.data.map { preferences ->
         RefreshInterval.fromStorage(preferences[KEY_INTERVAL])
-    }
+    }.onEach { cachedInterval = it }
 
     /**
-     * Mirrors [interval] into [currentStalenessMillis] until cancelled.
+     * Keeps [currentStalenessMillis] up to date until cancelled.
      *
      * Collects forever rather than reading once, so a change made in Settings
      * reaches the repository's cache window without anything having to be
      * rebuilt - which is the whole point of the setting.
      */
     suspend fun observeInterval() {
-        interval.collect { cachedInterval = it }
+        interval.collect()
     }
 
     /** The current window, for callers that cannot suspend. See the class comment. */
