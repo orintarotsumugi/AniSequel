@@ -362,7 +362,7 @@ jobs:
       - name: Verify APK Release Signing Integrity
         if: github.event_name != 'pull_request'
         env:
-          EXPECTED_SIGNER_SHA256: c33eceb9ccf48378c8ec8fc7c1d72b0340638d2d824a4aa3db96c8e8f1c0e4ab
+          EXPECTED_SIGNER_SHA256: 01924c4a7503820489802deb6993e5e030103a1a1a36482ecb5468fa3311f82
         run: |
           echo "::group::Verifying APK Signature and Keystore Integrity"
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
@@ -568,11 +568,12 @@ jobs:
             Every release from this one onward is signed with the same key, so you
             can install future updates over the top without uninstalling first.
 
-            If you are upgrading from **v1.0.16 or earlier**, the signing key has
-            changed and Android will refuse the install — a new key can never
-            update an app signed with an old one. Uninstall **AniSequel** once,
-            then install this APK. This wipes the app's local data, so expect to
-            sign in to AniList again.
+            If you are upgrading from **v1.0.16 or earlier**, or from any build
+            made between the first signing-key move and the 2026-10-05 key
+            rotation, the signing key has changed and Android will refuse the
+            install — a new key can never update an app signed with an old one.
+            Uninstall **AniSequel** once, then install this APK. This wipes the
+            app's local data, so expect to sign in to AniList again.
 
             If Android reports **"App not installed as package conflicts"**, an
             older copy signed with a *different* key is still present. Uninstall

@@ -29,13 +29,9 @@ Every release is signed with a single long-lived release key so that Android acc
 
 The key was previously committed as `debug.keystore.base64` through v1.0.16. Because base64 is an encoding rather than encryption, anyone who cloned the repo could decode it and sign an arbitrary "update" APK — which the in-app updater would accept, since it only checks that the downloaded APK's certificate matches the installed one. It has now been removed from the working tree and added to `.gitignore` so it cannot be committed again.
 
-**The key itself is unchanged.** Every published release, v1.0.0 through v1.0.16, is signed by the same certificate (SHA-256 `c33eceb9ccf48378c8ec8fc7c1d72b0340638d2d824a4aa3db96c8e8f1c0e4ab`), and every build made from the secret is signed by it too. Moving the key out of version control stops further leakage; it does not rotate the key. **Nobody needs to uninstall** — existing installs update in place exactly as before.
+**The key rotated on 2026-10-05.** Releases up to and including v1.0.16 are signed by the original certificate (SHA-256 `c33eceb9ccf48378c8ec8fc7c1d72b0340638d2d824a4aa3db96c8e8f1c0e4ab`), which was committed as `debug.keystore.base64` until v1.0.17 and then moved to the secrets above. Because that keystore's password cannot be recovered from the repository, no in-place update path exists from those installs - anyone still on them needs to install this APK as a fresh download. Every release from the rotation onward is signed by the certificate pinned at SHA-256 `01924c4a7503820489802deb6993e5e030103a1a1a36482ecb5468fa3311f82`, and every build made from the secret is signed by it too. Moving the key out of version control stops further leakage; it does not rotate. **Nobody needs to uninstall when updating from the rotation onward** - existing installs update in place exactly as before.
 
-Because the key is unchanged it is still recoverable from this repository's own history, which is how the `KEYSTORE_BASE64` secret is populated:
-
-```bash
-git show e95b75c:debug.keystore.base64 | tr -d '\n' | gh secret set KEYSTORE_BASE64
-```
+The original key is no longer usable from this repository: it still lives in git history, and it *was* committed intentionally as `debug.keystore.base64`, but the password for it is no longer held anywhere - recovery from history fails with "Keystore was tampered with, or password was incorrect", which is why the rotation was necessary.
 
 History is deliberately left intact, precisely because that is where the key now lives. Still keep a private, off-git backup: history can be lost, and regenerating a key does not restore update compatibility — it permanently breaks every existing install.
 
