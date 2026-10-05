@@ -278,7 +278,7 @@ fun AppNavigation(
             val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
             val dashboardState by dashboardFlow.collectAsState()
             val signedInViewer =
-                (dashboardState.value as? DashboardUiState.Success)?.viewer
+                (dashboardState as? DashboardUiState.Success)?.viewer
 
             SettingsScreen(
                 authViewModel = authViewModel,

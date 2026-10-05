@@ -1,6 +1,5 @@
 package com.example.ui.components.expressive
 
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,13 +50,13 @@ object ExpressiveMotion {
     )
 
     /** Fast effects spring for smooth color and opacity transitions without overshoot. */
-    val FastEffects: AnimationSpec<Float> = spring(
+    val FastEffects: FiniteAnimationSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMedium
     )
 
     /** Default effects spring for state fades and container transitions. */
-    val DefaultEffects: AnimationSpec<Float> = spring(
+    val DefaultEffects: FiniteAnimationSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
