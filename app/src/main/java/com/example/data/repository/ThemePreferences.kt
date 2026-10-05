@@ -42,6 +42,22 @@ enum class ThemeMode(val storageValue: String, val displayName: String) {
 }
 
 /**
+ * Which of the two compiled Material motion schemes the app renders with.
+ * The expressive scheme is the default; standard boys prefer less bounce.
+ */
+enum class MotionStyle(val storageValue: String, val displayName: String) {
+    EXPRESSIVE("expressive", "Expressive"),
+    STANDARD("standard", "Standard");
+
+    companion object {
+        val DEFAULT = EXPRESSIVE
+
+        fun fromStorage(value: String?): MotionStyle =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
  * The user's appearance choices, persisted.
  *
  * Read once at startup as a plain value rather than a Flow at every call site:
@@ -60,6 +76,9 @@ class ThemePreferences(private val context: Context) {
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
+        val THEME_PALETTE = stringPreferencesKey("theme_palette")
+        val MOTION_STYLE = stringPreferencesKey("motion_style")
+        val TRUE_BLACK = booleanPreferencesKey("true_black")
     }
 
     /**
@@ -74,6 +93,9 @@ class ThemePreferences(private val context: Context) {
     data class ThemeSettings(
         val themeMode: ThemeMode,
         val useDynamicColor: Boolean,
+        val paletteId: String = "anisequel",
+        val motionStyle: MotionStyle = MotionStyle.DEFAULT,
+        val trueBlack: Boolean = false,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     )
@@ -81,11 +103,30 @@ class ThemePreferences(private val context: Context) {
     val settings: Flow<ThemeSettings> = context.themeDataStore.data.map { preferences ->
         ThemeSettings(
             themeMode = ThemeMode.fromStorage(preferences[Keys.THEME_MODE]),
-            // Absent means off, which keeps the brand palette the default on
-            // upgrade rather than repainting everyone's app unasked.
             useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: false,
+            paletteId = preferences[Keys.THEME_PALETTE] ?: "anisequel",
+            motionStyle = MotionStyle.fromStorage(preferences[Keys.MOTION_STYLE]),
+            trueBlack = preferences[Keys.TRUE_BLACK] ?: false,
             isLoaded = true
         )
+    }
+
+    suspend fun setPalette(paletteId: String) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.THEME_PALETTE] = paletteId
+        }
+    }
+
+    suspend fun setMotionStyle(style: MotionStyle) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.MOTION_STYLE] = style.storageValue
+        }
+    }
+
+    suspend fun setTrueBlack(enabled: Boolean) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.TRUE_BLACK] = enabled
+        }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
@@ -112,6 +153,9 @@ class ThemePreferences(private val context: Context) {
         context.themeDataStore.edit { preferences ->
             preferences.remove(Keys.THEME_MODE)
             preferences.remove(Keys.USE_DYNAMIC_COLOR)
+            preferences.remove(Keys.THEME_PALETTE)
+            preferences.remove(Keys.MOTION_STYLE)
+            preferences.remove(Keys.TRUE_BLACK)
         }
     }
 }

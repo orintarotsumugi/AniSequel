@@ -73,12 +73,12 @@ fun SettingsScreen(
 
                 HorizontalDivider()
                 ExpressiveTabBar(
-                    tabs = listOf("Info", "Edit"),
+                    tabs = listOf("Info", "Theme", "Edit"),
                     selectedIndex = selectedTab,
                     onSelect = { selectedTab = it },
                     // "Info"/"Edit" as bare words left the reader guessing which
                     // was which; the icons say it before the labels are read.
-                    icons = listOf(AppVectorIcons.Info, AppVectorIcons.Tune),
+                    icons = listOf(AppVectorIcons.Info, AppVectorIcons.SectionAppearance, AppVectorIcons.Tune),
                     modifier = Modifier.testTag("settings_tabs")
                 )
             }
@@ -86,11 +86,15 @@ fun SettingsScreen(
     ) { paddingValues ->
         key(selectedTab) {
             when (selectedTab) {
-                1 -> EditSettingsTab(
+                2 -> EditSettingsTab(
                     authViewModel = authViewModel,
                     themePreferences = themePreferences,
                     onNavigateBack = onNavigateBack,
                     onNavigateToLogin = onNavigateToLogin,
+                    modifier = Modifier.padding(paddingValues)
+                )
+                1 -> ThemeTab(
+                    themePreferences = themePreferences,
                     modifier = Modifier.padding(paddingValues)
                 )
                 else -> InfoSettingsTab(
