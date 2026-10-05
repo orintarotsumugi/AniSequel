@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -57,7 +56,7 @@ fun ShimmerCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -69,7 +68,7 @@ fun ShimmerCard(
                 modifier = Modifier
                     .fillMaxWidth(0.6f)
                     .height(20.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .background(brush)
             )
 
@@ -81,7 +80,7 @@ fun ShimmerCard(
                     modifier = Modifier
                         .width(104.dp)
                         .height(148.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(MaterialTheme.shapes.small)
                         .background(brush)
                 )
 
@@ -98,7 +97,7 @@ fun ShimmerCard(
                             modifier = Modifier
                                 .fillMaxWidth(0.9f)
                                 .height(18.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(MaterialTheme.shapes.extraSmall)
                                 .background(brush)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -106,7 +105,7 @@ fun ShimmerCard(
                             modifier = Modifier
                                 .fillMaxWidth(0.6f)
                                 .height(14.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(MaterialTheme.shapes.extraSmall)
                                 .background(brush)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -114,14 +113,14 @@ fun ShimmerCard(
                             Box(
                                 modifier = Modifier
                                     .size(width = 54.dp, height = 20.dp)
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(MaterialTheme.shapes.extraSmall)
                                     .background(brush)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .size(width = 54.dp, height = 20.dp)
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(MaterialTheme.shapes.extraSmall)
                                     .background(brush)
                             )
                         }
@@ -131,7 +130,7 @@ fun ShimmerCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .background(brush)
                     )
                 }

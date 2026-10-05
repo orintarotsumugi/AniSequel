@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -64,7 +63,7 @@ fun SequelPlanningButton(
                     .height(40.dp)
                     .clearAndSetSemantics { contentDescription = "Already on your Planning list" }
                     .testTag("planned_button_${sequel.sequelId}"),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.small,
                 colors = ButtonDefaults.outlinedButtonColors(
                     disabledContentColor = statusColors.success,
                     disabledContainerColor = statusColors.successContainer
@@ -94,7 +93,7 @@ fun SequelPlanningButton(
                     .height(40.dp)
                     .bouncyPress(pressedScale = 0.95f)
                     .testTag("add_planning_button_${sequel.sequelId}"),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.small
             ) {
                 if (sequel.isAddingToPlanning) {
                     ExpressiveContainedLoadingIndicator(

@@ -22,7 +22,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -144,7 +143,7 @@ fun SequelDetailSheet(
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .size(44.dp)
-                                            .clip(RoundedCornerShape(10.dp))
+                                            .clip(MaterialTheme.shapes.extraSmall)
                                             .background(
                                                 sequel.parentCoverColor.toCoverColorOrNull()
                                                     ?: MaterialTheme.colorScheme.surfaceContainerHighest

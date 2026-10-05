@@ -237,7 +237,7 @@ fun ExpressiveSegmentedBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(4.dp)
             .testTag("${EXPRESSIVE_TAG}segmented_bar"),
@@ -261,7 +261,7 @@ fun ExpressiveSegmentedBar(
                 index == options.lastIndex && options.size > 1 -> RoundedCornerShape(
                     topStart = 6.dp, bottomStart = 6.dp, topEnd = 14.dp, bottomEnd = 14.dp
                 )
-                else -> RoundedCornerShape(6.dp)
+                else -> MaterialTheme.shapes.extraSmall
             }
 
             Box(
@@ -329,7 +329,7 @@ fun ExpressiveStateChip(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(if (selected) RoundedCornerShape(14.dp) else RoundedCornerShape(9.dp))
+            .clip(if (selected) MaterialTheme.shapes.small else MaterialTheme.shapes.medium)
             .background(background)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp)

@@ -297,7 +297,7 @@ private fun HiddenSequelRow(
         Box(
             modifier = Modifier
                 .size(width = 32.dp, height = 44.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(
                     sequel.coverColor.toCoverColorOrNull()
                         ?: MaterialTheme.colorScheme.surfaceContainerHighest

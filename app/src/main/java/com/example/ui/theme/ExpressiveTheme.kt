@@ -9,14 +9,16 @@ import androidx.compose.ui.unit.dp
  *
  * M3 Expressive moved shape from a per-component `shape:` parameter to a named
  * set of slots, so components interpolate between the right pair as they change
- * state instead of jumping. These are the expressive defaults with the corners
- * pulled in: this app's cards are dense lists read at arm's length, not
- * full-bleed hero surfaces.
+ * state instead of jumping. Players that differ from the M3 material
+ * defaults read as Expressive: containers are rounder (M3 defaults are 7dp,
+ * 10dp, 14dp, 16dp and 24dp), so this scale runs 10 / 14 / 20 / 28 / 36 -
+ * large enough that cards read as curved panels rather than hard rectangles,
+ * but still inside the scale where adjacent slots stay visually related.
  */
 val ExpressiveShapes: Shapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(26.dp),
-    extraLarge = RoundedCornerShape(34.dp)
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(36.dp)
 )

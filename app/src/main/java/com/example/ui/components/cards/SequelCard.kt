@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Card
@@ -43,12 +42,12 @@ fun SequelCard(
             .fillMaxWidth()
             .bouncyPress(pressedScale = 0.98f)
             .testTag("sequel_card_${sequel.sequelId}"),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 0.dp,
+            defaultElevation = 1.dp,
             pressedElevation = 3.dp
         ),
         border = CardDefaults.outlinedCardBorder()

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,7 +39,7 @@ fun LoginHero(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(92.dp)
-                .clip(RoundedCornerShape(26.dp))
+                .clip(MaterialTheme.shapes.large)
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
@@ -54,7 +53,7 @@ fun LoginHero(modifier: Modifier = Modifier) {
             Box(
                 modifier = Modifier
                     .size(84.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .clip(MaterialTheme.shapes.large)
                     .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
