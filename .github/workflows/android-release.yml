@@ -61,12 +61,12 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Java 21 (JDK 21)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           # JDK 21 is the newest LTS that AGP 9.1.1, Gradle 9.3.1 and the
           # Robolectric runner in this repo are all verified against. Newer JDKs
@@ -76,7 +76,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           # Pinned to the same version as gradle/wrapper/gradle-wrapper.properties
           # and ./gradlew. This was 'current', so CI resolved whatever Gradle
@@ -423,7 +423,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload Build Artifacts to Workflow Run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anisequel-apks
           path: release-artifacts/*.apk
