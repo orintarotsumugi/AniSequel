@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.repository.AuthRepositoryImpl
+import com.example.data.repository.ArrivingPreferences
 import com.example.data.repository.RefreshInterval
 import com.example.data.repository.RefreshIntervalPreferences
 import com.example.ui.components.AppVectorIcons
@@ -50,6 +51,7 @@ import kotlinx.coroutines.launch
 fun EditSettingsTab(
     authViewModel: AuthViewModel,
     refreshIntervalPreferences: RefreshIntervalPreferences,
+    arrivingPreferences: ArrivingPreferences,
     onNavigateToLogin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -71,6 +73,8 @@ fun EditSettingsTab(
         }
 
         ListRefreshCard(refreshIntervalPreferences)
+
+        ArrivingSectionCard(arrivingPreferences)
 
         SettingsButton(
             text = if (authState is AuthUiState.Authenticated) "Sign out" else "Sign in",
@@ -161,6 +165,49 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
                 testTag = "reset_refresh_interval_button"
             )
         }
+    }
+}
+
+/**
+ * How the dashboard's airing and upcoming rows behave.
+ *
+ * Two switches because they answer different questions: hiding the section
+ * removes the rows above search entirely (and with them every poster load on
+ * the path to a list), while compact keeps the information in plain rows that
+ * fetch no artwork - the entire cost of those cards is the image. Compact is
+ * meaningless on a hidden section, so it disables along with it.
+ */
+@Composable
+private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
+    val scope = rememberCoroutineScope()
+    val settings by arrivingPreferences.settings.collectAsState(
+        initial = ArrivingPreferences.ArrivingSettings()
+    )
+
+    SectionCard(
+        title = "Dashboard",
+        icon = AppVectorIcons.Tv,
+        subtitle = "The Currently arriving rows."
+    ) {
+        SwitchRow(
+            title = "Currently arriving",
+            subtitle = "Show airing and upcoming rows above search.",
+            checked = settings.showArrivingSection,
+            onCheckedChange = { enabled ->
+                scope.launch { arrivingPreferences.setShowArrivingSection(enabled) }
+            },
+            modifier = Modifier.testTag("arriving_section_switch")
+        )
+        SwitchRow(
+            title = "Compact arriving rows",
+            subtitle = "Plain rows that load no artwork - less data, less battery.",
+            checked = settings.compactArrivingCards,
+            enabled = settings.showArrivingSection,
+            onCheckedChange = { compact ->
+                scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
+            },
+            modifier = Modifier.testTag("compact_arriving_switch")
+        )
     }
 }
 

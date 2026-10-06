@@ -1,8 +1,10 @@
 package com.example.ui.screens.dashboard
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -59,6 +62,7 @@ import com.example.ui.components.expressive.bouncyPress
 fun ArrivingSection(
     entries: List<ArrivingEntry>,
     maxWidth: Dp,
+    compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (entries.isEmpty()) return
@@ -94,27 +98,123 @@ fun ArrivingSection(
         }
 
         val context = LocalContext.current
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(items = entries, key = { it.mediaId }) { entry ->
-                ArrivingCard(
-                    entry = entry,
-                    onClick = {
-                        // Same destination as the detail sheet's "View on
-                        // AniList": there is no in-app view for a show that is
-                        // already on the list.
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(entry.siteUrl))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.animateItem(
-                        placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                        fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                        fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+        if (compact) {
+            // Compact rows draw no artwork and carry no live countdown: the
+            // poster fetch is the whole data and battery cost of these cards,
+            // and the countdown pill is the one number that goes stale while
+            // the screen is up. A compact section therefore loads nothing and
+            // recomposes nothing on a schedule.
+            CompactArrivingList(
+                entries = entries,
+                onEntryClick = { openOnAniList(context, it) }
+            )
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(items = entries, key = { it.mediaId }) { entry ->
+                    ArrivingCard(
+                        entry = entry,
+                        onClick = { openOnAniList(context, entry) },
+                        modifier = Modifier.animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The destination of every arriving row: there is no in-app view for a show
+ * that is already on the list, so all of them hand off to AniList's page -
+ * the same one the detail sheet's "View on AniList" opens.
+ */
+private fun openOnAniList(context: Context, entry: ArrivingEntry) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(entry.siteUrl))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
+}
+
+/**
+ * The same list as [ArrivingCard] but without the artwork.
+ *
+ * One line of title over a status chip and the episode/start text, on a
+ * colour swatch that stands in for the poster. Deliberately no
+ * [AsyncImage]: the section's compact switch is what "uses less battery"
+ * means in this app.
+ */
+@Composable
+private fun CompactArrivingList(
+    entries: List<ArrivingEntry>,
+    onEntryClick: (ArrivingEntry) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("arriving_compact_list")
+    ) {
+        entries.forEachIndexed { index, entry ->
+            val placeholderTint = entry.coverColor.toCoverColorOrNull()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEntryClick(entry) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .testTag("arriving_compact_row_${entry.mediaId}"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(
+                            placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Movie,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entry.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SequelStatusChip(status = entry.status)
+                        Text(
+                            text = arrivalMeta(entry),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            if (index != entries.lastIndex) {
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
             }
         }

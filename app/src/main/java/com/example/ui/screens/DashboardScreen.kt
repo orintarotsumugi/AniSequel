@@ -72,6 +72,8 @@ fun DashboardScreen(
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
     val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
+    val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
+    val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
 
     // The most recently hidden entry, so the snackbar's Undo can put it back.
     // Held here rather than inside the ViewModel because the snackbar is what
@@ -206,10 +208,14 @@ fun DashboardScreen(
                             // because it is a different question from either,
                             // and hidden entirely when the viewer has nothing
                             // arriving rather than rendering an empty header.
-                            if (state.arriving.isNotEmpty()) {
+                            // The same emptiness check gates the switch in
+                            // Settings: disabled means the section - and every
+                            // poster load it draws - is not composed at all.
+                            if (state.arriving.isNotEmpty() && arrivingEnabled) {
                                 item(key = "arriving_section") {
                                     ArrivingSection(
                                         entries = state.arriving,
+                                        compact = arrivingCompact,
                                         maxWidth = MaxContentWidth
                                     )
                                 }

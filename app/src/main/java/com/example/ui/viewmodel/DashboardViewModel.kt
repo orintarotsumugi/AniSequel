@@ -15,6 +15,7 @@ import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.repository.AniListRepository
+import com.example.data.repository.ArrivingPreferences
 import com.example.data.repository.RefreshInterval
 import com.example.data.repository.RefreshIntervalPreferences
 import com.example.domain.usecase.FindArrivingEntriesUseCase
@@ -74,7 +75,16 @@ class DashboardViewModel(
      * nothing to refresh, and without a store the app falls back to
      * [RefreshInterval.DEFAULT] rather than refusing to start.
      */
-    private val refreshIntervalPreferences: RefreshIntervalPreferences? = null
+    private val refreshIntervalPreferences: RefreshIntervalPreferences? = null,
+
+    /**
+     * Whether the "Currently arriving" section shows, and how it draws.
+     *
+     * Optional for the same reason as [hiddenSequelsPreferences]: the demo and
+     * public-profile dashboards construct without a store and fall back to the
+     * shipped defaults (visible, full cards).
+     */
+    private val arrivingPreferences: ArrivingPreferences? = null
 ) : ViewModel() {
 
     companion object {
@@ -115,6 +125,22 @@ class DashboardViewModel(
     val hiddenSequels: StateFlow<List<MissedSequel>> = _hiddenSequels.asStateFlow()
 
     /**
+     * Whether the "Currently arriving" section is shown at all.
+     *
+     * Mirrors [ArrivingPreferences] rather than storing the value once, so
+     * flipping the switch in Settings changes the dashboard immediately and
+     * without a refresh. Defaults to enabled until the store's first emission,
+     * which matches the shipped behaviour for builds without a preferences
+     * object behind them.
+     */
+    private val _arrivingEnabled = MutableStateFlow(true)
+    val arrivingEnabled: StateFlow<Boolean> = _arrivingEnabled.asStateFlow()
+
+    /** Mirror of [ArrivingPreferences]' compact choice; see [arrivingEnabled]. */
+    private val _arrivingCompact = MutableStateFlow(false)
+    val arrivingCompact: StateFlow<Boolean> = _arrivingCompact.asStateFlow()
+
+    /**
      * The interval the user has chosen, mirrored here from the store.
      *
      * Collected rather than read once because [ListFreshnessWatch] asks for it on
@@ -153,6 +179,17 @@ class DashboardViewModel(
             viewModelScope.launch {
                 preferences.interval.collectLatest { interval ->
                     currentRefreshInterval = interval
+                }
+            }
+        }
+
+        // Mirrored the same way as the interval: a settings change should reach
+        // the dashboard on the next composition, not after a rebuild.
+        arrivingPreferences?.let { preferences ->
+            viewModelScope.launch {
+                preferences.settings.collectLatest { settings ->
+                    _arrivingEnabled.value = settings.showArrivingSection
+                    _arrivingCompact.value = settings.compactArrivingCards
                 }
             }
         }
@@ -494,6 +531,10 @@ class DashboardViewModel(
         }
 
         val watchedCount = countWatched(collection)
+        // Derived unconditionally: the work is memoized (one walk per
+        // collection), and re-deriving on a toggle is more than it saves. The
+        // switches in Settings pay their way by stopping the section - and its
+        // poster loads - from being composed at all, not by skipping this.
         val arriving = arrivingEntries(collection)
 
         val updated = filteredVisible.map { found ->
@@ -912,7 +953,8 @@ class DashboardViewModel(
         private val targetUsername: String? = null,
         private val isDemo: Boolean = false,
         private val hiddenSequelsPreferences: HiddenSequelsPreferences? = null,
-        private val refreshIntervalPreferences: RefreshIntervalPreferences? = null
+        private val refreshIntervalPreferences: RefreshIntervalPreferences? = null,
+        private val arrivingPreferences: ArrivingPreferences? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -921,7 +963,8 @@ class DashboardViewModel(
                 targetUsername = targetUsername,
                 isDemo = isDemo,
                 hiddenSequelsPreferences = hiddenSequelsPreferences,
-                refreshIntervalPreferences = refreshIntervalPreferences
+                refreshIntervalPreferences = refreshIntervalPreferences,
+                arrivingPreferences = arrivingPreferences
             ) as T
         }
     }

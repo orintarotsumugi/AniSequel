@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "1.0.32",
+      "entries": [
+        {
+          "title": "Coming arrivals, your way",
+          "detail": "Settings > Edit gains a Dashboard card. Turn the Currently arriving rows off entirely, or compact them to plain no-poster rows that load nothing - less data, less battery, while you scan your list."
+        }
+      ]
+    },
+    {
       "version": "1.0.31",
       "entries": [
         {

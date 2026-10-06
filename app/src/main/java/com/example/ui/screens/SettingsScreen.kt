@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import com.example.data.changelog.ChangelogRepository
 import com.example.data.model.ViewerProfile
+import com.example.data.repository.ArrivingPreferences
 import com.example.data.repository.RefreshIntervalPreferences
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
@@ -42,6 +43,7 @@ fun SettingsScreen(
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
+    arrivingPreferences: ArrivingPreferences,
     changelogRepository: ChangelogRepository,
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
@@ -96,6 +98,7 @@ fun SettingsScreen(
                 2 -> EditSettingsTab(
                     authViewModel = authViewModel,
                     refreshIntervalPreferences = refreshIntervalPreferences,
+                    arrivingPreferences = arrivingPreferences,
                     onNavigateToLogin = onNavigateToLogin,
                     modifier = Modifier.padding(paddingValues)
                 )

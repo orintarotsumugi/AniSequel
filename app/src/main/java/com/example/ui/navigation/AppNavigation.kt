@@ -31,6 +31,7 @@ import androidx.navigation.navArgument
 import com.example.data.changelog.ChangelogRepository
 import com.example.data.network.NetworkClient
 import com.example.data.repository.AniListRepositoryImpl
+import com.example.data.repository.ArrivingPreferences
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.HiddenSequelsPreferences
 import com.example.data.repository.RefreshIntervalPreferences
@@ -124,6 +125,13 @@ fun AppNavigation(
         RefreshIntervalPreferences(context.applicationContext)
     }
 
+    // Application-scoped so the dashboard and Settings agree in one session:
+    // the dashboard mirrors both flags and Settings writes them, and two
+    // instances would read two copies of the same preference.
+    val arrivingPreferences = remember(context) {
+        ArrivingPreferences(context.applicationContext)
+    }
+
     // The cache window is a supplier rather than a value because the user can
     // change it from Settings while the app is open: reading it per lookup is
     // what makes "15 min" mean fifteen minutes from the moment it is picked,
@@ -196,7 +204,8 @@ fun AppNavigation(
             factory = DashboardViewModel.Factory(
                 aniListRepository = aniListRepository,
                 hiddenSequelsPreferences = hiddenSequelsPreferences,
-                refreshIntervalPreferences = refreshIntervalPreferences
+                refreshIntervalPreferences = refreshIntervalPreferences,
+                arrivingPreferences = arrivingPreferences
             )
         )
     } else {
@@ -316,7 +325,8 @@ fun AppNavigation(
                     aniListRepository = aniListRepository,
                     targetUsername = username,
                     hiddenSequelsPreferences = hiddenSequelsPreferences,
-                    refreshIntervalPreferences = refreshIntervalPreferences
+                    refreshIntervalPreferences = refreshIntervalPreferences,
+                    arrivingPreferences = arrivingPreferences
                 )
             )
 
@@ -350,6 +360,7 @@ fun AppNavigation(
                 authViewModel = authViewModel,
                 themePreferences = themePreferences,
                 refreshIntervalPreferences = refreshIntervalPreferences,
+                arrivingPreferences = arrivingPreferences,
                 changelogRepository = changelogRepository,
                 viewer = signedInViewer,
                 totalWatchedCount = successState?.totalWatchedCount,
