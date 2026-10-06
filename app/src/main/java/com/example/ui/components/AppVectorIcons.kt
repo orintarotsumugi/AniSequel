@@ -2,31 +2,47 @@ package com.example.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarViewMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EmojiPeople
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
@@ -84,6 +100,42 @@ object AppVectorIcons {
     val SystemUpdate = Icons.Default.SystemUpdate
     val Download = Icons.Default.Download
     val Pause = Icons.Default.PauseCircle
+    val OverflowMenu = Icons.Default.MoreHoriz
+
+    // The profile screen's four destinations. Every one is named for what the
+    // destination *is*, and each of the four was picked because it cannot be
+    // mistaken for one of the others at 22dp.
+    //
+    // `Insights` rather than `BarChart`: the material set has no `BarChart` at
+    // all, and `Insights` is the icon that is actually a bar chart. Verified
+    // against the material-icons-extended sources rather than assumed, because
+    // a wrong import name here is a build failure discovered in CI.
+    val ProfileHome = Icons.Default.Home
+    val ProfileActivity = Icons.AutoMirrored.Filled.Comment
+    val ProfileStats = Icons.Default.Insights
+    val ProfileSocial = Icons.Default.Group
+
+    // Section headers on the profile screen.
+    val FavouriteAnime = Icons.Default.Movie
+    val FavouriteManga = Icons.AutoMirrored.Filled.MenuBook
+    val FavouriteCharacters = Icons.Default.EmojiPeople
+    val FavouriteStaff = Icons.Default.Badge
+    val FavouriteStudios = AppCustomVectors.StudioBuilding
+    val ProfileAbout = Icons.Default.FormatQuote
+    val ProfileJoined = Icons.Default.CalendarMonth
+    val ProfileUpdated = Icons.Default.Schedule
+
+    // One per Stats-tab chart, so the card and its meaning are never a guess.
+    val StatSummary = Icons.Default.Insights
+    val StatStatus = Icons.Default.RadioButtonChecked
+    val StatFormat = Icons.Default.Smartphone
+    val StatCountry = Icons.Default.Public
+    val StatScore = Icons.Default.BarChart
+    val StatEpisodeCount = Icons.Default.Timer
+    val StatReleaseYear = Icons.Default.Event
+    val StatWatchYear = Icons.Default.CalendarViewMonth
+    val StatGenre = Icons.Default.LocalOffer
+    val ActivityReplies = Icons.AutoMirrored.Filled.Comment
 
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the

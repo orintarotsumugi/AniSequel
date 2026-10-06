@@ -9,6 +9,10 @@ import com.example.data.model.MediaListCollectionData
 import com.example.data.model.SaveMediaListEntryData
 import com.example.data.model.SimpleMediaListEntry
 import com.example.data.model.UserByNameData
+import com.example.data.model.ActivityFeedData
+import com.example.data.model.FollowersData
+import com.example.data.model.FollowingData
+import com.example.data.model.UserOverviewData
 import com.example.data.model.ViewerData
 import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListApiService
@@ -58,6 +62,26 @@ class AniListErrorMappingTest {
 
         override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
             GraphQLResponse(null)
+
+        // The profile screen's four endpoints. Thrown rather than returned as an
+        // empty response on purpose: if a test ever starts calling one, that is a
+        // change of intent, and a blank `GraphQLResponse` would let it keep
+        // passing against data the fake invented.
+        override suspend fun getUserOverview(
+            request: GraphQLRequest
+        ): GraphQLResponse<UserOverviewData> = notServed("getUserOverview")
+
+        override suspend fun getUserActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getUserFollowers(
+            request: GraphQLRequest
+        ): GraphQLResponse<FollowersData> = notServed("getUserFollowers")
+
+        override suspend fun getUserFollowing(
+            request: GraphQLRequest
+        ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
@@ -209,6 +233,26 @@ class RequestCoalescingPolicyTest {
 
         override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
             GraphQLResponse(null)
+
+        // The profile screen's four endpoints. Thrown rather than returned as an
+        // empty response on purpose: if a test ever starts calling one, that is a
+        // change of intent, and a blank `GraphQLResponse` would let it keep
+        // passing against data the fake invented.
+        override suspend fun getUserOverview(
+            request: GraphQLRequest
+        ): GraphQLResponse<UserOverviewData> = notServed("getUserOverview")
+
+        override suspend fun getUserActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getUserFollowers(
+            request: GraphQLRequest
+        ): GraphQLResponse<FollowersData> = notServed("getUserFollowers")
+
+        override suspend fun getUserFollowing(
+            request: GraphQLRequest
+        ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
     }
 
     @Test
@@ -390,3 +434,15 @@ class AniListLiveResponseClassificationTest {
         assertEquals(listOf(GraphQLError("Invalid token", 400)), envelope?.errors)
     }
 }
+
+/**
+ * For the endpoints a fake deliberately does not serve.
+ *
+ * A test double is allowed to answer "I don't do that", but it must say so rather
+ * than answering with an empty response: `GraphQLResponse(null)` parses into a
+ * `null` payload, which the repository turns into a `NOT_FOUND` failure that reads
+ * like AniList being unhelpful. A fake that claims a screen it does not implement
+ * would let that sentence be tested by accident.
+ */
+private fun notServed(operation: String): Nothing =
+    throw UnsupportedOperationException("this fake does not serve $operation")

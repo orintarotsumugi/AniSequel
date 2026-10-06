@@ -259,11 +259,35 @@ object DemoDataProvider {
                     name = "Completed",
                     status = "COMPLETED",
                     entries = listOf(
-                        MediaListEntryItem(status = "COMPLETED", media = kimetsuS1),
-                        MediaListEntryItem(status = "COMPLETED", media = jjkS1),
-                        MediaListEntryItem(status = "COMPLETED", media = kaguyaS1),
-                        MediaListEntryItem(status = "COMPLETED", media = spyS1),
-                        MediaListEntryItem(status = "COMPLETED", media = frierenS1)
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            // Spread over the trailing weeks so the profile
+                            // screen's activity calendar has something to draw.
+                            // A demo that rendered an empty grid would look
+                            // like the feature is broken.
+                            completedAt = daysAgo(3),
+                            media = kimetsuS1
+                        ),
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            completedAt = daysAgo(9),
+                            media = jjkS1
+                        ),
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            completedAt = daysAgo(9),
+                            media = kaguyaS1
+                        ),
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            completedAt = daysAgo(24),
+                            media = spyS1
+                        ),
+                        MediaListEntryItem(
+                            status = "COMPLETED",
+                            completedAt = daysAgo(31),
+                            media = frierenS1
+                        )
                     )
                 ),
                 MediaListGroup(
@@ -276,5 +300,19 @@ object DemoDataProvider {
                 )
             )
         )
+    }
+
+    /**
+     * A calendar date [days] before today.
+     *
+     * Relative rather than literal dates on purpose: a fixture pinned to
+     * 2024 would sit in the far-left columns of the activity calendar forever,
+     * and the demo would rot into looking broken as soon as it was a year old.
+     * Same reasoning as the computed `airingAt` further up.
+     */
+    private fun daysAgo(days: Long): FuzzyDate {
+        val instant = java.time.Instant.now().minusSeconds(days * 24L * 60L * 60L)
+        val date = java.time.LocalDate.ofInstant(instant, java.time.ZoneOffset.UTC)
+        return FuzzyDate(year = date.year, month = date.monthValue, day = date.dayOfMonth)
     }
 }

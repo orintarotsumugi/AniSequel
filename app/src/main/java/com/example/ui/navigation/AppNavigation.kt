@@ -212,6 +212,21 @@ fun AppNavigation(
         null
     }
 
+    // Collected once here, beside the session, so the profile routes have the
+    // viewer's name and id without each of them re-reading the dashboard's
+    // state. The id is the load-bearing half: without it the profile screen
+    // looks its list up by name, misses the cache the dashboard just filled, and
+    // spends AniList's most expensive request re-downloading a list it already
+    // holds. See `ProfileDestination`.
+    //
+    // The empty flow is the same one Settings uses, for the same reason: a
+    // null-propagating `?.` would hide the `collectAsState` call on the frames
+    // where there is no session, and re-entering this lambda with a different
+    // call sequence crashes at runtime.
+    val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
+    val dashboardState by dashboardFlow.collectAsState()
+    val signedInViewer = (dashboardState as? DashboardUiState.Success)?.viewer
+
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
         when (authState) {
@@ -290,6 +305,16 @@ fun AppNavigation(
                     onSignInAgain = authViewModel::logout,
                     onOpenSettings = {
                         navController.navigate(AppRoutes.SETTINGS)
+                    },
+                    // Guarded on the viewer existing rather than on the route:
+                    // the button only appears on a loaded dashboard, and an
+                    // avatar that can be tapped before there is a name to open
+                    // is a route that would have to look one up - which is the
+                    // request this wiring exists to avoid.
+                    onOpenProfile = { viewer ->
+                        if (viewer != null) {
+                            navController.navigate(ProfileRoutes.OWN)
+                        }
                     }
                 )
             }
@@ -307,7 +332,17 @@ fun AppNavigation(
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
-                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) }
+                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) },
+                onOpenProfile = {
+                    navController.navigate(ProfileRoutes.OWN) {
+                        // A demo profile is not on AniList, so the viewer can
+                        // change what it says from there and come back to
+                        // something that no longer matches. Replacing it rather
+                        // than stacking means Back lands on the demo dashboard
+                        // every time instead of on a stack of stale demos.
+                        popUpTo(AppRoutes.DASHBOARD_DEMO) { inclusive = true }
+                    }
+                }
             )
         }
 
@@ -337,24 +372,75 @@ fun AppNavigation(
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
-                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) }
+                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) },
+                // The scanned person, not the viewer. Passing the viewer's name
+                // here would have opened the user's own profile from a dashboard
+                // that is showing somebody else's list - which looks exactly
+                // right on the top bar and is completely wrong.
+                onOpenProfile = {
+                    if (username.isNotBlank()) {
+                        navController.navigate(ProfileRoutes.byUsername(username))
+                    }
+                }
+            )
+        }
+
+        composable(ProfileRoutes.OWN) {
+            // `signedInViewer` is null until the dashboard has loaded, and a demo
+            // dashboard has no session ViewModel at all - hence the two sources
+            // rather than one. The button that reaches this route is on a loaded
+            // dashboard, so in practice this is never an empty string.
+            val username = signedInViewer?.name ?: DEMO_USERNAME
+            ProfileDestination(
+                repository = aniListRepository,
+                username = username,
+                userId = signedInViewer?.id,
+                isDemo = signedInViewer == null,
+                navController = navController,
+                onSignInAgain = authViewModel::logout
+            )
+        }
+
+        composable(
+            route = ProfileRoutes.BY_USERNAME,
+            arguments = ProfileUsernameArguments
+        ) { backStackEntry ->
+            val username = backStackEntry.arguments?.getString("username").orEmpty()
+            ProfileDestination(
+                repository = aniListRepository,
+                username = username,
+                // No id for a scanned profile: `getUserByName` has already been
+                // asked for it by the dashboard that led here, but its id is not
+                // carried in the route. `null` puts the list fetch on the by-name
+                // cache key, which is the same key that dashboard used - so it is
+                // still a cache hit rather than a second download.
+                userId = null,
+                isDemo = false,
+                navController = navController,
+                onSignInAgain = authViewModel::logout
+            )
+        }
+
+        composable(
+            route = ProfileRoutes.BY_ID,
+            arguments = ProfileIdArguments
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getInt("userId") ?: 0
+            ProfileDestination(
+                repository = aniListRepository,
+                // The name is only a label at this point; the query is by id. The
+                // follower row carries both, so an empty name would be a bug in
+                // the caller rather than a real case, and it still fetches.
+                username = "",
+                userId = userId,
+                isDemo = false,
+                navController = navController,
+                onSignInAgain = authViewModel::logout
             )
         }
 
         composable(AppRoutes.SETTINGS) {
-            // Collected here rather than at the top of AppNavigation: the viewer
-            // profile only exists once a dashboard has actually loaded, and
-            // `collectAsState` needs a flow that is known to be non-null.
-            // `collectAsState` must see a non-null receiver on every pass:
-            // a null-propagating `?.` hides the call when
-            // `mainDashboardViewModel` is absent, so a session arriving or
-            // the theme rotating after Settings is open would re-enter this
-            // lambda with a different call sequence and crash at runtime.
-            // A stable empty flow keeps the call unconditional.
-            val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
-            val dashboardState by dashboardFlow.collectAsState()
             val successState = dashboardState as? DashboardUiState.Success
-            val signedInViewer = successState?.viewer
 
             SettingsScreen(
                 authViewModel = authViewModel,
@@ -375,6 +461,15 @@ fun AppNavigation(
         }
     }
 }
+
+/**
+ * The demo profile's name.
+ *
+ * Deliberately the same name as [com.example.data.repository.DemoDataProvider]
+ * uses for its viewer, so the profile screen's own route and its fixture agree
+ * about who "this" is.
+ */
+private const val DEMO_USERNAME = "OtakuExplorer"
 
 /**
  * The brief hold while the stored session is read.

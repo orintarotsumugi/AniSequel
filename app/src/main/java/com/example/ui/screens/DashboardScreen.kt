@@ -60,6 +60,7 @@ fun DashboardScreen(
     dashboardViewModel: DashboardViewModel,
     onOpenSettings: (ViewerProfile?) -> Unit,
     onSignInAgain: () -> Unit = {},
+    onOpenProfile: (ViewerProfile?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
@@ -145,6 +146,7 @@ fun DashboardScreen(
                 onOpenFilter = { showFilterSheet = true },
                 onRefresh = { dashboardViewModel.refresh() },
                 onOpenSettings = { onOpenSettings(currentViewer) },
+                onOpenProfile = { onOpenProfile(currentViewer) },
                 isRefreshing = successState?.isRefreshing == true,
                 hasActiveFilters = hasActiveFilters,
                 scrollBehavior = scrollBehavior

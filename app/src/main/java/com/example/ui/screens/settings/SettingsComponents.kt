@@ -1,8 +1,5 @@
 package com.example.ui.screens.settings
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -224,14 +221,5 @@ fun SettingsScrollColumn(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             content = content
         )
-    }
-}
-
-fun openExternalUrl(context: Context, url: String) {
-    runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
     }
 }

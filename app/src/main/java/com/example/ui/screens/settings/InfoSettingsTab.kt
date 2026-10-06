@@ -28,6 +28,7 @@ import com.example.data.changelog.ChangelogRepository
 import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListOAuth
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.openExternalUrl
 
 @Composable
 fun InfoSettingsTab(

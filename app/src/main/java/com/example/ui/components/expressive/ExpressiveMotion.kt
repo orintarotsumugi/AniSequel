@@ -20,6 +20,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 
 /**
  * Standardized Material 3 Expressive motion tokens and physics specifications.
@@ -121,13 +122,13 @@ object ExpressiveMotion {
             )
         }
 
-    /**
+/**
      * Item appearance and disappearance for lazy list items.
      *
      * `LazyItemScope.animateItem` takes `fadeInSpec`/`fadeOutSpec` parameters
      * of type `FiniteAnimationSpec<Float>`. The dashboard had inlined
-     * `DampingRatioMediumBouncy`/`StiffnessMedium` for the entrance — which is
-     * exactly `FastSpatial` — and a separate `FastEffects`-like spring for the
+     * `DampingRatioMediumBouncy`/`StiffnessMedium` for the entrance — which
+     * is exactly `FastSpatial` — and a separate `FastEffects`-like spring for the
      * exit. This pair pins both types together.
      */
     val ListItemFadeIn: FiniteAnimationSpec<Float> get() =
@@ -135,6 +136,31 @@ object ExpressiveMotion {
 
     val ListItemFadeOut: FiniteAnimationSpec<Float> get() =
         effects(stiffness = Spring.StiffnessMedium)
+
+    /**
+     * The [FastSpatial] counterpart for `IntSize`-based expansion.
+     *
+     * `AnimatedVisibility`'s `expandHorizontally` and `shrinkHorizontally` take
+     * `FiniteAnimationSpec<IntSize>`; `expandVertically` and `shrinkVertically` take
+     * `FiniteAnimationSpec<IntOffset>`. They are two different types with two
+     * different physics meanings - one resizes, one moves - so the growing
+     * navigation label needs its own token rather than being given the wrong one
+     * and failing to compile. `FastSpatial` is the right physics for it: a label
+     * growing open should be as quick as a press, not as slow as a list item
+     * settling.
+     */
+    val FastSpatialSize: FiniteAnimationSpec<IntSize> get() =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        }
 
     /**
      * Selected-tab and selected-segment scale.

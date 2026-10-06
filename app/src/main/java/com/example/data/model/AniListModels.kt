@@ -61,16 +61,55 @@ data class UserAvatar(
     val large: String? = null
 )
 
+/**
+ * AniList's `UserStatisticTypes`: the per-medium breakdown of a user's list.
+ *
+ * The type is named `UserStatisticTypes` upstream and is reached as
+ * `User.statistics`. It is modelled here under a shorter local name that already
+ * existed, because `ViewerProfile.statistics` has pointed at it since the
+ * dashboard first read a list count and renaming it would be churn for no
+ * behaviour change.
+ *
+ * [manga] was added with the profile screen, which is the first thing to render
+ * a manga list. `anime` and `manga` are the *same* upstream type
+ * (`UserStatistics`), so the local `AnimeStats`/`MangaStats` split is only about
+ * which fields each side carries: `episodesWatched` and `minutesWatched` are
+ * anime-only in practice and `chaptersRead`/`volumesRead` manga-only, and AniList
+ * reports zeros rather than nulls for the ones that do not apply.
+ *
+ * Note what is deliberately **not** here: `meanScore`, `statuses` and `genres`.
+ *
+ *  - `statuses` and `genres` are the obvious-looking way to get "7 watching, 128
+ *    completed" and a top-genres chart straight from AniList, and they are asked
+ *    for in [com.example.data.network.GraphQLQueries.GET_USER_OVERVIEW] nowhere
+ *    because they answer `[]` for every user that was tried - including accounts
+ *    with hundreds of scored entries. The distributions come from the deprecated
+ *    `User.stats` block instead; see [AniListUserStats].
+ *  - `meanScore` did work on this field, so it is read from here rather than from
+ *    `stats.animeListScores` - two sources for one number is how the Stats tab and
+ *    the header card end up quoting different values.
+ */
 @JsonClass(generateAdapter = true)
 data class UserStatistics(
-    val anime: AnimeStats? = null
+    val anime: AnimeStats? = null,
+    val manga: MangaStats? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class AnimeStats(
     val count: Int? = null,
     val episodesWatched: Int? = null,
-    val minutesWatched: Long? = null
+    val minutesWatched: Long? = null,
+    /** AniList reports `Float`; Moshi reads a JSON number into a `Double`. */
+    val meanScore: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MangaStats(
+    val count: Int? = null,
+    val chaptersRead: Long? = null,
+    val volumesRead: Long? = null,
+    val meanScore: Double? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -119,6 +158,22 @@ data class MediaNode(
     val id: Int,
     val title: MediaTitle? = null,
     val format: String? = null,
+    /**
+     * `ANIME` or `MANGA`.
+     *
+     * Only the activity feed asks for it, to label an item "Watched" or "Read"
+     * - the same status means different things for the two media types and the
+     * feed cannot tell them apart without it.
+     */
+    val type: String? = null,
+    /**
+     * `JP`, `KR`, `CN` or `US`.
+     *
+     * Requested only by the list query, for the profile screen's country
+     * distribution. AniList reports this nowhere in its aggregate statistics, so
+     * the entry is the only place it can come from.
+     */
+    val countryOfOrigin: String? = null,
     val status: String? = null,
     val episodes: Int? = null,
     /**
@@ -225,7 +280,13 @@ data class StudioConnection(
 @JsonClass(generateAdapter = true)
 data class StudioNode(
     val id: Int? = null,
-    val name: String? = null
+    val name: String? = null,
+    /**
+     * Whether this is an animation studio, as opposed to a publisher or a
+     * producer. Only the favourites query asks for it, to tell a manga house
+     * from an anime one in the same row; the media detail query never does.
+     */
+    val isAnimationStudio: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)
