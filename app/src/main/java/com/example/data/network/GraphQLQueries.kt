@@ -91,9 +91,25 @@ object GraphQLQueries {
     """
 
     /**
-     * `episodes` is the only parent field the detector needs: an entry counts as
-     * watched when its progress reaches the parent's episode count even if the
-     * user never set a status.
+     * Parent fields, by consumer:
+     *
+     *  - `episodes` is what the watched detector needs: an entry counts as
+     *    watched when its progress reaches the episode count even if the user
+     *    never set a status.
+     *  - `status`, `startDate` and `nextAiringEpisode` drive the "Currently
+     *    arriving" section - the user's own list, split into what is airing now
+     *    and what has not started yet.
+     *  - `coverImage` is the parent's key visual on the card that says "Sequel
+     *    to X". It was always meant to be here; without it every one of those
+     *    cards rendered with no artwork at all.
+     *  - `completedAt` on the entry (not the media) is the year the *viewer*
+     *    marked it finished, which is what the "completed this year" filter
+     *    asks about.
+     *
+     * `id` and `score` on the entry are gone because nothing reads them - the
+     * media's own id is the identity used everywhere, and the score the UI
+     * renders is the media's `averageScore`. They cost one value per entry on
+     * the hottest request in the app for nothing.
      */
     val GET_USER_ANIME_LIST = """
         query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String) {
@@ -102,14 +118,17 @@ object GraphQLQueries {
               name
               status
               entries {
-                id
                 status
-                score
                 progress
+                completedAt { year month day }
                 media {
                   id
                   title { romaji english native userPreferred }
                   episodes
+                  status
+                  startDate { year month day }
+                  coverImage { large color }
+                  nextAiringEpisode { episode airingAt }
                   relations {
                     edges {
                       relationType

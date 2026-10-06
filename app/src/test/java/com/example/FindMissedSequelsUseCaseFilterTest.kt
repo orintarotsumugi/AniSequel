@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.model.FilterCriteria
+import com.example.data.model.FuzzyDate
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaListGroup
@@ -130,5 +131,98 @@ class FindMissedSequelsUseCaseFilterTest {
         )
 
         assertEquals(1, useCase.execute(list, FilterCriteria()).size)
+    }
+
+    private fun sequel(id: Int, startYear: Int?): MediaNode = MediaNode(
+        id = id,
+        title = MediaTitle(english = "Sequel $id"),
+        format = "TV",
+        status = "FINISHED",
+        episodes = 12,
+        startDate = startYear?.let { FuzzyDate(it, 7, 1) }
+    )
+
+    private fun completedEntry(parent: MediaNode, completedYear: Int?) =
+        MediaListEntryItem(
+            status = "COMPLETED",
+            completedAt = completedYear?.let { FuzzyDate(it, 3, 1) },
+            media = parent
+        )
+
+    private fun released(list: MediaListCollection, criteria: FilterCriteria, year: Int) =
+        useCase.applyFilters(useCase.discover(list, criteria), criteria, currentYear = year)
+
+    @Test
+    fun `sequel released this year keeps only sequels whose season starts this year`() {
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, sequel(301, 2026), sequel(302, 2025))
+            )
+        )
+
+        val result = released(list, FilterCriteria(sequelReleasedThisYear = true), 2026)
+
+        assertEquals(listOf(301), result.map { it.sequelId })
+    }
+
+    @Test
+    fun `a sequel with no announced start date is not releasing this year`() {
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, sequel(303, 2026), sequel(304, null))
+            )
+        )
+
+        val result = released(list, FilterCriteria(sequelReleasedThisYear = true), 2026)
+
+        assertEquals(listOf(303), result.map { it.sequelId })
+    }
+
+    @Test
+    fun `parent completed this year keeps only sequels from parents finished this year`() {
+        val oldParent = parent(105, sequel(305, 2026))
+        val thisYearParent = parent(106, sequel(306, 2025))
+        val list = collection(
+            completedEntry(oldParent, 2025),
+            completedEntry(thisYearParent, 2026)
+        )
+
+        val result = released(list, FilterCriteria(parentCompletedThisYear = true), 2026)
+
+        assertEquals(listOf(306), result.map { it.sequelId })
+    }
+
+    @Test
+    fun `year axes compose, a candidate must match both`() {
+        val thisYearParent = parent(
+            107,
+            sequel(307, 2026),
+            sequel(308, 2025)
+        )
+        val oldParent = parent(108, sequel(309, 2026))
+        val list = collection(
+            completedEntry(thisYearParent, 2026),
+            completedEntry(oldParent, 2025)
+        )
+
+        val criteria = FilterCriteria(
+            sequelReleasedThisYear = true,
+            parentCompletedThisYear = true
+        )
+        val result = released(list, criteria, 2026)
+
+        assertEquals(listOf(307), result.map { it.sequelId })
+    }
+
+    @Test
+    fun `a parent the viewer never marked completed was not completed this year`() {
+        val unfinishedParent = parent(109, sequel(310, 2026))
+        val list = collection(completedEntry(unfinishedParent, null))
+
+        val result = released(list, FilterCriteria(parentCompletedThisYear = true), 2026)
+
+        assertTrue(result.isEmpty())
     }
 }

@@ -36,6 +36,16 @@ data class MissedSequel(
 
     /** AniList's dominant colour for the parent's key visual. */
     val parentCoverColor: String? = null,
+
+    /**
+     * The year the *viewer* marked the parent finished, or null when they
+     * never did.
+     *
+     * From the entry's `completedAt`, so it answers "when did I complete
+     * this?" rather than "when did this air?" - which is what the filter
+     * asking the question means.
+     */
+    val parentCompletedYear: Int? = null,
     val sequelMedia: MediaNode,
     /** AniList's own relation name: SEQUEL, PREQUEL, SIDE_STORY, SPIN_OFF... */
     val relationType: String = RelationKind.SEQUEL.apiValue,
@@ -85,6 +95,35 @@ data class MissedSequel(
         val readable = name.lowercase(java.util.Locale.ROOT).replaceFirstChar { it.uppercase(java.util.Locale.ROOT) }
         sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
     }
+
+    /**
+     * Everything the search box matches against, lowercased exactly once.
+     *
+     * A keystroke runs `contains` over this for every candidate on the list,
+     * and the old code rebuilt a lowercased copy of six fields per candidate
+     * per keystroke - on a large account that was the single most repeated
+     * string work in the app. The fields are joined with '\n' rather than a
+     * space because a space can be the end of one title and the start of the
+     * next: without a separator a query could match across a field boundary
+     * that no single field contains. The single-line search field cannot
+     * produce a '\n' of its own, so a query never spans them either.
+     */
+    private val cachedSearchableText: String by lazy {
+        val titleFields = listOfNotNull(
+            sequelMedia.title?.romaji,
+            sequelMedia.title?.english,
+            sequelMedia.title?.native
+        )
+        (listOf(sequelTitle, parentTitle) + titleFields + synonyms)
+            .joinToString(separator = "\n") { it.lowercase(java.util.Locale.ROOT) }
+    }
+
+    /**
+     * [cachedSearchableText], for [com.example.domain.usecase.FindMissedSequelsUseCase.applyFilters].
+     */
+    val searchableText: String
+        get() = cachedSearchableText
+
     val sequelId: Int get() = sequelMedia.id
     val sequelTitle: String get() = sequelMedia.title?.displayTitle ?: "Unknown Sequel"
     val englishTitle: String? get() = sequelMedia.title?.english?.takeIf { it.isNotBlank() }
@@ -153,26 +192,13 @@ data class MissedSequel(
     val watchedEpisodes: Int? get() = sequelMedia.mediaListEntry?.progress
 
     /**
-     * `airingAt` is seconds since the epoch, from AniList.
+     * How long until the next episode, or null when nothing is scheduled.
+     *
+     * Delegates to [AiringCountdown], which the arriving section shares - see
+     * the note there on why this is one implementation.
      */
-    fun nextAiringCountdown(nowMillis: Long = System.currentTimeMillis()): String? {
-        val airingAt = nextAiringAt ?: return null
-        // AniList reports seconds; the arithmetic below is in milliseconds.
-        val airingAtMillis = airingAt * 1000L
-        val remaining = airingAtMillis - nowMillis
-        if (remaining <= 0L) return null
-
-        val minutes = remaining / 60_000
-        val hours = minutes / 60
-        val days = hours / 24
-
-        return when {
-            days >= 1 -> "in ${days}d"
-            hours >= 1 -> "in ${hours}h"
-            minutes >= 1 -> "in ${minutes}m"
-            else -> "now"
-        }
-    }
+    fun nextAiringCountdown(nowMillis: Long = System.currentTimeMillis()): String? =
+        AiringCountdown.format(nextAiringAt, nowMillis)
 
     /**
      * How far through this entry the viewer is, as a 0..1 fraction.

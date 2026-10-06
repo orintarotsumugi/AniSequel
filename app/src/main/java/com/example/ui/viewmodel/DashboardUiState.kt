@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import com.example.data.model.ArrivingEntry
 import com.example.data.model.MissedSequel
 import com.example.data.model.ViewerProfile
 
@@ -22,6 +23,16 @@ sealed interface DashboardUiState {
     data class Success(
         val viewer: ViewerProfile,
         val missedSequels: List<MissedSequel>,
+        /**
+         * The viewer's own entries that are airing or announced.
+         *
+         * A separate list rather than a partition of [missedSequels] on
+         * purpose: this section is never filtered, searched or sorted by the
+         * filter sheet, because it answers "what is arriving?" rather than
+         * "what am I missing?". Empty means nothing of theirs is arriving, so
+         * the section hides itself.
+         */
+        val arriving: List<ArrivingEntry> = emptyList(),
         val totalWatchedCount: Int,
         val totalMissedCount: Int,
         val isRefreshing: Boolean = false,

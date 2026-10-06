@@ -103,6 +103,14 @@ data class MediaListEntryItem(
     val status: String? = null,
     val score: Double? = null,
     val progress: Int? = null,
+    /**
+     * When *the viewer* marked this entry finished, not when it aired.
+     *
+     * The list query asks for it; `id` and `score` are still modelled but no
+     * longer requested, because fixtures and older cached responses carry them
+     * and Moshi leaves an unasked-for field null rather than failing.
+     */
+    val completedAt: FuzzyDate? = null,
     val media: MediaNode
 )
 

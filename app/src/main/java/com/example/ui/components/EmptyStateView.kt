@@ -81,7 +81,7 @@ fun EmptyStateView(
         if (isSearching) {
             Spacer(modifier = Modifier.height(20.dp))
             ExpressivePrimaryButton(
-                text = "Clear search and filters",
+                text = "Reset filters",
                 onClick = onResetFilters,
                 icon = AppVectorIcons.Close,
                 modifier = Modifier.testTag("reset_filters_button")

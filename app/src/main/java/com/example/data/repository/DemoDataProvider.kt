@@ -9,6 +9,7 @@ import com.example.data.model.MediaNode
 import com.example.data.model.MediaRelationEdge
 import com.example.data.model.MediaRelations
 import com.example.data.model.MediaTitle
+import com.example.data.model.NextAiringEpisode
 import com.example.data.model.StudioConnection
 import com.example.data.model.StudioNode
 import com.example.data.model.UserAvatar
@@ -214,6 +215,44 @@ object DemoDataProvider {
             relations = MediaRelations(listOf(MediaRelationEdge("SEQUEL", frierenS2)))
         )
 
+        // 6. A brand-new original currently airing (demo for the arriving section).
+        // No relations, so it never joins the missed-sequel graph; the airing
+        // timestamp is computed at load time so the countdown stays alive however
+        // old this demo build gets.
+        val originalAiring = MediaNode(
+            id = 999001,
+            title = MediaTitle(english = "Starlight Runner", romaji = "Starlight Runner"),
+            format = "TV",
+            status = "RELEASING",
+            episodes = 12,
+            averageScore = null,
+            popularity = 90000,
+            description = "A courier girl races across a neon megacity, outrunning corporate pursuers to deliver a message that could tip the balance of a silent war.",
+            genres = listOf("Action", "Sci-Fi"),
+            coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx999001-placeholder.jpg", color = "#7C4DFF"),
+            startDate = FuzzyDate(2026, 4, 5),
+            nextAiringEpisode = NextAiringEpisode(
+                episode = 7,
+                airingAt = (System.currentTimeMillis() / 1000) + 2 * 24 * 60 * 60
+            )
+        )
+
+        // 7. An upcoming original still in production (demo for the arriving
+        // section). Also relation-free so discovery stops at the watched shows.
+        val upcomingOriginal = MediaNode(
+            id = 999002,
+            title = MediaTitle(english = "Midnight Vanguard", romaji = "Midnight Vanguard"),
+            format = "TV",
+            status = "NOT_YET_RELEASED",
+            episodes = null,
+            averageScore = null,
+            popularity = 45000,
+            description = "Former elite soldiers are lured back into the field for one final contract that none of them is sure they will survive.",
+            genres = listOf("Action", "Thriller"),
+            coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx999002-placeholder.jpg", color = "#E53935"),
+            startDate = FuzzyDate(2026, 10, 15)
+        )
+
         return MediaListCollection(
             lists = listOf(
                 MediaListGroup(
@@ -225,6 +264,14 @@ object DemoDataProvider {
                         MediaListEntryItem(status = "COMPLETED", media = kaguyaS1),
                         MediaListEntryItem(status = "COMPLETED", media = spyS1),
                         MediaListEntryItem(status = "COMPLETED", media = frierenS1)
+                    )
+                ),
+                MediaListGroup(
+                    name = "Watching",
+                    status = "CURRENT",
+                    entries = listOf(
+                        MediaListEntryItem(status = "CURRENT", progress = 6, media = originalAiring),
+                        MediaListEntryItem(status = "PLANNING", progress = 0, media = upcomingOriginal)
                     )
                 )
             )

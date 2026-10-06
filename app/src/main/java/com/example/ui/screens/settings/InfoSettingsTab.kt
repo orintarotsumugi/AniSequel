@@ -32,7 +32,6 @@ import com.example.ui.components.AppVectorIcons
 @Composable
 fun InfoSettingsTab(
     viewer: ViewerProfile?,
-    onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onSignOut: () -> Unit = {},
     totalWatchedCount: Int? = null,
@@ -111,6 +110,12 @@ fun InfoSettingsTab(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "AniSequel asks for read access to your lists, and write access only when you tap Add to Planning.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         UpdateSectionCard()
@@ -122,7 +127,7 @@ fun InfoSettingsTab(
             // build's version - see the comment on `changelog` above. Showing the
             // app's own version here would claim notes belong to a release they
             // were never part of.
-            subtitle = changelog?.version?.let { "Up to $it" }
+            subtitle = changelog?.version?.let { "Release notes for $it" }
                 ?: BuildConfig.VERSION_NAME
         ) {
             if (changelogEntries.isEmpty()) {
@@ -174,12 +179,6 @@ fun InfoSettingsTab(
             icon = AppVectorIcons.SectionHelp,
             subtitle = "Docs and support"
         ) {
-            Text(
-                text = "AniSequel asks for read access to your lists, and write access only when you tap Add to Planning.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
             SettingsButton(
                 text = "AniList API documentation",
                 onClick = { openExternalUrl(context, AniListOAuth.DEVELOPER_SETTINGS_URL) },
@@ -190,7 +189,7 @@ fun InfoSettingsTab(
         }
 
         SettingsButton(
-            text = if (viewer != null) "Sign out" else "Back to sign in",
+            text = if (viewer != null) "Sign out" else "Sign in",
             onClick = {
                 if (viewer != null) {
                     // "Sign out" previously only hopped back to the dashboard

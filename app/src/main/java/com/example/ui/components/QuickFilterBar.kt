@@ -71,10 +71,12 @@ fun QuickFilterBar(
             .filter { (key, _) -> filterCriteria.selectedFormat == key }
             .map { (_, label) -> label }
 
-        val hasNarrowing = activeFormats.isNotEmpty() ||
-            filterCriteria.statusFilter != StatusFilter.ALL ||
-            filterCriteria.searchQuery.isNotBlank() ||
-            !filterCriteria.includeUnreleased
+        // The shared predicate rather than a local copy. This row's own
+        // version used to look at status, search and "include unreleased" only,
+        // so a viewer who hid already-planned entries - or widened the relation
+        // set - saw no "Filtered" row and no clear button, with no way to tell
+        // why the list was shorter than they expected.
+        val hasNarrowing = filterCriteria.isNarrowing
 
         if (hasNarrowing) {
             Spacer(modifier = Modifier.height(8.dp))

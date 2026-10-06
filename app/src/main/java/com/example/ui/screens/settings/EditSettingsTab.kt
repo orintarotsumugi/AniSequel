@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +59,7 @@ fun EditSettingsTab(
         SectionCard(
             title = "AniList",
             icon = AppVectorIcons.SectionAniList,
-            subtitle = "Sign in and API credentials."
+            subtitle = "Your AniList Client ID."
         ) {
             ClientIdEditor(
                 currentClientId = currentClientId,
@@ -74,7 +73,7 @@ fun EditSettingsTab(
         ListRefreshCard(refreshIntervalPreferences)
 
         SettingsButton(
-            text = if (authState is AuthUiState.Authenticated) "Sign out" else "Back to sign in",
+            text = if (authState is AuthUiState.Authenticated) "Sign out" else "Sign in",
             onClick = {
                 if (authState is AuthUiState.Authenticated) {
                     // Clears the token, the detail cache and the viewer
@@ -89,7 +88,7 @@ fun EditSettingsTab(
             icon = if (authState is AuthUiState.Authenticated) AppVectorIcons.Logout else AppVectorIcons.Login,
             variant = SettingsButtonVariant.Outlined,
             fillWidth = true,
-            testTag = "logout_button"
+            testTag = "edit_logout_button"
         )
 
         Spacer(modifier = Modifier.height(24.dp))

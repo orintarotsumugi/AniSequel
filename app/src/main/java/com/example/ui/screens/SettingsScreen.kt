@@ -105,7 +105,6 @@ fun SettingsScreen(
                 )
                 else -> InfoSettingsTab(
                     viewer = viewer,
-                    onNavigateBack = onNavigateBack,
                     onNavigateToLogin = onNavigateToLogin,
                     onSignOut = authViewModel::logout,
                     totalWatchedCount = totalWatchedCount,

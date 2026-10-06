@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.ArrivingEntry
 import com.example.data.model.FilterCriteria
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
@@ -16,11 +17,13 @@ import com.example.data.network.AniListException
 import com.example.data.repository.AniListRepository
 import com.example.data.repository.RefreshInterval
 import com.example.data.repository.RefreshIntervalPreferences
+import com.example.domain.usecase.FindArrivingEntriesUseCase
 import com.example.domain.usecase.FindMissedSequelsUseCase
 import com.example.domain.usecase.GetViewerProfileUseCase
 import com.example.domain.usecase.SaveToPlanningUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,6 +60,7 @@ class DashboardViewModel(
     private val getViewerProfileUseCase: GetViewerProfileUseCase = GetViewerProfileUseCase(aniListRepository),
     private val saveToPlanningUseCase: SaveToPlanningUseCase = SaveToPlanningUseCase(aniListRepository),
     private val findMissedSequelsUseCase: FindMissedSequelsUseCase = FindMissedSequelsUseCase(),
+    private val findArrivingEntriesUseCase: FindArrivingEntriesUseCase = FindArrivingEntriesUseCase(),
     /**
      * Optional so the demo and public-profile dashboards - which have no reason
      * to remember anything - construct without one, and so existing call sites
@@ -244,6 +248,19 @@ class DashboardViewModel(
     private var watchedCountSource: MediaListCollection? = null
 
     /**
+     * The arriving rows for [cachedCollection], and the collection they were
+     * derived from.
+     *
+     * The same memo shape as [watchedCountCache] for the same reason: the
+     * answer cannot change while the collection does not, and [recompute] runs
+     * on every keystroke. Walking the entries is cheap next to the relation
+     * walk, but "cheap per keystroke" is how a large account still ends up
+     * stuttering.
+     */
+    private var arrivingCache: List<ArrivingEntry>? = null
+    private var arrivingSource: MediaListCollection? = null
+
+    /**
      * Ids whose one-off detail query is in flight.
      *
      * Kept out of [DashboardUiState.Success] deliberately: a detail arriving
@@ -282,26 +299,42 @@ class DashboardViewModel(
         // only the most recent request can write to the state.
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
+            val username = targetUsername?.takeUnless { it.isBlank() }
             _uiState.value = DashboardUiState.Loading(
-                if (!targetUsername.isNullOrBlank()) {
-                    "Searching for @$targetUsername on AniList..."
+                if (username != null) {
+                    "Searching for @$username on AniList..."
                 } else {
                     "Connecting to AniList..."
                 }
             )
 
-            val viewerResult = if (!targetUsername.isNullOrBlank()) {
-                aniListRepository.getUserByName(targetUsername)
-            } else {
-                getViewerProfileUseCase.execute()
+            // A public profile is two independent requests: the profile is
+            // looked up by name and so is the list, so neither needs the
+            // other's id and nothing about one determines the other. Running
+            // them together halves the wait to first paint on that screen -
+            // and it is what makes `getUserAnimeListByUsername`, the by-name
+            // half of the repository, a path anything actually calls.
+            //
+            // The signed-in path cannot do this: the list query is keyed on
+            // the viewer's id, which is the thing being fetched.
+            val viewerDeferred = async {
+                if (username != null) {
+                    aniListRepository.getUserByName(username)
+                } else {
+                    getViewerProfileUseCase.execute()
+                }
+            }
+            val listDeferred = username?.let { name ->
+                async { aniListRepository.getUserAnimeListByUsername(name) }
             }
 
+            val viewerResult = viewerDeferred.await()
             viewerResult.fold(
                 onSuccess = { viewer ->
                     cachedViewer = viewer
                     _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
 
-                    val listResult = aniListRepository.getUserAnimeList(viewer.id)
+                    val listResult = listDeferred?.await() ?: aniListRepository.getUserAnimeList(viewer.id)
                     listResult.fold(
                         onSuccess = { collection ->
                             cachedCollection = collection
@@ -452,34 +485,36 @@ class DashboardViewModel(
         // Partition before filtering: the hidden half must be published even
         // when a search or a status filter has emptied the visible one,
         // otherwise the settings list of hidden anime would vanish the moment
-        // someone typed into the search box.
-        val split = findMissedSequelsUseCase.splitHidden(candidates, criteria.hiddenMediaIds)
-
-        val watchedCount = countWatched(collection)
-        val visible = withContext(Dispatchers.Default) {
-            findMissedSequelsUseCase.applyFilters(split.visible, criteria)
+        // someone typed into the search box. Both halves of this are list work
+        // over immutable inputs, so they share one trip to the default
+        // dispatcher rather than paying a suspension each.
+        val (split, filteredVisible) = withContext(Dispatchers.Default) {
+            val splitResult = findMissedSequelsUseCase.splitHidden(candidates, criteria.hiddenMediaIds)
+            splitResult to findMissedSequelsUseCase.applyFilters(splitResult.visible, criteria)
         }
 
-        val updated = visible
-            .map { withCachedDetail(it) }
-            .map { entry ->
-                // The server is authoritative. `addedToPlanningIds` records what
-                // *this session* added, and is cleared on every refresh, so a
-                // mutation that AniList accepted and a filter that hides the
-                // entry can both leave the optimistic flag behind. Re-checking
-                // against the loaded list keeps "Add to Planning" from showing
-                // as still-pending for something already saved.
-                if (addedToPlanningIds.contains(entry.sequelId)) {
+        val watchedCount = countWatched(collection)
+        val arriving = arrivingEntries(collection)
+
+        val updated = filteredVisible.map { found ->
+            val entry = withCachedDetail(found)
+            // The server is authoritative. `addedToPlanningIds` records what
+            // *this session* added, and is cleared on every refresh, so a
+            // mutation that AniList accepted and a filter that hides the
+            // entry can both leave the optimistic flag behind. Re-checking
+            // against the loaded list keeps "Add to Planning" from showing
+            // as still-pending for something already saved.
+            if (addedToPlanningIds.contains(entry.sequelId)) {
+                entry.copy(isAddedToPlanning = true)
+            } else {
+                val onList = entry.sequelMedia.mediaListEntry
+                if (onList != null && onList.status != null) {
                     entry.copy(isAddedToPlanning = true)
                 } else {
-                    val onList = entry.sequelMedia.mediaListEntry
-                    if (onList != null && onList.status != null) {
-                        entry.copy(isAddedToPlanning = true)
-                    } else {
-                        entry
-                    }
+                    entry
                 }
             }
+        }
 
         // A run that has been superseded must not publish. Without this an
         // older recompute that happened to finish last overwrote the newer list
@@ -492,6 +527,7 @@ class DashboardViewModel(
         _uiState.value = DashboardUiState.Success(
             viewer = viewer,
             missedSequels = updated,
+            arriving = arriving,
             totalWatchedCount = watchedCount,
             totalMissedCount = updated.size,
             isRefreshing = false,
@@ -570,6 +606,20 @@ class DashboardViewModel(
         detailCache[sequel.sequelId]?.let(sequel::withDetail) ?: sequel
 
     /**
+     * The arriving rows, recomputed only when the collection itself changes.
+     * See [arrivingCache] for why this is memoised at all.
+     */
+    private fun arrivingEntries(collection: MediaListCollection): List<ArrivingEntry> {
+        arrivingCache?.let { cached ->
+            if (arrivingSource === collection) return cached
+        }
+        val computed = findArrivingEntriesUseCase.execute(collection)
+        arrivingSource = collection
+        arrivingCache = computed
+        return computed
+    }
+
+    /**
      * Fetches the synopsis, banner and studio for one entry.
      *
      * These are the fields the list query leaves out on purpose: they are only
@@ -603,10 +653,14 @@ class DashboardViewModel(
     fun updateSearchQuery(query: String) {
         _filterCriteria.value = _filterCriteria.value.copy(searchQuery = query)
 
+        // Debounced here, but the run itself goes through [requestRecompute] so
+        // it cancels an in-flight recompute the way every other filter change
+        // does. It used to call `recompute()` directly, which left a sort from
+        // a previous tap free to finish after this one and win.
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
-            recompute()
+            requestRecompute()
         }
     }
 
@@ -655,6 +709,25 @@ class DashboardViewModel(
 
     fun selectFormat(format: String?) {
         _filterCriteria.value = _filterCriteria.value.copy(selectedFormat = format)
+        requestRecompute()
+    }
+
+    /**
+     * Narrows the list to sequels releasing in the current calendar year.
+     *
+     * Kept out of the quick filter bar deliberately: it is a refinement of the
+     * kind of thing the filter sheet exists for, and there is no room on the
+     * bar for a control that needs a sentence to explain what "this year"
+     * measures.
+     */
+    fun toggleSequelReleasedThisYear(enabled: Boolean = !_filterCriteria.value.sequelReleasedThisYear) {
+        _filterCriteria.value = _filterCriteria.value.copy(sequelReleasedThisYear = enabled)
+        requestRecompute()
+    }
+
+    /** Narrows the list to sequels whose parent the viewer completed this year. */
+    fun toggleParentCompletedThisYear(enabled: Boolean = !_filterCriteria.value.parentCompletedThisYear) {
+        _filterCriteria.value = _filterCriteria.value.copy(parentCompletedThisYear = enabled)
         requestRecompute()
     }
 

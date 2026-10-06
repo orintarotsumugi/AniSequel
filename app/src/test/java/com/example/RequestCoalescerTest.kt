@@ -3,6 +3,7 @@ package com.example
 import com.example.data.network.RequestCoalescer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -178,6 +179,74 @@ class RequestCoalescerTest {
 
         runCatching { coalescer.coalesce("GetViewer") { error("boom") } }
 
+        assertEquals(0, coalescer.inFlightCount())
+    }
+
+    /**
+     * Cancelling the request in flight must not cancel the callers waiting on
+     * it.
+     *
+     * This is the load path exactly: a second `loadData` cancels the first
+     * while it is still on the network, and the replacement arrives in time to
+     * be handed the dying request. The exception it was sharing described the
+     * *leader's* job, so the replacement died as cancelled too - no result, no
+     * error, no retry, and a dashboard that sat on its spinner forever. The
+     * follower now claims the slot and issues the request itself.
+     */
+    @Test
+    fun `a cancelled leader does not cancel the callers waiting on it`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+        var calls = 0
+
+        val leader = async {
+            coalescer.coalesce("GetUserAnimeList") {
+                calls++
+                awaitCancellation()
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        val replacement = async {
+            coalescer.coalesce("GetUserAnimeList") {
+                calls++
+                "response"
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        leader.cancel()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("response", replacement.await())
+        assertEquals(
+            "the replacement must issue the request the cancelled leader never finished",
+            2,
+            calls
+        )
+        assertEquals(0, coalescer.inFlightCount())
+    }
+
+    /**
+     * The same key after a cancelled leader must work for a caller that starts
+     * from scratch, not only for one that was already waiting.
+     *
+     * Guards the other half of the fix: a leader cancelled between completing
+     * its deferred and taking the lock in its `finally` leaves a finished entry
+     * in the map, and every later caller would be handed that dead deferred
+     * instead of a fresh request.
+     */
+    @Test
+    fun `a cancelled leader does not wedge the key for later callers`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+
+        val leader = async {
+            coalescer.coalesce("GetUserAnimeList") { awaitCancellation() }
+        }
+        testScheduler.advanceUntilIdle()
+        leader.cancel()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("fresh", coalescer.coalesce("GetUserAnimeList") { "fresh" })
         assertEquals(0, coalescer.inFlightCount())
     }
 }

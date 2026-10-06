@@ -3,7 +3,6 @@ package com.example.domain.usecase
 import com.example.data.model.FilterCriteria
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MissedSequel
-import com.example.data.model.RelationKind
 import com.example.data.model.SequelSortOption
 import com.example.data.model.StatusFilter
 
@@ -63,8 +62,6 @@ class FindMissedSequelsUseCase {
         }
 
         val includedRelations = filterCriteria.includedRelations
-            .map { it.apiValue }
-            .toSet()
 
         val missedSequels = mutableListOf<MissedSequel>()
 
@@ -73,10 +70,20 @@ class FindMissedSequelsUseCase {
 
             val parentMedia = entry.media
             val parentTitle = parentMedia.title?.displayTitle ?: "Anime #${parentMedia.id}"
+            val parentCompletedYear = entry.completedAt?.year
 
             for (edge in parentMedia.relations?.edges ?: emptyList()) {
                 val relationType = edge.relationType
-                if (relationType == null || !includedRelations.contains(relationType.uppercase(java.util.Locale.ROOT))) continue
+                if (relationType == null) continue
+
+                // Matched case-insensitively against the handful of included
+                // kinds rather than by uppercasing the value first. The old
+                // `contains(relationType.uppercase(ROOT))` allocated a String
+                // per edge, and a large account walks well over a thousand of
+                // them on the one path that is on the way to first paint.
+                val relationKind = includedRelations.firstOrNull {
+                    it.apiValue.equals(relationType, ignoreCase = true)
+                } ?: continue
 
                 val sequelNode = edge.node
                 val sequelId = sequelNode.id
@@ -105,8 +112,9 @@ class FindMissedSequelsUseCase {
                         // showing them costs no extra AniList request.
                         parentCoverUrl = parentMedia.coverImage?.bestUrl,
                         parentCoverColor = parentMedia.coverImage?.color,
+                        parentCompletedYear = parentCompletedYear,
                         sequelMedia = sequelNode,
-                        relationType = RelationKind.fromApi(relationType).apiValue,
+                        relationType = relationKind.apiValue,
                         isAddedToPlanning = isPlanned
                     )
                 )
@@ -120,21 +128,25 @@ class FindMissedSequelsUseCase {
     /**
      * Filters and orders candidates. Cheap enough to re-run on every keystroke,
      * which is exactly why it is separate from [discover].
+     *
+     * [currentYear] is a parameter rather than read inside the filter because
+     * "this year" is a real input to the answer: tests pass the year they mean
+     * instead of inheriting whatever year the machine running them happens to
+     * be in.
      */
     fun applyFilters(
         candidates: List<MissedSequel>,
-        filterCriteria: FilterCriteria
+        filterCriteria: FilterCriteria,
+        currentYear: Int = java.time.LocalDate.now().year
     ): List<MissedSequel> {
         val query = filterCriteria.searchQuery.trim().lowercase(java.util.Locale.ROOT)
 
         val filtered = candidates.filter { sequel ->
-            val matchesQuery = query.isEmpty() ||
-                    sequel.sequelTitle.lowercase(java.util.Locale.ROOT).contains(query) ||
-                    sequel.parentTitle.lowercase(java.util.Locale.ROOT).contains(query) ||
-                    sequel.sequelMedia.title?.romaji?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
-                    sequel.sequelMedia.title?.english?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
-                    sequel.sequelMedia.title?.native?.lowercase(java.util.Locale.ROOT)?.contains(query) == true ||
-                    sequel.synonyms.any { it.lowercase(java.util.Locale.ROOT).contains(query) }
+            // One pre-lowercased string per candidate rather than six
+            // `lowercase()` calls per candidate per keystroke. See
+            // [MissedSequel.searchableText] for why the fields are joined the
+            // way they are.
+            val matchesQuery = query.isEmpty() || sequel.searchableText.contains(query)
 
             // Release filter. Skipped when a specific status was chosen,
             // otherwise picking "Upcoming" while "Include unreleased" was off
@@ -153,7 +165,18 @@ class FindMissedSequelsUseCase {
             val matchesFormat = filterCriteria.selectedFormat == null ||
                     sequel.format.equals(filterCriteria.selectedFormat, ignoreCase = true)
 
-            matchesQuery && matchesRelease && matchesStatus && matchesFormat
+            // Both year axes are off by default, so the common path is two
+            // boolean checks. An undiscovered date (null year) never equals
+            // the current year, which is the honest answer for both: a show
+            // with no announced date is not releasing this year, and a parent
+            // the viewer never marked completed was not completed this year.
+            val matchesYear =
+                (!filterCriteria.sequelReleasedThisYear ||
+                    sequel.sequelMedia.startDate?.year == currentYear) &&
+                    (!filterCriteria.parentCompletedThisYear ||
+                        sequel.parentCompletedYear == currentYear)
+
+            matchesQuery && matchesRelease && matchesStatus && matchesFormat && matchesYear
         }
 
         return when (filterCriteria.sortOption) {
@@ -178,7 +201,6 @@ class FindMissedSequelsUseCase {
         collection: MediaListCollection,
         filterCriteria: FilterCriteria = FilterCriteria()
     ): List<MissedSequel> = applyFilters(discover(collection, filterCriteria), filterCriteria)
-
     /**
      * Splits a full candidate list into what is still on offer and what the user hid.
      *

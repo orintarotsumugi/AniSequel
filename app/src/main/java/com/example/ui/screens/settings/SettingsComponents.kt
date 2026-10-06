@@ -142,9 +142,9 @@ fun SwitchRow(
     enabled: Boolean = true
 ) {
     // The whole row is the target, not just the 52dp switch: a settings row whose
-// label does nothing when tapped is the most common way a screen like this
-// feels broken, and Android has trained people to expect the label to work.
-Row(
+    // label does nothing when tapped is the most common way a screen like this
+    // feels broken, and Android has trained people to expect the label to work.
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
@@ -198,7 +198,8 @@ fun InfoRow(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
         )
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -50,6 +51,11 @@ fun FilterSortSheet(
     onToggleHidePlanned: (Boolean) -> Unit,
     onFormatSelected: (String?) -> Unit,
     onToggleRelation: (RelationKind) -> Unit,
+    // The calendar-year axes, named for what they measure rather than for the
+    // switch they drive: one is about the sequel's release date, the other
+    // about the year the viewer finished its parent.
+    onToggleSequelThisYear: (Boolean) -> Unit = {},
+    onToggleParentCompletedThisYear: (Boolean) -> Unit = {},
     /**
      * The entries the user chose to stop being reminded about, and the two ways
      * back out. Empty until the ViewModel has split its candidates, which is
@@ -67,6 +73,11 @@ fun FilterSortSheet(
         modifier = modifier.testTag("filter_sort_sheet"),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
+        // Read once rather than per recomposition; the sheet is not open long
+        // enough for a New Year to matter, and the filter itself re-reads the
+        // year when it runs.
+        val currentYear = remember { java.time.LocalDate.now().year }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -97,7 +108,7 @@ fun FilterSortSheet(
 
             // Sort By Section
             Text(
-                text = "Sort Sequels By",
+                text = "Sort by",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
@@ -137,7 +148,7 @@ fun FilterSortSheet(
 
             // Airing Status Section
             Text(
-                text = "Airing Status",
+                text = "Airing status",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
@@ -173,7 +184,7 @@ fun FilterSortSheet(
 
             // Media Format Section
             Text(
-                text = "Media Format",
+                text = "Media format",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
@@ -182,7 +193,9 @@ fun FilterSortSheet(
             Spacer(modifier = Modifier.height(8.dp))
             val formats = listOf(
                     "All" to null,
-                    "TV" to "TV",
+                    // Labelled the same way the quick filter bar labels it, so
+                    // the same choice does not read as two different ones.
+                    "TV series" to "TV",
                     "Movies" to "MOVIE",
                     "OVA" to "OVA",
                     "ONA" to "ONA",
@@ -264,6 +277,59 @@ fun FilterSortSheet(
                 )
             }
 
+            // The two calendar-year axes. Off to the side of the one-tap
+            // controls and reachable only from here: each one needs a sentence
+            // to say what its year measures - the sequel's release date versus
+            // the year the *viewer* finished its parent - and neither fits on
+            // a segmented bar.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Releasing this year",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "Only sequels coming out in $currentYear",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+                Switch(
+                    checked = filterCriteria.sequelReleasedThisYear,
+                    onCheckedChange = onToggleSequelThisYear,
+                    modifier = Modifier.testTag("toggle_sequel_this_year_switch")
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Completed this year",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "Only sequels to shows you finished in $currentYear",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+                Switch(
+                    checked = filterCriteria.parentCompletedThisYear,
+                    onCheckedChange = onToggleParentCompletedThisYear,
+                    modifier = Modifier.testTag("toggle_parent_completed_this_year_switch")
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
@@ -272,7 +338,7 @@ fun FilterSortSheet(
             // behaviour and stays on by default; the rest widen the results
             // considerably, so they are opt-in rather than switched on silently.
             Text(
-                text = "Include Franchise Gaps",
+                text = "Include franchise gaps",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
@@ -280,7 +346,7 @@ fun FilterSortSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Prequels surface a season you finished without, side stories and spin-offs the franchise branched into.",
+                text = "Prequels are earlier seasons you never watched; side stories and spin-offs are the entries the franchise branched into.",
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -32,8 +32,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.data.model.MissedSequel
-import com.example.data.model.RelationKind
-import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
 import com.example.ui.components.AniTopAppBar
 import com.example.ui.components.EmptyStateView
@@ -43,6 +41,7 @@ import com.example.ui.components.SequelCard
 import com.example.ui.components.SequelDetailSheet
 import com.example.ui.components.StatsBanner
 import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.screens.dashboard.ArrivingSection
 import com.example.ui.screens.dashboard.DashboardDemoBanner
 import com.example.ui.screens.dashboard.DashboardErrorView
 import com.example.ui.screens.dashboard.DashboardLoadingView
@@ -126,16 +125,10 @@ fun DashboardScreen(
     val isDetailLoading = selectedSequelId != null && selectedSequelId in loadingDetailIds
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-    val hasActiveFilters by remember(filterCriteria) {
-        androidx.compose.runtime.derivedStateOf {
-            filterCriteria.statusFilter != StatusFilter.ALL ||
-                filterCriteria.selectedFormat != null ||
-                filterCriteria.searchQuery.isNotBlank() ||
-                !filterCriteria.includeUnreleased ||
-                !filterCriteria.hideAlreadyPlanned ||
-                filterCriteria.includedRelations != setOf(RelationKind.SEQUEL)
-        }
-    }
+    // One definition of "the filters are narrowing this list", owned by
+    // [FilterCriteria] so the top bar's badge, the quick filter row and the
+    // empty state cannot drift apart again.
+    val hasActiveFilters = filterCriteria.isNarrowing
 
     Scaffold(
         modifier = modifier
@@ -209,6 +202,19 @@ fun DashboardScreen(
                                 )
                             }
 
+                            // Above the search bar and the missed-sequel list
+                            // because it is a different question from either,
+                            // and hidden entirely when the viewer has nothing
+                            // arriving rather than rendering an empty header.
+                            if (state.arriving.isNotEmpty()) {
+                                item(key = "arriving_section") {
+                                    ArrivingSection(
+                                        entries = state.arriving,
+                                        maxWidth = MaxContentWidth
+                                    )
+                                }
+                            }
+
                             item(key = "search_bar") {
                                 DashboardSearchBar(
                                     query = filterCriteria.searchQuery,
@@ -237,12 +243,12 @@ fun DashboardScreen(
                             if (state.missedSequels.isEmpty()) {
                                 item(key = "empty_state") {
                                     EmptyStateView(
-                                        isSearching = filterCriteria.searchQuery.isNotBlank() ||
-                                            filterCriteria.selectedFormat != null ||
-                                            filterCriteria.statusFilter != StatusFilter.ALL ||
-                                            !filterCriteria.includeUnreleased ||
-                                            !filterCriteria.hideAlreadyPlanned ||
-                                            filterCriteria.includedRelations != setOf(RelationKind.SEQUEL),
+                                        // The same predicate as the badge and
+                                        // the quick filter row: an empty list
+                                        // with no filter active has nothing to
+                                        // reset, and an empty list with one
+                                        // active has a way out.
+                                        isSearching = filterCriteria.isNarrowing,
                                         onResetFilters = { dashboardViewModel.resetFilters() }
                                     )
                                 }
@@ -287,6 +293,8 @@ fun DashboardScreen(
             onToggleHidePlanned = { dashboardViewModel.toggleHideAlreadyPlanned(it) },
             onFormatSelected = { dashboardViewModel.selectFormat(it) },
             onToggleRelation = { dashboardViewModel.toggleRelation(it) },
+            onToggleSequelThisYear = { dashboardViewModel.toggleSequelReleasedThisYear(it) },
+            onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
             hiddenSequels = hiddenSequels,
             onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
             onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },

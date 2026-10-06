@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.0.31",
+      "entries": [
+        {
+          "title": "Currently arriving",
+          "detail": "Your Watching and Planning lists get their own row above search: what is airing in front of you, with the next episode counted down, and what is announced with its start date. Airing first, soonest first."
+        },
+        {
+          "title": "This year, only",
+          "detail": "Filters gains two switches: sequels that release this year, and sequels to shows you completed this year. Both live in the filter sheet and show what they are counting down from."
+        },
+        {
+          "title": "Quicker public profiles",
+          "detail": "Opening someone else's profile no longer waits for one scan to finish before starting another. Settings copy now says what each field is for, and dead version checks are gone."
+        }
+      ]
+    },
+    {
       "version": "1.0.30",
       "entries": [
         {
