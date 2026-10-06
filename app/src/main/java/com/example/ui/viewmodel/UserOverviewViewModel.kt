@@ -96,10 +96,10 @@ class UserOverviewViewModel(
                 return@launch
             }
 
-            val list = listDeferred.await().getOrElse { error ->
-                _uiState.value = errorState(error, "Failed to load the anime list")
-                return@launch
-            }
+            // If fetching the anime list fails (for instance on accounts with private lists
+            // or temporary rate limits), gracefully build the profile with null list data
+            // rather than failing the entire profile screen when the overview succeeded.
+            val list = listDeferred.await().getOrNull()
 
             _uiState.value = buildState(overview, list, isRefreshing = false)
         }
@@ -169,8 +169,11 @@ class UserOverviewViewModel(
             animeCount = animeStats?.count ?: 0,
             mangaCount = mangaStats?.count ?: 0,
             episodesWatched = animeStats?.episodesWatched ?: 0,
-            minutesWatched = animeStats?.minutesWatched ?: 0L,
-            meanScore = animeStats?.meanScore,
+            minutesWatched = animeStats?.minutesWatched
+                ?: aggregate?.watchedTime?.toLong()
+                ?: 0L,
+            meanScore = animeStats?.meanScore
+                ?: aggregate?.animeListScores?.meanScore?.toDouble(),
             standardDeviation = aggregate?.animeListScores?.standardDeviation,
             isRefreshing = isRefreshing,
             isDemoMode = isDemo

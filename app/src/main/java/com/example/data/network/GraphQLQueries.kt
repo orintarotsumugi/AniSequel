@@ -128,6 +128,7 @@ object GraphQLQueries {
               medium
               large
             }
+            bannerImage
             createdAt
             updatedAt
             statistics {

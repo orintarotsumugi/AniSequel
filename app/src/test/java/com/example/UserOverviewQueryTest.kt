@@ -87,6 +87,7 @@ class UserOverviewQueryTest {
         assertTrue(overview.contains("createdAt"))
         assertTrue(overview.contains("updatedAt"))
         assertTrue(overview.contains("about(asHtml: false)"))
+        assertTrue(overview.contains("bannerImage"))
     }
 
     @Test

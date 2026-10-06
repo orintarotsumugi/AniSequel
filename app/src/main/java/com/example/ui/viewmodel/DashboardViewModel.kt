@@ -92,6 +92,7 @@ class DashboardViewModel(
         // user has a few thousand completed entries, so the query is held back
         // until the typing pauses.
         private const val SEARCH_DEBOUNCE_MS = 220L
+        private const val MAX_DETAIL_CACHE_ENTRIES = 250
     }
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading())
@@ -267,8 +268,12 @@ class DashboardViewModel(
     private var discoveredCandidates: List<MissedSequel>? = null
     private var discoveryKey: Pair<Boolean, Set<RelationKind>>? = null
 
-    /** Description, banner and studio per media, fetched only when opened. */
-    private val detailCache = mutableMapOf<Int, MediaNode>()
+    /** Description, banner and studio per media, fetched only when opened. LRU-bounded. */
+    private val detailCache = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, MediaNode>?): Boolean {
+            return size > MAX_DETAIL_CACHE_ENTRIES
+        }
+    }
 
     /**
      * The completed count for [cachedCollection], and the collection it was

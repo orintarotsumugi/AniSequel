@@ -40,6 +40,20 @@ import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.viewmodel.SocialList
 import com.example.ui.viewmodel.UserSocialViewModel
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import com.example.ui.components.expressive.ExpressiveEmptyOrb
+import com.example.ui.components.expressive.ExpressiveShapes
+import com.example.ui.theme.AniSequelTheme
+
 /**
  * The Social tab: the people who follow this account, and the people it follows.
  *
@@ -70,6 +84,22 @@ fun ProfileSocialTab(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
+    // Triggers initial load when the Social tab is opened. Without this,
+    // the tab stays indefinitely in Idle state and spins forever.
+    LaunchedEffect(Unit) {
+        onLoad(SocialList.FOLLOWERS)
+    }
+
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+
+    val successState = socialState as? UserSocialViewModel.SocialState.Success
+    val currentSelected = successState?.selected ?: SocialList.FOLLOWERS
+    val rawPeople = successState?.peopleFor(currentSelected).orEmpty()
+    val filteredPeople = remember(rawPeople, searchQuery) {
+        if (searchQuery.isBlank()) rawPeople
+        else rawPeople.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+    }
+
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`: the grid must not reflow when the
         // window changes, because the user's scroll position would no longer be
@@ -84,9 +114,13 @@ fun ProfileSocialTab(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             SocialSelector(
-                selected = (socialState as? UserSocialViewModel.SocialState.Success)?.selected
-                    ?: SocialList.FOLLOWERS,
-                onSelect = onSelectList,
+                selected = currentSelected,
+                followersCount = successState?.followers?.size,
+                followingCount = successState?.following?.size,
+                onSelect = { list ->
+                    searchQuery = ""
+                    onSelectList(list)
+                },
                 modifier = Modifier
                     .widthIn(max = ProfileMaxContentWidth)
                     .fillMaxWidth()
@@ -94,8 +128,22 @@ fun ProfileSocialTab(
             )
         }
 
+        if (rawPeople.size > 5) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier
+                        .widthIn(max = ProfileMaxContentWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
+        }
+
         when (socialState) {
-            is UserSocialViewModel.SocialState.Loading -> {
+            is UserSocialViewModel.SocialState.Loading,
+            UserSocialViewModel.SocialState.Idle -> {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SocialLoading()
                 }
@@ -111,19 +159,25 @@ fun ProfileSocialTab(
             }
 
             is UserSocialViewModel.SocialState.Success -> {
-                val people = socialState.peopleFor(socialState.selected)
-
-                if (people.isEmpty()) {
+                if (rawPeople.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         SocialEmpty(selected = socialState.selected)
                     }
+                } else if (filteredPeople.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = "No matches for \"$searchQuery\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp)
+                        )
+                    }
                 } else {
                     items(
-                        items = people,
-                        // The user id, not the name: AniList usernames are
-                        // case-insensitively unique but can be *renamed*, and a
-                        // renamed follower appearing in both a cached page and a
-                        // fresh one would collapse to the same key.
+                        items = filteredPeople,
                         key = { it.id }
                     ) { person ->
                         FollowerCard(
@@ -133,29 +187,73 @@ fun ProfileSocialTab(
                     }
                 }
             }
-
-            UserSocialViewModel.SocialState.Idle -> {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SocialLoading()
-                }
-            }
         }
     }
 }
 
 @Composable
+private fun SocialSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier.testTag("social_search_input"),
+        placeholder = {
+            Text(
+                text = "Search users...",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = AppVectorIcons.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        imageVector = AppVectorIcons.Close,
+                        contentDescription = "Clear search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        shape = ExpressiveShapes.pill,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+        )
+    )
+}
+
+@Composable
 private fun SocialSelector(
     selected: SocialList,
+    followersCount: Int?,
+    followingCount: Int?,
     onSelect: (SocialList) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val followersLabel = if (followersCount != null) "Followers ($followersCount)" else "Followers"
+    val followingLabel = if (followingCount != null) "Following ($followingCount)" else "Following"
+
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         ExpressiveStateChip(
-            label = "Followers",
+            label = followersLabel,
             selected = selected == SocialList.FOLLOWERS,
             onClick = { onSelect(SocialList.FOLLOWERS) },
             modifier = Modifier
@@ -163,7 +261,7 @@ private fun SocialSelector(
                 .testTag("social_tab_followers")
         )
         ExpressiveStateChip(
-            label = "Following",
+            label = followingLabel,
             selected = selected == SocialList.FOLLOWING,
             onClick = { onSelect(SocialList.FOLLOWING) },
             modifier = Modifier
@@ -181,9 +279,9 @@ private fun FollowerCard(
 ) {
     Column(
         modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
             .bouncyPress(pressedScale = 0.96f)
+            .clickable(onClick = onClick)
+            .padding(bottom = 6.dp)
             .testTag("follower_card"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -209,7 +307,8 @@ private fun FollowerCard(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -248,7 +347,9 @@ private fun SocialError(message: String, onRetry: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
         TextButton(
             onClick = onRetry,
-            modifier = Modifier.testTag("social_retry_button")
+            modifier = Modifier
+                .bouncyPress()
+                .testTag("social_retry_button")
         ) {
             Text("Try again")
         }
@@ -257,16 +358,27 @@ private fun SocialError(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun SocialEmpty(selected: SocialList) {
-    Text(
-        text = when (selected) {
-            SocialList.FOLLOWERS -> "No followers"
-            SocialList.FOLLOWING -> "Not following anyone"
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 48.dp)
-            .testTag("social_empty")
-    )
+            .testTag("social_empty"),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ExpressiveEmptyOrb(
+            icon = AppVectorIcons.ProfileSocial,
+            containerColor = AniSequelTheme.statusColors.infoContainer,
+            iconTint = AniSequelTheme.statusColors.info
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = when (selected) {
+                SocialList.FOLLOWERS -> "No followers"
+                SocialList.FOLLOWING -> "Not following anyone"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
 }

@@ -1,6 +1,7 @@
 package com.example.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,18 +44,10 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * The banner, avatar, name, the two list totals, and when the account joined.
+ * The banner, avatar, name, core stats and account join/update dates.
  *
- * The banner is a fixed 108dp with the avatar and name directly beneath it rather
- * than overlapping its bottom edge.
- *
- * The overlap is what AniList itself draws, and it is not reproducible here for a
- * reason worth writing down: the avatar has to hang half outside the banner, and
- * anything holding both is either clipped to its own bounds - which cuts the
- * avatar in half - or has to buy the space back with a negative offset. The
- * negative offset costs dead layout space below, because `offset` moves a node
- * without changing what it measures. Stacked reads the same at a glance and does
- * not depend on that arithmetic holding on every screen size.
+ * Provides a crisp profile header with balanced 4-metric overview:
+ * Anime, Manga, Episodes watched, and Mean Score.
  */
 @Composable
 fun ProfileHeaderCard(
@@ -69,7 +65,7 @@ fun ProfileHeaderCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(108.dp)
+                .height(112.dp)
                 .clip(MaterialTheme.shapes.large)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -78,25 +74,40 @@ fun ProfileHeaderCard(
                 AsyncImage(
                     model = banner,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.matchParentSize(),
                     contentScale = ContentScale.Crop,
                     placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
                     error = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
                     fallback = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
                 )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+                                )
+                            )
+                        )
+                )
             }
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
                 model = state.avatarUrl,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(68.dp)
                     .clip(CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentScale = ContentScale.Crop,
                 placeholder = rememberVectorPainter(AppVectorIcons.SequelJump),
@@ -116,18 +127,18 @@ fun ProfileHeaderCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "AniList Member",
+                    text = if (state.isDemoMode) "AniSequel Demo Profile" else "AniList Member",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             HeaderStat(
                 label = "Anime",
@@ -141,9 +152,21 @@ fun ProfileHeaderCard(
                 icon = AppVectorIcons.FavouriteManga,
                 modifier = Modifier.weight(1f)
             )
+            HeaderStat(
+                label = "Episodes",
+                value = state.episodesWatched.toString(),
+                icon = AppVectorIcons.StatEpisodeCount,
+                modifier = Modifier.weight(1f)
+            )
+            HeaderStat(
+                label = "Score",
+                value = state.meanScore?.takeIf { it > 0.0 }?.let { formatMeanScore(it) } ?: "-",
+                icon = AppVectorIcons.StatScore,
+                modifier = Modifier.weight(1f)
+            )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (state.createdAt != null) {
@@ -181,28 +204,34 @@ private fun HeaderStat(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 10.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -250,8 +279,7 @@ internal fun formatJoinYear(createdAt: Int): String =
  *
  * `Locale.ROOT` on the format, so a device set to a locale that writes digits or
  * month names differently does not render a chip in a script the surrounding text
- * is not in - and relative time is the one place where that is most visible,
- * because it sits next to a username.
+ * is not in.
  */
 internal fun formatRelativeSeconds(timestamp: Int, now: Instant = Instant.now()): String {
     val seconds = now.epochSecond - timestamp
@@ -271,9 +299,6 @@ internal fun formatRelativeSeconds(timestamp: Int, now: Instant = Instant.now())
 
 /**
  * Minutes watched as the largest two units that say something.
- *
- * "1,122h" rather than a running clock: the number exists to be compared with
- * other people's, and everybody else's is in hours.
  */
 internal fun formatWatchTime(minutesWatched: Long): String {
     if (minutesWatched <= 0) return "0h"

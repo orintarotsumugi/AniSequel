@@ -83,7 +83,12 @@ class UserSocialViewModel(
         }
 
         val current = _state.value as? SocialState.Success
-        if (current != null && current.selected == selected && !forceRefresh) return
+        if (current != null && !forceRefresh) {
+            if (current.selected != selected) {
+                _state.value = current.copy(selected = selected)
+            }
+            return
+        }
 
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -113,7 +118,16 @@ class UserSocialViewModel(
         }
     }
 
-    fun select(list: SocialList) = load(list)
+    fun select(list: SocialList) {
+        val current = _state.value as? SocialState.Success
+        if (current != null) {
+            if (current.selected != list) {
+                _state.value = current.copy(selected = list)
+            }
+        } else {
+            load(list)
+        }
+    }
 
     fun retry() {
         val selected = when (val current = _state.value) {

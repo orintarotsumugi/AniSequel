@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -134,7 +135,7 @@ fun FavouriteMediaRow(
             .fillMaxWidth()
             .testTag("favourite_media_row"),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
     ) {
         items(items = items, key = { it.id }) { media ->
             FavouriteMediaCard(media = media, onClick = { onOpen(media) })
@@ -150,9 +151,9 @@ private fun FavouriteMediaCard(
     Column(
         modifier = Modifier
             .width(128.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
             .bouncyPress(pressedScale = 0.97f)
+            .clickable(onClick = onClick)
+            .padding(bottom = 6.dp)
             .testTag("favourite_media_card")
     ) {
         Card(
@@ -165,14 +166,19 @@ private fun FavouriteMediaCard(
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
+            val placeholderIcon = if (media.type.equals("MANGA", ignoreCase = true)) {
+                AppVectorIcons.FavouriteManga
+            } else {
+                AppVectorIcons.FavouriteAnime
+            }
             AsyncImage(
                 model = media.coverImage?.large,
                 contentDescription = null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                placeholder = rememberVectorPainter(AppVectorIcons.FavouriteAnime),
-                error = rememberVectorPainter(AppVectorIcons.FavouriteAnime),
-                fallback = rememberVectorPainter(AppVectorIcons.FavouriteAnime)
+                placeholder = rememberVectorPainter(placeholderIcon),
+                error = rememberVectorPainter(placeholderIcon),
+                fallback = rememberVectorPainter(placeholderIcon)
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
@@ -180,22 +186,38 @@ private fun FavouriteMediaCard(
             text = media.title?.displayTitle.orEmpty(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
+            minLines = 2,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = favouriteCaption(media),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 /** "TV • 84%", or the format alone when AniList has no score for it. */
 private fun favouriteCaption(media: MediaNode): String {
-    val format = media.format?.lowercase()?.replaceFirstChar { it.uppercase() }.orEmpty()
+    val rawFormat = media.format?.trim()
+    val format = when (rawFormat?.uppercase()) {
+        "TV" -> "TV"
+        "TV_SHORT" -> "TV Short"
+        "MOVIE" -> "Movie"
+        "SPECIAL" -> "Special"
+        "OVA" -> "OVA"
+        "ONA" -> "ONA"
+        "MANGA" -> "Manga"
+        "ONE_SHOT" -> "One Shot"
+        "NOVEL" -> "Novel"
+        else -> rawFormat?.lowercase()?.replaceFirstChar { it.uppercase() }.orEmpty()
+    }
     val score = media.averageScore?.takeIf { it > 0 }?.let { "$it%" }
     return listOfNotNull(format.takeIf { it.isNotBlank() }, score).joinToString(" • ")
 }
@@ -228,7 +250,7 @@ fun FavouritePeopleRow(
             .fillMaxWidth()
             .testTag("favourite_people_row"),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
     ) {
         items(items = characters, key = { "character_${it.id}" }) { character ->
             FavouritePerson(
@@ -262,9 +284,9 @@ private fun FavouritePerson(
     Column(
         modifier = Modifier
             .width(84.dp)
-            .clip(MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
             .bouncyPress(pressedScale = 0.96f)
+            .clickable(onClick = onClick)
+            .padding(bottom = 6.dp)
             .testTag("favourite_person"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -287,15 +309,18 @@ private fun FavouritePerson(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = subtitle,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -345,83 +370,26 @@ fun FavouriteStudioRow(
 }
 
 /**
- * The person's own bio, rendered as plain text.
+ * AniList's mean score out of 100, as the out-of-ten number people quote.
  *
- * AniList bios are Markdown and there is no Markdown renderer in the app, so
- * [stripMarkdown] reduces them to something readable rather than showing a wall
- * of `###` and `[text](url)`. The alternative - shipping a Markdown library for
- * one card - is not a trade this screen is worth, and rendering the raw source
- * would make a person look like they had written a help file.
+ * One decimal, because a mean is a mean: 82.3 and 82 describe different lists.
+ *
+ * `Locale.ROOT` on the format rather than the platform default, so a device set
+ * to a locale that writes decimals with a comma does not render "8,2/10" - which
+ * is not a score, and reads as a formatting bug on the one card quoting a number
+ * somebody chose.
  */
-@Composable
-fun AboutCard(
-    about: String,
-    modifier: Modifier = Modifier,
-    maxWidth: Dp = ProfileMaxContentWidth
-) {
-    val text = remember(about) { stripMarkdown(about) }
-
-    Card(
-        modifier = modifier
-            .widthIn(max = maxWidth)
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .testTag("profile_about_card"),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder()
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppVectorIcons.ProfileAbout,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "About",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+internal fun formatMeanScore(meanScore: Double): String {
+    val outOfTen = meanScore / 10.0
+    return if (outOfTen % 1.0 == 0.0) {
+        "${outOfTen.toInt()}/10"
+    } else {
+        String.format(java.util.Locale.ROOT, "%.1f/10", outOfTen)
     }
-}
-
-@Composable
-internal fun NoBioNote() {
-    Text(
-        text = "No bio on AniList",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .widthIn(max = ProfileMaxContentWidth)
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 8.dp)
-            .testTag("profile_no_bio")
-    )
 }
 
 /**
  * The "nothing here yet" line every favourites row falls back to.
- *
- * One shared line rather than five, and phrased as a statement about the list
- * rather than about the app: a person with no favourite studios has not failed to
- * load their profile, and "No studios pinned" says that. The orb keeps it in the
- * same visual language as the dashboard's empty state.
  */
 @Composable
 fun EmptyFavourites(message: String, modifier: Modifier = Modifier) {
@@ -448,51 +416,3 @@ fun EmptyFavourites(message: String, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * AniList's mean score out of 100, as the out-of-ten number people quote.
- *
- * One decimal, because a mean is a mean: 82.3 and 82 describe different lists.
- *
- * `Locale.ROOT` on the format rather than the platform default, so a device set
- * to a locale that writes decimals with a comma does not render "8,2/10" - which
- * is not a score, and reads as a formatting bug on the one card quoting a number
- * somebody chose.
- */
-internal fun formatMeanScore(meanScore: Double): String {
-    val outOfTen = meanScore / 10.0
-    return if (outOfTen % 1.0 == 0.0) {
-        "${outOfTen.toInt()}/10"
-    } else {
-        String.format(java.util.Locale.ROOT, "%.1f/10", outOfTen)
-    }
-}
-
-/**
- * Reduce Markdown to plain text.
- *
- * Deliberately a substitution pass, not a parser: it un-does the four things that
- * actually appear in an AniList bio - headings, emphasis, links and bullets - and
- * leaves everything else exactly as the person wrote it.
- *
- * ## Why the line-start patterns match spaces and tabs, not `\s`
- *
- * `\s` includes a newline, so a heading pattern written as `#{1,6}\s*` at the head
- * of a line consumes the blank line *before* it - up to three characters' worth,
- * which is exactly the run of newlines the later `\n{3,}` pass was supposed to
- * collapse. The two passes fought each other and the result depended on how many
- * blank lines the person happened to leave: `### One`, blank, blank, `text`
- * rendered as "One" and "text" in the same paragraph. `[ \t]*` matches only what
- * is actually on the heading's own line, so the blank-line pass is the only thing
- * deciding how paragraphs separate.
- */
-internal fun stripMarkdown(source: String): String = source
-    .replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
-    .replace(Regex("""!\[[^\]]*]\([^)]*\)"""), "")
-    .replace(Regex("""^[ \t]{0,3}#{1,6}[ \t]*""", RegexOption.MULTILINE), "")
-    .replace(Regex("""^[ \t]{0,3}>[ \t]?"""), "")
-    .replace(Regex("""(\*\*|__)(.+?)\1"""), "$2")
-    .replace(Regex("""(\*|_)(.+?)\1"""), "$2")
-    .replace(Regex("""^[ \t]{0,3}[-*+][ \t]+""", RegexOption.MULTILINE), "")
-    .replace(Regex("""`([^`]+)`"""), "$1")
-    .replace(Regex("""\n{3,}"""), "\n\n")
-    .trim()

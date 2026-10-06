@@ -18,12 +18,9 @@ import com.example.ui.viewmodel.UserOverviewUiState
 /**
  * The Home tab: who this is, what they have pinned, and what they wrote.
  *
- * Everything that is about *the person* rather than about a number. The counts
- * live on the Stats tab, because a person opening their own profile is usually
- * looking for the thing they pinned, and a wall of statistics above the favourites
- * is what AniList's own profile does and why people scroll past it.
- *
- * The bio sits under the favourites rather than above them, for the same reason.
+ * Everything that is about *the person* rather than about a number. Only populated
+ * favourite sections are displayed, avoiding empty section clutter when a user has
+ * only pinned anime or characters.
  */
 @Composable
 fun ProfileHomeTab(
@@ -32,6 +29,12 @@ fun ProfileHomeTab(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    val hasAnyFavourites = state.favouriteAnime.isNotEmpty() ||
+        state.favouriteManga.isNotEmpty() ||
+        state.favouriteCharacters.isNotEmpty() ||
+        state.favouriteStaff.isNotEmpty() ||
+        state.favouriteStudios.isNotEmpty()
 
     LazyColumn(
         modifier = modifier
@@ -48,78 +51,97 @@ fun ProfileHomeTab(
             )
         }
 
-        item(key = "favourite_anime") {
-            ProfileSectionHeader(
-                title = "Favourite Anime",
-                icon = AppVectorIcons.FavouriteAnime,
-                trailing = "${state.favouriteAnime.size}",
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-        item(key = "favourite_anime_row") {
-            FavouriteMediaRow(
-                items = state.favouriteAnime,
-                onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
-            )
-        }
-
-        item(key = "favourite_manga") {
-            ProfileSectionHeader(
-                title = "Favourite Manga",
-                icon = AppVectorIcons.FavouriteManga,
-                trailing = "${state.favouriteManga.size}",
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-        item(key = "favourite_manga_row") {
-            FavouriteMediaRow(
-                items = state.favouriteManga,
-                onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
-            )
+        if (state.favouriteAnime.isNotEmpty()) {
+            item(key = "favourite_anime") {
+                ProfileSectionHeader(
+                    title = "Favourite Anime",
+                    icon = AppVectorIcons.FavouriteAnime,
+                    trailing = "${state.favouriteAnime.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_anime_row") {
+                FavouriteMediaRow(
+                    items = state.favouriteAnime,
+                    onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
+                )
+            }
         }
 
-        item(key = "favourite_characters") {
-            ProfileSectionHeader(
-                title = "Favourite Characters",
-                icon = AppVectorIcons.FavouriteCharacters,
-                trailing = "${state.favouriteCharacters.size}",
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-        item(key = "favourite_character_row") {
-            FavouritePeopleRow(
-                characters = state.favouriteCharacters,
-                staff = emptyList(),
-                onOpen = { url -> url?.let { openExternalUrl(context, it) } }
-            )
-        }
-
-        item(key = "favourite_staff") {
-            ProfileSectionHeader(
-                title = "Favourite Staff",
-                icon = AppVectorIcons.FavouriteStaff,
-                trailing = "${state.favouriteStaff.size}",
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-        item(key = "favourite_staff_row") {
-            FavouritePeopleRow(
-                characters = emptyList(),
-                staff = state.favouriteStaff,
-                onOpen = { url -> url?.let { openExternalUrl(context, it) } }
-            )
+        if (state.favouriteManga.isNotEmpty()) {
+            item(key = "favourite_manga") {
+                ProfileSectionHeader(
+                    title = "Favourite Manga",
+                    icon = AppVectorIcons.FavouriteManga,
+                    trailing = "${state.favouriteManga.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_manga_row") {
+                FavouriteMediaRow(
+                    items = state.favouriteManga,
+                    onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
+                )
+            }
         }
 
-        item(key = "favourite_studios") {
-            ProfileSectionHeader(
-                title = "Favourite Studios",
-                icon = AppVectorIcons.FavouriteStudios,
-                trailing = "${state.favouriteStudios.size}",
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+        if (state.favouriteCharacters.isNotEmpty()) {
+            item(key = "favourite_characters") {
+                ProfileSectionHeader(
+                    title = "Favourite Characters",
+                    icon = AppVectorIcons.FavouriteCharacters,
+                    trailing = "${state.favouriteCharacters.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_character_row") {
+                FavouritePeopleRow(
+                    characters = state.favouriteCharacters,
+                    staff = emptyList(),
+                    onOpen = { url -> url?.let { openExternalUrl(context, it) } }
+                )
+            }
         }
-        item(key = "favourite_studio_row") {
-            FavouriteStudioRow(studios = state.favouriteStudios)
+
+        if (state.favouriteStaff.isNotEmpty()) {
+            item(key = "favourite_staff") {
+                ProfileSectionHeader(
+                    title = "Favourite Staff",
+                    icon = AppVectorIcons.FavouriteStaff,
+                    trailing = "${state.favouriteStaff.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_staff_row") {
+                FavouritePeopleRow(
+                    characters = emptyList(),
+                    staff = state.favouriteStaff,
+                    onOpen = { url -> url?.let { openExternalUrl(context, it) } }
+                )
+            }
+        }
+
+        if (state.favouriteStudios.isNotEmpty()) {
+            item(key = "favourite_studios") {
+                ProfileSectionHeader(
+                    title = "Favourite Studios",
+                    icon = AppVectorIcons.FavouriteStudios,
+                    trailing = "${state.favouriteStudios.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_studio_row") {
+                FavouriteStudioRow(studios = state.favouriteStudios)
+            }
+        }
+
+        if (!hasAnyFavourites) {
+            item(key = "empty_favourites") {
+                EmptyFavourites(
+                    message = "No favourites pinned yet",
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
         }
 
         item(key = "about") {

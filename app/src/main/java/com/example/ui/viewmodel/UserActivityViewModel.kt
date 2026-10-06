@@ -82,7 +82,7 @@ class UserActivityViewModel(
 
     fun loadNextPage() {
         val current = _state.value as? ActivityState.Success ?: return
-        if (current.hasMore || current.isLoadingMore) return
+        if (!current.hasMore || current.isLoadingMore) return
         fetch(forceRefresh = false, appending = true)
     }
 

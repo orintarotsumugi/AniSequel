@@ -5,11 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.data.model.FollowUser
 import com.example.ui.components.AppVectorIcons
@@ -62,21 +64,15 @@ internal val NavigationBarClearance = 96.dp
  *
  * The bottom is *not* the Scaffold's. The navigation capsule is meant to float
  * over the content rather than push it, so the Scaffold's bottom inset is
- * discarded here and replaced with [NavigationBarClearance]. Passing the
- * Scaffold's value would push the content up *and* add the clearance, leaving a
- * gap the height of the whole bar.
+ * replaced with [NavigationBarClearance].
  */
-internal fun profileListPadding(contentPadding: PaddingValues): PaddingValues = PaddingValues(
+internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues()): PaddingValues = PaddingValues(
     top = contentPadding.calculateTopPadding() + 8.dp,
     bottom = NavigationBarClearance
 )
 
 /**
  * The four destinations, declared once so the bar and the `when` cannot disagree.
- *
- * The order and the icons are the same four the reference profile uses: home,
- * activity, statistics, social. Each one was picked so it cannot be mistaken for
- * another of the four at 22dp.
  */
 private val ProfileTabs = listOf(
     NavigationDestination("Home", AppVectorIcons.ProfileHome, "profile_tab_home"),
@@ -101,9 +97,6 @@ fun UserProfileScreen(
     val socialState by socialViewModel.state.collectAsState()
     val context = LocalContext.current
 
-    // Survives rotation, and it has to: the tab is the screen's position. A
-    // `remember` here would drop the user back on Home on every rotation, with
-    // the navigation bar's own selection moving with them.
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
@@ -145,7 +138,7 @@ fun UserProfileScreen(
                                 .bouncyPress(pressedScale = 0.9f)
                         ) {
                             Icon(
-                                imageVector = AppVectorIcons.OverflowMenu,
+                                imageVector = AppVectorIcons.OpenInNew,
                                 contentDescription = "Open on AniList"
                             )
                         }
@@ -155,25 +148,12 @@ fun UserProfileScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        },
-        bottomBar = {
-            // Hidden until there is something to switch between. A navigation bar
-            // over a spinner is four things that do nothing, and the loading and
-            // error states are the only places on this screen a user can land
-            // without ever choosing a tab.
-            if (uiState is UserOverviewUiState.Success) {
-                ExpressiveNavigationBar(
-                    destinations = ProfileTabs,
-                    selectedIndex = selectedTab,
-                    onSelect = { selectedTab = it }
-                )
-            }
         }
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {
@@ -186,16 +166,25 @@ fun UserProfileScreen(
                     onRetry = { overviewViewModel.load() },
                     onSignInAgain = onSignInAgain
                 )
-                is UserOverviewUiState.Success -> ProfileTabsContent(
-                    state = state,
-                    selectedTab = selectedTab,
-                    activityState = activityState,
-                    activityViewModel = activityViewModel,
-                    socialState = socialState,
-                    socialViewModel = socialViewModel,
-                    onOpenUser = onOpenUser,
-                    topPadding = paddingValues.calculateTopPadding()
-                )
+                is UserOverviewUiState.Success -> {
+                    ProfileTabsContent(
+                        state = state,
+                        selectedTab = selectedTab,
+                        activityState = activityState,
+                        activityViewModel = activityViewModel,
+                        socialState = socialState,
+                        socialViewModel = socialViewModel,
+                        onOpenUser = onOpenUser
+                    )
+                    ExpressiveNavigationBar(
+                        destinations = ProfileTabs,
+                        selectedIndex = selectedTab,
+                        onSelect = { selectedTab = it },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                    )
+                }
             }
         }
     }
@@ -209,8 +198,7 @@ private fun ProfileTabsContent(
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,
-    onOpenUser: (FollowUser) -> Unit,
-    topPadding: Dp
+    onOpenUser: (FollowUser) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.isRefreshing) {
@@ -218,17 +206,16 @@ private fun ProfileTabsContent(
         }
 
         // `key(selectedTab)` so each tab's scrollable content is a new one and
-        // starts at the top. Without it the remembered scroll position of a tab is
-        // restored when it reappears, and switching away and back lands mid-list
-        // rather than at the section the heading promises.
+        // starts at the top.
         key(selectedTab) {
-            val padding = PaddingValues(top = topPadding)
+            val padding = PaddingValues(top = 0.dp)
             when (selectedTab) {
                 1 -> ProfileActivityTab(
                     activityState = activityState,
                     onLoadFirstPage = { activityViewModel.loadFirstPage() },
                     onLoadNextPage = { activityViewModel.loadNextPage() },
-                    contentPadding = padding
+                    contentPadding = padding,
+                    calendar = state.activity
                 )
 
                 2 -> ProfileStatsTab(state = state, contentPadding = padding)
@@ -238,9 +225,6 @@ private fun ProfileTabsContent(
                     onSelectList = { list ->
                         socialViewModel.select(list)
                     },
-                    // The tab being *shown* is what triggers the load, so opening a
-                    // profile and looking at the favourites does not spend two
-                    // requests asking who follows you.
                     onLoad = { list ->
                         socialViewModel.load(list)
                     },

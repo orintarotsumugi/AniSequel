@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.0.33",
+      "entries": [
+        {
+          "title": "A complete profile experience",
+          "detail": "The Profile tab receives a full overhaul: banner artwork, an interactive 26-week activity heatmap calendar, expandable bios, and instant search through followers and following."
+        },
+        {
+          "title": "Resilient profile loading",
+          "detail": "Public profiles and statistics stay accessible even when an account's list is private or unavailable, with automatic graceful fallback."
+        },
+        {
+          "title": "Bug fixes & expressive polish",
+          "detail": "Fixed pagination triggers, social feed idle loading, and streamlined navigation bar clearances."
+        }
+      ]
+    },
+    {
       "version": "1.0.32",
       "entries": [
         {
