@@ -126,7 +126,7 @@ fun ThemeTab(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Expressive = the designed bouncy physics. Standard = calmer fades that skip the overshoot.",
+                text = "Instant = no motion at all. Smooth = calm fades with no overshoot. Chill = full expressive physics.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

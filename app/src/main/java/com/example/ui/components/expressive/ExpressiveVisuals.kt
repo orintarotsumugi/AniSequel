@@ -16,11 +16,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.graphics.shapes.Morph
 import com.example.ui.components.AppVectorIcons
 
 private const val EXPRESSIVE_TAG = "expressive_"
@@ -108,7 +112,14 @@ fun ExpressiveLoadingOverlay(
 
 /**
  * Expressive shape orb for empty state graphics with subtle breathing motion.
+ *
+ * The orb's silhouette morphs between two Material shape-library polygons on a
+ * loop, rather than just pulsing on a fixed path. That keeps the empty state
+ * looking hand-built: a static 9-sided cookie with a scaling icon reads as the
+ * icon on a placeholder; a polygon that is actively *between* two shapes reads
+ * as a loading figure, which is the point of the empty state.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpressiveEmptyOrb(
     icon: ImageVector,
@@ -127,10 +138,35 @@ fun ExpressiveEmptyOrb(
         label = "orb_pulse_scale"
     )
 
+    // Cookie -> Flower: two familiar silhouettes, so the morph is a deformation
+    // the eye can track frame to frame rather than a morph into a polygon it
+    // has to decode first. Held at each end for nothing - the tween never rests,
+    // which is what makes the box look like it is turning.
+    val morphProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb_morph_progress"
+    )
+
+    val morphShape = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.Flower) }
+
+    // Instant motion: no box morph, no breathing icon - just the shape zoomed.
+    val effectiveSpeed = com.example.ui.components.expressive.ExpressiveMotion.speed
+
     Box(
         modifier = modifier
             .size(80.dp)
-            .clip(expressiveShape(ExpressiveShapes.orb))
+            .clip(
+                if (effectiveSpeed == com.example.data.repository.MotionStyle.INSTANT) {
+                    expressiveShape(ExpressiveShapes.orb)
+                } else {
+                    MorphShape(morphShape, morphProgress)
+                }
+            )
             .background(containerColor),
         contentAlignment = Alignment.Center
     ) {

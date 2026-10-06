@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
 
 /**
  * Standardized Material 3 Expressive motion tokens and physics specifications.
@@ -37,41 +39,39 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  */
 object ExpressiveMotion {
 
+    /**
+     * How the app's custom springs and fades are scaled. Set once per theme
+     * change in [com.example.ui.theme.AniSequelTheme]. The Material
+     * `MotionScheme` covers M3 components' built-in motion; this value covers
+     * the tokens the app itself drives (route transitions, list item fades,
+     * press feedback, and the morph loops).
+     */
+    var speed: com.example.data.repository.MotionStyle =
+        com.example.data.repository.MotionStyle.DEFAULT
+
     /** Snappy spatial spring for quick taps and micro-interactions. */
-    val FastSpatial: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium
-    )
+    val FastSpatial: FiniteAnimationSpec<Float> get() =
+        spatial()
 
     /** Default spatial spring with fluid overshoot for smooth layout adaptations. */
-    val DefaultSpatial: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = 0.65f,
-        stiffness = Spring.StiffnessMediumLow
-    )
+    val DefaultSpatial: FiniteAnimationSpec<Float> get() =
+        spatial(expressiveDamping = 0.65f, expressiveStiffness = Spring.StiffnessMediumLow)
 
     /** Bouncy spatial spring for celebratory interactions, buttons, and icon reveals. */
-    val BouncySpatial: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessLow
-    )
+    val BouncySpatial: FiniteAnimationSpec<Float> get() =
+        spatial(expressiveStiffness = Spring.StiffnessLow)
 
     /** Super bouncy spring with noticeable playful oscillation for hero moments. */
-    val SuperBouncy: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioHighBouncy,
-        stiffness = Spring.StiffnessVeryLow
-    )
+    val SuperBouncy: FiniteAnimationSpec<Float> get() =
+        spatial(expressiveDamping = Spring.DampingRatioHighBouncy, expressiveStiffness = Spring.StiffnessVeryLow)
 
     /** Fast effects spring for smooth color and opacity transitions without overshoot. */
-    val FastEffects: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMedium
-    )
+    val FastEffects: FiniteAnimationSpec<Float> get() =
+        effects(stiffness = Spring.StiffnessMedium)
 
     /** Default effects spring for state fades and container transitions. */
-    val DefaultEffects: FiniteAnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMediumLow
-    )
+    val DefaultEffects: FiniteAnimationSpec<Float> get() =
+        effects(stiffness = Spring.StiffnessMediumLow)
 
     /**
      * The colour counterpart to [FastEffects].
@@ -80,16 +80,14 @@ object ExpressiveMotion {
      * tokens above cannot be passed to it at all - which is why seven colour
      * animations had each grown their own bare `spring()` call.
      *
-     * Deliberately `NoBouncy`: a spring interpolates `Color` componentwise
+     *Deliberately `NoBouncy`: a spring interpolates `Color` componentwise
      * through `Ulerp`, and an overshooting spring drives individual channels past
      * their endpoints on the way down. A colour that overshoots is not a colour
      * on the way to another colour - it can render out of gamut. A two-state
      * selection change wants a fast, non-overshooting curve.
      */
-    val FastColorEffects: FiniteAnimationSpec<Color> = spring(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMedium
-    )
+    val FastColorEffects: FiniteAnimationSpec<Color> get() =
+        colorEffects(stiffness = Spring.StiffnessMedium)
 
     /**
      * The press spring shared by every press gesture below.
@@ -99,7 +97,54 @@ object ExpressiveMotion {
      * buttons. Previously each spelled out its own `spring(...)`, so a change
      * to the feel of one press had to be remembered in the other.
      */
-    val PressSpatial: FiniteAnimationSpec<Float> = DefaultSpatial
+    val PressSpatial: FiniteAnimationSpec<Float> get() =
+        DefaultSpatial
+
+    /**
+     * The spatial counterpart for `IntOffset`-based placement motion.
+     *
+     * List item add/remove animations in [androidx.compose.foundation.lazy.LazyItemScope.animateItem]
+     * take an `AnimationSpec<IntOffset>`, so the placement spring the dashboard
+     * was spelling out inline needs its own typed token. `FiniteAnimationSpec`
+     * is generic on the target type, so a `Float` token cannot be passed.
+     */
+    val DefaultSpatialOffset: FiniteAnimationSpec<IntOffset> get() =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = 0.65f,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        }
+
+    /**
+     * Item appearance and disappearance for lazy list items.
+     *
+     * `LazyItemScope.animateItem` takes `fadeInSpec`/`fadeOutSpec` parameters
+     * of type `FiniteAnimationSpec<Float>`. The dashboard had inlined
+     * `DampingRatioMediumBouncy`/`StiffnessMedium` for the entrance — which is
+     * exactly `FastSpatial` — and a separate `FastEffects`-like spring for the
+     * exit. This pair pins both types together.
+     */
+    val ListItemFadeIn: FiniteAnimationSpec<Float> get() =
+        effects(stiffness = Spring.StiffnessMedium)
+
+    val ListItemFadeOut: FiniteAnimationSpec<Float> get() =
+        effects(stiffness = Spring.StiffnessMedium)
+
+    /**
+     * Selected-tab and selected-segment scale.
+     *
+     * Three segmented controls and one chip rendered their selection scale
+     * animation with the same inline `DampingRatioLowBouncy` +
+     * `StiffnessMediumLow` spring; this is that physics, as a token.
+     */
+    val SelectionScale: FiniteAnimationSpec<Float> get() =
+        spatial(expressiveDamping = Spring.DampingRatioLowBouncy, expressiveStiffness = Spring.StiffnessMediumLow)
 
     /**
      * The [FastSpatial] counterpart for `animateIntAsState`.
@@ -109,10 +154,67 @@ object ExpressiveMotion {
      * token and needed its own - which it did not have, and so spelled the
      * numbers out inline instead.
      */
-    val FastSpatialInt: FiniteAnimationSpec<Int> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium
-    )
+    val FastSpatialInt: FiniteAnimationSpec<Int> get() =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        }
+
+    private fun spatial(
+        expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
+        expressiveStiffness: Float = Spring.StiffnessMedium
+    ): FiniteAnimationSpec<Float> =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = expressiveDamping,
+                stiffness = expressiveStiffness
+            )
+        }
+
+    private fun effects(
+        stiffness: Float
+    ): FiniteAnimationSpec<Float> =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            // `CHILL` and the tokens are one spring: the effects tokens are the
+            // calm half of the pair, even in the expressive style. NoBouncy keeps
+            // alpha and colour from overshooting their target.
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = stiffness
+            )
+        }
+
+    private fun colorEffects(
+        stiffness: Float
+    ): FiniteAnimationSpec<Color> =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = stiffness
+            )
+        }
 }
 
 /**

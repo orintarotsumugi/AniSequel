@@ -1,8 +1,7 @@
 package com.example.ui.components.detail
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import com.example.ui.components.expressive.ExpressiveMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -90,15 +89,16 @@ fun FullScreenCoverViewer(
         ) {
             AnimatedVisibility(
                 visible = isVisible,
-                enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                enter = fadeIn(ExpressiveMotion.DefaultEffects) +
                     scaleIn(
                         initialScale = 0.82f,
-                        animationSpec = spring(
-                            dampingRatio = 0.72f,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = ExpressiveMotion.DefaultSpatial
                     ),
-                exit = fadeOut() + scaleOut(targetScale = 0.85f),
+                exit = fadeOut(ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.85f,
+                        animationSpec = ExpressiveMotion.DefaultSpatial
+                    ),
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(

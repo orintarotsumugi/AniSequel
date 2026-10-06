@@ -3,8 +3,9 @@ package com.example.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -197,6 +198,12 @@ fun AniSequelTheme(
         ThemeMode.DARK -> true
     }
 
+    // Keep the tokens the app uses directly in step with the M3 motion scheme.
+    // They are the same property by different key: theme tokens animate M3
+    // components, the ExpressiveMotion tokens animate everything we write, and
+    // both have to agree on what happens after the curve (and on what that is).
+    com.example.ui.components.expressive.ExpressiveMotion.speed = motionStyle
+
     // Dynamic colour used to be `dynamicColor && supportsDynamicColor`. The
     // second half was a runtime SDK_INT check against `S`, and the floor is now
     // 31, so it can only ever be true. Dropped rather than left in: a guard
@@ -240,6 +247,28 @@ fun AniSequelTheme(
     }
 }
 
+/**
+ * Implementing `MotionScheme` is the documented route
+ * (m3.material.io/styles/motion) for making every built-in M3 component
+ * switch to a caller-supplied curve. This one is a no-op curve: every
+ * animation it hands out is `snap()`, so Material components resolve the
+ * transition instantly. It has the same cardinality as the standard scheme,
+ * just with the duration set to zero.
+ *
+ * The app's own springs and fades do not go through MaterialExpressiveTheme;
+ * they read [com.example.ui.components.expressive.ExpressiveMotion.speed],
+ * which the same preference drives.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private object InstantMotionScheme : MotionScheme {
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = snap()
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ExpressiveThemeHost(
@@ -250,8 +279,9 @@ private fun ExpressiveThemeHost(
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         motionScheme = when (motionStyle) {
-            com.example.data.repository.MotionStyle.EXPRESSIVE -> MotionScheme.expressive()
-            com.example.data.repository.MotionStyle.STANDARD -> MotionScheme.standard()
+            com.example.data.repository.MotionStyle.INSTANT -> InstantMotionScheme
+            com.example.data.repository.MotionStyle.SMOOTH -> MotionScheme.standard()
+            com.example.data.repository.MotionStyle.CHILL -> MotionScheme.expressive()
         },
         shapes = ExpressiveShapes,
         typography = AniSequelTypography,

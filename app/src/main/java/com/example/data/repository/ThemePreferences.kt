@@ -42,18 +42,39 @@ enum class ThemeMode(val storageValue: String, val displayName: String) {
 }
 
 /**
- * Which of the two compiled Material motion schemes the app renders with.
- * The expressive scheme is the default; standard boys prefer less bounce.
+ * How much motion the app renders with.
+ *
+ * Maps to the two compiled Material MotionSchemes the app knows about - but
+ * also records the user's preference for *this app's* hand-tuned tokens in
+ * [com.example.ui.components.expressive.ExpressiveMotion], so the fades and
+ * springs written against those tokens can honour it too.
+ *
+ *  - **Instant** - no fade, no bounce, no morph. The user has their data; a
+ *    transition there just states that.
+ *  - **Smooth** - a standard fade, no overshoot. Quieter than the expressive
+ *    scheme.
+ *  - **Chill** - the full expressive springs. The default: it is what the rest
+ *    of the app is designed around.
  */
 enum class MotionStyle(val storageValue: String, val displayName: String) {
-    EXPRESSIVE("expressive", "Expressive"),
-    STANDARD("standard", "Standard");
+    INSTANT("instant", "Instant"),
+    SMOOTH("smooth", "Smooth"),
+    CHILL("chill", "Chill");
 
     companion object {
-        val DEFAULT = EXPRESSIVE
+        val DEFAULT = CHILL
 
         fun fromStorage(value: String?): MotionStyle =
-            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+            entries.firstOrNull { it.storageValue == value }
+                // Storage values written before the rename: "expressive" and
+                // "standard" both existed in the old two-way toggle. Map them rather
+                // than resetting silently - the old labels meant "a bit more bounce"
+                // and "a bit more calm", which is Chill and Smooth respectively.
+                ?: when (value) {
+                    "expressive" -> CHILL
+                    "standard" -> SMOOTH
+                    else -> DEFAULT
+                }
     }
 }
 

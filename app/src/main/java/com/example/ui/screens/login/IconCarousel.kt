@@ -1,9 +1,7 @@
 package com.example.ui.screens.login
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -159,10 +157,7 @@ fun IconCarousel(
                 val width by animateFloatAsState(
                     targetValue = if (selected) with(density) { 16.dp.toPx() }
                         else with(density) { 6.dp.toPx() },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    ),
+                    animationSpec = ExpressiveMotion.DefaultEffects,
                     label = "carousel_dot_$dotIndex"
                 )
                 val color = if (selected) {

@@ -4,9 +4,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.toShape
+import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
+import kotlin.math.max
 
 /**
  * Shape tokens and utilities for Material 3 Expressive surfaces.
@@ -82,3 +91,50 @@ object ExpressiveShapes {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun expressiveShape(polygon: RoundedPolygon) = polygon.toShape()
+
+/**
+ * A [Shape] that interpolates between two [MaterialShapes] polygons over [progress].
+ *
+ * Morphing is what makes the empty-state artwork "breathe" between two of
+ * Material's 35 iconic shapes - two polygons whose outlines map vertex to
+ * vertex, so the intermediate silhouettes stay simple. Doing this with a plain
+ * alpha crossfade produces two translucent shapes overlapping; a morph produces
+ * one shape that is between.
+ *
+ * [progress] is sampled once per [createOutline] call, so driving it from an
+ * animated state re-evaluates the clip each frame. The polygon that describes
+ * the outline is a [Morph]; its bounds scale/translate to whatever size the
+ * caller hands it, which is why, like [expressiveShape], this is only
+ * appropriate for a fixed square - a Morph is a unit polygon, and stretching it
+ * across a wide/short box would produce the same generic-outline surprise the
+ * pill token replaced.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+class MorphShape(
+    private val morph: Morph,
+    private val progress: Float
+) : Shape {
+    private var path = Path()
+    private val matrix = Matrix()
+
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        path.rewind()
+        morph.toPath(progress, path)
+        val b = morph.calculateBounds()
+        val boundsLeft = b[0]
+        val boundsTop = b[1]
+        val boundsWidth = (b[2] - b[0]).coerceAtLeast(0.0001f)
+        val boundsHeight = (b[3] - b[1]).coerceAtLeast(0.0001f)
+        val maxDimension = max(boundsWidth, boundsHeight)
+        matrix.reset()
+        matrix.translate(size.width / 2f, size.height / 2f)
+        matrix.scale(size.width / maxDimension, size.height / maxDimension)
+        matrix.translate(-(boundsLeft + boundsWidth / 2f), -(boundsTop + boundsHeight / 2f))
+        path.transform(matrix)
+        return Outline.Generic(path)
+    }
+}

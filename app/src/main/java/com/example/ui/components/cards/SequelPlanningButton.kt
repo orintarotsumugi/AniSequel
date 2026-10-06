@@ -1,8 +1,6 @@
 package com.example.ui.components.cards
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -30,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveContainedLoadingIndicator
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.theme.AniSequelTheme
 
@@ -46,9 +45,9 @@ fun SequelPlanningButton(
     AnimatedContent(
         targetState = sequel.isAddedToPlanning,
         transitionSpec = {
-            (fadeIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                scaleIn(initialScale = 0.9f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow))) togetherWith
-                (fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
+            (fadeIn(ExpressiveMotion.FastEffects) +
+                scaleIn(initialScale = 0.9f, animationSpec = ExpressiveMotion.BouncySpatial)) togetherWith
+                (fadeOut(ExpressiveMotion.FastEffects) +
                     scaleOut(targetScale = 0.9f))
         },
         label = "planning_button_anim",

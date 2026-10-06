@@ -1,9 +1,12 @@
 package com.example.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,10 +64,38 @@ private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
  * overshoot; the same bouncy spring physics the rest of the app uses are the
  * motion routes should use too.
  */
-private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> = spring(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
-    stiffness = Spring.StiffnessMediumLow
-)
+private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> get() =
+    when (com.example.ui.components.expressive.ExpressiveMotion.speed) {
+        com.example.data.repository.MotionStyle.INSTANT -> snap()
+        com.example.data.repository.MotionStyle.SMOOTH -> spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+        com.example.data.repository.MotionStyle.CHILL -> spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+    }
+
+/**
+ * Effects-style fade that accompanies [RouteSlideSpring] on route transitions.
+ * A pure slide crosses one surface over the other; the slide plus a short fade
+ * gives the incoming surface something to compose against - without it, the
+ * underneath content reads as the background rather than as replaced content
+ * while the slide is moving.
+ */
+private val RouteFadeEffect: FiniteAnimationSpec<Float> get() =
+    when (com.example.ui.components.expressive.ExpressiveMotion.speed) {
+        com.example.data.repository.MotionStyle.INSTANT -> snap()
+        com.example.data.repository.MotionStyle.SMOOTH -> spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+        com.example.data.repository.MotionStyle.CHILL -> spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+    }
 
 @Composable
 fun AppNavigation(
@@ -203,28 +234,28 @@ fun AppNavigation(
         startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
         modifier = modifier,
         enterTransition = {
-            slideIntoContainer(
+            (slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
                 animationSpec = RouteSlideSpring
-            )
+            ) + fadeIn(RouteFadeEffect))
         },
         exitTransition = {
-            slideOutOfContainer(
+            (slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
                 animationSpec = RouteSlideSpring
-            )
+            ) + fadeOut(RouteFadeEffect))
         },
         popEnterTransition = {
-            slideIntoContainer(
+            (slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
                 animationSpec = RouteSlideSpring
-            )
+            ) + fadeIn(RouteFadeEffect))
         },
         popExitTransition = {
-            slideOutOfContainer(
+            (slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
                 animationSpec = RouteSlideSpring
-            )
+            ) + fadeOut(RouteFadeEffect))
         }
     ) {
         composable(AppRoutes.LOGIN) {

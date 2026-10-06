@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -265,15 +263,9 @@ fun DashboardScreen(
                                             .widthIn(max = MaxContentWidth)
                                             .padding(horizontal = 16.dp)
                                             .animateItem(
-                                                placementSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                    stiffness = Spring.StiffnessMediumLow
-                                                ),
-                                                fadeInSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                                    stiffness = Spring.StiffnessMedium
-                                                ),
-                                                fadeOutSpec = ExpressiveMotion.FastEffects
+                                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                                             )
                                     )
                                 }

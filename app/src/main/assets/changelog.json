@@ -1,7 +1,20 @@
 {
   "versions": [
     {
-      "version": "1.0.24",
+      "version": "1.0.30",
+      "entries": [
+        {
+          "title": "Motion that matches you",
+          "detail": "Settings > Motion now offers Instant, Smooth or Chill. Chill is the full bouncy physics; Smooth is calm without overshoot; Instant skips motion entirely."
+        },
+        {
+          "title": "A shape that turns, never snaps",
+          "detail": "The What's new orb morphs between Material shapes instead of sitting as a flat icon. The transition fades between lists and routes are gentler and resolved to a token."
+        }
+      ]
+    },
+    {
+      "version": "1.0.29",
       "entries": [
         {
           "title": "Android 12 and newer only",

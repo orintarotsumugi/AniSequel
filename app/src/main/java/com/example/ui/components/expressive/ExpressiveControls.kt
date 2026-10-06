@@ -1,9 +1,7 @@
 package com.example.ui.components.expressive
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,10 +64,7 @@ fun ExpressiveTabBar(
 
             val scale by animateFloatAsState(
                 targetValue = if (selected) 1f else 0.95f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
+                animationSpec = ExpressiveMotion.SelectionScale,
                 label = "tab_scale_$label"
             )
             val container by animateColorAsState(
@@ -174,10 +169,7 @@ fun ExpressivePolygonSegmentedBar(
             )
             val scale by animateFloatAsState(
                 targetValue = if (selected) 1f else 0.95f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
+                animationSpec = ExpressiveMotion.SelectionScale,
                 label = "segment_scale_${option.label}"
             )
 
@@ -244,10 +236,7 @@ fun ExpressiveSegmentedBar(
             val selected = index == selectedIndex
             val scale by animateFloatAsState(
                 targetValue = if (selected) 1f else 0.96f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
+                animationSpec = ExpressiveMotion.SelectionScale,
                 label = "segmented_scale_$label"
             )
 
@@ -316,7 +305,7 @@ fun ExpressiveStateChip(
     )
     val scale by animateFloatAsState(
         targetValue = if (selected) 1f else 0.97f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = ExpressiveMotion.SelectionScale,
         label = "chip_scale"
     )
 
