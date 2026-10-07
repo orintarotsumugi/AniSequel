@@ -205,13 +205,7 @@ class AniListRepositoryImpl(
         val key = "user:$userId"
         if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
 
-        return execute(
-            GraphQLRequest(
-                query = GraphQLQueries.GET_USER_ANIME_LIST,
-                variables = mapOf("userId" to userId)
-            ),
-            apiService::getMediaListCollection
-        ).map { it.collection.require("Media list collection is empty") }
+        return fetchFullMediaListCollection(userId = userId, userName = null)
             .onSuccess { storeList(key, it) }
     }
 
@@ -219,17 +213,80 @@ class AniListRepositoryImpl(
         userName: String,
         forceRefresh: Boolean
     ): Result<MediaListCollection> {
-        val key = "userName:${userName.trim()}"
+        val key = "userName:${userName.trim().lowercase()}"
         if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
 
-        return execute(
+        return fetchFullMediaListCollection(userId = null, userName = userName.trim())
+            .onSuccess { storeList(key, it) }
+    }
+
+    /**
+     * Fetches complete MediaListCollection, supporting AniList chunking for large lists.
+     */
+    private suspend fun fetchFullMediaListCollection(
+        userId: Int?,
+        userName: String?
+    ): Result<MediaListCollection> {
+        val initialVars = mutableMapOf<String, Any?>()
+        if (userId != null) initialVars["userId"] = userId
+        if (userName != null) initialVars["userName"] = userName
+        initialVars["chunk"] = 1
+
+        val firstResult = execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_USER_ANIME_LIST,
-                variables = mapOf("userName" to userName.trim())
+                variables = initialVars
             ),
             apiService::getMediaListCollection
         ).map { it.collection.require("Media list collection is empty") }
-            .onSuccess { storeList(key, it) }
+
+        val firstCollection = firstResult.getOrElse { return Result.failure(it) }
+        if (firstCollection.hasNextChunk != true) {
+            return Result.success(firstCollection)
+        }
+
+        // Multi-chunk list merge for accounts spanning multiple chunks
+        val allLists = firstCollection.lists?.map { it.copy(entries = it.entries?.toMutableList()) }?.toMutableList()
+            ?: mutableListOf()
+        var currentChunk = 2
+        var hasNext = true
+
+        while (hasNext && currentChunk <= 10) {
+            val chunkVars = mutableMapOf<String, Any?>()
+            if (userId != null) chunkVars["userId"] = userId
+            if (userName != null) chunkVars["userName"] = userName
+            chunkVars["chunk"] = currentChunk
+
+            val nextResult = execute(
+                GraphQLRequest(
+                    query = GraphQLQueries.GET_USER_ANIME_LIST,
+                    variables = chunkVars
+                ),
+                apiService::getMediaListCollection
+            ).map { it.collection.require("Media list collection chunk $currentChunk is empty") }
+
+            val nextCollection = nextResult.getOrNull() ?: break
+            val nextLists = nextCollection.lists.orEmpty()
+
+            nextLists.forEach { nextGroup ->
+                val existingGroupIndex = allLists.indexOfFirst {
+                    it.name.equals(nextGroup.name, ignoreCase = true) ||
+                        (it.status != null && it.status.equals(nextGroup.status, ignoreCase = true))
+                }
+                if (existingGroupIndex >= 0) {
+                    val existingGroup = allLists[existingGroupIndex]
+                    val mergedEntries = ((existingGroup.entries ?: emptyList()) + (nextGroup.entries ?: emptyList()))
+                    allLists[existingGroupIndex] = existingGroup.copy(entries = mergedEntries)
+                } else {
+                    allLists.add(nextGroup)
+                }
+            }
+
+            hasNext = nextCollection.hasNextChunk == true
+            currentChunk++
+        }
+
+        return Result.success(MediaListCollection(lists = allLists, hasNextChunk = false))
     }
 
     /**

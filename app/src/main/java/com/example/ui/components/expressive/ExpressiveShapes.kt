@@ -122,6 +122,9 @@ class MorphShape(
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
+        if (size.width <= 0f || size.height <= 0f) {
+            return Outline.Rectangle(androidx.compose.ui.geometry.Rect.Zero)
+        }
         path.rewind()
         morph.toPath(progress, path)
         val b = morph.calculateBounds()
@@ -130,9 +133,10 @@ class MorphShape(
         val boundsWidth = (b[2] - b[0]).coerceAtLeast(0.0001f)
         val boundsHeight = (b[3] - b[1]).coerceAtLeast(0.0001f)
         val maxDimension = max(boundsWidth, boundsHeight)
+        val scale = kotlin.math.min(size.width, size.height) / maxDimension
         matrix.reset()
         matrix.translate(size.width / 2f, size.height / 2f)
-        matrix.scale(size.width / maxDimension, size.height / maxDimension)
+        matrix.scale(scale, scale)
         matrix.translate(-(boundsLeft + boundsWidth / 2f), -(boundsTop + boundsHeight / 2f))
         path.transform(matrix)
         return Outline.Generic(path)

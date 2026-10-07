@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.0.34",
+      "entries": [
+        {
+          "title": "Improved list loading & caching",
+          "detail": "Enhanced AniList list synchronization with multi-chunk pagination support for large libraries, cross-referenced cache keys, and instant retrieval."
+        },
+        {
+          "title": "AniList Markdown in profile",
+          "detail": "Rich formatting for user bios including interactive spoilers, clickable links, headers, code blocks, and blockquotes."
+        },
+        {
+          "title": "Material 3 Expressive shapes",
+          "detail": "Refined geometric bounds scaling and aspect ratio preservation across custom shapes and morphing visual components."
+        }
+      ]
+    },
+    {
       "version": "1.0.33",
       "entries": [
         {

@@ -323,8 +323,9 @@ object GraphQLQueries {
      * that is otherwise impossible to draw.
      */
     val GET_USER_ANIME_LIST = """
-        query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String) {
-          MediaListCollection(userId: ${'$'}userId, userName: ${'$'}userName, type: ANIME) {
+        query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String, ${'$'}chunk: Int) {
+          MediaListCollection(userId: ${'$'}userId, userName: ${'$'}userName, type: ANIME, chunk: ${'$'}chunk) {
+            hasNextChunk
             lists {
               name
               status

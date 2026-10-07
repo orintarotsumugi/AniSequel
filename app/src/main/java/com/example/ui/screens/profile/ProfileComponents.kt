@@ -370,25 +370,6 @@ fun FavouriteStudioRow(
 }
 
 /**
- * AniList's mean score out of 100, as the out-of-ten number people quote.
- *
- * One decimal, because a mean is a mean: 82.3 and 82 describe different lists.
- *
- * `Locale.ROOT` on the format rather than the platform default, so a device set
- * to a locale that writes decimals with a comma does not render "8,2/10" - which
- * is not a score, and reads as a formatting bug on the one card quoting a number
- * somebody chose.
- */
-internal fun formatMeanScore(meanScore: Double): String {
-    val outOfTen = meanScore / 10.0
-    return if (outOfTen % 1.0 == 0.0) {
-        "${outOfTen.toInt()}/10"
-    } else {
-        String.format(java.util.Locale.ROOT, "%.1f/10", outOfTen)
-    }
-}
-
-/**
  * The "nothing here yet" line every favourites row falls back to.
  */
 @Composable

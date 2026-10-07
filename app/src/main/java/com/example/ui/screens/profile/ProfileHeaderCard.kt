@@ -92,6 +92,28 @@ fun ProfileHeaderCard(
                             )
                         )
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.AnimeSparkle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
             }
         }
 
@@ -261,51 +283,4 @@ private fun MetaChip(icon: ImageVector, label: String) {
             maxLines = 1
         )
     }
-}
-
-/**
- * The year an account was created.
- *
- * Null for accounts AniList does not backfill - the field simply does not exist
- * before 2020 - and the chip is hidden rather than showing "Joined unknown".
- */
-internal fun formatJoinYear(createdAt: Int): String =
-    Instant.ofEpochSecond(createdAt.toLong())
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("yyyy", Locale.ROOT))
-
-/**
- * A Unix timestamp as "5 hours ago".
- *
- * `Locale.ROOT` on the format, so a device set to a locale that writes digits or
- * month names differently does not render a chip in a script the surrounding text
- * is not in.
- */
-internal fun formatRelativeSeconds(timestamp: Int, now: Instant = Instant.now()): String {
-    val seconds = now.epochSecond - timestamp
-    if (seconds < 0) return "just now"
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    val days = hours / 24
-    val years = days / 365
-    return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        hours < 24 -> "${hours}h ago"
-        days < 365 -> "${days}d ago"
-        else -> "${years}y ago"
-    }
-}
-
-/**
- * Minutes watched as the largest two units that say something.
- */
-internal fun formatWatchTime(minutesWatched: Long): String {
-    if (minutesWatched <= 0) return "0h"
-    val hours = minutesWatched / 60
-    if (hours < 1) return "${minutesWatched}m"
-    if (hours < 24) return "${hours}h"
-    val days = hours / 24
-    val remainderHours = hours % 24
-    return if (remainderHours == 0L) "${days}d" else "${days}d ${remainderHours}h"
 }

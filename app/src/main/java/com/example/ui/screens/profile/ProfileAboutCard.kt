@@ -26,15 +26,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.components.expressive.bouncyPress
+import com.example.ui.components.markdown.AniListMarkdownParser
+import com.example.ui.components.markdown.AniListMarkdownView
 
 /**
- * The person's own bio, rendered with Markdown stripped and an optional expand toggle
- * for long bios to maintain comfortable scrolling.
+ * The person's own bio, rendered with expressive AniList Markdown support and an optional
+ * expand toggle for long bios to maintain comfortable scrolling.
  */
 @Composable
 fun AboutCard(
@@ -42,9 +44,9 @@ fun AboutCard(
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth
 ) {
-    val text = remember(about) { stripMarkdown(about) }
+    val nodes = remember(about) { AniListMarkdownParser.parse(about) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val isLongBio = text.length > 280
+    val isLongBio = about.length > 280
 
     Card(
         modifier = modifier
@@ -85,6 +87,7 @@ fun AboutCard(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
+                            .bouncyPress()
                             .clickable { expanded = !expanded }
                             .padding(4.dp)
                     )
@@ -93,12 +96,9 @@ fun AboutCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (isLongBio && !expanded) 6 else Int.MAX_VALUE,
-                overflow = if (isLongBio && !expanded) TextOverflow.Ellipsis else TextOverflow.Clip
+            AniListMarkdownView(
+                nodes = nodes,
+                maxLines = if (isLongBio && !expanded) 6 else Int.MAX_VALUE
             )
         }
     }
