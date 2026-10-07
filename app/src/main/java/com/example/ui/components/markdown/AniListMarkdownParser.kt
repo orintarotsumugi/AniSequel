@@ -4,40 +4,48 @@ package com.example.ui.components.markdown
  * Tokenizer and AST parser for AniList-flavored Markdown.
  *
  * Handles:
- *  - Headers (`# `, `## `, `### `, `#### `)
+ *  - Headers (`# `, `## `, `### `, `#### `, etc.)
  *  - Blockquotes (`> `)
  *  - Code blocks (```` ````) and inline code (`` `code` ``)
- *  - Unordered (`- `, `* `) and ordered (`1. `) lists
- *  - AniList image embeds (`img(url)`, `img220(url)`, `![alt](url)`)
- *  - Horizontal dividers (`---`, `***`)
+ *  - Checklists (`- [ ]`, `- [x]`) and lists (`- `, `* `, `1. `)
+ *  - AniList image embeds (`img(url)`, `img220(url)`, `![alt](url)`, linked images)
+ *  - Videos (`youtube(id/url)`, `webm(url)`)
+ *  - Centered blocks (`~~~center`, `<center>`, `~~~`)
+ *  - Horizontal dividers (`---`, `***`, `___`)
  *  - Spoilers (`~!spoiler!~`)
- *  - Links (`[label](url)`)
- *  - Bold (`**`, `__`), Italic (`*`, `_`), Strikethrough (`~~`)
+ *  - Links (`[label](url)`), raw auto-URLs, and user mentions (`@username`)
+ *  - Bold (`**`, `__`, `<b>`), Italic (`*`, `_`, `<i>`), Underline (`<u>`), Strikethrough (`~~`, `<s>`)
  */
 object AniListMarkdownParser {
 
-    private val CODE_BLOCK_PATTERN = Regex("""^```([a-zA-Z0-9_-]*)\n([\s\S]*?)\n```""", RegexOption.MULTILINE)
     private val HEADER_PATTERN = Regex("""^(#{1,6})\s+(.+)$""")
-    private val BLOCKQUOTE_PATTERN = Regex("""^>\s*(.*)$""")
+    private val CHECKLIST_PATTERN = Regex("""^[-*+]\s+\[([ xX])]\s*(.+)$""")
     private val UNORDERED_LIST_PATTERN = Regex("""^[-*+]\s+(.+)$""")
     private val ORDERED_LIST_PATTERN = Regex("""^\d+\.\s+(.+)$""")
     private val HORIZONTAL_RULE_PATTERN = Regex("""^(\*{3,}|-{3,}|_{3,})$""")
-    private val ANILIST_IMG_PATTERN = Regex("""^img\d*\((https?://[^)]+)\)$""", RegexOption.IGNORE_CASE)
+    private val LINKED_MD_IMG_PATTERN = Regex("""^\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)$""")
+    private val LINKED_ANILIST_IMG_PATTERN = Regex("""^\[img(?:\d+%|\d+)?\((https?://[^)]+)\)]\((https?://[^\s)]+)\)$""", RegexOption.IGNORE_CASE)
+    private val ANILIST_IMG_PATTERN = Regex("""^img(?:\d+%|\d+)?\((https?://[^)]+)\)$|^image\((https?://[^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val MD_IMG_PATTERN = Regex("""^!\[([^\]]*)]\((https?://[^)]+)\)$""")
+    private val YOUTUBE_PATTERN = Regex("""^youtube\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
+    private val WEBM_PATTERN = Regex("""^webm\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
 
     // Inline regex patterns
+    private val INLINE_LINKED_IMG = Regex("""\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)""")
     private val INLINE_LINK = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
+    private val INLINE_AUTO_URL = Regex("""https?://[^\s<>"'()\[\]{}]+""")
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
     private val INLINE_BOLD_ITALIC = Regex("""(?:\*\*\*|___)(.+?)(?:\*\*\*|___)""")
-    private val INLINE_BOLD = Regex("""(?:\*\*|__)(.+?)(?:\*\*|__)""")
-    private val INLINE_ITALIC = Regex("""(?:\*|_)(.+?)(?:\*|_)""")
-    private val INLINE_STRIKETHROUGH = Regex("""~~(.+?)~~""")
-    private val ANILIST_INLINE_IMG = Regex("""img\d*\((https?://[^)]+)\)""", RegexOption.IGNORE_CASE)
+    private val INLINE_BOLD = Regex("""(?:\*\*|__)(.+?)(?:\*\*|__)|<b>(.+?)</b>|<strong>(.+?)</strong>""", RegexOption.IGNORE_CASE)
+    private val INLINE_ITALIC = Regex("""(?:\*|_)(.+?)(?:\*|_)|<i>(.+?)</i>|<em>(.+?)</em>""", RegexOption.IGNORE_CASE)
+    private val INLINE_UNDERLINE = Regex("""<u>(.+?)</u>""", RegexOption.IGNORE_CASE)
+    private val INLINE_STRIKETHROUGH = Regex("""~~(.+?)~~|<s>(.+?)</s>|<del>(.+?)</del>""", RegexOption.IGNORE_CASE)
+    private val INLINE_MENTION = Regex("""@([a-zA-Z0-9_-]+)""")
 
     fun parse(raw: String): List<MarkdownNode> {
-        val clean = raw.replace("\r\n", "\n").replace("\r", "\n").trim()
+        val clean = raw.replace("\r\n", "\n").replace("\r", "\n").replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n").trim()
         if (clean.isBlank()) return emptyList()
 
         val nodes = mutableListOf<MarkdownNode>()
@@ -52,6 +60,27 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // Centered block (~~~center ... ~~~ or <center> ... </center> or ~~~ ... ~~~)
+            val trimmedLine = line.trim()
+            if (trimmedLine.equals("~~~center", ignoreCase = true) ||
+                trimmedLine.equals("<center>", ignoreCase = true) ||
+                (trimmedLine == "~~~" && (i + 1 < lines.size))
+            ) {
+                val centerLines = mutableListOf<String>()
+                i++
+                while (i < lines.size &&
+                    !lines[i].trim().equals("~~~", ignoreCase = true) &&
+                    !lines[i].trim().equals("</center>", ignoreCase = true)
+                ) {
+                    centerLines.add(lines[i])
+                    i++
+                }
+                if (i < lines.size) i++ // skip closing delimiter
+                val centerContent = parse(centerLines.joinToString("\n"))
+                nodes.add(MarkdownNode.CenteredBlock(centerContent))
+                continue
+            }
+
             // Code block check
             if (line.startsWith("```")) {
                 val lang = line.removePrefix("```").trim().takeIf { it.isNotEmpty() }
@@ -61,20 +90,20 @@ object AniListMarkdownParser {
                     codeLines.add(lines[i])
                     i++
                 }
-                if (i < lines.size) i++ // skip closing ```
+                if (i < lines.size) i++
                 nodes.add(MarkdownNode.CodeBlock(lang, codeLines.joinToString("\n")))
                 continue
             }
 
             // Horizontal rule
-            if (HORIZONTAL_RULE_PATTERN.matches(line.trim())) {
+            if (HORIZONTAL_RULE_PATTERN.matches(trimmedLine)) {
                 nodes.add(MarkdownNode.Divider)
                 i++
                 continue
             }
 
             // Headers
-            val headerMatch = HEADER_PATTERN.matchEntire(line.trim())
+            val headerMatch = HEADER_PATTERN.matchEntire(trimmedLine)
             if (headerMatch != null) {
                 val level = headerMatch.groupValues[1].length
                 val content = headerMatch.groupValues[2].trim()
@@ -83,18 +112,56 @@ object AniListMarkdownParser {
                 continue
             }
 
-            // AniList / Markdown images
-            val anilistImgMatch = ANILIST_IMG_PATTERN.matchEntire(line.trim())
-            if (anilistImgMatch != null) {
-                nodes.add(MarkdownNode.ImageBlock(anilistImgMatch.groupValues[1], null))
+            // Linked images: [![Alt](imgUrl)](targetUrl) or [img(imgUrl)](targetUrl)
+            val linkedMdImgMatch = LINKED_MD_IMG_PATTERN.matchEntire(trimmedLine)
+            if (linkedMdImgMatch != null) {
+                val alt = linkedMdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
+                val imgUrl = linkedMdImgMatch.groupValues[2]
+                val targetUrl = linkedMdImgMatch.groupValues[3]
+                nodes.add(MarkdownNode.ImageBlock(url = imgUrl, alt = alt, targetUrl = targetUrl))
                 i++
                 continue
             }
 
-            val mdImgMatch = MD_IMG_PATTERN.matchEntire(line.trim())
+            val linkedAnilistImgMatch = LINKED_ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
+            if (linkedAnilistImgMatch != null) {
+                val imgUrl = linkedAnilistImgMatch.groupValues[1]
+                val targetUrl = linkedAnilistImgMatch.groupValues[2]
+                nodes.add(MarkdownNode.ImageBlock(url = imgUrl, targetUrl = targetUrl))
+                i++
+                continue
+            }
+
+            // AniList / Markdown standalone images
+            val anilistImgMatch = ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
+            if (anilistImgMatch != null) {
+                val url = anilistImgMatch.groupValues[1].ifEmpty { anilistImgMatch.groupValues[2] }
+                nodes.add(MarkdownNode.ImageBlock(url = url, alt = null))
+                i++
+                continue
+            }
+
+            val mdImgMatch = MD_IMG_PATTERN.matchEntire(trimmedLine)
             if (mdImgMatch != null) {
                 val alt = mdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
-                nodes.add(MarkdownNode.ImageBlock(mdImgMatch.groupValues[2], alt))
+                nodes.add(MarkdownNode.ImageBlock(url = mdImgMatch.groupValues[2], alt = alt))
+                i++
+                continue
+            }
+
+            // Video embeds
+            val ytMatch = YOUTUBE_PATTERN.matchEntire(trimmedLine)
+            if (ytMatch != null) {
+                val target = ytMatch.groupValues[1].trim()
+                val url = if (target.startsWith("http")) target else "https://www.youtube.com/watch?v=$target"
+                nodes.add(MarkdownNode.VideoBlock(url, isYoutube = true))
+                i++
+                continue
+            }
+
+            val webmMatch = WEBM_PATTERN.matchEntire(trimmedLine)
+            if (webmMatch != null) {
+                nodes.add(MarkdownNode.VideoBlock(webmMatch.groupValues[1].trim(), isYoutube = false))
                 i++
                 continue
             }
@@ -111,8 +178,22 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // Checklist
+            if (CHECKLIST_PATTERN.matches(trimmedLine)) {
+                val items = mutableListOf<CheckListItem>()
+                while (i < lines.size && CHECKLIST_PATTERN.matches(lines[i].trim())) {
+                    val match = CHECKLIST_PATTERN.matchEntire(lines[i].trim())!!
+                    val checked = match.groupValues[1].trim().equals("x", ignoreCase = true)
+                    val text = match.groupValues[2]
+                    items.add(CheckListItem(checked = checked, inlines = parseInlines(text)))
+                    i++
+                }
+                nodes.add(MarkdownNode.CheckListBlock(items = items))
+                continue
+            }
+
             // Unordered list
-            if (UNORDERED_LIST_PATTERN.matches(line.trim())) {
+            if (UNORDERED_LIST_PATTERN.matches(trimmedLine)) {
                 val items = mutableListOf<List<InlineToken>>()
                 while (i < lines.size && UNORDERED_LIST_PATTERN.matches(lines[i].trim())) {
                     val itemText = UNORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
@@ -124,7 +205,7 @@ object AniListMarkdownParser {
             }
 
             // Ordered list
-            if (ORDERED_LIST_PATTERN.matches(line.trim())) {
+            if (ORDERED_LIST_PATTERN.matches(trimmedLine)) {
                 val items = mutableListOf<List<InlineToken>>()
                 while (i < lines.size && ORDERED_LIST_PATTERN.matches(lines[i].trim())) {
                     val itemText = ORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
@@ -136,7 +217,7 @@ object AniListMarkdownParser {
             }
 
             // AniList Spoiler block ~!... !~
-            val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(line.trim())
+            val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(trimmedLine)
             if (spoilerMatch != null) {
                 val content = spoilerMatch.groupValues[1].trim()
                 nodes.add(MarkdownNode.SpoilerBlock(parseInlines(content)))
@@ -144,15 +225,25 @@ object AniListMarkdownParser {
                 continue
             }
 
-            // General Paragraph (accumulate continuous non-empty lines)
+            // General Paragraph
             val paragraphLines = mutableListOf<String>()
             while (i < lines.size && lines[i].isNotBlank() &&
                 !lines[i].startsWith("```") &&
                 !HEADER_PATTERN.matches(lines[i].trim()) &&
                 !lines[i].trimStart().startsWith(">") &&
+                !CHECKLIST_PATTERN.matches(lines[i].trim()) &&
                 !UNORDERED_LIST_PATTERN.matches(lines[i].trim()) &&
                 !ORDERED_LIST_PATTERN.matches(lines[i].trim()) &&
-                !HORIZONTAL_RULE_PATTERN.matches(lines[i].trim())
+                !HORIZONTAL_RULE_PATTERN.matches(lines[i].trim()) &&
+                !lines[i].trim().equals("~~~center", ignoreCase = true) &&
+                !lines[i].trim().equals("<center>", ignoreCase = true) &&
+                !ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
+                !MD_IMG_PATTERN.matches(lines[i].trim()) &&
+                !LINKED_MD_IMG_PATTERN.matches(lines[i].trim()) &&
+                !LINKED_ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
+                !YOUTUBE_PATTERN.matches(lines[i].trim()) &&
+                !WEBM_PATTERN.matches(lines[i].trim()) &&
+                !ANILIST_SPOILER_BLOCK.matches(lines[i].trim())
             ) {
                 paragraphLines.add(lines[i].trim())
                 i++
@@ -167,7 +258,7 @@ object AniListMarkdownParser {
     }
 
     /**
-     * Parses inline tokens: links, spoilers, bold/italic, code, strikethrough, and plain text.
+     * Parses inline tokens: links, spoilers, bold/italic, underline, code, strikethrough, mentions, auto URLs, and plain text.
      */
     fun parseInlines(text: String): List<InlineToken> {
         if (text.isEmpty()) return emptyList()
@@ -176,14 +267,16 @@ object AniListMarkdownParser {
         var remaining = text
 
         while (remaining.isNotEmpty()) {
-            // Find closest match across inline patterns
             val linkMatch = INLINE_LINK.find(remaining)
             val spoilerMatch = INLINE_SPOILER.find(remaining)
             val codeMatch = INLINE_CODE.find(remaining)
             val boldItalicMatch = INLINE_BOLD_ITALIC.find(remaining)
             val boldMatch = INLINE_BOLD.find(remaining)
             val italicMatch = INLINE_ITALIC.find(remaining)
+            val underlineMatch = INLINE_UNDERLINE.find(remaining)
             val strikeMatch = INLINE_STRIKETHROUGH.find(remaining)
+            val mentionMatch = INLINE_MENTION.find(remaining)
+            val autoUrlMatch = INLINE_AUTO_URL.find(remaining)
 
             val matches = listOfNotNull(
                 linkMatch?.let { it to "LINK" },
@@ -192,7 +285,10 @@ object AniListMarkdownParser {
                 boldItalicMatch?.let { it to "BOLD_ITALIC" },
                 boldMatch?.let { it to "BOLD" },
                 italicMatch?.let { it to "ITALIC" },
-                strikeMatch?.let { it to "STRIKE" }
+                underlineMatch?.let { it to "UNDERLINE" },
+                strikeMatch?.let { it to "STRIKE" },
+                mentionMatch?.let { it to "MENTION" },
+                autoUrlMatch?.let { it to "AUTO_URL" }
             ).sortedBy { it.first.range.first }
 
             if (matches.isEmpty()) {
@@ -213,6 +309,10 @@ object AniListMarkdownParser {
                     val url = firstMatch.groupValues[2]
                     tokens.add(InlineToken.Link(label, url))
                 }
+                "AUTO_URL" -> {
+                    val url = firstMatch.value
+                    tokens.add(InlineToken.Link(url, url))
+                }
                 "SPOILER" -> {
                     tokens.add(InlineToken.Spoiler(firstMatch.groupValues[1]))
                 }
@@ -223,13 +323,29 @@ object AniListMarkdownParser {
                     tokens.add(InlineToken.BoldItalic(firstMatch.groupValues[1]))
                 }
                 "BOLD" -> {
-                    tokens.add(InlineToken.Bold(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1].ifEmpty {
+                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
+                    }
+                    tokens.add(InlineToken.Bold(content))
                 }
                 "ITALIC" -> {
-                    tokens.add(InlineToken.Italic(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1].ifEmpty {
+                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
+                    }
+                    tokens.add(InlineToken.Italic(content))
+                }
+                "UNDERLINE" -> {
+                    tokens.add(InlineToken.Underline(firstMatch.groupValues[1]))
                 }
                 "STRIKE" -> {
-                    tokens.add(InlineToken.Strikethrough(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1].ifEmpty {
+                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
+                    }
+                    tokens.add(InlineToken.Strikethrough(content))
+                }
+                "MENTION" -> {
+                    val user = firstMatch.groupValues[1]
+                    tokens.add(InlineToken.Mention(user))
                 }
             }
 

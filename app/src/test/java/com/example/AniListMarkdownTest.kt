@@ -66,13 +66,19 @@ class AniListMarkdownTest {
         val input = """
             img220(https://files.catbox.moe/example.jpg)
             ![Banner](https://image.tmdb.org/t/p/w500/test.png)
+            [![Alt](https://files.catbox.moe/thumb.png)](https://anilist.co/anime/1)
         """.trimIndent()
 
         val nodes = AniListMarkdownParser.parse(input)
-        assertEquals(2, nodes.size)
+        assertEquals(3, nodes.size)
         assertEquals("https://files.catbox.moe/example.jpg", (nodes[0] as MarkdownNode.ImageBlock).url)
         assertEquals("https://image.tmdb.org/t/p/w500/test.png", (nodes[1] as MarkdownNode.ImageBlock).url)
         assertEquals("Banner", (nodes[1] as MarkdownNode.ImageBlock).alt)
+
+        val linkedImg = nodes[2] as MarkdownNode.ImageBlock
+        assertEquals("https://files.catbox.moe/thumb.png", linkedImg.url)
+        assertEquals("https://anilist.co/anime/1", linkedImg.targetUrl)
+        assertEquals("Alt", linkedImg.alt)
     }
 
     @Test
@@ -91,7 +97,7 @@ class AniListMarkdownTest {
 
     @Test
     fun `parses markdown links and inline styles`() {
-        val text = "Check [AniList](https://anilist.co) and `code` and **bold** and *italic* and ~~strike~~"
+        val text = "Check [AniList](https://anilist.co) and `code` and **bold** and *italic* and ~~strike~~ and <u>underlined</u>"
         val inlines = AniListMarkdownParser.parseInlines(text)
 
         val link = inlines.filterIsInstance<InlineToken.Link>().firstOrNull()
@@ -109,6 +115,9 @@ class AniListMarkdownTest {
 
         val strike = inlines.filterIsInstance<InlineToken.Strikethrough>().firstOrNull()
         assertEquals("strike", strike?.text)
+
+        val underline = inlines.filterIsInstance<InlineToken.Underline>().firstOrNull()
+        assertEquals("underlined", underline?.text)
     }
 
     @Test
@@ -132,5 +141,44 @@ class AniListMarkdownTest {
         assertTrue(nodes[0] is MarkdownNode.Paragraph)
         assertTrue(nodes[1] is MarkdownNode.Divider)
         assertTrue(nodes[2] is MarkdownNode.Paragraph)
+    }
+
+    @Test
+    fun `parses centered block and mentions`() {
+        val input = """
+            ~~~center
+            Welcome to my profile @john_doe!
+            ~~~
+        """.trimIndent()
+
+        val nodes = AniListMarkdownParser.parse(input)
+        assertEquals(1, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.CenteredBlock)
+
+        val inlines = AniListMarkdownParser.parseInlines("Hello @anime_fan and @user-123")
+        val mentions = inlines.filterIsInstance<InlineToken.Mention>()
+        assertEquals(2, mentions.size)
+        assertEquals("anime_fan", mentions[0].username)
+        assertEquals("user-123", mentions[1].username)
+    }
+
+    @Test
+    fun `parses video embeds and checklists`() {
+        val input = """
+            youtube(dQw4w9WgXcQ)
+            - [x] Finished season 1
+            - [ ] Waiting for sequel
+        """.trimIndent()
+
+        val nodes = AniListMarkdownParser.parse(input)
+        assertEquals(2, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.VideoBlock)
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", (nodes[0] as MarkdownNode.VideoBlock).url)
+
+        assertTrue(nodes[1] is MarkdownNode.CheckListBlock)
+        val checklist = nodes[1] as MarkdownNode.CheckListBlock
+        assertEquals(2, checklist.items.size)
+        assertTrue(checklist.items[0].checked)
+        assertTrue(!checklist.items[1].checked)
     }
 }

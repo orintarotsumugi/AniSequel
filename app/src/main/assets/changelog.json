@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.0.35",
+      "entries": [
+        {
+          "title": "Complete AniList Markdown Engine",
+          "detail": "Full support for clickable linked images, HTML tags (underline, strikethrough, bold, italic), auto-detected web URLs, interactive spoilers, and checklists in user bios."
+        },
+        {
+          "title": "Dashboard & Settings Refinements",
+          "detail": "Fixed filter state synchronization, enhanced theme card previews, and streamlined navigation clearances."
+        },
+        {
+          "title": "Material 3 Expressive UI Polish",
+          "detail": "Spring transitions, enhanced touch targets, and responsive card layouts across all tabs."
+        }
+      ]
+    },
+    {
       "version": "1.0.34",
       "entries": [
         {

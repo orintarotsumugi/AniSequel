@@ -16,11 +16,10 @@ import com.example.ui.components.openExternalUrl
 import com.example.ui.viewmodel.UserOverviewUiState
 
 /**
- * The Home tab: who this is, what they have pinned, and what they wrote.
+ * The Home tab: who this is, what they wrote in their bio, and what they have pinned.
  *
- * Everything that is about *the person* rather than about a number. Only populated
- * favourite sections are displayed, avoiding empty section clutter when a user has
- * only pinned anime or characters.
+ * Places the expressive markdown About bio right below the header card for high visibility,
+ * followed by rich carousels of pinned favourites.
  */
 @Composable
 fun ProfileHomeTab(
@@ -49,6 +48,14 @@ fun ProfileHomeTab(
                 state = state,
                 modifier = Modifier.testTag("profile_header_card")
             )
+        }
+
+        item(key = "about") {
+            if (state.about != null) {
+                AboutCard(about = state.about)
+            } else {
+                NoBioNote()
+            }
         }
 
         if (state.favouriteAnime.isNotEmpty()) {
@@ -141,14 +148,6 @@ fun ProfileHomeTab(
                     message = "No favourites pinned yet",
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
-            }
-        }
-
-        item(key = "about") {
-            if (state.about != null) {
-                AboutCard(about = state.about)
-            } else {
-                NoBioNote()
             }
         }
     }
