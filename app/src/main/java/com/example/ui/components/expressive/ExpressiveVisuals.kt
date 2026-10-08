@@ -1,11 +1,15 @@
 package com.example.ui.components.expressive
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,17 +52,25 @@ fun ExpressiveCountBadge(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.primaryContainer)
             .padding(horizontal = 9.dp, vertical = 3.dp)
             .testTag("${EXPRESSIVE_TAG}count_badge")
     ) {
-        Text(
-            text = if (count > 99) "99+" else "$count",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            fontWeight = FontWeight.Bold
-        )
+        AnimatedContent(
+            targetState = if (count > 99) "99+" else "$count",
+            transitionSpec = {
+                fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects)
+            },
+            label = "count_badge_text"
+        ) { text ->
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

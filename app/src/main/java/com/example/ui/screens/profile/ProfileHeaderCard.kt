@@ -62,97 +62,120 @@ fun ProfileHeaderCard(
             .padding(horizontal = 16.dp)
             .testTag("profile_header")
     ) {
+        // Banner Container with increased height, layered multi-stop scrim, and overlapping avatar layout
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(112.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(bottom = 36.dp)
         ) {
-            val banner = state.bannerUrl
-            if (banner != null) {
-                AsyncImage(
-                    model = banner,
-                    contentDescription = null,
-                    modifier = Modifier.matchParentSize(),
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-                    error = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-                    fallback = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
-                                )
-                            )
-                        )
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.AnimeSparkle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                        modifier = Modifier.size(36.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                val banner = state.bannerUrl
+                if (banner != null) {
+                    AsyncImage(
+                        model = banner,
+                        contentDescription = "Profile Banner",
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
+                        error = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
+                        fallback = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
                     )
+                    // Multi-stop gradient for readable contrast and seamless blend with surface
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0.0f to Color.Black.copy(alpha = 0.20f),
+                                    0.45f to Color.Black.copy(alpha = 0.25f),
+                                    0.75f to Color.Black.copy(alpha = 0.50f),
+                                    1.0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                                )
+                            )
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.AnimeSparkle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            // Overlapping Avatar anchored at the bottom-start of the banner
             AsyncImage(
                 model = state.avatarUrl,
-                contentDescription = null,
+                contentDescription = "${state.username}'s Avatar",
                 modifier = Modifier
-                    .size(68.dp)
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
-                    .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                    .border(3.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentScale = ContentScale.Crop,
                 placeholder = rememberVectorPainter(AppVectorIcons.SequelJump),
                 error = rememberVectorPainter(AppVectorIcons.SequelJump),
                 fallback = rememberVectorPainter(AppVectorIcons.SequelJump)
             )
+        }
 
-            Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = state.username,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = if (state.isDemoMode) "AniSequel Demo Profile" else "AniList Member",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (state.isDemoMode) MaterialTheme.colorScheme.tertiary
+                                else MaterialTheme.colorScheme.primary
+                            )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (state.isDemoMode) "AniSequel Demo Profile" else "AniList Member",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

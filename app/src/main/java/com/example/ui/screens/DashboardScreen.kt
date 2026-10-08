@@ -186,8 +186,8 @@ fun DashboardScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("sequels_list"),
-                            contentPadding = PaddingValues(bottom = 28.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 32.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             if (state.isDemoMode) {

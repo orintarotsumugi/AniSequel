@@ -1,6 +1,7 @@
 package com.example.ui.components.expressive
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -239,15 +240,37 @@ fun ExpressiveSegmentedBar(
                 animationSpec = ExpressiveMotion.SelectionScale,
                 label = "segmented_scale_$label"
             )
+            val cornerOuter by animateDpAsState(
+                targetValue = if (selected) 18.dp else 12.dp,
+                animationSpec = ExpressiveMotion.FastSpatialDp,
+                label = "segmented_outer_$label"
+            )
+            val cornerInner by animateDpAsState(
+                targetValue = if (selected) 8.dp else 4.dp,
+                animationSpec = ExpressiveMotion.FastSpatialDp,
+                label = "segmented_inner_$label"
+            )
+            val containerColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceContainer,
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segmented_container_$label"
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segmented_text_$label"
+            )
 
             val shape = when {
                 index == 0 && options.size > 1 -> RoundedCornerShape(
-                    topStart = 14.dp, bottomStart = 14.dp, topEnd = 6.dp, bottomEnd = 6.dp
+                    topStart = cornerOuter, bottomStart = cornerOuter, topEnd = cornerInner, bottomEnd = cornerInner
                 )
                 index == options.lastIndex && options.size > 1 -> RoundedCornerShape(
-                    topStart = 6.dp, bottomStart = 6.dp, topEnd = 14.dp, bottomEnd = 14.dp
+                    topStart = cornerInner, bottomStart = cornerInner, topEnd = cornerOuter, bottomEnd = cornerOuter
                 )
-                else -> MaterialTheme.shapes.extraSmall
+                else -> RoundedCornerShape(cornerInner)
             }
 
             Box(
@@ -259,10 +282,7 @@ fun ExpressiveSegmentedBar(
                         scaleY = scale
                     }
                     .clip(shape)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainer
-                    )
+                    .background(containerColor)
                     .clickable { onSelect(index) }
                     .testTag("${EXPRESSIVE_TAG}segment_$label"),
                 contentAlignment = Alignment.Center
@@ -270,8 +290,7 @@ fun ExpressiveSegmentedBar(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textColor,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                 )
             }
@@ -308,6 +327,11 @@ fun ExpressiveStateChip(
         animationSpec = ExpressiveMotion.SelectionScale,
         label = "chip_scale"
     )
+    val cornerRadius by animateDpAsState(
+        targetValue = if (selected) 12.dp else 20.dp,
+        animationSpec = ExpressiveMotion.FastSpatialDp,
+        label = "chip_corner_radius"
+    )
 
     Box(
         modifier = modifier
@@ -315,10 +339,10 @@ fun ExpressiveStateChip(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(if (selected) MaterialTheme.shapes.small else MaterialTheme.shapes.medium)
+            .clip(RoundedCornerShape(cornerRadius))
             .background(background)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
             .testTag("${EXPRESSIVE_TAG}chip_$label"),
         contentAlignment = Alignment.Center
     ) {

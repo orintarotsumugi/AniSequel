@@ -31,6 +31,7 @@ import com.example.data.model.FilterCriteria
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveCountBadge
 import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.components.expressive.bouncyPress
 
 @Composable
@@ -52,7 +53,7 @@ fun DashboardSearchBar(
             .testTag("anime_search_bar"),
         placeholder = { Text("Search franchise or sequel") },
         singleLine = true,
-        shape = MaterialTheme.shapes.small,
+        shape = ExpressiveShapes.pill,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest

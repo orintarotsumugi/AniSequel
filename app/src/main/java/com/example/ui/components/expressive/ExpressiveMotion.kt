@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 
@@ -181,6 +182,22 @@ object ExpressiveMotion {
      * numbers out inline instead.
      */
     val FastSpatialInt: FiniteAnimationSpec<Int> get() =
+        when (speed) {
+            com.example.data.repository.MotionStyle.INSTANT -> snap()
+            com.example.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.example.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        }
+
+    /**
+     * The [FastSpatial] counterpart for `animateDpAsState` (corner radius and elevation).
+     */
+    val FastSpatialDp: FiniteAnimationSpec<Dp> get() =
         when (speed) {
             com.example.data.repository.MotionStyle.INSTANT -> snap()
             com.example.data.repository.MotionStyle.SMOOTH -> spring(

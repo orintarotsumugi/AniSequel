@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.0.36",
+      "entries": [
+        {
+          "title": "Collapsible Currently Arriving Section",
+          "detail": "Easily expand or collapse the Currently Arriving anime carousel with an animated toggle button, smooth spring transitions, and persistent user preferences."
+        },
+        {
+          "title": "Material 3 Expressive Morphing & Physics",
+          "detail": "Enhanced shape morphing in segmented controls, tabs, and navigation components with dynamic corner radius interpolation, fluid spring physics, and draw-phase transforms."
+        },
+        {
+          "title": "UI & Animation Polish",
+          "detail": "Improved tactile touch targets, refined motion tokens across screens, and resolved layout bugs for a cleaner, more responsive experience."
+        }
+      ]
+    },
+    {
       "version": "1.0.35",
       "entries": [
         {

@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EmojiPeople
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Group
@@ -101,6 +103,8 @@ object AppVectorIcons {
     val Download = Icons.Default.Download
     val Pause = Icons.Default.PauseCircle
     val OverflowMenu = Icons.Default.MoreHoriz
+    val ExpandMore = Icons.Default.ExpandMore
+    val ExpandLess = Icons.Default.ExpandLess
 
     // The profile screen's four destinations. Every one is named for what the
     // destination *is*, and each of the four was picked because it cannot be
