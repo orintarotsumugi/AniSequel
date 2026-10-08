@@ -280,7 +280,7 @@ data class PersonImage(
 data class ListActivity(
     val id: Int,
     val status: String? = null,
-    val progress: Int? = null,
+    val progress: String? = null,
     val createdAt: Int? = null,
     val likeCount: Int? = null,
     val replyCount: Int? = null,

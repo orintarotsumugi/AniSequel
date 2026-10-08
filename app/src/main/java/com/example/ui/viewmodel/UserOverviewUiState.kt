@@ -27,6 +27,7 @@ sealed interface UserOverviewUiState {
     data class Loading(val message: String = "Loading your AniList profile...") : UserOverviewUiState
 
     data class Success(
+        val userId: Int,
         val username: String,
         val about: String?,
         val siteUrl: String?,

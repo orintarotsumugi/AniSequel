@@ -161,11 +161,11 @@ object DemoProfileProvider {
      */
     fun getDemoActivity(): List<ListActivity> = listOf(
         activity(1, 100465, "completed", null, hoursAgo(2), likes = 8, replies = 0),
-        activity(2, 142329, "current", 7, hoursAgo(9), likes = 3, replies = 1),
+        activity(2, 142329, "current", "7", hoursAgo(9), likes = 3, replies = 1),
         activity(3, 154587, "planning", null, hoursAgo(26), likes = 1, replies = 0),
         activity(4, 113415, "completed", null, hoursAgo(31), likes = 12, replies = 4),
-        activity(5, 20605, "current", 22, hoursAgo(50), likes = 2, replies = 0),
-        activity(6, 20958, "paused", 5, hoursAgo(74), likes = 0, replies = 0),
+        activity(5, 20605, "current", "22", hoursAgo(50), likes = 2, replies = 0),
+        activity(6, 20958, "paused", "5", hoursAgo(74), likes = 0, replies = 0),
         activity(7, 164212, "completed", null, hoursAgo(120), likes = 5, replies = 1),
         // The same show as row 4, dropped earlier. Two rows on one media is the
         // normal case for a feed - watched, then completed - and it is why the
@@ -210,7 +210,7 @@ object DemoProfileProvider {
         index: Int,
         mediaId: Int,
         status: String,
-        progress: Int?,
+        progress: String?,
         createdAtSecondsAgo: Long,
         likes: Int,
         replies: Int

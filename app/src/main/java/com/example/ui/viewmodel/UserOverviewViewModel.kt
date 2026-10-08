@@ -142,6 +142,7 @@ class UserOverviewViewModel(
         val entries = buildListEntryInsights(list)
 
         return UserOverviewUiState.Success(
+            userId = overview.id,
             username = overview.name,
             about = overview.about?.takeIf { it.isNotBlank() },
             siteUrl = overview.siteUrl,

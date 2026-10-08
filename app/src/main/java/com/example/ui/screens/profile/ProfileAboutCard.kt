@@ -118,17 +118,27 @@ internal fun NoBioNote() {
     )
 }
 
+private val STRIP_LINK_REGEX = Regex("""\[([^\]]+)]\([^)]*\)""")
+private val STRIP_IMAGE_REGEX = Regex("""!\[[^\]]*]\([^)]*\)""")
+private val STRIP_HEADER_REGEX = Regex("""^[ \t]{0,3}#{1,6}[ \t]*""", RegexOption.MULTILINE)
+private val STRIP_BLOCKQUOTE_REGEX = Regex("""^[ \t]{0,3}>[ \t]?""")
+private val STRIP_BOLD_REGEX = Regex("""(\*\*|__)(.+?)\1""")
+private val STRIP_ITALIC_REGEX = Regex("""(\*|_)(.+?)\1""")
+private val STRIP_LIST_REGEX = Regex("""^[ \t]{0,3}[-*+][ \t]+""", RegexOption.MULTILINE)
+private val STRIP_CODE_REGEX = Regex("""`([^`]+)`""")
+private val STRIP_NEWLINES_REGEX = Regex("""\n{3,}""")
+
 /**
  * Reduce Markdown to plain text.
  */
 internal fun stripMarkdown(source: String): String = source
-    .replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
-    .replace(Regex("""!\[[^\]]*]\([^)]*\)"""), "")
-    .replace(Regex("""^[ \t]{0,3}#{1,6}[ \t]*""", RegexOption.MULTILINE), "")
-    .replace(Regex("""^[ \t]{0,3}>[ \t]?"""), "")
-    .replace(Regex("""(\*\*|__)(.+?)\1"""), "$2")
-    .replace(Regex("""(\*|_)(.+?)\1"""), "$2")
-    .replace(Regex("""^[ \t]{0,3}[-*+][ \t]+""", RegexOption.MULTILINE), "")
-    .replace(Regex("""`([^`]+)`"""), "$1")
-    .replace(Regex("""\n{3,}"""), "\n\n")
+    .replace(STRIP_LINK_REGEX, "$1")
+    .replace(STRIP_IMAGE_REGEX, "")
+    .replace(STRIP_HEADER_REGEX, "")
+    .replace(STRIP_BLOCKQUOTE_REGEX, "")
+    .replace(STRIP_BOLD_REGEX, "$2")
+    .replace(STRIP_ITALIC_REGEX, "$2")
+    .replace(STRIP_LIST_REGEX, "")
+    .replace(STRIP_CODE_REGEX, "$1")
+    .replace(STRIP_NEWLINES_REGEX, "\n\n")
     .trim()

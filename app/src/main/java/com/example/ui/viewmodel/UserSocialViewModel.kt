@@ -33,7 +33,7 @@ enum class SocialList { FOLLOWERS, FOLLOWING }
  */
 class UserSocialViewModel(
     private val aniListRepository: AniListRepository,
-    private val userId: Int?,
+    private var userId: Int?,
     private val isDemo: Boolean = false
 ) : ViewModel() {
 
@@ -61,6 +61,23 @@ class UserSocialViewModel(
     private var loadJob: Job? = null
 
     /**
+     * Updates the user id once resolved from a profile overview scan.
+     */
+    fun updateUserId(newUserId: Int) {
+        if (this.userId == newUserId) return
+        this.userId = newUserId
+        val current = _state.value
+        if (current is SocialState.Error || current is SocialState.Idle || current is SocialState.Loading) {
+            val selected = when (current) {
+                is SocialState.Error -> current.list
+                is SocialState.Loading -> current.list
+                else -> SocialList.FOLLOWERS
+            }
+            load(selected, forceRefresh = true)
+        }
+    }
+
+    /**
      * Fetch the list the user picked, once each.
      *
      * Fetched on demand rather than in `init` for the same reason as the activity
@@ -75,10 +92,7 @@ class UserSocialViewModel(
      */
     fun load(selected: SocialList, forceRefresh: Boolean = false) {
         if (userId == null && !isDemo) {
-            _state.value = SocialState.Error(
-                message = "AniList serves follower lists by id, and this profile was opened without one.",
-                list = selected
-            )
+            _state.value = SocialState.Loading(selected)
             return
         }
 

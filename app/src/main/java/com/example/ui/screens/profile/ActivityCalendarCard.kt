@@ -1,6 +1,5 @@
 package com.example.ui.screens.profile
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -229,18 +229,21 @@ private fun ActivityCell(
     // the colour ramp would never be reached and would read as "there is a level
     // this app cannot show".
     val target = if (visible) intensity.coerceIn(0f, 1f) else 0f
-
-    val fill by animateFloatAsState(
-        targetValue = target,
-        animationSpec = ExpressiveMotion.FastEffects,
-        label = "activity_cell_$key"
-    )
+    val base = MaterialTheme.colorScheme.primary
+    val empty = MaterialTheme.colorScheme.surfaceContainerHighest
+    val color = remember(target, base, empty) {
+        when {
+            target <= 0f -> empty
+            target >= 1f -> base
+            else -> base.copy(alpha = 0.22f + target * 0.78f)
+        }
+    }
 
     Box(
         modifier = Modifier
             .size(CellSize)
             .clip(RoundedCornerShape(3.dp))
-            .background(colorFor(fill))
+            .background(color)
             // Days that have not happened carry no description at all: they are not
             // days yet, and announcing them would make TalkBack read a run of
             // "No activity" before every real one. The box is still drawn, so the

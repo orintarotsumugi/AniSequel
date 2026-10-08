@@ -24,7 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
@@ -92,9 +93,9 @@ fun UserProfileScreen(
     onSignInAgain: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val uiState by overviewViewModel.uiState.collectAsState()
-    val activityState by activityViewModel.state.collectAsState()
-    val socialState by socialViewModel.state.collectAsState()
+    val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
+    val activityState by activityViewModel.state.collectAsStateWithLifecycle()
+    val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -167,6 +168,12 @@ fun UserProfileScreen(
                     onSignInAgain = onSignInAgain
                 )
                 is UserOverviewUiState.Success -> {
+                    LaunchedEffect(state.userId) {
+                        if (state.userId > 0) {
+                            activityViewModel.updateUserId(state.userId)
+                            socialViewModel.updateUserId(state.userId)
+                        }
+                    }
                     ProfileTabsContent(
                         state = state,
                         selectedTab = selectedTab,
@@ -214,6 +221,7 @@ private fun ProfileTabsContent(
                     activityState = activityState,
                     onLoadFirstPage = { activityViewModel.loadFirstPage() },
                     onLoadNextPage = { activityViewModel.loadNextPage() },
+                    onRetry = { activityViewModel.retry() },
                     contentPadding = padding,
                     calendar = state.activity
                 )

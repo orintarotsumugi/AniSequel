@@ -4,6 +4,7 @@ import com.example.data.model.ActivityFeedData
 import com.example.data.model.FollowersData
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.UserOverviewData
+import com.example.data.network.FlexibleStringAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import org.junit.Assert.assertEquals
@@ -39,7 +40,9 @@ import org.junit.Test
  */
 class UserOverviewJsonTest {
 
-    private val moshi = Moshi.Builder().build()
+    private val moshi = Moshi.Builder()
+        .add(String::class.java, FlexibleStringAdapter)
+        .build()
 
     private inline fun <reified T> parse(json: String): T {
         val responseType = Types.newParameterizedType(GraphQLResponse::class.java, T::class.java)
@@ -455,5 +458,31 @@ class UserActivityJsonTest {
         val json = """{"data":{"Page":{"followers":[]}}}"""
 
         assertEquals(0, parse<FollowersData>(json).page!!.followers!!.size)
+    }
+
+    @Test
+    fun `an activity with string progress or range parses cleanly`() {
+        val json = """
+            {"data":{"Page":{"activities":[
+              {"id":1,"status":"current","progress":"12","media":{"id":100}},
+              {"id":2,"status":"current","progress":"1 - 10","media":{"id":101}}
+            ]}}}
+        """.trimIndent()
+
+        val activities = parse<ActivityFeedData>(json).page!!.activities!!
+        assertEquals("12", activities[0].progress)
+        assertEquals("1 - 10", activities[1].progress)
+    }
+
+    @Test
+    fun `an activity with numeric progress is safely coerced to string`() {
+        val json = """
+            {"data":{"Page":{"activities":[
+              {"id":3,"status":"current","progress":7,"media":{"id":102}}
+            ]}}}
+        """.trimIndent()
+
+        val activities = parse<ActivityFeedData>(json).page!!.activities!!
+        assertEquals("7", activities[0].progress)
     }
 }

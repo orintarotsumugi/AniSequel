@@ -158,10 +158,56 @@ class ProfileViewModelTest {
         assertEquals(2, repository.followingFetchCount)
     }
 
+    @Test
+    fun `UserActivityViewModel updateUserId triggers load when starting with null userId`() = runTest(testDispatcher) {
+        val page1 = List(5) { createActivity(it + 1) }
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to page1)
+        )
+
+        val viewModel = UserActivityViewModel(repository, userId = null, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        // Should be waiting in Loading, not permanently failing
+        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Loading)
+        assertEquals(0, repository.activityFetchCount)
+
+        // Once the profile resolves the user id, it should fetch automatically
+        viewModel.updateUserId(1)
+        advanceUntilIdle()
+
+        val success = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(5, success.activities.size)
+        assertEquals(1, repository.activityFetchCount)
+    }
+
+    @Test
+    fun `UserSocialViewModel updateUserId triggers load when starting with null userId`() = runTest(testDispatcher) {
+        val followers = listOf(FollowUser(1, "Follower1"))
+        val repository = FakeProfileRepository(followersResult = followers)
+
+        val viewModel = UserSocialViewModel(repository, userId = null)
+        viewModel.load(SocialList.FOLLOWERS)
+        advanceUntilIdle()
+
+        // Stays in loading gracefully
+        assertTrue(viewModel.state.value is UserSocialViewModel.SocialState.Loading)
+        assertEquals(0, repository.followersFetchCount)
+
+        // Resolving the id triggers the fetch
+        viewModel.updateUserId(1)
+        advanceUntilIdle()
+
+        val success = viewModel.state.value as UserSocialViewModel.SocialState.Success
+        assertEquals(1, success.followers.size)
+        assertEquals(1, repository.followersFetchCount)
+    }
+
     private fun createActivity(id: Int) = ListActivity(
         id = id,
         status = "completed",
-        progress = 12,
+        progress = "12",
         media = MediaNode(
             id = id,
             title = MediaTitle(english = "Anime $id"),

@@ -403,7 +403,8 @@ class AniListRepositoryImpl(
             // guarantee, and a forum post arriving here would parse into an
             // activity with no media and no status. Dropping those here means a
             // blank card is never rendered; see `ListActivity.isUnrecognised`.
-            val activities = data.page?.activities.orEmpty().filterNot { it.isUnrecognised }
+            val activities = data.page?.activities.orEmpty()
+                .filterNot { it.isUnrecognised || it.media == null }
             storeItems(activityCache, key, activities)
             activities
         }

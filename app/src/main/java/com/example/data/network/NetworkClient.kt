@@ -130,7 +130,9 @@ object NetworkClient {
         // @JsonClass(generateAdapter = true), so Moshi resolves a generated
         // adapter for each one. The reflective factory was dead weight, and it
         // drags kotlin-reflect into every build that enables R8.
-        val moshi = Moshi.Builder().build()
+        val moshi = Moshi.Builder()
+            .add(String::class.java, FlexibleStringAdapter)
+            .build()
 
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)

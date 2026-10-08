@@ -51,6 +51,7 @@ fun ProfileActivityTab(
     activityState: UserActivityViewModel.ActivityState,
     onLoadFirstPage: () -> Unit,
     onLoadNextPage: () -> Unit,
+    onRetry: () -> Unit = onLoadFirstPage,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     calendar: ActivityCalendar? = null
@@ -125,7 +126,7 @@ fun ProfileActivityTab(
                 item(key = "activity_error") {
                     ActivityError(
                         message = activityState.message,
-                        onRetry = onLoadFirstPage
+                        onRetry = onRetry
                     )
                 }
             }

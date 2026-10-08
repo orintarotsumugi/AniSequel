@@ -41,7 +41,7 @@ class UserActivityViewModel(
      * favourites but cannot show a feed, and says so rather than loading the
      * wrong person's.
      */
-    private val userId: Int?,
+    private var userId: Int?,
     private val isDemo: Boolean = false,
     private val pageSize: Int = 25
 ) : ViewModel() {
@@ -66,6 +66,18 @@ class UserActivityViewModel(
     private var started = false
 
     /**
+     * Updates the user id once resolved from a profile overview scan.
+     */
+    fun updateUserId(newUserId: Int) {
+        if (this.userId == newUserId) return
+        this.userId = newUserId
+        if (_state.value is ActivityState.Error || _state.value is ActivityState.Idle || _state.value is ActivityState.Loading) {
+            started = false
+            loadFirstPage(forceRefresh = true)
+        }
+    }
+
+    /**
      * Fetch the first page, once.
      *
      * Guarded rather than idempotent because the Activity tab is re-entered every
@@ -75,6 +87,10 @@ class UserActivityViewModel(
      */
     fun loadFirstPage(forceRefresh: Boolean = false) {
         if (started && !forceRefresh) return
+        if (userId == null && !isDemo) {
+            _state.value = ActivityState.Loading("Loading recent activity...")
+            return
+        }
         started = true
         nextPage = 1
         fetch(forceRefresh)
@@ -87,13 +103,14 @@ class UserActivityViewModel(
     }
 
     fun retry() {
-        started = true
+        started = false
         nextPage = 1
-        fetch(forceRefresh = false)
+        fetch(forceRefresh = true)
     }
 
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {
-        if (userId == null && !isDemo) {
+        val currentId = userId
+        if (currentId == null && !isDemo) {
             _state.value = ActivityState.Error(
                 "AniList does not serve activity by name, and this profile was opened without an id."
             )
@@ -114,7 +131,7 @@ class UserActivityViewModel(
             val result = if (isDemo) {
                 Result.success(aniListRepository.getDemoUserActivity())
             } else {
-                aniListRepository.getUserActivity(userId!!, page, forceRefresh)
+                aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
             }
 
             result.fold(
