@@ -1,15 +1,6 @@
 {
   "versions": [
     {
-      "version": "1.0.40",
-      "entries": [
-        {
-          "title": "Version 1.0.40 Update",
-          "detail": "Updated app version to 1.0.40 with refined hold & swipe quick add gestures and enhanced Material 3 expressive motion."
-        }
-      ]
-    },
-    {
       "version": "1.0.38",
       "entries": [
         {
