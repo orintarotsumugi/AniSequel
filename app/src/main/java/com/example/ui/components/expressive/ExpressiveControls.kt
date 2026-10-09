@@ -87,6 +87,8 @@ fun ExpressiveTabBar(
                 label = "tab_content_$label"
             )
 
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -97,7 +99,10 @@ fun ExpressiveTabBar(
                     }
                     .clip(ExpressiveShapes.pill)
                     .background(container)
-                    .clickable { onSelect(index) }
+                    .clickable {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSelect(index)
+                    }
                     .semantics {
                         this.selected = selected
                         role = Role.Tab
@@ -106,7 +111,10 @@ fun ExpressiveTabBar(
                 contentAlignment = Alignment.Center
             ) {
                 val icon = icons.getOrNull(index)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
                     if (icon != null) {
                         Icon(
                             imageVector = icon,
@@ -114,13 +122,15 @@ fun ExpressiveTabBar(
                             tint = content,
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                     }
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelLarge,
                         color = content,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }

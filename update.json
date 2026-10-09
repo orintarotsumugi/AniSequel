@@ -1,8 +1,8 @@
 {
-  "version": "1.0.37",
-  "version_code": 77,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.37",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.37/anisequel-universal.apk",
+  "version": "1.0.40",
+  "version_code": 80,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.40",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.40/anisequel-universal.apk",
   "size_bytes": 2406708,
   "published_at": "2026-10-05T04:26:05Z",
   "notes": "## AniSequel\n\nFind the anime sequels you finished the first season of and never got\naround to, and add them to your AniList Planning list in one tap.\n\n### 📦 APK package\n**anisequel-universal.apk** runs on every supported device — there is\nonly one build, so there is nothing to choose between.\n\n*Built from commit* `ea234a0881ba6806fdeeb6de5973e884335068a2` *on run* `71`.\n\n### 🔑 First launch\nAniSequel signs you in to your own AniList account through AniList's\nOAuth page — there is no AniSequel account and no password to manage.\n\n### ⚠️ Installing over an older build\nEvery release from this one onward is signed with the same key, so you\ncan install future updates over the top without uninstalling first.\n\nIf you are upgrading from **v1.0.16 or earlier**, or from any build\nmade between the first signing-key move and the 2026-10-05 key\nrotation, the signing key has changed and Android will refuse the\ninstall — a new key can never update an app signed with an old one.\nUninstall **AniSequel** once, then install this APK. This wipes the\napp's local data, so expect to sign in to AniList again.\n\nIf Android reports **\"App not installed as package conflicts\"**, an\nolder copy sig\n\nBuild 71 from ea234a08."

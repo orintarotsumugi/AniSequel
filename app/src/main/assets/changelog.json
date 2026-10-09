@@ -1,6 +1,36 @@
 {
   "versions": [
     {
+      "version": "1.0.40",
+      "entries": [
+        {
+          "title": "Version 1.0.40 Update",
+          "detail": "Updated app version to 1.0.40 with refined hold & swipe quick add gestures and enhanced Material 3 expressive motion."
+        }
+      ]
+    },
+    {
+      "version": "1.0.38",
+      "entries": [
+        {
+          "title": "Hold & Swipe to Currently Watching",
+          "detail": "Hold the quick add button with an animated progress fill and color transition to instantly add a sequel to Currently Watching, or perform a horizontal swipe gesture to add immediately."
+        },
+        {
+          "title": "Quick Add Gestures in Settings",
+          "detail": "Configure button hold duration (3 seconds vs 5 seconds) and toggle the swipe gesture in Settings > Edit under Quick Add Gestures."
+        },
+        {
+          "title": "Anime Info Tab Redesign",
+          "detail": "Completely modularized anime info tab with high-definition YouTube trailer cards, score distribution badges, rank achievements, production studio specs, and thematic tags."
+        },
+        {
+          "title": "Material 3 Expressive Refinements",
+          "detail": "Polished spring physics, tactile haptic feedback on tab changes, and crisp pure-vector icons across the application."
+        }
+      ]
+    },
+    {
       "version": "1.0.37",
       "entries": [
         {

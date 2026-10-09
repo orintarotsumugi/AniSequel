@@ -16,7 +16,10 @@ fun SequelDetailSheet(
     onLoadDetail: (MissedSequel) -> Unit,
     isDetailLoading: Boolean,
     canWriteToAniList: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddToWatching: (MissedSequel) -> Unit = {},
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
 ) {
     com.example.ui.components.detail.SequelDetailSheet(
         sequel = sequel,
@@ -26,6 +29,9 @@ fun SequelDetailSheet(
         onLoadDetail = onLoadDetail,
         isDetailLoading = isDetailLoading,
         canWriteToAniList = canWriteToAniList,
-        modifier = modifier
+        modifier = modifier,
+        onAddToWatching = onAddToWatching,
+        holdDurationSeconds = holdDurationSeconds,
+        swipeEnabled = swipeEnabled
     )
 }

@@ -52,6 +52,7 @@ fun EditSettingsTab(
     authViewModel: AuthViewModel,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
+    quickAddPreferences: com.example.data.repository.QuickAddPreferences,
     onNavigateToLogin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -73,6 +74,8 @@ fun EditSettingsTab(
         }
 
         ListRefreshCard(refreshIntervalPreferences)
+
+        QuickAddSectionCard(quickAddPreferences)
 
         ArrivingSectionCard(arrivingPreferences)
 

@@ -34,7 +34,10 @@ fun SequelCard(
     onAddToPlanning: () -> Unit,
     /** Stops offering this entry again. Persisted by the ViewModel. */
     onHide: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddToWatching: () -> Unit = {},
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
 ) {
     Card(
         onClick = onClick,
@@ -79,7 +82,10 @@ fun SequelCard(
                     ) {
                         SequelPlanningButton(
                             sequel = sequel,
-                            onAddToPlanning = onAddToPlanning
+                            onAddToPlanning = onAddToPlanning,
+                            onAddToWatching = onAddToWatching,
+                            holdDurationSeconds = holdDurationSeconds,
+                            swipeEnabled = swipeEnabled
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))

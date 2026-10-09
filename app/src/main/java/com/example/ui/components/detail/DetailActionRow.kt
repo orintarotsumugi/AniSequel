@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -21,19 +20,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.expressive.ExpressiveContainedLoadingIndicator
+import com.example.ui.components.cards.HoldAndSwipePlanningButton
 import com.example.ui.components.expressive.bouncyPress
 
+/**
+ * Action bar at the bottom of the anime detail sheet.
+ * Features an external AniList link button and the interactive Hold-and-Swipe quick action button.
+ */
 @Composable
 fun DetailActionRow(
     sequel: MissedSequel,
     canWriteToAniList: Boolean,
     onAddToPlanning: (MissedSequel) -> Unit,
     context: Context,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddToWatching: (MissedSequel) -> Unit = {},
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
 ) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -46,7 +50,7 @@ fun DetailActionRow(
             },
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height(44.dp)
                 .bouncyPress(pressedScale = 0.96f),
             shape = MaterialTheme.shapes.small
         ) {
@@ -59,12 +63,12 @@ fun DetailActionRow(
             Text("AniList", maxLines = 1)
         }
 
-        if (!canWriteToAniList && !sequel.isAddedToPlanning) {
+        if (!canWriteToAniList && !sequel.isSavedToList) {
             OutlinedButton(
                 onClick = { onAddToPlanning(sequel) },
                 modifier = Modifier
                     .weight(1.3f)
-                    .height(48.dp)
+                    .height(44.dp)
                     .bouncyPress(pressedScale = 0.96f)
                     .testTag("sheet_sign_in_to_add_button"),
                 shape = MaterialTheme.shapes.small
@@ -77,53 +81,15 @@ fun DetailActionRow(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Sign in to add")
             }
-        } else if (sequel.isAddedToPlanning) {
-            Button(
-                onClick = {},
-                enabled = false,
-                modifier = Modifier
-                    .weight(1.3f)
-                    .height(48.dp),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.BookmarkDone,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Planned")
-            }
         } else {
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    onAddToPlanning(sequel)
-                },
-                enabled = !sequel.isAddingToPlanning,
-                modifier = Modifier
-                    .weight(1.3f)
-                    .height(48.dp)
-                    .bouncyPress(pressedScale = 0.96f)
-                    .testTag("sheet_add_planning_button"),
-                shape = MaterialTheme.shapes.small
-            ) {
-                if (sequel.isAddingToPlanning) {
-                    ExpressiveContainedLoadingIndicator(
-                        modifier = Modifier.size(22.dp),
-                        containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
-                        indicatorColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Icon(
-                        imageVector = AppVectorIcons.BookmarkAdd,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Add to Planning")
-                }
-            }
+            HoldAndSwipePlanningButton(
+                sequel = sequel,
+                onAddToPlanning = { onAddToPlanning(sequel) },
+                onAddToWatching = { onAddToWatching(sequel) },
+                holdDurationSeconds = holdDurationSeconds,
+                swipeEnabled = swipeEnabled,
+                modifier = Modifier.weight(1.3f)
+            )
         }
     }
 }

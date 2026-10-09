@@ -44,6 +44,7 @@ fun SettingsScreen(
     themePreferences: ThemePreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
+    quickAddPreferences: com.example.data.repository.QuickAddPreferences,
     changelogRepository: ChangelogRepository,
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
@@ -99,6 +100,7 @@ fun SettingsScreen(
                     authViewModel = authViewModel,
                     refreshIntervalPreferences = refreshIntervalPreferences,
                     arrivingPreferences = arrivingPreferences,
+                    quickAddPreferences = quickAddPreferences,
                     onNavigateToLogin = onNavigateToLogin,
                     modifier = Modifier.padding(paddingValues)
                 )

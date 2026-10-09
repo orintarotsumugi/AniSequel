@@ -61,6 +61,7 @@ fun DashboardScreen(
     onOpenSettings: (ViewerProfile?) -> Unit,
     onSignInAgain: () -> Unit = {},
     onOpenProfile: (ViewerProfile?) -> Unit = {},
+    quickAddPreferences: com.example.data.repository.QuickAddPreferences? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
@@ -68,6 +69,10 @@ fun DashboardScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val quickAddSettings = quickAddPreferences?.settings?.collectAsState(
+        initial = com.example.data.repository.QuickAddPreferences.QuickAddSettings()
+    )?.value ?: remember { com.example.data.repository.QuickAddPreferences.QuickAddSettings() }
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
@@ -269,6 +274,9 @@ fun DashboardScreen(
                                         sequel = item,
                                         onClick = { selectedSequelId = item.sequelId },
                                         onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
+                                        onAddToWatching = { dashboardViewModel.addToWatching(item) },
+                                        holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                                        swipeEnabled = quickAddSettings.swipeEnabled,
                                         onHide = {
                                             lastHiddenSequel = item
                                             dashboardViewModel.toggleHideSequel(item)
@@ -316,6 +324,9 @@ fun DashboardScreen(
             sheetState = detailSheetState,
             onDismiss = { selectedSequelId = null },
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
+            onAddToWatching = { dashboardViewModel.addToWatching(it) },
+            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+            swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { dashboardViewModel.loadDetail(it) },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false

@@ -60,6 +60,7 @@ class DashboardViewModel(
     private val isDemo: Boolean = false,
     private val getViewerProfileUseCase: GetViewerProfileUseCase = GetViewerProfileUseCase(aniListRepository),
     private val saveToPlanningUseCase: SaveToPlanningUseCase = SaveToPlanningUseCase(aniListRepository),
+    private val saveToWatchingUseCase: com.example.domain.usecase.SaveToWatchingUseCase = com.example.domain.usecase.SaveToWatchingUseCase(aniListRepository),
     private val findMissedSequelsUseCase: FindMissedSequelsUseCase = FindMissedSequelsUseCase(),
     private val findArrivingEntriesUseCase: FindArrivingEntriesUseCase = FindArrivingEntriesUseCase(),
     /**
@@ -226,6 +227,7 @@ class DashboardViewModel(
     private var cachedViewer: ViewerProfile? = null
     private var cachedCollection: MediaListCollection? = null
     private val addedToPlanningIds = mutableSetOf<Int>()
+    private val addedToWatchingIds = mutableSetOf<Int>()
     private var searchJob: Job? = null
 
     /**
@@ -503,6 +505,7 @@ class DashboardViewModel(
         discoveredCandidates = null
         discoveryKey = null
         addedToPlanningIds.clear()
+        addedToWatchingIds.clear()
         if (clearDetailCache) detailCache.clear()
         recompute()
     }
@@ -550,16 +553,16 @@ class DashboardViewModel(
             // entry can both leave the optimistic flag behind. Re-checking
             // against the loaded list keeps "Add to Planning" from showing
             // as still-pending for something already saved.
-            if (addedToPlanningIds.contains(entry.sequelId)) {
-                entry.copy(isAddedToPlanning = true)
-            } else {
-                val onList = entry.sequelMedia.mediaListEntry
-                if (onList != null && onList.status != null) {
-                    entry.copy(isAddedToPlanning = true)
-                } else {
-                    entry
-                }
-            }
+            val onList = entry.sequelMedia.mediaListEntry
+            val isWatching = addedToWatchingIds.contains(entry.sequelId) ||
+                    onList?.status.equals("CURRENT", ignoreCase = true)
+            val isPlanned = !isWatching && (addedToPlanningIds.contains(entry.sequelId) ||
+                    onList?.status != null)
+
+            entry.copy(
+                isAddedToWatching = isWatching,
+                isAddedToPlanning = isPlanned
+            )
         }
 
         // A run that has been superseded must not publish. Without this an
@@ -938,6 +941,66 @@ class DashboardViewModel(
                     _eventFlow.emit(
                         DashboardEvent.ShowSnackbar(
                             err.message ?: "Could not add to your Planning list"
+                        )
+                    )
+                }
+            )
+        }
+    }
+
+    fun addToWatching(sequel: MissedSequel) {
+        val current = _uiState.value
+        if (current !is DashboardUiState.Success) return
+
+        if (!current.canWriteToAniList) {
+            viewModelScope.launch {
+                _eventFlow.emit(
+                    DashboardEvent.ShowSnackbar(
+                        if (current.isDemoMode) {
+                            "Demo mode: nothing is saved to AniList. Connect an account to add entries for real."
+                        } else {
+                            "Connect your own AniList account to add entries to your Watching list."
+                        }
+                    )
+                )
+            }
+            return
+        }
+
+        val updatedList = current.missedSequels.map {
+            if (it.sequelId == sequel.sequelId) it.copy(isAddingToWatching = true) else it
+        }
+        _uiState.value = current.copy(missedSequels = updatedList)
+
+        viewModelScope.launch {
+            saveToWatchingUseCase.execute(sequel.sequelId).fold(
+                onSuccess = {
+                    addedToWatchingIds.add(sequel.sequelId)
+                    addedToPlanningIds.remove(sequel.sequelId)
+                    _eventFlow.emit(
+                        DashboardEvent.ShowSnackbar(
+                            "Added \"${sequel.sequelTitle}\" to your Currently Watching list"
+                        )
+                    )
+                    recompute()
+                },
+                onFailure = { err ->
+                    val success = _uiState.value as? DashboardUiState.Success
+                    if (success != null) {
+                        _uiState.value = success.copy(
+                            missedSequels = success.missedSequels.map { item ->
+                                if (item.sequelId == sequel.sequelId) {
+                                    item.copy(isAddingToWatching = false)
+                                } else {
+                                    item
+                                }
+                            }
+                        )
+                    }
+
+                    _eventFlow.emit(
+                        DashboardEvent.ShowSnackbar(
+                            err.message ?: "Could not add to your Watching list"
                         )
                     )
                 }

@@ -39,6 +39,7 @@ interface AniListRepository {
      */
     suspend fun getMediaDetail(mediaId: Int): Result<MediaNode>
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
+    suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")
 
     /**
      * Bio, list statistics and favourites for the profile screen.

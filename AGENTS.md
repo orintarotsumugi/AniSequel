@@ -121,7 +121,7 @@ Full history and the current fingerprint: [README § Release signing](README.md#
 
 ---
 
-## 6. Version numbers
+## 6. Version numbers and changelog
 
 Version lives in **three** places and all three must agree:
 
@@ -132,6 +132,15 @@ Version lives in **three** places and all three must agree:
 `VersionBaselineTest` enforces it — run it. After a release, bring 1 and 2
 forward by hand: the workflow's commit is rejected by branch protection because
 GitHub does not run workflows for `GITHUB_TOKEN` pushes.
+
+### Always update the changelog and app version together (MANDATORY)
+
+- **Never ship changes or release a new version without updating `assets/changelog.json`**.
+- When new features, visual redesigns, gesture additions, or bug fixes are introduced:
+  1. Increment the version number (`anisequelVersionName` in `gradle.properties`, `BASELINE_VERSION_NAME` in `app/build.gradle.kts`, `version` in `update.json`) and version code (`anisequelVersionCode`, `BASELINE_VERSION_CODE`, `version_code`).
+  2. Prepend a new release block to `app/src/main/assets/changelog.json` matching the new version number, with concise, descriptive entries explaining what changed.
+  3. Run `ChangelogTest` and `VersionBaselineTest` to verify that the changelog format, version ordering, and version alignment pass all assertions.
+  4. The in-app "What's new" card in Settings > Info and the release manifest read from `changelog.json`. Leaving it stale breaks user trust and fails automated test verification.
 
 ---
 

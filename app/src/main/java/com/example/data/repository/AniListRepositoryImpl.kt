@@ -333,6 +333,16 @@ class AniListRepositoryImpl(
             // added still shows as a missed sequel on the next list recompute.
             .onSuccess { listCache.clear() }
 
+    override suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.ADD_TO_WATCHING,
+                variables = mapOf("mediaId" to mediaId)
+            ),
+            apiService::saveMediaListEntry
+        ).map { it.entry.require("No response from watching mutation") }
+            .onSuccess { listCache.clear() }
+
     /**
      * Keyed on whichever identifier the caller supplied, so the signed-in
      * profile and a scanned public one get separate entries - and so a

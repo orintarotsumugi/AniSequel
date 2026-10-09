@@ -62,7 +62,10 @@ fun SequelDetailSheet(
     onLoadDetail: (MissedSequel) -> Unit,
     isDetailLoading: Boolean,
     canWriteToAniList: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddToWatching: (MissedSequel) -> Unit = {},
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
 ) {
     if (sequel == null) return
     val context = LocalContext.current
@@ -92,9 +95,10 @@ fun SequelDetailSheet(
             Spacer(modifier = Modifier.height(12.dp))
 
             ExpressiveTabBar(
-                tabs = listOf("Story & Gaps", "Specs & Info"),
+                tabs = listOf("Story & Gaps", "Anime Info & Specs"),
                 selectedIndex = detailTab,
                 onSelect = { detailTab = it },
+                icons = listOf(AppVectorIcons.FranchiseBranch, AppVectorIcons.Info),
                 modifier = Modifier.padding(horizontal = 0.dp)
             )
 
@@ -242,6 +246,9 @@ fun SequelDetailSheet(
                 sequel = sequel,
                 canWriteToAniList = canWriteToAniList,
                 onAddToPlanning = onAddToPlanning,
+                onAddToWatching = onAddToWatching,
+                holdDurationSeconds = holdDurationSeconds,
+                swipeEnabled = swipeEnabled,
                 context = context
             )
         }

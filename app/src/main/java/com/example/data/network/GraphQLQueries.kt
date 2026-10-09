@@ -404,4 +404,14 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    val ADD_TO_WATCHING = """
+        mutation AddToWatching(${'$'}mediaId: Int) {
+          SaveMediaListEntry(mediaId: ${'$'}mediaId, status: CURRENT) {
+            id
+            status
+            mediaId
+          }
+        }
+    """.trimIndent()
 }

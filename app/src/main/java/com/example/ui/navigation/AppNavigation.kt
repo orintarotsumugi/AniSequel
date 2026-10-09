@@ -132,6 +132,10 @@ fun AppNavigation(
         ArrivingPreferences(context.applicationContext)
     }
 
+    val quickAddPreferences = remember(context) {
+        com.example.data.repository.QuickAddPreferences(context.applicationContext)
+    }
+
     // The cache window is a supplier rather than a value because the user can
     // change it from Settings while the app is open: reading it per lookup is
     // what makes "15 min" mean fifteen minutes from the moment it is picked,
@@ -447,6 +451,7 @@ fun AppNavigation(
                 themePreferences = themePreferences,
                 refreshIntervalPreferences = refreshIntervalPreferences,
                 arrivingPreferences = arrivingPreferences,
+                quickAddPreferences = quickAddPreferences,
                 changelogRepository = changelogRepository,
                 viewer = signedInViewer,
                 totalWatchedCount = successState?.totalWatchedCount,

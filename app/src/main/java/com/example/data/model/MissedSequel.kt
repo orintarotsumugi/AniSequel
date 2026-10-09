@@ -50,8 +50,12 @@ data class MissedSequel(
     /** AniList's own relation name: SEQUEL, PREQUEL, SIDE_STORY, SPIN_OFF... */
     val relationType: String = RelationKind.SEQUEL.apiValue,
     val isAddingToPlanning: Boolean = false,
-    val isAddedToPlanning: Boolean = false
+    val isAddedToPlanning: Boolean = false,
+    val isAddingToWatching: Boolean = false,
+    val isAddedToWatching: Boolean = false
 ) {
+    val isSavedToList: Boolean get() = isAddedToPlanning || isAddedToWatching
+    val isSavingToList: Boolean get() = isAddingToPlanning || isAddingToWatching
     // Derived values that walk the whole media node, memoised per instance.
     //
     // These are read inside `SequelCard`, which is the single hottest composable
