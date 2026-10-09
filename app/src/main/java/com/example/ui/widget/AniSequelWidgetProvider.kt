@@ -1,92 +1,66 @@
 package com.example.ui.widget
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import androidx.glance.GlanceId
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.action.actionUpdateAppWidget
-import androidx.glance.appwidget.glanceAppWidget
-import androidx.glance.appwidget.state.UpdateFailureException
-import androidx.glance.appwidget.updateAll
-import androidx.glance.appwidget.updateAppWidget
-import com.example.ui.widget.glance.WidgetView
+import android.widget.RemoteViews
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import com.example.MainActivity
+import com.example.R
 
 /**
- * Glance app widget that shows a compact snapshot of the viewer's recent list
- * activity and opens the app on the activity screen when tapped.
+ * Standard AppWidget provider for the profile-activity widget.
  *
- * The widget is updated by `AniSequelWidgetUpdater.updateAll` and by the system
- * on the periodic interval declared in `res/xml/widget_anisequel.xml`.
+ * The widget is small and glanceable: a title, a count of recent list activity,
+ * and a tap target that routes the app to the profile activity screen.
+ *
+ * This uses the stable android.appwidget framework APIs instead of the
+ * unreleased Glance widget APIs, so it compiles against the app's current
+ * dependency set.
  */
-object AniSequelWidgetProvider : GlanceAppWidget() {
-    override val glanceRequest = glanceAppWidget {
-        val widgetId = appWidgetId
-        val state = loadState(widgetId)
+class AniSequelWidgetProvider : AppWidgetProvider() {
 
-        WidgetView(
-            activityCount = state.activityCount,
-            subtitle = state.subtitle,
-            onClick = actionStartActivity(
-                intent = Intent().apply {
-                    // The hosting activity is expected to route this to the
-                    // profile activity screen on resume.
-                    setClass(context, com.example.MainActivity::class.java)
-                    putExtra(EXTRA_WIDGET_OPEN_ACTIVITY, true)
-                }
-            )
-        )
-    }
-
-    private fun loadState(widgetId: Int): WidgetState {
-        val context = context
-        val glanceContext = androidx.glance.context.GlanceContext.getGlanceContext(context)
-        val stateStore = glanceContext.appWidgetState[widgetId]
-        val countRaw = stateStore?.getString(AndroidWidgetKeys.ACTIVITY_COUNT_KEY)
-        val subtitleRaw = stateStore?.getString(AndroidWidgetKeys.SUBTITLE_KEY)
-        return WidgetState(
-            activityCount = countRaw?.toIntOrNull() ?: 0,
-            subtitle = subtitleRaw ?: "Activity"
-        )
-    }
-
-    fun updateWidget(
+    override fun onUpdate(
         context: Context,
-        widgetId: Int,
-        activityCount: Int,
-        subtitle: String
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
     ) {
-        try {
-            updateAppWidgetState(context, widgetId) { state ->
-                state.setString(AndroidWidgetKeys.ACTIVITY_COUNT_KEY, activityCount.toString())
-                state.setString(AndroidWidgetKeys.SUBTITLE_KEY, subtitle)
-            }
-            updateAppWidget(context, widgetId, this)
-        } catch (_: UpdateFailureException) {
-            // Widget may have been deleted; the next update will recreate it.
+        appWidgetIds.forEach { widgetId ->
+            updateWidget(context, appWidgetManager, widgetId)
         }
     }
 
-    fun updateAllWidgets(context: Context) {
-        updateAll(context, this)
+    override fun onDisabled(context: Context) {
+        // Nothing to tear down; the next re-enable will recreate instances.
     }
 
-    /**
-     * Convenience launcher used by the manifest receiver and by tests that need
-     * to refresh every installed instance without touching the updater service.
-     */
-    fun updateOnReceive(context: Context, intent: Intent) {
-        updateAllWidgets(context)
-    }
-}
+    companion object {
+        fun updateWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            widgetId: Int
+        ) {
+            val views = RemoteViews(context.packageName, R.layout.widget_anisequel_preview).apply {
+                setTextViewText(R.id.widget_preview_count, demoActivityCount().toString())
+                setOnClickPendingIntent(
+                    R.id.widget_preview_root,
+                    PendingIntent.getActivity(
+                        context,
+                        widgetId,
+                        Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra(MainActivity.EXTRA_WIDGET_OPEN_ACTIVITY, true)
+                        },
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+            }
 
-/**
- * Keys used to store the per-instance widget state.
- *
- * Kept in a separate object so update and view code stay consistent.
- */
-internal object AndroidWidgetKeys {
-    const val ACTIVITY_COUNT_KEY = "activity_count"
-    const val SUBTITLE_KEY = "subtitle"
+            appWidgetManager.updateAppWidget(widgetId, views)
+        }
+
+        private fun demoActivityCount(): Int =
+            com.example.data.repository.DemoProfileProvider.getDemoActivity().size
+    }
 }

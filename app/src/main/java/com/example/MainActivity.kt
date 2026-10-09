@@ -31,6 +31,11 @@ import java.lang.ref.WeakReference
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /** Extra used by the profile-activity widget to request opening the activity screen. */
+        const val EXTRA_WIDGET_OPEN_ACTIVITY = "anisequel.widget.open_activity"
+    }
+
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
 

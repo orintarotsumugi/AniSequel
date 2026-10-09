@@ -1,13 +1,11 @@
 package com.example.ui.widget
 
 import android.content.Context
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.UpdateFailureException
-import androidx.glance.appwidget.updateAll
-import com.example.ui.widget.glance.widgetActivityCount
+import android.appwidget.AppWidgetManager
+import com.example.ui.widget.AniSequelWidgetProvider
 
 /**
- * Background updater for the AniSequel profile-activity widget.
+ * Background updater for the profile-activity widget.
  *
  * The widget shows a compact summary of the viewer's recent list activity.
  * Because the widget process cannot use the app's repository or auth layer
@@ -21,19 +19,12 @@ import com.example.ui.widget.glance.widgetActivityCount
  */
 object AniSequelWidgetUpdater {
     fun updateAll(context: Context) {
-        val manager = GlanceAppWidgetManager(context)
-        val instanceIds = manager.getGlanceIds(AniSequelWidgetProvider::class.java)
-
-        val activityCount = widgetActivityCount()
-        val subtitle = "list activity"
-
-        instanceIds.forEach { widgetId ->
-            AniSequelWidgetProvider.updateWidget(
-                context = context,
-                widgetId = widgetId,
-                activityCount = activityCount,
-                subtitle = subtitle
-            )
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(
+            android.content.ComponentName(context, AniSequelWidgetProvider::class.java)
+        )
+        ids.forEach { widgetId ->
+            AniSequelWidgetProvider.updateWidget(context, manager, widgetId)
         }
     }
 }
