@@ -1,3 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AniSequel</string>
+
+    <!-- Activity screen is the fourth destination on the profile. -->
+    <string name="profile_tab_activity">Activity</string>
+    <string name="profile_activity_list">Activity</string>
+    <string name="profile_activity_empty">No activity yet</string>
 </resources>
