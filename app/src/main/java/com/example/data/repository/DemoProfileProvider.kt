@@ -166,6 +166,12 @@ object DemoProfileProvider {
         activity(4, 113415, "completed", null, hoursAgo(31), likes = 12, replies = 4),
         activity(5, 20605, "current", "22", hoursAgo(50), likes = 2, replies = 0),
         activity(6, 20958, "paused", "5", hoursAgo(74), likes = 0, replies = 0),
+        // A manga entry, and the only one in this fixture. The feed's type chip and
+        // its "Chapter N" wording have no other offline path - every other row here
+        // is an anime, so without this the demo would show the anime branch twice
+        // and the manga branch never, which is exactly how a manga regression ships
+        // unnoticed.
+        activity(9, 30013, "current", "42", hoursAgo(96), likes = 4, replies = 0),
         activity(7, 164212, "completed", null, hoursAgo(120), likes = 5, replies = 1),
         // The same show as row 4, dropped earlier. Two rows on one media is the
         // normal case for a feed - watched, then completed - and it is why the
@@ -374,6 +380,18 @@ object DemoProfileProvider {
             format = "TV",
             episodes = 12,
             coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx20958-HuFJyr54Mmir.jpg")
+        )
+        // The one manga in the feed. `type = "MANGA"` is what the card reads to
+        // label it, and it is also what makes the row say "Chapter 42" instead of
+        // "Episode 42" - so both the chip and the wording are pinned by one row.
+        // No `episodes`, deliberately: a manga has none, and the card must not
+        // print "Chapter 42 of null".
+        30013 -> MediaNode(
+            id = 30013,
+            type = "MANGA",
+            title = MediaTitle(english = "Black Clover"),
+            format = "MANGA",
+            coverImage = MediaCoverImage(large = "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30013-tXMKBoU8Xfqu.jpg")
         )
         else -> MediaNode(
             id = 164212,

@@ -34,9 +34,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.ListActivity
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.cards.SequelInfoChip
 import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.components.openExternalUrl
+import java.util.Locale
 
 /** AniList covers are 2:3. */
 private const val POSTER_ASPECT = 2f / 3f
@@ -56,7 +58,10 @@ fun ActivityCard(
 ) {
     val media = activity.media ?: return
     val coverUrl = media.coverImage?.bestUrl ?: media.coverImage?.large
-    val isManga = media.type == "MANGA"
+    // `MANGA` is the value AniList sends, but the model documents `type` as the
+    // discriminator the whole feed depends on, so a case difference must not be
+    // what decides whether a manga row reads "Episode" or "Chapter".
+    val isManga = media.type.equals("MANGA", ignoreCase = true)
     val context = LocalContext.current
     val siteUrl = media.siteUrl
 
@@ -127,7 +132,13 @@ fun ActivityCard(
                     ) {
                         ActivityStatusPill(
                             text = activity.displayStatusFor(isManga),
-                            accent = activity.status?.lowercase() == "completed"
+                            // `equals(ignoreCase = true)` rather than
+                            // `lowercase() ==`: the status is already lowercase in
+                            // AniList's payload, and lowercasing it again asks the
+                            // JVM's default locale to do a job that is not a
+                            // locale question at all (`I` does not lowercase to
+                            // `i` in Turkish).
+                            accent = activity.status.equals("completed", ignoreCase = true)
                         )
                         if (activity.createdAt != null) {
                             Text(
@@ -157,7 +168,19 @@ fun ActivityCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Anime and manga rows were previously identical cards with
+                        // different cover art - and the two share covers often
+                        // enough (manga and its adaptation) that the feed could
+                        // not be read without opening something. The type is the
+                        // one field that always answers it.
+                        SequelInfoChip(
+                            icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
+                            label = if (isManga) "Manga" else "Anime"
+                        )
                         ActivityCount(
                             icon = AppVectorIcons.Star,
                             count = activity.likeCount ?: 0
@@ -180,14 +203,47 @@ fun ActivityCard(
  * The progress is only rendered when AniList gave a progress *and* the show has an
  * episode count to compare it against - "Episode 7 of 0" is worse than no second
  * line at all.
+ *
+ * Manga is worded as **chapters**, not episodes, and never as "of N": this query
+ * does not ask for a manga's total chapter count (the model has no field for it),
+ * and "Chapter 42 of null" is worse than the number on its own. The demo fixture
+ * carries one manga row so this branch is exercised without a real account.
  */
 private fun activityDetail(activity: ListActivity): String {
     val media = activity.media ?: return ""
-    val progress = activity.progress ?: return media.format?.lowercase()
-        ?.replaceFirstChar { it.uppercase() }
-        .orEmpty()
+    val isManga = media.type.equals("MANGA", ignoreCase = true)
+    val progress = activity.progress?.takeIf { it.isNotBlank() }
+        ?: return formatLabel(media.format)
+    if (isManga) return "Chapter $progress"
     val episodes = media.episodes ?: return "Episode $progress"
     return "Episode $progress of $episodes"
+}
+
+/**
+ * AniList's `MediaFormat` enum, spelled the way a person writes it.
+ *
+ * `format.lowercase()` produced "Tv", because the field is an enum name rather
+ * than a word - so every entry in the feed with no progress on it was labelled
+ * "Tv" or "Manga" next to the title. This is the same mapping the favourites row
+ * uses; there is no shared home for it yet because the two disagree on the
+ * separator ("TV • 84%" there, the format alone here), and a helper parameterised
+ * on that would be more code than the table.
+ */
+private fun formatLabel(format: String?): String {
+    if (format == null) return ""
+    return when (format.uppercase(Locale.ROOT)) {
+        "TV" -> "TV"
+        "TV_SHORT" -> "TV Short"
+        "MOVIE" -> "Movie"
+        "SPECIAL" -> "Special"
+        "OVA" -> "OVA"
+        "ONA" -> "ONA"
+        "MANGA" -> "Manga"
+        "NOVEL" -> "Novel"
+        "ONE_SHOT" -> "One Shot"
+        else -> format.replace('_', ' ').lowercase(Locale.ROOT)
+            .replaceFirstChar { it.uppercase(Locale.ROOT) }
+    }
 }
 
 @Composable

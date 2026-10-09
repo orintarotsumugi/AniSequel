@@ -26,12 +26,17 @@ data class UserOverview(
     /**
      * The bio, as Markdown - the query asks for `about(asHtml: false)`.
      *
-     * Rendered as plain text with the syntax stripped rather than parsed.
-     * AniList bios are written in Markdown and there is no Markdown renderer in
-     * the app; `ParsedMarkdown` exists on the API but returns a GFM AST rather
-     * than anything renderable. A stripped-to-text bio that reads cleanly is
-     * worth more here than a half-broken rich-text renderer, and the raw text is
-     * kept rather than dropped so nothing the person wrote disappears.
+     * Kept as raw text, and parsed by `AniListMarkdownParser` at render time.
+     *
+     * This comment used to say the opposite - that the bio was "rendered as plain
+     * text with the syntax stripped", because there was no Markdown renderer in
+     * the app. That stopped being true when `ui/components/markdown/` was added,
+     * and `AboutCard` has rendered these nodes rich ever since, so the sentence was
+     * describing a renderer that no longer exists while the one that does went
+     * unmentioned. (`stripMarkdown` in `ProfileAboutCard` is the leftover from that
+     * approach: no UI calls it any more - only `ProfileTextFormattingTest` does.)
+     * The API's `ParsedMarkdown` is still not the path: it answers with a GFM AST
+     * rather than anything renderable.
      */
     val about: String? = null,
     val siteUrl: String? = null,

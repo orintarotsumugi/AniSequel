@@ -36,6 +36,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
@@ -153,6 +154,24 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Explore with sample data", fontWeight = FontWeight.SemiBold)
                 }
+
+                // What the demo button actually opens. "Sample data" on its own
+                // reads like a test fixture, and the button used to be the last
+                // thing on the screen with nothing under it - so a first-time
+                // visitor had no way to tell whether it was a preview, a tutorial
+                // or something that would sign them in somewhere.
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "No AniList account needed - it opens a sample profile, " +
+                        "activity feed, followers and statistics so you can look around.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("explore_demo_caption")
+                )
             }
         }
     }

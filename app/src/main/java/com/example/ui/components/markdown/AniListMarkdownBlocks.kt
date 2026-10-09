@@ -1,8 +1,6 @@
 package com.example.ui.components.markdown
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,11 +126,17 @@ fun RenderList(list: MarkdownNode.ListBlock) {
         list.items.forEachIndexed { index, itemInlines ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 val bullet = if (list.ordered) "${index + 1}." else "•"
+                // 26dp and `softWrap = false`, not 20dp: an ordered list past its
+                // ninth item prints "10.", which does not fit the old column and
+                // wrapped onto a second line - so the tenth item of every
+                // numbered list in every bio was indented by one blank row.
                 Text(
                     text = bullet,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.width(20.dp)
+                    softWrap = false,
+                    maxLines = 1,
+                    modifier = Modifier.width(26.dp)
                 )
                 val annotated = buildInlineAnnotatedString(itemInlines, onLinkClick = { openExternalUrl(context, it) })
                 Text(
@@ -257,7 +261,14 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
 
 @Composable
 fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
-    var revealed by remember { mutableStateOf(false) }
+    // `rememberSaveable`, not `remember`.
+    //
+    // This renders inside the profile's `LazyColumn`, and a plain `remember` is
+    // discarded as soon as the card leaves the viewport - so a revealed spoiler
+    // re-hid itself the moment the reader scrolled past it and back. The state is
+    // small enough to save (one boolean), and `rememberSaveable` also survives a
+    // configuration change, so the reveal is not undone by a rotation either.
+    var revealed by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
 
     Surface(
@@ -271,6 +282,10 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
             .fillMaxWidth()
             .bouncyPress()
             .clickable { revealed = !revealed }
+            // Revealing swaps a one-line prompt for the hidden text, so the block
+            // changes height. Animating that here means the surrounding list does
+            // not jump; the token is the `IntSize` one for exactly this reason.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
     ) {
         if (!revealed) {
             Row(
@@ -293,12 +308,27 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
             }
         } else {
             val annotated = buildInlineAnnotatedString(spoiler.inlines, onLinkClick = { openExternalUrl(context, it) })
-            Text(
-                text = annotated,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(10.dp)
-            )
+            // The icon stays, as a cue that the same tap hides it again. It used
+            // to vanish with the prompt, which left a revealed spoiler looking
+            // like plain text - nothing said it could be tapped back shut.
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Done,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = annotated,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }

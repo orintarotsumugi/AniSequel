@@ -53,6 +53,7 @@ import androidx.compose.material3.IconButton
 import com.example.ui.components.expressive.ExpressiveEmptyOrb
 import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.theme.AniSequelTheme
+import java.util.Locale
 
 /**
  * The Social tab: the people who follow this account, and the people it follows.
@@ -74,6 +75,15 @@ import com.example.ui.theme.AniSequelTheme
  * whether they find that person. Two columns of huge portraits on a phone shows
  * nine people per screen; three shows fifteen. Fixed rather than adaptive so the
  * grid does not reflow when the window is resized mid-scroll.
+ *
+ * ## The A-Z switch is a choice the reader makes, not the default
+ *
+ * AniList returns followers in its own order, which is roughly "most recently
+ * followed first" - the order someone's own list of people was built in. Sorting it
+ * alphabetically by default would throw that away to answer a question nobody
+ * asked. So the switch is off until it is turned on, and turning it on is the only
+ * thing that reorders the grid: the search field narrows what is shown, it never
+ * reorders it.
  */
 @Composable
 fun ProfileSocialTab(
@@ -91,13 +101,24 @@ fun ProfileSocialTab(
     }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    // Sort state survives a rotation for the same reason the query does: a reader
+    // who switched to A-Z and rotated the phone would otherwise be handed the
+    // AniList order back, with the grid silently reshuffled under them.
+    var sortByName by rememberSaveable { mutableStateOf(false) }
 
     val successState = socialState as? UserSocialViewModel.SocialState.Success
     val currentSelected = successState?.selected ?: SocialList.FOLLOWERS
     val rawPeople = successState?.peopleFor(currentSelected).orEmpty()
-    val filteredPeople = remember(rawPeople, searchQuery) {
-        if (searchQuery.isBlank()) rawPeople
-        else rawPeople.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+    val filteredPeople = remember(rawPeople, searchQuery, sortByName) {
+        val matches = if (searchQuery.isBlank()) {
+            rawPeople
+        } else {
+            rawPeople.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+        }
+        // `Locale.ROOT`, not the default: the name is somebody else's identifier,
+        // not a word being read aloud, and Turkish would otherwise sort every
+        // name containing an `i` to the end of the grid.
+        if (sortByName) matches.sortedBy { it.name.lowercase(Locale.ROOT) } else matches
     }
 
     LazyVerticalGrid(
@@ -128,15 +149,50 @@ fun ProfileSocialTab(
             )
         }
 
-        if (rawPeople.size > 5) {
+        if (rawPeople.size > 1) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                SocialSearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
+                Row(
                     modifier = Modifier
                         .widthIn(max = ProfileMaxContentWidth)
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // The search field only earns its row once the list is longer
+                    // than a screen, but the sort switch is useful at any size -
+                    // so it holds the row on its own for short lists rather than
+                    // appearing and disappearing with the count.
+                    if (rawPeople.size > 5) {
+                        SocialSearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    ExpressiveStateChip(
+                        label = "A-Z",
+                        selected = sortByName,
+                        onClick = { sortByName = !sortByName },
+                        modifier = Modifier.testTag("social_sort_chip")
+                    )
+                }
+            }
+        }
+
+        if (searchQuery.isNotBlank() && filteredPeople.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(
+                    text = "Showing ${filteredPeople.size} of ${rawPeople.size}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .widthIn(max = ProfileMaxContentWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .testTag("social_search_count")
                 )
             }
         }

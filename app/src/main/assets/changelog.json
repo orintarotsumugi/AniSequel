@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.0.40",
+      "entries": [
+        {
+          "title": "A status you can read without colour",
+          "detail": "Every status chip now carries its own icon - Airing, Upcoming, Hiatus, Finished and Cancelled - instead of a bare dot. The states were previously distinguished by hue alone, which merges Airing and Upcoming on a grayscale screen and for a colour-blind reader."
+        },
+        {
+          "title": "Anime and manga, told apart",
+          "detail": "Activity rows are labelled Anime or Manga and the wording follows: a manga row says Chapter 42 rather than Episode 42. Rows with nothing logged yet name their format properly - TV, Movie, OVA - rather than printing \"Tv\"."
+        },
+        {
+          "title": "Spoilers stay open while you scroll",
+          "detail": "A revealed spoiler used to re-hide itself the moment it scrolled out of view, because the reveal was never saved. It now survives scrolling and rotation, animates open instead of jumping, and keeps its icon so it can be tapped shut again."
+        },
+        {
+          "title": "Sort your follow lists",
+          "detail": "Followers and Following gain an A-Z switch beside the search field, and searching now reports how many people it is showing. AniList's own ordering stays the default."
+        },
+        {
+          "title": "A demo that shows the whole profile",
+          "detail": "Demo mode's activity feed now includes a manga entry, so the type labels and the chapter wording can be reviewed alongside the anime rows - without an AniList account. The profile it opens already carried the four tabs, followers and statistics."
+        },
+        {
+          "title": "Numbered lists in bios line up",
+          "detail": "An ordered list past its ninth item printed \"10.\" wider than the bullet column and wrapped onto its own line, indenting every entry after it. The column now fits two digits."
+        }
+      ]
+    },
+    {
       "version": "1.0.39",
       "entries": [
         {
