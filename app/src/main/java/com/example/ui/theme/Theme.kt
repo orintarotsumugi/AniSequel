@@ -189,6 +189,8 @@ fun AniSequelTheme(
      * where [Color.Black] draws zero light instead of a dark navy.
      */
     trueBlack: Boolean = false,
+    /** Custom hex accent colour chosen by user. */
+    customColorHex: String? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -196,6 +198,10 @@ fun AniSequelTheme(
         ThemeMode.SYSTEM -> systemDark
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
+    }
+
+    val customColor = androidx.compose.runtime.remember(customColorHex) {
+        DynamicThemeBuilder.parseHexColor(customColorHex)
     }
 
     // Keep the tokens the app uses directly in step with the M3 motion scheme.
@@ -213,6 +219,10 @@ fun AniSequelTheme(
         dynamicColor -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        customColor != null -> {
+            val (lightDynamic, darkDynamic) = DynamicThemeBuilder.createDynamicSchemes(customColor)
+            if (darkTheme) darkDynamic else lightDynamic
         }
         darkTheme -> palette.dark
         else -> palette.light

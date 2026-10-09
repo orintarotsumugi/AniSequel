@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.37",
+      "entries": [
+        {
+          "title": "HD Cover Art & Interactive Artwork Viewer",
+          "detail": "Fetches extra-large high definition cover art directly from AniList with pinch-to-zoom up to 4x, double-tap zoom toggle, smooth panning, and dominant color ambient glow."
+        },
+        {
+          "title": "Custom App Colors & Expanded Color Themes",
+          "detail": "Choose from new vibrant theme palettes (Cyber Jade, Neon Violet, Crimson, Deep Ocean) and pick any custom accent hue dynamically across the entire application."
+        },
+        {
+          "title": "AniList Markdown Tables & Spoilers",
+          "detail": "Added complete Markdown table parsing and rendering with Material 3 container styling, enhanced spoiler block interactions, and inline formatting."
+        },
+        {
+          "title": "Layout & Performance Optimizations",
+          "detail": "Improved poster tap ergonomics, refined profile tab clearances, and reduced unnecessary recompositions for silky smooth scrolling."
+        }
+      ]
+    },
+    {
       "version": "1.0.36",
       "entries": [
         {

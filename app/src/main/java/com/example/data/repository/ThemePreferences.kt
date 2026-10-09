@@ -100,6 +100,7 @@ class ThemePreferences(private val context: Context) {
         val THEME_PALETTE = stringPreferencesKey("theme_palette")
         val MOTION_STYLE = stringPreferencesKey("motion_style")
         val TRUE_BLACK = booleanPreferencesKey("true_black")
+        val CUSTOM_COLOR_HEX = stringPreferencesKey("custom_color_hex")
     }
 
     /**
@@ -117,6 +118,7 @@ class ThemePreferences(private val context: Context) {
         val paletteId: String = "anisequel",
         val motionStyle: MotionStyle = MotionStyle.DEFAULT,
         val trueBlack: Boolean = false,
+        val customColorHex: String? = null,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     )
@@ -128,6 +130,7 @@ class ThemePreferences(private val context: Context) {
             paletteId = preferences[Keys.THEME_PALETTE] ?: "anisequel",
             motionStyle = MotionStyle.fromStorage(preferences[Keys.MOTION_STYLE]),
             trueBlack = preferences[Keys.TRUE_BLACK] ?: false,
+            customColorHex = preferences[Keys.CUSTOM_COLOR_HEX],
             isLoaded = true
         )
     }
@@ -135,6 +138,16 @@ class ThemePreferences(private val context: Context) {
     suspend fun setPalette(paletteId: String) {
         context.themeDataStore.edit { preferences ->
             preferences[Keys.THEME_PALETTE] = paletteId
+        }
+    }
+
+    suspend fun setCustomColorHex(hex: String?) {
+        context.themeDataStore.edit { preferences ->
+            if (hex != null) {
+                preferences[Keys.CUSTOM_COLOR_HEX] = hex
+            } else {
+                preferences.remove(Keys.CUSTOM_COLOR_HEX)
+            }
         }
     }
 
@@ -179,6 +192,7 @@ class ThemePreferences(private val context: Context) {
             preferences.remove(Keys.THEME_PALETTE)
             preferences.remove(Keys.MOTION_STYLE)
             preferences.remove(Keys.TRUE_BLACK)
+            preferences.remove(Keys.CUSTOM_COLOR_HEX)
         }
     }
 }

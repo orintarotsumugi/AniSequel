@@ -84,7 +84,7 @@ object GraphQLQueries {
                 format
                 status
                 averageScore
-                coverImage { large }
+                coverImage { extraLarge large }
                 siteUrl
     """
 
@@ -219,7 +219,7 @@ object GraphQLQueries {
                   format
                   episodes
                   title { english romaji native }
-                  coverImage { large color }
+                  coverImage { extraLarge large color }
                   siteUrl
                 }
               }
@@ -284,7 +284,7 @@ object GraphQLQueries {
                 genres
                 siteUrl
                 startDate { year month day }
-                coverImage { large color }
+                coverImage { extraLarge large color }
                 nextAiringEpisode { episode airingAt }
                 mediaListEntry { status progress }
     """
@@ -341,7 +341,7 @@ object GraphQLQueries {
                   format
                   countryOfOrigin
                   startDate { year month day }
-                  coverImage { large color }
+                  coverImage { extraLarge large color }
                   nextAiringEpisode { episode airingAt }
                   relations {
                     edges {

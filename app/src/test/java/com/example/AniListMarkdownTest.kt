@@ -181,4 +181,22 @@ class AniListMarkdownTest {
         assertTrue(checklist.items[0].checked)
         assertTrue(!checklist.items[1].checked)
     }
+
+    @Test
+    fun `parses markdown tables`() {
+        val input = """
+            | Title | Score | Status |
+            | :--- | :---: | ---: |
+            | Steins;Gate | 95 | Completed |
+            | Frieren | 98 | Watching |
+        """.trimIndent()
+
+        val nodes = AniListMarkdownParser.parse(input)
+        assertEquals(1, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.TableBlock)
+        val table = nodes[0] as MarkdownNode.TableBlock
+        assertEquals(3, table.headers.size)
+        assertEquals(2, table.rows.size)
+        assertEquals(3, table.rows[0].size)
+    }
 }

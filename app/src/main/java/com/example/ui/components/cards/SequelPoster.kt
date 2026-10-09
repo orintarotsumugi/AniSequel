@@ -74,7 +74,8 @@ fun SequelPoster(
             )
             .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
             .expressiveHoldGesture(
-                onHold = { showFullScreen = true }
+                onHold = { showFullScreen = true },
+                onClick = { showFullScreen = true }
             )
     ) {
         // Placeholder artwork, shown only until the real cover arrives.

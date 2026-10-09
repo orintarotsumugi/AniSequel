@@ -172,7 +172,7 @@ private fun FavouriteMediaCard(
                 AppVectorIcons.FavouriteAnime
             }
             AsyncImage(
-                model = media.coverImage?.large,
+                model = media.coverImage?.bestUrl ?: media.coverImage?.large,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,

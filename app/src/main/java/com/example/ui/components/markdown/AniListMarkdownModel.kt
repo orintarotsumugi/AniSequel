@@ -19,6 +19,10 @@ sealed interface MarkdownNode {
     ) : MarkdownNode
     data class VideoBlock(val url: String, val isYoutube: Boolean) : MarkdownNode
     data class SpoilerBlock(val inlines: List<InlineToken>) : MarkdownNode
+    data class TableBlock(
+        val headers: List<List<InlineToken>>,
+        val rows: List<List<List<InlineToken>>>
+    ) : MarkdownNode
     data class CenteredBlock(val children: List<MarkdownNode>) : MarkdownNode
     object Divider : MarkdownNode
 }

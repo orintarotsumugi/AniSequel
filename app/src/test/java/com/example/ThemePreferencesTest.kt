@@ -97,6 +97,17 @@ class ThemePreferencesTest {
         val settings = preferences.settings.first()
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
         assertFalse(settings.useDynamicColor)
+        assertEquals(null, settings.customColorHex)
+    }
+
+    @Test
+    fun `custom accent color round-trips through storage`() = runTest {
+        val preferences = preferences()
+        preferences.setCustomColorHex("#00BFA5")
+        assertEquals("#00BFA5", preferences.settings.first().customColorHex)
+
+        preferences.setCustomColorHex(null)
+        assertEquals(null, preferences.settings.first().customColorHex)
     }
 
     /**

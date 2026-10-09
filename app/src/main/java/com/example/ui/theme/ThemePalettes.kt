@@ -230,7 +230,37 @@ data class ThemePalette(
             )
         )
 
-        val entries: List<ThemePalette> = listOf(ANISDK, SAKURA, MATCHA, JUBITER, AMBER)
+        val CYBER_JADE: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF00BFA5))
+            ThemePalette(id = "cyber_jade", displayName = "Cyber Jade", light = l, dark = d)
+        }
+
+        val NEON_VIOLET: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF9C27B0))
+            ThemePalette(id = "neon_violet", displayName = "Neon Violet", light = l, dark = d)
+        }
+
+        val CRIMSON: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFFE53935))
+            ThemePalette(id = "crimson", displayName = "Crimson", light = l, dark = d)
+        }
+
+        val OCEAN: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF0288D1))
+            ThemePalette(id = "ocean", displayName = "Deep Ocean", light = l, dark = d)
+        }
+
+        val entries: List<ThemePalette> = listOf(
+            ANISDK,
+            SAKURA,
+            CYBER_JADE,
+            NEON_VIOLET,
+            CRIMSON,
+            OCEAN,
+            MATCHA,
+            JUBITER,
+            AMBER
+        )
 
         fun fromStorage(id: String?): ThemePalette =
             entries.firstOrNull { it.id == id } ?: ANISDK

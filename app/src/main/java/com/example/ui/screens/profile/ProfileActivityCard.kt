@@ -55,7 +55,7 @@ fun ActivityCard(
     modifier: Modifier = Modifier
 ) {
     val media = activity.media ?: return
-    val coverUrl = media.coverImage?.large
+    val coverUrl = media.coverImage?.bestUrl ?: media.coverImage?.large
     val isManga = media.type == "MANGA"
     val context = LocalContext.current
     val siteUrl = media.siteUrl

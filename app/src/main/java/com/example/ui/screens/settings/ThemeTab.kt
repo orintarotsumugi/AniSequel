@@ -2,6 +2,7 @@ package com.example.ui.screens.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -24,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +38,7 @@ import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.example.ui.components.expressive.SegmentedOption
 import com.example.ui.components.expressive.bouncyPress
+import com.example.ui.theme.DynamicThemeBuilder
 import com.example.ui.theme.ThemePalette
 import kotlinx.coroutines.launch
 
@@ -99,9 +103,87 @@ fun ThemeTab(
                 ThemePalette.entries.forEach { palette ->
                     PaletteSwatch(
                         palette = palette,
-                        selected = themeSettings.paletteId == palette.id,
-                        onClick = { scope.launch { themePreferences.setPalette(palette.id) } }
+                        selected = themeSettings.paletteId == palette.id && themeSettings.customColorHex == null,
+                        onClick = {
+                            scope.launch {
+                                themePreferences.setCustomColorHex(null)
+                                themePreferences.setPalette(palette.id)
+                            }
+                        }
                     )
+                }
+            }
+        }
+
+        SectionCard(
+            title = "Custom app colour",
+            icon = AppVectorIcons.AnimeSparkle,
+            subtitle = "Pick any accent hue for the entire app."
+        ) {
+            val customHues = listOf(
+                "#0057B7" to "Blue",
+                "#E91E63" to "Rose",
+                "#9C27B0" to "Violet",
+                "#673AB7" to "Indigo",
+                "#00BCD4" to "Cyan",
+                "#00BFA5" to "Jade",
+                "#4CAF50" to "Green",
+                "#FF9800" to "Amber",
+                "#FF5722" to "Flame",
+                "#F44336" to "Crimson",
+                "#607D8B" to "Slate"
+            )
+
+            Text(
+                text = if (themeSettings.customColorHex != null) {
+                    "Active custom colour: ${themeSettings.customColorHex}"
+                } else {
+                    "Select a hue to override palette colours dynamically."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                customHues.forEach { (hex, name) ->
+                    val isSelected = themeSettings.customColorHex.equals(hex, ignoreCase = true)
+                    val color = DynamicThemeBuilder.parseHexColor(hex) ?: Color.Gray
+
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = color,
+                        tonalElevation = if (isSelected) 6.dp else 1.dp,
+                        border = if (isSelected) {
+                            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
+                        } else null,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable {
+                                scope.launch {
+                                    if (isSelected) {
+                                        themePreferences.setCustomColorHex(null)
+                                    } else {
+                                        themePreferences.setCustomColorHex(hex)
+                                    }
+                                }
+                            }
+                    ) {
+                        if (isSelected) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = AppVectorIcons.CheckCircle,
+                                    contentDescription = name,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -171,7 +253,8 @@ fun ThemeTab(
             themeSettings.useDynamicColor ||
             themeSettings.paletteId != ThemePalette.ANISDK.id ||
             themeSettings.motionStyle != MotionStyle.DEFAULT ||
-            themeSettings.trueBlack
+            themeSettings.trueBlack ||
+            themeSettings.customColorHex != null
 
         if (appearanceChanged) {
             Spacer(modifier = Modifier.height(8.dp))

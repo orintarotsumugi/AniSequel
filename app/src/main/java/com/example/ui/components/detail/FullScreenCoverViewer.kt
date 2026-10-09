@@ -8,6 +8,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,7 +60,7 @@ import com.example.ui.components.cards.toCoverColorOrNull
 
 /**
  * Full-screen immersive anime cover artwork viewer.
- * Triggered by holding (long-pressing) or tapping the anime cover.
+ * Supports pinch-to-zoom (up to 4x), double-tap zoom toggle, pan, and HD display.
  */
 @Composable
 fun FullScreenCoverViewer(
@@ -63,6 +68,9 @@ fun FullScreenCoverViewer(
     onDismiss: () -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -79,11 +87,19 @@ fun FullScreenCoverViewer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.88f))
+                .background(Color.Black.copy(alpha = 0.92f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = {
+                        if (scale > 1.05f) {
+                            scale = 1f
+                            offsetX = 0f
+                            offsetY = 0f
+                        } else {
+                            onDismiss()
+                        }
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -110,24 +126,42 @@ fun FullScreenCoverViewer(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Bar: Format Badge & Close Button
+                    // Top Bar: Format Badge, HD tag & Close Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            tonalElevation = 4.dp
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${sequel.format} · ${sequel.status}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                tonalElevation = 4.dp
+                            ) {
+                                Text(
+                                    text = "${sequel.format} · ${sequel.status}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                tonalElevation = 2.dp
+                            ) {
+                                Text(
+                                    text = "HD",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
                         }
 
                         IconButton(
@@ -146,7 +180,7 @@ fun FullScreenCoverViewer(
                         }
                     }
 
-                    // Center Anime Cover Artwork
+                    // Center Anime Cover Artwork with interactive Zoom & Pan
                     val coverBg = sequel.coverColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest
                     Box(
                         modifier = Modifier
@@ -160,6 +194,40 @@ fun FullScreenCoverViewer(
                             )
                             .clip(MaterialTheme.shapes.large)
                             .background(coverBg)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onDoubleTap = {
+                                        if (scale > 1.2f) {
+                                            scale = 1f
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        } else {
+                                            scale = 2.4f
+                                        }
+                                    }
+                                )
+                            }
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val newScale = (scale * zoom).coerceIn(1f, 4.5f)
+                                    scale = newScale
+                                    if (newScale > 1f) {
+                                        val maxX = 300f * (newScale - 1f)
+                                        val maxY = 400f * (newScale - 1f)
+                                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                    } else {
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                }
+                            }
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
                     ) {
                         AsyncImage(
                             model = sequel.sequelCoverUrl,
@@ -256,7 +324,7 @@ fun FullScreenCoverViewer(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Tap anywhere to close",
+                                text = if (scale > 1.05f) "Double-tap to reset zoom · Tap anywhere to close" else "Pinch or double-tap to zoom · Tap anywhere to close",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                             )

@@ -225,12 +225,21 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // Markdown Table check
+            val tableResult = tryParseTable(lines, i) { parseInlines(it) }
+            if (tableResult != null) {
+                nodes.add(tableResult.first)
+                i = tableResult.second
+                continue
+            }
+
             // General Paragraph
             val paragraphLines = mutableListOf<String>()
             while (i < lines.size && lines[i].isNotBlank() &&
                 !lines[i].startsWith("```") &&
                 !HEADER_PATTERN.matches(lines[i].trim()) &&
                 !lines[i].trimStart().startsWith(">") &&
+                !lines[i].trimStart().startsWith("|") &&
                 !CHECKLIST_PATTERN.matches(lines[i].trim()) &&
                 !UNORDERED_LIST_PATTERN.matches(lines[i].trim()) &&
                 !ORDERED_LIST_PATTERN.matches(lines[i].trim()) &&
