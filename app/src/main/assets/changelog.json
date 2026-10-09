@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.39",
+      "entries": [
+        {
+          "title": "Anime Info & Specs Tab Repaired",
+          "detail": "Opening a sequel's detail sheet could fail to build the Anime Info & Specs tab, which referenced a specs grid the codebase no longer has. The tab now renders the current studio, schedule, rating and tag panels."
+        },
+        {
+          "title": "Cover Art in the Detail Header",
+          "detail": "The detail header sat on a flat grey panel until AniList's wide banner arrived, and stayed that way for every entry that has no banner at all. It now falls back to the entry's own key visual and its dominant cover colour from the first frame."
+        },
+        {
+          "title": "Instant Motion Is Actually Instant",
+          "detail": "The empty-state orb kept two invisible animation loops running behind a static shape in the Instant motion style. It no longer animates at all in that style."
+        },
+        {
+          "title": "Smoother Empty-State Morphing",
+          "detail": "The orb's shape morph now animates in the draw phase, so it no longer recomposes the whole empty state on every frame it is on screen."
+        }
+      ]
+    },
+    {
       "version": "1.0.38",
       "entries": [
         {

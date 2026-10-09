@@ -172,7 +172,7 @@ fun SequelDetailSheet(
                             }
                         }
 
-                        DetailInfoGrid(sequel = sequel)
+                        DetailSpecsGrid(sequel = sequel, isDetailLoading = isDetailLoading)
 
                         if (sequel.genres.isNotEmpty()) {
                             Text(

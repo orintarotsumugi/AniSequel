@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
+import com.example.data.repository.MotionStyle
 import com.example.ui.components.AppVectorIcons
 
 private const val EXPRESSIVE_TAG = "expressive_"
@@ -130,14 +131,82 @@ fun ExpressiveLoadingOverlay(
  * looking hand-built: a static 9-sided cookie with a scaling icon reads as the
  * icon on a placeholder; a polygon that is actively *between* two shapes reads
  * as a loading figure, which is the point of the empty state.
+ *
+ * ## Instant motion is actually instant now
+ *
+ * This used to be one composable that always built the `rememberInfiniteTransition`
+ * and always read both of its values - into `clip` and into `graphicsLayer`. The
+ * instant motion style only changed *which* shape got clipped, so behind a static
+ * box two tweens went on ticking on every frame and the icon went on breathing.
+ * That is the opposite of what the comment on the branch claimed, which is why it
+ * read as handled.
+ *
+ * The branch is between two composables rather than inside one because an
+ * infinite transition cannot be skipped conditionally: a composable that
+ * sometimes owns a clock would change the shape of the composition every time the
+ * motion style changed. The static path allocates no animation at all.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpressiveEmptyOrb(
     icon: ImageVector,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    if (ExpressiveMotion.speed == MotionStyle.INSTANT) {
+        StaticEmptyOrb(
+            icon = icon,
+            modifier = modifier,
+            containerColor = containerColor,
+            iconTint = iconTint
+        )
+    } else {
+        MorphingEmptyOrb(
+            icon = icon,
+            modifier = modifier,
+            containerColor = containerColor,
+            iconTint = iconTint
+        )
+    }
+}
+
+/**
+ * The instant-motion orb: one static shape, one static icon, no clock at all.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun StaticEmptyOrb(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    containerColor: Color,
+    iconTint: Color
+) {
+    Box(
+        modifier = modifier
+            .size(80.dp)
+            .clip(expressiveShape(ExpressiveShapes.orb))
+            .background(containerColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(36.dp)
+        )
+    }
+}
+
+/**
+ * The expressive orb: Cookie -> Flower while the icon breathes.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MorphingEmptyOrb(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    containerColor: Color,
+    iconTint: Color
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "orb_pulse_transition")
     val scale by infiniteTransition.animateFloat(
@@ -166,19 +235,13 @@ fun ExpressiveEmptyOrb(
 
     val morphShape = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.Flower) }
 
-    // Instant motion: no box morph, no breathing icon - just the shape zoomed.
-    val effectiveSpeed = com.example.ui.components.expressive.ExpressiveMotion.speed
-
     Box(
         modifier = modifier
             .size(80.dp)
-            .clip(
-                if (effectiveSpeed == com.example.data.repository.MotionStyle.INSTANT) {
-                    expressiveShape(ExpressiveShapes.orb)
-                } else {
-                    MorphShape(morphShape, morphProgress)
-                }
-            )
+            // `morphProgress` is read by `MorphShape` while the layer is drawn,
+            // not here while the modifier chain is built, so a frame of the
+            // morph invalidates the draw pass instead of this composable.
+            .clip(MorphShape(morphShape) { morphProgress })
             .background(containerColor),
         contentAlignment = Alignment.Center
     ) {

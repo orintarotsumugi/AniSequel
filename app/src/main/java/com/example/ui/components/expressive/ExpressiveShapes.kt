@@ -101,18 +101,30 @@ fun expressiveShape(polygon: RoundedPolygon) = polygon.toShape()
  * alpha crossfade produces two translucent shapes overlapping; a morph produces
  * one shape that is between.
  *
- * [progress] is sampled once per [createOutline] call, so driving it from an
- * animated state re-evaluates the clip each frame. The polygon that describes
- * the outline is a [Morph]; its bounds scale/translate to whatever size the
- * caller hands it, which is why, like [expressiveShape], this is only
- * appropriate for a fixed square - a Morph is a unit polygon, and stretching it
- * across a wide/short box would produce the same generic-outline surprise the
- * pill token replaced.
+ * The polygon that describes the outline is a [Morph]; its bounds scale/translate
+ * to whatever size the caller hands it, which is why, like [expressiveShape],
+ * this is only appropriate for a fixed square - a Morph is a unit polygon, and
+ * stretching it across a wide/short box would produce the same generic-outline
+ * surprise the pill token replaced.
+ *
+ * ## Why [progress] is a provider and not a `Float`
+ *
+ * It used to be a `Float` captured at construction, which forced the caller to
+ * read the animated value while building the modifier chain - i.e. in
+ * composition. A `Modifier.clip` applied to an animated `Shape` recomposes its
+ * caller on every frame of the morph, which is what the empty-state orb did for
+ * as long as it was on screen: one full recomposition per frame, on a screen
+ * whose only other job is showing a message.
+ *
+ * Taking a `() -> Float` moves the read into [createOutline], which the layer
+ * calls while drawing. So the same animation now invalidates the draw pass alone
+ * - the same distinction `Modifier.graphicsLayer { }` makes for scale, just for
+ * an outline that has to change shape rather than size.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class MorphShape(
     private val morph: Morph,
-    private val progress: Float
+    private val progress: () -> Float
 ) : Shape {
     private var path = Path()
     private val matrix = Matrix()
@@ -126,7 +138,7 @@ class MorphShape(
             return Outline.Rectangle(androidx.compose.ui.geometry.Rect.Zero)
         }
         path.rewind()
-        morph.toPath(progress, path)
+        morph.toPath(progress(), path)
         val b = morph.calculateBounds()
         val boundsLeft = b[0]
         val boundsTop = b[1]

@@ -47,6 +47,25 @@ fun DetailHeader(
     var showFullScreen by remember { mutableStateOf(false) }
     val coverBg = sequel.coverColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.primary
 
+    // The header backdrop is the banner when AniList has one, and the entry's own
+    // key visual when it does not.
+    //
+    // It used to be banner-or-nothing, and nothing is the common case rather than
+    // the exception: the dashboard's list query deliberately does not ask for
+    // `bannerImage` (it is one wide image per entry on the hottest request in the
+    // app, and it is fetched later by the detail query), so *every* detail sheet
+    // opened from the dashboard started as a flat grey slab under the scrim until
+    // the detail response landed. Entries AniList has no banner for at all stayed
+    // that way. Falling back to the cover costs no request - the list query already
+    // sent it - and makes the header the show's own artwork from its first frame.
+    val backdrop = sequel.bannerUrl ?: sequel.sequelCoverUrl
+
+    // What shows through the 45%-to-85% scrim before (or instead of) the artwork.
+    // AniList's dominant colour for the key visual is the difference between a
+    // header that is already recognisably this show and a grey rectangle.
+    val backdropBase = sequel.coverColor.toCoverColorOrNull()
+        ?: MaterialTheme.colorScheme.surfaceContainerHigh
+
     if (showFullScreen) {
         FullScreenCoverViewer(
             sequel = sequel,
@@ -59,13 +78,17 @@ fun DetailHeader(
             .fillMaxWidth()
             .height(216.dp)
             .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(backdropBase)
     ) {
-        if (sequel.bannerUrl != null) {
+        if (backdrop != null) {
             AsyncImage(
-                model = sequel.bannerUrl,
+                model = backdrop,
                 contentDescription = null,
                 modifier = Modifier.fillMaxWidth().height(216.dp),
+                // Banners are authored wide and a cover is not, so a cover used as
+                // the backdrop is cropped from the top - where the title lockup and
+                // the faces are - rather than from the middle of a torso.
+                alignment = Alignment.TopCenter,
                 contentScale = ContentScale.Crop
             )
         }

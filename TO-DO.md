@@ -96,12 +96,22 @@ decision) sit in the same file as the DTO. Splitting them is cheap and would let
 
 ## 2. Animation and rendering
 
-### 2.1 `ExpressiveVisuals` keeps an infinite transition running while composed
+### 2.1 `ExpressiveVisuals`' orb still animates while it is not visible
 
 `ExpressiveVisuals.kt` starts a `rememberInfiniteTransition` for the empty-state
 orb. It ticks for as long as the composable is in the tree, including when the
-orb is off-screen. The shimmer loader had the same shape and is fixed — its
-phase clock is now shared across every skeleton on screen.
+orb is off-screen.
+
+Two of the three costs that used to be grouped under this entry are now gone:
+
+- The instant motion style no longer runs the clock at all - the orb branches to
+  a static composable instead of animating a shape it then ignores.
+- The morph progress is read by `MorphShape` *while drawing* rather than in
+  composition, so a frame of the morph no longer recomposes the empty state.
+
+What is left is the transition itself ticking behind an orb that has been
+scrolled out of view. The shimmer loader had the same shape and is fixed - its
+phase clock is now hoisted and shared across every skeleton on screen.
 
 Same fix applies: derive the animation from a shared phase, and stop driving it
 when the surface is not visible. There is no visible-surface API in the current
