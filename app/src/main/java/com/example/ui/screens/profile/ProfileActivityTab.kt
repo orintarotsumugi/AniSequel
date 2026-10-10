@@ -58,7 +58,11 @@ fun ProfileActivityTab(
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
     // not opening the profile.
-    LaunchedEffect(Unit) { onLoadFirstPage() }
+    LaunchedEffect(Unit) {
+        if (activityState is UserActivityViewModel.ActivityState.Idle) {
+            onLoadFirstPage()
+        }
+    }
 
     val listState = rememberLazyListState()
 
@@ -139,7 +143,8 @@ fun ProfileActivityTab(
                 } else {
                     items(
                         items = activityState.activities,
-                        key = { it.id }
+                        key = { it.id },
+                        contentType = { "activity" }
                     ) { activity ->
                         ActivityCard(
                             activity = activity,

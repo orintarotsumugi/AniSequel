@@ -1,5 +1,11 @@
 package com.example.ui.screens.profile
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
+import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.ExpressiveNavigationBar
 import com.example.ui.components.expressive.NavigationDestination
 import com.example.ui.components.expressive.bouncyPress
@@ -222,11 +229,27 @@ private fun ProfileTabsContent(
             ProfileRefreshBar()
         }
 
-        // `key(selectedTab)` so each tab's scrollable content is a new one and
-        // starts at the top.
-        key(selectedTab) {
+        AnimatedContent(
+            targetState = selectedTab,
+            transitionSpec = {
+                val forward = targetState > initialState
+                (
+                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) + slideInHorizontally(
+                        animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                        initialOffsetX = { fullWidth -> if (forward) fullWidth / 8 else -fullWidth / 8 }
+                    )
+                ) togetherWith (
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) + slideOutHorizontally(
+                        animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                        targetOffsetX = { fullWidth -> if (forward) -fullWidth / 8 else fullWidth / 8 }
+                    )
+                )
+            },
+            label = "profile_tab_transition",
+            modifier = Modifier.fillMaxSize()
+        ) { tabIndex ->
             val padding = PaddingValues(top = 0.dp)
-            when (selectedTab) {
+            when (tabIndex) {
                 1 -> ProfileActivityTab(
                     activityState = activityState,
                     onLoadFirstPage = { activityViewModel.loadFirstPage() },

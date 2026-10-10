@@ -137,7 +137,11 @@ fun FavouriteMediaRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        items(items = items, key = { it.id }) { media ->
+        items(
+            items = items,
+            key = { it.id },
+            contentType = { "media" }
+        ) { media ->
             FavouriteMediaCard(media = media, onClick = { onOpen(media) })
         }
     }

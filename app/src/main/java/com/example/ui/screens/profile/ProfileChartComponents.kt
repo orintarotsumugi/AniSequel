@@ -1,6 +1,7 @@
 package com.example.ui.screens.profile
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +27,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -216,25 +221,26 @@ internal fun SegmentStrip(
     segments: List<SegmentTally>,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    val segmentColors = segments.map { chartSlotColor(it.slot) }
+    Canvas(
         modifier = modifier
             .fillMaxWidth()
             .height(14.dp)
             .clip(RoundedCornerShape(7.dp))
             .testTag("status_segment_strip")
     ) {
-        segments.forEach { segment ->
-            val weight by animateFloatAsState(
-                targetValue = segment.share.coerceAtLeast(MIN_SEGMENT_SHARE),
-                animationSpec = ExpressiveMotion.FastSpatial,
-                label = "segment_${segment.slot}"
-            )
-            Box(
-                modifier = Modifier
-                    .weight(weight)
-                    .fillMaxWidth()
-                    .background(chartSlotColor(segment.slot))
-            )
+        val total = segments.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(0.0001f)
+        var currentX = 0f
+        segments.forEachIndexed { index, segment ->
+            val segWidth = (segment.share / total) * size.width
+            if (segWidth > 0f) {
+                drawRect(
+                    color = segmentColors.getOrElse(index) { Color.Gray },
+                    topLeft = Offset(currentX, 0f),
+                    size = Size(segWidth, size.height)
+                )
+                currentX += segWidth
+            }
         }
     }
 }
@@ -321,19 +327,24 @@ internal fun BarRow(
             modifier = Modifier.width(labelWidth)
         )
         Spacer(modifier = Modifier.width(10.dp))
+        val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(width)
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(color)
-            )
-        }
+                .clip(RoundedCornerShape(5.dp))
+                .background(trackColor)
+                .drawBehind {
+                    val barWidth = size.width * width
+                    if (barWidth > 0f) {
+                        drawRoundRect(
+                            color = color,
+                            size = Size(barWidth, size.height),
+                            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                        )
+                    }
+                }
+        )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = row.count.toString(),

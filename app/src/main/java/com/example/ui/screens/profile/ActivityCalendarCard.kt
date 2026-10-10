@@ -1,5 +1,6 @@
 package com.example.ui.screens.profile
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -133,23 +137,7 @@ private fun CalendarGrid(calendar: ActivityCalendar) {
         Row {
             WeekdayGutter(labels = calendar.weekdayLabels)
             Spacer(modifier = Modifier.width(GutterGap))
-            Row(horizontalArrangement = Arrangement.spacedBy(CellGap)) {
-                calendar.columns.forEach { column ->
-                    Column(verticalArrangement = Arrangement.spacedBy(CellGap)) {
-                        column.days.forEach { day ->
-                            ActivityCell(
-                                // AniList's own 0f..1f intensity, so a cell
-                                // that had a busy day is dark regardless of how
-                                // busy the *other* cells were this week.
-                                intensity = day.intensity,
-                                count = day.count,
-                                visible = day.inRange,
-                                key = day.epochDay
-                            )
-                        }
-                    }
-                }
-            }
+            ActivityCellsCanvas(calendar = calendar)
         }
     }
 }
@@ -216,48 +204,45 @@ private fun WeekdayGutter(labels: List<String>) {
 private const val DAYS_PER_WEEK = 7
 
 @Composable
-private fun ActivityCell(
-    intensity: Float,
-    count: Int,
-    visible: Boolean,
-    key: Long
-) {
-    // The intensity arrives normalised from the use case, which divides
-    // AniList's 1-to-7 level by seven. Scaling it against this window's own
-    // busiest cell instead would make the same account look different after a
-    // quiet week - and would mean a grid that is *never* all-dark, so the top of
-    // the colour ramp would never be reached and would read as "there is a level
-    // this app cannot show".
-    val target = if (visible) intensity.coerceIn(0f, 1f) else 0f
+private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
     val base = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.surfaceContainerHighest
-    val color = remember(target, base, empty) {
-        when {
-            target <= 0f -> empty
-            target >= 1f -> base
-            else -> base.copy(alpha = 0.22f + target * 0.78f)
+    val columnCount = calendar.columns.size
+    val totalWidth = (ColumnPitch * columnCount - CellGap).coerceAtLeast(0.dp)
+    val totalHeight = CellSize * DAYS_PER_WEEK + CellGap * (DAYS_PER_WEEK - 1)
+
+    Canvas(
+        modifier = Modifier
+            .size(width = totalWidth, height = totalHeight)
+            .testTag("activity_calendar_cells")
+            .semantics {
+                contentDescription = "${calendar.totalChanges} changes in ${calendar.weeksShown} weeks"
+            }
+    ) {
+        val cellSizePx = CellSize.toPx()
+        val cellGapPx = CellGap.toPx()
+        val pitchPx = cellSizePx + cellGapPx
+        val cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+
+        calendar.columns.forEachIndexed { colIdx, column ->
+            val left = colIdx * pitchPx
+            column.days.forEachIndexed { rowIdx, day ->
+                val top = rowIdx * pitchPx
+                val target = if (day.inRange) day.intensity.coerceIn(0f, 1f) else 0f
+                val color = when {
+                    target <= 0f -> empty
+                    target >= 1f -> base
+                    else -> base.copy(alpha = 0.22f + target * 0.78f)
+                }
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(left, top),
+                    size = Size(cellSizePx, cellSizePx),
+                    cornerRadius = cornerRadius
+                )
+            }
         }
     }
-
-    Box(
-        modifier = Modifier
-            .size(CellSize)
-            .clip(RoundedCornerShape(3.dp))
-            .background(color)
-            // Days that have not happened carry no description at all: they are not
-            // days yet, and announcing them would make TalkBack read a run of
-            // "No activity" before every real one. The box is still drawn, so the
-            // grid keeps its weekday rows.
-            .semantics {
-                if (visible) {
-                    contentDescription = if (count == 0) {
-                        "No activity"
-                    } else {
-                        "$count ${if (count == 1) "change" else "changes"}"
-                    }
-                }
-            }
-    )
 }
 
 @Composable

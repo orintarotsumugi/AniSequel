@@ -97,7 +97,9 @@ fun ProfileSocialTab(
     // Triggers initial load when the Social tab is opened. Without this,
     // the tab stays indefinitely in Idle state and spins forever.
     LaunchedEffect(Unit) {
-        onLoad(SocialList.FOLLOWERS)
+        if (socialState is UserSocialViewModel.SocialState.Idle) {
+            onLoad(SocialList.FOLLOWERS)
+        }
     }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -234,7 +236,8 @@ fun ProfileSocialTab(
                 } else {
                     items(
                         items = filteredPeople,
-                        key = { it.id }
+                        key = { it.id },
+                        contentType = { "follower" }
                     ) { person ->
                         FollowerCard(
                             person = person,
