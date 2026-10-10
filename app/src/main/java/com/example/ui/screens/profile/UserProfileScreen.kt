@@ -91,6 +91,16 @@ fun UserProfileScreen(
     onOpenUser: (FollowUser) -> Unit,
     onNavigateBack: () -> Unit,
     onSignInAgain: () -> Unit = {},
+    /**
+     * The tab the screen opens on.
+     *
+     * An argument rather than only screen state because the profile can be
+     * opened *for* a tab: the home-screen widget opens the Activity feed, and a
+     * screen that always started on Home would land the user one tap short of
+     * what they asked for. Only the first composition reads it - after that the
+     * user's own taps own the selection.
+     */
+    initialTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
@@ -98,7 +108,7 @@ fun UserProfileScreen(
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
 
     Scaffold(
         modifier = modifier

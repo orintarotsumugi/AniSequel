@@ -35,6 +35,27 @@ object ProfileRoutes {
     const val BY_USERNAME = "profile_user/{username}"
     const val BY_ID = "profile_id/{userId}"
 
+    /**
+     * [OWN] with the tab the profile should open on.
+     *
+     * The tab is an optional query argument rather than a second destination, so
+     * `navigate(OWN)` from the dashboard resolves to the same composable and the
+     * two cannot drift. It carries the home-screen widget's request: a tap on the
+     * tile asks for the Activity tab, and `"profile"` alone leaves the profile on
+     * its default tab as before.
+     */
+    const val OWN_ROUTE = "profile?tab={tab}"
+    const val OWN_TAB_ARG = "tab"
+
+    /** The value [OWN_TAB_ARG] takes for the profile's Activity tab. */
+    const val TAB_ACTIVITY = "activity"
+
+    /** Index of the Activity tab in `ProfileTabs`. */
+    const val ACTIVITY_TAB_INDEX = 1
+
+    /** [OWN] opening directly on the Activity tab. Used by the widget. */
+    const val OWN_ACTIVITY = "profile?tab=activity"
+
     fun byUsername(username: String) = "profile_user/$username"
     fun byId(userId: Int) = "profile_id/$userId"
 }
@@ -74,7 +95,8 @@ fun ProfileDestination(
     userId: Int?,
     isDemo: Boolean,
     navController: NavHostController,
-    onSignInAgain: () -> Unit
+    onSignInAgain: () -> Unit,
+    initialTab: Int = 0
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
     // after the other from the same stack, and without the name in the key the
@@ -122,6 +144,7 @@ fun ProfileDestination(
             navController.navigate(ProfileRoutes.byId(person.id))
         },
         onNavigateBack = { navController.popBackStack() },
-        onSignInAgain = onSignInAgain
+        onSignInAgain = onSignInAgain,
+        initialTab = initialTab
     )
 }

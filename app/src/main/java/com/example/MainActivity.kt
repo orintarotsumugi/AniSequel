@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -38,6 +40,20 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
+
+    /**
+     * Set when the home-screen widget asked to open the profile's Activity tab.
+     *
+     * Compose state rather than a plain `Boolean` because the widget's tap can
+     * arrive at three different moments - a cold launch, a warm launch through
+     * `onNewIntent`, or not at all - and only the first two of those happen during
+     * a composition. A field that the composition does not observe would be read
+     * once, on whichever frame happened to look at it.
+     *
+     * Cleared by [AppNavigation] once it has navigated, so the request is not
+     * replayed on the next recomposition.
+     */
+    private var openProfileActivityRequest by mutableStateOf(false)
 
     /**
      * Held so [onResume] can reach the updater.
@@ -80,6 +96,19 @@ class MainActivity : ComponentActivity() {
 
         // Handle OAuth deep link if launched via custom scheme
         handleDeepLinkIntent(intent)
+
+        // The widget's tap, on a fresh launch only.
+        //
+        // Guarded on `savedInstanceState`, because the extras live on the intent
+        // for as long as the Activity does: without the guard, a rotation would
+        // re-read the extra and jump back to the profile from wherever the user
+        // had navigated to since. `onNewIntent` is the other half of this - see
+        // below.
+        if (savedInstanceState == null &&
+            intent?.getBooleanExtra(EXTRA_WIDGET_OPEN_ACTIVITY, false) == true
+        ) {
+            openProfileActivityRequest = true
+        }
 
         setContent {
             // Collected here rather than inside the theme so the whole tree
@@ -131,7 +160,9 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(
                         authRepository = authRepository,
                         authViewModel = authViewModel,
-                        themePreferences = themePreferences
+                        themePreferences = themePreferences,
+                        openProfileActivityOnLaunch = openProfileActivityRequest,
+                        onProfileActivityOpened = { openProfileActivityRequest = false }
                     )
 
                     UpdatePromptHost(controller = updateController)
@@ -164,6 +195,13 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleDeepLinkIntent(intent)
+
+        // A second tap on the widget while the app is already open. MainActivity
+        // is `singleTask`, so this is the only path that tap can take - it never
+        // reaches `onCreate`.
+        if (intent.getBooleanExtra(EXTRA_WIDGET_OPEN_ACTIVITY, false)) {
+            openProfileActivityRequest = true
+        }
     }
 
     private fun handleDeepLinkIntent(intent: Intent?) {

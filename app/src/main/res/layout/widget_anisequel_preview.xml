@@ -1,51 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the widget picker shows.
+
+  From API 31 the picker asks for a layout rather than a screenshot, so this is a
+  static mirror of `widget_anisequel.xml` with a sample count in it. The values
+  are literals on purpose: this layout is inflated by the launcher, in a process
+  that has never run any of this app's code, so nothing here can be filled in at
+  display time. Keeping it structurally identical to the live layout is what stops
+  the preview and the placed widget drifting apart.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_preview_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground">
+    android:background="@drawable/widget_background">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="16dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="14dp">
 
-        <TextView
-            android:id="@+id/widget_preview_title"
+        <ImageView
+            android:layout_width="4dp"
+            android:layout_height="44dp"
+            android:background="@drawable/widget_accent_bar"
+            android:contentDescription="@null" />
+
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="AniSequel"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/widget_preview_subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Activity"
-            android:textColor="?android:attr/textColorSecondary"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="12"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="38sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/widget_preview_count"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="3"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="activities"
-            android:textColor="?android:attr/textColorSecondary"
-            android:textSize="14sp" />
-
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_caption"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
-
 </FrameLayout>

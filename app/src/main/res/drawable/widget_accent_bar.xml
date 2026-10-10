@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The accent bar down the widget's left edge.
+
+  Themed rather than a brand literal: on a Material You device `colorAccent` is
+  the wallpaper-derived accent, so the tile picks up the same accent colour as the
+  launcher around it. A hardcoded brand blue would be the only element on the
+  home screen not following that.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <solid android:color="?android:attr/colorAccent" />
+</shape>

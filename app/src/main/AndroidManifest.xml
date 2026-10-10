@@ -39,11 +39,23 @@
             </intent-filter>
         </activity>
 
-        <!-- Profile-activity Glance widget. -->
+        <!-- Profile-activity widget.
+
+             The receiver is the AppWidgetProvider itself, not a plain
+             BroadcastReceiver that forwards to one. It used to be a separate
+             `AniSequelWidgetReceiver` which read only `EXTRA_APPWIDGET_ID` -
+             the system sends the update list as `EXTRA_APPWIDGET_IDS`, so the
+             extra was almost always absent and the widget never received its
+             first update at all. Extending `AppWidgetProvider` here means the
+             platform's own `onReceive` unpacking does that work.
+
+             `exported="false"` with no `permission`: the system broadcast is
+             delivered regardless, and nothing outside this app needs to send to
+             it. The old `android.permission.BIND_APPWIDGET` declaration was not
+             in any Google sample and restricted the declaration for no gain. -->
         <receiver
-            android:name="com.example.ui.widget.AniSequelWidgetReceiver"
-            android:exported="true"
-            android:permission="android.permission.BIND_APPWIDGET">
+            android:name=".ui.widget.AniSequelWidgetProvider"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

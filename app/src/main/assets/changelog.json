@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.42",
+      "entries": [
+        {
+          "title": "The profile widget can actually be added",
+          "detail": "The widget's metadata pointed its configuration at a class that is not an Activity, so when the tile was dropped the launcher had nothing to launch - which is a failure reported as the app not being installed. It also never declared an initial layout, so a placed tile had nothing to draw until its first update. Both are now correct, and the widget is registered as its own app widget provider: the forwarding receiver in front of it dropped the update the system sends, so a freshly added tile was never filled in."
+        },
+        {
+          "title": "Tapping the widget opens your activity feed",
+          "detail": "A tap wrote a request for the profile's Activity screen into the widget's intent and nothing ever read it, so the app opened wherever it was last left. The request is now honoured and the profile opens directly on the Activity tab."
+        },
+        {
+          "title": "A widget that reads at a glance",
+          "detail": "The tile is redrawn: a rounded surface using the system's own widget radius, an accent bar that follows your device's accent colour, a bold count and one line of context. It previously stacked four centred lines that clipped mid-word once the tile was squashed, and its picker entry shared the same problem. When there is nothing logged yet it says so instead of showing a bare zero."
+        },
+        {
+          "title": "Less work per widget update",
+          "detail": "Every copy on the home screen now shares one set of views and one tap target, so an update is a single draw and a single round trip to the launcher instead of a full rebuild per instance, and the count behind it is read once per update rather than once per tile."
+        }
+      ]
+    },
+    {
       "version": "1.0.40",
       "entries": [
         {

@@ -6,4 +6,14 @@
     <string name="profile_tab_activity">Activity</string>
     <string name="profile_activity_list">Activity</string>
     <string name="profile_activity_empty">No activity yet</string>
+
+    <!-- Profile-activity widget. `widget_description` is what the Android 12+
+         widget picker prints under the tile, so it is a sentence about the tile
+         rather than a repeat of the app name. `widget_count_initial` is the text
+         the initialLayout shows for the moment between the tile being placed and
+         its first update. -->
+    <string name="widget_description">Your recent AniList list activity, one tap from the home screen</string>
+    <string name="widget_count_initial">0</string>
+    <string name="widget_caption">recent updates</string>
+    <string name="widget_caption_empty">nothing logged yet</string>
 </resources>

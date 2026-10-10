@@ -103,6 +103,17 @@ fun AppNavigation(
     authRepository: AuthRepository,
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
+    /**
+     * A tap on the home-screen widget asked for the profile's Activity tab.
+     *
+     * Passed in rather than read from the Activity's intent here so this stays a
+     * pure function of its arguments - the widget's request arrives as an Intent
+     * extra, which only `MainActivity` can see, and routing it through here is
+     * what keeps the navigation graph from having to know about `Intent`s.
+     */
+    openProfileActivityOnLaunch: Boolean = false,
+    /** Called once the request has been navigated to, so it is not replayed. */
+    onProfileActivityOpened: () -> Unit = {},
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
@@ -257,6 +268,20 @@ fun AppNavigation(
         }
     }
 
+    // The widget's tap, honoured once the app knows who is signed in.
+    //
+    // Deferred rather than fired on arrival because a profile needs an identity:
+    // the widget's `PendingIntent` can only start the Activity, and at that moment
+    // the stored session may still be being restored - or may not exist, in which
+    // case the request has to stay pending until a sign-in resolves it instead of
+    // being spent on a login screen.
+    LaunchedEffect(openProfileActivityOnLaunch, authState) {
+        if (openProfileActivityOnLaunch && authState is AuthUiState.Authenticated) {
+            navController.navigate(ProfileRoutes.OWN_ACTIVITY)
+            onProfileActivityOpened()
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
@@ -389,7 +414,25 @@ fun AppNavigation(
             )
         }
 
-        composable(ProfileRoutes.OWN) {
+        // The base route and the widget's `profile?tab=activity` are one
+        // destination: the query argument is optional, so `navigate(OWN)` from
+        // the dashboard still lands here and leaves the tab untouched.
+        composable(
+            route = ProfileRoutes.OWN_ROUTE,
+            arguments = listOf(
+                navArgument(ProfileRoutes.OWN_TAB_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            // Read off the route rather than from a shared flag, so the request
+            // travels with the destination. A flag would outlive the visit and
+            // re-open the Activity tab on the *next* profile the user opened,
+            // from wherever they opened it.
+            val requestedTab = backStackEntry.arguments?.getString(ProfileRoutes.OWN_TAB_ARG)
+
             // `signedInViewer` is null until the dashboard has loaded, and a demo
             // dashboard has no session ViewModel at all - hence the two sources
             // rather than one. The button that reaches this route is on a loaded
@@ -401,7 +444,12 @@ fun AppNavigation(
                 userId = signedInViewer?.id,
                 isDemo = signedInViewer == null,
                 navController = navController,
-                onSignInAgain = authViewModel::logout
+                onSignInAgain = authViewModel::logout,
+                initialTab = if (requestedTab == ProfileRoutes.TAB_ACTIVITY) {
+                    ProfileRoutes.ACTIVITY_TAB_INDEX
+                } else {
+                    0
+                }
             )
         }
 

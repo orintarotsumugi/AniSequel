@@ -1,14 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadata for the profile-activity widget.
+
+  Three attributes here are load-bearing, and each was wrong in a way that only
+  showed up on a device:
+
+  - `initialLayout` was missing. The picker showed the widget as an entry, but
+    there was no layout for the host to inflate between placing it and the first
+    `onUpdate`, so the widget sat blank (and some launchers drop an entry that
+    cannot render at all).
+  - `configure` pointed at `AniSequelWidgetProvider`, which is an
+    AppWidgetProvider, not an Activity. The    launcher launches that component when the user drops the widget, so there was nothing
+    to launch - a failure some launchers report as the app not being installed. This widget needs no configuration,
+    so the attribute is gone rather than pointed at a stub Activity.
+  - `previewImage` duplicated `previewLayout`. From API 31 `previewLayout` wins,
+    and this app's floor *is* 31, so the drawable was unreachable (see the
+    "Reachability counts" rule in AGENTS.md).
+
+  The size is 2x2 cells with a 40dp minimum, so it stays legible when the user
+  squashes it: two lines of text and a 4dp accent bar are all it draws.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
-    android:minHeight="40dp"
+    android:minHeight="110dp"
+    android:maxResizeWidth="250dp"
+    android:maxResizeHeight="220dp"
     android:targetCellWidth="2"
-    android:targetCellHeight="1"
+    android:targetCellHeight="2"
     android:minResizeWidth="110dp"
     android:minResizeHeight="40dp"
     android:updatePeriodMillis="1800000"
-    android:previewImage="@drawable/ic_launcher_foreground"
+    android:initialLayout="@layout/widget_anisequel"
     android:previewLayout="@layout/widget_anisequel_preview"
+    android:description="@string/widget_description"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen"
-    android:configure="com.example.ui.widget.AniSequelWidgetProvider" />
+    android:widgetCategory="home_screen" />
