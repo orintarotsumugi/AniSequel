@@ -2,6 +2,7 @@ package com.example.data.network
 
 import android.content.Context
 import coil.ImageLoader
+import coil.decode.GifDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.example.BuildConfig
@@ -184,6 +185,9 @@ object NetworkClient {
             // to revalidate anyway - so a second cache would add a layer that
             // can never be hit and duplicate 32MB of the covers on disk.
             .respectCacheHeaders(false)
+            .components {
+                add(GifDecoder.Factory())
+            }
             .build()
 
     private const val MEMORY_CACHE_PERCENT = 0.25

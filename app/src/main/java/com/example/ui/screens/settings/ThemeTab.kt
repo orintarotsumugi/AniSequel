@@ -50,7 +50,8 @@ private fun ThemeMode.icon(): ImageVector = when (this) {
 
 /**
  * The dedicated Theme tab: every visual choice in one place, brand palettes
- * plus motion style plus OLED black, all expressive and M3-schemed.
+ * plus motion style plus OLED black, anime theme adaptation, and background colors,
+ * all expressive and M3-schemed.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -88,6 +89,51 @@ fun ThemeTab(
         }
 
         SectionCard(
+            title = "Anime Theme Adaptation",
+            icon = AppVectorIcons.AnimeSparkle,
+            subtitle = "Adapt UI colors to viewed anime with immersive dark theme."
+        ) {
+            SwitchRow(
+                title = "Anime Dynamic Theme",
+                subtitle = "Apply anime cover color scheme when viewing anime.",
+                checked = themeSettings.animeThemeActive,
+                onCheckedChange = { active ->
+                    scope.launch { themePreferences.setAnimeThemeActive(active, themeSettings.animeThemeColorHex) }
+                },
+                modifier = Modifier.testTag("anime_theme_active_switch")
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SwitchRow(
+                title = "Retain Anime Color",
+                subtitle = "Keep anime color for Material You UI design.",
+                checked = themeSettings.animeThemeRetainColor,
+                onCheckedChange = { retain ->
+                    scope.launch { themePreferences.setAnimeThemeRetainColor(retain) }
+                },
+                modifier = Modifier.testTag("anime_theme_retain_switch")
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Revert Timer (After leaving anime info)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            val revertOptions = listOf("Immediately", "5 Minutes", "10 Minutes")
+            val revertValues = listOf(0, 300, 600)
+            val currentRevertIndex = revertValues.indexOf(themeSettings.animeThemeRevertDuration).coerceAtLeast(1)
+            ExpressivePolygonSegmentedBar(
+                options = revertOptions.map { SegmentedOption(label = it, icon = AppVectorIcons.Restore) },
+                selectedIndex = currentRevertIndex,
+                onSelect = { index ->
+                    scope.launch { themePreferences.setAnimeThemeRevertDuration(revertValues[index]) }
+                },
+                modifier = Modifier.testTag("anime_theme_revert_duration_row")
+            )
+        }
+
+        SectionCard(
             title = "Colour palette",
             icon = AppVectorIcons.SectionAppearance,
             subtitle = "The accent colour for the whole app."
@@ -106,10 +152,11 @@ fun ThemeTab(
                 ThemePalette.entries.forEach { palette ->
                     PaletteSwatch(
                         palette = palette,
-                        selected = themeSettings.paletteId == palette.id && themeSettings.customColorHex == null,
+                        selected = themeSettings.paletteId == palette.id && themeSettings.customColorHex == null && !themeSettings.animeThemeActive,
                         onClick = {
                             scope.launch {
                                 themePreferences.setCustomColorHex(null)
+                                themePreferences.setAnimeThemeActive(false, null)
                                 themePreferences.setPalette(palette.id)
                             }
                         }
@@ -193,6 +240,66 @@ fun ThemeTab(
         }
 
         SectionCard(
+            title = "App Background Color",
+            icon = AppVectorIcons.SectionAppearance,
+            subtitle = "Change the full background color of the app."
+        ) {
+            val bgColors = listOf(
+                null to "Default",
+                "#000000" to "Pure Black",
+                "#080C14" to "Midnight Navy",
+                "#121212" to "Deep Charcoal",
+                "#1C1410" to "Warm Espresso",
+                "#101820" to "Slate Navy"
+            )
+
+            Text(
+                text = "Customize the background canvas color across all screens.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                bgColors.forEach { (hex, name) ->
+                    val isSelected = themeSettings.appBackgroundColor.equals(hex, ignoreCase = true) || (hex == null && themeSettings.appBackgroundColor == null)
+                    val color = if (hex != null) DynamicThemeBuilder.parseHexColor(hex) ?: Color.DarkGray else MaterialTheme.colorScheme.surfaceContainer
+
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = color,
+                        tonalElevation = if (isSelected) 6.dp else 1.dp,
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .size(54.dp, 38.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .bouncyPress(pressedScale = 0.90f)
+                            .clickable {
+                                scope.launch {
+                                    themePreferences.setAppBackgroundColor(hex)
+                                }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionCard(
             title = "Motion",
             icon = AppVectorIcons.Trending,
             subtitle = "How the app animates."
@@ -222,12 +329,6 @@ fun ThemeTab(
         ) {
             SwitchRow(
                 title = "Dynamic colours",
-                // Unconditional, where this used to be
-                // `if (supportsDynamicColor) ... else "Needs Android 12+"`.
-                // That branch is now unreachable - minSdk is 31 - so the
-                // fallback text was a lie waiting for the floor to move, and
-                // `enabled = supportsDynamicColor` was a switch that could
-                // never be off on a supported device.
                 subtitle = "Match your wallpaper.",
                 checked = themeSettings.useDynamicColor,
                 onCheckedChange = { enabled ->
@@ -258,7 +359,9 @@ fun ThemeTab(
             themeSettings.paletteId != ThemePalette.ANISDK.id ||
             themeSettings.motionStyle != MotionStyle.DEFAULT ||
             themeSettings.trueBlack ||
-            themeSettings.customColorHex != null
+            themeSettings.customColorHex != null ||
+            themeSettings.animeThemeActive ||
+            themeSettings.appBackgroundColor != null
 
         if (appearanceChanged) {
             Spacer(modifier = Modifier.height(8.dp))

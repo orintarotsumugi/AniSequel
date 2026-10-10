@@ -47,10 +47,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
+import com.example.data.repository.ThemeMode
+import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveTabBar
 import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.theme.AniSequelTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -69,16 +74,46 @@ fun SequelDetailSheet(
 ) {
     if (sequel == null) return
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val themePreferences = remember(context) { ThemePreferences(context) }
+    val themeSettings by themePreferences.settings.collectAsState(
+        initial = ThemePreferences.ThemeSettings(
+            themeMode = ThemeMode.DEFAULT,
+            useDynamicColor = false
+        )
+    )
+
     var isDescriptionExpanded by remember(sequel.sequelId) { mutableStateOf(false) }
     var detailTab by rememberSaveable(sequel.sequelId) { mutableIntStateOf(0) }
     val statusColors = AniSequelTheme.statusColors
 
     LaunchedEffect(sequel.sequelId) {
         onLoadDetail(sequel)
+        if (themeSettings.animeThemeActive) {
+            val colorHex = sequel.coverColor ?: "#0057B7"
+            themePreferences.setAnimeThemeActive(true, colorHex)
+        }
+    }
+
+    LaunchedEffect(themeSettings.animeThemeActive, themeSettings.animeThemeRevertDuration) {
+        if (themeSettings.animeThemeActive && themeSettings.animeThemeRevertDuration > 0) {
+            val delayMillis = themeSettings.animeThemeRevertDuration * 1000L
+            kotlinx.coroutines.delay(delayMillis)
+            themePreferences.setAnimeThemeActive(false, null)
+        }
+    }
+
+    val handleDismiss: () -> Unit = {
+        scope.launch {
+            if (themeSettings.animeThemeRevertDuration == 0) {
+                themePreferences.setAnimeThemeActive(false, null)
+            }
+        }
+        onDismiss()
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = handleDismiss,
         sheetState = sheetState,
         modifier = modifier.testTag("sequel_detail_sheet"),
         containerColor = MaterialTheme.colorScheme.surface

@@ -47,6 +47,7 @@ fun AniListMarkdownView(
                         AniListMarkdownView(nodes = node.children, maxLines = maxLines)
                     }
                 }
+                is MarkdownNode.AniListPreviewBlock -> RenderAniListPreview(node)
                 is MarkdownNode.Divider -> HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     modifier = Modifier.padding(vertical = 4.dp)

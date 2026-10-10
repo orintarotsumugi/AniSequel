@@ -30,6 +30,7 @@ object AniListMarkdownParser {
     private val YOUTUBE_PATTERN = Regex("""^youtube\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val WEBM_PATTERN = Regex("""^webm\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
+    private val ANILIST_PREVIEW_PATTERN = Regex("""^https?://anilist\.co/(anime|manga|character|staff|studio|user)/(\d+|[a-zA-Z0-9_-]+)(?:/([^\s)]+))?$""", RegexOption.IGNORE_CASE)
 
     // Inline regex patterns
     private val INLINE_LINKED_IMG = Regex("""\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)""")
@@ -60,17 +61,20 @@ object AniListMarkdownParser {
                 continue
             }
 
-            // Centered block (~~~center ... ~~~ or <center> ... </center> or ~~~ ... ~~~)
+            // Centered block (~~~center, <center>, <div align="center">, etc.)
             val trimmedLine = line.trim()
             if (trimmedLine.equals("~~~center", ignoreCase = true) ||
                 trimmedLine.equals("<center>", ignoreCase = true) ||
+                trimmedLine.equals("<div align=\"center\">", ignoreCase = true) ||
+                trimmedLine.equals("<div style=\"text-align: center;\">", ignoreCase = true) ||
                 (trimmedLine == "~~~" && (i + 1 < lines.size))
             ) {
                 val centerLines = mutableListOf<String>()
                 i++
                 while (i < lines.size &&
                     !lines[i].trim().equals("~~~", ignoreCase = true) &&
-                    !lines[i].trim().equals("</center>", ignoreCase = true)
+                    !lines[i].trim().equals("</center>", ignoreCase = true) &&
+                    !lines[i].trim().equals("</div>", ignoreCase = true)
                 ) {
                     centerLines.add(lines[i])
                     i++
@@ -78,6 +82,20 @@ object AniListMarkdownParser {
                 if (i < lines.size) i++ // skip closing delimiter
                 val centerContent = parse(centerLines.joinToString("\n"))
                 nodes.add(MarkdownNode.CenteredBlock(centerContent))
+                continue
+            }
+
+            // AniList entity preview card check
+            val anilistPreviewMatch = ANILIST_PREVIEW_PATTERN.matchEntire(trimmedLine)
+            if (anilistPreviewMatch != null) {
+                val type = anilistPreviewMatch.groupValues[1].uppercase()
+                val id = anilistPreviewMatch.groupValues[2]
+                val rawSlug = anilistPreviewMatch.groupValues[3].ifEmpty { "$type #$id" }
+                val title = rawSlug.replace('-', ' ').replace('_', ' ').split(' ').joinToString(" ") { word ->
+                    word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                }
+                nodes.add(MarkdownNode.AniListPreviewBlock(url = trimmedLine, type = type, id = id, title = title))
+                i++
                 continue
             }
 

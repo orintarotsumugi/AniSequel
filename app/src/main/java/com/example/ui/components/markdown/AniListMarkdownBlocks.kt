@@ -332,3 +332,58 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
         }
     }
 }
+
+@Composable
+fun RenderAniListPreview(preview: MarkdownNode.AniListPreviewBlock) {
+    val context = LocalContext.current
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bouncyPress()
+            .clickable { openExternalUrl(context, preview.url) }
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = ExpressiveShapes.pill,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Text(
+                    text = preview.type,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preview.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "AniList • #${preview.id}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = AppVectorIcons.OpenInNew,
+                contentDescription = "Open",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+

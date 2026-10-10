@@ -24,6 +24,12 @@ sealed interface MarkdownNode {
         val rows: List<List<List<InlineToken>>>
     ) : MarkdownNode
     data class CenteredBlock(val children: List<MarkdownNode>) : MarkdownNode
+    data class AniListPreviewBlock(
+        val url: String,
+        val type: String,
+        val id: String,
+        val title: String
+    ) : MarkdownNode
     object Divider : MarkdownNode
 }
 

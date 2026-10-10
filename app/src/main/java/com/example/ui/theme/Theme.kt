@@ -191,17 +191,31 @@ fun AniSequelTheme(
     trueBlack: Boolean = false,
     /** Custom hex accent colour chosen by user. */
     customColorHex: String? = null,
+    animeThemeActive: Boolean = false,
+    animeThemeColorHex: String? = null,
+    animeThemeRetainColor: Boolean = true,
+    appBackgroundColor: String? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkTheme = when (themeMode) {
+    val effectiveDark = when (themeMode) {
         ThemeMode.SYSTEM -> systemDark
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
 
+    val animeColor = androidx.compose.runtime.remember(animeThemeActive, animeThemeColorHex) {
+        if (animeThemeActive) DynamicThemeBuilder.parseHexColor(animeThemeColorHex) else null
+    }
+
+    val darkTheme = if (animeThemeActive && animeColor != null) true else effectiveDark
+
     val customColor = androidx.compose.runtime.remember(customColorHex) {
         DynamicThemeBuilder.parseHexColor(customColorHex)
+    }
+
+    val bgCustomColor = androidx.compose.runtime.remember(appBackgroundColor) {
+        DynamicThemeBuilder.parseHexColor(appBackgroundColor)
     }
 
     // Keep the tokens the app uses directly in step with the M3 motion scheme.
@@ -216,6 +230,10 @@ fun AniSequelTheme(
     // that reads as load-bearing and cannot fail is worse than no guard,
     // because the next reader assumes there is a device class it excludes.
     val colorScheme = when {
+        animeThemeActive && animeColor != null -> {
+            val (_, darkDynamic) = DynamicThemeBuilder.createDynamicSchemes(animeColor)
+            darkDynamic
+        }
         dynamicColor -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -227,7 +245,7 @@ fun AniSequelTheme(
         darkTheme -> palette.dark
         else -> palette.light
     }.let { scheme ->
-        if (trueBlack && darkTheme) {
+        val baseScheme = if (trueBlack && darkTheme) {
             scheme.copy(
                 background = Color.Black,
                 surface = Color.Black,
@@ -239,6 +257,16 @@ fun AniSequelTheme(
             )
         } else {
             scheme
+        }
+
+        if (bgCustomColor != null) {
+            baseScheme.copy(
+                background = bgCustomColor,
+                surface = bgCustomColor,
+                surfaceContainerLowest = bgCustomColor
+            )
+        } else {
+            baseScheme
         }
     }
 

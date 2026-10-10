@@ -136,7 +136,11 @@ class MainActivity : ComponentActivity() {
                 palette = ThemePalette.fromStorage(themeSettings.paletteId),
                 motionStyle = themeSettings.motionStyle,
                 trueBlack = themeSettings.trueBlack,
-                customColorHex = themeSettings.customColorHex
+                customColorHex = themeSettings.customColorHex,
+                animeThemeActive = themeSettings.animeThemeActive,
+                animeThemeColorHex = themeSettings.animeThemeColorHex,
+                animeThemeRetainColor = themeSettings.animeThemeRetainColor,
+                appBackgroundColor = themeSettings.appBackgroundColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // Held on the themed background until the stored theme is in.

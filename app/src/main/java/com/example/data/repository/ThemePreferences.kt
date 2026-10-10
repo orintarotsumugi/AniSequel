@@ -101,6 +101,11 @@ class ThemePreferences(private val context: Context) {
         val MOTION_STYLE = stringPreferencesKey("motion_style")
         val TRUE_BLACK = booleanPreferencesKey("true_black")
         val CUSTOM_COLOR_HEX = stringPreferencesKey("custom_color_hex")
+        val ANIME_THEME_ACTIVE = booleanPreferencesKey("anime_theme_active")
+        val ANIME_THEME_COLOR_HEX = stringPreferencesKey("anime_theme_color_hex")
+        val ANIME_THEME_RETAIN_COLOR = booleanPreferencesKey("anime_theme_retain_color")
+        val ANIME_THEME_REVERT_DURATION = androidx.datastore.preferences.core.intPreferencesKey("anime_theme_revert_duration")
+        val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
     }
 
     /**
@@ -119,6 +124,11 @@ class ThemePreferences(private val context: Context) {
         val motionStyle: MotionStyle = MotionStyle.DEFAULT,
         val trueBlack: Boolean = false,
         val customColorHex: String? = null,
+        val animeThemeActive: Boolean = false,
+        val animeThemeColorHex: String? = null,
+        val animeThemeRetainColor: Boolean = true,
+        val animeThemeRevertDuration: Int = 300,
+        val appBackgroundColor: String? = null,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     )
@@ -131,6 +141,11 @@ class ThemePreferences(private val context: Context) {
             motionStyle = MotionStyle.fromStorage(preferences[Keys.MOTION_STYLE]),
             trueBlack = preferences[Keys.TRUE_BLACK] ?: false,
             customColorHex = preferences[Keys.CUSTOM_COLOR_HEX],
+            animeThemeActive = preferences[Keys.ANIME_THEME_ACTIVE] ?: false,
+            animeThemeColorHex = preferences[Keys.ANIME_THEME_COLOR_HEX],
+            animeThemeRetainColor = preferences[Keys.ANIME_THEME_RETAIN_COLOR] ?: true,
+            animeThemeRevertDuration = preferences[Keys.ANIME_THEME_REVERT_DURATION] ?: 300,
+            appBackgroundColor = preferences[Keys.APP_BACKGROUND_COLOR],
             isLoaded = true
         )
     }
@@ -169,6 +184,39 @@ class ThemePreferences(private val context: Context) {
         }
     }
 
+    suspend fun setAnimeThemeActive(active: Boolean, colorHex: String? = null) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_ACTIVE] = active
+            if (colorHex != null) {
+                preferences[Keys.ANIME_THEME_COLOR_HEX] = colorHex
+            } else if (!active) {
+                preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            }
+        }
+    }
+
+    suspend fun setAnimeThemeRetainColor(retain: Boolean) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_RETAIN_COLOR] = retain
+        }
+    }
+
+    suspend fun setAnimeThemeRevertDuration(durationSeconds: Int) {
+        context.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_REVERT_DURATION] = durationSeconds
+        }
+    }
+
+    suspend fun setAppBackgroundColor(hex: String?) {
+        context.themeDataStore.edit { preferences ->
+            if (hex != null) {
+                preferences[Keys.APP_BACKGROUND_COLOR] = hex
+            } else {
+                preferences.remove(Keys.APP_BACKGROUND_COLOR)
+            }
+        }
+    }
+
     /**
      * Turns Material You on or off.
      *
@@ -193,6 +241,11 @@ class ThemePreferences(private val context: Context) {
             preferences.remove(Keys.MOTION_STYLE)
             preferences.remove(Keys.TRUE_BLACK)
             preferences.remove(Keys.CUSTOM_COLOR_HEX)
+            preferences.remove(Keys.ANIME_THEME_ACTIVE)
+            preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            preferences.remove(Keys.ANIME_THEME_RETAIN_COLOR)
+            preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
+            preferences.remove(Keys.APP_BACKGROUND_COLOR)
         }
     }
 }

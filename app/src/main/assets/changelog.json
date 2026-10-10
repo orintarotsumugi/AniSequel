@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.49",
+      "entries": [
+        {
+          "title": "Enhanced AniList Markdown & Rich Link Previews",
+          "detail": "Markdown bios and descriptions now render rich interactive preview cards for AniList links, support animated GIFs with fluid playback, and include robust alignment parsing for centered text and blocks."
+        },
+        {
+          "title": "Animated GIF Support in Markdown",
+          "detail": "Integrated GIF decoding into Coil so animated image embeds and badges render seamlessly across profile bios and detail views."
+        }
+      ]
+    },
+    {
       "version": "1.0.44",
       "entries": [
         {

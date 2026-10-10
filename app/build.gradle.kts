@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.0.44"
-val BASELINE_VERSION_CODE = 126
+val BASELINE_VERSION_NAME = "1.0.49"
+val BASELINE_VERSION_CODE = 127
 
 plugins {
   alias(libs.plugins.android.application)
@@ -195,6 +195,7 @@ dependencies {
   // implementation(libs.androidx.room.ktx)
   // implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
+  implementation(libs.coil.gif)
   implementation(libs.converter.moshi)
   // implementation(platform(libs.firebase.bom))
   // implementation(libs.firebase.ai)
