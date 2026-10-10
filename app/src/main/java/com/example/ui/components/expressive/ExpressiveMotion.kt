@@ -5,7 +5,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
@@ -17,6 +19,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
@@ -100,7 +103,7 @@ object ExpressiveMotion {
      * to the feel of one press had to be remembered in the other.
      */
     val PressSpatial: FiniteAnimationSpec<Float> get() =
-        DefaultSpatial
+        spatial(expressiveDamping = Spring.DampingRatioMediumBouncy, expressiveStiffness = Spring.StiffnessMedium)
 
     /**
      * The spatial counterpart for `IntOffset`-based placement motion.
@@ -278,10 +281,15 @@ object ExpressiveMotion {
  * animation win in the app - see TO-DO.md.
  */
 fun Modifier.bouncyPress(
-    pressedScale: Float = 0.96f
+    pressedScale: Float = 0.94f,
+    interactionSource: InteractionSource? = null
 ): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val fallbackSource = remember { MutableInteractionSource() }
+    val effectiveSource = interactionSource ?: fallbackSource
+    val isInteractionPressed by effectiveSource.collectIsPressedAsState()
+    val isPointerPressed = remember { mutableStateOf(false) }
+
+    val isPressed = isInteractionPressed || isPointerPressed.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
@@ -289,10 +297,26 @@ fun Modifier.bouncyPress(
         label = "bouncy_press_scale"
     )
 
-    this.graphicsLayer {
-        scaleX = scale
-        scaleY = scale
-    }
+    this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitFirstDown(requireUnconsumed = false)
+                    isPointerPressed.value = true
+                    try {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                        } while (event.changes.any { it.pressed })
+                    } finally {
+                        isPointerPressed.value = false
+                    }
+                }
+            }
+        }
 }
 
 /**

@@ -61,7 +61,21 @@ data class FilterCriteria(
      * airing. An old show picked up in January counts; last year's season
      * finished this week does not.
      */
-    val parentCompletedThisYear: Boolean = false
+    val parentCompletedThisYear: Boolean = false,
+
+    /**
+     * Finds sequels to anime the viewer is currently watching, or sequels
+     * the viewer has already marked as currently watching in their list.
+     * Off by default so the sequel feed defaults to missed continuations.
+     */
+    val includeCurrentlyWatching: Boolean = false,
+
+    /**
+     * Finds sequels that are already present in the viewer's anime list
+     * (Completed, Paused, Dropped, etc.). Off by default to keep the focus
+     * on gaps and unwatched continuations.
+     */
+    val includeInList: Boolean = false
 ) {
     /**
      * True when any criterion here is actively narrowing the result list.
@@ -86,5 +100,7 @@ data class FilterCriteria(
             !hideAlreadyPlanned ||
             includedRelations != setOf(RelationKind.SEQUEL) ||
             sequelReleasedThisYear ||
-            parentCompletedThisYear
+            parentCompletedThisYear ||
+            includeCurrentlyWatching ||
+            includeInList
 }

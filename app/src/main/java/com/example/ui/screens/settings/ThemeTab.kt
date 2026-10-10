@@ -67,6 +67,9 @@ fun ThemeTab(
     )
 
     SettingsScrollColumn(modifier) {
+        ThemePreviewCard(themeSettings = themeSettings)
+        Spacer(modifier = Modifier.height(14.dp))
+
         SectionCard(
             title = "Dark mode",
             icon = AppVectorIcons.ThemeDark,
@@ -163,6 +166,7 @@ fun ThemeTab(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(MaterialTheme.shapes.small)
+                            .bouncyPress(pressedScale = 0.90f)
                             .clickable {
                                 scope.launch {
                                     if (isSelected) {
@@ -283,9 +287,16 @@ private fun PaletteSwatch(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (selected) palette.dark.primary else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = com.example.ui.components.expressive.ExpressiveMotion.FastColorEffects,
+        label = "palette_border_color"
+    )
+
     Column(
         modifier = Modifier
             .clip(MaterialTheme.shapes.small)
+            .bouncyPress(pressedScale = 0.94f)
             .clickable(onClick = onClick)
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -294,12 +305,11 @@ private fun PaletteSwatch(
             modifier = Modifier.size(56.dp, 40.dp),
             shape = MaterialTheme.shapes.small,
             color = palette.dark.primaryContainer,
-            tonalElevation = 0.dp,
-            border = if (selected) {
-                androidx.compose.foundation.BorderStroke(2.dp, palette.dark.primary)
-            } else {
-                androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            }
+            tonalElevation = if (selected) 4.dp else 0.dp,
+            border = androidx.compose.foundation.BorderStroke(
+                width = if (selected) 2.dp else 1.dp,
+                color = borderColor
+            )
         ) {
             Row {
                 Surface(modifier = Modifier.width(32.dp).height(40.dp), color = palette.dark.primary) {}

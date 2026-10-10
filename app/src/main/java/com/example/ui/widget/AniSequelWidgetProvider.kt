@@ -76,16 +76,20 @@ class AniSequelWidgetProvider : AppWidgetProvider() {
         }
 
         private fun renderWidget(context: Context): RemoteViews {
-            val count = AniSequelWidgetData.recentActivityCount()
+            val count = AniSequelWidgetData.recentActivityCount(context)
+            val username = AniSequelWidgetData.username(context)
+
+            val caption = if (count == 0) {
+                context.getString(R.string.widget_caption_empty)
+            } else if (!username.isNullOrBlank()) {
+                "@$username · ${context.getString(R.string.widget_caption)}"
+            } else {
+                context.getString(R.string.widget_caption)
+            }
 
             return RemoteViews(context.packageName, R.layout.widget_anisequel).apply {
                 setTextViewText(R.id.widget_count, count.toString())
-                setTextViewText(
-                    R.id.widget_caption,
-                    context.getString(
-                        if (count == 0) R.string.widget_caption_empty else R.string.widget_caption
-                    )
-                )
+                setTextViewText(R.id.widget_caption, caption)
                 setOnClickPendingIntent(R.id.widget_root, openActivityPendingIntent(context))
             }
         }

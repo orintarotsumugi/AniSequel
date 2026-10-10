@@ -282,6 +282,25 @@ fun AppNavigation(
         }
     }
 
+    // Keep home screen widgets in sync with live dashboard counts whenever data updates
+    LaunchedEffect(dashboardState) {
+        val success = dashboardState as? DashboardUiState.Success
+        if (success != null) {
+            val top = success.missedSequels.firstOrNull()
+            com.example.ui.widget.AniSequelWidgetData.updateData(
+                context = context,
+                missedCount = success.totalMissedCount,
+                arrivingCount = success.arriving.size,
+                username = success.viewer.name,
+                topMissedTitle = top?.sequelTitle,
+                topMissedParent = top?.parentTitle
+            )
+            com.example.ui.widget.AniSequelWidgetProvider.updateAll(context)
+            com.example.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
+            com.example.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,

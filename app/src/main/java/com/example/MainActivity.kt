@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Extra used by the profile-activity widget to request opening the activity screen. */
         const val EXTRA_WIDGET_OPEN_ACTIVITY = "anisequel.widget.open_activity"
+        /** Extra used by the missed-sequels widget to request opening the main dashboard. */
+        const val EXTRA_WIDGET_OPEN_DASHBOARD = "anisequel.widget.open_dashboard"
+        /** Extra used by the arriving-sequels widget to request opening the arriving feed. */
+        const val EXTRA_WIDGET_OPEN_ARRIVING = "anisequel.widget.open_arriving"
     }
 
     private lateinit var authRepository: AuthRepository

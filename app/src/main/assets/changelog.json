@@ -1,6 +1,48 @@
 {
   "versions": [
     {
+      "version": "1.0.44",
+      "entries": [
+        {
+          "title": "Tactile bouncy touch feedback across the UI",
+          "detail": "Restored non-consuming pointer detection in the expressive motion engine so interactive buttons, cards, tabs, and status chips dynamically spring and bounce on press with fluid Material 3 spring physics."
+        },
+        {
+          "title": "Interactive live theme preview card",
+          "detail": "Added a live interactive preview card in Settings > Theme demonstrating active palettes, custom hues, dark mode, and true black OLED surfaces with interactive sample action buttons."
+        },
+        {
+          "title": "New anime aesthetic palettes",
+          "detail": "Introduced Midnight Neon (cyberpunk electric cyan and magenta) and Golden Hour (warm amber and copper) curated palettes to the theme selector."
+        },
+        {
+          "title": "Enhanced swatch selection indicators",
+          "detail": "Palette swatches and custom accent hue pickers now feature tactile bouncy presses, animated spring elevation borders, and smooth selection state indicators."
+        }
+      ]
+    },
+    {
+      "version": "1.0.43",
+      "entries": [
+        {
+          "title": "Currently watching & in-list sequels discoverable",
+          "detail": "The sequel finder can now discover sequels to shows you are currently watching or sequels already in your anime lists. Both options are accessible via new toggles in the filter sheet and remain disabled by default to preserve the classic unwatched gaps feed."
+        },
+        {
+          "title": "New Missed Sequels and Arriving home-screen widgets",
+          "detail": "Added dedicated home-screen widgets for Missed Sequels and Arriving Soon anime. Placed widgets update with live data from your AniList account and launch directly into relevant dashboard destinations."
+        },
+        {
+          "title": "Enhanced widget performance and data persistence",
+          "detail": "Widgets now persist live dashboard counts and username details in lightweight local cache, eliminating redundant background fixture queries and synchronizing instantly across updates."
+        },
+        {
+          "title": "Sequel discovery pipeline optimization",
+          "detail": "Deduplicated sequel candidate allocations during the initial franchise graph exploration, cutting unnecessary object allocations and improving scrolling and filtering responsiveness on accounts with large watch histories."
+        }
+      ]
+    },
+    {
       "version": "1.0.42",
       "entries": [
         {

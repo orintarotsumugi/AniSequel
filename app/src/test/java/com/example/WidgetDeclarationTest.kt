@@ -81,7 +81,7 @@ class WidgetDeclarationTest {
     private fun widgetMetadata(): Element = parse(widgetMetadataPath)
 
     /** The `<receiver>` the platform treats as this app's widget provider. */
-    private fun widgetReceiver(): Element {
+    private fun widgetReceivers(): List<Element> {
         val receivers = parse(manifestPath).descendants("receiver")
         val declared = receivers.filter { receiver ->
             receiver.descendants("meta-data").any {
@@ -91,110 +91,96 @@ class WidgetDeclarationTest {
 
         assertTrue(
             "AndroidManifest.xml declares ${receivers.size} receivers and none of " +
-                "them carries the android.appwidget.provider meta-data, so the " +
-                "widget is not published at all.",
-            declared.size == 1
+                "them carries the android.appwidget.provider meta-data, so no " +
+                "widget is published at all.",
+            declared.isNotEmpty()
         )
 
-        return declared.single()
+        return declared
     }
 
-    /**
-     * The one that produced "this app is not installed".
-     *
-     * Only asserted when a configure target exists: this widget needs no
-     * configuration, and the fix was to stop pointing the attribute at something
-     * that cannot be launched rather than to invent an Activity for it. If one is
-     * ever declared, it has to be an Activity the manifest actually declares.
-     */
+    private fun widgetReceiver(): Element = widgetReceivers().first()
+
     @Test
     fun `a widget configuration target is an activity the manifest declares`() {
-        val configured = widgetMetadata().getAttribute("android:configure")
-        if (configured.isBlank()) return
+        for (receiver in widgetReceivers()) {
+            val metaDataResource = receiver.descendants("meta-data")
+                .firstOrNull { it.getAttribute("android:name") == "android.appwidget.provider" }
+                ?.getAttribute("android:resource")
+                ?.removePrefix("@xml/") ?: continue
 
-        val className = configured.removePrefix(".")
-        val activities = parse(manifestPath).descendants("activity")
-            .map { it.getAttribute("android:name").removePrefix(".") }
+            val metadata = parse("app/src/main/res/xml/$metaDataResource.xml")
+            val configured = metadata.getAttribute("android:configure")
+            if (configured.isBlank()) continue
 
-        assertTrue(
-            "res/xml/$widgetMetadataPath sets android:configure=\"$configured\", " +
-                "but AndroidManifest.xml declares no matching <activity> " +
-                "(declared: $activities). The launcher starts that component when " +
-                "the user drops the widget, and a target that is not an Activity " +
-                "makes adding the widget fail with a message about the app not " +
-                "being installed.",
-            activities.any { it == className }
-        )
+            val className = configured.removePrefix(".")
+            val activities = parse(manifestPath).descendants("activity")
+                .map { it.getAttribute("android:name").removePrefix(".") }
+
+            assertTrue(
+                "res/xml/$metaDataResource.xml sets android:configure=\"$configured\", " +
+                    "but AndroidManifest.xml declares no matching <activity> " +
+                    "(declared: $activities).",
+                activities.any { it == className }
+            )
+        }
     }
 
-    /**
-     * Without this there is nothing for the host to inflate until the first
-     * update arrives, which is a blank tile - or, on a picker that renders the
-     * entry first, no entry.
-     */
     @Test
     fun `the widget declares an initial layout that exists`() {
-        val initialLayout = widgetMetadata().getAttribute("android:initialLayout")
+        for (receiver in widgetReceivers()) {
+            val metaDataResource = receiver.descendants("meta-data")
+                .firstOrNull { it.getAttribute("android:name") == "android.appwidget.provider" }
+                ?.getAttribute("android:resource")
+                ?.removePrefix("@xml/")
 
-        assertTrue(
-            "res/xml/$widgetMetadataPath has no android:initialLayout. The host " +
-                "inflates that layout before the widget's first update, so without " +
-                "it a freshly placed tile has nothing to draw.",
-            initialLayout.isNotBlank()
-        )
-        assertTrue(
-            "android:initialLayout=\"$initialLayout\" is not a @layout/ reference",
-            initialLayout.startsWith("@layout/")
-        )
+            assertNotNull("Widget receiver must specify android:resource in meta-data", metaDataResource)
+            val metadata = parse("app/src/main/res/xml/$metaDataResource.xml")
+            val initialLayout = metadata.getAttribute("android:initialLayout")
 
-        val name = initialLayout.removePrefix("@layout/")
-        assertTrue(
-            "android:initialLayout points at $initialLayout, but " +
-                "app/src/main/res/layout/$name.xml does not exist.",
-            File(root, "app/src/main/res/layout/$name.xml").isFile
-        )
+            assertTrue(
+                "res/xml/$metaDataResource.xml has no android:initialLayout.",
+                initialLayout.isNotBlank()
+            )
+            assertTrue(
+                "android:initialLayout=\"$initialLayout\" is not a @layout/ reference",
+                initialLayout.startsWith("@layout/")
+            )
+
+            val name = initialLayout.removePrefix("@layout/")
+            assertTrue(
+                "android:initialLayout points at $initialLayout, but " +
+                    "app/src/main/res/layout/$name.xml does not exist.",
+                File(root, "app/src/main/res/layout/$name.xml").isFile
+            )
+        }
     }
 
-    /**
-     * The platform refuses to reschedule an update period under 30 minutes, so a
-     * value below it silently does nothing except read as a shorter interval than
-     * the widget actually gets.
-     */
     @Test
     fun `the update period is either disabled or at least thirty minutes`() {
-        val period = widgetMetadata().getAttribute("android:updatePeriodMillis").toLongOrNull()
+        for (receiver in widgetReceivers()) {
+            val metaDataResource = receiver.descendants("meta-data")
+                .firstOrNull { it.getAttribute("android:name") == "android.appwidget.provider" }
+                ?.getAttribute("android:resource")
+                ?.removePrefix("@xml/") ?: continue
 
-        assertNotNull(
-            "res/xml/$widgetMetadataPath has no android:updatePeriodMillis",
-            period
-        )
-        assertTrue(
-            "android:updatePeriodMillis=$period. The platform does not support " +
-                "periods below 1800000 (30 minutes) and ignores the value, so a " +
-                "smaller number is a lie about how often the widget refreshes. Use " +
-                "0 to disable periodic updates.",
-            period == 0L || period!! >= 1_800_000L
-        )
+            val metadata = parse("app/src/main/res/xml/$metaDataResource.xml")
+            val period = metadata.getAttribute("android:updatePeriodMillis").toLongOrNull()
+
+            assertNotNull(
+                "res/xml/$metaDataResource.xml has no android:updatePeriodMillis",
+                period
+            )
+            assertTrue(
+                "android:updatePeriodMillis=$period in $metaDataResource.xml. The platform does not support " +
+                    "periods below 1800000 (30 minutes) and ignores the value.",
+                period == 0L || period!! >= 1_800_000L
+            )
+        }
     }
 
-    /**
-     * The receiver must be the `AppWidgetProvider` itself.
-     *
-     * This is the bug that made a newly added tile stay blank: a forwarding
-     * `BroadcastReceiver` in front of the provider unpacked the broadcast by hand
-     * and got the extra name wrong. `AppWidgetProvider` already does that
-     * unpacking correctly, so anything that is *not* one has to reimplement it.
-     */
     @Test
     fun `the registered receiver is an AppWidgetProvider`() {
-        val receiver = widgetReceiver()
-        val declaredName = receiver.getAttribute("android:name")
-
-        assertTrue(
-            "the widget's <receiver> has no android:name",
-            declaredName.isNotBlank()
-        )
-
         val namespace = Regex("""namespace\s*=\s*"([^"]+)"""")
             .find(File(root, buildScriptPath).readText())
             ?.groupValues
@@ -202,75 +188,83 @@ class WidgetDeclarationTest {
 
         assertNotNull("could not read `namespace` out of $buildScriptPath", namespace)
 
-        val className = if (declaredName.startsWith(".")) {
-            "$namespace${declaredName}"
-        } else {
-            declaredName
-        }
-        val source = File(root, "app/src/main/java/${className.replace('.', '/')}.kt")
+        for (receiver in widgetReceivers()) {
+            val declaredName = receiver.getAttribute("android:name")
+            assertTrue("the widget's <receiver> has no android:name", declaredName.isNotBlank())
 
-        assertTrue(
-            "the widget's receiver android:name is \"$declaredName\", which " +
-                "resolves to $className - and no such source file exists under " +
-                "app/src/main/java.",
-            source.isFile
-        )
-        assertTrue(
-            "${source.name} is registered as the widget's receiver but does not " +
-                "extend AppWidgetProvider. A plain BroadcastReceiver has to unpack " +
-                "the update broadcast itself, which is how the widget came to " +
-                "never receive its first update - see this class's own note.",
-            source.readText().contains(": AppWidgetProvider()")
-        )
+            val className = if (declaredName.startsWith(".")) {
+                "$namespace${declaredName}"
+            } else {
+                declaredName
+            }
+            val source = File(root, "app/src/main/java/${className.replace('.', '/')}.kt")
+
+            assertTrue(
+                "the widget's receiver android:name is \"$declaredName\", which " +
+                    "resolves to $className - and no such source file exists under " +
+                    "app/src/main/java.",
+                source.isFile
+            )
+            assertTrue(
+                "${source.name} is registered as the widget's receiver but does not " +
+                    "extend AppWidgetProvider.",
+                source.readText().contains(": AppWidgetProvider()")
+            )
+        }
     }
 
     @Test
     fun `the receiver filters the app widget update broadcast`() {
-        val receiver = widgetReceiver()
-        val actions = receiver.descendants("intent-filter")
-            .flatMap { it.descendants("action") }
-            .map { it.getAttribute("android:name") }
+        for (receiver in widgetReceivers()) {
+            val actions = receiver.descendants("intent-filter")
+                .flatMap { it.descendants("action") }
+                .map { it.getAttribute("android:name") }
 
-        assertTrue(
-            "the widget's receiver does not filter " +
-                "android.appwidget.action.APPWIDGET_UPDATE (it filters $actions). " +
-                "The platform only ever calls it through that action.",
-            "android.appwidget.action.APPWIDGET_UPDATE" in actions
-        )
+            assertTrue(
+                "the widget receiver ${receiver.getAttribute("android:name")} does not filter " +
+                    "android.appwidget.action.APPWIDGET_UPDATE (it filters $actions).",
+                "android.appwidget.action.APPWIDGET_UPDATE" in actions
+            )
+        }
     }
 
-    /**
-     * Every id the provider writes must exist in the layout the metadata declares.
-     *
-     * `setTextViewText` and `setOnClickPendingIntent` on an id that is not in the
-     * layout are silently ignored. A rename on either side therefore ships a
-     * widget that is present, empty and untappable, with nothing logged.
-     */
     @Test
     fun `the ids the provider writes exist in the declared initial layout`() {
-        val initialLayout = widgetMetadata().getAttribute("android:initialLayout")
-        val layoutName = initialLayout.removePrefix("@layout/")
-        val layout = File(root, "app/src/main/res/layout/$layoutName.xml").readText()
+        val namespace = Regex("""namespace\s*=\s*"([^"]+)"""")
+            .find(File(root, buildScriptPath).readText())
+            ?.groupValues
+            ?.get(1)
 
-        val written = Regex("""R\.id\.(\w+)""")
-            .findAll(File(root, providerPath).readText())
-            .map { it.groupValues[1] }
-            .toSet()
+        for (receiver in widgetReceivers()) {
+            val declaredName = receiver.getAttribute("android:name")
+            val className = if (declaredName.startsWith(".")) "$namespace$declaredName" else declaredName
+            val sourceFile = File(root, "app/src/main/java/${className.replace('.', '/')}.kt")
 
-        assertTrue(
-            "no R.id references found in $providerPath. This test exists to compare " +
-                "them against the layout, so finding none means it can no longer do " +
-                "that rather than that the widget stopped writing any.",
-            written.isNotEmpty()
-        )
+            val metaDataResource = receiver.descendants("meta-data")
+                .firstOrNull { it.getAttribute("android:name") == "android.appwidget.provider" }
+                ?.getAttribute("android:resource")
+                ?.removePrefix("@xml/") ?: continue
 
-        val missing = written.filterNot { layout.contains("@+id/$it") }
-        assertTrue(
-            "the provider writes to $missing, which $layoutName.xml does not " +
-                "declare. RemoteViews ignores an update to a view that is not " +
-                "there, so this is a widget that renders empty or does not respond " +
-                "to taps - with no error anywhere.",
-            missing.isEmpty()
-        )
+            val metadata = parse("app/src/main/res/xml/$metaDataResource.xml")
+            val initialLayout = metadata.getAttribute("android:initialLayout")
+            val layoutName = initialLayout.removePrefix("@layout/")
+            val layout = File(root, "app/src/main/res/layout/$layoutName.xml").readText()
+
+            val written = Regex("""R\.id\.(\w+)""")
+                .findAll(sourceFile.readText())
+                .map { it.groupValues[1] }
+                .toSet()
+
+            assertTrue(
+                "no R.id references found in ${sourceFile.name}.",
+                written.isNotEmpty()
+            )
+
+            val missing = written.filterNot { layout.contains("@+id/$it") }
+            assertTrue(
+                "${sourceFile.name} writes to $missing, which $layoutName.xml does not declare.",
+                missing.isEmpty()
+            )
+        }
     }
 }

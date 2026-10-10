@@ -45,42 +45,49 @@ class FindMissedSequelsUseCase {
         val lists = collection.lists ?: return emptyList()
         val allUserEntries = lists.flatMap { it.entries ?: emptyList() }
 
-        // Every media the user already tracks in an active or completed list
-        // (Completed, Watching, Paused, Dropped). These can never be missed.
-        val activeOrCompletedMediaIds = mutableSetOf<Int>()
-        // ...and the subset sitting in Planning, which the switch controls.
+        val completedMediaIds = mutableSetOf<Int>()
+        val watchingMediaIds = mutableSetOf<Int>()
         val plannedMediaIds = mutableSetOf<Int>()
+        val otherListMediaIds = mutableSetOf<Int>()
 
         for (entry in allUserEntries) {
             val mediaId = entry.media.id
             val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
-            if (entryStatus.equals("PLANNING", ignoreCase = true)) {
-                plannedMediaIds.add(mediaId)
-            } else {
-                activeOrCompletedMediaIds.add(mediaId)
+            when {
+                entryStatus.equals("PLANNING", ignoreCase = true) -> plannedMediaIds.add(mediaId)
+                entryStatus.equals("CURRENT", ignoreCase = true) || entryStatus.equals("WATCHING", ignoreCase = true) -> watchingMediaIds.add(mediaId)
+                isWatched(entryStatus, entry.media.episodes, entry.progress) -> completedMediaIds.add(mediaId)
+                else -> otherListMediaIds.add(mediaId)
             }
         }
 
         val includedRelations = filterCriteria.includedRelations
-
         val missedSequels = mutableListOf<MissedSequel>()
+        // Performance optimization: prevent duplicate candidate allocations during discovery
+        val seenSequelIds = mutableSetOf<Int>()
 
         for (entry in allUserEntries) {
-            if (!isWatched(entry.status, entry.media.episodes, entry.progress)) continue
+            val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
+            val isParentWatched = isWatched(entryStatus, entry.media.episodes, entry.progress)
+            val isParentWatching = entryStatus.equals("CURRENT", ignoreCase = true) || entryStatus.equals("WATCHING", ignoreCase = true)
+            val isParentOther = !isParentWatched && !isParentWatching && !entryStatus.equals("PLANNING", ignoreCase = true)
+
+            // Can this entry serve as a parent from which to explore franchise edges?
+            val canExploreFromParent = isParentWatched ||
+                (filterCriteria.includeCurrentlyWatching && isParentWatching) ||
+                (filterCriteria.includeInList && (isParentWatching || isParentOther))
+
+            if (!canExploreFromParent) continue
 
             val parentMedia = entry.media
             val parentTitle = parentMedia.title?.displayTitle ?: "Anime #${parentMedia.id}"
             val parentCompletedYear = entry.completedAt?.year
 
             for (edge in parentMedia.relations?.edges ?: emptyList()) {
-                val relationType = edge.relationType
-                if (relationType == null) continue
+                val relationType = edge.relationType ?: continue
 
                 // Matched case-insensitively against the handful of included
-                // kinds rather than by uppercasing the value first. The old
-                // `contains(relationType.uppercase(ROOT))` allocated a String
-                // per edge, and a large account walks well over a thousand of
-                // them on the one path that is on the way to first paint.
+                // kinds rather than by uppercasing the value first.
                 val relationKind = includedRelations.firstOrNull {
                     it.apiValue.equals(relationType, ignoreCase = true)
                 } ?: continue
@@ -88,21 +95,37 @@ class FindMissedSequelsUseCase {
                 val sequelNode = edge.node
                 val sequelId = sequelNode.id
 
-                // If the user already watched or is actively tracking this franchise entry,
-                // it is never a "missed" entry.
-                if (activeOrCompletedMediaIds.contains(sequelId)) continue
+                val isWatching = watchingMediaIds.contains(sequelId) ||
+                    sequelNode.mediaListEntry?.status.equals("CURRENT", ignoreCase = true) ||
+                    sequelNode.mediaListEntry?.status.equals("WATCHING", ignoreCase = true)
 
-                // The user's own "do not remind me about this one again". Checked
-                // here rather than in [applyFilters] so a hidden entry is never
-                // built in the first place, and so it stops costing anything in
-                // the sort that runs on every keystroke.
-                if (!includeHidden && filterCriteria.hiddenMediaIds.contains(sequelId)) continue
+                val isCompleted = completedMediaIds.contains(sequelId) ||
+                    sequelNode.mediaListEntry?.status.equals("COMPLETED", ignoreCase = true)
+
+                val isOtherList = otherListMediaIds.contains(sequelId)
 
                 val isPlanned = plannedMediaIds.contains(sequelId) ||
-                        sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
+                    sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
 
-                // If it is on the planning list and the user chose to hide planned entries, skip.
-                if (isPlanned && filterCriteria.hideAlreadyPlanned) continue
+                // Skip rules based on toggles:
+                // 1. If currently watching: only keep if includeCurrentlyWatching or includeInList is on
+                if (isWatching && !filterCriteria.includeCurrentlyWatching && !filterCriteria.includeInList) {
+                    continue
+                }
+                // 2. If already completed or in other list (paused/dropped): only keep if includeInList is on
+                if ((isCompleted || isOtherList) && !filterCriteria.includeInList) {
+                    continue
+                }
+                // 3. If in planning: respect hideAlreadyPlanned (unless includeInList is on)
+                if (isPlanned && filterCriteria.hideAlreadyPlanned && !filterCriteria.includeInList) {
+                    continue
+                }
+
+                // The user's own "do not remind me about this one again".
+                if (!includeHidden && filterCriteria.hiddenMediaIds.contains(sequelId)) continue
+
+                // Dedup on the fly: the same sequel reachable from two parents is one gap
+                if (!seenSequelIds.add(sequelId)) continue
 
                 missedSequels.add(
                     MissedSequel(
@@ -115,14 +138,14 @@ class FindMissedSequelsUseCase {
                         parentCompletedYear = parentCompletedYear,
                         sequelMedia = sequelNode,
                         relationType = relationKind.apiValue,
-                        isAddedToPlanning = isPlanned
+                        isAddedToPlanning = isPlanned,
+                        isAddedToWatching = isWatching
                     )
                 )
             }
         }
 
-        // The same sequel reachable from two parents is one gap, not two.
-        return missedSequels.distinctBy { it.sequelId }
+        return missedSequels
     }
 
     /**

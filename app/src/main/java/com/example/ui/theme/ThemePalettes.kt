@@ -250,9 +250,21 @@ data class ThemePalette(
             ThemePalette(id = "ocean", displayName = "Deep Ocean", light = l, dark = d)
         }
 
+        val MIDNIGHT_NEON: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF00E5FF))
+            ThemePalette(id = "midnight_neon", displayName = "Midnight Neon", light = l, dark = d)
+        }
+
+        val GOLDEN_HOUR: ThemePalette = run {
+            val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFFFF9100))
+            ThemePalette(id = "golden_hour", displayName = "Golden Hour", light = l, dark = d)
+        }
+
         val entries: List<ThemePalette> = listOf(
             ANISDK,
             SAKURA,
+            MIDNIGHT_NEON,
+            GOLDEN_HOUR,
             CYBER_JADE,
             NEON_VIOLET,
             CRIMSON,

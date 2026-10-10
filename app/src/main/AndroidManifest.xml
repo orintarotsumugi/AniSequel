@@ -64,6 +64,30 @@
                 android:resource="@xml/widget_anisequel" />
         </receiver>
 
+        <!-- Missed Sequels home-screen widget -->
+        <receiver
+            android:name=".ui.widget.MissedSequelsWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_missed_sequels" />
+        </receiver>
+
+        <!-- Arriving Sequels home-screen widget -->
+        <receiver
+            android:name=".ui.widget.ArrivingSequelsWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_arriving_sequels" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

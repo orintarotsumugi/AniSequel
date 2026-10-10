@@ -311,6 +311,8 @@ fun DashboardScreen(
             onToggleRelation = { dashboardViewModel.toggleRelation(it) },
             onToggleSequelThisYear = { dashboardViewModel.toggleSequelReleasedThisYear(it) },
             onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
+            onToggleCurrentlyWatching = { dashboardViewModel.toggleIncludeCurrentlyWatching(it) },
+            onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
             hiddenSequels = hiddenSequels,
             onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
             onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },

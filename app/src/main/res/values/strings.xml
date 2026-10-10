@@ -16,4 +16,14 @@
     <string name="widget_count_initial">0</string>
     <string name="widget_caption">recent updates</string>
     <string name="widget_caption_empty">nothing logged yet</string>
+
+    <!-- Missed sequels widget -->
+    <string name="widget_missed_description">Track missed franchise continuations from your home screen</string>
+    <string name="widget_missed_caption">missed sequels</string>
+    <string name="widget_missed_caption_empty">all caught up</string>
+
+    <!-- Arriving sequels widget -->
+    <string name="widget_arriving_description">Track arriving and airing sequel episodes from your home screen</string>
+    <string name="widget_arriving_caption">arriving soon</string>
+    <string name="widget_arriving_caption_empty">no upcoming airing</string>
 </resources>

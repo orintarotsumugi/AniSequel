@@ -56,6 +56,8 @@ fun FilterSortSheet(
     // about the year the viewer finished its parent.
     onToggleSequelThisYear: (Boolean) -> Unit = {},
     onToggleParentCompletedThisYear: (Boolean) -> Unit = {},
+    onToggleCurrentlyWatching: (Boolean) -> Unit = {},
+    onToggleInList: (Boolean) -> Unit = {},
     /**
      * The entries the user chose to stop being reminded about, and the two ways
      * back out. Empty until the ViewModel has split its candidates, which is
@@ -327,6 +329,54 @@ fun FilterSortSheet(
                     checked = filterCriteria.parentCompletedThisYear,
                     onCheckedChange = onToggleParentCompletedThisYear,
                     modifier = Modifier.testTag("toggle_parent_completed_this_year_switch")
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Include Currently Watching",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "Find sequels you are currently watching or from anime in progress",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+                Switch(
+                    checked = filterCriteria.includeCurrentlyWatching,
+                    onCheckedChange = onToggleCurrentlyWatching,
+                    modifier = Modifier.testTag("toggle_currently_watching_switch")
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Include Sequels in My List",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "Show sequels already tracked in your completed, paused, or dropped lists",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+                Switch(
+                    checked = filterCriteria.includeInList,
+                    onCheckedChange = onToggleInList,
+                    modifier = Modifier.testTag("toggle_in_list_switch")
                 )
             }
 

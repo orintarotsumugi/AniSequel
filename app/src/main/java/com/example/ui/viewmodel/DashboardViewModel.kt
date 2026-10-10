@@ -268,7 +268,7 @@ class DashboardViewModel(
      * unhide instant *and* is what gives the hidden list something to render.
      */
     private var discoveredCandidates: List<MissedSequel>? = null
-    private var discoveryKey: Pair<Boolean, Set<RelationKind>>? = null
+    private var discoveryKey: Triple<Boolean, Set<RelationKind>, Pair<Boolean, Boolean>>? = null
 
     /** Description, banner and studio per media, fetched only when opened. LRU-bounded. */
     private val detailCache = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
@@ -604,12 +604,11 @@ class DashboardViewModel(
         criteria: FilterCriteria
     ): List<MissedSequel> {
         // Every input [FindMissedSequelsUseCase.discover] actually reads has to
-        // be in this key. `hiddenMediaIds` used to be here while `discover`
-        // dropped hidden entries; it is gone now because the walk includes them
-        // and the split happens afterwards, so it is no longer an input.
-        val key = Pair(
+        // be in this key.
+        val key = Triple(
             criteria.hideAlreadyPlanned,
-            criteria.includedRelations
+            criteria.includedRelations,
+            Pair(criteria.includeCurrentlyWatching, criteria.includeInList)
         )
         discoveredCandidates?.let { cached ->
             if (discoveryKey == key) return cached
@@ -777,6 +776,18 @@ class DashboardViewModel(
     /** Narrows the list to sequels whose parent the viewer completed this year. */
     fun toggleParentCompletedThisYear(enabled: Boolean = !_filterCriteria.value.parentCompletedThisYear) {
         _filterCriteria.value = _filterCriteria.value.copy(parentCompletedThisYear = enabled)
+        requestRecompute()
+    }
+
+    /** Finds sequels to currently watching shows or sequels already in watching list. */
+    fun toggleIncludeCurrentlyWatching(enabled: Boolean = !_filterCriteria.value.includeCurrentlyWatching) {
+        _filterCriteria.value = _filterCriteria.value.copy(includeCurrentlyWatching = enabled)
+        requestRecompute()
+    }
+
+    /** Finds sequels already tracked in the user's list (Completed, Paused, etc.). */
+    fun toggleIncludeInList(enabled: Boolean = !_filterCriteria.value.includeInList) {
+        _filterCriteria.value = _filterCriteria.value.copy(includeInList = enabled)
         requestRecompute()
     }
 
