@@ -318,11 +318,13 @@ class AniListRepositoryImpl(
     }
 
     /**
-     * The heavy per-entry fields, fetched for the one sequel the user opens.
+     * The heavy per-entry fields, fetched for the one entry the user opens.
      *
      * Keeping these out of the list query is what stops AniList returning HTTP
      * 500 for large accounts, and it means opening a card no longer re-parses
-     * 1,500 nodes' worth of synopses.
+     * 1,500 nodes' worth of synopses. The query itself is the full display
+     * record - see [GraphQLQueries.GET_MEDIA_DETAIL] - because the profile feed
+     * and the arriving section open entries the list query only summarised.
      */
     override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> {
         detailCache[mediaId]?.let { return Result.success(it) }

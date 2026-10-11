@@ -22,7 +22,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.durationLabel
+import com.example.data.model.englishName
+import com.example.data.model.formatLabel
+import com.example.data.model.nativeName
+import com.example.data.model.romajiName
+import com.example.data.model.seasonLabel
+import com.example.data.model.sourceLabel
+import com.example.data.model.studioName
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.bouncyPress
 
@@ -32,7 +40,7 @@ import com.example.ui.components.expressive.bouncyPress
  */
 @Composable
 fun AnimeSpecsGrid(
-    sequel: MissedSequel,
+    media: MediaNode,
     isDetailLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -47,13 +55,13 @@ fun AnimeSpecsGrid(
             SpecCard(
                 icon = AppVectorIcons.Studio,
                 title = "Animation Studio",
-                value = sequel.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
+                value = media.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
                 modifier = Modifier.weight(1f)
             )
             SpecCard(
                 icon = AppVectorIcons.SourceBook,
                 title = "Source Material",
-                value = sequel.source ?: if (isDetailLoading) "Loading..." else "Original / Other",
+                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else "Original / Other",
                 modifier = Modifier.weight(1f)
             )
         }
@@ -63,21 +71,21 @@ fun AnimeSpecsGrid(
             SpecCard(
                 icon = AppVectorIcons.Schedule,
                 title = "Duration / Format",
-                value = buildDurationFormatString(sequel, isDetailLoading),
+                value = buildDurationFormatString(media, isDetailLoading),
                 modifier = Modifier.weight(1f)
             )
             SpecCard(
                 icon = AppVectorIcons.Calendar,
                 title = "Season & Year",
-                value = sequel.airingSeason ?: "TBA",
+                value = media.seasonLabel ?: "TBA",
                 modifier = Modifier.weight(1f)
             )
         }
 
         // Titles breakdown (Native, Romaji, English)
-        val native = sequel.nativeTitle
-        val romaji = sequel.romajiTitle
-        val english = sequel.englishTitle
+        val native = media.nativeName
+        val romaji = media.romajiName
+        val english = media.englishName
 
         if (!native.isNullOrBlank() || !romaji.isNullOrBlank() || !english.isNullOrBlank()) {
             TitlesCard(
@@ -208,9 +216,9 @@ private fun SpecCard(
     }
 }
 
-private fun buildDurationFormatString(sequel: MissedSequel, isDetailLoading: Boolean): String {
-    val duration = sequel.duration
-    val format = sequel.format
+private fun buildDurationFormatString(media: MediaNode, isDetailLoading: Boolean): String {
+    val duration = media.durationLabel
+    val format = media.formatLabel
     return when {
         duration != null -> "$format · $duration"
         isDetailLoading -> "Loading..."

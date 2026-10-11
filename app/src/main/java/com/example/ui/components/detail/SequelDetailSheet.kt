@@ -47,6 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
+import com.example.data.model.genreList
+import com.example.data.model.posterColor
+import com.example.data.model.synopsis
 import com.example.data.repository.ThemeMode
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
@@ -60,11 +63,11 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SequelDetailSheet(
-    sequel: MissedSequel?,
+    subject: AnimeDetailSubject?,
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
-    onLoadDetail: (MissedSequel) -> Unit,
+    onLoadDetail: (Int) -> Unit,
     isDetailLoading: Boolean,
     canWriteToAniList: Boolean,
     modifier: Modifier = Modifier,
@@ -72,7 +75,11 @@ fun SequelDetailSheet(
     holdDurationSeconds: Int = 3,
     swipeEnabled: Boolean = true
 ) {
-    if (sequel == null) return
+    if (subject == null) return
+    val media = subject.media
+    // Non-null only for a franchise recommendation. Its presence is what adds
+    // the parent card and the add-to-list action, and what names the first tab.
+    val sequel = subject.sequel
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themePreferences = remember(context) { ThemePreferences(context) }
@@ -83,14 +90,14 @@ fun SequelDetailSheet(
         )
     )
 
-    var isDescriptionExpanded by remember(sequel.sequelId) { mutableStateOf(false) }
-    var detailTab by rememberSaveable(sequel.sequelId) { mutableIntStateOf(0) }
+    var isDescriptionExpanded by remember(subject.mediaId) { mutableStateOf(false) }
+    var detailTab by rememberSaveable(subject.mediaId) { mutableIntStateOf(0) }
     val statusColors = AniSequelTheme.statusColors
 
-    LaunchedEffect(sequel.sequelId) {
-        onLoadDetail(sequel)
+    LaunchedEffect(subject.mediaId) {
+        onLoadDetail(subject.mediaId)
         if (themeSettings.animeThemeActive) {
-            val colorHex = sequel.coverColor ?: "#0057B7"
+            val colorHex = media.posterColor ?: "#0057B7"
             themePreferences.setAnimeThemeActive(true, colorHex)
             if (themeSettings.animeThemeRetainColor) {
                 // "Retain" means the anime's colour becomes the app's accent,
@@ -144,15 +151,25 @@ fun SequelDetailSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {
-            DetailHeader(sequel = sequel)
+            DetailHeader(media = media)
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val tabLabels = if (sequel != null) {
+                listOf("Story & Gaps", "Anime Info & Specs")
+            } else {
+                listOf("About", "Anime Info & Specs")
+            }
+            val tabIcons = if (sequel != null) {
+                listOf(AppVectorIcons.FranchiseBranch, AppVectorIcons.Info)
+            } else {
+                listOf(AppVectorIcons.Info, AppVectorIcons.AnimeSparkle)
+            }
             ExpressiveTabBar(
-                tabs = listOf("Story & Gaps", "Anime Info & Specs"),
+                tabs = tabLabels,
                 selectedIndex = detailTab,
                 onSelect = { detailTab = it },
-                icons = listOf(AppVectorIcons.FranchiseBranch, AppVectorIcons.Info),
+                icons = tabIcons,
                 modifier = Modifier.padding(horizontal = 0.dp)
             )
 
@@ -168,67 +185,71 @@ fun SequelDetailSheet(
             ) { tab ->
                 if (tab == 1) {
                     DetailSpecsView(
-                        sequel = sequel,
+                        media = media,
                         isDetailLoading = isDetailLoading
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        // The watched entry this one hangs off, with its own
+                        // artwork. This is the relationship that explains why the
+                        // entry is on the screen at all, so it gets an image
+                        // rather than a bare title - and it costs nothing,
+                        // because the list query already returned the parent's
+                        // cover. Only a recommendation has a parent; an arriving
+                        // or activity row is a show the viewer already tracks.
+                        if (sequel != null) {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(
-                                    imageVector = AppVectorIcons.CheckCircle,
-                                    contentDescription = null,
-                                    tint = statusColors.success,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                // The watched entry this one hangs off, with its own artwork. This is the
-                                // relationship that explains why the entry is on the
-                                // screen at all, so it gets an image rather than a
-                                // bare title - and it costs nothing, because the list
-                                // query already returned the parent's cover.
-                                if (sequel.parentCoverUrl != null) {
-                                    AsyncImage(
-                                        model = sequel.parentCoverUrl,
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = AppVectorIcons.CheckCircle,
                                         contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(MaterialTheme.shapes.extraSmall)
-                                            .background(
-                                                sequel.parentCoverColor.toCoverColorOrNull()
-                                                    ?: MaterialTheme.colorScheme.surfaceContainerHighest
-                                            )
+                                        tint = statusColors.success,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                }
+                                    if (sequel.parentCoverUrl != null) {
+                                        AsyncImage(
+                                            model = sequel.parentCoverUrl,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(MaterialTheme.shapes.extraSmall)
+                                                .background(
+                                                    sequel.parentCoverColor.toCoverColorOrNull()
+                                                        ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                                                )
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                    }
 
-                                Column {
-                                    Text(
-                                        text = sequel.relationLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = sequel.parentTitle,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Column {
+                                        Text(
+                                            text = sequel.relationLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = sequel.parentTitle,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        DetailSpecsGrid(sequel = sequel, isDetailLoading = isDetailLoading)
+                        DetailSpecsGrid(media = media, isDetailLoading = isDetailLoading)
 
-                        if (sequel.genres.isNotEmpty()) {
+                        if (media.genreList.isNotEmpty()) {
                             Text(
                                 text = "Genres",
                                 style = MaterialTheme.typography.titleSmall,
@@ -238,7 +259,7 @@ fun SequelDetailSheet(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                sequel.genres.forEach { genre ->
+                                media.genreList.forEach { genre ->
                                     Surface(
                                         shape = MaterialTheme.shapes.extraSmall,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -254,7 +275,7 @@ fun SequelDetailSheet(
                             }
                         }
 
-                        val desc = sequel.description
+                        val desc = media.synopsis
                         if (isDetailLoading && desc.isNullOrBlank()) {
                             Text(
                                 text = "Synopsis",
@@ -297,7 +318,7 @@ fun SequelDetailSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             DetailActionRow(
-                sequel = sequel,
+                subject = subject,
                 canWriteToAniList = canWriteToAniList,
                 onAddToPlanning = onAddToPlanning,
                 onAddToWatching = onAddToWatching,

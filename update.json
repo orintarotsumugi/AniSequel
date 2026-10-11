@@ -1,9 +1,9 @@
 {
-  "version": "1.0.53",
-  "version_code": 133,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.52",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.52/anisequel-universal.apk",
-  "size_bytes": 2627070,
-  "published_at": "2026-10-11T04:29:27Z",
-  "notes": "- GIFs and images in bios and comments: A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline.\n- AniList links get a preview card: Pasting an anime, manga, character, staff or studio link now previews it as a card, including links with a www. host or a trailing slash that previously fell through as plain text.\n- Like and comment on activity: The Activity feed's like and reply counts are now buttons. Tap the heart to like or un-like a post, or open a thread to read and post a comment without leaving the app.\n- Theme screen, reorganised: Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again.\n- Theme switching is snappier: Dynamic colour schemes are built once per picked colour instead of on every on-screen change, so changing your accent or theme feels immediate.\n- Planning \n\nBuild 133 from ceabaf0e."
+  "version": "1.0.54",
+  "version_code": 134,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.53",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.53/anisequel-universal.apk",
+  "size_bytes": 2627522,
+  "published_at": "2026-10-11T05:14:45Z",
+  "notes": "- Retain Anime Color keeps the colour: Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised.\n- Theme tab, rebuilt around Material 3 Expressive: Settings > Theme leads with a live preview hero washed in the scheme's own colours, then answers three questions in order: how the app looks (appearance mode, then how dark the background is), where the colour comes from (accent palettes and hues, then the anime cover), and how the app moves. Every section and every motion style carries its own vector icon, palettes are chosen from gradient swatches, custom hues are round chips with adaptive check marks, and the anime section shows which cover colour is live and whether it is retained or temporary. Sections read in one scroll, every pick animates with spring physics.\n\nBuild 136 from 966559e8."
 }

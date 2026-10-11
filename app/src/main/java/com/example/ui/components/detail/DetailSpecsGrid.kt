@@ -21,7 +21,21 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.airingCountdown
+import com.example.data.model.airingEpisodeNumber
+import com.example.data.model.durationLabel
+import com.example.data.model.episodesLabel
+import com.example.data.model.formatLabel
+import com.example.data.model.isAiringNow
+import com.example.data.model.isOnHiatus
+import com.example.data.model.isUpcoming
+import com.example.data.model.seasonLabel
+import com.example.data.model.sourceLabel
+import com.example.data.model.statusLabel
+import com.example.data.model.studioName
+import com.example.data.model.watchFraction
+import com.example.data.model.watchFractionLabel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.WavyProgressBar
 import com.example.ui.theme.AniSequelTheme
@@ -32,23 +46,23 @@ import com.example.ui.theme.AniSequelTheme
  */
 @Composable
 fun DetailSpecsGrid(
-    sequel: MissedSequel,
+    media: MediaNode,
     isDetailLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
     val statusValue = when {
-        sequel.isAiring -> "Currently Airing"
-        sequel.isUnreleased -> "Upcoming"
-        sequel.isHiatus -> "On Hiatus"
-        sequel.status.equals("CANCELLED", ignoreCase = true) -> "Cancelled"
+        media.isAiringNow -> "Currently Airing"
+        media.isUpcoming -> "Upcoming"
+        media.isOnHiatus -> "On Hiatus"
+        media.statusLabel.equals("CANCELLED", ignoreCase = true) -> "Cancelled"
         else -> "Finished"
     }
 
     val statusColor = when {
-        sequel.isAiring -> statusColors.success
-        sequel.isUnreleased -> statusColors.info
-        sequel.isHiatus -> statusColors.warning
+        media.isAiringNow -> statusColors.success
+        media.isUpcoming -> statusColors.info
+        media.isOnHiatus -> statusColors.warning
         else -> null
     }
 
@@ -66,8 +80,8 @@ fun DetailSpecsGrid(
                 icon = AppVectorIcons.Tv,
                 title = "Episodes & Length",
                 value = buildString {
-                    append(sequel.episodes)
-                    sequel.duration?.let { append(" · $it") }
+                    append(media.episodesLabel)
+                    media.durationLabel?.let { append(" · $it") }
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -78,21 +92,21 @@ fun DetailSpecsGrid(
             SpecTile(
                 icon = AppVectorIcons.Studio,
                 title = "Animation Studio",
-                value = sequel.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
+                value = media.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
                 modifier = Modifier.weight(1f)
             )
             SpecTile(
                 icon = AppVectorIcons.SourceBook,
                 title = "Source Material",
-                value = sequel.source ?: if (isDetailLoading) "Loading..." else "Original / Other",
+                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else "Original / Other",
                 modifier = Modifier.weight(1f)
             )
         }
 
         // Row 3: Airing Season & Next Episode (or Countdown)
-        val nextEpisode = sequel.nextEpisodeNumber
-        val countdown = sequel.nextAiringCountdown()
-        val airingSeason = sequel.airingSeason
+        val nextEpisode = media.airingEpisodeNumber
+        val countdown = media.airingCountdown()
+        val airingSeason = media.seasonLabel
 
         if (airingSeason != null || nextEpisode != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -116,7 +130,7 @@ fun DetailSpecsGrid(
                     SpecTile(
                         icon = AppVectorIcons.Schedule,
                         title = "Format",
-                        value = sequel.format,
+                        value = media.formatLabel,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -124,8 +138,8 @@ fun DetailSpecsGrid(
         }
 
         // Watch Progress if in progress
-        val progress = sequel.watchProgress()
-        val progressLabel = sequel.watchProgressLabel()
+        val progress = media.watchFraction()
+        val progressLabel = media.watchFractionLabel()
         if (progress != null && progressLabel != null) {
             Surface(
                 shape = MaterialTheme.shapes.small,

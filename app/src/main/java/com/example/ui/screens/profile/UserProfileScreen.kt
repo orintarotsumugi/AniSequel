@@ -29,11 +29,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,7 +47,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
+import com.example.data.model.MediaNode
+import com.example.data.model.withSummaryProgress
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.SequelDetailSheet
+import com.example.ui.components.detail.AnimeDetailSubject
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
 import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.ExpressiveNavigationBar
@@ -115,8 +122,20 @@ fun UserProfileScreen(
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val detailNodes by activityViewModel.detailNodes.collectAsStateWithLifecycle()
+    val loadingDetailIds by activityViewModel.loadingDetailIds.collectAsStateWithLifecycle()
+    val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    // The activity row that was tapped, as the row's own media node so the
+    // sheet has something to draw on the first frame. The fetched detail
+    // supersedes it once it lands.
+    var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
+
+    val selectedSubject = selectedMedia?.let { summary ->
+        AnimeDetailSubject.Media(detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary)
+    }
+    val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
 
     Scaffold(
         modifier = modifier
@@ -200,7 +219,8 @@ fun UserProfileScreen(
                         activityViewModel = activityViewModel,
                         socialState = socialState,
                         socialViewModel = socialViewModel,
-                        onOpenUser = onOpenUser
+                        onOpenUser = onOpenUser,
+                        onOpenDetail = { selectedMedia = it }
                     )
                     ExpressiveNavigationBar(
                         destinations = ProfileTabs,
@@ -214,6 +234,22 @@ fun UserProfileScreen(
             }
         }
     }
+
+    // The activity row's detail sheet. A plain media subject: an activity entry
+    // is a show the person already tracks, so it has no parent and nothing to
+    // add - the same distinction [com.example.data.model.ArrivingEntry] draws.
+    selectedSubject?.let { subject ->
+        SequelDetailSheet(
+            subject = subject,
+            sheetState = detailSheetState,
+            onDismiss = { selectedMedia = null },
+            onAddToPlanning = {},
+            onAddToWatching = {},
+            onLoadDetail = { activityViewModel.loadDetail(it) },
+            isDetailLoading = detailLoading,
+            canWriteToAniList = false
+        )
+    }
 }
 
 @Composable
@@ -225,7 +261,8 @@ private fun ProfileTabsContent(
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,
-    onOpenUser: (FollowUser) -> Unit
+    onOpenUser: (FollowUser) -> Unit,
+    onOpenDetail: (MediaNode) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.isRefreshing) {
@@ -268,7 +305,8 @@ private fun ProfileTabsContent(
                     onOpenComments = { activityViewModel.openComments(it) },
                     onCloseComments = { activityViewModel.closeComments() },
                     onRetryComments = { activityViewModel.openComments(it) },
-                    onPostComment = { activityViewModel.postComment(it) }
+                    onPostComment = { activityViewModel.postComment(it) },
+                    onOpenDetail = onOpenDetail
                 )
 
                 2 -> ProfileStatsTab(state = state, contentPadding = padding)

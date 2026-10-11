@@ -7,7 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.trailerYoutubeUrl
 
 /**
  * Material 3 Expressive Anime Info & Specs tab.
@@ -21,7 +22,7 @@ import com.example.data.model.MissedSequel
  */
 @Composable
 fun DetailSpecsView(
-    sequel: MissedSequel,
+    media: MediaNode,
     isDetailLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -33,28 +34,28 @@ fun DetailSpecsView(
     ) {
         // Official Trailer preview if available
         AnimeTrailerBanner(
-            trailerUrl = sequel.trailerUrl
+            trailerUrl = media.trailerYoutubeUrl
         )
 
         // All-Time & Seasonal Community Rankings
         AnimeRankingsSection(
-            sequel = sequel
+            media = media
         )
 
         // Community Scores & Popularity Banner
         AnimeRatingsSection(
-            sequel = sequel
+            media = media
         )
 
         // Production, Schedule & Native Transliterations Grid
         AnimeSpecsGrid(
-            sequel = sequel,
+            media = media,
             isDetailLoading = isDetailLoading
         )
 
         // Thematic Tags with Weights & Alternative Titles
         AnimeThematicTags(
-            sequel = sequel
+            media = media
         )
     }
 }

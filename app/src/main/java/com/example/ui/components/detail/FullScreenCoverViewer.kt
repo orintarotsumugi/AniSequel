@@ -54,7 +54,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.displayName
+import com.example.data.model.englishName
+import com.example.data.model.formatLabel
+import com.example.data.model.posterColor
+import com.example.data.model.posterUrl
+import com.example.data.model.romajiName
+import com.example.data.model.statusLabel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.cards.toCoverColorOrNull
 
@@ -64,7 +71,7 @@ import com.example.ui.components.cards.toCoverColorOrNull
  */
 @Composable
 fun FullScreenCoverViewer(
-    sequel: MissedSequel,
+    media: MediaNode,
     onDismiss: () -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -142,7 +149,7 @@ fun FullScreenCoverViewer(
                                 tonalElevation = 4.dp
                             ) {
                                 Text(
-                                    text = "${sequel.format} · ${sequel.status}",
+                                    text = "${media.formatLabel} · ${media.statusLabel}",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.Bold,
@@ -181,7 +188,7 @@ fun FullScreenCoverViewer(
                     }
 
                     // Center Anime Cover Artwork with interactive Zoom & Pan
-                    val coverBg = sequel.coverColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                    val coverBg = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest
                     Box(
                         modifier = Modifier
                             .weight(1f, fill = false)
@@ -230,8 +237,8 @@ fun FullScreenCoverViewer(
                             }
                     ) {
                         AsyncImage(
-                            model = sequel.sequelCoverUrl,
-                            contentDescription = sequel.sequelTitle,
+                            model = media.posterUrl,
+                            contentDescription = media.displayName,
                             modifier = Modifier
                                 .widthIn(max = 340.dp)
                                 .height(440.dp),
@@ -253,7 +260,7 @@ fun FullScreenCoverViewer(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = sequel.sequelTitle,
+                                text = media.displayName,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.ExtraBold,
@@ -263,8 +270,8 @@ fun FullScreenCoverViewer(
                             )
 
                             // Romaji & English Titles
-                            val romaji = sequel.romajiTitle
-                            val english = sequel.englishTitle
+                            val romaji = media.romajiName
+                            val english = media.englishName
 
                             if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))

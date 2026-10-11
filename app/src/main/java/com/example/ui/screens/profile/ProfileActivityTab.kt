@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.data.model.MediaNode
 import com.example.domain.usecase.ActivityCalendar
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveEmptyOrb
@@ -61,7 +62,8 @@ fun ProfileActivityTab(
     onOpenComments: (Int) -> Unit = {},
     onCloseComments: () -> Unit = {},
     onRetryComments: (Int) -> Unit = {},
-    onPostComment: (String) -> Unit = {}
+    onPostComment: (String) -> Unit = {},
+    onOpenDetail: (MediaNode) -> Unit = {}
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
     // not opening the profile.
@@ -161,6 +163,7 @@ fun ProfileActivityTab(
                                 .padding(horizontal = 16.dp),
                             onLike = { onLike(activity.id) },
                             onComments = { onOpenComments(activity.id) },
+                            onOpenDetail = onOpenDetail,
                             likePending = activity.id in activityState.pendingLikes
                         )
                     }

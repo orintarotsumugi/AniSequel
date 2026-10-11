@@ -74,31 +74,16 @@ data class MissedSequel(
     // card from a background dispatcher while the main thread is drawing it.
 
     /** The synopsis, with AniList's HTML stripped. See [description]. */
-    private val cachedDescription: String? by lazy { buildDescription() }
+    private val cachedDescription: String? by lazy { sequelMedia.synopsis }
 
     /** The most relevant thematic tags, highest ranked first. */
-    private val cachedTopTags: List<String> by lazy {
-        sequelMedia.tags
-            ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
-            ?.sortedByDescending { it.rank ?: 0 }
-            ?.mapNotNull { it.name }
-            ?.take(MAX_TAGS) ?: emptyList()
-    }
+    private val cachedTopTags: List<String> by lazy { sequelMedia.rankedTags }
 
     /** AniList's best ranking for this entry, formatted, or null. */
-    private val cachedTopRanking: String? by lazy {
-        val best = rankings.firstOrNull { it.rank != null } ?: return@lazy null
-        val rankNum = best.rank ?: return@lazy null
-        val context = best.context?.takeIf { it.isNotBlank() } ?: "Ranked"
-        "#$rankNum $context"
-    }
+    private val cachedTopRanking: String? by lazy { sequelMedia.topRankingLabel }
 
     /** "Winter 2019", from AniList's `season` and `seasonYear`. */
-    private val cachedAiringSeason: String? by lazy {
-        val name = sequelMedia.season?.takeIf { it.isNotBlank() } ?: return@lazy null
-        val readable = name.lowercase(java.util.Locale.ROOT).replaceFirstChar { it.uppercase(java.util.Locale.ROOT) }
-        sequelMedia.seasonYear?.let { "$readable $it" } ?: readable
-    }
+    private val cachedAiringSeason: String? by lazy { sequelMedia.seasonLabel }
 
     /**
      * Everything the search box matches against, lowercased exactly once.
@@ -130,48 +115,34 @@ data class MissedSequel(
 
     val sequelId: Int get() = sequelMedia.id
     val sequelTitle: String get() = sequelMedia.title?.displayTitle ?: "Unknown Sequel"
-    val englishTitle: String? get() = sequelMedia.title?.english?.takeIf { it.isNotBlank() }
-    val romajiTitle: String? get() = sequelMedia.title?.romaji?.takeIf { it.isNotBlank() }
-    val nativeTitle: String? get() = sequelMedia.title?.native?.takeIf { it.isNotBlank() }
-    val sequelCoverUrl: String? get() = sequelMedia.coverImage?.bestUrl
+    val englishTitle: String? get() = sequelMedia.englishName
+    val romajiTitle: String? get() = sequelMedia.romajiName
+    val nativeTitle: String? get() = sequelMedia.nativeName
+    val sequelCoverUrl: String? get() = sequelMedia.posterUrl
     val bannerUrl: String? get() = sequelMedia.bannerImage
-    val format: String get() = sequelMedia.format ?: "ANIME"
-    val status: String get() = sequelMedia.status ?: "UNKNOWN"
-    val episodes: String get() = sequelMedia.episodes?.let { "$it eps" } ?: "Episodes TBA"
-    val score: String get() = sequelMedia.averageScore?.let { "$it%" } ?: "N/A"
-    val releaseDate: String get() = sequelMedia.startDate?.formatted ?: "TBA"
-    val genres: List<String> get() = sequelMedia.genres ?: emptyList()
-    val studioName: String? get() = sequelMedia.studios?.nodes?.firstOrNull()?.name
-    val siteUrl: String get() = sequelMedia.siteUrl ?: "https://anilist.co/anime/$sequelId"
-    val source: String?
-        get() = sequelMedia.source?.replace('_', ' ')?.lowercase(java.util.Locale.ROOT)?.split(' ')
-            ?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase(java.util.Locale.ROOT) } }
-    val duration: String?
-        get() = sequelMedia.duration?.let { "$it mins / ep" }
-    val trailerUrl: String?
-        get() = sequelMedia.trailer?.youtubeUrl
-    val synonyms: List<String>
-        get() = sequelMedia.synonyms?.filter { it.isNotBlank() } ?: emptyList()
-    val meanScore: String?
-        get() = sequelMedia.meanScore?.let { "$it%" }
+    val format: String get() = sequelMedia.formatLabel
+    val status: String get() = sequelMedia.statusLabel
+    val episodes: String get() = sequelMedia.episodesLabel
+    val score: String get() = sequelMedia.scoreLabel
+    val releaseDate: String get() = sequelMedia.releaseLabel
+    val genres: List<String> get() = sequelMedia.genreList
+    val studioName: String? get() = sequelMedia.studioName
+    val siteUrl: String get() = sequelMedia.pageUrl
+    val source: String? get() = sequelMedia.sourceLabel
+    val duration: String? get() = sequelMedia.durationLabel
+    val trailerUrl: String? get() = sequelMedia.trailerYoutubeUrl
+    val synonyms: List<String> get() = sequelMedia.synonymList
+    val meanScore: String? get() = sequelMedia.meanScoreLabel
 
     /**
      * The synopsis, with AniList's HTML stripped.
      *
-     * The regex is a compiled constant rather than a literal at each call site:
-     * this runs once per visible card on every recomposition while the filter
-     * chips animate, and `Regex("…")` in a property body compiles a new pattern
-     * each time rather than reusing one.
+     * The regex is a compiled constant rather than a literal at each call site;
+     * see [MediaNode.synopsis]. It is memoised here because this runs once per
+     * visible card on every recomposition while the filter chips animate.
      */
     val description: String?
         get() = cachedDescription
-
-    private fun buildDescription(): String? =
-        sequelMedia.description
-            ?.replace(TAG_PATTERN, "")
-            ?.replace(WHITESPACE_PATTERN, " ")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
 
     /**
      * AniList's dominant colour for this entry's artwork, as `#RRGGBB`.
@@ -180,10 +151,10 @@ data class MissedSequel(
      * computes it from the key visual, so a card waiting on art is recognisably
      * the right show instead of a grey rectangle.
      */
-    val coverColor: String? get() = sequelMedia.coverImage?.color
+    val coverColor: String? get() = sequelMedia.posterColor
 
-    val nextEpisodeNumber: Int? get() = sequelMedia.nextAiringEpisode?.episode
-    val nextAiringAt: Long? get() = sequelMedia.nextAiringEpisode?.airingAt
+    val nextEpisodeNumber: Int? get() = sequelMedia.airingEpisodeNumber
+    val nextAiringAt: Long? get() = sequelMedia.airingAtSeconds
 
     /**
      * How many episodes of *this* entry the viewer has already watched.
@@ -193,7 +164,7 @@ data class MissedSequel(
      * `progress`/`current`, which is what makes a card able to say "you're 4
      * episodes in" rather than only "not on your list".
      */
-    val watchedEpisodes: Int? get() = sequelMedia.mediaListEntry?.progress
+    val watchedEpisodes: Int? get() = sequelMedia.watchedEpisodeCount
 
     /**
      * How long until the next episode, or null when nothing is scheduled.
@@ -202,7 +173,7 @@ data class MissedSequel(
      * the note there on why this is one implementation.
      */
     fun nextAiringCountdown(nowMillis: Long = System.currentTimeMillis()): String? =
-        AiringCountdown.format(nextAiringAt, nowMillis)
+        sequelMedia.airingCountdown(nowMillis)
 
     /**
      * How far through this entry the viewer is, as a 0..1 fraction.
@@ -211,20 +182,10 @@ data class MissedSequel(
      * no progress recorded - so callers can skip the bar entirely rather than
      * drawing an empty one.
      */
-    fun watchProgress(): Float? {
-        val total = sequelMedia.episodes ?: return null
-        if (total <= 0) return null
-        val watched = watchedEpisodes ?: return null
-        return (watched.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-    }
+    fun watchProgress(): Float? = sequelMedia.watchFraction()
 
     /** "6 / 12 eps watched" - null when the viewer has not started it. */
-    fun watchProgressLabel(): String? {
-        val total = sequelMedia.episodes ?: return null
-        val watched = watchedEpisodes ?: return null
-        if (watched <= 0) return null
-        return "$watched / $total eps"
-    }
+    fun watchProgressLabel(): String? = sequelMedia.watchFractionLabel()
 
     /**
      * "Winter 2019", from AniList's `season` and `seasonYear`.
@@ -237,16 +198,16 @@ data class MissedSequel(
         get() = cachedAiringSeason
 
     val isUnreleased: Boolean
-        get() = status == "NOT_YET_RELEASED"
+        get() = sequelMedia.isUpcoming
 
     val isAiring: Boolean
-        get() = status == "RELEASING"
+        get() = sequelMedia.isAiringNow
 
     val isHiatus: Boolean
-        get() = status.equals("HIATUS", ignoreCase = true)
+        get() = sequelMedia.isOnHiatus
 
     val rankings: List<MediaRanking>
-        get() = sequelMedia.rankings ?: emptyList()
+        get() = sequelMedia.rankingList
 
     val topRanking: String?
         get() = cachedTopRanking
@@ -276,15 +237,4 @@ data class MissedSequel(
     /** This entry with the lazily-fetched description, banner and studio folded in. */
     fun withDetail(detail: MediaNode): MissedSequel =
         copy(sequelMedia = sequelMedia.withDetail(detail))
-
-    private companion object {
-        /** HTML tags AniList interleaves into `description`. */
-        val TAG_PATTERN = Regex("<[^>]*>")
-
-        /** Runs of whitespace left behind once the tags are gone. */
-        val WHITESPACE_PATTERN = Regex("\\s+")
-
-        /** How many thematic tags the detail sheet renders. */
-        const val MAX_TAGS = 8
-    }
 }

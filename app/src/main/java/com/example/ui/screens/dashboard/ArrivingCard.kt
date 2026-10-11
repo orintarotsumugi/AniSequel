@@ -1,8 +1,5 @@
 package com.example.ui.screens.dashboard
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -225,13 +222,4 @@ fun arrivalMeta(entry: ArrivingEntry): String = when {
         }
     }
     else -> entry.startLabel?.let { "Starts $it" } ?: "Start date TBA"
-}
-
-/**
- * Open external destination on AniList safely.
- */
-fun openOnAniList(context: Context, entry: ArrivingEntry) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(entry.siteUrl))
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
 }

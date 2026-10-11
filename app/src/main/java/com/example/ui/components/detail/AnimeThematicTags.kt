@@ -20,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.rankedTags
+import com.example.data.model.synonymList
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveShapes
 
@@ -31,15 +33,15 @@ import com.example.ui.components.expressive.ExpressiveShapes
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AnimeThematicTags(
-    sequel: MissedSequel,
+    media: MediaNode,
     modifier: Modifier = Modifier
 ) {
-    val mediaTags = sequel.sequelMedia.tags
+    val mediaTags = media.tags
         ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
         ?.sortedByDescending { it.rank ?: 0 }
         ?.take(8)
-    val fallbackTags = sequel.topTags
-    val synonyms = sequel.synonyms
+    val fallbackTags = media.rankedTags
+    val synonyms = media.synonymList
 
     val hasTags = !mediaTags.isNullOrEmpty() || fallbackTags.isNotEmpty()
     val hasSynonyms = synonyms.isNotEmpty()

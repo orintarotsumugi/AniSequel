@@ -34,18 +34,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
+import com.example.data.model.displayName
+import com.example.data.model.englishName
+import com.example.data.model.formatLabel
+import com.example.data.model.posterColor
+import com.example.data.model.posterUrl
+import com.example.data.model.releaseLabel
+import com.example.data.model.romajiName
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.cards.toCoverColorOrNull
 import com.example.ui.components.expressive.expressiveHoldGesture
 
 @Composable
 fun DetailHeader(
-    sequel: MissedSequel,
+    media: MediaNode,
     modifier: Modifier = Modifier
 ) {
     var showFullScreen by remember { mutableStateOf(false) }
-    val coverBg = sequel.coverColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.primary
+    val coverBg = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.primary
 
     // The header backdrop is the banner when AniList has one, and the entry's own
     // key visual when it does not.
@@ -58,17 +65,17 @@ fun DetailHeader(
     // the detail response landed. Entries AniList has no banner for at all stayed
     // that way. Falling back to the cover costs no request - the list query already
     // sent it - and makes the header the show's own artwork from its first frame.
-    val backdrop = sequel.bannerUrl ?: sequel.sequelCoverUrl
+    val backdrop = media.bannerImage ?: media.posterUrl
 
     // What shows through the 45%-to-85% scrim before (or instead of) the artwork.
     // AniList's dominant colour for the key visual is the difference between a
     // header that is already recognisably this show and a grey rectangle.
-    val backdropBase = sequel.coverColor.toCoverColorOrNull()
+    val backdropBase = media.posterColor.toCoverColorOrNull()
         ?: MaterialTheme.colorScheme.surfaceContainerHigh
 
     if (showFullScreen) {
         FullScreenCoverViewer(
-            sequel = sequel,
+            media = media,
             onDismiss = { showFullScreen = false }
         )
     }
@@ -113,7 +120,7 @@ fun DetailHeader(
             modifier = Modifier.align(Alignment.TopStart)
         ) {
             Text(
-                text = sequel.format,
+                text = media.formatLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onPrimary,
                 fontWeight = FontWeight.Bold,
@@ -147,8 +154,8 @@ fun DetailHeader(
                     )
             ) {
                 AsyncImage(
-                    model = sequel.sequelCoverUrl,
-                    contentDescription = sequel.sequelTitle,
+                    model = media.posterUrl,
+                    contentDescription = media.displayName,
                     modifier = Modifier.matchParentSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -179,7 +186,7 @@ fun DetailHeader(
                 verticalArrangement = Arrangement.Bottom
             ) {
                 Text(
-                    text = sequel.sequelTitle,
+                    text = media.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
@@ -188,10 +195,10 @@ fun DetailHeader(
                 )
 
                 // Romaji and English title tiles
-                val romaji = sequel.romajiTitle
-                val english = sequel.englishTitle
+                val romaji = media.romajiName
+                val english = media.englishName
 
-                if (!romaji.isNullOrBlank() && romaji != sequel.sequelTitle) {
+                if (!romaji.isNullOrBlank() && romaji != media.displayName) {
                     Spacer(modifier = Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
@@ -217,7 +224,7 @@ fun DetailHeader(
                     }
                 }
 
-                if (!english.isNullOrBlank() && english != sequel.sequelTitle) {
+                if (!english.isNullOrBlank() && english != media.displayName) {
                     Spacer(modifier = Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
@@ -245,7 +252,7 @@ fun DetailHeader(
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = sequel.releaseDate,
+                    text = media.releaseLabel,
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.80f),
                     maxLines = 1,

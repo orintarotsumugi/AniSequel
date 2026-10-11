@@ -52,7 +52,7 @@ fun SequelPoster(
 
     if (showFullScreen) {
         FullScreenCoverViewer(
-            sequel = sequel,
+            media = sequel.sequelMedia,
             onDismiss = { showFullScreen = false }
         )
     }

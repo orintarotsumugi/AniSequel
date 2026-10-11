@@ -19,17 +19,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissedSequel
+import com.example.data.model.pageUrl
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.cards.HoldAndSwipePlanningButton
 import com.example.ui.components.expressive.bouncyPress
 
 /**
  * Action bar at the bottom of the anime detail sheet.
- * Features an external AniList link button and the interactive Hold-and-Swipe quick action button.
+ *
+ * The external AniList link is always offered. The interactive Hold-and-Swipe
+ * quick add is only for a [AnimeDetailSubject.Sequel]: an arriving or activity
+ * row is already on somebody's list, so there is nothing to add and the button
+ * would be offering an action that cannot mean anything.
  */
 @Composable
 fun DetailActionRow(
-    sequel: MissedSequel,
+    subject: AnimeDetailSubject,
     canWriteToAniList: Boolean,
     onAddToPlanning: (MissedSequel) -> Unit,
     context: Context,
@@ -38,6 +43,8 @@ fun DetailActionRow(
     holdDurationSeconds: Int = 3,
     swipeEnabled: Boolean = true
 ) {
+    val sequel = subject.sequel
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -45,7 +52,7 @@ fun DetailActionRow(
         OutlinedButton(
             onClick = {
                 runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sequel.siteUrl)))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(subject.media.pageUrl)))
                 }
             },
             modifier = Modifier
@@ -63,7 +70,7 @@ fun DetailActionRow(
             Text("AniList", maxLines = 1)
         }
 
-        if (!canWriteToAniList && !sequel.isSavedToList) {
+        if (sequel != null && !canWriteToAniList && !sequel.isSavedToList) {
             OutlinedButton(
                 onClick = { onAddToPlanning(sequel) },
                 modifier = Modifier
@@ -81,7 +88,7 @@ fun DetailActionRow(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Sign in to add")
             }
-        } else {
+        } else if (sequel != null) {
             HoldAndSwipePlanningButton(
                 sequel = sequel,
                 onAddToPlanning = { onAddToPlanning(sequel) },

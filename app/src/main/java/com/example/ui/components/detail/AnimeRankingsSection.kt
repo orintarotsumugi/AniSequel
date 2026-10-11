@@ -21,8 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.data.model.MediaNode
 import com.example.data.model.MediaRanking
-import com.example.data.model.MissedSequel
+import com.example.data.model.rankingList
+import com.example.data.model.topRankingLabel
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveShapes
 
@@ -33,11 +35,11 @@ import com.example.ui.components.expressive.ExpressiveShapes
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AnimeRankingsSection(
-    sequel: MissedSequel,
+    media: MediaNode,
     modifier: Modifier = Modifier
 ) {
-    val allRankings = sequel.rankings.filter { it.rank != null }
-    val topRankFallback = sequel.topRanking
+    val allRankings = media.rankingList.filter { it.rank != null }
+    val topRankFallback = media.topRankingLabel
 
     if (allRankings.isEmpty() && topRankFallback == null) return
 

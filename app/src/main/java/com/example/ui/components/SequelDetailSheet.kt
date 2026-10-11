@@ -5,15 +5,16 @@ import androidx.compose.material3.SheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.example.data.model.MissedSequel
+import com.example.ui.components.detail.AnimeDetailSubject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SequelDetailSheet(
-    sequel: MissedSequel?,
+    subject: AnimeDetailSubject?,
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
-    onLoadDetail: (MissedSequel) -> Unit,
+    onLoadDetail: (Int) -> Unit,
     isDetailLoading: Boolean,
     canWriteToAniList: Boolean,
     modifier: Modifier = Modifier,
@@ -22,7 +23,7 @@ fun SequelDetailSheet(
     swipeEnabled: Boolean = true
 ) {
     com.example.ui.components.detail.SequelDetailSheet(
-        sequel = sequel,
+        subject = subject,
         sheetState = sheetState,
         onDismiss = onDismiss,
         onAddToPlanning = onAddToPlanning,

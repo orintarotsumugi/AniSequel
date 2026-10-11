@@ -93,7 +93,6 @@ class DashboardViewModel(
         // user has a few thousand completed entries, so the query is held back
         // until the typing pauses.
         private const val SEARCH_DEBOUNCE_MS = 220L
-        private const val MAX_DETAIL_CACHE_ENTRIES = 250
     }
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading())
@@ -293,12 +292,23 @@ class DashboardViewModel(
      */
     private var discoveredSource: MediaListCollection? = null
 
-    /** Description, banner and studio per media, fetched only when opened. LRU-bounded. */
-    private val detailCache = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, MediaNode>?): Boolean {
-            return size > MAX_DETAIL_CACHE_ENTRIES
-        }
-    }
+    /**
+     * Detail fetched on demand for the sheet, shared with the profile screen's
+     * loader. See [MediaDetailStore].
+     *
+     * The list folds a fetched node into its own entry through
+     * [foldDetailIntoList] so a card open behind the sheet updates without a
+     * full recompute.
+     */
+    private val detailStore = MediaDetailStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        isDemo = isDemo,
+        onLoaded = ::foldDetailIntoList
+    )
+
+    /** The node fetched for the entry a sheet is showing, keyed by media id. */
+    val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
 
     /**
      * The completed count for [cachedCollection], and the collection it was
@@ -334,8 +344,7 @@ class DashboardViewModel(
      * patches a single card, and routing that through a full recompute would
      * throw away the "loading" state the sheet is rendering.
      */
-    private val _loadingDetailIds = MutableStateFlow<Set<Int>>(emptySet())
-    val loadingDetailIds: StateFlow<Set<Int>> = _loadingDetailIds.asStateFlow()
+    val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
 
     /** True when the current session may write back to the user's AniList. */
     private val canWriteToAniList: Boolean
@@ -514,7 +523,7 @@ class DashboardViewModel(
      *
      * The reset was written out three times - in `loadData`, `refresh` and
      * `loadDemoData` - and the three copies had drifted apart. The demo path had
-     * come to omit `detailCache.clear()` and `addedToPlanningIds.clear()`,
+     * come to omit the detail clear and `addedToPlanningIds.clear()`,
      * which is a latent wrong-data bug rather than a style one: the detail cache
      * is keyed by media id, so a demo load following a real one could render
      * entries against details fetched for a different viewer.
@@ -530,7 +539,7 @@ class DashboardViewModel(
         discoveryKey = null
         addedToPlanningIds.clear()
         addedToWatchingIds.clear()
-        if (clearDetailCache) detailCache.clear()
+        if (clearDetailCache) detailStore.clear()
         recompute()
     }
 
@@ -681,7 +690,7 @@ class DashboardViewModel(
     }
 
     private fun withCachedDetail(sequel: MissedSequel): MissedSequel =
-        detailCache[sequel.sequelId]?.let(sequel::withDetail) ?: sequel
+        detailStore.cached(sequel.sequelId)?.let(sequel::withDetail) ?: sequel
 
     /**
      * The arriving rows, recomputed only when the collection itself changes.
@@ -703,29 +712,27 @@ class DashboardViewModel(
      * These are the fields the list query leaves out on purpose: they are only
      * ever rendered for the entry a user opens, and asking AniList for them
      * across every relation node is what makes it return HTTP 500 on large
-     * accounts. Demo data is already complete, so it skips the call.
+     * accounts. Demo data is already complete, so [MediaDetailStore] skips the
+     * call.
      */
-    fun loadDetail(sequel: MissedSequel) {
-        if (isDemo || detailCache.containsKey(sequel.sequelId)) return
+    fun loadDetail(mediaId: Int) {
+        detailStore.load(mediaId)
+    }
 
-        _loadingDetailIds.value = _loadingDetailIds.value + sequel.sequelId
-        viewModelScope.launch {
-            try {
-                aniListRepository.getMediaDetail(sequel.sequelId).onSuccess { detail ->
-                    detailCache[sequel.sequelId] = detail
-                    val success = _uiState.value as? DashboardUiState.Success ?: return@onSuccess
-                    _uiState.value = success.copy(
-                        missedSequels = success.missedSequels.map { item ->
-                            if (item.sequelId == sequel.sequelId) item.withDetail(detail) else item
-                        }
-                    )
-                }
-                // A failed detail load is not worth interrupting the user over:
-                // the sheet simply shows what the list query already had.
-            } finally {
-                _loadingDetailIds.value = _loadingDetailIds.value - sequel.sequelId
+    /**
+     * Folds a freshly fetched detail into the list entry it belongs to.
+     *
+     * The sheet reads the node from [detailNodes] directly, but a card sitting
+     * behind the sheet should reflect the same detail the moment it lands
+     * rather than on the next recompute.
+     */
+    private fun foldDetailIntoList(mediaId: Int, detail: MediaNode) {
+        val success = _uiState.value as? DashboardUiState.Success ?: return
+        _uiState.value = success.copy(
+            missedSequels = success.missedSequels.map { item ->
+                if (item.sequelId == mediaId) item.withDetail(detail) else item
             }
-        }
+        )
     }
 
     fun updateSearchQuery(query: String) {

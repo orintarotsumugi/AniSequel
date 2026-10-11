@@ -359,12 +359,52 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
-     * The heavy, single-item fields, fetched only for the entry the user opens.
+     * The single media record the detail sheet renders.
+     *
+     * This was once the *heavy* fields only - description, banner, studios - on
+     * the reasoning that the list query already carried the rest. That held for
+     * a missed sequel, whose list node has title, format, status, episodes and
+     * cover. It does not hold for the two other sources that now open this
+     * sheet: an activity row's media and an arriving summary carry a handful of
+     * those fields at most, so the sheet had no title to render until this
+     * answered. Widening the query costs nothing worth protecting - it is one
+     * item per open, not one per relation node - whereas the alternative was a
+     * null-filled header on the profile feed.
      */
     val GET_MEDIA_DETAIL = """
         query GetMediaDetail(${'$'}id: Int) {
           Media(id: ${'$'}id) {
             id
+            title {
+              romaji
+              english
+              native
+              userPreferred
+            }
+            format
+            type
+            status
+            episodes
+            season
+            seasonYear
+            averageScore
+            popularity
+            genres
+            siteUrl
+            startDate {
+              year
+              month
+              day
+            }
+            coverImage {
+              extraLarge
+              large
+              color
+            }
+            nextAiringEpisode {
+              episode
+              airingAt
+            }
             description(asHtml: false)
             bannerImage
             studios(isMain: true) {

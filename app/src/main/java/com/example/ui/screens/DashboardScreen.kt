@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.data.model.MissedSequel
 import com.example.data.model.ViewerProfile
+import com.example.data.model.withSummaryProgress
 import com.example.ui.components.AniTopAppBar
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.FilterSortSheet
@@ -40,6 +41,8 @@ import com.example.ui.components.QuickFilterBar
 import com.example.ui.components.SequelCard
 import com.example.ui.components.SequelDetailSheet
 import com.example.ui.components.StatsBanner
+import com.example.ui.components.detail.AnimeDetailSubject
+import com.example.ui.components.detail.toDetailMedia
 import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.screens.dashboard.ArrivingSection
 import com.example.ui.screens.dashboard.DashboardDemoBanner
@@ -81,7 +84,12 @@ fun DashboardScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
+    // An arriving row is not a sequel, so it is tracked by its own media id and
+    // resolved to a plain media subject below. One nullable id per source keeps
+    // "what is open" unambiguous without a second sheet.
+    var selectedArrivingId by remember { mutableStateOf<Int?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
+    val detailNodes by dashboardViewModel.detailNodes.collectAsState()
     val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
     val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
     val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
@@ -131,18 +139,35 @@ fun DashboardScreen(
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
 
-    // Memoised on the state instance and the id: an uncached linear scan ran on
-    // every recomposition, including the ones driven by unrelated state such as
-    // the snackbar or the detail spinner. `successState` is the same instance
-    // across those recompositions, so the keys are stable and the scan happens
-    // only when the list or the open id actually changes.
-    val selectedSequel = remember(selectedSequelId, successState) {
-        selectedSequelId?.let { id ->
-            successState?.missedSequels?.firstOrNull { it.sequelId == id }
+    // One subject for the sheet, resolved from whichever source was tapped.
+    //
+    // Memoised on the state instance and the open ids: an uncached linear scan
+    // ran on every recomposition, including the ones driven by unrelated state
+    // such as the snackbar or the detail spinner. `detailNodes` is a key as well
+    // so an arriving row swaps to its fetched detail the moment it lands.
+    //
+    // A sequel keeps its parent narrative; an arriving row is a summary the
+    // detail query fills in, so its subject prefers the fetched node and keeps
+    // the summary's progress either way.
+    val selectedSubject = remember(selectedSequelId, selectedArrivingId, successState, detailNodes) {
+        when {
+            selectedSequelId != null -> successState?.missedSequels
+                ?.firstOrNull { it.sequelId == selectedSequelId }
+                ?.let { AnimeDetailSubject.Sequel(it) }
+            selectedArrivingId != null -> successState?.arriving
+                ?.firstOrNull { it.mediaId == selectedArrivingId }
+                ?.let { entry ->
+                    val summary = entry.toDetailMedia()
+                    AnimeDetailSubject.Media(
+                        detailNodes[entry.mediaId]?.withSummaryProgress(summary) ?: summary
+                    )
+                }
+            else -> null
         }
     }
 
-    val isDetailLoading = selectedSequelId != null && selectedSequelId in loadingDetailIds
+    val selectedDetailId = selectedSubject?.mediaId
+    val isDetailLoading = selectedDetailId != null && selectedDetailId in loadingDetailIds
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // One definition of "the filters are narrowing this list", owned by
@@ -235,7 +260,8 @@ fun DashboardScreen(
                                     ArrivingSection(
                                         entries = state.arriving,
                                         compact = arrivingCompact,
-                                        maxWidth = MaxContentWidth
+                                        maxWidth = MaxContentWidth,
+                                        onEntryClick = { selectedArrivingId = it.mediaId }
                                     )
                                 }
                             }
@@ -332,11 +358,14 @@ fun DashboardScreen(
         )
     }
 
-    if (selectedSequel != null) {
+    if (selectedSubject != null) {
         SequelDetailSheet(
-            sequel = selectedSequel,
+            subject = selectedSubject,
             sheetState = detailSheetState,
-            onDismiss = { selectedSequelId = null },
+            onDismiss = {
+                selectedSequelId = null
+                selectedArrivingId = null
+            },
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,

@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.data.model.MissedSequel
+import com.example.data.model.MediaNode
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.theme.AniSequelTheme
 
@@ -35,12 +35,12 @@ import com.example.ui.theme.AniSequelTheme
  */
 @Composable
 fun AnimeRatingsSection(
-    sequel: MissedSequel,
+    media: MediaNode,
     modifier: Modifier = Modifier
 ) {
-    val avgScore = sequel.sequelMedia.averageScore
-    val meanScore = sequel.sequelMedia.meanScore
-    val popularity = sequel.sequelMedia.popularity
+    val avgScore = media.averageScore
+    val meanScore = media.meanScore
+    val popularity = media.popularity
     val statusColors = AniSequelTheme.statusColors
 
     if (avgScore == null && meanScore == null && popularity == null) return

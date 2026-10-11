@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +64,7 @@ import com.example.ui.components.expressive.bouncyPress
 fun ArrivingSection(
     entries: List<ArrivingEntry>,
     maxWidth: Dp,
+    onEntryClick: (ArrivingEntry) -> Unit,
     compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -146,7 +146,6 @@ fun ArrivingSection(
                 animationSpec = ExpressiveMotion.FastSpatialSize
             ) + fadeOut(animationSpec = ExpressiveMotion.FastEffects)
         ) {
-            val context = LocalContext.current
             if (compact) {
                 // Compact rows draw no artwork and carry no live countdown: the
                 // poster fetch is the whole data and battery cost of these cards,
@@ -155,7 +154,7 @@ fun ArrivingSection(
                 // recomposes nothing on a schedule.
                 CompactArrivingList(
                     entries = entries,
-                    onEntryClick = { openOnAniList(context, it) }
+                    onEntryClick = onEntryClick
                 )
             } else {
                 LazyRow(
@@ -168,7 +167,7 @@ fun ArrivingSection(
                     items(items = entries, key = { it.mediaId }) { entry ->
                         ArrivingCard(
                             entry = entry,
-                            onClick = { openOnAniList(context, entry) },
+                            onClick = { onEntryClick(entry) },
                             modifier = Modifier.animateItem(
                                 placementSpec = ExpressiveMotion.DefaultSpatialOffset,
                                 fadeInSpec = ExpressiveMotion.ListItemFadeIn,

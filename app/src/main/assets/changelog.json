@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.54",
+      "entries": [
+        {
+          "title": "In-app details from the Activity feed and Currently Arriving",
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+        },
+        {
+          "title": "The detail sheet adapts to what it is showing",
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+        }
+      ]
+    },
+    {
       "version": "1.0.53",
       "entries": [
         {

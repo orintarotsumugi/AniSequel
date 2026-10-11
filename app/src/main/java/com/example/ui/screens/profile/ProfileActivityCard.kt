@@ -26,18 +26,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.ListActivity
+import com.example.data.model.MediaNode
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.cards.SequelInfoChip
 import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.components.expressive.bouncyPress
-import com.example.ui.components.openExternalUrl
 import java.util.Locale
 
 /** AniList covers are 2:3. */
@@ -57,6 +56,7 @@ fun ActivityCard(
     modifier: Modifier = Modifier,
     onLike: () -> Unit = {},
     onComments: () -> Unit = {},
+    onOpenDetail: (MediaNode) -> Unit = {},
     likePending: Boolean = false
 ) {
     val media = activity.media ?: return
@@ -65,15 +65,16 @@ fun ActivityCard(
     // discriminator the whole feed depends on, so a case difference must not be
     // what decides whether a manga row reads "Episode" or "Chapter".
     val isManga = media.type.equals("MANGA", ignoreCase = true)
-    val context = LocalContext.current
-    val siteUrl = media.siteUrl
 
     Card(
         modifier = modifier
             .bouncyPress(pressedScale = 0.97f)
-            .clickable(enabled = siteUrl != null) {
-                siteUrl?.let { openExternalUrl(context, it) }
-            }
+            // The row opens the same in-app detail sheet a sequel card does. It
+            // used to hand the tap to the browser, which meant the one screen
+            // with AniList's own description, ratings and tags was unreachable
+            // from the feed - the detail query was never asked for a show that
+            // was not a missed sequel.
+            .clickable { onOpenDetail(media) }
             .testTag("activity_card"),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(

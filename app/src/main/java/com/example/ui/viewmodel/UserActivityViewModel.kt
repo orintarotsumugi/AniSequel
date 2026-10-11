@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ActivityReply
 import com.example.data.model.ListActivity
+import com.example.data.model.MediaNode
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
 import com.example.data.repository.AniListRepository
@@ -93,6 +94,27 @@ class UserActivityViewModel(
 
     private val _comments = MutableStateFlow<CommentsState?>(null)
     val comments: StateFlow<CommentsState?> = _comments.asStateFlow()
+
+    /**
+     * Detail fetched on demand for the entry an activity row opens.
+     *
+     * Shares [MediaDetailStore] with the dashboard: an activity row's own media
+     * node is a thin summary - title, cover, format, episodes - and the sheet's
+     * query is what fills in the synopsis, ratings and tags.
+     */
+    private val detailStore = MediaDetailStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        isDemo = isDemo
+    )
+
+    val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
+    val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
+
+    /** Fetches the synopsis, banner and studio for one entry. */
+    fun loadDetail(mediaId: Int) {
+        detailStore.load(mediaId)
+    }
 
     private var loadJob: Job? = null
     private var nextPage = 1

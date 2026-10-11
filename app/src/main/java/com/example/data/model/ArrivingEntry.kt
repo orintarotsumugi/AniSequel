@@ -34,10 +34,9 @@ data class ArrivingEntry(
      *
      * Built rather than read: the list query does not ask for `siteUrl` on the
      * parent (one value per entry on the hottest request, for a URL that is
-     * derivable from the id it already sends), and there is no in-app detail
-     * view for a show that is already on the list - so the card opens the page
-     * that has one, the same way the detail sheet's own "View on AniList"
-     * action does.
+     * derivable from the id it already sends). It is the canonical page for the
+     * entry - the detail sheet links to it as `MediaNode.pageUrl`, which builds
+     * the same URL.
      */
     val siteUrl: String
         get() = "https://anilist.co/anime/$mediaId"
