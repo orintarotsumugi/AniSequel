@@ -158,10 +158,19 @@ object AppVectorIcons {
     val SectionAbout = Icons.Outlined.Contrast
     val SectionUpdates = Icons.Default.SystemUpdate
     val SectionHelp = Icons.AutoMirrored.Filled.MenuBook
+    val SectionBackground = AppCustomVectors.SurfaceTones
+    val SectionMotion = AppCustomVectors.MotionWaves
     val ThemeLight = Icons.Outlined.LightMode
     val ThemeDark = Icons.Outlined.DarkMode
     val Restore = Icons.Outlined.RestartAlt
     val Tune = Icons.Outlined.Tune
     val NewReleases = Icons.Outlined.NewReleases
     val FullscreenExpand = AppCustomVectors.FullscreenExpand
+
+    // The three motion styles on the Theme tab, each named for what the style
+    // *is*: no motion, calm motion, everything-bounces motion. They sit side
+    // by side in one segment bar, so their glyphs must read as different.
+    val MotionInstant = Icons.Outlined.RestartAlt
+    val MotionSmooth = AppCustomVectors.MotionWaves
+    val MotionChill = AppCustomVectors.MotionBolt
 }

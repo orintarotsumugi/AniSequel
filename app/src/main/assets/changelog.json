@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.53",
+      "entries": [
+        {
+          "title": "Retain Anime Color keeps the colour",
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+        },
+        {
+          "title": "Theme tab, rebuilt around Material 3 Expressive",
+          "detail": "Settings > Theme leads with a live preview hero washed in the scheme's own colours, then answers three questions in order: how the app looks (appearance mode, then how dark the background is), where the colour comes from (accent palettes and hues, then the anime cover), and how the app moves. Every section and every motion style carries its own vector icon, palettes are chosen from gradient swatches, custom hues are round chips with adaptive check marks, and the anime section shows which cover colour is live and whether it is retained or temporary. Sections read in one scroll, every pick animates with spring physics."
+        }
+      ]
+    },
+    {
       "version": "1.0.51",
       "entries": [
         {

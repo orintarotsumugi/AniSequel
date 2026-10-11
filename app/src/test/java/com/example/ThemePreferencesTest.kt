@@ -91,6 +91,8 @@ class ThemePreferencesTest {
         val preferences = preferences()
         preferences.setThemeMode(ThemeMode.LIGHT)
         preferences.setUseDynamicColor(true)
+        preferences.setAnimeThemeRetainColor(false)
+        preferences.setCustomColorHex("#00BFA5")
 
         preferences.reset()
 
@@ -98,6 +100,7 @@ class ThemePreferencesTest {
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
         assertFalse(settings.useDynamicColor)
         assertEquals(null, settings.customColorHex)
+        assertTrue(settings.animeThemeRetainColor)
     }
 
     @Test
@@ -108,6 +111,20 @@ class ThemePreferencesTest {
 
         preferences.setCustomColorHex(null)
         assertEquals(null, preferences.settings.first().customColorHex)
+    }
+
+    @Test
+    fun `retain anime colour defaults on and round-trips through storage`() = runTest {
+        val preferences = preferences()
+        // An upgrade that has never written the key keeps the shipped default of
+        // on, so Retain is never silently weaker for existing installs.
+        assertTrue(preferences.settings.first().animeThemeRetainColor)
+
+        preferences.setAnimeThemeRetainColor(false)
+        assertFalse(preferences.settings.first().animeThemeRetainColor)
+
+        preferences.setAnimeThemeRetainColor(true)
+        assertTrue(preferences.settings.first().animeThemeRetainColor)
     }
 
     /**

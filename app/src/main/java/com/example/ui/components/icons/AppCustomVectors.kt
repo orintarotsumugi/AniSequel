@@ -287,6 +287,109 @@ object AppCustomVectors {
     }
 
     /**
+     * Surface tones: a rounded square split into two halves.
+     *
+     * The Theme tab's Background card changes how dark the app's surfaces are,
+     * which is a "two tones" job — hence the split square. It is distinct from
+     * `Contrast`, the About card's half-circle, at the 20dp a section header
+     * renders it at.
+     */
+    val SurfaceTones: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "SurfaceTones",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 2.2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // Rounded square outline.
+                moveTo(6f, 3.5f)
+                horizontalLineTo(18f)
+                curveTo(19.66f, 3.5f, 21f, 4.84f, 21f, 6.5f)
+                verticalLineTo(17.5f)
+                curveTo(21f, 19.16f, 19.66f, 20.5f, 18f, 20.5f)
+                horizontalLineTo(6f)
+                curveTo(4.34f, 20.5f, 3f, 19.16f, 3f, 17.5f)
+                verticalLineTo(6.5f)
+                curveTo(3f, 4.84f, 4.34f, 3.5f, 6f, 3.5f)
+
+                // The split between the two tones, stopped short of the corners.
+                moveTo(12f, 4.6f)
+                verticalLineTo(19.4f)
+            }
+        }.build()
+    }
+
+    /**
+     * Motion waves: two gentle S-curves, like ripples but with no overshoot.
+     *
+     * The Theme tab's Motion section and its "Smooth" option. "Instant" has no
+     * motion at all and "Chill" is all overshoot, so each of the three styles
+     * gets its own glyph rather than three copies of one arrow.
+     */
+    val MotionWaves: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "MotionWaves",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 2.2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(3f, 7.5f)
+                curveTo(6f, 3.5f, 9f, 3.5f, 12f, 7.5f)
+                curveTo(15f, 11.5f, 18f, 11.5f, 21f, 7.5f)
+
+                moveTo(3f, 16.5f)
+                curveTo(6f, 12.5f, 9f, 12.5f, 12f, 16.5f)
+                curveTo(15f, 20.5f, 18f, 20.5f, 21f, 16.5f)
+            }
+        }.build()
+    }
+
+    /**
+     * Motion bolt / lightning for the "Chill" motion style.
+     *
+     * Chill is the full expressive physics — the spring with the most energy —
+     * so it gets a bolt while Smooth gets calm waves. The segment bar renders
+     * all three styles side by side, and three copies of one arrow is why the
+     * section used to read as "which arrow".
+     */
+    val MotionBolt: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "MotionBolt",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(13f, 2f)
+                lineTo(4f, 14f)
+                horizontalLineTo(10f)
+                lineTo(8f, 22f)
+                lineTo(19f, 9f)
+                horizontalLineTo(13f)
+                close()
+            }
+        }.build()
+    }
+
+    /**
      * Expand to fullscreen vector icon.
      */
     val FullscreenExpand: ImageVector by lazy {

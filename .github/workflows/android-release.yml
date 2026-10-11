@@ -221,15 +221,29 @@ jobs:
           if [ "${GITHUB_REF}" = "refs/tags/${GITHUB_REF_NAME}" ]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            # Advance the patch number past the newest published release.
+            # Step the patch past the newest published release, *unless* the
+            # committed baseline already names a version nothing has published.
+            #
+            # The unconditional +1 used to be here, and it made every release
+            # one version ahead of itself: with the baseline at 1.0.51 and
+            # v1.0.50 published, this step published v1.0.52 while the notes
+            # (written for 1.0.51) still described 1.0.51's changes. The tag,
+            # the release notes and the changelog never agreed.
             LATEST=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo '')
             LATEST_PATCH=$(echo "${LATEST:-}" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+).*$/\3/')
             LATEST_PATCH=${LATEST_PATCH:-0}
             if echo "${LATEST:-}" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
               BASE_PATCH=$(echo "$VERSION_NAME" | cut -d. -f3)
               BASE_PATCH=${BASE_PATCH:-0}
-              NEXT_PATCH=$(( LATEST_PATCH > BASE_PATCH ? LATEST_PATCH : BASE_PATCH ))
-              NEXT_PATCH=$(( NEXT_PATCH + 1 ))
+              if [ "$BASE_PATCH" -gt "$LATEST_PATCH" ]; then
+                # The baseline names the next unpublished version; publish it
+                # verbatim so tag, notes and changelog describe the same thing.
+                NEXT_PATCH=$BASE_PATCH
+              else
+                # The baseline is behind the newest release, or was itself
+                # already published; step one past the newest release instead.
+                NEXT_PATCH=$(( LATEST_PATCH + 1 ))
+              fi
               VERSION_NAME="1.0.${NEXT_PATCH}"
             fi
 
@@ -252,14 +266,13 @@ jobs:
           # release - so it used to sit at 1.0.0 while releases reached 1.0.6,
           # with nothing failing in between.
           #
-          # The comparison is against the newest *published* release, NOT against
-          # the version this build is about to publish. Those are different
-          # numbers by construction: the resolver always advances the patch, so a
-          # perfectly healthy build publishing v1.0.7 from a baseline of 1.0.6
-          # would warn every single time. A step that cries wolf on healthy
-          # builds is worse than no step - it is noise people learn to ignore.
-          # A real drift is the baseline trailing the newest release by more
-          # than the one version the sync is allowed to be behind.
+          # The comparison is against the newest *published* release, NOT
+          # against the version this build is about to publish. The resolver
+          # publishes the committed baseline whenever that baseline names an
+          # unpublished version, so in the healthy case the two are the same
+          # number and a warning here means real drift - the baseline trailing
+          # the newest release by more than the one version the sync is allowed
+          # to be behind.
           BASELINE=$(grep '^anisequelVersionName=' gradle.properties | cut -d= -f2 | tr -d ' \r' || true)
           BASELINE=${BASELINE:-0.0.0}
 
@@ -653,14 +666,15 @@ jobs:
           fi
 
           # The version the notes were written for is not necessarily this build's
-          # version - see the resolver step. Worth saying out loud when they differ
-          # by more than the one patch the resolver adds on its own, because that
-          # is the case where the page is shipping notes from a release ago.
+          # version - a tag build publishes under an explicit tag, and a baseline
+          # that trailed the newest release gets advanced past it. Worth saying
+          # out loud when they differ, because that is the case where the page
+          # could be shipping notes from a release ago.
           if [ -n "${NOTES_VERSION}" ] && [ "${NOTES_VERSION}" != "${VERSION_NAME}" ]; then
             echo "::warning::Release notes are written for ${NOTES_VERSION} but this" \
-                 "build publishes as ${VERSION_NAME}. Fine when that is the resolver's" \
-                 "one-patch advance; not fine if it means nobody wrote notes for the" \
-                 "changes in this build."
+                 "build publishes as ${VERSION_NAME}. Expected only on a tag build or" \
+                 "when the baseline trailed; otherwise the page may be describing an" \
+                 "older release than the one being published."
           fi
 
           BODY=$(gh release view "${TAG}" --json body --jq '.body' 2>/dev/null || echo "")
@@ -757,9 +771,10 @@ jobs:
           CHANGELOG_VERSION=""
           if [ -f "${CHANGELOG}" ]; then
             # Newest block with usable notes, rather than a lookup by
-            # ${VERSION_NAME}: the resolver above *derives* VERSION_NAME by
-            # advancing past the newest published release, so it does not exist
-            # until this run starts and no changelog can be written ahead of it.
+            # ${VERSION_NAME}: a tag build publishes under an explicit tag that
+            # need not match the changelog's newest block, and the changelog is
+            # hand-edited against the baseline. The newest block is the release
+            # the reader should see either way.
             CHANGELOG_VERSION=$(jq -r \
               '[(.versions // [])[] | select((.entries // []) | map(.title | select(. != null and . != "")) | length > 0)][0].version // ""' \
               "${CHANGELOG}" 2>/dev/null || echo "")
@@ -783,9 +798,9 @@ jobs:
           else
             if [ -n "${CHANGELOG_VERSION}" ] && [ "${CHANGELOG_VERSION}" != "${VERSION_NAME}" ]; then
               echo "::warning::Release notes are written for ${CHANGELOG_VERSION} but" \
-                   "this build publishes as ${VERSION_NAME}. Expected when that is the" \
-                   "resolver's one-patch advance; not expected if it means no notes" \
-                   "were written for the changes in this build."
+                   "this build publishes as ${VERSION_NAME}. Expected only on a tag" \
+                   "build or when the baseline trailed; otherwise the notes may" \
+                   "describe an older release than the one being published."
             fi
             # Capped: this lands in a dialog on a phone, and an unbounded list
             # would push the first item off the screen.

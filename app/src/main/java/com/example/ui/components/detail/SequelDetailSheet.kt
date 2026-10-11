@@ -92,11 +92,30 @@ fun SequelDetailSheet(
         if (themeSettings.animeThemeActive) {
             val colorHex = sequel.coverColor ?: "#0057B7"
             themePreferences.setAnimeThemeActive(true, colorHex)
+            if (themeSettings.animeThemeRetainColor) {
+                // "Retain" means the anime's colour becomes the app's accent,
+                // not just a glow around this sheet: persist it as a custom
+                // hue so the whole app — and the next launch — keeps it. There
+                // is an exit hatch: picking a palette or a hue in the Theme
+                // tab clears it, as does Reset appearance.
+                themePreferences.setCustomColorHex(colorHex)
+            }
         }
     }
 
-    LaunchedEffect(themeSettings.animeThemeActive, themeSettings.animeThemeRevertDuration) {
-        if (themeSettings.animeThemeActive && themeSettings.animeThemeRevertDuration > 0) {
+    // The revert timer belongs to the *temporary* layer only. While Retain is
+    // on the colour was persisted as a custom hue, so deactivating the layer
+    // after a delay would flick the app between schemes for no gain — the
+    // retained accent is already what the user asked to keep.
+    LaunchedEffect(
+        themeSettings.animeThemeActive,
+        themeSettings.animeThemeRevertDuration,
+        themeSettings.animeThemeRetainColor
+    ) {
+        if (themeSettings.animeThemeActive &&
+            themeSettings.animeThemeRevertDuration > 0 &&
+            !themeSettings.animeThemeRetainColor
+        ) {
             val delayMillis = themeSettings.animeThemeRevertDuration * 1000L
             kotlinx.coroutines.delay(delayMillis)
             themePreferences.setAnimeThemeActive(false, null)

@@ -1,9 +1,9 @@
 {
-  "version": "1.0.51",
-  "version_code": 129,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.38",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.38/anisequel-universal.apk",
-  "size_bytes": 2406708,
-  "published_at": "2026-10-05T04:26:05Z",
-  "notes": "## AniSequel\n\nFind the anime sequels you finished the first season of and never got\naround to, and add them to your AniList Planning list in one tap.\n\n### 📦 APK package\n**anisequel-universal.apk** runs on every supported device — there is\nonly one build, so there is nothing to choose between.\n\n*Built from commit* `ea234a0881ba6806fdeeb6de5973e884335068a2` *on run* `71`.\n\n### 🔑 First launch\nAniSequel signs you in to your own AniList account through AniList's\nOAuth page — there is no AniSequel account and no password to manage.\n\n### ⚠️ Installing over an older build\nEvery release from this one onward is signed with the same key, so you\ncan install future updates over the top without uninstalling first.\n\nIf you are upgrading from **v1.0.16 or earlier**, or from any build\nmade between the first signing-key move and the 2026-10-05 key\nrotation, the signing key has changed and Android will refuse the\ninstall — a new key can never update an app signed with an old one.\nUninstall **AniSequel** once, then install this APK. This wipes the\napp's local data, so expect to sign in to AniList again.\n\nIf Android reports **\"App not installed as package conflicts\"**, an\nolder copy sig\n\nBuild 71 from ea234a08."
+  "version": "1.0.53",
+  "version_code": 133,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.52",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.52/anisequel-universal.apk",
+  "size_bytes": 2627070,
+  "published_at": "2026-10-11T04:29:27Z",
+  "notes": "- GIFs and images in bios and comments: A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline.\n- AniList links get a preview card: Pasting an anime, manga, character, staff or studio link now previews it as a card, including links with a www. host or a trailing slash that previously fell through as plain text.\n- Like and comment on activity: The Activity feed's like and reply counts are now buttons. Tap the heart to like or un-like a post, or open a thread to read and post a comment without leaving the app.\n- Theme screen, reorganised: Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again.\n- Theme switching is snappier: Dynamic colour schemes are built once per picked colour instead of on every on-screen change, so changing your accent or theme feels immediate.\n- Planning \n\nBuild 133 from ceabaf0e."
 }

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -59,6 +60,14 @@ fun SectionCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     subtitle: String? = null,
+    /**
+     * The icon tile's background. Defaults to the quiet `secondaryContainer`
+     * role; the Theme tab passes richer roles so its sections read as the
+     * colourful half of Settings without the Edit and Info tabs changing.
+     */
+    iconContainer: Color = MaterialTheme.colorScheme.secondaryContainer,
+    /** The icon drawn on [iconContainer]. */
+    iconContent: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     content: @Composable () -> Unit
 ) {
     Card(
@@ -77,13 +86,13 @@ fun SectionCard(
                         modifier = Modifier
                             .size(34.dp)
                             .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                            .background(iconContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tint = iconContent,
                             modifier = Modifier.size(18.dp)
                         )
                     }

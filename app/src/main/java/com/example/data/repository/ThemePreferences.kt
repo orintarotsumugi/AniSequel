@@ -126,6 +126,13 @@ class ThemePreferences(private val context: Context) {
         val customColorHex: String? = null,
         val animeThemeActive: Boolean = false,
         val animeThemeColorHex: String? = null,
+        /**
+         * Whether the anime-derived colour is *kept* as the app's own accent
+         * after the detail sheet closes, rather than reverting. Only meaningful
+         * while [animeThemeActive] is in use: the detail sheet reads it to
+         * decide whether to persist the cover colour as a custom hue, and the
+         * revert timer is skipped while it is on.
+         */
         val animeThemeRetainColor: Boolean = true,
         val animeThemeRevertDuration: Int = 300,
         val appBackgroundColor: String? = null,
@@ -195,6 +202,13 @@ class ThemePreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Keeps the anime-derived colour as the app's own custom accent while the
+     * feature is in use. The detail sheet reads this to decide whether to
+     * persist the cover colour, so switching it here and opening a detail sheet
+     * is what changes the whole app's colours — the same "content-based dynamic
+     * colour" idea as the wallpaper toggle, driven by the cover art instead.
+     */
     suspend fun setAnimeThemeRetainColor(retain: Boolean) {
         context.themeDataStore.edit { preferences ->
             preferences[Keys.ANIME_THEME_RETAIN_COLOR] = retain

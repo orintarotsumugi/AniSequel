@@ -193,7 +193,6 @@ fun AniSequelTheme(
     customColorHex: String? = null,
     animeThemeActive: Boolean = false,
     animeThemeColorHex: String? = null,
-    animeThemeRetainColor: Boolean = true,
     appBackgroundColor: String? = null,
     content: @Composable () -> Unit
 ) {

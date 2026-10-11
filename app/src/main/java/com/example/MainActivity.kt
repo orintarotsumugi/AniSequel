@@ -135,7 +135,6 @@ class MainActivity : ComponentActivity() {
                 customColorHex = themeSettings.customColorHex,
                 animeThemeActive = themeSettings.animeThemeActive,
                 animeThemeColorHex = themeSettings.animeThemeColorHex,
-                animeThemeRetainColor = themeSettings.animeThemeRetainColor,
                 appBackgroundColor = themeSettings.appBackgroundColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {

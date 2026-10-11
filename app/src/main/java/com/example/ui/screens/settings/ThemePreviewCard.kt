@@ -1,6 +1,7 @@
 package com.example.ui.screens.settings
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -38,18 +40,18 @@ import androidx.compose.ui.unit.dp
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveMotion
-import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.theme.AniSequelTheme
 import com.example.ui.theme.ThemePalette
 
 /**
- * Interactive Material 3 theme preview card.
+ * The Material 3 Expressive hero of the Theme tab.
  *
- * Renders a miniature mockup of an AniSequel card in real-time with the active
- * color scheme, true black settings, and spring motion style. Users can interact
- * with sample buttons to experience tactile animation bounciness and confirm
- * visual readability before navigating away.
+ * A wide gradient header leads with the scheme's own key colours — so the card
+ * is literally a colour chip for whatever is driving the theme — and the active
+ * colour source (wallpaper, palette, custom hue or retained anime colour) is
+ * named in a pill. Below the band is the same interactive mockup as before, so
+ * the spring physics can be felt before leaving the screen.
  */
 @Composable
 fun ThemePreviewCard(
@@ -64,224 +66,252 @@ fun ThemePreviewCard(
         "Custom (${themeSettings.customColorHex})"
     } else if (themeSettings.useDynamicColor) {
         "Dynamic Wallpaper"
+    } else if (themeSettings.animeThemeActive && themeSettings.animeThemeColorHex != null) {
+        "Anime (${themeSettings.animeThemeColorHex})"
     } else {
         ThemePalette.fromStorage(themeSettings.paletteId).displayName
     }
+
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val heroAccent by animateColorAsState(
+        targetValue = primary,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "theme_hero_accent"
+    )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .testTag("theme_live_preview_card"),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant
-        )
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Header: Live Preview label + Active Palette tag
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Column {
+            // Hero band: the scheme's own key colours as a gradient, so the
+            // preview is also a swatch of the active source. The scrim keeps
+            // white text readable on every palette, light or dark.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .background(
+                        Brush.linearGradient(listOf(primary, secondary, tertiary))
+                    )
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Live Theme Preview",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Surface(
-                    shape = ExpressiveShapes.pill,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.padding(2.dp)
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.16f))
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = activePaletteName,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Live Theme Preview",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Your accent, as the whole app renders it.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.92f)
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(percent = 50),
+                        color = Color.White.copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = activePaletteName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Mockup Card
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Poster placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp, 64.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
+            Column(modifier = Modifier.padding(14.dp)) {
+                // Mockup card
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(1.dp, heroAccent.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = AppVectorIcons.Movie,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                            // Poster placeholder
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp, 64.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(heroAccent.copy(alpha = 0.22f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = AppVectorIcons.Movie,
+                                    contentDescription = null,
+                                    tint = heroAccent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
 
-                        // Details
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = ExpressiveShapes.pill,
-                                    color = statusColors.successContainer,
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = RoundedCornerShape(percent = 50),
+                                        color = statusColors.successContainer,
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Airing",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = statusColors.success,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
                                     Text(
-                                        text = "Airing",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = statusColors.success,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                        text = "TV • Fall 2026",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
                                 Text(
-                                    text = "TV • Fall 2026",
+                                    text = "Frieren: Beyond Journey's End S2",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+
+                                Text(
+                                    text = "Finished S1 (28/28 eps)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = "Frieren: Beyond Journey's End S2",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1
-                            )
-
-                            Text(
-                                text = "Finished S1 (28/28 eps)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Interactive Action Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { isPlanned = !isPlanned },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp)
-                                .bouncyPress(pressedScale = 0.94f)
-                                .testTag("preview_plan_button"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = if (isPlanned) {
-                                ButtonDefaults.buttonColors(
-                                    containerColor = statusColors.successContainer,
-                                    contentColor = statusColors.success
-                                )
-                            } else {
-                                ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        ) {
-                            Icon(
-                                imageVector = if (isPlanned) AppVectorIcons.BookmarkDone else AppVectorIcons.BookmarkAdd,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isPlanned) "Planned" else "+ Plan",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
 
-                        OutlinedButton(
-                            onClick = { isWatching = !isWatching },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp)
-                                .bouncyPress(pressedScale = 0.94f)
-                                .testTag("preview_watch_button"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = if (isWatching) {
-                                ButtonDefaults.outlinedButtonColors(
-                                    containerColor = statusColors.infoContainer,
-                                    contentColor = statusColors.info
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { isPlanned = !isPlanned },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .bouncyPress(pressedScale = 0.94f)
+                                    .testTag("preview_plan_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = if (isPlanned) {
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = statusColors.successContainer,
+                                        contentColor = statusColors.success
+                                    )
+                                } else {
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = heroAccent,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlanned) AppVectorIcons.BookmarkDone else AppVectorIcons.BookmarkAdd,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            } else {
-                                ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isPlanned) "Planned" else "+ Plan",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
-                        ) {
-                            Icon(
-                                imageVector = AppVectorIcons.Play,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isWatching) "Watching" else "Watch",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+
+                            OutlinedButton(
+                                onClick = { isWatching = !isWatching },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .bouncyPress(pressedScale = 0.94f)
+                                    .testTag("preview_watch_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = if (isWatching) {
+                                    ButtonDefaults.outlinedButtonColors(
+                                        containerColor = statusColors.infoContainer,
+                                        contentColor = statusColors.info
+                                    )
+                                } else {
+                                    ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = AppVectorIcons.Play,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isWatching) "Watching" else "Watch",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // Swatch palette dots showing roles
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RoleSwatchDot("Primary", MaterialTheme.colorScheme.primary)
-                RoleSwatchDot("Secondary", MaterialTheme.colorScheme.secondary)
-                RoleSwatchDot("Tertiary", MaterialTheme.colorScheme.tertiary)
-                RoleSwatchDot("Container", MaterialTheme.colorScheme.primaryContainer)
-                RoleSwatchDot("Surface", MaterialTheme.colorScheme.surface)
+                // Role swatches: the five roles the eye reads first, in the
+                // current scheme.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RoleSwatchDot("Primary", primary)
+                    RoleSwatchDot("Secondary", secondary)
+                    RoleSwatchDot("Tertiary", tertiary)
+                    RoleSwatchDot("Container", MaterialTheme.colorScheme.primaryContainer)
+                    RoleSwatchDot("Surface", MaterialTheme.colorScheme.surface)
+                }
             }
         }
     }

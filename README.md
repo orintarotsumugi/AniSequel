@@ -36,7 +36,9 @@ in-app updater.
 - **Filters and hiding.** Sort, filter by relation type and status, search, and
   hide entries you deliberately do not want to be reminded about — with undo.
 - **Material 3 Expressive UI.** Spring physics throughout, `RoundedPolygon`
-  artwork where a shape earns its keep, dynamic colour, and six theme palettes.
+  artwork where a shape earns its keep, dynamic colour — drawn from the
+  wallpaper, or from an anime's cover art when you view it — and six theme
+  palettes.
 - **Self-contained updater.** No update library and no Play Services.
 
 ### Deliberate non-goals
