@@ -6,8 +6,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.util.LruCache
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -49,6 +52,20 @@ object WidgetCover {
         .build()
 
     /**
+     * One background thread for every cover fetch in the app.
+     *
+     * A widget update used to spawn a fresh `Thread` per tile per update. With
+     * four providers, a system tick plus an app-driven refresh could put several
+     * downloads in flight at once, and each would compete with the foreground for
+     * cores until it finished. A single low-priority executor serialises them: a
+     * home-screen tile is a thirty-minute glance, not something worth delaying a
+     * frame for.
+     */
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "widget-cover").apply { priority = Thread.MIN_PRIORITY }
+    }
+
+    /**
      * Hard ceiling on a decoded cover, in pixels (~400 KB at `RGB_565`).
      *
      * A `RemoteViews` bitmap is marshalled through a Binder transaction with a
@@ -60,11 +77,28 @@ object WidgetCover {
     private const val MAX_DECODED_PIXELS = 200_000L
 
     /**
+     * Cached placeholder rectangles, bounded by decoded byte count.
+     *
+     * A placeholder is a static shape - a rounded rectangle in one of a handful
+     * of dominant colours - so drawing it per update per tile allocated the same
+     * bitmap over and over, on the main thread, inside `onUpdate`. The key
+     * carries the colour and the pixel size, so a density change or a different
+     * entry still misses once and reuses after.
+     */
+    private val placeholders = object : LruCache<String, Bitmap>(PLACEHOLDER_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
+    /** ~512 KB of cached placeholders: a few tiles' worth, never a memory story. */
+    private const val PLACEHOLDER_CACHE_BYTES = 512 * 1024
+
+    /**
      * Fetches [url] and hands the decoded bitmap (or null) to [onLoaded].
      *
-     * The callback runs on a background thread; it is always invoked exactly
-     * once, including for a null or blank [url], so a caller using it to finish a
-     * `goAsync()` pending result can do so in a `finally` without leaking it.
+     * The callback always runs on the shared background thread, including for a
+     * null or blank [url], so a caller using it to finish a `goAsync()` pending
+     * result can do so in a `finally` without leaking it - and without ever
+     * running a render on the caller's thread by surprise.
      */
     fun loadAsync(
         url: String?,
@@ -72,32 +106,27 @@ object WidgetCover {
         targetHeightPx: Int,
         onLoaded: (Bitmap?) -> Unit
     ) {
-        if (url.isNullOrBlank()) {
-            onLoaded(null)
-            return
-        }
-
-        Thread {
-            val bitmap = try {
-                download(url, targetWidthPx, targetHeightPx)
-            } catch (t: Throwable) {
+        executor.execute {
+            val bitmap = if (url.isNullOrBlank()) {
                 null
+            } else {
+                try {
+                    download(url, targetWidthPx, targetHeightPx)
+                } catch (t: Throwable) {
+                    null
+                }
             }
             try {
                 onLoaded(bitmap)
             } catch (t: Throwable) {
-                // A throwing callback must not escape this Thread: the default
+                // A throwing callback must not escape this thread: the default
                 // handler would kill the app's process over a home-screen tile.
             }
-        }.apply {
-            name = "widget-cover"
-            // The tile is never worth competing with the foreground for cores.
-            priority = Thread.MIN_PRIORITY
-        }.start()
+        }
     }
 
     /**
-     * A rounded rectangle filled with [colorHex], sized for the ImageView.
+     * The rounded rectangle a tile draws behind its cover, cached.
      *
      * Never null, and that is the point. A malformed AniList colour - or none at
      * all - draws a transparent rectangle instead, so a caller can hand the
@@ -110,26 +139,25 @@ object WidgetCover {
      * `RemoteViews` can set a view's background colour, but that replaces the
      * shape drawable with a square.
      */
-    fun roundedPlaceholder(context: Context, colorHex: String?, widthPx: Int, heightPx: Int): Bitmap {
-        val color = colorHex?.let { parseColor(it) } ?: Color.TRANSPARENT
+    fun placeholder(context: Context, colorHex: String?, widthPx: Int, heightPx: Int): Bitmap {
         val width = widthPx.coerceAtLeast(1)
         val height = heightPx.coerceAtLeast(1)
+        val key = "${colorHex.orEmpty()}|$width|$height"
 
-        return try {
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            if (color != Color.TRANSPARENT) {
-                val radius = (8f * context.resources.displayMetrics.density)
-                    .coerceAtMost(min(width, height) / 2f)
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
-                Canvas(bitmap).drawRoundRect(
-                    0f, 0f, width.toFloat(), height.toFloat(), radius, radius, paint
-                )
-            }
-            bitmap
-        } catch (t: Throwable) {
-            // A 1x1 transparent bitmap still beats a null one at the call site.
-            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        placeholders.get(key)?.let { return it }
+
+        val color = colorHex?.let { parseColor(it) } ?: Color.TRANSPARENT
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        if (color != Color.TRANSPARENT) {
+            val radius = (8f * context.resources.displayMetrics.density)
+                .coerceAtMost(min(width, height) / 2f)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+            Canvas(bitmap).drawRoundRect(
+                0f, 0f, width.toFloat(), height.toFloat(), radius, radius, paint
+            )
         }
+        placeholders.put(key, bitmap)
+        return bitmap
     }
 
     /** Density-independent pixels, for the decode target and the placeholder. */

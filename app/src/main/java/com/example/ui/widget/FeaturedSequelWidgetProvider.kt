@@ -20,11 +20,8 @@ import com.example.R
  * sequel *to*, and how many are waiting - so a user can decide whether to open
  * the app from the home screen.
  *
- * `onReceive` is overridden for the same reason as
- * [AniSequelWidgetProvider]'s: the poster is fetched on a background thread kept
- * alive by `goAsync()` while `super.onReceive` draws the colour placeholder
- * first. With no cover stored it stays on that placeholder and the title, which
- * is the intended look rather than a blank tile.
+ * `onReceive` and the update path are shared with the other three providers via
+ * [WidgetUpdater]; see [AniSequelWidgetProvider] for why `goAsync()` matters.
  */
 class FeaturedSequelWidgetProvider : AppWidgetProvider() {
 
@@ -33,7 +30,9 @@ class FeaturedSequelWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        updateWidgets(context, appWidgetManager, appWidgetIds)
+        WidgetUpdater.updateWidgets(context, appWidgetManager, appWidgetIds) { c, cover ->
+            renderWidget(c, cover)
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -46,7 +45,16 @@ class FeaturedSequelWidgetProvider : AppWidgetProvider() {
         if (ids.isEmpty()) return
 
         val pendingResult = goAsync()
-        loadCover(context, manager, ids) { pendingResult.finish() }
+        WidgetUpdater.refreshCover(
+            context = context,
+            manager = manager,
+            ids = ids,
+            coverWidthDp = COVER_WIDTH_DP,
+            coverHeightDp = COVER_HEIGHT_DP,
+            coverUrl = { AniSequelWidgetData.topMissedCover(context) },
+            render = { c, cover -> renderWidget(c, cover) },
+            onDone = { pendingResult.finish() }
+        )
     }
 
     companion object {
@@ -58,46 +66,18 @@ class FeaturedSequelWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, FeaturedSequelWidgetProvider::class.java)
             )
-            updateWidgets(context, manager, ids)
-            loadCover(context, manager, ids) {}
+            WidgetUpdater.updateAll(
+                context = context,
+                manager = manager,
+                ids = ids,
+                coverWidthDp = COVER_WIDTH_DP,
+                coverHeightDp = COVER_HEIGHT_DP,
+                coverUrl = { AniSequelWidgetData.topMissedCover(context) },
+                render = { c, cover -> renderWidget(c, cover) }
+            )
         }
 
-        private fun updateWidgets(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray
-        ) {
-            if (ids.isEmpty()) return
-            manager.updateAppWidget(ids, renderWidget(context, null))
-        }
-
-        private fun loadCover(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray,
-            onDone: () -> Unit
-        ) {
-            if (ids.isEmpty()) {
-                onDone()
-                return
-            }
-
-            WidgetCover.loadAsync(
-                url = AniSequelWidgetData.topMissedCover(context),
-                targetWidthPx = WidgetCover.dp(context, COVER_WIDTH_DP),
-                targetHeightPx = WidgetCover.dp(context, COVER_HEIGHT_DP)
-            ) { bitmap ->
-                try {
-                    manager.updateAppWidget(ids, renderWidget(context, bitmap))
-                } catch (t: Throwable) {
-                    // Never let a widget update take the process down.
-                } finally {
-                    onDone()
-                }
-            }
-        }
-
-        private fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
+        internal fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
             val count = AniSequelWidgetData.missedSequelsCount(context)
             val title = AniSequelWidgetData.topMissedTitle(context)
             val parent = AniSequelWidgetData.topMissedParent(context)
@@ -106,18 +86,26 @@ class FeaturedSequelWidgetProvider : AppWidgetProvider() {
             val caption = context.getString(
                 if (count == 0) R.string.widget_featured_caption_empty else R.string.widget_featured_caption
             )
-            val parentLine = if (!parent.isNullOrBlank()) {
-                context.getString(R.string.widget_featured_sequel_to, parent)
+            // A recommendation with nothing it is a sequel *to* has no parent line
+            // to draw. The placeholder string ("Sequel to…") would render as a
+            // sentence with its subject missing, which is worse than no line.
+            val parentLine = if (parent.isNullOrBlank()) {
+                null
             } else {
-                context.getString(R.string.widget_featured_parent_initial)
+                context.getString(R.string.widget_featured_sequel_to, parent)
             }
 
             return RemoteViews(context.packageName, R.layout.widget_featured_sequel).apply {
                 setTextViewText(
                     R.id.widget_featured_title,
-                    title?.takeIf { it.isNotBlank() } ?: context.getString(R.string.widget_featured_title_initial)
+                    title?.takeIf { it.isNotBlank() }
+                        ?: context.getString(R.string.widget_featured_title_initial)
                 )
-                setTextViewText(R.id.widget_featured_parent, parentLine)
+                setTextViewText(R.id.widget_featured_parent, parentLine.orEmpty())
+                setViewVisibility(
+                    R.id.widget_featured_parent,
+                    if (parentLine == null) View.GONE else View.VISIBLE
+                )
                 setTextViewText(R.id.widget_featured_count, count.toString())
                 setTextViewText(R.id.widget_featured_caption, caption)
                 setTextViewText(R.id.widget_featured_username, username?.let { "@$it" }.orEmpty())
@@ -127,7 +115,7 @@ class FeaturedSequelWidgetProvider : AppWidgetProvider() {
                 )
                 setImageViewBitmap(
                     R.id.widget_featured_cover,
-                    cover ?: WidgetCover.roundedPlaceholder(
+                    cover ?: WidgetCover.placeholder(
                         context,
                         AniSequelWidgetData.topMissedColor(context),
                         WidgetCover.dp(context, COVER_WIDTH_DP),

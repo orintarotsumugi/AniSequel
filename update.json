@@ -1,9 +1,9 @@
 {
-  "version": "1.0.55",
-  "version_code": 135,
-  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.54",
-  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.54/anisequel-universal.apk",
-  "size_bytes": 2627882,
-  "published_at": "2026-10-11T06:59:43Z",
-  "notes": "- In-app details from the Activity feed and Currently Arriving: Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had.\n- The detail sheet adapts to what it is showing: An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry.\n\nBuild 139 from 59af3b6f."
+  "version": "1.0.56",
+  "version_code": 136,
+  "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.55",
+  "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.55/anisequel-universal.apk",
+  "size_bytes": 2651990,
+  "published_at": "2026-10-11T08:14:05Z",
+  "notes": "- Widgets that name what they count: The home-screen tiles now draw the show they are talking about: the top missed sequel and the first arriving episode each show a cover, its title and what it is, alongside the count and your AniList handle, with the entry's own colour filling the poster frame until the art loads. Covers are fetched off the main thread, and a tile falls back to that colour placeholder whenever there is no artwork or no network, so it never renders blank.\n- A Featured Sequel widget: A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app.\n- See who liked an activity: Holding the heart on an activity in a profile now opens a small sheet listing everyone who liked it, avatar and name, with the count in the header. The list comes straight from AniList, so it always agrees with the number on the card. A quick tap still toggles your own like exactly as before.\n- Redrawn vectors: Six of the app's hand-drawn icons were rebuilt so they read at a glance: the calendar clock has a real face and hands, the double \n\nBuild 141 from a334ea26."
 }

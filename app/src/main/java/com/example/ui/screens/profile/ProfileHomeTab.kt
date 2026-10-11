@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.openExternalUrl
+import com.example.data.model.MediaNode
 import com.example.ui.viewmodel.UserOverviewUiState
 
 /**
@@ -20,11 +21,19 @@ import com.example.ui.viewmodel.UserOverviewUiState
  *
  * Places the expressive markdown About bio right below the header card for high visibility,
  * followed by rich carousels of pinned favourites.
+ *
+ * A pinned anime or manga opens the same in-app detail sheet the activity feed uses,
+ * rather than handing the tap to the browser. The favourites are the shows a person
+ * chose to show off, so tapping one should answer with the synopsis, scores and specs
+ * the app already knows how to render - and the sheet still carries the AniList link
+ * for the one who wants the page. Characters, staff and studios have no media sheet,
+ * so they keep the external link.
  */
 @Composable
 fun ProfileHomeTab(
     state: UserOverviewUiState.Success,
     contentPadding: PaddingValues,
+    onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -70,7 +79,7 @@ fun ProfileHomeTab(
             item(key = "favourite_anime_row") {
                 FavouriteMediaRow(
                     items = state.favouriteAnime,
-                    onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
+                    onOpen = onOpenDetail
                 )
             }
         }
@@ -87,7 +96,7 @@ fun ProfileHomeTab(
             item(key = "favourite_manga_row") {
                 FavouriteMediaRow(
                     items = state.favouriteManga,
-                    onOpen = { media -> media.siteUrl?.let { openExternalUrl(context, it) } }
+                    onOpen = onOpenDetail
                 )
             }
         }

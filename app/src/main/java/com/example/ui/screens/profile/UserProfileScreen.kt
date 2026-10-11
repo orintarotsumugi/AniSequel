@@ -336,7 +336,11 @@ private fun ProfileTabsContent(
                     contentPadding = padding
                 )
 
-                else -> ProfileHomeTab(state = state, contentPadding = padding)
+                else -> ProfileHomeTab(
+                    state = state,
+                    contentPadding = padding,
+                    onOpenDetail = onOpenDetail
+                )
             }
         }
     }

@@ -18,9 +18,8 @@ import com.example.R
  *
  * Tapping it opens AniSequel directly onto the main dashboard.
  *
- * `onReceive` is overridden for the same reason as
- * [AniSequelWidgetProvider]'s: the cover is fetched on a background thread kept
- * alive by `goAsync()` while `super.onReceive` draws the placeholder first.
+ * `onReceive` and the update path are shared with the other three providers via
+ * [WidgetUpdater]; see [AniSequelWidgetProvider] for why `goAsync()` matters.
  */
 class MissedSequelsWidgetProvider : AppWidgetProvider() {
 
@@ -29,7 +28,9 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        updateWidgets(context, appWidgetManager, appWidgetIds)
+        WidgetUpdater.updateWidgets(context, appWidgetManager, appWidgetIds) { c, cover ->
+            renderWidget(c, cover)
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -42,7 +43,16 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
         if (ids.isEmpty()) return
 
         val pendingResult = goAsync()
-        loadCover(context, manager, ids) { pendingResult.finish() }
+        WidgetUpdater.refreshCover(
+            context = context,
+            manager = manager,
+            ids = ids,
+            coverWidthDp = COVER_WIDTH_DP,
+            coverHeightDp = COVER_HEIGHT_DP,
+            coverUrl = { AniSequelWidgetData.topMissedCover(context) },
+            render = { c, cover -> renderWidget(c, cover) },
+            onDone = { pendingResult.finish() }
+        )
     }
 
     companion object {
@@ -54,48 +64,20 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, MissedSequelsWidgetProvider::class.java)
             )
-            updateWidgets(context, manager, ids)
-            loadCover(context, manager, ids) {}
+            WidgetUpdater.updateAll(
+                context = context,
+                manager = manager,
+                ids = ids,
+                coverWidthDp = COVER_WIDTH_DP,
+                coverHeightDp = COVER_HEIGHT_DP,
+                coverUrl = { AniSequelWidgetData.topMissedCover(context) },
+                render = { c, cover -> renderWidget(c, cover) }
+            )
         }
 
-        private fun updateWidgets(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray
-        ) {
-            if (ids.isEmpty()) return
-            manager.updateAppWidget(ids, renderWidget(context, null))
-        }
-
-        private fun loadCover(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray,
-            onDone: () -> Unit
-        ) {
-            if (ids.isEmpty()) {
-                onDone()
-                return
-            }
-
-            WidgetCover.loadAsync(
-                url = AniSequelWidgetData.topMissedCover(context),
-                targetWidthPx = WidgetCover.dp(context, COVER_WIDTH_DP),
-                targetHeightPx = WidgetCover.dp(context, COVER_HEIGHT_DP)
-            ) { bitmap ->
-                try {
-                    manager.updateAppWidget(ids, renderWidget(context, bitmap))
-                } catch (t: Throwable) {
-                    // Never let a widget update take the process down.
-                } finally {
-                    onDone()
-                }
-            }
-        }
-
-        private fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
+        internal fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
             val count = AniSequelWidgetData.missedSequelsCount(context)
-            val topTitle = AniSequelWidgetData.topMissedTitle(context)
+            val title = AniSequelWidgetData.topMissedTitle(context)
             val username = AniSequelWidgetData.username(context)
 
             val caption = context.getString(
@@ -105,9 +87,13 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
             return RemoteViews(context.packageName, R.layout.widget_missed_sequels).apply {
                 setTextViewText(R.id.widget_missed_count, count.toString())
                 setTextViewText(R.id.widget_missed_caption, caption)
-                setTextViewText(
+                // No top entry means the list is empty and there is nothing to
+                // name. Showing the app name here read as a headline for a show
+                // nobody is missing.
+                setTextViewText(R.id.widget_missed_title, title.orEmpty())
+                setViewVisibility(
                     R.id.widget_missed_title,
-                    topTitle?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
+                    if (title.isNullOrBlank()) View.GONE else View.VISIBLE
                 )
                 setTextViewText(R.id.widget_missed_username, username?.let { "@$it" }.orEmpty())
                 setViewVisibility(
@@ -116,7 +102,7 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
                 )
                 setImageViewBitmap(
                     R.id.widget_missed_cover,
-                    cover ?: WidgetCover.roundedPlaceholder(
+                    cover ?: WidgetCover.placeholder(
                         context,
                         AniSequelWidgetData.topMissedColor(context),
                         WidgetCover.dp(context, COVER_WIDTH_DP),

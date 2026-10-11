@@ -16,8 +16,8 @@ import com.example.R
  * The profile-activity widget.
  *
  * A 2x2 tile that answers one question - how much has been logged recently -
- * with the latest entry's poster, its title and the viewer's handle, and, when
- * tapped, opens the app straight on the profile's Activity tab.
+ * with the viewer's avatar, their handle and the latest entry's title, and,
+ * when tapped, opens the app straight on the profile's Activity tab.
  *
  * ## It is the receiver
  *
@@ -40,11 +40,11 @@ import com.example.R
  * ## Why `onReceive` is overridden
  *
  * The cover is a network fetch. A broadcast receiver's process can be killed the
- * moment `onReceive` returns, so `goAsync()` keeps it alive until
- * [WidgetCover] has an answer. `super.onReceive` runs first so the existing
- * `onUpdate` draws the synchronous placeholder (counts, caption, the entry's
- * dominant colour) before the art arrives; the background thread then replaces
- * it. Missing that first paint is what used to leave a freshly placed tile blank.
+ * moment `onReceive` returns, so `goAsync()` keeps it alive until [WidgetCover]
+ * has an answer. `super.onReceive` runs first so the existing `onUpdate` draws
+ * the synchronous placeholder (counts, caption, the entry's dominant colour)
+ * before the art arrives; the background thread then replaces it. Missing that
+ * first paint is what used to leave a freshly placed tile blank.
  */
 class AniSequelWidgetProvider : AppWidgetProvider() {
 
@@ -53,7 +53,9 @@ class AniSequelWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        updateWidgets(context, appWidgetManager, appWidgetIds)
+        WidgetUpdater.updateWidgets(context, appWidgetManager, appWidgetIds) { c, cover ->
+            renderWidget(c, cover)
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -66,7 +68,16 @@ class AniSequelWidgetProvider : AppWidgetProvider() {
         if (ids.isEmpty()) return
 
         val pendingResult = goAsync()
-        loadCover(context, manager, ids) { pendingResult.finish() }
+        WidgetUpdater.refreshCover(
+            context = context,
+            manager = manager,
+            ids = ids,
+            coverWidthDp = COVER_WIDTH_DP,
+            coverHeightDp = COVER_HEIGHT_DP,
+            coverUrl = { AniSequelWidgetData.activityArt(context) },
+            render = { c, cover -> renderWidget(c, cover) },
+            onDone = { pendingResult.finish() }
+        )
     }
 
     companion object {
@@ -87,85 +98,48 @@ class AniSequelWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, AniSequelWidgetProvider::class.java)
             )
-            updateWidgets(context, manager, ids)
-            loadCover(context, manager, ids) {}
+            WidgetUpdater.updateAll(
+                context = context,
+                manager = manager,
+                ids = ids,
+                coverWidthDp = COVER_WIDTH_DP,
+                coverHeightDp = COVER_HEIGHT_DP,
+                coverUrl = { AniSequelWidgetData.activityArt(context) },
+                render = { c, cover -> renderWidget(c, cover) }
+            )
         }
 
-        private fun updateWidgets(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray
-        ) {
-            // No instances placed: there is nothing to update and, more to the
-            // point, nothing to inflate a layout for. The system's own tick also
-            // fires for a provider with zero instances.
-            if (ids.isEmpty()) return
-
-            manager.updateAppWidget(ids, renderWidget(context, null))
-        }
-
-        /**
-         * Fetches the cover off the main thread and re-renders, then always calls
-         * [onDone]. A widget update that throws must not escape a background
-         * thread, so the render is wrapped too.
-         */
-        private fun loadCover(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray,
-            onDone: () -> Unit
-        ) {
-            if (ids.isEmpty()) {
-                onDone()
-                return
-            }
-
-            WidgetCover.loadAsync(
-                url = AniSequelWidgetData.latestActivityCover(context),
-                targetWidthPx = WidgetCover.dp(context, COVER_WIDTH_DP),
-                targetHeightPx = WidgetCover.dp(context, COVER_HEIGHT_DP)
-            ) { bitmap ->
-                try {
-                    manager.updateAppWidget(ids, renderWidget(context, bitmap))
-                } catch (t: Throwable) {
-                    // Never let a widget update take the process down.
-                } finally {
-                    onDone()
-                }
-            }
-        }
-
-        private fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
+        internal fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
             val count = AniSequelWidgetData.recentActivityCount(context)
-            val username = AniSequelWidgetData.username(context)
             val title = AniSequelWidgetData.latestActivityTitle(context)
+            val username = AniSequelWidgetData.username(context)
 
-            val caption = if (count == 0) {
-                context.getString(R.string.widget_caption_empty)
-            } else {
-                context.getString(R.string.widget_caption)
-            }
+            val caption = context.getString(
+                if (count == 0) R.string.widget_caption_empty else R.string.widget_caption
+            )
 
             return RemoteViews(context.packageName, R.layout.widget_anisequel).apply {
                 setTextViewText(R.id.widget_count, count.toString())
                 setTextViewText(R.id.widget_caption, caption)
-                setTextViewText(
+                // The title hides itself when there is no latest entry to name.
+                // Falling back to the app name read as a headline naming a show
+                // nobody could have watched, which is the last thing a tile that
+                // is about *activity* should claim.
+                setTextViewText(R.id.widget_title, title.orEmpty())
+                setViewVisibility(
                     R.id.widget_title,
-                    title?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
+                    if (title.isNullOrBlank()) View.GONE else View.VISIBLE
                 )
                 setTextViewText(R.id.widget_username, username?.let { "@$it" }.orEmpty())
                 setViewVisibility(
                     R.id.widget_username,
                     if (username.isNullOrBlank()) View.GONE else View.VISIBLE
                 )
-                // Activity art has no stored dominant colour, so there is nothing
-                // to tint the frame with; `roundedPlaceholder` still returns a
-                // bitmap (transparent), which lets the layout's own placeholder
-                // show through rather than leaving a stale bitmap from the last
-                // update on the tile.
+                // Activity art has no stored dominant colour, so the placeholder
+                // is transparent and the layout's own neutral frame shows through.
                 setImageViewBitmap(
                     R.id.widget_cover,
-                    cover ?: WidgetCover.roundedPlaceholder(
+                    cover ?: WidgetCover.placeholder(
                         context,
                         null,
                         WidgetCover.dp(context, COVER_WIDTH_DP),

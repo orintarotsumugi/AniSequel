@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,7 +73,22 @@ fun AniTopAppBar(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column {
+                // The name is a second way into the same profile the avatar opens.
+                // The avatar is the discoverable one, but a name is what a person
+                // reads and taps, so the whole identity block answers to it.
+                Column(
+                    modifier = if (viewer != null) {
+                        Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClick = onOpenProfile)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Open your AniList profile"
+                            }
+                    } else {
+                        Modifier
+                    }
+                ) {
                     Text(
                         text = "AniSequel",
                         style = MaterialTheme.typography.titleMedium,

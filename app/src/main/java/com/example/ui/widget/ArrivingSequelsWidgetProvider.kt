@@ -19,9 +19,8 @@ import com.example.R
  * Tapping it opens AniSequel on the dashboard, where the arriving section sits
  * at the top.
  *
- * `onReceive` is overridden for the same reason as
- * [AniSequelWidgetProvider]'s: the cover is fetched on a background thread kept
- * alive by `goAsync()` while `super.onReceive` draws the placeholder first.
+ * `onReceive` and the update path are shared with the other three providers via
+ * [WidgetUpdater]; see [AniSequelWidgetProvider] for why `goAsync()` matters.
  */
 class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
 
@@ -30,7 +29,9 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        updateWidgets(context, appWidgetManager, appWidgetIds)
+        WidgetUpdater.updateWidgets(context, appWidgetManager, appWidgetIds) { c, cover ->
+            renderWidget(c, cover)
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -43,7 +44,16 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
         if (ids.isEmpty()) return
 
         val pendingResult = goAsync()
-        loadCover(context, manager, ids) { pendingResult.finish() }
+        WidgetUpdater.refreshCover(
+            context = context,
+            manager = manager,
+            ids = ids,
+            coverWidthDp = COVER_WIDTH_DP,
+            coverHeightDp = COVER_HEIGHT_DP,
+            coverUrl = { AniSequelWidgetData.arrivingCover(context) },
+            render = { c, cover -> renderWidget(c, cover) },
+            onDone = { pendingResult.finish() }
+        )
     }
 
     companion object {
@@ -55,48 +65,20 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, ArrivingSequelsWidgetProvider::class.java)
             )
-            updateWidgets(context, manager, ids)
-            loadCover(context, manager, ids) {}
+            WidgetUpdater.updateAll(
+                context = context,
+                manager = manager,
+                ids = ids,
+                coverWidthDp = COVER_WIDTH_DP,
+                coverHeightDp = COVER_HEIGHT_DP,
+                coverUrl = { AniSequelWidgetData.arrivingCover(context) },
+                render = { c, cover -> renderWidget(c, cover) }
+            )
         }
 
-        private fun updateWidgets(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray
-        ) {
-            if (ids.isEmpty()) return
-            manager.updateAppWidget(ids, renderWidget(context, null))
-        }
-
-        private fun loadCover(
-            context: Context,
-            manager: AppWidgetManager,
-            ids: IntArray,
-            onDone: () -> Unit
-        ) {
-            if (ids.isEmpty()) {
-                onDone()
-                return
-            }
-
-            WidgetCover.loadAsync(
-                url = AniSequelWidgetData.arrivingCover(context),
-                targetWidthPx = WidgetCover.dp(context, COVER_WIDTH_DP),
-                targetHeightPx = WidgetCover.dp(context, COVER_HEIGHT_DP)
-            ) { bitmap ->
-                try {
-                    manager.updateAppWidget(ids, renderWidget(context, bitmap))
-                } catch (t: Throwable) {
-                    // Never let a widget update take the process down.
-                } finally {
-                    onDone()
-                }
-            }
-        }
-
-        private fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
+        internal fun renderWidget(context: Context, cover: Bitmap?): RemoteViews {
             val count = AniSequelWidgetData.arrivingCount(context)
-            val topTitle = AniSequelWidgetData.arrivingTitle(context)
+            val title = AniSequelWidgetData.arrivingTitle(context)
             val username = AniSequelWidgetData.username(context)
 
             val caption = context.getString(
@@ -106,9 +88,12 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
             return RemoteViews(context.packageName, R.layout.widget_arriving_sequels).apply {
                 setTextViewText(R.id.widget_arriving_count, count.toString())
                 setTextViewText(R.id.widget_arriving_caption, caption)
-                setTextViewText(
+                // Nothing arriving means no entry to name. The app name here would
+                // read as a headline for a show that is not coming.
+                setTextViewText(R.id.widget_arriving_title, title.orEmpty())
+                setViewVisibility(
                     R.id.widget_arriving_title,
-                    topTitle?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
+                    if (title.isNullOrBlank()) View.GONE else View.VISIBLE
                 )
                 setTextViewText(R.id.widget_arriving_username, username?.let { "@$it" }.orEmpty())
                 setViewVisibility(
@@ -117,7 +102,7 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
                 )
                 setImageViewBitmap(
                     R.id.widget_arriving_cover,
-                    cover ?: WidgetCover.roundedPlaceholder(
+                    cover ?: WidgetCover.placeholder(
                         context,
                         AniSequelWidgetData.arrivingColor(context),
                         WidgetCover.dp(context, COVER_WIDTH_DP),

@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.0.56",
+      "entries": [
+        {
+          "title": "Favourites open the in-app anime info",
+          "detail": "Tapping a pinned anime or manga on a profile's Home tab opens the same detail sheet the activity feed uses - synopsis, community scores, rankings, genres, specs and an AniList link - instead of handing the tap to the browser. A favourite is a show someone chose to show off, so it should answer with everything the app already knows how to render. Characters, staff and studios have no media sheet, so they keep the external link."
+        },
+        {
+          "title": "Your name on the dashboard opens your profile",
+          "detail": "The viewer's handle in the dashboard's top bar is now a second way into the profile, next to the avatar. A name is what a person reads and taps, so the whole identity block answers to it - tapping your name opens your AniList profile just as the avatar always has."
+        },
+        {
+          "title": "Widgets stop naming shows they are not showing",
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+        },
+        {
+          "title": "The activity tile shows your face",
+          "detail": "The activity tile drew nothing for a signed-in user because the dashboard has no viewer-activity feed to read from. It now draws your AniList avatar - the face the tile is actually about - and falls back to the demo poster only until the first real load lands."
+        },
+        {
+          "title": "Covers load on one low-priority thread",
+          "detail": "Every cover fetch shared a single background thread instead of spawning a new one per tile per update, so a system tick plus an app refresh no longer put several downloads in flight at once. The placeholder rectangle is cached by colour and size rather than redrawn on the main thread inside onUpdate, which is what a widget update used to do on every tick."
+        }
+      ]
+    },
+    {
       "version": "1.0.55",
       "entries": [
         {

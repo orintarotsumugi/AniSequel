@@ -297,13 +297,18 @@ fun AppNavigation(
     val widgetSuccess = dashboardState as? DashboardUiState.Success
     val widgetTopMissedId = widgetSuccess?.missedSequels?.firstOrNull()?.sequelId
     val widgetTopArrivingId = widgetSuccess?.arriving?.firstOrNull()?.mediaId
+    // The avatar is the activity tile's artwork, so the tile repaints when it
+    // changes even if nothing else about the viewer did.
+    val widgetAvatarUrl = widgetSuccess?.viewer?.avatar?.large
+        ?: widgetSuccess?.viewer?.avatar?.medium
     LaunchedEffect(
         widgetSuccess?.viewer?.id,
         widgetSuccess?.viewer?.name,
         widgetSuccess?.totalMissedCount,
         widgetSuccess?.arriving?.size,
         widgetTopMissedId,
-        widgetTopArrivingId
+        widgetTopArrivingId,
+        widgetAvatarUrl
     ) {
         val success = widgetSuccess ?: return@LaunchedEffect
         val top = success.missedSequels.firstOrNull()
@@ -319,7 +324,8 @@ fun AppNavigation(
             topMissedColor = top?.coverColor,
             arrivingTitle = arriving?.title,
             arrivingCover = arriving?.coverUrl,
-            arrivingColor = arriving?.coverColor
+            arrivingColor = arriving?.coverColor,
+            activityArt = widgetAvatarUrl
         )
         com.example.ui.widget.AniSequelWidgetProvider.updateAll(context)
         com.example.ui.widget.MissedSequelsWidgetProvider.updateAll(context)

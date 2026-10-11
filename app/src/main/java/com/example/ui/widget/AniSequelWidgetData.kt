@@ -34,7 +34,7 @@ object AniSequelWidgetData {
     private const val KEY_ARRIVING_COVER = "arriving_cover"
     private const val KEY_ARRIVING_COLOR = "arriving_color"
     private const val KEY_ACTIVITY_TITLE = "activity_title"
-    private const val KEY_ACTIVITY_COVER = "activity_cover"
+    private const val KEY_ACTIVITY_ART = "activity_art"
     private const val KEY_USERNAME = "username"
 
     /** How many list entries the viewer logged recently. */
@@ -136,9 +136,16 @@ object AniSequelWidgetData {
             DemoProfileProvider.getDemoActivity().firstOrNull()?.media?.displayName
         }
 
-    /** The cover on the viewer's latest activity. */
-    fun latestActivityCover(context: Context? = null): String? =
-        storedString(context, KEY_ACTIVITY_COVER) {
+    /**
+     * The image on the activity tile.
+     *
+     * The dashboard has no viewer-activity feed to draw from, so what the app
+     * actually has is the viewer's avatar - the face the tile is about. Synced,
+     * that is what is stored; unsynced, the fixture's first poster keeps the tile
+     * from being a blank rectangle before the first real load lands.
+     */
+    fun activityArt(context: Context? = null): String? =
+        storedString(context, KEY_ACTIVITY_ART) {
             DemoProfileProvider.getDemoActivity().firstOrNull()?.media?.posterUrl
         }
 
@@ -163,7 +170,7 @@ object AniSequelWidgetData {
         arrivingCover: String? = null,
         arrivingColor: String? = null,
         activityTitle: String? = null,
-        activityCover: String? = null,
+        activityArt: String? = null,
         username: String? = null
     ) {
         val editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
@@ -182,7 +189,7 @@ object AniSequelWidgetData {
         if (arrivingCover != null) editor.putString(KEY_ARRIVING_COVER, arrivingCover) else editor.remove(KEY_ARRIVING_COVER)
         if (arrivingColor != null) editor.putString(KEY_ARRIVING_COLOR, arrivingColor) else editor.remove(KEY_ARRIVING_COLOR)
         if (activityTitle != null) editor.putString(KEY_ACTIVITY_TITLE, activityTitle) else editor.remove(KEY_ACTIVITY_TITLE)
-        if (activityCover != null) editor.putString(KEY_ACTIVITY_COVER, activityCover) else editor.remove(KEY_ACTIVITY_COVER)
+        if (activityArt != null) editor.putString(KEY_ACTIVITY_ART, activityArt) else editor.remove(KEY_ACTIVITY_ART)
         // Never cleared: the username is what marks a session as synced, and
         // removing it would flip every fallback above back to demo data.
         username?.let { editor.putString(KEY_USERNAME, it) }
