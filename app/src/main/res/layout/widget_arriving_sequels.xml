@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The placed Arriving Sequels widget.
+
+  Same shape as the other two tiles: cover, title, count, handle. The cover sits
+  on the layout's neutral placeholder until the provider draws the entry's
+  dominant colour over it.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_arriving_root"
     android:layout_width="match_parent"
@@ -10,48 +17,71 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="14dp">
+        android:padding="12dp">
 
         <ImageView
-            android:id="@+id/widget_arriving_accent"
-            android:layout_width="4dp"
-            android:layout_height="44dp"
-            android:background="@drawable/widget_accent_bar"
-            android:contentDescription="@null" />
+            android:id="@+id/widget_arriving_cover"
+            android:layout_width="48dp"
+            android:layout_height="64dp"
+            android:background="@drawable/widget_cover_placeholder"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/widget_arriving_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:includeFontPadding="false"
-                android:text="0"
-                android:textColor="?android:attr/textColorPrimary"
-                android:textSize="38sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_arriving_caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/widget_arriving_caption"
-                android:textColor="?android:attr/textColorSecondary"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/widget_arriving_subcaption"
-                android:layout_width="wrap_content"
+                android:id="@+id/widget_arriving_title"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/app_name"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_arriving_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="0"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_arriving_caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/widget_arriving_caption"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_arriving_username"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textColor="?android:attr/textColorSecondary"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

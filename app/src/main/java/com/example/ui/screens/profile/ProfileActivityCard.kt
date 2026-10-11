@@ -2,6 +2,7 @@ package com.example.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +59,7 @@ fun ActivityCard(
     modifier: Modifier = Modifier,
     onLike: () -> Unit = {},
     onComments: () -> Unit = {},
+    onOpenLikers: () -> Unit = {},
     onOpenDetail: (MediaNode) -> Unit = {},
     likePending: Boolean = false
 ) {
@@ -201,6 +205,12 @@ fun ActivityCard(
                             enabled = activity.isLiked != null && !likePending,
                             contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
                             onClick = onLike,
+                            // Long press shows who liked it. The control is enabled
+                            // only with a session (above), so this is unreachable on
+                            // the demo feed; and it stays reachable at likeCount 0 so
+                            // the sheet can report the empty state rather than the
+                            // gesture silently doing nothing.
+                            onLongClick = onOpenLikers,
                             modifier = Modifier.testTag("activity_like_button")
                         )
                         // Reading a thread needs no session, so this is always
@@ -304,6 +314,13 @@ private fun ActivityStatusPill(text: String, accent: Boolean) {
  * aiming at. [enabled] is false for the heart when AniList has not said whether
  * this activity is liked - see the call site - and the pressed animation is
  * omitted in that case, so a disabled control does not still bounce.
+ *
+ * [onLongClick] is optional; only the heart currently passes it. The long press
+ * runs through `combinedClickable` so the tap path itself is unchanged.
+ * `hapticFeedbackEnabled` is set false and the haptic is played by hand instead:
+ * the modifier performs its own long-press haptic by default, and leaving both on
+ * would buzz twice. The hand-played one is the same single
+ * [HapticFeedbackType.LongPress] every other hold gesture in the app uses.
  */
 @Composable
 private fun ActivityAction(
@@ -313,14 +330,26 @@ private fun ActivityAction(
     enabled: Boolean,
     contentDescription: String,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val appearance = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled) { onClick() }
+            .combinedClickable(
+                enabled = enabled,
+                onLongClick = onLongClick?.let { open ->
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        open()
+                    }
+                },
+                hapticFeedbackEnabled = false,
+                onClick = onClick
+            )
             .then(if (enabled) Modifier.bouncyPress(pressedScale = 0.9f) else Modifier)
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically

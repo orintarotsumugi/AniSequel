@@ -58,6 +58,31 @@ data class ActivityDetail(
 )
 
 /**
+ * Payload of the likes-on-an-activity query.
+ *
+ * `likes` is a plain `[User]` - AniList does not paginate it - so the whole list
+ * of likers arrives in one response and no cursor state is modelled. Each liker
+ * is a [FollowUser] rather than a new type: the selection is the identical
+ * `{ id name avatar { ... } }` a follower row asks for, and the sheet renders the
+ * same circle from the same fields, so a second type would only be the same data
+ * under a second name.
+ *
+ * An absent or null `likes` reads as no likers rather than an error, because the
+ * activity a stale id resolves to need not be a `ListActivity` at all.
+ */
+@JsonClass(generateAdapter = true)
+data class ActivityLikesData(
+    @Json(name = "Activity") val activity: ActivityLikesNode? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ActivityLikesNode(
+    val id: Int? = null,
+    val likeCount: Int? = null,
+    val likes: List<FollowUser>? = null
+)
+
+/**
  * Payload of the like toggle.
  *
  * `ToggleLikeV2` returns `LikeableUnion`; the document fragments the two members

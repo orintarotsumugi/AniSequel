@@ -26,4 +26,14 @@
     <string name="widget_arriving_description">Track arriving and airing sequel episodes from your home screen</string>
     <string name="widget_arriving_caption">arriving soon</string>
     <string name="widget_arriving_caption_empty">no upcoming airing</string>
+
+    <!-- Featured Sequel widget. `widget_featured_title_initial` and
+         `widget_featured_parent_initial` are what the initialLayout shows for the
+         moment between the tile being placed and its first update. -->
+    <string name="widget_featured_description">The top missed sequel, poster and all, on your home screen</string>
+    <string name="widget_featured_title_initial">Featured sequel</string>
+    <string name="widget_featured_parent_initial">Sequel to&#8230;</string>
+    <string name="widget_featured_caption">missed sequels</string>
+    <string name="widget_featured_caption_empty">all caught up</string>
+    <string name="widget_featured_sequel_to">Sequel to %1$s</string>
 </resources>

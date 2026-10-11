@@ -287,12 +287,15 @@ object AppCustomVectors {
     }
 
     /**
-     * Surface tones: a rounded square split into two halves.
+     * Surface tones: three stacked rounded surfaces, each offset from the one
+     * behind it.
      *
      * The Theme tab's Background card changes how dark the app's surfaces are,
-     * which is a "two tones" job — hence the split square. It is distinct from
-     * `Contrast`, the About card's half-circle, at the 20dp a section header
-     * renders it at.
+     * which is a layered-tones job — hence the offset stack rather than a single
+     * split shape. It stays distinct from `Contrast`, the About card's
+     * half-circle, at the 20dp a section header renders it at. The old glyph was
+     * one square bisected down the middle, which read as a "flip" or "compare"
+     * control instead of depth.
      */
     val SurfaceTones: ImageVector by lazy {
         ImageVector.Builder(
@@ -304,24 +307,45 @@ object AppCustomVectors {
         ).apply {
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 2.2f,
+                strokeLineWidth = 1.8f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                // Rounded square outline.
-                moveTo(6f, 3.5f)
-                horizontalLineTo(18f)
-                curveTo(19.66f, 3.5f, 21f, 4.84f, 21f, 6.5f)
-                verticalLineTo(17.5f)
-                curveTo(21f, 19.16f, 19.66f, 20.5f, 18f, 20.5f)
-                horizontalLineTo(6f)
-                curveTo(4.34f, 20.5f, 3f, 19.16f, 3f, 17.5f)
-                verticalLineTo(6.5f)
-                curveTo(3f, 4.84f, 4.34f, 3.5f, 6f, 3.5f)
+                // Back plane.
+                moveTo(11f, 3f)
+                horizontalLineTo(20f)
+                quadTo(22f, 3f, 22f, 5f)
+                verticalLineTo(13f)
+                quadTo(22f, 15f, 20f, 15f)
+                horizontalLineTo(11f)
+                quadTo(9f, 15f, 9f, 13f)
+                verticalLineTo(5f)
+                quadTo(9f, 3f, 11f, 3f)
+                close()
 
-                // The split between the two tones, stopped short of the corners.
-                moveTo(12f, 4.6f)
-                verticalLineTo(19.4f)
+                // Middle plane, one step forward and down.
+                moveTo(8f, 6f)
+                horizontalLineTo(17f)
+                quadTo(19f, 6f, 19f, 8f)
+                verticalLineTo(16f)
+                quadTo(19f, 18f, 17f, 18f)
+                horizontalLineTo(8f)
+                quadTo(6f, 18f, 6f, 16f)
+                verticalLineTo(8f)
+                quadTo(6f, 6f, 8f, 6f)
+                close()
+
+                // Front plane, nearest the viewer.
+                moveTo(5f, 9f)
+                horizontalLineTo(14f)
+                quadTo(16f, 9f, 16f, 11f)
+                verticalLineTo(19f)
+                quadTo(16f, 21f, 14f, 21f)
+                horizontalLineTo(5f)
+                quadTo(3f, 21f, 3f, 19f)
+                verticalLineTo(11f)
+                quadTo(3f, 9f, 5f, 9f)
+                close()
             }
         }.build()
     }
@@ -361,10 +385,12 @@ object AppCustomVectors {
     /**
      * Motion bolt / lightning for the "Chill" motion style.
      *
-     * Chill is the full expressive physics — the spring with the most energy —
-     * so it gets a bolt while Smooth gets calm waves. The segment bar renders
-     * all three styles side by side, and three copies of one arrow is why the
-     * section used to read as "which arrow".
+     * Chill is the full expressive physics — the spring with the most energy — so
+     * it gets a bolt with three trailing speed lines, while Smooth gets calm
+     * waves. The old bolt was a zigzag whose halves met at a single point and
+     * filled in at small sizes, reading as a blob. The bolt stays filled and the
+     * speed lines are stroked so they remain hairlines and the bolt keeps its hard
+     * edges — the one place a fill and a stroke genuinely both belong.
      */
     val MotionBolt: ImageVector by lazy {
         ImageVector.Builder(
@@ -374,23 +400,46 @@ object AppCustomVectors {
             viewportWidth = 24f,
             viewportHeight = 24f
         ).apply {
+            // The bolt itself.
             path(
                 fill = SolidColor(Color.White),
                 pathFillType = PathFillType.NonZero
             ) {
-                moveTo(13f, 2f)
-                lineTo(4f, 14f)
-                horizontalLineTo(10f)
-                lineTo(8f, 22f)
-                lineTo(19f, 9f)
-                horizontalLineTo(13f)
+                moveTo(13.5f, 2f)
+                lineTo(4.5f, 13f)
+                horizontalLineTo(10.5f)
+                lineTo(9f, 22f)
+                lineTo(19.5f, 10.5f)
+                horizontalLineTo(13.5f)
                 close()
+            }
+            // Trailing speed lines, kept short so they clear the bolt's left edge.
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.6f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(1.5f, 7f)
+                horizontalLineTo(6f)
+
+                moveTo(1f, 12f)
+                horizontalLineTo(3.5f)
+
+                moveTo(1.5f, 17f)
+                horizontalLineTo(6f)
             }
         }.build()
     }
 
     /**
      * Expand to fullscreen vector icon.
+     *
+     * Four diagonal arrows radiating from the centre to the corners, each with its
+     * own head. The old glyph was four corner brackets with no shafts - the same
+     * corner marks a "collapse" glyph uses, which is how the player's expand
+     * button could read as its opposite. The shafts make the direction
+     * unambiguous.
      */
     val FullscreenExpand: ImageVector by lazy {
         ImageVector.Builder(
@@ -402,25 +451,37 @@ object AppCustomVectors {
         ).apply {
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 2.2f,
+                strokeLineWidth = 1.8f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(3f, 9f)
-                lineTo(3f, 3f)
-                lineTo(9f, 3f)
+                // Top-left arrow.
+                moveTo(4f, 7.5f)
+                lineTo(4f, 4f)
+                lineTo(7.5f, 4f)
+                moveTo(4f, 4f)
+                lineTo(10.5f, 10.5f)
 
-                moveTo(15f, 3f)
-                lineTo(21f, 3f)
-                lineTo(21f, 9f)
+                // Top-right arrow.
+                moveTo(16.5f, 4f)
+                lineTo(20f, 4f)
+                lineTo(20f, 7.5f)
+                moveTo(20f, 4f)
+                lineTo(13.5f, 10.5f)
 
-                moveTo(21f, 15f)
-                lineTo(21f, 21f)
-                lineTo(15f, 21f)
+                // Bottom-right arrow.
+                moveTo(20f, 16.5f)
+                lineTo(20f, 20f)
+                lineTo(16.5f, 20f)
+                moveTo(20f, 20f)
+                lineTo(13.5f, 13.5f)
 
-                moveTo(9f, 21f)
-                lineTo(3f, 21f)
-                lineTo(3f, 15f)
+                // Bottom-left arrow.
+                moveTo(7.5f, 20f)
+                lineTo(4f, 20f)
+                lineTo(4f, 16.5f)
+                moveTo(4f, 20f)
+                lineTo(10.5f, 13.5f)
             }
         }.build()
     }

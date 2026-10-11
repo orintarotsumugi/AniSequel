@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The rectangle behind a widget's cover before the bitmap arrives.
+
+  An XML shape for the same reason `widget_background` is one: a RemoteViews
+  layout cannot use a Compose `ImageVector`, and the only way to round a cover's
+  corners for the host is a drawable it inflates. It is deliberately neutral -
+  when AniList has a dominant colour the provider draws a tinted rounded bitmap
+  over this, so a tile always looks intentional; when it does not, this is the
+  fallback.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="?android:attr/colorControlHighlight" />
+</shape>

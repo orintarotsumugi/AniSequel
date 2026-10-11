@@ -120,6 +120,7 @@ fun UserProfileScreen(
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
+    val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val detailNodes by activityViewModel.detailNodes.collectAsStateWithLifecycle()
@@ -250,6 +251,17 @@ fun UserProfileScreen(
             canWriteToAniList = false
         )
     }
+
+    // The heart's long-press sheet, a sibling of the detail sheet rather than a
+    // child of the activity list: a `ModalBottomSheet` lives in its own window,
+    // and nesting it inside the tab's `AnimatedContent` would take it down with
+    // the tab's outgoing transition on any tab switch.
+    likersState?.let { likers ->
+        ActivityLikersSheet(
+            state = likers,
+            onDismiss = { activityViewModel.dismissLikers() }
+        )
+    }
 }
 
 @Composable
@@ -306,6 +318,7 @@ private fun ProfileTabsContent(
                     onCloseComments = { activityViewModel.closeComments() },
                     onRetryComments = { activityViewModel.openComments(it) },
                     onPostComment = { activityViewModel.postComment(it) },
+                    onOpenLikers = { activityViewModel.openLikers(it) },
                     onOpenDetail = onOpenDetail
                 )
 

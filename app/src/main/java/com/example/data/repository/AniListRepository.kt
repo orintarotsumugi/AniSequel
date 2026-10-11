@@ -94,6 +94,18 @@ interface AniListRepository {
         unsupported("getActivityReplies")
 
     /**
+     * The people who liked one activity.
+     *
+     * The default is an empty list rather than [unsupported], unlike every sibling
+     * above. Liking is the one engagement feature whose answer is still useful
+     * without a session - anyone can read who liked a public activity - so a
+     * repository that cannot serve it degrades to "no likers" instead of throwing.
+     * Only test doubles exercise the default, and none of them opens this sheet.
+     */
+    suspend fun getActivityLikes(activityId: Int): Result<List<FollowUser>> =
+        Result.success(emptyList())
+
+    /**
      * Likes an activity if it is not liked, un-likes it if it is. AniList does
      * not have a separate "unlike"; the same call toggles, which is why the
      * return value - not the request - is what the UI trusts.

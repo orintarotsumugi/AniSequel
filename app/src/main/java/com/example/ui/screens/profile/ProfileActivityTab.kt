@@ -63,6 +63,7 @@ fun ProfileActivityTab(
     onCloseComments: () -> Unit = {},
     onRetryComments: (Int) -> Unit = {},
     onPostComment: (String) -> Unit = {},
+    onOpenLikers: (Int) -> Unit = {},
     onOpenDetail: (MediaNode) -> Unit = {}
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
@@ -163,6 +164,7 @@ fun ProfileActivityTab(
                                 .padding(horizontal = 16.dp),
                             onLike = { onLike(activity.id) },
                             onComments = { onOpenComments(activity.id) },
+                            onOpenLikers = { onOpenLikers(activity.id) },
                             onOpenDetail = onOpenDetail,
                             likePending = activity.id in activityState.pendingLikes
                         )

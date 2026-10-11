@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadata for the Featured Sequel widget.
+
+  Same declaration contract as the other three, and for the same reasons (each
+  was learned from a shipped v1.0.42 failure - see the header of
+  `widget_anisequel.xml` and `WidgetDeclarationTest`):
+
+  - `initialLayout` is required, so a freshly placed tile has something to draw
+    before the first `onUpdate`.
+  - `configure` is absent: this widget needs no configuration, and pointing it at
+    the AppWidgetProvider was the bug that made launchers report the app as not
+    installed.
+  - `previewLayout` is preferred over `previewImage` from API 31, which is this
+    app's floor.
+
+  It is a wider target (4 cells) because it is the one tile built to show a
+  poster rather than a number, so it starts where it has room for both.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:maxResizeWidth="400dp"
+    android:maxResizeHeight="300dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_featured_sequel"
+    android:previewLayout="@layout/widget_featured_sequel_preview"
+    android:description="@string/widget_featured_description"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

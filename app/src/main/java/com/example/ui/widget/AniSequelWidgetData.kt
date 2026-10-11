@@ -1,6 +1,8 @@
 package com.example.ui.widget
 
 import android.content.Context
+import com.example.data.model.displayName
+import com.example.data.model.posterUrl
 import com.example.data.repository.DemoProfileProvider
 
 /**
@@ -26,6 +28,13 @@ object AniSequelWidgetData {
     private const val KEY_ARRIVING_COUNT = "arriving_count"
     private const val KEY_TOP_MISSED_TITLE = "top_missed_title"
     private const val KEY_TOP_MISSED_PARENT = "top_missed_parent"
+    private const val KEY_TOP_MISSED_COVER = "top_missed_cover"
+    private const val KEY_TOP_MISSED_COLOR = "top_missed_color"
+    private const val KEY_ARRIVING_TITLE = "arriving_title"
+    private const val KEY_ARRIVING_COVER = "arriving_cover"
+    private const val KEY_ARRIVING_COLOR = "arriving_color"
+    private const val KEY_ACTIVITY_TITLE = "activity_title"
+    private const val KEY_ACTIVITY_COVER = "activity_cover"
     private const val KEY_USERNAME = "username"
 
     /** How many list entries the viewer logged recently. */
@@ -72,6 +81,67 @@ object AniSequelWidgetData {
         return "Demon Slayer: Entertainment District Arc"
     }
 
+    /**
+     * The stored string for [key], or the offline fixture when nothing has synced.
+     *
+     * The rule every string accessor below shares, and the same one
+     * [topMissedTitle] spells out: a key that is *present* wins (even when it
+     * holds an empty string), and once `KEY_USERNAME` exists an absent value is
+     * genuinely absent - not "show demo data". A signed-in user whose top
+     * missed entry has no artwork gets the colour placeholder, not a poster for
+     * a show they never watched.
+     */
+    private fun storedString(context: Context?, key: String, demo: () -> String?): String? {
+        if (context != null) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.getString(key, null)?.let { return it }
+            if (prefs.contains(KEY_USERNAME)) return null
+        }
+        return demo()
+    }
+
+    /** Top missed sequel's cover URL, for the rich widgets. */
+    fun topMissedCover(context: Context? = null): String? =
+        storedString(context, KEY_TOP_MISSED_COVER) { null }
+
+    /** AniList's dominant colour for the top missed sequel, as `#RRGGBB`. */
+    fun topMissedColor(context: Context? = null): String? =
+        storedString(context, KEY_TOP_MISSED_COLOR) { null }
+
+    /** The entry the top missed sequel continues ("Sequel to ..."). */
+    fun topMissedParent(context: Context? = null): String? =
+        storedString(context, KEY_TOP_MISSED_PARENT) { null }
+
+    /** The first arriving entry's title. */
+    fun arrivingTitle(context: Context? = null): String? =
+        storedString(context, KEY_ARRIVING_TITLE) { null }
+
+    /** The first arriving entry's cover URL. */
+    fun arrivingCover(context: Context? = null): String? =
+        storedString(context, KEY_ARRIVING_COVER) { null }
+
+    /** AniList's dominant colour for the first arriving entry. */
+    fun arrivingColor(context: Context? = null): String? =
+        storedString(context, KEY_ARRIVING_COLOR) { null }
+
+    /**
+     * The media on the viewer's latest activity.
+     *
+     * The offline fallback comes from [DemoProfileProvider.getDemoActivity],
+     * the same fixture [recentActivityCount] counts, so a placed-but-unsynced
+     * tile is recognisably the demo feed rather than a blank rectangle.
+     */
+    fun latestActivityTitle(context: Context? = null): String? =
+        storedString(context, KEY_ACTIVITY_TITLE) {
+            DemoProfileProvider.getDemoActivity().firstOrNull()?.media?.displayName
+        }
+
+    /** The cover on the viewer's latest activity. */
+    fun latestActivityCover(context: Context? = null): String? =
+        storedString(context, KEY_ACTIVITY_COVER) {
+            DemoProfileProvider.getDemoActivity().firstOrNull()?.media?.posterUrl
+        }
+
     /** The viewer's username if known. */
     fun username(context: Context? = null): String? {
         if (context == null) return null
@@ -87,6 +157,13 @@ object AniSequelWidgetData {
         arrivingCount: Int? = null,
         topMissedTitle: String? = null,
         topMissedParent: String? = null,
+        topMissedCover: String? = null,
+        topMissedColor: String? = null,
+        arrivingTitle: String? = null,
+        arrivingCover: String? = null,
+        arrivingColor: String? = null,
+        activityTitle: String? = null,
+        activityCover: String? = null,
         username: String? = null
     ) {
         val editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
@@ -99,6 +176,13 @@ object AniSequelWidgetData {
         if (arrivingCount != null) editor.putInt(KEY_ARRIVING_COUNT, arrivingCount) else editor.remove(KEY_ARRIVING_COUNT)
         if (topMissedTitle != null) editor.putString(KEY_TOP_MISSED_TITLE, topMissedTitle) else editor.remove(KEY_TOP_MISSED_TITLE)
         if (topMissedParent != null) editor.putString(KEY_TOP_MISSED_PARENT, topMissedParent) else editor.remove(KEY_TOP_MISSED_PARENT)
+        if (topMissedCover != null) editor.putString(KEY_TOP_MISSED_COVER, topMissedCover) else editor.remove(KEY_TOP_MISSED_COVER)
+        if (topMissedColor != null) editor.putString(KEY_TOP_MISSED_COLOR, topMissedColor) else editor.remove(KEY_TOP_MISSED_COLOR)
+        if (arrivingTitle != null) editor.putString(KEY_ARRIVING_TITLE, arrivingTitle) else editor.remove(KEY_ARRIVING_TITLE)
+        if (arrivingCover != null) editor.putString(KEY_ARRIVING_COVER, arrivingCover) else editor.remove(KEY_ARRIVING_COVER)
+        if (arrivingColor != null) editor.putString(KEY_ARRIVING_COLOR, arrivingColor) else editor.remove(KEY_ARRIVING_COLOR)
+        if (activityTitle != null) editor.putString(KEY_ACTIVITY_TITLE, activityTitle) else editor.remove(KEY_ACTIVITY_TITLE)
+        if (activityCover != null) editor.putString(KEY_ACTIVITY_COVER, activityCover) else editor.remove(KEY_ACTIVITY_COVER)
         // Never cleared: the username is what marks a session as synced, and
         // removing it would flip every fallback above back to demo data.
         username?.let { editor.putString(KEY_USERNAME, it) }

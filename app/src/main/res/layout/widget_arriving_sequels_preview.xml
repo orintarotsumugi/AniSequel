@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Static mirror of `widget_arriving_sequels.xml` for the API 31+ picker; see
+     `widget_anisequel_preview.xml` for why the values are literals. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,40 +11,64 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="14dp">
+        android:padding="12dp">
 
         <ImageView
-            android:layout_width="4dp"
-            android:layout_height="44dp"
-            android:background="@drawable/widget_accent_bar"
-            android:contentDescription="@null" />
+            android:layout_width="48dp"
+            android:layout_height="64dp"
+            android:background="@drawable/widget_cover_placeholder"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:includeFontPadding="false"
-                android:text="3"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="One Piece"
                 android:textColor="?android:attr/textColorPrimary"
-                android:textSize="38sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/widget_arriving_caption"
-                android:textColor="?android:attr/textColorSecondary"
-                android:textSize="12sp" />
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="3"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/widget_arriving_caption"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="AniSequel · Airing soon"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="matchai"
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="10sp" />
         </LinearLayout>

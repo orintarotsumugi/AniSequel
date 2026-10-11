@@ -11,6 +11,7 @@ import com.example.data.model.SimpleMediaListEntry
 import com.example.data.model.UserByNameData
 import com.example.data.model.ActivityDetailData
 import com.example.data.model.ActivityFeedData
+import com.example.data.model.ActivityLikesData
 import com.example.data.model.FollowersData
 import com.example.data.model.FollowingData
 import com.example.data.model.SaveActivityReplyData
@@ -89,6 +90,10 @@ class AniListErrorMappingTest {
         override suspend fun getActivityReplies(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityDetailData> = notServed("getActivityReplies")
+
+        override suspend fun getActivityLikes(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityLikesData> = notServed("getActivityLikes")
 
         override suspend fun toggleActivityLike(
             request: GraphQLRequest
@@ -272,6 +277,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun getActivityReplies(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityDetailData> = notServed("getActivityReplies")
+
+        override suspend fun getActivityLikes(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityLikesData> = notServed("getActivityLikes")
 
         override suspend fun toggleActivityLike(
             request: GraphQLRequest

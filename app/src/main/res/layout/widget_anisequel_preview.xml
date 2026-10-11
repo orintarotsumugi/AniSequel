@@ -3,11 +3,12 @@
   What the widget picker shows.
 
   From API 31 the picker asks for a layout rather than a screenshot, so this is a
-  static mirror of `widget_anisequel.xml` with a sample count in it. The values
+  static mirror of `widget_anisequel.xml` with sample values in it. The values
   are literals on purpose: this layout is inflated by the launcher, in a process
   that has never run any of this app's code, so nothing here can be filled in at
-  display time. Keeping it structurally identical to the live layout is what stops
-  the preview and the placed widget drifting apart.
+  display time and the cover cannot be fetched. Keeping it structurally identical
+  to the live layout is what stops the preview and the placed widget drifting
+  apart.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -19,35 +20,66 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="14dp">
+        android:padding="12dp">
 
         <ImageView
-            android:layout_width="4dp"
-            android:layout_height="44dp"
-            android:background="@drawable/widget_accent_bar"
-            android:contentDescription="@null" />
+            android:layout_width="48dp"
+            android:layout_height="64dp"
+            android:background="@drawable/widget_cover_placeholder"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:includeFontPadding="false"
-                android:text="12"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Frieren: Beyond Journey's End"
                 android:textColor="?android:attr/textColorPrimary"
-                android:textSize="38sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/widget_caption"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="12"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/widget_caption"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="matchai"
                 android:textColor="?android:attr/textColorSecondary"
-                android:textSize="12sp" />
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

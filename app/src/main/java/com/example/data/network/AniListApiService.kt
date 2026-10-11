@@ -2,6 +2,7 @@ package com.example.data.network
 
 import com.example.data.model.ActivityDetailData
 import com.example.data.model.ActivityFeedData
+import com.example.data.model.ActivityLikesData
 import com.example.data.model.FollowersData
 import com.example.data.model.FollowingData
 import com.example.data.model.GraphQLRequest
@@ -91,6 +92,13 @@ interface AniListApiService {
     suspend fun getActivityReplies(
         @Body request: GraphQLRequest
     ): GraphQLResponse<ActivityDetailData>
+
+    /** The people who liked one activity. Opened with the likers sheet. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getActivityLikes(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityLikesData>
 
     /** Likes or un-likes an activity. Requires a session. */
     @POST("/")

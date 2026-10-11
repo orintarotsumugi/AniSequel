@@ -505,6 +505,21 @@ class AniListRepositoryImpl(
             data.activity?.replies.orEmpty()
         }
 
+    override suspend fun getActivityLikes(activityId: Int): Result<List<FollowUser>> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_ACTIVITY_LIKES,
+                variables = mapOf("activityId" to activityId)
+            ),
+            apiService::getActivityLikes
+        ).map { data ->
+            // The same reduction as the replies fetch: a member the fragment did
+            // not match comes back with no selected fields, and a retired id as
+            // null. Both are "nobody to show", not a failure, so the sheet still
+            // opens and says so.
+            data.activity?.likes.orEmpty()
+        }
+
     override suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =
         execute(
             GraphQLRequest(

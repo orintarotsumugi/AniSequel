@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The count pill on the Featured Sequel widget.
+
+  Themed with `colorControlHighlight` rather than a brand literal so it reads as
+  a raised chip on whatever surface the launcher gave the tile, and so the count
+  stays legible on both light and dark home screens. `widget_background`'s shape
+  is not reused: a badge at radius `system_app_widget_background_radius` would be
+  an oval at this height.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="?android:attr/colorControlHighlight" />
+</shape>

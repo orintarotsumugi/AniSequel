@@ -288,29 +288,43 @@ fun AppNavigation(
     // object. The state instance is replaced on every filter keystroke (the
     // search box triggers a recompute), so keying on it re-rendered three
     // widgets per character typed to write numbers that had not changed. The
-    // viewer, the two counts and the top missed entry are the only inputs.
+    // viewer, the two counts and the top entries are the only inputs.
+    //
+    // The top arriving entry is a key of its own because the tiles now render
+    // its cover and title, and its size can be unchanged while the entry at the
+    // front of the list changes - which would otherwise leave the previous
+    // poster on the tile.
     val widgetSuccess = dashboardState as? DashboardUiState.Success
     val widgetTopMissedId = widgetSuccess?.missedSequels?.firstOrNull()?.sequelId
+    val widgetTopArrivingId = widgetSuccess?.arriving?.firstOrNull()?.mediaId
     LaunchedEffect(
         widgetSuccess?.viewer?.id,
         widgetSuccess?.viewer?.name,
         widgetSuccess?.totalMissedCount,
         widgetSuccess?.arriving?.size,
-        widgetTopMissedId
+        widgetTopMissedId,
+        widgetTopArrivingId
     ) {
         val success = widgetSuccess ?: return@LaunchedEffect
         val top = success.missedSequels.firstOrNull()
+        val arriving = success.arriving.firstOrNull()
         com.example.ui.widget.AniSequelWidgetData.updateData(
             context = context,
             missedCount = success.totalMissedCount,
             arrivingCount = success.arriving.size,
             username = success.viewer.name,
             topMissedTitle = top?.sequelTitle,
-            topMissedParent = top?.parentTitle
+            topMissedParent = top?.parentTitle,
+            topMissedCover = top?.sequelCoverUrl,
+            topMissedColor = top?.coverColor,
+            arrivingTitle = arriving?.title,
+            arrivingCover = arriving?.coverUrl,
+            arrivingColor = arriving?.coverColor
         )
         com.example.ui.widget.AniSequelWidgetProvider.updateAll(context)
         com.example.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
         com.example.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
+        com.example.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
     }
 
     NavHost(

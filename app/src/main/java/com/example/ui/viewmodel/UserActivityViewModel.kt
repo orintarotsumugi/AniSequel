@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ActivityReply
+import com.example.data.model.FollowUser
 import com.example.data.model.ListActivity
 import com.example.data.model.MediaNode
 import com.example.data.network.AniListErrorKind
@@ -89,11 +90,33 @@ class UserActivityViewModel(
         val postError: String? = null
     )
 
+    /**
+     * The likers sheet's state.
+     *
+     * The same shape as [CommentsState] and nullable for the same reason: the
+     * sheet's visibility is derived from the state, so there is no frame where it
+     * is up with nothing under it. [activityId] is part of the state so a slow
+     * response for a sheet the user already closed and replaced with another
+     * activity's is discarded rather than painted over the new one.
+     *
+     * There is no posting side here - a like is toggled from the card - so unlike
+     * [CommentsState] there is no in-flight or error-writing field.
+     */
+    data class LikersState(
+        val activityId: Int,
+        val isLoading: Boolean = false,
+        val likers: List<FollowUser> = emptyList(),
+        val loadError: String? = null
+    )
+
     private val _state = MutableStateFlow<ActivityState>(ActivityState.Idle)
     val state: StateFlow<ActivityState> = _state.asStateFlow()
 
     private val _comments = MutableStateFlow<CommentsState?>(null)
     val comments: StateFlow<CommentsState?> = _comments.asStateFlow()
+
+    private val _likers = MutableStateFlow<LikersState?>(null)
+    val likers: StateFlow<LikersState?> = _likers.asStateFlow()
 
     /**
      * Detail fetched on demand for the entry an activity row opens.
@@ -301,6 +324,44 @@ class UserActivityViewModel(
 
     fun closeComments() {
         _comments.value = null
+    }
+
+    /**
+     * Opens the likers sheet for [activityId] and loads who liked it.
+     *
+     * A failure is swallowed into the sheet's error line rather than the feed's
+     * error screen: reading who liked something is a read, and a read that does
+     * not arrive must not throw away the twenty-five cards already on screen.
+     * The demo feed answers with an empty list, the same way [openComments] does,
+     * because it has no session and nobody actually liked the fixture.
+     */
+    fun openLikers(activityId: Int) {
+        _likers.value = LikersState(activityId = activityId, isLoading = true)
+        viewModelScope.launch {
+            val result = if (isDemo) {
+                Result.success(emptyList())
+            } else {
+                aniListRepository.getActivityLikes(activityId)
+            }
+            // Discard a response for a sheet the user has already closed or
+            // replaced: the state is only written if it is still this activity.
+            val current = _likers.value?.takeIf { it.activityId == activityId } ?: return@launch
+            result.fold(
+                onSuccess = { likers ->
+                    _likers.value = current.copy(isLoading = false, likers = likers, loadError = null)
+                },
+                onFailure = { error ->
+                    _likers.value = current.copy(
+                        isLoading = false,
+                        loadError = error.message ?: "Couldn't load likes."
+                    )
+                }
+            )
+        }
+    }
+
+    fun dismissLikers() {
+        _likers.value = null
     }
 
     /** Posts [text] as a comment on the open thread. */

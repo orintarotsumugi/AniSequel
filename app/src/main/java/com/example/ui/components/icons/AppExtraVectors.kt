@@ -16,7 +16,15 @@ import androidx.compose.ui.unit.dp
 object AppExtraVectors {
 
     /**
-     * Franchise relationship branch graph icon (connecting parent anime to sequel node).
+     * Franchise relationship branch graph: one parent anime splitting into two
+     * sequel/prequel nodes.
+     *
+     * The old glyph was a bare trunk with a single stub curve and two dots, which
+     * read as a squiggle rather than a graph. This draws the relationship the
+     * detail screen actually shows - a parent node entering a horizontal bus that
+     * fans out to two children - so "watched -> has a sequel" is legible at a
+     * glance. The connector is stroked while the nodes are filled, because the
+     * round node markers must stay solid dots and cannot be faked with a line.
      */
     val FranchiseBranch: ImageVector by lazy {
         ImageVector.Builder(
@@ -26,35 +34,45 @@ object AppExtraVectors {
             viewportWidth = 24f,
             viewportHeight = 24f
         ).apply {
+            // Connector: parent down to a bus, then out and down to both children.
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 2.2f,
+                strokeLineWidth = 2f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(6f, 5f)
-                verticalLineTo(19f)
-                moveTo(6f, 12f)
-                curveTo(10f, 12f, 14f, 8f, 18f, 8f)
+                moveTo(12f, 5.8f)
+                verticalLineTo(11f)
+                moveTo(5f, 11f)
+                horizontalLineTo(19f)
+                moveTo(5f, 11f)
+                verticalLineTo(16.7f)
+                moveTo(19f, 11f)
+                verticalLineTo(16.7f)
             }
+            // Nodes: one parent over two children. Each is two half-arcs so the
+            // dots are true circles rather than the superellipses the old quadTo
+            // approximation produced.
             path(
                 fill = SolidColor(Color.White),
                 pathFillType = PathFillType.NonZero
             ) {
-                // Circle at start
-                moveTo(6f, 3.5f)
-                quadTo(7.5f, 3.5f, 7.5f, 5f)
-                quadTo(7.5f, 6.5f, 6f, 6.5f)
-                quadTo(4.5f, 6.5f, 4.5f, 5f)
-                quadTo(4.5f, 3.5f, 6f, 3.5f)
+                // Parent node.
+                moveTo(10.2f, 4f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 13.8f, 4f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 10.2f, 4f)
                 close()
 
-                // Circle at branch end
-                moveTo(18f, 6.5f)
-                quadTo(19.5f, 6.5f, 19.5f, 8f)
-                quadTo(19.5f, 9.5f, 18f, 9.5f)
-                quadTo(16.5f, 9.5f, 16.5f, 8f)
-                quadTo(16.5f, 6.5f, 18f, 6.5f)
+                // Left child node.
+                moveTo(3.2f, 18.5f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 6.8f, 18.5f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 3.2f, 18.5f)
+                close()
+
+                // Right child node.
+                moveTo(17.2f, 18.5f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 20.8f, 18.5f)
+                arcTo(1.8f, 1.8f, 0f, false, true, 17.2f, 18.5f)
                 close()
             }
         }.build()
@@ -62,6 +80,12 @@ object AppExtraVectors {
 
     /**
      * Double checkmark badge for completed series & synced status.
+     *
+     * Two separate ticks, the second shifted right so it overlaps the tail of the
+     * first - the "both stages done" reading. The old glyph was one wide tick with
+     * a second stroke buried inside it, which merged into a single blob at the
+     * 16-20dp the badges render at. Keeping the ticks parallel and offset leaves a
+     * visible notch between them at any size.
      */
     val CheckDouble: ImageVector by lazy {
         ImageVector.Builder(
@@ -73,23 +97,30 @@ object AppExtraVectors {
         ).apply {
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 2.2f,
+                strokeLineWidth = 2f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(2f, 12f)
-                lineTo(7f, 17f)
-                lineTo(17f, 7f)
+                // Leading tick.
+                moveTo(1.5f, 12.5f)
+                lineTo(6f, 17f)
+                lineTo(13.5f, 9.5f)
 
-                moveTo(10f, 12f)
-                lineTo(14f, 16f)
-                lineTo(22f, 8f)
+                // Trailing tick, offset right so the two read as a pair.
+                moveTo(8.5f, 12.5f)
+                lineTo(13f, 17f)
+                lineTo(20.5f, 9.5f)
             }
         }.build()
     }
 
     /**
      * Calendar clock for next airing episode countdown.
+     *
+     * Calendar body with two binding rings, a header rule, and a clock face inset
+     * below it. The old glyph drew an open-bottomed calendar with only a dangling
+     * minute hand and no face at all, so it read as a broken square. The face and
+     * both hands are what make it a countdown rather than a shape.
      */
     val CalendarClock: ImageVector by lazy {
         ImageVector.Builder(
@@ -101,28 +132,42 @@ object AppExtraVectors {
         ).apply {
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 2f,
+                strokeLineWidth = 1.8f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(19f, 4f)
-                horizontalLineTo(5f)
-                curveTo(3.89f, 4f, 3f, 4.89f, 3f, 6f)
-                verticalLineTo(20f)
-                curveTo(3f, 21.1f, 3.89f, 22f, 5f, 22f)
-                horizontalLineTo(12f)
-
-                moveTo(16f, 2f)
-                verticalLineTo(6f)
-                moveTo(8f, 2f)
-                verticalLineTo(6f)
-                moveTo(3f, 10f)
+                // Calendar body with rounded corners.
+                moveTo(5f, 4f)
                 horizontalLineTo(19f)
-
-                // Clock circle & hands
-                moveTo(17f, 14f)
+                curveTo(20.1f, 4f, 21f, 4.9f, 21f, 6f)
                 verticalLineTo(18f)
-                lineTo(20f, 20f)
+                curveTo(21f, 19.1f, 20.1f, 20f, 19f, 20f)
+                horizontalLineTo(5f)
+                curveTo(3.9f, 20f, 3f, 19.1f, 3f, 18f)
+                verticalLineTo(6f)
+                curveTo(3f, 4.9f, 3.9f, 4f, 5f, 4f)
+                close()
+
+                // Binding rings above the header.
+                moveTo(7.5f, 1.5f)
+                verticalLineTo(5.5f)
+                moveTo(16.5f, 1.5f)
+                verticalLineTo(5.5f)
+
+                // Header rule.
+                moveTo(3f, 8f)
+                horizontalLineTo(21f)
+
+                // Clock face inset below the header: two half-arcs make a circle.
+                moveTo(7.5f, 14.2f)
+                arcTo(4.5f, 4.5f, 0f, false, true, 16.5f, 14.2f)
+                arcTo(4.5f, 4.5f, 0f, false, true, 7.5f, 14.2f)
+
+                // Minute hand up to twelve, hour hand out to four.
+                moveTo(12f, 14.2f)
+                lineTo(12f, 10.8f)
+                moveTo(12f, 14.2f)
+                lineTo(15f, 15.6f)
             }
         }.build()
     }

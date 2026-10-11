@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.55",
+      "entries": [
+        {
+          "title": "Widgets that name what they count",
+          "detail": "The home-screen tiles now draw the show they are talking about: the top missed sequel and the first arriving episode each show a cover, its title and what it is, alongside the count and your AniList handle, with the entry's own colour filling the poster frame until the art loads. Covers are fetched off the main thread, and a tile falls back to that colour placeholder whenever there is no artwork or no network, so it never renders blank."
+        },
+        {
+          "title": "A Featured Sequel widget",
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
+        },
+        {
+          "title": "See who liked an activity",
+          "detail": "Holding the heart on an activity in a profile now opens a small sheet listing everyone who liked it, avatar and name, with the count in the header. The list comes straight from AniList, so it always agrees with the number on the card. A quick tap still toggles your own like exactly as before."
+        },
+        {
+          "title": "Redrawn vectors",
+          "detail": "Six of the app's hand-drawn icons were rebuilt so they read at a glance: the calendar clock has a real face and hands, the double check is two visible ticks, the franchise branch is a parent-splits-into-two graph, the fullscreen glyph has shafts so it cannot be mistaken for its opposite, the motion bolt gained speed lines, and the surface-tones icon is a layered stack rather than a bisected square."
+        }
+      ]
+    },
+    {
       "version": "1.0.54",
       "entries": [
         {

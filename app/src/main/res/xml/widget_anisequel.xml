@@ -10,15 +10,19 @@
     `onUpdate`, so the widget sat blank (and some launchers drop an entry that
     cannot render at all).
   - `configure` pointed at `AniSequelWidgetProvider`, which is an
-    AppWidgetProvider, not an Activity. The    launcher launches that component when the user drops the widget, so there was nothing
-    to launch - a failure some launchers report as the app not being installed. This widget needs no configuration,
-    so the attribute is gone rather than pointed at a stub Activity.
+    AppWidgetProvider, not an Activity. The launcher launches that component
+    when the user drops the widget, so there was nothing to launch - a failure
+    some launchers report as the app not being installed. This widget needs no
+    configuration, so the attribute is gone rather than pointed at a stub
+    Activity.
   - `previewImage` duplicated `previewLayout`. From API 31 `previewLayout` wins,
     and this app's floor *is* 31, so the drawable was unreachable (see the
     "Reachability counts" rule in AGENTS.md).
 
   The size is 2x2 cells with a 40dp minimum, so it stays legible when the user
-  squashes it: two lines of text and a 4dp accent bar are all it draws.
+  squashes it: the count is the element that survives, and the cover and title
+  clip first. See `res/layout/widget_anisequel.xml` for the layout's own
+  reasoning.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"

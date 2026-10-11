@@ -493,6 +493,38 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The people who liked one activity.
+     *
+     * `ListActivity.likes` is a plain `[User]`, not a paginated connection, so
+     * unlike replies this needs no page argument and always returns everyone who
+     * liked the activity. That is what lets the sheet print "Liked by N" from the
+     * list it just drew instead of trusting a count that could disagree with it.
+     *
+     * Its own document rather than a field on the feed query, for the same reason
+     * [GET_ACTIVITY_REPLIES] is: a feed page carries twenty-five activities, and
+     * every liker of every one of them is a list nobody asked to see until the
+     * sheet opens.
+     *
+     * `Activity(id:)` returns `ActivityUnion`, so the `ListActivity` fragment is
+     * required.
+     */
+    val GET_ACTIVITY_LIKES = """
+        query GetActivityLikes(${'$'}activityId: Int) {
+          Activity(id: ${'$'}activityId) {
+            ... on ListActivity {
+              id
+              likeCount
+              likes {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * Likes or un-likes an activity.
      *
      * `ToggleLikeV2` and not `ToggleLike`: the older field took the same
