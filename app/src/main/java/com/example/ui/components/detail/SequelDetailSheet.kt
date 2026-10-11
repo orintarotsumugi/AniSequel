@@ -155,15 +155,16 @@ fun SequelDetailSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val isManga = media.type.equals("MANGA", ignoreCase = true)
             val tabLabels = if (sequel != null) {
-                listOf("Story & Gaps", "Anime Info & Specs")
+                listOf("Story & Gaps", if (isManga) "Manga Info & Specs" else "Anime Info & Specs")
             } else {
-                listOf("About", "Anime Info & Specs")
+                listOf("About", if (isManga) "Manga Info & Specs" else "Anime Info & Specs")
             }
             val tabIcons = if (sequel != null) {
                 listOf(AppVectorIcons.FranchiseBranch, AppVectorIcons.Info)
             } else {
-                listOf(AppVectorIcons.Info, AppVectorIcons.AnimeSparkle)
+                listOf(AppVectorIcons.Info, if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.AnimeSparkle)
             }
             ExpressiveTabBar(
                 tabs = tabLabels,

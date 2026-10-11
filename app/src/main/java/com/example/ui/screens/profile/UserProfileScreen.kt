@@ -313,6 +313,8 @@ private fun ProfileTabsContent(
                     // A comment is a write, and the demo feed has no session to
                     // write with - the same gate every other mutation uses.
                     canPostComment = !state.isDemoMode,
+                    userName = state.username,
+                    userAvatar = state.avatarUrl,
                     onLike = { activityViewModel.toggleLike(it) },
                     onOpenComments = { activityViewModel.openComments(it) },
                     onCloseComments = { activityViewModel.closeComments() },

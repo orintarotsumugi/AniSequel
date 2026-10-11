@@ -176,6 +176,8 @@ data class MediaNode(
     val countryOfOrigin: String? = null,
     val status: String? = null,
     val episodes: Int? = null,
+    val chapters: Int? = null,
+    val volumes: Int? = null,
     /**
      * AniList's airing season: `WINTER`, `SPRING`, `SUMMER` or `FALL`.
      *

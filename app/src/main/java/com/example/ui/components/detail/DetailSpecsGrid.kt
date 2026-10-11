@@ -28,8 +28,10 @@ import com.example.data.model.durationLabel
 import com.example.data.model.episodesLabel
 import com.example.data.model.formatLabel
 import com.example.data.model.isAiringNow
+import com.example.data.model.isManga
 import com.example.data.model.isOnHiatus
 import com.example.data.model.isUpcoming
+import com.example.data.model.releaseLabel
 import com.example.data.model.seasonLabel
 import com.example.data.model.sourceLabel
 import com.example.data.model.statusLabel
@@ -66,8 +68,9 @@ fun DetailSpecsGrid(
         else -> null
     }
 
+    val isManga = media.isManga
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Row 1: Status & Episodes
+        // Row 1: Status & Length / Chapters
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SpecTile(
                 icon = AppVectorIcons.CheckCircle,
@@ -77,62 +80,85 @@ fun DetailSpecsGrid(
                 modifier = Modifier.weight(1f)
             )
             SpecTile(
-                icon = AppVectorIcons.Tv,
-                title = "Episodes & Length",
-                value = buildString {
-                    append(media.episodesLabel)
-                    media.durationLabel?.let { append(" · $it") }
+                icon = if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.Tv,
+                title = if (isManga) "Chapters & Volumes" else "Episodes & Length",
+                value = if (isManga) {
+                    val chaptersStr = media.chapters?.let { "$it chs" } ?: "Chapters TBA"
+                    val volumesStr = media.volumes?.let { " · $it vols" }.orEmpty()
+                    chaptersStr + volumesStr
+                } else {
+                    buildString {
+                        append(media.episodesLabel)
+                        media.durationLabel?.let { append(" · $it") }
+                    }
                 },
                 modifier = Modifier.weight(1f)
             )
         }
 
-        // Row 2: Studio & Source Material
+        // Row 2: Studio / Publisher & Source Material
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SpecTile(
-                icon = AppVectorIcons.Studio,
-                title = "Animation Studio",
-                value = media.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
+                icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.Studio,
+                title = if (isManga) "Publisher / Serialization" else "Animation Studio",
+                value = media.studioName ?: if (isDetailLoading) "Loading..." else if (isManga) "Manga Serialization" else "TBA",
                 modifier = Modifier.weight(1f)
             )
             SpecTile(
                 icon = AppVectorIcons.SourceBook,
                 title = "Source Material",
-                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else "Original / Other",
+                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else if (isManga) "Original" else "Original / Other",
                 modifier = Modifier.weight(1f)
             )
         }
 
-        // Row 3: Airing Season & Next Episode (or Countdown)
-        val nextEpisode = media.airingEpisodeNumber
-        val countdown = media.airingCountdown()
-        val airingSeason = media.seasonLabel
-
-        if (airingSeason != null || nextEpisode != null) {
+        // Row 3: Release info
+        if (isManga) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (airingSeason != null) {
-                    SpecTile(
-                        icon = AppVectorIcons.Calendar,
-                        title = "Season & Year",
-                        value = airingSeason,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (nextEpisode != null) {
-                    SpecTile(
-                        icon = AppVectorIcons.Schedule,
-                        title = "Next Episode",
-                        value = if (countdown != null) "Ep $nextEpisode · $countdown" else "Episode $nextEpisode",
-                        valueColor = statusColors.info,
-                        modifier = Modifier.weight(1f)
-                    )
-                } else if (airingSeason == null) {
-                    SpecTile(
-                        icon = AppVectorIcons.Schedule,
-                        title = "Format",
-                        value = media.formatLabel,
-                        modifier = Modifier.weight(1f)
-                    )
+                SpecTile(
+                    icon = AppVectorIcons.Calendar,
+                    title = "Release Year",
+                    value = media.releaseLabel,
+                    modifier = Modifier.weight(1f)
+                )
+                SpecTile(
+                    icon = AppVectorIcons.Schedule,
+                    title = "Format",
+                    value = media.formatLabel,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            val nextEpisode = media.airingEpisodeNumber
+            val countdown = media.airingCountdown()
+            val airingSeason = media.seasonLabel
+
+            if (airingSeason != null || nextEpisode != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (airingSeason != null) {
+                        SpecTile(
+                            icon = AppVectorIcons.Calendar,
+                            title = "Season & Year",
+                            value = airingSeason,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (nextEpisode != null) {
+                        SpecTile(
+                            icon = AppVectorIcons.Schedule,
+                            title = "Next Episode",
+                            value = if (countdown != null) "Ep $nextEpisode · $countdown" else "Episode $nextEpisode",
+                            valueColor = statusColors.info,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else if (airingSeason == null) {
+                        SpecTile(
+                            icon = AppVectorIcons.Schedule,
+                            title = "Format",
+                            value = media.formatLabel,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

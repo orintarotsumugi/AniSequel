@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -124,16 +126,16 @@ fun ProfileHeaderCard(
                 }
             }
 
-            // Overlapping Avatar anchored at the bottom-start of the banner
+            // Overlapping Avatar anchored at the bottom-start of the banner (rounded squircle, not circle)
             AsyncImage(
                 model = state.avatarUrl,
                 contentDescription = "${state.username}'s Avatar",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = 16.dp)
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .border(3.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    .size(86.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .border(3.5.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentScale = ContentScale.Crop,
                 placeholder = rememberVectorPainter(AppVectorIcons.SequelJump),
@@ -158,21 +160,47 @@ fun ProfileHeaderCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (state.isDemoMode) "AniSequel Demo Profile" else "AniList Member",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Aligned metadata rows with clean vector icons
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (state.updatedAt != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (state.isDemoMode) MaterialTheme.colorScheme.tertiary
-                                else MaterialTheme.colorScheme.primary
-                            )
+                    Icon(
+                        imageVector = AppVectorIcons.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (state.isDemoMode) "AniSequel Demo Profile" else "AniList Member",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+                        text = "Updated ${formatRelativeSeconds(state.updatedAt)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (state.createdAt != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = AppVectorIcons.Calendar,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Joined ${formatJoinYear(state.createdAt)}",
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -181,51 +209,23 @@ fun ProfileHeaderCard(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // Two prominent Anime & Manga cards matching reference layout
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             HeaderStat(
                 label = "Anime",
                 value = state.animeCount.toString(),
-                icon = AppVectorIcons.FavouriteAnime,
+                icon = AppVectorIcons.Tv,
                 modifier = Modifier.weight(1f)
             )
             HeaderStat(
                 label = "Manga",
                 value = state.mangaCount.toString(),
-                icon = AppVectorIcons.FavouriteManga,
+                icon = AppVectorIcons.SourceBook,
                 modifier = Modifier.weight(1f)
             )
-            HeaderStat(
-                label = "Episodes",
-                value = state.episodesWatched.toString(),
-                icon = AppVectorIcons.StatEpisodeCount,
-                modifier = Modifier.weight(1f)
-            )
-            HeaderStat(
-                label = "Score",
-                value = state.meanScore?.takeIf { it > 0.0 }?.let { formatMeanScore(it) } ?: "-",
-                icon = AppVectorIcons.StatScore,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (state.createdAt != null) {
-                MetaChip(
-                    icon = AppVectorIcons.ProfileJoined,
-                    label = "Joined ${formatJoinYear(state.createdAt)}"
-                )
-            }
-            if (state.updatedAt != null) {
-                MetaChip(
-                    icon = AppVectorIcons.ProfileUpdated,
-                    label = "Updated ${formatRelativeSeconds(state.updatedAt)}"
-                )
-            }
         }
     }
 }
@@ -239,7 +239,7 @@ private fun HeaderStat(
 ) {
     Card(
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -249,19 +249,19 @@ private fun HeaderStat(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp, horizontal = 4.dp),
+                .padding(vertical = 12.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
@@ -269,6 +269,7 @@ private fun HeaderStat(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
@@ -282,28 +283,4 @@ private fun HeaderStat(
     }
 }
 
-@Composable
-private fun MetaChip(icon: ImageVector, label: String) {
-    Row(
-        modifier = Modifier
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .testTag("profile_meta_chip"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-    }
-}
+

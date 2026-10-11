@@ -22,8 +22,8 @@ object DemoDataProvider {
             id = 999999,
             name = "OtakuExplorer",
             avatar = UserAvatar(
-                large = "https://s4.anilist.co/file/anilistcdn/user/avatar/large/default.png",
-                medium = "https://s4.anilist.co/file/anilistcdn/user/avatar/medium/default.png"
+                large = "https://s4.anilist.co/file/anilistcdn/character/large/b154587-n6onjReL2gwM.jpg",
+                medium = "https://s4.anilist.co/file/anilistcdn/character/large/b154587-n6onjReL2gwM.jpg"
             ),
             bannerImage = "https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922-YfZhKBUDDS6L.jpg"
         )

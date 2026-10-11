@@ -319,8 +319,17 @@ data class ListActivity(
         }
 
     /** Anime and manga use different words for the same status. */
-    fun displayStatusFor(isManga: Boolean): String =
-        if (isManga && status.equals("current", ignoreCase = true)) "Read" else displayStatus
+    fun displayStatusFor(isManga: Boolean): String = when (status?.lowercase()) {
+        "current" -> if (isManga) "Read" else "Watched"
+        "watched", "watched episode" -> if (isManga) "Read" else "Watched"
+        "read", "read chapter" -> "Read"
+        "planning" -> if (isManga) "Plans to read" else "Plans to watch"
+        "completed" -> "Completed"
+        "dropped" -> "Dropped"
+        "paused" -> "Paused"
+        "repeating" -> if (isManga) "Rereading" else "Rewatching"
+        else -> status?.replaceFirstChar { it.uppercase() } ?: "Updated"
+    }
 }
 
 /** Payload of the activity-feed query. */

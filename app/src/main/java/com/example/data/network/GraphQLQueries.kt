@@ -220,6 +220,8 @@ object GraphQLQueries {
                   type
                   format
                   episodes
+                  chapters
+                  volumes
                   title { english romaji native }
                   coverImage { extraLarge large color }
                   siteUrl
@@ -385,6 +387,8 @@ object GraphQLQueries {
             type
             status
             episodes
+            chapters
+            volumes
             season
             seasonYear
             averageScore

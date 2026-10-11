@@ -58,6 +58,8 @@ fun ProfileActivityTab(
     calendar: ActivityCalendar? = null,
     commentsState: UserActivityViewModel.CommentsState? = null,
     canPostComment: Boolean = false,
+    userName: String? = null,
+    userAvatar: String? = null,
     onLike: (Int) -> Unit = {},
     onOpenComments: (Int) -> Unit = {},
     onCloseComments: () -> Unit = {},
@@ -158,6 +160,8 @@ fun ProfileActivityTab(
                     ) { activity ->
                         ActivityCard(
                             activity = activity,
+                            userName = userName,
+                            userAvatar = userAvatar,
                             modifier = Modifier
                                 .widthIn(max = ProfileMaxContentWidth)
                                 .fillMaxWidth()

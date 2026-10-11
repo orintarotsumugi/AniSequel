@@ -26,6 +26,7 @@ import com.example.data.model.MediaNode
 import com.example.data.model.durationLabel
 import com.example.data.model.englishName
 import com.example.data.model.formatLabel
+import com.example.data.model.isManga
 import com.example.data.model.nativeName
 import com.example.data.model.romajiName
 import com.example.data.model.seasonLabel
@@ -50,34 +51,44 @@ fun AnimeSpecsGrid(
             .testTag("spec_specs_grid"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Row 1: Studio & Source
+        val isManga = media.isManga
+
+        // Row 1: Studio / Publisher & Source
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SpecCard(
-                icon = AppVectorIcons.Studio,
-                title = "Animation Studio",
-                value = media.studioName ?: if (isDetailLoading) "Loading..." else "TBA",
+                icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.Studio,
+                title = if (isManga) "Publisher / Serialization" else "Animation Studio",
+                value = media.studioName ?: if (isDetailLoading) "Loading..." else if (isManga) "Manga Serialization" else "TBA",
                 modifier = Modifier.weight(1f)
             )
             SpecCard(
                 icon = AppVectorIcons.SourceBook,
                 title = "Source Material",
-                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else "Original / Other",
+                value = media.sourceLabel ?: if (isDetailLoading) "Loading..." else if (isManga) "Original" else "Original / Other",
                 modifier = Modifier.weight(1f)
             )
         }
 
-        // Row 2: Duration & Season/Year
+        // Row 2: Duration / Chapters & Season/Year / Release Date
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SpecCard(
                 icon = AppVectorIcons.Schedule,
-                title = "Duration / Format",
-                value = buildDurationFormatString(media, isDetailLoading),
+                title = if (isManga) "Format & Chapters" else "Duration / Format",
+                value = if (isManga) {
+                    val count = listOfNotNull(
+                        media.chapters?.let { "$it Chapters" },
+                        media.volumes?.let { "$it Vols" }
+                    ).joinToString(" · ")
+                    if (count.isNotBlank()) "$count · ${media.formatLabel}" else media.formatLabel
+                } else {
+                    buildDurationFormatString(media, isDetailLoading)
+                },
                 modifier = Modifier.weight(1f)
             )
             SpecCard(
                 icon = AppVectorIcons.Calendar,
-                title = "Season & Year",
-                value = media.seasonLabel ?: "TBA",
+                title = if (isManga) "Release Date" else "Season & Year",
+                value = if (isManga) (media.startDate?.formatted ?: "TBA") else (media.seasonLabel ?: "TBA"),
                 modifier = Modifier.weight(1f)
             )
         }

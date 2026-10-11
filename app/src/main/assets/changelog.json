@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.57",
+      "entries": [
+        {
+          "title": "Clean profile identity header",
+          "detail": "Removed the pill button highlight and circular cutout around the account status on your profile. The handle and membership status are rendered as clean, plain typography without intrusive button containers."
+        },
+        {
+          "title": "Dedicated manga specifications and progress",
+          "detail": "Manga entries in the activity feed and detail specs now correctly display chapters and volumes rather than episodes and runtimes. Manga details distinguish serialization publishers and reading progress without anime-specific terms."
+        },
+        {
+          "title": "Enhanced provider and profile backgrounds",
+          "detail": "Refined atmospheric backdrop gradients and higher quality art for the demo provider, ensuring rich contrast and seamless edge blending."
+        },
+        {
+          "title": "Dashboard avatar and title polish",
+          "detail": "The dashboard top bar employs consistent rounded squircle avatars instead of circular cutouts, keeping your name and title crisp and uncluttered."
+        }
+      ]
+    },
+    {
       "version": "1.0.56",
       "entries": [
         {

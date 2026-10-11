@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,22 +74,8 @@ fun AniTopAppBar(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // The name is a second way into the same profile the avatar opens.
-                // The avatar is the discoverable one, but a name is what a person
-                // reads and taps, so the whole identity block answers to it.
-                Column(
-                    modifier = if (viewer != null) {
-                        Modifier
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable(onClick = onOpenProfile)
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = "Open your AniList profile"
-                            }
-                    } else {
-                        Modifier
-                    }
-                ) {
+                // Plain text header - profile navigation is cleanly triggered by the avatar button
+                Column {
                     Text(
                         text = "AniSequel",
                         style = MaterialTheme.typography.titleMedium,
@@ -246,7 +233,7 @@ private fun Avatar(viewer: ViewerProfile?) {
             contentDescription = null,
             modifier = Modifier
                 .size(36.dp)
-                .clip(MaterialTheme.shapes.extraSmall)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentScale = ContentScale.Crop
         )
@@ -254,7 +241,7 @@ private fun Avatar(viewer: ViewerProfile?) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(MaterialTheme.shapes.extraSmall)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {

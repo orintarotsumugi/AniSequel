@@ -71,8 +71,8 @@ object DemoProfileProvider {
         """.trimIndent(),
         siteUrl = "https://anilist.co/user/OtakuExplorer",
         avatar = UserAvatar(
-            large = "https://s4.anilist.co/file/anilistcdn/user/avatar/large/default.png",
-            medium = "https://s4.anilist.co/file/anilistcdn/user/avatar/medium/default.png"
+            large = "https://s4.anilist.co/file/anilistcdn/character/large/b154587-n6onjReL2gwM.jpg",
+            medium = "https://s4.anilist.co/file/anilistcdn/character/large/b154587-n6onjReL2gwM.jpg"
         ),
         bannerImage = "https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922-YfZhKBUDDS6L.jpg",
         statistics = UserStatistics(
@@ -413,6 +413,7 @@ object DemoProfileProvider {
     ): MediaNode = MediaNode(
         id = id,
         title = MediaTitle(english = title, romaji = title),
+        type = if (format.equals("MANGA", ignoreCase = true) || format.equals("NOVEL", ignoreCase = true) || format.equals("ONE_SHOT", ignoreCase = true)) "MANGA" else "ANIME",
         format = format,
         status = status,
         averageScore = score,

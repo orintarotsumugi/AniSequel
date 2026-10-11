@@ -35,9 +35,17 @@ val MediaNode.posterUrl: String? get() = coverImage?.bestUrl
  */
 val MediaNode.posterColor: String? get() = coverImage?.color
 
-val MediaNode.formatLabel: String get() = format ?: "ANIME"
+val MediaNode.isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
+
+val MediaNode.formatLabel: String get() = format ?: if (isManga) "MANGA" else "ANIME"
 val MediaNode.statusLabel: String get() = status ?: "UNKNOWN"
-val MediaNode.episodesLabel: String get() = episodes?.let { "$it eps" } ?: "Episodes TBA"
+val MediaNode.episodesLabel: String get() = if (isManga) {
+    chapters?.let { "$it chs" } ?: "Chapters TBA"
+} else {
+    episodes?.let { "$it eps" } ?: "Episodes TBA"
+}
+val MediaNode.chaptersLabel: String? get() = chapters?.let { "$it chs" }
+val MediaNode.volumesLabel: String? get() = volumes?.let { "$it vols" }
 val MediaNode.scoreLabel: String get() = averageScore?.let { "$it%" } ?: "N/A"
 val MediaNode.meanScoreLabel: String? get() = meanScore?.let { "$it%" }
 val MediaNode.releaseLabel: String get() = startDate?.formatted ?: "TBA"
@@ -45,7 +53,7 @@ val MediaNode.genreList: List<String> get() = genres ?: emptyList()
 val MediaNode.studioName: String? get() = studios?.nodes?.firstOrNull()?.name
 
 /** The entry's page on AniList, derived from the id when the query omitted it. */
-val MediaNode.pageUrl: String get() = siteUrl ?: "https://anilist.co/anime/$id"
+val MediaNode.pageUrl: String get() = siteUrl ?: if (isManga) "https://anilist.co/manga/$id" else "https://anilist.co/anime/$id"
 
 /** AniList's `MediaSource` enum, spelled the way a person writes it. */
 val MediaNode.sourceLabel: String?
@@ -127,14 +135,26 @@ fun MediaNode.airingCountdown(nowMillis: Long = System.currentTimeMillis()): Str
  * an empty one.
  */
 fun MediaNode.watchFraction(): Float? {
+    if (isManga) {
+        val total = chapters ?: return null
+        if (total <= 0) return null
+        val read = watchedEpisodeCount ?: return null
+        return (read.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+    }
     val total = episodes ?: return null
     if (total <= 0) return null
     val watched = watchedEpisodeCount ?: return null
     return (watched.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 }
 
-/** "6 / 12 eps watched" - null when the viewer has not started it. */
+/** "6 / 12 eps watched" or "14 / 32 chs read" - null when the viewer has not started it. */
 fun MediaNode.watchFractionLabel(): String? {
+    if (isManga) {
+        val total = chapters ?: return null
+        val read = watchedEpisodeCount ?: return null
+        if (read <= 0) return null
+        return "$read / $total chs read"
+    }
     val total = episodes ?: return null
     val watched = watchedEpisodeCount ?: return null
     if (watched <= 0) return null

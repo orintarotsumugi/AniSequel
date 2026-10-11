@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -51,12 +52,14 @@ private const val POSTER_ASPECT = 2f / 3f
  * Low on purpose: this is a background, and a card whose background competes with
  * the status pill is a card nobody can read the pill on.
  */
-private const val COVER_BACKGROUND_ALPHA = 0.18f
+private const val COVER_BACKGROUND_ALPHA = 0.22f
 
 @Composable
 fun ActivityCard(
     activity: ListActivity,
     modifier: Modifier = Modifier,
+    userName: String? = null,
+    userAvatar: String? = null,
     onLike: () -> Unit = {},
     onComments: () -> Unit = {},
     onOpenLikers: () -> Unit = {},
@@ -73,11 +76,6 @@ fun ActivityCard(
     Card(
         modifier = modifier
             .bouncyPress(pressedScale = 0.97f)
-            // The row opens the same in-app detail sheet a sequel card does. It
-            // used to hand the tap to the browser, which meant the one screen
-            // with AniList's own description, ratings and tags was unreachable
-            // from the feed - the detail query was never asked for a show that
-            // was not a missed sequel.
             .clickable { onOpenDetail(media) }
             .testTag("activity_card"),
         shape = MaterialTheme.shapes.large,
@@ -88,8 +86,7 @@ fun ActivityCard(
         border = CardDefaults.outlinedCardBorder()
     ) {
         Box {
-            // The tinted cover, behind everything. `fillMaxSize` inside a Box whose
-            // size comes from the content below, so it is measured last and drawn first.
+            // Enhanced ambient backdrop matching reference screenshot
             if (coverUrl != null) {
                 AsyncImage(
                     model = coverUrl,
@@ -107,123 +104,133 @@ fun ActivityCard(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.82f),
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f)
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f),
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
                                 )
                             )
                         )
                 )
             }
 
-            Row(modifier = Modifier.padding(14.dp)) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .width(92.dp)
-                        .aspectRatio(POSTER_ASPECT)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberVectorPainter(AppVectorIcons.FavouriteAnime),
-                    error = rememberVectorPainter(AppVectorIcons.FavouriteAnime),
-                    fallback = rememberVectorPainter(AppVectorIcons.FavouriteAnime)
-                )
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                // User info header row if present
+                if (userName != null || userAvatar != null || activity.createdAt != null) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ActivityStatusPill(
-                            text = activity.displayStatusFor(isManga),
-                            // `equals(ignoreCase = true)` rather than
-                            // `lowercase() ==`: the status is already lowercase in
-                            // AniList's payload, and lowercasing it again asks the
-                            // JVM's default locale to do a job that is not a
-                            // locale question at all (`I` does not lowercase to
-                            // `i` in Turkish).
-                            accent = activity.status.equals("completed", ignoreCase = true)
-                        )
-                        if (activity.createdAt != null) {
+                        if (userAvatar != null) {
+                            AsyncImage(
+                                model = userAvatar,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        if (userName != null) {
                             Text(
-                                text = formatRelativeSeconds(activity.createdAt),
+                                text = userName,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        if (activity.createdAt != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "· ${formatRelativeSeconds(activity.createdAt)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = activityDetail(activity),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                Row {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .width(88.dp)
+                            .aspectRatio(POSTER_ASPECT)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentScale = ContentScale.Crop,
+                        placeholder = rememberVectorPainter(
+                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
+                        ),
+                        error = rememberVectorPainter(
+                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
+                        ),
+                        fallback = rememberVectorPainter(
+                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
+                        )
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = media.title?.displayTitle.orEmpty(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Anime and manga rows were previously identical cards with
-                        // different cover art - and the two share covers often
-                        // enough (manga and its adaptation) that the feed could
-                        // not be read without opening something. The type is the
-                        // one field that always answers it.
-                        SequelInfoChip(
-                            icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
-                            label = if (isManga) "Manga" else "Anime"
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        ActivityStatusPill(
+                            text = activity.displayStatusFor(isManga),
+                            accent = activity.status.equals("completed", ignoreCase = true)
                         )
-                        // The heart is interactive only when AniList answered
-                        // `isLiked`; a null means it did not (no session), and a
-                        // control that cannot record a like must not look like it
-                        // can. The count stays visible either way, so the row is
-                        // not lying about the activity's popularity.
-                        ActivityAction(
-                            icon = if (activity.isLiked == true) {
-                                AppVectorIcons.ActivityLiked
-                            } else {
-                                AppVectorIcons.ActivityNotLiked
-                            },
-                            count = activity.likeCount ?: 0,
-                            active = activity.isLiked == true,
-                            enabled = activity.isLiked != null && !likePending,
-                            contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
-                            onClick = onLike,
-                            // Long press shows who liked it. The control is enabled
-                            // only with a session (above), so this is unreachable on
-                            // the demo feed; and it stays reachable at likeCount 0 so
-                            // the sheet can report the empty state rather than the
-                            // gesture silently doing nothing.
-                            onLongClick = onOpenLikers,
-                            modifier = Modifier.testTag("activity_like_button")
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = activityDetail(activity),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        // Reading a thread needs no session, so this is always
-                        // enabled; posting inside the sheet is what is gated.
-                        ActivityAction(
-                            icon = AppVectorIcons.ActivityReplies,
-                            count = activity.replyCount ?: 0,
-                            active = false,
-                            enabled = true,
-                            contentDescription = "Comments",
-                            onClick = onComments,
-                            modifier = Modifier.testTag("activity_comments_button")
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = media.title?.displayTitle.orEmpty(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SequelInfoChip(
+                                icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
+                                label = if (isManga) "Manga" else "Anime"
+                            )
+                            ActivityAction(
+                                icon = if (activity.isLiked == true) {
+                                    AppVectorIcons.ActivityLiked
+                                } else {
+                                    AppVectorIcons.ActivityNotLiked
+                                },
+                                count = activity.likeCount ?: 0,
+                                active = activity.isLiked == true,
+                                enabled = activity.isLiked != null && !likePending,
+                                contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
+                                onClick = onLike,
+                                onLongClick = onOpenLikers,
+                                modifier = Modifier.testTag("activity_like_button")
+                            )
+                            ActivityAction(
+                                icon = AppVectorIcons.ActivityReplies,
+                                count = activity.replyCount ?: 0,
+                                active = false,
+                                enabled = true,
+                                contentDescription = "Comments",
+                                onClick = onComments,
+                                modifier = Modifier.testTag("activity_comments_button")
+                            )
+                        }
                     }
                 }
             }
@@ -248,10 +255,24 @@ private fun activityDetail(activity: ListActivity): String {
     val media = activity.media ?: return ""
     val isManga = media.type.equals("MANGA", ignoreCase = true)
     val progress = activity.progress?.takeIf { it.isNotBlank() }
-        ?: return formatLabel(media.format)
-    if (isManga) return "Chapter $progress"
-    val episodes = media.episodes ?: return "Episode $progress"
-    return "Episode $progress of $episodes"
+    if (progress == null) {
+        val label = formatLabel(media.format)
+        return if (label.isNotBlank()) label else if (isManga) "Manga" else "TV"
+    }
+    val cleanProgress = if (isManga) {
+        progress.replace("Episode", "Chapter", ignoreCase = true)
+            .replace("ep", "ch", ignoreCase = true)
+    } else {
+        progress
+    }
+    if (isManga) {
+        val chapters = media.chapters
+        val displayNum = if (cleanProgress.startsWith("Chapter", ignoreCase = true)) cleanProgress else "Chapter $cleanProgress"
+        return if (chapters != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $chapters" else displayNum
+    }
+    val episodes = media.episodes
+    val displayNum = if (cleanProgress.startsWith("Episode", ignoreCase = true)) cleanProgress else "Episode $cleanProgress"
+    return if (episodes != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $episodes" else displayNum
 }
 
 /**
