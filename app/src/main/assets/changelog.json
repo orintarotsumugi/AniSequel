@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.0.58",
+      "entries": [
+        {
+          "title": "Markdown links render (and nest) correctly",
+          "detail": "A bold line whose text is a link - the way most AnimeList bios write their hall-of-fame entries - used to print the raw brackets and URL in bold instead of a tappable title. Emphasis runs and link labels now keep their inner markup as a nested expression, so a link inside bold, bold inside a link, or italic inside bold renders as both styles. Link taps also now route through the app's own URL handling, so they open in the same in-app browser as every other link."
+        },
+        {
+          "title": "A hero profile header",
+          "detail": "The profile banner is taller and its gradient is weighted to the bottom, so the artwork stays visible while the identity line beneath it stays readable. Your avatar is a ring-bordered squircle that no longer loses its edge against a dark banner, your membership, join date and last-updated time sit in the app's capsule treatment, and a new Episodes / Time / Mean Score strip summarises the account without another row of tiles."
+        },
+        {
+          "title": "Activity cards with real background art",
+          "detail": "Each activity entry now draws its show's cover behind the card as a blurred colour wash rather than a sharp low-alpha crop, so the title and status pill are legible against any cover while the entry still reads by palette. The poster, user header and timestamps are rebalanced to match."
+        },
+        {
+          "title": "A friends list you can actually scan",
+          "detail": "Follower avatars get a rounded-square frame with a hairline border so a grid of faces reads as separate people instead of one mosaic, and names use a heavier, more legible weight. The Recent Activity heading now carries its own count, matching the calendar above it."
+        }
+      ]
+    },
+    {
       "version": "1.0.57",
       "entries": [
         {

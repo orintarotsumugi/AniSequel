@@ -228,3 +228,69 @@ and no `MAPS_API_KEY` reference anywhere.
 The plugin is there for a Maps integration that does not exist. Removing it also
 removes the `.env` / `.env.example` convention that a contributor has to be told
 about and that currently guards nothing.
+
+---
+
+## 5. Profile UI follow-ups
+
+The profile screen got a visual pass — hero header, summary strip, blurred
+activity backdrops, a scan-friendly friends grid, and nested-markdown rendering.
+What that pass deliberately did **not** do is listed here so the next person does
+not mistake each one for an oversight.
+
+### 5.1 `stripMarkdown` is UI-dead and only its test keeps it alive
+
+`ProfileAboutCard.stripMarkdown` strips Markdown to plain text. No screen calls
+it any more — `AboutCard` renders the parsed AST — but
+`ProfileTextFormattingTest` still exercises it, so it cannot simply be deleted
+without removing that suite too.
+
+Either wire it back in where a single-line preview of a bio is wanted (a search
+result, a future social feed row) or delete both the function and its tests in
+one change. Leaving a tested-but-unused formatter is how the next reader assumes
+some screen is using it.
+
+### 5.2 Blur has no cost measurement on a long activity feed
+
+`ActivityCard` blurs every cover it draws (`Modifier.blur(28.dp)`), and an
+activity feed is unbounded — it pages. On a low-end device, a screenful of
+blurred layers is the first thing likely to drop frames, and there is no
+benchmark module to say whether it does (see §2.3 / §3.4).
+
+First step: measure with `macrobenchmark` on one scrolling test, then either cap
+the blur to the visible cards or replace it with a pre-blurred server-side
+transform. Do not guess either way.
+
+### 5.3 The hero header does not collapse on scroll
+
+The new banner is a fixed 200dp block. The reference design it follows collapses
+it into the top app bar as the page scrolls, reclaiming that height for the
+bio and favourites.
+
+This needs the header to be a `LazyColumn` item that reports a scroll offset
+to a `TopAppBar`'s `scrollBehavior`, plus a decision about what the bar shows
+while collapsed. Worth doing only with a screenshot test in place first, because
+the failure mode (a header that flickers between two states) is exactly what a
+review cannot see.
+
+### 5.4 Markdown nesting stops at four levels and then degrades to raw text
+
+`AniListMarkdownParser` re-parses an emphasis run's or link label's inner
+expression, capped at `MAX_INLINE_DEPTH = 4`. Past the cap the renderer falls
+back to the flat source text, so a pathological bio would still print asterisks.
+
+Real bios never get close, and the cap is what prevents unbounded recursion. If
+it ever needs raising, raise it with a test that pins the cap rather than
+removing the guard.
+
+### 5.5 No screenshot tests for the profile tabs
+
+The four profile tabs — Home, Activity, Stats, Social — are the most
+shape-variable screens in the app (they change entirely between an account that
+pinned nothing and one that pinned fifty), and nothing asserts what they look
+like. Every visual claim in this pass was verified by reading code and comparing
+against a reference image, not by a test.
+
+A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
+already builds, would turn §5.2 and §5.3 into measurements and catch the next
+regression in the header the way `ExpressiveShapesTest` catches capsule geometry.

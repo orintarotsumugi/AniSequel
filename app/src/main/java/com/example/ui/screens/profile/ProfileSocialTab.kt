@@ -1,8 +1,10 @@
 package com.example.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Icon
@@ -344,25 +347,33 @@ private fun FollowerCard(
             .testTag("follower_card"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AsyncImage(
-            model = person.avatar?.medium ?: person.avatar?.large,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxWidth()
-                // Square, matching the reference. A 1:1 crop of a 220x220 avatar
-                // is also what AniList serves, so nothing is resampled.
-                .aspectRatio(1f)
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
-        )
-        Spacer(modifier = Modifier.height(6.dp))
+        Box(modifier = Modifier.fillMaxWidth()) {
+            AsyncImage(
+                model = person.avatar?.medium ?: person.avatar?.large,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Square, matching the reference. A 1:1 crop of a 220x220
+                    // avatar is also what AniList serves, so nothing is
+                    // resampled. `shapes.large` and the hairline border are what
+                    // separate one face from the next: two hundred avatars on the
+                    // app's surface colour used to bleed into each other into a
+                    // single mosaic with no edges.
+                    .aspectRatio(1f)
+                    .clip(MaterialTheme.shapes.large)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentScale = ContentScale.Crop,
+                placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+                error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+                fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
+            )
+        }
+        Spacer(modifier = Modifier.height(7.dp))
         Text(
             text = person.name,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -49,7 +49,10 @@ fun ProfileHomeTab(
             .fillMaxSize()
             .testTag("profile_home_tab"),
         contentPadding = profileListPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        // 16 rather than 14: the header ends with a summary strip and the bio is
+        // a card, so the two dense blocks at the top of the page need a hair more
+        // air between them than the favourites rows do further down.
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item(key = "header") {

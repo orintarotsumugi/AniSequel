@@ -4,6 +4,7 @@ import com.example.ui.components.markdown.AniListMarkdownParser
 import com.example.ui.components.markdown.InlineToken
 import com.example.ui.components.markdown.MarkdownNode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -234,6 +235,74 @@ class AniListMarkdownTest {
         assertTrue(inlines.none { it is InlineToken.Image })
         val link = inlines.filterIsInstance<InlineToken.Link>().firstOrNull()
         assertEquals("https://anilist.co/anime/1", link?.url)
+    }
+
+    /**
+     * The bug a screenshot caught and no test did: an emphasis run whose text is
+     * a link.
+     *
+     * `**✨ [#1] [Hell's Paradise](url)**` used to flatten the inner link into the
+     * bold token's *string*, so the renderer appended the raw characters and the
+     * bio printed `[Hell's Paradise](https://anilist.co/anime/128893)` in bold
+     * instead of a tappable title. The link has to survive as a child token.
+     */
+    @Test
+    fun `nests a link inside an emphasis run instead of flattening it`() {
+        val inlines = AniListMarkdownParser.parseInlines(
+            "**✨ [#1] [Hell's Paradise](https://anilist.co/anime/128893)** *Loyal to my first anime.*"
+        )
+
+        val bold = inlines.filterIsInstance<InlineToken.Bold>().firstOrNull()
+        assertNotNull("the emphasis run must survive as a Bold token", bold)
+
+        val nestedLink = bold!!.children.filterIsInstance<InlineToken.Link>().firstOrNull()
+        assertEquals("Hell's Paradise", nestedLink?.label)
+        assertEquals("https://anilist.co/anime/128893", nestedLink?.url)
+
+        // The flat fallback stays intact, so a renderer that cannot walk children
+        // still has the run's own text rather than nothing.
+        assertTrue(bold.text.contains("Hell's Paradise"))
+    }
+
+    /**
+     * The mirror case: a link whose *label* is emphasised.
+     *
+     * `[**AniList**](url)` used to print the asterisks inside the link text.
+     */
+    @Test
+    fun `nests an emphasis run inside a link label`() {
+        val inlines = AniListMarkdownParser.parseInlines("[**AniList**](https://anilist.co)")
+
+        val link = inlines.filterIsInstance<InlineToken.Link>().firstOrNull()
+        // `label` stays the raw source (the fallback a renderer that cannot walk
+        // children would use); the parsed style lives in the children.
+        assertEquals("**AniList**", link?.label)
+        assertEquals("https://anilist.co", link?.url)
+
+        val bold = link?.children?.filterIsInstance<InlineToken.Bold>()?.firstOrNull()
+        assertEquals("AniList", bold?.text)
+    }
+
+    @Test
+    fun `nests italic inside bold`() {
+        val inlines = AniListMarkdownParser.parseInlines("**bold *and italic* text**")
+
+        val bold = inlines.filterIsInstance<InlineToken.Bold>().firstOrNull()
+        assertNotNull(bold)
+        val italic = bold!!.children.filterIsInstance<InlineToken.Italic>().firstOrNull()
+        assertEquals("and italic", italic?.text)
+    }
+
+    /**
+     * The depth cap is what keeps a malformed bio from recursing forever, since a
+     * run's label is re-parsed as an expression. This pins that the cap is
+     * reached rather than the stack being.
+     */
+    @Test
+    fun `a pathological nesting depth terminates instead of recursing forever`() {
+        val inlines = AniListMarkdownParser.parseInlines("**".repeat(12) + "deep" + "**".repeat(12))
+
+        assertTrue("parsing must return tokens rather than overflowing", inlines.isNotEmpty())
     }
 
     @Test

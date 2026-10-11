@@ -1,6 +1,7 @@
 package com.example.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,10 +51,22 @@ private const val POSTER_ASPECT = 2f / 3f
 /**
  * How present the cover is behind its own card.
  *
- * Low on purpose: this is a background, and a card whose background competes with
- * the status pill is a card nobody can read the pill on.
+ * Raised from 0.22 now that the backdrop is blurred: a sharp crop had to stay
+ * faint to keep the card's text readable, whereas a blurred one can be half
+ * present and still leave every glyph legible - so the show's palette actually
+ * reads instead of being a hint.
  */
-private const val COVER_BACKGROUND_ALPHA = 0.22f
+private const val COVER_BACKGROUND_ALPHA = 0.50f
+
+/**
+ * How hard the ambient cover is blurred.
+ *
+ * Enough that the art behind a card reads as a colour wash and its own lettering
+ * and faces cannot compete with the card's text, which is what a sharp crop at
+ * even low alpha did. `Modifier.blur` needs the API 31 render effect, which is
+ * this app's whole supported range.
+ */
+private val COVER_BLUR_RADIUS = 28.dp
 
 @Composable
 fun ActivityCard(
@@ -86,26 +100,34 @@ fun ActivityCard(
         border = CardDefaults.outlinedCardBorder()
     ) {
         Box {
-            // Enhanced ambient backdrop matching reference screenshot
+            // The cover, blown up and blurred behind its own card.
+            //
+            // The blur does real work rather than decoration: a *sharp* crop of
+            // the art sat its own lettering and faces directly behind the title
+            // and the status pill, so the card's text fought the background no
+            // matter how the scrim was weighted. Blurred into a wash, the show is
+            // still recognisable by palette and every glyph on the card is
+            // legible. The scrim is bottom-weighted for the same reason the
+            // header's is: the top stays art, the bottom stays readable.
             if (coverUrl != null) {
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
                     modifier = Modifier
                         .matchParentSize()
-                        .clip(MaterialTheme.shapes.large),
+                        .blur(COVER_BLUR_RADIUS),
                     contentScale = ContentScale.Crop,
                     alpha = COVER_BACKGROUND_ALPHA
                 )
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .clip(MaterialTheme.shapes.large)
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f),
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.40f),
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.80f),
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.96f)
                                 )
                             )
                         )
@@ -126,25 +148,29 @@ fun ActivityCard(
                                 model = userAvatar,
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(9.dp))
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                                 contentScale = ContentScale.Crop
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                         }
                         if (userName != null) {
                             Text(
                                 text = userName,
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                         if (activity.createdAt != null) {
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "· ${formatRelativeSeconds(activity.createdAt)}",
+                                text = formatRelativeSeconds(activity.createdAt),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -157,9 +183,10 @@ fun ActivityCard(
                         model = coverUrl,
                         contentDescription = null,
                         modifier = Modifier
-                            .width(88.dp)
+                            .width(96.dp)
                             .aspectRatio(POSTER_ASPECT)
                             .clip(MaterialTheme.shapes.medium)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentScale = ContentScale.Crop,
                         placeholder = rememberVectorPainter(

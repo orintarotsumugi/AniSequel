@@ -120,9 +120,18 @@ fun ProfileActivityTab(
         }
 
         item(key = "activity_header") {
+            // The count mirrors the calendar's "N changes" line above it, so the
+            // two sections of the tab read as the same kind of heading rather
+            // than one labelled and one bare.
+            val loadedCount = (activityState as? UserActivityViewModel.ActivityState.Success)
+                ?.activities
+                ?.size
+                ?.takeIf { it > 0 }
+                ?.toString()
             ProfileSectionHeader(
                 title = "Recent Activity",
                 icon = AppVectorIcons.ProfileActivity,
+                trailing = loadedCount,
                 modifier = Modifier
                     .widthIn(max = ProfileMaxContentWidth)
                     .fillMaxWidth()

@@ -40,16 +40,40 @@ data class CheckListItem(
 
 /**
  * Inline style segments for rich text rendering.
+ *
+ * ## Why the emphasis and link tokens carry [children]
+ *
+ * An emphasis run is not a string, it is a *sub-expression*. AniList bios nest
+ * markup constantly - a bold line whose text is a link, an italic quote that
+ * contains a bold word, a link whose label is itself bold:
+ *
+ * ```
+ * **✨ [#1] [Hell's Paradise](https://anilist.co/anime/128893)**
+ * ```
+ *
+ * Modelling an emphasis as `text: String` flattens that inner link into its own
+ * source, so the renderer printed the raw `[Hell's Paradise](https://...)`
+ * characters inside the bold run - which is exactly the bug the reference
+ * screenshot shows. [children] holds the parsed inner expression instead, and the
+ * renderer walks it under the same style. [text] is kept as the raw source for
+ * the styles that need it (a spoiler's reveal, an image's fallback label) and as
+ * the graceful degradation when the nesting depth cap is reached.
+ *
+ * Additive and defaulted, so every existing flat construction keeps working.
  */
 sealed interface InlineToken {
     data class Plain(val text: String) : InlineToken
-    data class Bold(val text: String) : InlineToken
-    data class Italic(val text: String) : InlineToken
-    data class BoldItalic(val text: String) : InlineToken
-    data class Underline(val text: String) : InlineToken
-    data class Strikethrough(val text: String) : InlineToken
+    data class Bold(val text: String, val children: List<InlineToken> = emptyList()) : InlineToken
+    data class Italic(val text: String, val children: List<InlineToken> = emptyList()) : InlineToken
+    data class BoldItalic(val text: String, val children: List<InlineToken> = emptyList()) : InlineToken
+    data class Underline(val text: String, val children: List<InlineToken> = emptyList()) : InlineToken
+    data class Strikethrough(val text: String, val children: List<InlineToken> = emptyList()) : InlineToken
     data class Code(val code: String) : InlineToken
-    data class Link(val label: String, val url: String) : InlineToken
+    data class Link(
+        val label: String,
+        val url: String,
+        val children: List<InlineToken> = emptyList()
+    ) : InlineToken
     data class Mention(val username: String) : InlineToken
     data class Spoiler(val text: String) : InlineToken
 

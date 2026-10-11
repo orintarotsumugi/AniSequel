@@ -324,7 +324,20 @@ object AniListMarkdownParser {
      * Parses inline tokens: links, inline images/GIFs, spoilers, bold/italic,
      * underline, code, strikethrough, mentions, auto URLs, and plain text.
      */
-    fun parseInlines(text: String): List<InlineToken> {
+    fun parseInlines(text: String): List<InlineToken> = parseInlines(text, depth = 0)
+
+    /**
+     * How deep nested emphasis and link-label parsing may descend before it stops.
+     *
+     * The cap is what keeps a malformed bio from recursing forever - a run whose
+     * label parses back into the same run would otherwise spin. Real bios nest two
+     * or three levels at most, so this is headroom rather than a limit anyone
+     * reaches; past it the renderer falls back to the flat [InlineToken.Bold.text]
+     * the token already carries.
+     */
+    private const val MAX_INLINE_DEPTH = 4
+
+    private fun parseInlines(text: String, depth: Int): List<InlineToken> {
         if (text.isEmpty()) return emptyList()
 
         val tokens = mutableListOf<InlineToken>()
@@ -377,7 +390,9 @@ object AniListMarkdownParser {
                 "LINK" -> {
                     val label = firstMatch.groupValues[1]
                     val url = firstMatch.groupValues[2]
-                    tokens.add(InlineToken.Link(label, url))
+                    // A label may itself be emphasised (`[**AniList**](url)`),
+                    // which used to print the asterisks verbatim.
+                    tokens.add(InlineToken.Link(label, url, nested(label, depth)))
                 }
                 "AUTO_URL" -> {
                     val url = firstMatch.value
@@ -398,28 +413,30 @@ object AniListMarkdownParser {
                     tokens.add(InlineToken.Code(firstMatch.groupValues[1]))
                 }
                 "BOLD_ITALIC" -> {
-                    tokens.add(InlineToken.BoldItalic(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1]
+                    tokens.add(InlineToken.BoldItalic(content, nested(content, depth)))
                 }
                 "BOLD" -> {
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }
-                    tokens.add(InlineToken.Bold(content))
+                    tokens.add(InlineToken.Bold(content, nested(content, depth)))
                 }
                 "ITALIC" -> {
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }
-                    tokens.add(InlineToken.Italic(content))
+                    tokens.add(InlineToken.Italic(content, nested(content, depth)))
                 }
                 "UNDERLINE" -> {
-                    tokens.add(InlineToken.Underline(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1]
+                    tokens.add(InlineToken.Underline(content, nested(content, depth)))
                 }
                 "STRIKE" -> {
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }
-                    tokens.add(InlineToken.Strikethrough(content))
+                    tokens.add(InlineToken.Strikethrough(content, nested(content, depth)))
                 }
                 "MENTION" -> {
                     val user = firstMatch.groupValues[1]
@@ -432,4 +449,14 @@ object AniListMarkdownParser {
 
         return tokens
     }
+
+    /**
+     * The inline expression nested inside an emphasis run or a link label.
+     *
+     * Empty once [MAX_INLINE_DEPTH] is reached or the text has nothing to parse,
+     * which the renderer reads as "use the flat text this token already holds".
+     */
+    private fun nested(text: String, depth: Int): List<InlineToken> =
+        if (depth >= MAX_INLINE_DEPTH || text.isBlank()) emptyList()
+        else parseInlines(text, depth + 1)
 }
