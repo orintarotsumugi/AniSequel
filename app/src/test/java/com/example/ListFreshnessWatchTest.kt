@@ -85,7 +85,47 @@ class ListFreshnessWatchTest {
         watch.stop()
     }
 
-    /** The half the reopen bug was hiding: the timer, for a dashboard left open. */
+    /**
+     * Production `onRefresh` is fire-and-forget: it starts a network fetch and
+     * returns, and `markLoaded` only lands when that fetch succeeds. The loop's
+     * wait used to be computed before that fetch landed, so a resume-time refresh
+     * that was still in flight made the loop fire a second, identical refresh
+     * once the retry floor elapsed. The re-check at fire time must cancel it.
+     */
+    @Test
+    fun `a fetch landing during the wait is not re-fetched five minutes later`() = runTest {
+        var now = base
+        var refreshes = 0
+        lateinit var watch: ListFreshnessWatch
+        watch = ListFreshnessWatch(
+            scope = backgroundScope,
+            interval = { RefreshInterval.THIRTY_MINUTES },
+            // Deliberately async: like a real network fetch, it does not call
+            // `markLoaded` from inside `onRefresh`.
+            onRefresh = { refreshes++ },
+            nowMillis = { now }
+        )
+        watch.markLoaded(now)
+
+        now = base + minutes(31)
+        watch.start()
+        runCurrent()
+        assertEquals(1, refreshes)
+
+        // The fetch resolves a moment later, as a real request would - well
+        // before the five-minute retry floor has elapsed.
+        watch.markLoaded(now)
+        now = base + minutes(36)
+
+        advanceTimeBy(minutes(5))
+        runCurrent()
+        assertEquals(
+            "data that loaded during the wait must cancel the pending fetch",
+            1,
+            refreshes
+        )
+        watch.stop()
+    }
     @Test
     fun `the list re-fetches on its own once the interval passes`() = runTest {
         var now = base

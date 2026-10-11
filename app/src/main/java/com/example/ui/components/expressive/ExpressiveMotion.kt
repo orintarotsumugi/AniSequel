@@ -144,12 +144,13 @@ object ExpressiveMotion {
     /**
      * The [FastSpatial] counterpart for `IntSize`-based expansion.
      *
-     * `AnimatedVisibility`'s `expandHorizontally` and `shrinkHorizontally` take
-     * `FiniteAnimationSpec<IntSize>`; `expandVertically` and `shrinkVertically` take
-     * `FiniteAnimationSpec<IntOffset>`. They are two different types with two
-     * different physics meanings - one resizes, one moves - so the growing
-     * navigation label needs its own token rather than being given the wrong one
-     * and failing to compile. `FastSpatial` is the right physics for it: a label
+     * `AnimatedVisibility`'s `expandVertically`, `shrinkVertically`,
+     * `expandHorizontally` and `shrinkHorizontally` all take
+     * `FiniteAnimationSpec<IntSize>` - the size being revealed or hidden, which
+     * is why the hidden-sequels section can pass this token straight to
+     * `expandVertically`. The note here used to say `IntOffset`; that is the type
+     * `slideInVertically` takes, a different mechanism, and the claim sent a
+     * reader after the wrong token. `FastSpatial` is the right physics: a section
      * growing open should be as quick as a press, not as slow as a list item
      * settling.
      */

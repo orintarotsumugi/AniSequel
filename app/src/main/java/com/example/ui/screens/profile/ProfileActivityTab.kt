@@ -54,7 +54,14 @@ fun ProfileActivityTab(
     onRetry: () -> Unit = onLoadFirstPage,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
-    calendar: ActivityCalendar? = null
+    calendar: ActivityCalendar? = null,
+    commentsState: UserActivityViewModel.CommentsState? = null,
+    canPostComment: Boolean = false,
+    onLike: (Int) -> Unit = {},
+    onOpenComments: (Int) -> Unit = {},
+    onCloseComments: () -> Unit = {},
+    onRetryComments: (Int) -> Unit = {},
+    onPostComment: (String) -> Unit = {}
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
     // not opening the profile.
@@ -151,7 +158,10 @@ fun ProfileActivityTab(
                             modifier = Modifier
                                 .widthIn(max = ProfileMaxContentWidth)
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = 16.dp),
+                            onLike = { onLike(activity.id) },
+                            onComments = { onOpenComments(activity.id) },
+                            likePending = activity.id in activityState.pendingLikes
                         )
                     }
 
@@ -163,6 +173,18 @@ fun ProfileActivityTab(
                 }
             }
         }
+    }
+
+    // The sheet is a sibling of the list, not an item in it: it renders in its
+    // own window, and an item in a `LazyListScope` cannot be a composable call.
+    if (commentsState != null) {
+        ActivityCommentsSheet(
+            state = commentsState,
+            canPost = canPostComment,
+            onDismiss = onCloseComments,
+            onRetry = { onRetryComments(commentsState.activityId) },
+            onPost = onPostComment
+        )
     }
 }
 

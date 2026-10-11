@@ -123,6 +123,57 @@ class UserOverviewQueryTest {
     }
 
     @Test
+    fun `the feed asks for the viewer's like state and the activity's own url`() {
+        val activity = GraphQLQueries.GET_USER_ACTIVITY
+
+        // `isLiked` is what decides whether the heart renders; without it the
+        // repository's null-means-unknown rule would hide the control on every row.
+        assertTrue(activity.contains("isLiked"))
+        // `siteUrl` selects twice now - once for the activity and once for its
+        // media - so this pins that the activity's is the one the card links.
+        assertTrue(activity.contains("siteUrl"))
+    }
+
+    @Test
+    fun `the replies query reads the thread off the activity union`() {
+        val replies = GraphQLQueries.GET_ACTIVITY_REPLIES
+
+        assertTrue(replies.trimStart().startsWith("query"))
+        assertTrue(replies.contains("Activity(id:"))
+        // `Activity(id:)` is a union, so the member must be fragmented.
+        assertTrue(replies.contains("... on ListActivity"))
+        assertTrue(replies.contains("replies"))
+        // The comment body, parsed as markdown by the sheet's renderer.
+        assertTrue(replies.contains("text"))
+    }
+
+    @Test
+    fun `likes use ToggleLikeV2 with an explicit type`() {
+        val toggle = GraphQLQueries.TOGGLE_ACTIVITY_LIKE
+
+        assertTrue(toggle.trimStart().startsWith("mutation"))
+        // `ToggleLike` (v1) is not what AniList documents, and the id is not
+        // unique across the likeable types, so the type cannot be left to
+        // inference: without it the mutation is ambiguous.
+        assertTrue(toggle.contains("ToggleLikeV2"))
+        assertTrue(toggle.contains("type: ACTIVITY"))
+        assertTrue(toggle.contains("... on ListActivity"))
+    }
+
+    @Test
+    fun `a comment is a reply, never a direct message`() {
+        val save = GraphQLQueries.SAVE_ACTIVITY_REPLY
+
+        assertTrue(save.trimStart().startsWith("mutation"))
+        assertTrue(save.contains("SaveActivityReply"))
+        // `SaveActivityMessage` takes a `messengerId` and posts a private message.
+        // The two names are one word apart, and posting a comment through the
+        // wrong one would silently DM the author instead.
+        assertFalse(save.contains("SaveActivityMessage"))
+        assertFalse(save.contains("messengerId"))
+    }
+
+    @Test
     fun `followers and following are separate documents`() {
         // `Page` accepts exactly one data field. Asking for both in one document is
         // a GraphQL validation error ("Page query can only accept 1 child field"),

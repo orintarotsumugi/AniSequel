@@ -229,17 +229,32 @@ fun AniSequelTheme(
     // 31, so it can only ever be true. Dropped rather than left in: a guard
     // that reads as load-bearing and cannot fail is worse than no guard,
     // because the next reader assumes there is a device class it excludes.
-    val colorScheme = when {
-        animeThemeActive && animeColor != null -> {
-            val (_, darkDynamic) = DynamicThemeBuilder.createDynamicSchemes(animeColor)
-            darkDynamic
-        }
-        dynamicColor -> {
-            val context = LocalContext.current
+    //
+    // The scheme builders used to run inline in the `when` below, so every
+    // recomposition of the theme - the whole app - re-derived the HSL
+    // transforms even when nothing about the colour had changed. The heavy
+    // half now runs once per colour, keyed on the parsed value.
+    val animeDarkScheme = androidx.compose.runtime.remember(animeColor) {
+        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it).second }
+    }
+    val customDynamicSchemes = androidx.compose.runtime.remember(customColor) {
+        customColor?.let { DynamicThemeBuilder.createDynamicSchemes(it) }
+    }
+    val context = LocalContext.current
+    val wallpaperScheme = androidx.compose.runtime.remember(dynamicColor, darkTheme, context) {
+        if (dynamicColor) {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+        } else null
+    }
+
+    val colorScheme = when {
+        // Both asserts are gated by the same condition in the branch above, and
+        // `remember` guarantees the same value a read would give - a kotlin
+        // nullable here would only re-check what the branch already proved.
+        animeThemeActive && animeColor != null -> requireNotNull(animeDarkScheme)
+        dynamicColor -> requireNotNull(wallpaperScheme)
         customColor != null -> {
-            val (lightDynamic, darkDynamic) = DynamicThemeBuilder.createDynamicSchemes(customColor)
+            val (lightDynamic, darkDynamic) = requireNotNull(customDynamicSchemes)
             if (darkTheme) darkDynamic else lightDynamic
         }
         darkTheme -> palette.dark

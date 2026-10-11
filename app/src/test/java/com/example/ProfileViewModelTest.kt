@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.data.model.ActivityLikeState
+import com.example.data.model.ActivityReply
 import com.example.data.model.FollowUser
 import com.example.data.model.ListActivity
 import com.example.data.model.MediaCoverImage
@@ -45,11 +47,19 @@ class ProfileViewModelTest {
     private class FakeProfileRepository(
         var activityPages: Map<Int, List<ListActivity>> = emptyMap(),
         var followersResult: List<FollowUser> = emptyList(),
-        var followingResult: List<FollowUser> = emptyList()
+        var followingResult: List<FollowUser> = emptyList(),
+        var likeResult: Result<ActivityLikeState> =
+            Result.success(ActivityLikeState(isLiked = true, likeCount = 1)),
+        var repliesResult: Result<List<ActivityReply>> = Result.success(emptyList()),
+        var postReplyResult: Result<ActivityReply> =
+            Result.success(ActivityReply(id = 1, text = "posted"))
     ) : AniListRepository {
         var activityFetchCount = 0
         var followersFetchCount = 0
         var followingFetchCount = 0
+        var likeFetchCount = 0
+        var repliesFetchCount = 0
+        var postReplyFetchCount = 0
 
         override suspend fun getViewer(): Result<ViewerProfile> = Result.failure(UnsupportedOperationException())
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> = Result.failure(UnsupportedOperationException())
@@ -84,6 +94,21 @@ class ProfileViewModelTest {
         ): Result<List<FollowUser>> {
             followingFetchCount++
             return Result.success(followingResult)
+        }
+
+        override suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> {
+            likeFetchCount++
+            return likeResult
+        }
+
+        override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> {
+            repliesFetchCount++
+            return repliesResult
+        }
+
+        override suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> {
+            postReplyFetchCount++
+            return postReplyResult
         }
     }
 
@@ -204,10 +229,148 @@ class ProfileViewModelTest {
         assertEquals(1, repository.followersFetchCount)
     }
 
-    private fun createActivity(id: Int) = ListActivity(
+    @Test
+    fun `toggling a like is optimistic and settles on the server's answer`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = false, likeCount = 0)))
+        )
+        repository.likeResult = Result.success(ActivityLikeState(isLiked = true, likeCount = 1))
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        viewModel.toggleLike(1)
+
+        // Optimistic: the state has already moved, before the suspended request is
+        // resumed - and the activity is marked in flight so a second tap cannot
+        // toggle it back.
+        val optimistic = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(true, optimistic.activities.single().isLiked)
+        assertEquals(1, optimistic.activities.single().likeCount)
+        assertTrue(1 in optimistic.pendingLikes)
+
+        advanceUntilIdle()
+
+        val settled = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(true, settled.activities.single().isLiked)
+        assertEquals(1, settled.activities.single().likeCount)
+        assertFalse(1 in settled.pendingLikes)
+        assertEquals(1, repository.likeFetchCount)
+    }
+
+    @Test
+    fun `a failed like puts the original row back`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = false, likeCount = 3)))
+        )
+        repository.likeResult = Result.failure(RuntimeException("nope"))
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        viewModel.toggleLike(1)
+        advanceUntilIdle()
+
+        // The optimistic count was a guess and the server contradicted it, so the
+        // pre-tap row is restored rather than left showing a like that did not stick.
+        val state = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(false, state.activities.single().isLiked)
+        assertEquals(3, state.activities.single().likeCount)
+        assertFalse(1 in state.pendingLikes)
+    }
+
+    @Test
+    fun `a like is refused when AniList did not answer whether it is liked`() = runTest(testDispatcher) {
+        // `isLiked == null` is what a signed-out feed looks like. Offering the
+        // action would send a mutation with no session to record it.
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = null, likeCount = 0)))
+        )
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        viewModel.toggleLike(1)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.likeFetchCount)
+    }
+
+    @Test
+    fun `opening comments loads the thread`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(activityPages = mapOf(1 to listOf(createActivity(1))))
+        repository.repliesResult = Result.success(listOf(ActivityReply(id = 5, text = "hi")))
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        viewModel.openComments(1)
+        assertTrue(viewModel.comments.value!!.isLoading)
+
+        advanceUntilIdle()
+
+        val comments = viewModel.comments.value!!
+        assertFalse(comments.isLoading)
+        assertEquals(1, comments.replies.size)
+        assertEquals("hi", comments.replies.single().text)
+        assertEquals(1, repository.repliesFetchCount)
+    }
+
+    @Test
+    fun `posting a comment appends the created reply and bumps the feed count`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(id = 1, replyCount = 2)))
+        )
+        repository.postReplyResult = Result.success(ActivityReply(id = 9, text = "mine"))
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+        viewModel.openComments(1)
+        advanceUntilIdle()
+
+        viewModel.postComment("mine")
+        advanceUntilIdle()
+
+        val comments = viewModel.comments.value!!
+        assertFalse(comments.isPosting)
+        assertEquals(1, comments.replies.size)
+        assertEquals(9, comments.replies.single().id)
+        // The feed's reply count is kept honest without a refetch.
+        val feed = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(3, feed.activities.single().replyCount)
+    }
+
+    @Test
+    fun `a failed comment keeps the draft available`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(activityPages = mapOf(1 to listOf(createActivity(1))))
+        repository.postReplyResult = Result.failure(RuntimeException("offline"))
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+        viewModel.openComments(1)
+        advanceUntilIdle()
+
+        viewModel.postComment("mine")
+        advanceUntilIdle()
+
+        val comments = viewModel.comments.value!!
+        assertFalse(comments.isPosting)
+        assertEquals(0, comments.replies.size)
+        assertTrue(comments.postError != null)
+    }
+
+    private fun createActivity(
+        id: Int,
+        isLiked: Boolean? = null,
+        likeCount: Int = 0,
+        replyCount: Int = 0
+    ) = ListActivity(
         id = id,
         status = "completed",
         progress = "12",
+        likeCount = likeCount,
+        replyCount = replyCount,
+        isLiked = isLiked,
         media = MediaNode(
             id = id,
             title = MediaTitle(english = "Anime $id"),

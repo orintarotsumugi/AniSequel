@@ -160,6 +160,8 @@ class UpdateManager(private val context: Context) {
                     )
                 }
 
+                val sizeLimit = if (declaredSize > 0) declaredSize * 2 else Long.MAX_VALUE
+
                 var partial: File? = null
                 try {
                     val directory = downloadDirectory()
@@ -173,11 +175,22 @@ class UpdateManager(private val context: Context) {
                             val total = body.contentLength().takeIf { it > 0 } ?: declaredSize
                             var read: Long = 0
 
+                            // The pre-check above is a fast reject, but it compares against
+                            // `contentLength()`, which is -1 for chunked transfer
+                            // and then never fails. The bound is enforced here
+                            // too, on bytes actually read, so a body without a
+                            // Content-Length header cannot grow without limit.
                             while (true) {
                                 val count = input.read(buffer)
                                 if (count == -1) break
-                                output.write(buffer, 0, count)
                                 read += count
+                                if (read > sizeLimit) {
+                                    partFile.delete()
+                                    return@withContext UpdateDownloadResult.Failed(
+                                        "The download was much larger than expected. Skipped."
+                                    )
+                                }
+                                output.write(buffer, 0, count)
                                 onProgress(read, total)
                             }
 
@@ -293,9 +306,17 @@ class UpdateManager(private val context: Context) {
         return file.takeIf { looksLikeApk }
     }
 
-    /** Where the APK for a release is written, named after the release itself. */
+    /**
+     * Where the APK for a release is written.
+     *
+     * Named after the version *code*, not the version name. The updater compares
+     * codes because "1.0.9" sorts above "1.0.10", so a cache keyed on the name
+     * could serve one release's APK to another when the code advanced without a
+     * name change - and the name string reaches the filesystem unvalidated. The
+     * code is the GitHub run number: monotonic by construction and safe in a path.
+     */
     private fun targetFileFor(directory: File, manifest: UpdateManifest): File =
-        File(directory, "anisequel-${manifest.version ?: "update"}.apk")
+        File(directory, "anisequel-${manifest.versionCode ?: "unversioned"}.apk")
 
     private fun downloadDirectory(): File =
         File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }

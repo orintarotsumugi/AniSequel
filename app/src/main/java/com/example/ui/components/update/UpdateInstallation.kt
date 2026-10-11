@@ -117,10 +117,16 @@ class UpdateInstallation(private val context: Context) {
      * because losing a downloaded APK to a crash at the last step is the worst
      * possible outcome for a feature the user asked for.
      */
-    fun openInstaller(apk: File): Boolean =
-        installIntents(apk).any { intent ->
+    fun openInstaller(apk: File): Boolean {
+        // `installIntents` builds a FileProvider URI, which throws when the file
+        // sits outside the provider's configured paths or the provider is
+        // misconfigured. That is exactly the last-step crash this method exists
+        // to avoid, so building the intents is inside the `runCatching` too.
+        val intents = runCatching { installIntents(apk) }.getOrElse { return false }
+        return intents.any { intent ->
             runCatching { context.startActivity(intent) }.isSuccess
         }
+    }
 
     /**
      * Sends the user to the per-app install permission setting.

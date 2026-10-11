@@ -32,7 +32,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,21 +57,6 @@ fun RenderHeader(header: MarkdownNode.Header) {
         text = annotated,
         style = style,
         color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-fun RenderParagraph(paragraph: MarkdownNode.Paragraph, maxLines: Int) {
-    val context = LocalContext.current
-    val annotated = buildInlineAnnotatedString(paragraph.inlines, onLinkClick = { openExternalUrl(context, it) })
-    Text(
-        text = annotated,
-        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = if (paragraph.centered) TextAlign.Center else TextAlign.Start,
-        maxLines = maxLines,
-        overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
-        modifier = if (paragraph.centered) Modifier.fillMaxWidth() else Modifier
     )
 }
 

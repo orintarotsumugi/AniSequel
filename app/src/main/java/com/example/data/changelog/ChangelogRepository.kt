@@ -106,12 +106,13 @@ class ChangelogRepository(private val context: Context) {
      * in this release" deep link, for instance. Nothing in the app uses it today,
      * which is the point: the Info tab must not use it.
      *
-     * Returns the *newest* matching block rather than the first, so a duplicated
-     * version cannot make a caller show older notes than the release page.
+     * Relies on the file's newest-first order (`ChangelogTest` pins it), so this
+     * returns the *newest* matching block if a version is ever duplicated. It used
+     * to reverse the list and take the first, which returned the *oldest* match -
+     * the opposite of what the signature promises.
      */
     fun entriesFor(version: String): List<ChangelogItem> =
         load().versions
-            ?.asReversed()
             ?.firstOrNull { it.version == version }
             ?.entries
             ?.filterNot { it.title.isNullOrBlank() }

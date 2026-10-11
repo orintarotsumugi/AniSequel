@@ -92,6 +92,12 @@ class UserOverviewViewModel(
             val listDeferred = async { fetchList(forceRefresh) }
 
             val overview = overviewDeferred.await().getOrElse { error ->
+                // The list fetch is a child of this coroutine, so returning
+                // without cancelling it would still block this coroutine on it
+                // and then throw its result away. Cancel it instead: the profile
+                // cannot be shown either way, and the list query is the
+                // expensive half of the pair.
+                listDeferred.cancel()
                 _uiState.value = errorState(error, "Failed to load the AniList profile")
                 return@launch
             }

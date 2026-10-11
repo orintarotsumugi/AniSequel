@@ -1,6 +1,84 @@
 {
   "versions": [
     {
+      "version": "1.0.51",
+      "entries": [
+        {
+          "title": "GIFs and images in bios and comments",
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
+        },
+        {
+          "title": "AniList links get a preview card",
+          "detail": "Pasting an anime, manga, character, staff or studio link now previews it as a card, including links with a www. host or a trailing slash that previously fell through as plain text."
+        },
+        {
+          "title": "Like and comment on activity",
+          "detail": "The Activity feed's like and reply counts are now buttons. Tap the heart to like or un-like a post, or open a thread to read and post a comment without leaving the app."
+        },
+        {
+          "title": "Theme screen, reorganised",
+          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+        },
+        {
+          "title": "Theme switching is snappier",
+          "detail": "Dynamic colour schemes are built once per picked colour instead of on every on-screen change, so changing your accent or theme feels immediate."
+        },
+        {
+          "title": "Planning button no longer double-fires",
+          "detail": "A long press that you released over the planning target no longer also triggered the quick add at the same time."
+        },
+        {
+          "title": "Refreshing another user's profile lists them correctly",
+          "detail": "If the profile you are viewing cannot be loaded, Refresh now shows a proper error instead of silently swapping in your own list."
+        },
+        {
+          "title": "Lists are no longer fetched twice",
+          "detail": "A refresh that lands while the freshness check is already in flight no longer triggers a duplicate fetch of the same lists."
+        },
+        {
+          "title": "Custom lists no longer merge together",
+          "detail": "Chunked list results are now merged by list name alone, so two custom lists that share a status are kept separate instead of being welded into one."
+        },
+        {
+          "title": "Chunked downloads obey the size cap",
+          "detail": "Update downloads enforce their size limit inside the read loop, so a server that streams without a Content-Length header can no longer slip an oversized APK past the guard."
+        }
+      ]
+    },
+    {
+      "version": "1.0.50",
+      "entries": [
+        {
+          "title": "Year charts sort by the actual year",
+          "detail": "Release and watch-year charts previously truncated years to two digits, so a 1995 show was ordered as 2095 and a 1999 show merged with a 2019 one. Each year is now counted and ordered correctly, with pre-2000 years shown in full."
+        },
+        {
+          "title": "Home screen widgets show your real numbers",
+          "detail": "Widgets no longer fall back to sample counts (3, 2, 9 and a demo title) once your account has synced. An empty missed list now hides the previous top title instead of leaving it behind."
+        },
+        {
+          "title": "Adding a sequel no longer keeps it in your missed list",
+          "detail": "A list fetched while you were adding a title could overwrite the cleared cache and leave that sequel showing as missed until the next refresh. In-flight fetches are now invalidated when you add a title."
+        },
+        {
+          "title": "Refresh recovers instead of hanging",
+          "detail": "If the viewer profile could not be loaded, tapping Refresh left the dashboard on a spinner with no way back. It now surfaces a retryable error, and returning to the app reliably restarts the freshness check."
+        },
+        {
+          "title": "Recent activity feed keeps what you've loaded",
+          "detail": "A failed page while scrolling the activity feed no longer wipes the rows already on screen; the footer spinner clears and the next scroll retries."
+        },
+        {
+          "title": "Incomplete downloads no longer masquerade as finished",
+          "detail": "A failed chunk of a large list now fails the load loudly instead of caching a silently truncated list, and update APKs are cached by version code so a stale file cannot be served for a newer release."
+        },
+        {
+          "title": "More reliable in-app updates",
+          "detail": "Opening the system installer is now guarded against misconfiguration, and the \"Immediately\" option for the temporary theme revert works again."
+        }
+      ]
+    },
+    {
       "version": "1.0.49",
       "entries": [
         {

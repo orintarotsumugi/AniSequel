@@ -52,4 +52,16 @@ sealed interface InlineToken {
     data class Link(val label: String, val url: String) : InlineToken
     data class Mention(val username: String) : InlineToken
     data class Spoiler(val text: String) : InlineToken
+
+    /**
+     * An image or GIF embedded *inside* a paragraph, not on a line of its own.
+     *
+     * AniList bios are full of these: `Text ![alt](cat.gif) more text` and bare
+     * `https://.../cat.gif` links between words. [RenderParagraph] puts a real
+     * [androidx.compose.foundation.Image] into the flow for this token so a GIF
+     * animates inline; everywhere a paragraph is not rendered as a flow (a
+     * header, a list item, a truncated bio) it degrades to a plain link to [url],
+     * which is what [buildInlineAnnotatedString] does with it.
+     */
+    data class Image(val url: String, val alt: String? = null) : InlineToken
 }

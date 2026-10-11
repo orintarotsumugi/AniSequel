@@ -1,5 +1,7 @@
 package com.example.data.repository
 
+import com.example.data.model.ActivityLikeState
+import com.example.data.model.ActivityReply
 import com.example.data.model.FollowUser
 import com.example.data.model.ListActivity
 import com.example.data.model.MediaListCollection
@@ -82,6 +84,31 @@ interface AniListRepository {
         forceRefresh: Boolean = false
     ): Result<List<FollowUser>> = unsupported("getUserFollowing")
 
+    /**
+     * One activity's comment thread, oldest first as AniList returns them.
+     *
+     * Fetched when the sheet opens rather than with the feed, so a person who
+     * never taps a comment never pays for a thread.
+     */
+    suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
+        unsupported("getActivityReplies")
+
+    /**
+     * Likes an activity if it is not liked, un-likes it if it is. AniList does
+     * not have a separate "unlike"; the same call toggles, which is why the
+     * return value - not the request - is what the UI trusts.
+     *
+     * Requires a session. Called with none (the demo feed) it fails with
+     * [com.example.data.network.AniListErrorKind.INVALID_SESSION], and the UI
+     * hides the control rather than offering an action that cannot work.
+     */
+    suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =
+        unsupported("toggleActivityLike")
+
+    /** Posts [text] as a comment on an activity, returning the created reply. */
+    suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> =
+        unsupported("postActivityReply")
+
     fun getDemoProfile(): ViewerProfile
     fun getDemoAnimeList(): MediaListCollection
 
@@ -105,9 +132,9 @@ interface AniListRepository {
  * person has not done anything", which is the one claim this screen must never
  * make about somebody.
  *
- * `AniListRepositoryImpl` overrides all six. Only the test doubles that exist to
- * exercise the dashboard's two calls rely on the default, and none of them opens
- * a profile.
+ * `AniListRepositoryImpl` overrides every one. Only the test doubles that exist
+ * to exercise the dashboard's two calls rely on the default, and none of them
+ * opens a profile.
  */
 private fun unsupported(operation: String): Nothing =
     throw UnsupportedOperationException("AniListRepository does not serve $operation")

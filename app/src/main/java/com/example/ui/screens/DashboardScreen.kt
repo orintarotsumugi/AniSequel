@@ -61,7 +61,7 @@ fun DashboardScreen(
     onOpenSettings: (ViewerProfile?) -> Unit,
     onSignInAgain: () -> Unit = {},
     onOpenProfile: (ViewerProfile?) -> Unit = {},
-    quickAddPreferences: com.example.data.repository.QuickAddPreferences? = null,
+    quickAddPreferences: com.example.data.repository.QuickAddPreferences,
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
@@ -70,9 +70,14 @@ fun DashboardScreen(
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val quickAddSettings = quickAddPreferences?.settings?.collectAsState(
+    // Collected unconditionally. The old form short-circuited on a nullable
+    // parameter (`prefs?.settings?.collectAsState(...) ?: remember { ... }`),
+    // which changes the composable calls between recompositions - a Rules of
+    // Compose violation, not just a wasted allocation, that would drop or
+    // scramble state the moment the parameter flipped.
+    val quickAddSettings by quickAddPreferences.settings.collectAsState(
         initial = com.example.data.repository.QuickAddPreferences.QuickAddSettings()
-    )?.value ?: remember { com.example.data.repository.QuickAddPreferences.QuickAddSettings() }
+    )
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelId by remember { mutableStateOf<Int?>(null) }
@@ -126,8 +131,15 @@ fun DashboardScreen(
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
 
-    val selectedSequel = selectedSequelId?.let { id ->
-        successState?.missedSequels?.firstOrNull { it.sequelId == id }
+    // Memoised on the state instance and the id: an uncached linear scan ran on
+    // every recomposition, including the ones driven by unrelated state such as
+    // the snackbar or the detail spinner. `successState` is the same instance
+    // across those recompositions, so the keys are stable and the scan happens
+    // only when the list or the open id actually changes.
+    val selectedSequel = remember(selectedSequelId, successState) {
+        selectedSequelId?.let { id ->
+            successState?.missedSequels?.firstOrNull { it.sequelId == id }
+        }
     }
 
     val isDetailLoading = selectedSequelId != null && selectedSequelId in loadingDetailIds

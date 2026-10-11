@@ -54,7 +54,10 @@ private const val COVER_BACKGROUND_ALPHA = 0.18f
 @Composable
 fun ActivityCard(
     activity: ListActivity,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLike: () -> Unit = {},
+    onComments: () -> Unit = {},
+    likePending: Boolean = false
 ) {
     val media = activity.media ?: return
     val coverUrl = media.coverImage?.bestUrl ?: media.coverImage?.large
@@ -181,13 +184,34 @@ fun ActivityCard(
                             icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
                             label = if (isManga) "Manga" else "Anime"
                         )
-                        ActivityCount(
-                            icon = AppVectorIcons.Star,
-                            count = activity.likeCount ?: 0
+                        // The heart is interactive only when AniList answered
+                        // `isLiked`; a null means it did not (no session), and a
+                        // control that cannot record a like must not look like it
+                        // can. The count stays visible either way, so the row is
+                        // not lying about the activity's popularity.
+                        ActivityAction(
+                            icon = if (activity.isLiked == true) {
+                                AppVectorIcons.ActivityLiked
+                            } else {
+                                AppVectorIcons.ActivityNotLiked
+                            },
+                            count = activity.likeCount ?: 0,
+                            active = activity.isLiked == true,
+                            enabled = activity.isLiked != null && !likePending,
+                            contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
+                            onClick = onLike,
+                            modifier = Modifier.testTag("activity_like_button")
                         )
-                        ActivityCount(
+                        // Reading a thread needs no session, so this is always
+                        // enabled; posting inside the sheet is what is gated.
+                        ActivityAction(
                             icon = AppVectorIcons.ActivityReplies,
-                            count = activity.replyCount ?: 0
+                            count = activity.replyCount ?: 0,
+                            active = false,
+                            enabled = true,
+                            contentDescription = "Comments",
+                            onClick = onComments,
+                            modifier = Modifier.testTag("activity_comments_button")
                         )
                     }
                 }
@@ -271,20 +295,46 @@ private fun ActivityStatusPill(text: String, accent: Boolean) {
     )
 }
 
+/**
+ * A like or comment control: an icon, a count, and whether it is active.
+ *
+ * The tap target is the whole row rather than the 16dp icon, because a 16dp
+ * target is below the 48dp minimum and the count is part of what the user is
+ * aiming at. [enabled] is false for the heart when AniList has not said whether
+ * this activity is liked - see the call site - and the pressed animation is
+ * omitted in that case, so a disabled control does not still bounce.
+ */
 @Composable
-private fun ActivityCount(icon: ImageVector, count: Int) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun ActivityAction(
+    icon: ImageVector,
+    count: Int,
+    active: Boolean,
+    enabled: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val appearance = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .clickable(enabled = enabled) { onClick() }
+            .then(if (enabled) Modifier.bouncyPress(pressedScale = 0.9f) else Modifier)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(15.dp)
+            contentDescription = contentDescription,
+            tint = appearance,
+            modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(5.dp))
         Text(
             text = count.toString(),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = appearance
         )
     }
 }

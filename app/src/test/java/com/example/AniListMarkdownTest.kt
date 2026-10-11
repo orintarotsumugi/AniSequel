@@ -199,4 +199,50 @@ class AniListMarkdownTest {
         assertEquals(2, table.rows.size)
         assertEquals(3, table.rows[0].size)
     }
+
+    @Test
+    fun `parses a bare image or GIF URL on its own line as an image`() {
+        val nodes = AniListMarkdownParser.parse("https://files.catbox.moe/happy.gif")
+        assertEquals(1, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.ImageBlock)
+        assertEquals("https://files.catbox.moe/happy.gif", (nodes[0] as MarkdownNode.ImageBlock).url)
+    }
+
+    @Test
+    fun `parses inline images and GIFs inside a paragraph`() {
+        val inlines = AniListMarkdownParser.parseInlines(
+            "Look ![a cat](https://x.test/cat.gif) and https://x.test/dog.png together"
+        )
+
+        val images = inlines.filterIsInstance<InlineToken.Image>()
+        assertEquals(2, images.size)
+        assertEquals("https://x.test/cat.gif", images[0].url)
+        assertEquals("a cat", images[0].alt)
+        assertEquals("https://x.test/dog.png", images[1].url)
+        assertEquals(null, images[1].alt)
+
+        // The `!` that used to leak out as its own plain token must be gone; it
+        // was literally printed in every bio that carried an inline image.
+        assertTrue(
+            inlines.none { it is InlineToken.Plain && it.text.contains("!") }
+        )
+    }
+
+    @Test
+    fun `keeps a non-image URL inline as a link`() {
+        val inlines = AniListMarkdownParser.parseInlines("See https://anilist.co/anime/1 for more")
+        assertTrue(inlines.none { it is InlineToken.Image })
+        val link = inlines.filterIsInstance<InlineToken.Link>().firstOrNull()
+        assertEquals("https://anilist.co/anime/1", link?.url)
+    }
+
+    @Test
+    fun `parses AniList preview links with www and a trailing slash`() {
+        val nodes = AniListMarkdownParser.parse("https://www.anilist.co/anime/16498/")
+        assertEquals(1, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.AniListPreviewBlock)
+        val preview = nodes[0] as MarkdownNode.AniListPreviewBlock
+        assertEquals("ANIME", preview.type)
+        assertEquals("16498", preview.id)
+    }
 }

@@ -205,13 +205,23 @@ class DashboardViewModel(
      * Android resumes a process rather than restarting it, so reopening AniSequel
      * used to answer from the same in-memory cache until the hour elapsed.
      *
-     * Skipped while a load is already in flight. On a cold start this runs
-     * moments after `init`, and the watch would otherwise put a second fetch on
-     * top of the first - which the user pays for in both time and rate limit.
+     * A load already in flight is *deferred to*, not skipped. On a cold start
+     * this runs moments after `init` started `loadData`, and Android delivers
+     * exactly one resume per launch - so returning here left the freshness watch
+     * stopped for the whole session, and a dashboard left open never noticed its
+     * list had aged. Joining the load instead starts the watch the instant the
+     * load settles, without stacking a second fetch on the first.
      */
     fun onForegrounded() {
         if (isDemo) return
-        if (loadJob?.isActive == true) return
+        val load = loadJob
+        if (load != null && load.isActive) {
+            viewModelScope.launch {
+                load.join()
+                if (!isDemo) freshnessWatch.start()
+            }
+            return
+        }
 
         // Starting is also the immediate staleness check, so this is the whole of
         // the reopen behaviour: an overdue list is refetched now, a current one
@@ -269,6 +279,19 @@ class DashboardViewModel(
      */
     private var discoveredCandidates: List<MissedSequel>? = null
     private var discoveryKey: Triple<Boolean, Set<RelationKind>, Pair<Boolean, Boolean>>? = null
+
+    /**
+     * The collection [discoveredCandidates] was walked from.
+     *
+     * The cache is a function of the collection as well as the filter key, and a
+     * superseded run cannot be stopped once it has passed its last suspension
+     * point (see [recomputeGeneration]). Without this identity check, such a run
+     * could still *store* candidates derived from the previous collection, and
+     * the next run with the same filters - a refresh's fresh data included -
+     * would be served that stale walk. Same shape as [watchedCountSource] and
+     * [arrivingSource], which is the pattern this one was missing.
+     */
+    private var discoveredSource: MediaListCollection? = null
 
     /** Description, banner and studio per media, fetched only when opened. LRU-bounded. */
     private val detailCache = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
@@ -427,11 +450,17 @@ class DashboardViewModel(
             // landing in between used to clear this, so tapping Refresh after
             // opening a card re-fetched the viewer's entire list from scratch
             // instead of just the entries.
-            val viewer = cachedViewer ?: resolveViewer()
-            if (viewer == null) {
-                _uiState.value = DashboardUiState.Loading("Connecting to AniList...")
+            //
+            // When even the viewer cannot be resolved, surface it as an error the
+            // screen can retry from. This used to install a `Loading` state and
+            // return, with nothing left to leave it: the spinner spun forever and
+            // the Refresh button that would have fixed it was on the screen this
+            // replaced.
+            val viewer = cachedViewer ?: getViewerProfileUseCase.execute().getOrElse { error ->
+                showError(error, fallback = "Failed to refresh from AniList")
                 return@launch
             }
+            cachedViewer = viewer
 
             // forceRefresh, or this would be served from the list cache and the
             // gesture would do nothing at all - the list would look stuck
@@ -466,12 +495,6 @@ class DashboardViewModel(
         }
     }
 
-    /** Returns the viewer now known, fetching it only if it is genuinely absent. */
-    private suspend fun resolveViewer(): ViewerProfile? {
-        if (isDemo) return cachedViewer
-        return getViewerProfileUseCase.execute().getOrNull()?.also { cachedViewer = it }
-    }
-
     private suspend fun loadDemoData() {
         cachedViewer = aniListRepository.getDemoProfile()
         cachedCollection = aniListRepository.getDemoAnimeList()
@@ -503,6 +526,7 @@ class DashboardViewModel(
      */
     private suspend fun invalidateDerivedState(clearDetailCache: Boolean = true) {
         discoveredCandidates = null
+        discoveredSource = null
         discoveryKey = null
         addedToPlanningIds.clear()
         addedToWatchingIds.clear()
@@ -611,7 +635,12 @@ class DashboardViewModel(
             Pair(criteria.includeCurrentlyWatching, criteria.includeInList)
         )
         discoveredCandidates?.let { cached ->
-            if (discoveryKey == key) return cached
+            // Both the criteria *and* the collection have to match. The
+            // collection was not part of this check before, so a run that started
+            // before a refresh could store a walk of the old list and the next
+            // run - over the new list - would reuse it, silently replacing the
+            // refreshed data with the previous snapshot.
+            if (discoveredSource === collection && discoveryKey == key) return cached
         }
 
         val discovered = withContext(Dispatchers.Default) {
@@ -624,6 +653,7 @@ class DashboardViewModel(
             )
         }
         discoveredCandidates = discovered
+        discoveredSource = collection
         discoveryKey = key
         return discovered
     }

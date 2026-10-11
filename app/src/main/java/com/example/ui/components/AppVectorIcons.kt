@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Bookmark
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.EmojiPeople
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Group
@@ -52,6 +54,7 @@ import androidx.compose.material.icons.outlined.Api
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -140,6 +143,12 @@ object AppVectorIcons {
     val StatWatchYear = Icons.Default.CalendarViewMonth
     val StatGenre = Icons.Default.LocalOffer
     val ActivityReplies = Icons.AutoMirrored.Filled.Comment
+
+    // Activity engagement. Filled and outlined hearts are two states of one
+    // control, so they are named for the state rather than the shape.
+    val ActivityLiked = Icons.Default.Favorite
+    val ActivityNotLiked = Icons.Outlined.FavoriteBorder
+    val ActivitySend = Icons.AutoMirrored.Filled.Send
 
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the

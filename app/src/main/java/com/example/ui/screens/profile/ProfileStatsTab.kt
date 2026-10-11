@@ -32,6 +32,7 @@ import com.example.domain.usecase.SegmentTally
 import com.example.ui.theme.AniSequelTheme
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.viewmodel.UserOverviewUiState
+import kotlin.math.roundToInt
 
 /**
  * The Stats tab.
@@ -318,7 +319,7 @@ private fun FormatRow(label: String, count: Int, share: Float, color: Color) {
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "${(share * 100).toInt()}%",
+            text = "${(share * 100).roundToInt()}%",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(42.dp),

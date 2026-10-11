@@ -310,6 +310,39 @@ class BuildListEntryInsightsUseCaseTest {
     }
 
     @Test
+    fun `a pre-2000 year keeps its full digits and sorts before the 2000s`() {
+        // Every year used to be truncated to two digits and read back as 20xx.
+        // A 1995 show became "'95" and sorted as 2095 - after a 2019 one - so the
+        // chart claimed the wrong chronological order.
+        val insights = useCase(
+            collection(
+                entry(1, releaseYear = 2019),
+                entry(2, releaseYear = 1995),
+                entry(3, releaseYear = 2006)
+            )
+        )
+
+        assertEquals(listOf("1995", "'06", "'19"), insights.releaseYears.map { it.label })
+    }
+
+    @Test
+    fun `1999 and 2019 are two buckets, not one shared two-digit label`() {
+        // Truncation made both of these "'19" and the label-keyed grouping merged
+        // them into a single row, hiding that a 1999 title and a 2019 one are
+        // different years.
+        val insights = useCase(
+            collection(
+                entry(1, releaseYear = 1999),
+                entry(2, releaseYear = 2019),
+                entry(3, releaseYear = 1999)
+            )
+        )
+
+        assertEquals(listOf("1999", "'19"), insights.releaseYears.map { it.label })
+        assertEquals(listOf(2, 1), insights.releaseYears.map { it.count })
+    }
+
+    @Test
     fun `episodes fall into the four bands plus everything longer`() {
         val insights = useCase(
             collection(

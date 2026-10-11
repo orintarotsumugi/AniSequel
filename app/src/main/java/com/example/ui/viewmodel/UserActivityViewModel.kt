@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.ActivityReply
 import com.example.data.model.ListActivity
 import com.example.data.network.AniListErrorKind
 import com.example.data.network.AniListException
@@ -53,13 +54,45 @@ class UserActivityViewModel(
         data class Success(
             val activities: List<ListActivity>,
             val isLoadingMore: Boolean = false,
-            val hasMore: Boolean = false
+            val hasMore: Boolean = false,
+            /**
+             * Activity ids whose like request is still unanswered.
+             *
+             * In the state rather than in a mutable set beside it so the card can
+             * disable its own button on the frame the tap lands: two taps before
+             * the first response would toggle twice, and AniList would be right to
+             * end up back where it started while the UI showed one change.
+             */
+            val pendingLikes: Set<Int> = emptySet()
         ) : ActivityState
         data class Error(val message: String, val isAuthError: Boolean = false) : ActivityState
     }
 
+    /**
+     * The comments sheet's state.
+     *
+     * Null when the sheet is closed, and non-null when it is open - the sheet's
+     * visibility is derived from this rather than held beside it, so there is no
+     * frame where a sheet is up with no thread under it.
+     *
+     * [activityId] is part of the state so a slow response for a thread the user
+     * already closed and replaced with another one is discarded rather than
+     * painted over the new thread.
+     */
+    data class CommentsState(
+        val activityId: Int,
+        val isLoading: Boolean = false,
+        val replies: List<ActivityReply> = emptyList(),
+        val loadError: String? = null,
+        val isPosting: Boolean = false,
+        val postError: String? = null
+    )
+
     private val _state = MutableStateFlow<ActivityState>(ActivityState.Idle)
     val state: StateFlow<ActivityState> = _state.asStateFlow()
+
+    private val _comments = MutableStateFlow<CommentsState?>(null)
+    val comments: StateFlow<CommentsState?> = _comments.asStateFlow()
 
     private var loadJob: Job? = null
     private var nextPage = 1
@@ -150,17 +183,157 @@ class UserActivityViewModel(
                         // signal AniList gives here - `Page.pageInfo` is not asked
                         // for, because for a union-typed field the parse cost is
                         // not worth a boolean this derives more reliably.
-                        hasMore = activities.size >= pageSize
+                        hasMore = activities.size >= pageSize,
+                        // Carried over so a page landing mid-like does not re-enable
+                        // a button whose request is still in flight.
+                        pendingLikes = (_state.value as? ActivityState.Success)?.pendingLikes.orEmpty()
                     )
                 },
                 onFailure = { error ->
-                    _state.value = ActivityState.Error(
-                        message = error.message ?: "Couldn't load recent activity.",
-                        isAuthError = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+                    if (appending) {
+                        // A failed *extra* page must not wipe the pages already
+                        // read. It used to replace the whole state with an error
+                        // screen, so one transient failure while scrolling threw
+                        // away twenty-five loaded rows and showed a retry button
+                        // where the feed had been. Keep the feed and just clear
+                        // the footer spinner; the next scroll retries the page.
+                        (_state.value as? ActivityState.Success)?.let { current ->
+                            _state.value = current.copy(isLoadingMore = false)
+                        }
+                    } else {
+                        _state.value = ActivityState.Error(
+                            message = error.message ?: "Couldn't load recent activity.",
+                            isAuthError = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * Likes an activity if it is not liked, un-likes it if it is.
+     *
+     * Optimistic: the heart and the count move on the tap, and the server's
+     * answer - which is the truth about the new state, not just an ack - settles
+     * them. A failure puts the original row back, because the optimistic count was
+     * a guess and the server just contradicted it.
+     *
+     * Refuses when `isLiked` is null (AniList did not answer it, which is what
+     * happens with no session) and while a request for the same activity is still
+     * in flight, so a double tap cannot toggle twice.
+     */
+    fun toggleLike(activityId: Int) {
+        if (isDemo) return
+        val current = _state.value as? ActivityState.Success ?: return
+        if (activityId in current.pendingLikes) return
+        val activity = current.activities.firstOrNull { it.id == activityId } ?: return
+        val wasLiked = activity.isLiked ?: return
+
+        val optimistic = activity.copy(
+            isLiked = !wasLiked,
+            likeCount = ((activity.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+        )
+        replaceActivity(optimistic, addPending = activityId)
+
+        viewModelScope.launch {
+            aniListRepository.toggleActivityLike(activityId).fold(
+                onSuccess = { result ->
+                    replaceActivity(
+                        optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
+                        removePending = activityId
+                    )
+                },
+                onFailure = {
+                    replaceActivity(activity, removePending = activityId)
+                }
+            )
+        }
+    }
+
+    /** Opens the comment thread for [activityId] and loads it. */
+    fun openComments(activityId: Int) {
+        _comments.value = CommentsState(activityId = activityId, isLoading = true)
+        viewModelScope.launch {
+            val result = if (isDemo) {
+                Result.success(emptyList())
+            } else {
+                aniListRepository.getActivityReplies(activityId)
+            }
+            // Discard a response for a thread the user has already closed or
+            // replaced: the state is only written if it is still this thread.
+            val current = _comments.value?.takeIf { it.activityId == activityId } ?: return@launch
+            result.fold(
+                onSuccess = { replies ->
+                    _comments.value = current.copy(isLoading = false, replies = replies, loadError = null)
+                },
+                onFailure = { error ->
+                    _comments.value = current.copy(
+                        isLoading = false,
+                        loadError = error.message ?: "Couldn't load comments."
                     )
                 }
             )
         }
+    }
+
+    fun closeComments() {
+        _comments.value = null
+    }
+
+    /** Posts [text] as a comment on the open thread. */
+    fun postComment(text: String) {
+        if (isDemo) return
+        val current = _comments.value ?: return
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || current.isPosting) return
+
+        val activityId = current.activityId
+        _comments.value = current.copy(isPosting = true, postError = null)
+
+        viewModelScope.launch {
+            aniListRepository.postActivityReply(activityId, trimmed).fold(
+                onSuccess = { reply ->
+                    val latest = _comments.value?.takeIf { it.activityId == activityId } ?: return@fold
+                    _comments.value = latest.copy(
+                        isPosting = false,
+                        postError = null,
+                        replies = latest.replies + reply
+                    )
+                    bumpReplyCount(activityId)
+                },
+                onFailure = { error ->
+                    _comments.value = _comments.value
+                        ?.takeIf { it.activityId == activityId }
+                        ?.copy(isPosting = false, postError = error.message ?: "Couldn't post that comment.")
+                }
+            )
+        }
+    }
+
+    /** Rewrites the one activity in the loaded page, and its in-flight marker. */
+    private fun replaceActivity(
+        activity: ListActivity,
+        addPending: Int? = null,
+        removePending: Int? = null
+    ) {
+        val current = _state.value as? ActivityState.Success ?: return
+        _state.value = current.copy(
+            activities = current.activities.map { if (it.id == activity.id) activity else it },
+            pendingLikes = current.pendingLikes
+                .let { if (addPending != null) it + addPending else it }
+                .let { if (removePending != null) it - removePending else it }
+        )
+    }
+
+    /** Keeps the feed's reply count honest after a comment is posted. */
+    private fun bumpReplyCount(activityId: Int) {
+        val current = _state.value as? ActivityState.Success ?: return
+        _state.value = current.copy(
+            activities = current.activities.map {
+                if (it.id == activityId) it.copy(replyCount = (it.replyCount ?: 0) + 1) else it
+            }
+        )
     }
 
     class Factory(

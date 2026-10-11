@@ -86,12 +86,23 @@ class KeystoreIntegrityTest {
      *
      * Failing rather than returning an empty list matters: a git failure here
      * would otherwise look exactly like a clean repository, and the test would
-     * pass without having checked anything.
+     * pass without having checked anything. This method *used to* return
+     * `emptyList()` on every one of those paths, while this comment claimed it
+     * failed - so the guard was green precisely when it could not see the repo.
      */
     private fun trackedFiles(): List<String> {
         val gitDir = File(root, ".git")
         if (!gitDir.exists()) {
-            return emptyList()
+            // No repository to ask. Scanning the working tree is not a
+            // substitute: the release workflow decodes `release-key.jks` into
+            // the workspace before this task runs (see the test below), so a
+            // disk scan cannot tell a committed key from a generated one. When
+            // we cannot enumerate tracked files we have not checked anything,
+            // and a silent pass is the failure mode this guard exists to stop.
+            error(
+                "No .git at ${root.path}: cannot enumerate tracked files, so the " +
+                    "committed-key guard did not run. Check out the repository with git."
+            )
         }
         val process = try {
             ProcessBuilder("git", "ls-files")
@@ -99,13 +110,14 @@ class KeystoreIntegrityTest {
                 .redirectErrorStream(true)
                 .start()
         } catch (e: Exception) {
-            return emptyList()
+            error("Could not run `git ls-files` in ${root.path}: $e")
         }
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val exit = process.waitFor()
 
-        if (exit != 0) {
-            return emptyList()
+        check(exit == 0) {
+            "`git ls-files` exited $exit in ${root.path}; the workspace may not be a " +
+                "git repository, so the committed-key guard could not run. Output:\n$output"
         }
 
         // One path per line. A path containing a space survives this intact,

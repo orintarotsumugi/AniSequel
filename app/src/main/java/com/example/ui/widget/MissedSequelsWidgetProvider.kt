@@ -66,9 +66,12 @@ class MissedSequelsWidgetProvider : AppWidgetProvider() {
         }
 
         private fun openDashboardPendingIntent(context: Context): PendingIntent {
+            // No extra: the dashboard is already the start destination for a
+            // signed-in session. There used to be an `EXTRA_WIDGET_OPEN_DASHBOARD`
+            // here that nothing ever read, so it promised a routing decision that
+            // did not exist.
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(MainActivity.EXTRA_WIDGET_OPEN_DASHBOARD, true)
             }
 
             return PendingIntent.getActivity(

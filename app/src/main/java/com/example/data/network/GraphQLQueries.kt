@@ -181,7 +181,7 @@ object GraphQLQueries {
                   siteUrl
                 }
               }
-              studios(perPage: 12) { nodes { id name isAnimationStudio siteUrl } }
+              studios(perPage: 12) { nodes { id name isAnimationStudio } }
             }
           }
         }
@@ -213,6 +213,8 @@ object GraphQLQueries {
                 createdAt
                 likeCount
                 replyCount
+                isLiked
+                siteUrl
                 media {
                   id
                   type
@@ -411,6 +413,93 @@ object GraphQLQueries {
             id
             status
             mediaId
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * One activity and its comment thread.
+     *
+     * Its own request rather than a `replies` selection on the feed query: a
+     * feed page is twenty-five activities, and asking for every reply on every
+     * one of them would fetch threads nobody opened. The sheet is the only thing
+     * that needs them, so it is the only thing that asks.
+     *
+     * `Activity(id:)` returns `ActivityUnion`, so the fragment is required.
+     */
+    val GET_ACTIVITY_REPLIES = """
+        query GetActivityReplies(${'$'}activityId: Int) {
+          Activity(id: ${'$'}activityId) {
+            ... on ListActivity {
+              id
+              isLiked
+              likeCount
+              replyCount
+              replies {
+                id
+                text
+                likeCount
+                isLiked
+                createdAt
+                user {
+                  id
+                  name
+                  avatar { large medium }
+                }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Likes or un-likes an activity.
+     *
+     * `ToggleLikeV2` and not `ToggleLike`: the older field took the same
+     * arguments but the V2 name is the one AniList documents, and the reply
+     * likes this app will add next use the identical shape. `type: ACTIVITY`
+     * disambiguates the id, which is not unique across the likeable types.
+     *
+     * The union is fragmented on `ListActivity`, the only member this can return
+     * for `ACTIVITY`; a reply like (not sent yet) would add an `ActivityReply`
+     * fragment here.
+     */
+    val TOGGLE_ACTIVITY_LIKE = """
+        mutation ToggleActivityLike(${'$'}activityId: Int) {
+          ToggleLikeV2(id: ${'$'}activityId, type: ACTIVITY) {
+            ... on ListActivity {
+              id
+              isLiked
+              likeCount
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Posts a comment on an activity.
+     *
+     * `SaveActivityReply`, **not** `SaveActivityMessage`. The latter is for
+     * direct messages and takes a `messengerId`; posting a comment through it
+     * would look like a reply to this thread and deliver a private message
+     * instead. The names are close enough that this is worth stating.
+     *
+     * The response is the created reply, which is exactly the shape the sheet
+     * appends to its list, so a successful post needs no refetch.
+     */
+    val SAVE_ACTIVITY_REPLY = """
+        mutation SaveActivityReply(${'$'}activityId: Int, ${'$'}text: String) {
+          SaveActivityReply(activityId: ${'$'}activityId, text: ${'$'}text) {
+            id
+            text
+            likeCount
+            isLiked
+            createdAt
+            user {
+              id
+              name
+              avatar { large medium }
+            }
           }
         }
     """.trimIndent()

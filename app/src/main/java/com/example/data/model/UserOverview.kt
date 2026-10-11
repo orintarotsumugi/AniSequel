@@ -289,6 +289,18 @@ data class ListActivity(
     val createdAt: Int? = null,
     val likeCount: Int? = null,
     val replyCount: Int? = null,
+    /**
+     * Whether the signed-in viewer has liked this activity.
+     *
+     * Nullable on purpose, and null means **unknown** rather than "not liked":
+     * AniList only answers it when a request carries a token, so the demo feed
+     * has no value here. The like control is rendered only when this is non-null,
+     * so an unknown can never be shown to a user as a definite "not liked" - a
+     * heart that is empty when it should be filled is a lie about their account.
+     */
+    val isLiked: Boolean? = null,
+    /** This activity's own page on AniList (`https://anilist.co/activity/<id>`). */
+    val siteUrl: String? = null,
     val media: MediaNode? = null
 ) {
     /** True for the members of the union this app does not model. */

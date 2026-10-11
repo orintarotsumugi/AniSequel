@@ -1,5 +1,6 @@
 package com.example.data.network
 
+import com.example.data.model.ActivityDetailData
 import com.example.data.model.ActivityFeedData
 import com.example.data.model.FollowersData
 import com.example.data.model.FollowingData
@@ -7,7 +8,9 @@ import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.MediaListCollectionData
 import com.example.data.model.MediaDetailData
+import com.example.data.model.SaveActivityReplyData
 import com.example.data.model.SaveMediaListEntryData
+import com.example.data.model.ToggleLikeData
 import com.example.data.model.UserByNameData
 import com.example.data.model.UserOverviewData
 import com.example.data.model.ViewerData
@@ -81,4 +84,25 @@ interface AniListApiService {
     suspend fun getUserFollowing(
         @Body request: GraphQLRequest
     ): GraphQLResponse<FollowingData>
+
+    /** One activity and its replies. Opened with the comments sheet. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getActivityReplies(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityDetailData>
+
+    /** Likes or un-likes an activity. Requires a session. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun toggleActivityLike(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ToggleLikeData>
+
+    /** Posts a comment on an activity. Requires a session. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun saveActivityReply(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<SaveActivityReplyData>
 }

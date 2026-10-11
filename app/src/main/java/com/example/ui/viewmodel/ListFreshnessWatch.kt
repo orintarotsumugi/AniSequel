@@ -123,7 +123,23 @@ class ListFreshnessWatch(
                 }
 
                 delay(maxOf(wait, MIN_RETRY_GAP_MILLIS))
-                onRefresh()
+
+                // Fire unless a newer load replaced the one this wait was
+                // computed against. `onRefresh` is fire-and-forget, so when the
+                // resume check above woke an exact on-time refresh the wait was
+                // read against the *pre-*refresh timestamp while that fetch was
+                // still in flight - firing again after sleeping it out used to
+                // put a second, identical fetch on top of the one that had just
+                // landed. The comparison is the whole check, by construction:
+                // the delay was derived from "how long until this load is due",
+                // so once it expires the timestamp can only have changed because
+                // another load succeeded. Re-reading the clock here would add a
+                // second, decoupled clock next to the sleep (the tests drive the
+                // delay with `advanceTimeBy` while `nowMillis` stays pinned, and
+                // the wait is the only value that carries the schedule).
+                if (lastLoadedAtMillis == loaded) {
+                    onRefresh()
+                }
             }
         }
     }

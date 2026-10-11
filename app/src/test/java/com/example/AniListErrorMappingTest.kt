@@ -9,9 +9,12 @@ import com.example.data.model.MediaListCollectionData
 import com.example.data.model.SaveMediaListEntryData
 import com.example.data.model.SimpleMediaListEntry
 import com.example.data.model.UserByNameData
+import com.example.data.model.ActivityDetailData
 import com.example.data.model.ActivityFeedData
 import com.example.data.model.FollowersData
 import com.example.data.model.FollowingData
+import com.example.data.model.SaveActivityReplyData
+import com.example.data.model.ToggleLikeData
 import com.example.data.model.UserOverviewData
 import com.example.data.model.ViewerData
 import com.example.data.model.ViewerProfile
@@ -82,6 +85,18 @@ class AniListErrorMappingTest {
         override suspend fun getUserFollowing(
             request: GraphQLRequest
         ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
+
+        override suspend fun getActivityReplies(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityDetailData> = notServed("getActivityReplies")
+
+        override suspend fun toggleActivityLike(
+            request: GraphQLRequest
+        ): GraphQLResponse<ToggleLikeData> = notServed("toggleActivityLike")
+
+        override suspend fun saveActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
@@ -253,6 +268,18 @@ class RequestCoalescingPolicyTest {
         override suspend fun getUserFollowing(
             request: GraphQLRequest
         ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
+
+        override suspend fun getActivityReplies(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityDetailData> = notServed("getActivityReplies")
+
+        override suspend fun toggleActivityLike(
+            request: GraphQLRequest
+        ): GraphQLResponse<ToggleLikeData> = notServed("toggleActivityLike")
+
+        override suspend fun saveActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
     }
 
     @Test

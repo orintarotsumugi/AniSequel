@@ -232,8 +232,14 @@ internal fun SegmentStrip(
         val total = segments.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(0.0001f)
         var currentX = 0f
         segments.forEachIndexed { index, segment ->
-            val segWidth = (segment.share / total) * size.width
-            if (segWidth > 0f) {
+            val shareFraction = segment.share / total
+            if (shareFraction > 0f) {
+                // The documented floor, finally applied: one entry in three
+                // hundred is 0.3%, about a pixel, and a zero-width segment is a
+                // segment that is not there. The constant existed and was
+                // explained but never used, so those statuses stayed invisible.
+                // The strip is clipped, so a floor that overflows cannot escape.
+                val segWidth = shareFraction.coerceAtLeast(MIN_SEGMENT_SHARE) * size.width
                 drawRect(
                     color = segmentColors.getOrElse(index) { Color.Gray },
                     topLeft = Offset(currentX, 0f),

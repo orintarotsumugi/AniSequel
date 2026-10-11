@@ -2,10 +2,12 @@ package com.example.data.network
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Collapses identical in-flight requests into one network call.
@@ -108,8 +110,22 @@ class RequestCoalescer<K : Any> {
                 // Only the leader removes it, and only if the entry is still its
                 // own deferred - a leader whose slot was replaced must not evict
                 // the successor's request.
-                mutex.withLock {
-                    if (inFlight[key] === deferred) inFlight.remove(key)
+                //
+                // `NonCancellable` is load-bearing for the *successful* completion
+                // that loses the race to a cancellation. The no-waiter cleanup
+                // above only fires when `await` throws, and a deferred completed
+                // with a value does not throw: a leader cancelled after
+                // `deferred.complete(value)` but with the mutex momentarily held
+                // would throw out of this `withLock` (a cancelled coroutine does
+                // not wait for a lock) and leave a *completed* deferred in the map.
+                // Every later caller - a sequential refresh included - would then
+                // `getOrPut` and `await` it and be served the first response
+                // forever, breaking the "sequential requests are never collapsed"
+                // guarantee. `NonCancellable` makes this removal happen regardless.
+                withContext(NonCancellable) {
+                    mutex.withLock {
+                        if (inFlight[key] === deferred) inFlight.remove(key)
+                    }
                 }
             }
         }

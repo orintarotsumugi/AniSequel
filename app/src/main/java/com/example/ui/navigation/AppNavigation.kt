@@ -282,23 +282,35 @@ fun AppNavigation(
         }
     }
 
-    // Keep home screen widgets in sync with live dashboard counts whenever data updates
-    LaunchedEffect(dashboardState) {
-        val success = dashboardState as? DashboardUiState.Success
-        if (success != null) {
-            val top = success.missedSequels.firstOrNull()
-            com.example.ui.widget.AniSequelWidgetData.updateData(
-                context = context,
-                missedCount = success.totalMissedCount,
-                arrivingCount = success.arriving.size,
-                username = success.viewer.name,
-                topMissedTitle = top?.sequelTitle,
-                topMissedParent = top?.parentTitle
-            )
-            com.example.ui.widget.AniSequelWidgetProvider.updateAll(context)
-            com.example.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
-            com.example.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
-        }
+    // Keep home screen widgets in sync with the live dashboard counts.
+    //
+    // Keyed on the values the widgets actually render, not on the whole state
+    // object. The state instance is replaced on every filter keystroke (the
+    // search box triggers a recompute), so keying on it re-rendered three
+    // widgets per character typed to write numbers that had not changed. The
+    // viewer, the two counts and the top missed entry are the only inputs.
+    val widgetSuccess = dashboardState as? DashboardUiState.Success
+    val widgetTopMissedId = widgetSuccess?.missedSequels?.firstOrNull()?.sequelId
+    LaunchedEffect(
+        widgetSuccess?.viewer?.id,
+        widgetSuccess?.viewer?.name,
+        widgetSuccess?.totalMissedCount,
+        widgetSuccess?.arriving?.size,
+        widgetTopMissedId
+    ) {
+        val success = widgetSuccess ?: return@LaunchedEffect
+        val top = success.missedSequels.firstOrNull()
+        com.example.ui.widget.AniSequelWidgetData.updateData(
+            context = context,
+            missedCount = success.totalMissedCount,
+            arrivingCount = success.arriving.size,
+            username = success.viewer.name,
+            topMissedTitle = top?.sequelTitle,
+            topMissedParent = top?.parentTitle
+        )
+        com.example.ui.widget.AniSequelWidgetProvider.updateAll(context)
+        com.example.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
+        com.example.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
     }
 
     NavHost(
@@ -350,6 +362,7 @@ fun AppNavigation(
             mainDashboardViewModel?.let { dashboardViewModel ->
                 DashboardScreen(
                     dashboardViewModel = dashboardViewModel,
+                    quickAddPreferences = quickAddPreferences,
                     onSignInAgain = authViewModel::logout,
                     onOpenSettings = {
                         navController.navigate(AppRoutes.SETTINGS)
@@ -375,6 +388,7 @@ fun AppNavigation(
 
             DashboardScreen(
                 dashboardViewModel = demoViewModel,
+                quickAddPreferences = quickAddPreferences,
                 onSignInAgain = {
                     navController.navigate(AppRoutes.LOGIN) {
                         popUpTo(navController.graph.id) { inclusive = true }
@@ -415,6 +429,7 @@ fun AppNavigation(
 
             DashboardScreen(
                 dashboardViewModel = userViewModel,
+                quickAddPreferences = quickAddPreferences,
                 onSignInAgain = {
                     navController.navigate(AppRoutes.LOGIN) {
                         popUpTo(navController.graph.id) { inclusive = true }

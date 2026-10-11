@@ -90,6 +90,12 @@ fun HoldAndSwipePlanningButton(
     var isHolding by remember { mutableStateOf(false) }
     val holdProgressAnim = remember { Animatable(0f) }
     var holdJob by remember { mutableStateOf<Job?>(null) }
+    // True from the moment a hold reaches 100% until the finger lifts. The
+    // release branch decided "quick tap -> Add to Planning" from the elapsed
+    // fraction, and the hold handler snaps the animator back to 0f the instant
+    // it completes - so releasing after a completed hold read as a quick tap
+    // and wrote the same title to Planning right after Writing it to Watching.
+    var holdCommitted by remember { mutableStateOf(false) }
 
     // Swipe drag state
     val dragOffset = remember { Animatable(0f) }
@@ -193,6 +199,7 @@ fun HoldAndSwipePlanningButton(
                     detectTapGestures(
                         onPress = {
                             isHolding = true
+                            holdCommitted = false
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
                             holdJob?.cancel()
@@ -208,6 +215,7 @@ fun HoldAndSwipePlanningButton(
                                 // Hold reached 100% -> Trigger watching!
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 isHolding = false
+                                holdCommitted = true
                                 onAddToWatching()
                                 holdProgressAnim.snapTo(0f)
                             }
@@ -223,8 +231,9 @@ fun HoldAndSwipePlanningButton(
                                     holdProgressAnim.animateTo(0f, ExpressiveMotion.FastEffects)
                                 }
 
-                                // Quick tap -> Add to Planning
-                                if (elapsedFraction < 0.25f) {
+                                // Quick tap -> Add to Planning. Only when the hold
+                                // did not already commit: see `holdCommitted`.
+                                if (elapsedFraction < 0.25f && !holdCommitted) {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onAddToPlanning()
                                 }

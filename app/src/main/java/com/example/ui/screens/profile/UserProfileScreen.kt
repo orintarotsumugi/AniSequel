@@ -112,6 +112,7 @@ fun UserProfileScreen(
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
+    val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -195,6 +196,7 @@ fun UserProfileScreen(
                         state = state,
                         selectedTab = selectedTab,
                         activityState = activityState,
+                        commentsState = commentsState,
                         activityViewModel = activityViewModel,
                         socialState = socialState,
                         socialViewModel = socialViewModel,
@@ -219,6 +221,7 @@ private fun ProfileTabsContent(
     state: UserOverviewUiState.Success,
     selectedTab: Int,
     activityState: UserActivityViewModel.ActivityState,
+    commentsState: UserActivityViewModel.CommentsState?,
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,
@@ -256,7 +259,16 @@ private fun ProfileTabsContent(
                     onLoadNextPage = { activityViewModel.loadNextPage() },
                     onRetry = { activityViewModel.retry() },
                     contentPadding = padding,
-                    calendar = state.activity
+                    calendar = state.activity,
+                    commentsState = commentsState,
+                    // A comment is a write, and the demo feed has no session to
+                    // write with - the same gate every other mutation uses.
+                    canPostComment = !state.isDemoMode,
+                    onLike = { activityViewModel.toggleLike(it) },
+                    onOpenComments = { activityViewModel.openComments(it) },
+                    onCloseComments = { activityViewModel.closeComments() },
+                    onRetryComments = { activityViewModel.openComments(it) },
+                    onPostComment = { activityViewModel.postComment(it) }
                 )
 
                 2 -> ProfileStatsTab(state = state, contentPadding = padding)

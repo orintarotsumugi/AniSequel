@@ -9,6 +9,8 @@ package com.example.ui.components.markdown
  *  - Code blocks (```` ````) and inline code (`` `code` ``)
  *  - Checklists (`- [ ]`, `- [x]`) and lists (`- `, `* `, `1. `)
  *  - AniList image embeds (`img(url)`, `img220(url)`, `![alt](url)`, linked images)
+ *  - Bare image/GIF URLs on their own line (`https://.../x.gif`) as an embed
+ *  - Inline images and GIFs inside a paragraph (`Text ![alt](x.gif) more`)
  *  - Videos (`youtube(id/url)`, `webm(url)`)
  *  - Centered blocks (`~~~center`, `<center>`, `~~~`)
  *  - Horizontal dividers (`---`, `***`, `___`)
@@ -27,15 +29,39 @@ object AniListMarkdownParser {
     private val LINKED_ANILIST_IMG_PATTERN = Regex("""^\[img(?:\d+%|\d+)?\((https?://[^)]+)\)]\((https?://[^\s)]+)\)$""", RegexOption.IGNORE_CASE)
     private val ANILIST_IMG_PATTERN = Regex("""^img(?:\d+%|\d+)?\((https?://[^)]+)\)$|^image\((https?://[^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val MD_IMG_PATTERN = Regex("""^!\[([^\]]*)]\((https?://[^)]+)\)$""")
+    /**
+     * A bare image/GIF URL alone on its line.
+     *
+     * AniList renders one of these as an embedded image, but this parser used to
+     * fall through to the paragraph/auto-URL path and produce a *link*, so a GIF
+     * posted on its own line was a blue underline rather than the GIF. The
+     * extension list is the whole test - there is no content-type to consult
+     * before the request is made - and it is matched case-insensitively because
+     * hosts are not consistent about the casing.
+     */
+    private val BARE_IMAGE_URL_PATTERN = Regex(
+        """^https?://\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
+        RegexOption.IGNORE_CASE
+    )
     private val YOUTUBE_PATTERN = Regex("""^youtube\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val WEBM_PATTERN = Regex("""^webm\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
-    private val ANILIST_PREVIEW_PATTERN = Regex("""^https?://anilist\.co/(anime|manga|character|staff|studio|user)/(\d+|[a-zA-Z0-9_-]+)(?:/([^\s)]+))?$""", RegexOption.IGNORE_CASE)
+    private val ANILIST_PREVIEW_PATTERN = Regex("""^https?://(?:www\.)?anilist\.co/(anime|manga|character|staff|studio|user)/(\d+|[a-zA-Z0-9_-]+)(?:/([^\s)]+))?/?$""", RegexOption.IGNORE_CASE)
 
     // Inline regex patterns
     private val INLINE_LINKED_IMG = Regex("""\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)""")
+    /**
+     * `![alt](url)` in the middle of a paragraph.
+     *
+     * Checked ahead of [INLINE_LINK] because that pattern matches the `[alt](url)`
+     * half of it and leaves the leading `!` as a stray `Plain("!")` token, which
+     * is exactly what the bio used to print for an inline image.
+     */
+    private val INLINE_MD_IMG = Regex("""!\[([^\]]*)]\((https?://[^)\s]+)\)""")
     private val INLINE_LINK = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
     private val INLINE_AUTO_URL = Regex("""https?://[^\s<>"'()\[\]{}]+""")
+    /** Whether an auto-linked URL points at an image, so it can be embedded. */
+    private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
     private val INLINE_BOLD_ITALIC = Regex("""(?:\*\*\*|___)(.+?)(?:\*\*\*|___)""")
@@ -167,6 +193,15 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // A bare image/GIF URL on its own line, which AniList shows as the
+            // image itself. Without this it fell through to the paragraph path and
+            // rendered as a link.
+            if (BARE_IMAGE_URL_PATTERN.matches(trimmedLine)) {
+                nodes.add(MarkdownNode.ImageBlock(url = trimmedLine))
+                i++
+                continue
+            }
+
             // Video embeds
             val ytMatch = YOUTUBE_PATTERN.matchEntire(trimmedLine)
             if (ytMatch != null) {
@@ -266,6 +301,7 @@ object AniListMarkdownParser {
                 !lines[i].trim().equals("<center>", ignoreCase = true) &&
                 !ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !MD_IMG_PATTERN.matches(lines[i].trim()) &&
+                !BARE_IMAGE_URL_PATTERN.matches(lines[i].trim()) &&
                 !LINKED_MD_IMG_PATTERN.matches(lines[i].trim()) &&
                 !LINKED_ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !YOUTUBE_PATTERN.matches(lines[i].trim()) &&
@@ -285,7 +321,8 @@ object AniListMarkdownParser {
     }
 
     /**
-     * Parses inline tokens: links, spoilers, bold/italic, underline, code, strikethrough, mentions, auto URLs, and plain text.
+     * Parses inline tokens: links, inline images/GIFs, spoilers, bold/italic,
+     * underline, code, strikethrough, mentions, auto URLs, and plain text.
      */
     fun parseInlines(text: String): List<InlineToken> {
         if (text.isEmpty()) return emptyList()
@@ -294,6 +331,7 @@ object AniListMarkdownParser {
         var remaining = text
 
         while (remaining.isNotEmpty()) {
+            val mdImgMatch = INLINE_MD_IMG.find(remaining)
             val linkMatch = INLINE_LINK.find(remaining)
             val spoilerMatch = INLINE_SPOILER.find(remaining)
             val codeMatch = INLINE_CODE.find(remaining)
@@ -306,6 +344,7 @@ object AniListMarkdownParser {
             val autoUrlMatch = INLINE_AUTO_URL.find(remaining)
 
             val matches = listOfNotNull(
+                mdImgMatch?.let { it to "IMAGE" },
                 linkMatch?.let { it to "LINK" },
                 spoilerMatch?.let { it to "SPOILER" },
                 codeMatch?.let { it to "CODE" },
@@ -331,6 +370,10 @@ object AniListMarkdownParser {
             }
 
             when (type) {
+                "IMAGE" -> {
+                    val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
+                    tokens.add(InlineToken.Image(firstMatch.groupValues[2], alt))
+                }
                 "LINK" -> {
                     val label = firstMatch.groupValues[1]
                     val url = firstMatch.groupValues[2]
@@ -338,7 +381,15 @@ object AniListMarkdownParser {
                 }
                 "AUTO_URL" -> {
                     val url = firstMatch.value
-                    tokens.add(InlineToken.Link(url, url))
+                    // A bare URL that points at an image gets embedded rather than
+                    // linked, so `https://.../cat.gif` between two words animates.
+                    tokens.add(
+                        if (IMAGE_EXTENSION.containsMatchIn(url)) {
+                            InlineToken.Image(url)
+                        } else {
+                            InlineToken.Link(url, url)
+                        }
+                    )
                 }
                 "SPOILER" -> {
                     tokens.add(InlineToken.Spoiler(firstMatch.groupValues[1]))

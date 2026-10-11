@@ -1,9 +1,11 @@
 package com.example.ui.screens.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,11 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrightnessAuto
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -40,6 +40,7 @@ import com.example.ui.components.expressive.SegmentedOption
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.theme.DynamicThemeBuilder
 import com.example.ui.theme.ThemePalette
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private fun ThemeMode.icon(): ImageVector = when (this) {
@@ -49,11 +50,16 @@ private fun ThemeMode.icon(): ImageVector = when (this) {
 }
 
 /**
- * The dedicated Theme tab: every visual choice in one place, brand palettes
- * plus motion style plus OLED black, anime theme adaptation, and background colors,
- * all expressive and M3-schemed.
+ * The dedicated Theme tab.
+ *
+ * Sections run from most-used to least: appearance, accent colour (dynamic,
+ * palette and custom hues in one place), the anime cover-colour adaptation,
+ * backgrounds, and motion. The old tab scattered those three accent controls
+ * over three separate cards with the anime feature - which does nothing until a
+ * colour is set - wedged between the mode picker and the palette, so "what is
+ * my accent?" took four scroll positions to answer.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThemeTab(
     themePreferences: ThemePreferences,
@@ -72,9 +78,9 @@ fun ThemeTab(
         Spacer(modifier = Modifier.height(14.dp))
 
         SectionCard(
-            title = "Dark mode",
+            title = "Appearance",
             icon = AppVectorIcons.ThemeDark,
-            subtitle = "When the app goes dark."
+            subtitle = "Light, dark, or follow the device."
         ) {
             ExpressivePolygonSegmentedBar(
                 options = ThemeMode.entries.map { mode ->
@@ -88,24 +94,32 @@ fun ThemeTab(
             )
         }
 
+        AccentColourSection(
+            themePreferences = themePreferences,
+            settings = themeSettings,
+            scope = scope
+        )
+
         SectionCard(
-            title = "Anime Theme Adaptation",
+            title = "Anime colour match",
             icon = AppVectorIcons.AnimeSparkle,
-            subtitle = "Adapt UI colors to viewed anime with immersive dark theme."
+            subtitle = "While an anime detail sheet is open, borrow its cover colour."
         ) {
             SwitchRow(
                 title = "Anime Dynamic Theme",
-                subtitle = "Apply anime cover color scheme when viewing anime.",
+                subtitle = "Apply the anime's colour scheme while you view it.",
                 checked = themeSettings.animeThemeActive,
                 onCheckedChange = { active ->
-                    scope.launch { themePreferences.setAnimeThemeActive(active, themeSettings.animeThemeColorHex) }
+                    scope.launch {
+                        themePreferences.setAnimeThemeActive(active, themeSettings.animeThemeColorHex)
+                    }
                 },
                 modifier = Modifier.testTag("anime_theme_active_switch")
             )
             Spacer(modifier = Modifier.height(10.dp))
             SwitchRow(
                 title = "Retain Anime Color",
-                subtitle = "Keep anime color for Material You UI design.",
+                subtitle = "Keep the anime's colour around the sheet.",
                 checked = themeSettings.animeThemeRetainColor,
                 onCheckedChange = { retain ->
                     scope.launch { themePreferences.setAnimeThemeRetainColor(retain) }
@@ -114,7 +128,7 @@ fun ThemeTab(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Revert Timer (After leaving anime info)",
+                text = "Revert after closing the anime",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -122,7 +136,13 @@ fun ThemeTab(
             Spacer(modifier = Modifier.height(6.dp))
             val revertOptions = listOf("Immediately", "5 Minutes", "10 Minutes")
             val revertValues = listOf(0, 300, 600)
-            val currentRevertIndex = revertValues.indexOf(themeSettings.animeThemeRevertDuration).coerceAtLeast(1)
+            // An unknown stored value falls back to "5 Minutes", but a real 0
+            // must survive: the previous `.coerceAtLeast(1)` clamped 0 up to 1, so
+            // "Immediately" could never be shown, and picking it snapped straight
+            // back to "5 Minutes". Index -1 (a value not in the list) is the only
+            // case the fallback is for.
+            val storedRevertIndex = revertValues.indexOf(themeSettings.animeThemeRevertDuration)
+            val currentRevertIndex = if (storedRevertIndex >= 0) storedRevertIndex else 1
             ExpressivePolygonSegmentedBar(
                 options = revertOptions.map { SegmentedOption(label = it, icon = AppVectorIcons.Restore) },
                 selectedIndex = currentRevertIndex,
@@ -133,171 +153,11 @@ fun ThemeTab(
             )
         }
 
-        SectionCard(
-            title = "Colour palette",
-            icon = AppVectorIcons.SectionAppearance,
-            subtitle = "The accent colour for the whole app."
-        ) {
-            Text(
-                text = "Custom palettes apply when Dynamic colours is off; when it is on, the wallpaper wins.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                ThemePalette.entries.forEach { palette ->
-                    PaletteSwatch(
-                        palette = palette,
-                        selected = themeSettings.paletteId == palette.id && themeSettings.customColorHex == null && !themeSettings.animeThemeActive,
-                        onClick = {
-                            scope.launch {
-                                themePreferences.setCustomColorHex(null)
-                                themePreferences.setAnimeThemeActive(false, null)
-                                themePreferences.setPalette(palette.id)
-                            }
-                        }
-                    )
-                }
-            }
-        }
-
-        SectionCard(
-            title = "Custom app colour",
-            icon = AppVectorIcons.AnimeSparkle,
-            subtitle = "Pick any accent hue for the entire app."
-        ) {
-            val customHues = listOf(
-                "#0057B7" to "Blue",
-                "#E91E63" to "Rose",
-                "#9C27B0" to "Violet",
-                "#673AB7" to "Indigo",
-                "#00BCD4" to "Cyan",
-                "#00BFA5" to "Jade",
-                "#4CAF50" to "Green",
-                "#FF9800" to "Amber",
-                "#FF5722" to "Flame",
-                "#F44336" to "Crimson",
-                "#607D8B" to "Slate"
-            )
-
-            Text(
-                text = if (themeSettings.customColorHex != null) {
-                    "Active custom colour: ${themeSettings.customColorHex}"
-                } else {
-                    "Select a hue to override palette colours dynamically."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                customHues.forEach { (hex, name) ->
-                    val isSelected = themeSettings.customColorHex.equals(hex, ignoreCase = true)
-                    val color = DynamicThemeBuilder.parseHexColor(hex) ?: Color.Gray
-
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = color,
-                        tonalElevation = if (isSelected) 6.dp else 1.dp,
-                        border = if (isSelected) {
-                            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
-                        } else null,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .bouncyPress(pressedScale = 0.90f)
-                            .clickable {
-                                scope.launch {
-                                    if (isSelected) {
-                                        themePreferences.setCustomColorHex(null)
-                                    } else {
-                                        themePreferences.setCustomColorHex(hex)
-                                    }
-                                }
-                            }
-                    ) {
-                        if (isSelected) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = AppVectorIcons.CheckCircle,
-                                    contentDescription = name,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        SectionCard(
-            title = "App Background Color",
-            icon = AppVectorIcons.SectionAppearance,
-            subtitle = "Change the full background color of the app."
-        ) {
-            val bgColors = listOf(
-                null to "Default",
-                "#000000" to "Pure Black",
-                "#080C14" to "Midnight Navy",
-                "#121212" to "Deep Charcoal",
-                "#1C1410" to "Warm Espresso",
-                "#101820" to "Slate Navy"
-            )
-
-            Text(
-                text = "Customize the background canvas color across all screens.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                bgColors.forEach { (hex, name) ->
-                    val isSelected = themeSettings.appBackgroundColor.equals(hex, ignoreCase = true) || (hex == null && themeSettings.appBackgroundColor == null)
-                    val color = if (hex != null) DynamicThemeBuilder.parseHexColor(hex) ?: Color.DarkGray else MaterialTheme.colorScheme.surfaceContainer
-
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = color,
-                        tonalElevation = if (isSelected) 6.dp else 1.dp,
-                        border = androidx.compose.foundation.BorderStroke(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier
-                            .size(54.dp, 38.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .bouncyPress(pressedScale = 0.90f)
-                            .clickable {
-                                scope.launch {
-                                    themePreferences.setAppBackgroundColor(hex)
-                                }
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        BackgroundSection(
+            themePreferences = themePreferences,
+            settings = themeSettings,
+            scope = scope
+        )
 
         SectionCard(
             title = "Motion",
@@ -319,38 +179,6 @@ fun ThemeTab(
                 text = "Instant = no motion at all. Smooth = calm fades with no overshoot. Chill = full expressive physics.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        SectionCard(
-            title = "System colour",
-            icon = AppVectorIcons.SectionAniList,
-            subtitle = "Material You wallpaper colours."
-        ) {
-            SwitchRow(
-                title = "Dynamic colours",
-                subtitle = "Match your wallpaper.",
-                checked = themeSettings.useDynamicColor,
-                onCheckedChange = { enabled ->
-                    scope.launch { themePreferences.setUseDynamicColor(enabled) }
-                },
-                modifier = Modifier.testTag("dynamic_color_switch")
-            )
-        }
-
-        SectionCard(
-            title = "Dark surface",
-            icon = AppVectorIcons.ThemeDark,
-            subtitle = "How black the dark theme is."
-        ) {
-            SwitchRow(
-                title = "True black",
-                subtitle = "Pure black backgrounds drain less power on OLED screens.",
-                checked = themeSettings.trueBlack,
-                onCheckedChange = { enabled ->
-                    scope.launch { themePreferences.setTrueBlack(enabled) }
-                },
-                modifier = Modifier.testTag("true_black_switch")
             )
         }
 
@@ -378,6 +206,242 @@ fun ThemeTab(
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+/**
+ * The whole accent story in one card: wallpaper colour (when on), then the
+ * brand palette, then a custom hue. It used to be three cards - "Colour
+ * palette", "Custom app colour" and "System colour" - whose precedence was
+ * documented nowhere and discoverable only from `Theme.kt`.
+ */
+@Composable
+private fun AccentColourSection(
+    themePreferences: ThemePreferences,
+    settings: ThemePreferences.ThemeSettings,
+    scope: CoroutineScope
+) {
+    SectionCard(
+        title = "Accent colour",
+        icon = AppVectorIcons.SectionAppearance,
+        subtitle = "Wallpaper colour wins, then a custom hue, then the palette."
+    ) {
+        SwitchRow(
+            title = "Dynamic colour",
+            subtitle = "Take the accent from your wallpaper.",
+            checked = settings.useDynamicColor,
+            onCheckedChange = { enabled ->
+                scope.launch { themePreferences.setUseDynamicColor(enabled) }
+            },
+            modifier = Modifier.testTag("dynamic_color_switch")
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Palette",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ThemePalette.entries.forEach { palette ->
+                PaletteSwatch(
+                    palette = palette,
+                    // A palette is "selected" only when nothing outranks it: a
+                    // custom hue or an active anime colour means no palette read
+                    // is actually driving the scheme.
+                    selected = settings.paletteId == palette.id &&
+                        settings.customColorHex == null &&
+                        !settings.animeThemeActive,
+                    onClick = {
+                        scope.launch {
+                            // The palette picker used to clear only the custom
+                            // hue, leaving an active anime colour to silently
+                            // overrule whatever the user had just chosen.
+                            themePreferences.setCustomColorHex(null)
+                            themePreferences.setAnimeThemeActive(false, null)
+                            themePreferences.setPalette(palette.id)
+                        }
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Custom hue",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            customHues.forEach { (hex, name) ->
+                val isSelected = settings.customColorHex.equals(hex, ignoreCase = true)
+                val color = DynamicThemeBuilder.parseHexColor(hex) ?: Color.Gray
+
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = color,
+                    tonalElevation = if (isSelected) 6.dp else 1.dp,
+                    border = if (isSelected) {
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
+                    } else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .bouncyPress(pressedScale = 0.90f)
+                        .clickable {
+                            scope.launch {
+                                // Picking a hue used to leave an active anime
+                                // colour in place, and because the anime colour
+                                // outranks everything in `Theme.kt`, the new hue
+                                // appeared to do nothing. It now steps the anime
+                                // adaptation off, like the palette picker does.
+                                themePreferences.setAnimeThemeActive(false, null)
+                                themePreferences.setCustomColorHex(if (isSelected) null else hex)
+                            }
+                        }
+                ) {
+                    if (isSelected) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = AppVectorIcons.CheckCircle,
+                                contentDescription = name,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = if (settings.customColorHex != null) {
+                "Selected: ${settings.customColorHex}"
+            } else {
+                "A custom hue refines the accent above any palette."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+    }
+}
+
+/**
+ * How dark the app gets: the OLED-black switch and the background canvas colour
+ * that overrides every screen. These were two one-switch/one-row cards before;
+ * there is nothing else in either of them, so grouping them reads as "the
+ * background" instead of two features.
+ */
+@Composable
+private fun BackgroundSection(
+    themePreferences: ThemePreferences,
+    settings: ThemePreferences.ThemeSettings,
+    scope: CoroutineScope
+) {
+    SectionCard(
+        title = "Background",
+        icon = AppVectorIcons.SectionAppearance,
+        subtitle = "How dark the app is in dark mode."
+    ) {
+        SwitchRow(
+            title = "True black",
+            subtitle = "Pure black backgrounds drain less power on OLED screens.",
+            checked = settings.trueBlack,
+            onCheckedChange = { enabled ->
+                scope.launch { themePreferences.setTrueBlack(enabled) }
+            },
+            modifier = Modifier.testTag("true_black_switch")
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Canvas colour",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            backgroundColors.forEach { (hex, name) ->
+                val isSelected = settings.appBackgroundColor.equals(hex, ignoreCase = true) ||
+                    (hex == null && settings.appBackgroundColor == null)
+                val color = if (hex != null) {
+                    DynamicThemeBuilder.parseHexColor(hex) ?: Color.DarkGray
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                }
+
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = color,
+                    tonalElevation = if (isSelected) 6.dp else 1.dp,
+                    border = BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier
+                        .size(54.dp, 38.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .bouncyPress(pressedScale = 0.90f)
+                        .clickable {
+                            scope.launch { themePreferences.setAppBackgroundColor(hex) }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The fixed hues the custom-accent picker offers, with display names. */
+private val customHues = listOf(
+    "#0057B7" to "Blue",
+    "#E91E63" to "Rose",
+    "#9C27B0" to "Violet",
+    "#673AB7" to "Indigo",
+    "#00BCD4" to "Cyan",
+    "#00BFA5" to "Jade",
+    "#4CAF50" to "Green",
+    "#FF9800" to "Amber",
+    "#FF5722" to "Flame",
+    "#F44336" to "Crimson",
+    "#607D8B" to "Slate"
+)
+
+/** The background canvas choices; `null` is "follow the theme". */
+private val backgroundColors = listOf(
+    null to "Default",
+    "#000000" to "Pure Black",
+    "#080C14" to "Midnight Navy",
+    "#121212" to "Deep Charcoal",
+    "#1C1410" to "Warm Espresso",
+    "#101820" to "Slate Navy"
+)
 
 /**
  * One brand in the palette picker: a swatch in the selection ring with the
@@ -409,7 +473,7 @@ private fun PaletteSwatch(
             shape = MaterialTheme.shapes.small,
             color = palette.dark.primaryContainer,
             tonalElevation = if (selected) 4.dp else 0.dp,
-            border = androidx.compose.foundation.BorderStroke(
+            border = BorderStroke(
                 width = if (selected) 2.dp else 1.dp,
                 color = borderColor
             )

@@ -13,7 +13,8 @@ import com.example.R
 /**
  * Widget displaying the count of arriving soon and currently airing sequels.
  *
- * Tapping it opens AniSequel directly onto the dashboard arriving section.
+ * Tapping it opens AniSequel on the dashboard, where the arriving section sits
+ * at the top.
  */
 class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
 
@@ -61,9 +62,13 @@ class ArrivingSequelsWidgetProvider : AppWidgetProvider() {
         }
 
         private fun openArrivingPendingIntent(context: Context): PendingIntent {
+            // No extra. This used to carry an `EXTRA_WIDGET_OPEN_ARRIVING` that
+            // `MainActivity` never read, documented as opening "the arriving
+            // section" - a deep link that does not exist. The dashboard is the
+            // start destination and shows the arriving section at the top, so
+            // opening the app is the behaviour the extra only pretended to add.
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(MainActivity.EXTRA_WIDGET_OPEN_ARRIVING, true)
             }
 
             return PendingIntent.getActivity(

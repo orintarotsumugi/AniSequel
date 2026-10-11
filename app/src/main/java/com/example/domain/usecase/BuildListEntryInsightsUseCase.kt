@@ -52,19 +52,13 @@ class BuildListEntryInsightsUseCase {
             countBy = { it.label }
         )
 
-        val releaseYears = buckets(
-            entries.mapNotNull { entry ->
-                entry.media.startDate?.year?.let { BucketTally(twoDigitYear(it), 1, 0f) }
-            },
-            countBy = { it.label }
-        ).sortedBy { it.yearSortKey }
+        val releaseYears = yearTallies(
+            entries.mapNotNull { entry -> entry.media.startDate?.year }
+        )
 
-        val watchYears = buckets(
-            entries.mapNotNull { entry ->
-                entry.completedAt?.year?.let { BucketTally(twoDigitYear(it), 1, 0f) }
-            },
-            countBy = { it.label }
-        ).sortedBy { it.yearSortKey }
+        val watchYears = yearTallies(
+            entries.mapNotNull { entry -> entry.completedAt?.year }
+        )
 
         val (bucketed, withoutEpisodes) = episodeBuckets(entries)
 
@@ -79,11 +73,33 @@ class BuildListEntryInsightsUseCase {
     }
 
     /**
+     * One tally per year, in chronological order.
+     *
+     * Grouped on the real year rather than on the chart label, because two
+     * different years can share one label: "'19" is 1999 and 2019 at once.
+     * Grouping on the label merged those rows, and sorting on a century
+     * reconstructed from two digits re-read 1995 as 2095, so a pre-2000 show
+     * landed *after* a 2019 one on both year charts. Keeping the year through
+     * the grouping counts and orders correctly; it is down-coded to a label only
+     * at the end.
+     */
+    private fun yearTallies(years: List<Int>): List<BucketTally> {
+        val counts = LinkedHashMap<Int, Int>()
+        years.forEach { year -> counts[year] = (counts[year] ?: 0) + 1 }
+        return withShares(
+            counts.entries
+                .sortedBy { it.key }
+                .map { (year, count) -> BucketTally(yearLabel(year), count, 0f) }
+        )
+    }
+
+    /**
      * Count rows into one tally per distinct label.
      *
-     * [countBy] is where the input rows and the output labels can differ - the
-     * years chart labels "2019" as "'19" - so the grouping key is passed in rather
-     * than derived from the label.
+     * [countBy] is the grouping key, kept separate from each row's own label so a
+     * caller can group on a value the label only represents. It used to be how
+     * the years chart grouped without re-reading a truncated two-digit label;
+     * that chart now groups on the real year in [yearTallies].
      */
     private fun buckets(
         rows: List<BucketTally>,
@@ -163,34 +179,29 @@ class BuildListEntryInsightsUseCase {
         )
 
         /**
-         * Pull the sort key back out of a "'19" label.
+         * A year as the chart shows it.
          *
-         * The label is a display decision and sorting on it would sort "06" after
-         * "26" for the wrong reason. Two-digit years only cover 2000-2099, which is
-         * every anime AniList has, so prefixing a century constant is exact rather
-         * than a guess.
-         */
-        val BucketTally.yearSortKey: Int
-            // Parenthesised deliberately. `+` binds tighter than `?:`, so the
-            // unparenthesised form parses as `(CENTURY + year) ?: 0` and the
-            // sum's nullability leaks out of a getter declared `Int` - a compile
-            // error about types in an expression that reads as arithmetic.
-            get() = CENTURY + (label.removePrefix(YEAR_PREFIX).toIntOrNull() ?: 0)
-
-        /**
-         * A year as the chart shows it: `'19`.
+         * `'19` for the century where the two-digit form is unambiguous, and the
+         * full year outside it. Truncation stops being a display choice and
+         * starts being a collision at the century boundary - 1999 and 2019 are
+         * both "'19" if the first is truncated - so a pre-2000 title keeps its
+         * full year and stays distinguishable from the 20xx one beside it.
          *
-         * A function rather than `"'$${...}"` written inline, because that is not
-         * an apostrophe followed by an interpolation. `$` followed by `$` is not a
-         * template expression, so Kotlin reads the first as a literal dollar sign
-         * and interpolates the second - the label came out as `$19`, every year on
-         * both charts, and the tests caught it by expecting `'19`.
+         * Concatenation rather than an inline `"'$${...}"`. That is not an
+         * apostrophe followed by an interpolation: `$` before another `$` is a
+         * literal dollar, so the label came out `$19` on both charts and pinned
+         * the mistake.
          */
-        fun twoDigitYear(year: Int): String = YEAR_PREFIX + year.toString().takeLast(2)
+        fun yearLabel(year: Int): String =
+            if (year in CENTURY until CENTURY + 100) {
+                YEAR_PREFIX + year.toString().takeLast(2)
+            } else {
+                year.toString()
+            }
 
         const val CENTURY = 2000
 
-        /** What [twoDigitYear] puts in front, and what [yearSortKey] strips off. */
+        /** What [yearLabel] puts in front of a two-digit year. */
         const val YEAR_PREFIX = "'"
 
         /**
