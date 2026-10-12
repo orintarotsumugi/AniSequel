@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,20 @@ fun ProfileActivityTab(
     onRetry: () -> Unit = onLoadFirstPage,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    /**
+     * The feed's scroll state, hoisted by the screen.
+     *
+     * Parameterised rather than created here because `AnimatedContent` disposes
+     * the outgoing tab once its transition finishes: a state created inside this
+     * composable died with it, so switching to Stats and back dropped the reader
+     * at the top of the feed they had scrolled a long way down. Every tab on the
+     * screen keeps one of these for the same reason.
+     *
+     * Named `listState` to match the other tabs even though this one also has an
+     * `activityState`; a bare `state` next to that read as the tab's data rather
+     * than its scroll position.
+     */
+    listState: LazyListState = rememberLazyListState(),
     calendar: ActivityCalendar? = null,
     commentsState: UserActivityViewModel.CommentsState? = null,
     canPostComment: Boolean = false,
@@ -75,8 +90,6 @@ fun ProfileActivityTab(
             onLoadFirstPage()
         }
     }
-
-    val listState = rememberLazyListState()
 
     // Six rows from the end is far enough that the fetch has usually landed before
     // the user gets there, and near enough that a short list does not spin.

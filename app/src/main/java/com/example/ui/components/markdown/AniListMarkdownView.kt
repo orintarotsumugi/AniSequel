@@ -13,7 +13,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 /**
+ * How many top-level blocks a *collapsed* render keeps.
+ *
+ * Public because the profile's bio card has to decide whether to offer a "Show
+ * more" toggle at all, and it can only answer that from the same number the
+ * renderer clips on. It used to hardcode a character count while this file
+ * hardcoded `4`, so the two could disagree and the toggle would appear for a bio
+ * that had nothing hidden behind it.
+ */
+const val MARKDOWN_COLLAPSED_BLOCK_LIMIT = 4
+
+/**
  * Pure Compose renderer for parsed AniList markdown AST.
+ *
+ * [maxLines] below `Int.MAX_VALUE` is the collapsed signal. Alongside the per-text
+ * line clamp it drops whole blocks past [MARKDOWN_COLLAPSED_BLOCK_LIMIT]: a
+ * single six-line paragraph cannot be cut at a block boundary, but a bio of six
+ * one-line paragraphs would otherwise cost a collapsed card the same height as
+ * an expanded one. Callers that collapse should fade the bottom edge, because a
+ * dropped block is otherwise indistinguishable from the author never writing it.
  */
 @Composable
 fun AniListMarkdownView(
@@ -25,7 +43,11 @@ fun AniListMarkdownView(
         modifier = modifier.testTag("anilist_markdown_view"),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val displayNodes = if (maxLines < Int.MAX_VALUE && nodes.size > 4) nodes.take(4) else nodes
+        val displayNodes = if (maxLines < Int.MAX_VALUE && nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT) {
+            nodes.take(MARKDOWN_COLLAPSED_BLOCK_LIMIT)
+        } else {
+            nodes
+        }
         displayNodes.forEach { node ->
             when (node) {
                 is MarkdownNode.Header -> RenderHeader(node)

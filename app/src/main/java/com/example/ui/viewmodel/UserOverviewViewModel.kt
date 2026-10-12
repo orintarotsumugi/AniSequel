@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.FavouriteCharacter
 import com.example.data.model.FavouriteStaff
 import com.example.data.model.MediaListCollection
+import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.StudioNode
 import com.example.data.model.UserOverview
@@ -23,7 +24,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * State holder for the AniList profile screen's Home and Stats tabs.
+ * Every list entry on a collection, flattened and de-duplicated by media id.
+ *
+ * AniList returns a list per *status group*, and a custom list can overlap
+ * the standard ones, so the same anime can arrive more than once - across
+ * *different* groups too. The Library tab is a `LazyColumn` keyed on the media
+ * id, and a repeated key throws `IllegalArgumentException` while it lays out,
+ * so this is a crash guard rather than tidying.
+ */
+private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntryItem> =
+    collection?.lists
+        ?.flatMap { it.entries.orEmpty() }
+        ?.distinctBy { it.media.id }
+        .orEmpty()
+
+/**
+ * State holder for the AniList profile screen's Home, Stats and Library tabs.
  *
  * ## Two requests, and why the second one is nearly free
  *
@@ -40,6 +56,14 @@ import kotlinx.coroutines.launch
  * use a different key, and this screen would re-download the single most expensive
  * query in the app - multi-megabyte, and one of AniList's ~30 requests a minute -
  * to recount what was already in memory.
+ *
+ * ## Why the manga half of the Library tab is not fetched here
+ *
+ * The anime list is forced on every profile open for the Stats tallies above. The
+ * manga list is needed by none of that, and AniList is currently degraded to 30
+ * requests per minute, so it is fetched on demand - the first time somebody
+ * filters the Library tab to manga - and then cached by the repository like every
+ * other list.
  */
 class UserOverviewViewModel(
     private val aniListRepository: AniListRepository,
@@ -68,6 +92,51 @@ class UserOverviewViewModel(
      * profile fetch could leave the screen showing the older result.
      */
     private var loadJob: Job? = null
+
+    /**
+     * The manga half of the Library tab, loaded only on demand.
+     *
+     * Null until [loadMangaLibrary] has been called and it has not failed; an
+     * empty list afterwards is a real answer ("this person tracks no manga") and
+     * is deliberately different from null, so the tab can tell "not asked yet"
+     * from "asked, and there is none".
+     */
+    private val _mangaLibrary = MutableStateFlow<List<MediaListEntryItem>?>(null)
+    val mangaLibrary: StateFlow<List<MediaListEntryItem>?> = _mangaLibrary.asStateFlow()
+
+    private val _isLoadingManga = MutableStateFlow(false)
+    val isLoadingManga: StateFlow<Boolean> = _isLoadingManga.asStateFlow()
+
+    private var mangaJob: Job? = null
+
+    /**
+     * Fetches the manga list, once.
+     *
+     * Guarded rather than idempotent because the Library tab calls it from a
+     * filter chip that a tapper will hit repeatedly: a re-entry that refetched
+     * would spend a request per tap, against an API AniList currently holds at
+     * 30 requests a minute, and the repository's cache would have prevented the
+     * network call one layer too late to matter.
+     */
+    fun loadMangaLibrary() {
+        if (_mangaLibrary.value != null || _isLoadingManga.value) return
+        if (isDemo || userId == null) return
+
+        _isLoadingManga.value = true
+        mangaJob = viewModelScope.launch {
+            val result = aniListRepository.getUserMangaList(userId, false)
+            result.fold(
+                onSuccess = { collection ->
+                    _mangaLibrary.value = flattenLibrary(collection)
+                },
+                // Left null on failure so the chip is still a retry: a person who
+                // hit a rate limit needs the tap to be able to ask again, and a
+                // failure is not the same as an empty list.
+                onFailure = { }
+            )
+            _isLoadingManga.value = false
+        }
+    }
 
     init {
         load()
@@ -173,6 +242,7 @@ class UserOverviewViewModel(
             ),
             entryInsights = entries,
             activity = buildActivityCalendar(aggregate?.activityHistory),
+            libraryAnime = flattenLibrary(list),
             animeCount = animeStats?.count ?: 0,
             mangaCount = mangaStats?.count ?: 0,
             episodesWatched = animeStats?.episodesWatched ?: 0,

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,7 +35,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
+import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.withSummaryProgress
 import com.example.ui.components.AppVectorIcons
@@ -87,12 +89,19 @@ internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues())
 )
 
 /**
- * The four destinations, declared once so the bar and the `when` cannot disagree.
+ * The five destinations, declared once so the bar and the `when` cannot disagree.
+ *
+ * The Library destination is fourth because it is the one a person arrives at to
+ * answer "what is this account actually tracking", which is a question about the
+ * person rather than about their activity - so it sits beside the other
+ * person-shaped tabs and before Social, which is the furthest from the profile's
+ * subject.
  */
 private val ProfileTabs = listOf(
     NavigationDestination("Home", AppVectorIcons.ProfileHome, "profile_tab_home"),
     NavigationDestination("Activity", AppVectorIcons.ProfileActivity, "profile_tab_activity"),
     NavigationDestination("Stats", AppVectorIcons.ProfileStats, "profile_tab_stats"),
+    NavigationDestination("Library", AppVectorIcons.StatEpisodeCount, "profile_tab_library"),
     NavigationDestination("Social", AppVectorIcons.ProfileSocial, "profile_tab_social")
 )
 
@@ -122,6 +131,11 @@ fun UserProfileScreen(
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
+    // The manga half of the Library tab. Collected here rather than inside the tab
+    // because the tab is disposed on every switch away, and a collection that
+    // started and stopped with it would drop a fetch that was already in flight.
+    val mangaLibrary by overviewViewModel.mangaLibrary.collectAsStateWithLifecycle()
+    val isLoadingManga by overviewViewModel.isLoadingManga.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val detailNodes by activityViewModel.detailNodes.collectAsStateWithLifecycle()
     val loadingDetailIds by activityViewModel.loadingDetailIds.collectAsStateWithLifecycle()
@@ -220,6 +234,9 @@ fun UserProfileScreen(
                         activityViewModel = activityViewModel,
                         socialState = socialState,
                         socialViewModel = socialViewModel,
+                        mangaLibrary = mangaLibrary,
+                        isLoadingManga = isLoadingManga,
+                        onLoadManga = { overviewViewModel.loadMangaLibrary() },
                         onOpenUser = onOpenUser,
                         onOpenDetail = { selectedMedia = it }
                     )
@@ -273,9 +290,44 @@ private fun ProfileTabsContent(
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,
+    mangaLibrary: List<MediaListEntryItem>?,
+    isLoadingManga: Boolean,
+    /**
+     * Passed rather than the ViewModel itself.
+     *
+     * [ProfileTabsContent] is a private composable that exists to keep the tab
+     * switch in one place; handing it the overview ViewModel would widen its
+     * surface to the whole profile loader when all it needs is one action. It is
+     * a lambda rather than the ViewModel so the dependency stays visible at the
+     * call site.
+     */
+    onLoadManga: () -> Unit,
     onOpenUser: (FollowUser) -> Unit,
     onOpenDetail: (MediaNode) -> Unit
 ) {
+    // Hoisted above [AnimatedContent] so each tab keeps its own scroll position.
+    //
+    // `AnimatedContent` composes the incoming tab alongside the outgoing one and
+    // then *disposes* the outgoing one when its transition finishes. Anything
+    // remembered inside a tab therefore dies with it, and a tab remembered its
+    // `LazyListState` there: switching to Stats and back dropped the reader at
+    // the top of a feed they had scrolled a long way down, every time, with no
+    // indication that anything had happened. Hoisting makes the states outlive
+    // the transition, so returning to a tab restores exactly where it was.
+    val homeListState = rememberLazyListState()
+    val activityListState = rememberLazyListState()
+    val statsListState = rememberLazyListState()
+    val libraryGridState = rememberLazyGridState()
+    val socialGridState = rememberLazyGridState()
+
+    // Favourites are their own connection in AniList rather than a list status,
+    // so the Library's Favourites filter tests membership of these ids instead of
+    // matching a status string. Taken from the same state the Home tab renders,
+    // so pinning and favouriting can never disagree.
+    val favouriteIds = remember(state.libraryAnime, state.favouriteAnime, state.favouriteManga) {
+        (state.favouriteAnime + state.favouriteManga).mapNotNullTo(mutableSetOf()) { it.id }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.isRefreshing) {
             ProfileRefreshBar()
@@ -308,6 +360,7 @@ private fun ProfileTabsContent(
                     onLoadNextPage = { activityViewModel.loadNextPage() },
                     onRetry = { activityViewModel.retry() },
                     contentPadding = padding,
+                    listState = activityListState,
                     calendar = state.activity,
                     commentsState = commentsState,
                     // A comment is a write, and the demo feed has no session to
@@ -324,9 +377,20 @@ private fun ProfileTabsContent(
                     onOpenDetail = onOpenDetail
                 )
 
-                2 -> ProfileStatsTab(state = state, contentPadding = padding)
+                2 -> ProfileStatsTab(state = state, contentPadding = padding, listState = statsListState)
 
-                3 -> ProfileSocialTab(
+                3 -> ProfileLibraryTab(
+                    animeEntries = state.libraryAnime,
+                    mangaEntries = mangaLibrary,
+                    favouriteIds = favouriteIds,
+                    isLoadingManga = isLoadingManga,
+                    onLoadManga = onLoadManga,
+                    contentPadding = padding,
+                    onOpenDetail = onOpenDetail,
+                    gridState = libraryGridState
+                )
+
+                4 -> ProfileSocialTab(
                     socialState = socialState,
                     onSelectList = { list ->
                         socialViewModel.select(list)
@@ -335,13 +399,15 @@ private fun ProfileTabsContent(
                         socialViewModel.load(list)
                     },
                     onOpenUser = onOpenUser,
-                    contentPadding = padding
+                    contentPadding = padding,
+                    gridState = socialGridState
                 )
 
                 else -> ProfileHomeTab(
                     state = state,
                     contentPadding = padding,
-                    onOpenDetail = onOpenDetail
+                    onOpenDetail = onOpenDetail,
+                    listState = homeListState
                 )
             }
         }

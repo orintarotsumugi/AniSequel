@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import com.example.data.model.FavouriteCharacter
 import com.example.data.model.FavouriteStaff
+import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.StudioNode
 import com.example.domain.usecase.ActivityCalendar
@@ -45,6 +46,20 @@ sealed interface UserOverviewUiState {
         /** The three AniList does not aggregate: country, release year, watch year, episodes. */
         val entryInsights: ListEntryInsights,
         val activity: ActivityCalendar,
+        /**
+         * Every anime on this person's list, flattened and de-duplicated.
+         *
+         * Free: the Stats tab already forces the whole anime list to be fetched
+         * and chunk-merged, and this screen was throwing all of it away the
+         * moment [entryInsights] had been tallied. The Library tab is built on it,
+         * which is why adding a tab that lists hundreds of entries cost no extra
+         * request.
+         *
+         * Entries rather than bare media because the list status and progress are
+         * the reason to list things - "Completed, 24/24" beside a cover is what
+         * a row in this tab has to say, and it is not on the media node.
+         */
+        val libraryAnime: List<MediaListEntryItem>,
         val animeCount: Int,
         val mangaCount: Int,
         val episodesWatched: Int,

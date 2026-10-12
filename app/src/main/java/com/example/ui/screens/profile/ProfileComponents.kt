@@ -2,6 +2,7 @@ package com.example.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -152,11 +153,15 @@ private fun FavouriteMediaCard(
     media: MediaNode,
     onClick: () -> Unit
 ) {
+    // Shared with [bouncyPress] so the press cancels when a drag of the
+    // `LazyRow` starts, instead of the card staying squashed under a finger that
+    // is actually scrolling.
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .width(128.dp)
-            .bouncyPress(pressedScale = 0.97f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, onClick = onClick)
             .padding(bottom = 6.dp)
             .testTag("favourite_media_card")
     ) {
@@ -285,11 +290,12 @@ private fun FavouritePerson(
     placeholder: ImageVector,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .width(84.dp)
-            .bouncyPress(pressedScale = 0.96f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, onClick = onClick)
             .padding(bottom = 6.dp)
             .testTag("favourite_person"),
         horizontalAlignment = Alignment.CenterHorizontally

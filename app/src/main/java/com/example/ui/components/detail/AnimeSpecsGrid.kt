@@ -2,8 +2,10 @@ package com.example.ui.components.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,7 +35,6 @@ import com.example.data.model.seasonLabel
 import com.example.data.model.sourceLabel
 import com.example.data.model.studioName
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.expressive.bouncyPress
 
 /**
  * Grid of core anime production, schedule, and title transliteration specifications.
@@ -53,8 +54,17 @@ fun AnimeSpecsGrid(
     ) {
         val isManga = media.isManga
 
-        // Row 1: Studio / Publisher & Source
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Row 1: Studio / Publisher & Source.
+        //
+        // `IntrinsicSize.Min` on both rows because two cards of equal weight are
+        // not automatically equal height: each sizes to its own content, and a
+        // longer studio name or a two-line value left one tile visibly taller
+        // than its neighbour. The cards then `fillMaxHeight`, so each row reads as
+        // one band rather than two stacked boxes.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.height(IntrinsicSize.Min)
+        ) {
             SpecCard(
                 icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.Studio,
                 title = if (isManga) "Publisher / Serialization" else "Animation Studio",
@@ -70,7 +80,10 @@ fun AnimeSpecsGrid(
         }
 
         // Row 2: Duration / Chapters & Season/Year / Release Date
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.height(IntrinsicSize.Min)
+        ) {
             SpecCard(
                 icon = AppVectorIcons.Schedule,
                 title = if (isManga) "Format & Chapters" else "Duration / Format",
@@ -194,10 +207,18 @@ private fun SpecCard(
     value: String,
     modifier: Modifier = Modifier
 ) {
+    // No press animation, and it used to have one at 0.98f.
+    //
+    // Nothing here is clickable - a studio name, a format, a duration - so the
+    // modifier was a promise the card never kept: touching it depressed it and
+    // then sprang it back with no result. Worse on a scroll, because the old
+    // press loop held the depression for as long as a finger stayed down, so
+    // dragging past a spec tile made it pulse under the thumb. A surface that
+    // cannot be pressed should look like one.
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier.bouncyPress(pressedScale = 0.98f)
+        modifier = modifier.fillMaxHeight()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -211,7 +232,12 @@ private fun SpecCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // One line, so the two cards in a row keep matching heights and
+                    // the label cannot wrap "Publisher / Serialization" into a
+                    // second line that the neighbouring tile does not have.
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -220,7 +246,11 @@ private fun SpecCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                // The value is the reason the tile exists, and it was the thing
+                // being cut. Two lines covers "1200 Ch · 14 Vols · Manga" and a
+                // long studio name at large font scales, which one line could not.
+                minLines = 2,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

@@ -163,7 +163,9 @@ data class MediaNode(
      *
      * Only the activity feed asks for it, to label an item "Watched" or "Read"
      * - the same status means different things for the two media types and the
-     * feed cannot tell them apart without it.
+     * feed cannot tell them apart without it. Also asked for by the media list
+     * query now, so the profile's Library tab can filter by the media's own type
+     * instead of guessing from the list an entry arrived in.
      */
     val type: String? = null,
     /**

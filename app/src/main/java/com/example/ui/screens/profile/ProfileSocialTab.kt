@@ -3,6 +3,7 @@ package com.example.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
@@ -95,7 +98,16 @@ fun ProfileSocialTab(
     onLoad: (SocialList) -> Unit,
     onOpenUser: (FollowUser) -> Unit,
     contentPadding: PaddingValues,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Hoisted by the screen so the grid's scroll position outlives a tab switch.
+     *
+     * This is the tab where that matters most: it is the only one that is read
+     * by scrolling *and* commonly left and returned to, and a fifty-person grid
+     * that resets to the top on every visit makes the Followers/Following switch
+     * feel like it costs more than it does.
+     */
+    gridState: LazyGridState = rememberLazyGridState()
 ) {
     // Triggers initial load when the Social tab is opened. Without this,
     // the tab stays indefinitely in Idle state and spins forever.
@@ -134,6 +146,7 @@ fun ProfileSocialTab(
         modifier = modifier
             .fillMaxSize()
             .testTag("profile_social_tab"),
+        state = gridState,
         contentPadding = profileListPadding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -181,6 +194,10 @@ fun ProfileSocialTab(
                         label = "A-Z",
                         selected = sortByName,
                         onClick = { sortByName = !sortByName },
+                        // This switch reorders every face in the grid, so a missed
+                        // tap is not a lost press - it is a list the user believes
+                        // is in AniList order and is not.
+                        minTouchTargetHeight = 48.dp,
                         modifier = Modifier.testTag("social_sort_chip")
                     )
                 }
@@ -239,7 +256,13 @@ fun ProfileSocialTab(
                 } else {
                     items(
                         items = filteredPeople,
-                        key = { it.id },
+                        // Scoped by list, because the grid is showing one list at a
+                        // time but both are in the same `LazyVerticalGrid`. Following
+                        // somebody who also follows you puts their id in *both* lists,
+                        // and a bare `id` key then matches the same slot twice on the
+                        // switch - so the grid tries to animate one person into a
+                        // different person instead of replacing the list.
+                        key = { "${currentSelected}_${it.id}" },
                         contentType = { "follower" }
                     ) { person ->
                         FollowerCard(
@@ -318,6 +341,9 @@ private fun SocialSelector(
             label = followersLabel,
             selected = selected == SocialList.FOLLOWERS,
             onClick = { onSelect(SocialList.FOLLOWERS) },
+            // These two are this tab's only navigation, and at the chip's own
+            // ~30dp height they were the smallest targets on the screen.
+            minTouchTargetHeight = 48.dp,
             modifier = Modifier
                 .weight(1f)
                 .testTag("social_tab_followers")
@@ -326,6 +352,7 @@ private fun SocialSelector(
             label = followingLabel,
             selected = selected == SocialList.FOLLOWING,
             onClick = { onSelect(SocialList.FOLLOWING) },
+            minTouchTargetHeight = 48.dp,
             modifier = Modifier
                 .weight(1f)
                 .testTag("social_tab_following")
@@ -339,10 +366,11 @@ private fun FollowerCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = modifier
-            .bouncyPress(pressedScale = 0.96f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, onClick = onClick)
             .padding(bottom = 6.dp)
             .testTag("follower_card"),
         horizontalAlignment = Alignment.CenterHorizontally

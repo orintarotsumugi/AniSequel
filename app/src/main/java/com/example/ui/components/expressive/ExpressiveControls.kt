@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private const val EXPRESSIVE_TAG = "expressive_"
@@ -310,6 +312,15 @@ fun ExpressiveSegmentedBar(
 
 /**
  * Filter chip whose corners and padding smoothly animate on selection.
+ *
+ * [minTouchTargetHeight] opts a call site into a full-size tap target. The chip
+ * is `labelMedium` inside 7dp of vertical padding, which is about 30dp - short of
+ * the 48dp minimum - and it is used both as a small filter and as a *tab
+ * selector*, which are not the same job: a chip that selects which of two long
+ * lists you are looking at is the primary control of its tab, and a fingertip
+ * finds a 30dp target rather than the user aiming at it. Defaulting it on would
+ * have resized every filter in the app, so the bigger target is asked for by the
+ * call sites that are actually a primary control.
  */
 @Composable
 fun ExpressiveStateChip(
@@ -320,7 +331,8 @@ fun ExpressiveStateChip(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     selectedContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    selectedContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
+    selectedContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    minTouchTargetHeight: Dp = 0.dp
 ) {
     val background by animateColorAsState(
         targetValue = if (selected) selectedContainerColor else containerColor,
@@ -349,6 +361,9 @@ fun ExpressiveStateChip(
                 scaleX = scale
                 scaleY = scale
             }
+            // Before the clip and the click, so the minimum is inside the hit
+            // area rather than padding the chip after the fact.
+            .defaultMinSize(minHeight = minTouchTargetHeight)
             .clip(RoundedCornerShape(cornerRadius))
             .background(background)
             .clickable(onClick = onClick)

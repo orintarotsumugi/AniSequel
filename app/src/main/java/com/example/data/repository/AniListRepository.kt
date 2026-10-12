@@ -35,6 +35,17 @@ interface AniListRepository {
     ): Result<MediaListCollection>
 
     /**
+     * The user's manga list, for the profile's Library tab.
+     *
+     * Fetched only when somebody actually filters the Library to manga, unlike
+     * the anime list which a profile opens with because the Stats tab needs it.
+     */
+    suspend fun getUserMangaList(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection> = unsupported("getUserMangaList")
+
+    /**
      * Description, banner and studio for one entry, fetched on demand because
      * the list query omits them (they are only rendered for the entry the user
      * opens, and asking for them up front makes AniList fail on large lists).

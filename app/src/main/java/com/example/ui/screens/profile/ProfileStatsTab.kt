@@ -3,7 +3,6 @@ package com.example.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,7 +59,15 @@ import kotlin.math.roundToInt
 fun ProfileStatsTab(
     state: UserOverviewUiState.Success,
     contentPadding: PaddingValues,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Hoisted by the screen so this tab's scroll position outlives a tab switch.
+     *
+     * The Stats tab is the one most likely to be scrolled and then left - to
+     * look something up and come back - so it is the one that loses most from
+     * `AnimatedContent` disposing the state along with the tab.
+     */
+    listState: LazyListState = rememberLazyListState()
 ) {
     LazyColumn(
         modifier = modifier
@@ -66,7 +75,8 @@ fun ProfileStatsTab(
             .testTag("profile_stats_tab"),
         contentPadding = profileListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        state = listState
     ) {
         item(key = "summary") {
             SummaryCard(state = state)

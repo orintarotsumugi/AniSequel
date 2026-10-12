@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.1.0",
+      "entries": [
+        {
+          "title": "A Library tab that you can actually browse",
+          "detail": "Every anime and manga on an account, as a three-column poster grid instead of a list of rows - because finding a half-remembered title is a recognising task, and a row spends a third of the screen saying what the cover already says. Each poster carries a small progress badge ('Ep 6/12'), with filters for All, Watching, Completed, Paused, Planning, Dropped, Rewatching and Favourites, each showing its own count, plus a search box that appears once a list is long enough to need one. Anime/Manga sits above the filters. It costs nothing to load: the Stats tab was already downloading this list to count things and throwing it away, so the anime half is already in hand. Manga is fetched the first time you filter to it, then cached."
+        },
+        {
+          "title": "Your place in a tab is kept",
+          "detail": "Switching between Home, Activity, Stats, Library and Social no longer throws away where you had scrolled to. Each tab keeps its own scroll position, so checking your Stats and coming back leaves you exactly where you were in your activity feed, your favourites, or your library."
+        },
+        {
+          "title": "Cards stop squashing while you scroll",
+          "detail": "Press feedback was tracking 'a finger is down' rather than 'this is a tap', so flicking a list into the end with your finger resting on a card left that card visibly depressed for the whole fling and then springing back - which reads as the row reacting twice. Presses now cancel the moment the swipe becomes a scroll, on every tab. Pressing a card also costs one pointer handler instead of two, which takes a duplicated handler off every row of the activity feed."
+        },
+        {
+          "title": "A cleaner anime Info tab",
+          "detail": "The studio, source, duration and release tiles no longer pretend to be pressable - nothing was ever behind them, so they would dip under your finger and spring back for no reason, including during a scroll. The two tiles in each row now match height instead of going ragged when one label wrapped, the label can no longer spill onto a second line, and the value underneath gets two lines so long studio names and '1200 Ch - 14 Vols - Manga' stop being cut off."
+        },
+        {
+          "title": "Like and comment buttons you can actually hit",
+          "detail": "The heart and the comment count on an activity card were about 24dp tall, well under the 48dp minimum tap target, even though their own code claimed to meet it. They are now full-size targets, and the 'Show more' on a long bio and the Followers/Following switch are too. A disabled heart no longer bounces when touched, and the row spacing was tightened so the wider buttons still fit on a small phone at a large font size."
+        },
+        {
+          "title": "Long bios no longer vanish without saying so",
+          "detail": "A bio written as several short paragraphs could have whole paragraphs dropped with no sign it happened, while the 'Show more' that would have explained it stayed hidden because it keyed off character count instead of actual content. The toggle now appears whenever there is genuinely something to expand, and a collapsed bio fades out at the cut so the truncation is visible rather than silent."
+        },
+        {
+          "title": "Followers grid fixes",
+          "detail": "Tapping through a follower you also follow no longer risks the grid animating one person into another - grid keys are scoped per list now."
+        }
+      ]
+    },
+    {
       "version": "1.0.58",
       "entries": [
         {

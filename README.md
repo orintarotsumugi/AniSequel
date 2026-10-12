@@ -41,6 +41,39 @@ in-app updater.
   palettes.
 - **Self-contained updater.** No update library and no Play Services.
 
+### The profile screen
+
+Five tabs: Home (identity, bio, pinned favourites), Activity (calendar and
+paginated list history), Stats, Library, and Social. Each keeps its own scroll
+position across a tab switch, because `AnimatedContent` disposes the tab it
+animates away from and anything remembered inside it dies with it.
+
+**Library** browses every anime and manga on the account as a poster grid with
+per-status counts and search. It costs no extra requests: the Stats tab already
+forces the whole anime list to be fetched and chunk-merged, because AniList
+publishes no aggregate for country of origin, release year, watch year or episode
+counts, and the screen used to discard all of it once it had tallied what it
+needed. Manga is the one half nothing else needed, so it is fetched the first
+time somebody filters to it and then cached.
+
+### The tier list (domain layer only, not yet reachable)
+
+`domain/tier/` holds the rules, the geometry and the exporter as pure Kotlin with
+no Android or Compose imports. **No screen is wired to it yet** — it is the part
+that can be tested without a device, built first so the approach is proven before
+Compose is written on top of it.
+
+One layout is computed and intended for several renderers, rather than each
+arranging the list for itself — three independent arrangements is how an export
+ends up with the labels in a different order from the screen it came from.
+
+Export is **SVG**, and it is lossless rather than a screenshot: every glyph is
+still text and every rule is still a rectangle, so the file is sharp at any size.
+Posters are embedded as base64 rather than linked, which costs roughly 40-60KB
+each and buys a file that opens correctly in every viewer and every app it is
+shared into — a linked poster is blocked or skipped often enough that a tier list
+would otherwise arrive as a wall of empty tiles.
+
 ### Deliberate non-goals
 
 - **No offline-first database.** Every scan is a fresh read. Caching AniList
@@ -429,6 +462,7 @@ AniSequel/
 │       ├── main/java/com/example/
 │       │   ├── data/             network, repository, update
 │       │   ├── domain/usecase/   pure sequel-detection logic
+│       │   ├── domain/tier/      tier-list rules, layout, SVG export
 │       │   └── ui/               screens, components, theme, viewmodel
 │       ├── main/res/
 │       │   ├── drawable/         adaptive-icon layers only

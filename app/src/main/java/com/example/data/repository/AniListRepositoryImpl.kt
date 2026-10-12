@@ -58,6 +58,17 @@ class AniListRepositoryImpl(
          * lot of cards keeps their full cast/studio trees resident.
          */
         const val MAX_DETAIL_CACHE_NODES = 128
+
+        /**
+         * AniList's `MediaType` enum names, as the GraphQL variables carry them.
+         *
+         * Strings rather than an enum because these travel into a query variable
+         * map, and a locally-declared enum would have to be kept in step with the
+         * server's - two lists of the same names, with no compiler help when the
+         * server adds one.
+         */
+        const val LIST_TYPE_ANIME = "ANIME"
+        const val LIST_TYPE_MANGA = "MANGA"
     }
 
     /**
@@ -225,6 +236,31 @@ class AniListRepositoryImpl(
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
+    /**
+     * The user's manga list, cached under its own key.
+     *
+     * Separate from [getUserAnimeList] because AniList's `MediaType` is a filter on
+     * the same query rather than a different resource, so the two results never
+     * overlap - sharing a cache key would let whichever list loaded last answer for
+     * the other, and the Library tab would silently show anime under a Manga filter.
+     *
+     * Not fetched when a profile opens. The anime list already is, because the Stats
+     * tab tallies it, so manga is the one half the app did not already have on hand;
+     * fetching it eagerly would spend a request - and AniList is currently degraded
+     * to 30 per minute - on a list half the profile never looks at.
+     */
+    override suspend fun getUserMangaList(
+        userId: Int,
+        forceRefresh: Boolean
+    ): Result<MediaListCollection> {
+        val key = "user:$userId:manga"
+        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+
+        val epoch = listEpoch
+        return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
+            .onSuccess { if (epoch == listEpoch) storeList(key, it) }
+    }
+
     override suspend fun getUserAnimeListByUsername(
         userName: String,
         forceRefresh: Boolean
@@ -239,19 +275,32 @@ class AniListRepositoryImpl(
 
     /**
      * Fetches complete MediaListCollection, supporting AniList chunking for large lists.
+     *
+     * [listType] is the GraphQL `MediaType` enum name. It is a parameter rather
+     * than a hardcoded `ANIME` because the Library tab needs the manga half of the
+     * same list, and a second copy of this method would be a second copy of the
+     * chunk merge below - which is the part with real invariants in it.
      */
     private suspend fun fetchFullMediaListCollection(
         userId: Int?,
-        userName: String?
+        userName: String?,
+        listType: String = LIST_TYPE_ANIME
     ): Result<MediaListCollection> {
+        val query = if (listType == LIST_TYPE_MANGA) {
+            GraphQLQueries.GET_USER_MANGA_LIST
+        } else {
+            GraphQLQueries.GET_USER_ANIME_LIST
+        }
+
         val initialVars = mutableMapOf<String, Any?>()
         if (userId != null) initialVars["userId"] = userId
         if (userName != null) initialVars["userName"] = userName
         initialVars["chunk"] = 1
+        initialVars["type"] = listType
 
         val firstResult = execute(
             GraphQLRequest(
-                query = GraphQLQueries.GET_USER_ANIME_LIST,
+                query = query,
                 variables = initialVars
             ),
             apiService::getMediaListCollection
@@ -273,10 +322,15 @@ class AniListRepositoryImpl(
             if (userId != null) chunkVars["userId"] = userId
             if (userName != null) chunkVars["userName"] = userName
             chunkVars["chunk"] = currentChunk
+            // `type` is declared non-null on the query, so a chunk that omitted it
+            // would be rejected outright - which would fail the whole walk and, by
+            // the contract above, fail the *first* page's success too. An account
+            // large enough to need chunk two would simply have had no list.
+            chunkVars["type"] = listType
 
             val nextResult = execute(
                 GraphQLRequest(
-                    query = GraphQLQueries.GET_USER_ANIME_LIST,
+                    query = query,
                     variables = chunkVars
                 ),
                 apiService::getMediaListCollection

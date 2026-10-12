@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +36,15 @@ fun ProfileHomeTab(
     state: UserOverviewUiState.Success,
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Hoisted by the screen so this tab's scroll position outlives a tab switch.
+     *
+     * `AnimatedContent` disposes the tab it is animating away from, so a state
+     * created here would be garbage collected with it and the reader would come
+     * back to the top of their own favourites.
+     */
+    listState: LazyListState = rememberLazyListState()
 ) {
     val context = LocalContext.current
 
@@ -53,7 +63,8 @@ fun ProfileHomeTab(
         // a card, so the two dense blocks at the top of the page need a hair more
         // air between them than the favourites rows do further down.
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        state = listState
     ) {
         item(key = "header") {
             ProfileHeaderCard(

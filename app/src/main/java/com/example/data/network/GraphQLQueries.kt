@@ -326,9 +326,25 @@ object GraphQLQueries {
      * with it. About 0.8% of the most expensive request the app makes, for a chart
      * that is otherwise impossible to draw.
      */
-    val GET_USER_ANIME_LIST = """
-        query GetUserAnimeList(${'$'}userId: Int, ${'$'}userName: String, ${'$'}chunk: Int) {
-          MediaListCollection(userId: ${'$'}userId, userName: ${'$'}userName, type: ANIME, chunk: ${'$'}chunk) {
+    /**
+     * The user's media list for one [MediaType].
+     *
+     * One builder rather than an ANIME constant and a MANGA constant: the field
+     * list is long enough that a second copy would be a second thing to forget to
+     * widen when a new field is needed, and the only difference between the two
+     * lists is the `type` argument. `MediaType` is a real GraphQL enum, so it is
+     * passed as a variable and validated by AniList rather than pasted into the
+     * query text.
+     *
+     * `relations` is here for the same reason it is in the anime list - the
+     * detail sheet opens from a Library row and draws a sequel banner from it -
+     * and it is the reason this is the app's heaviest query. It is asked for once
+     * per *page* of a user's own list rather than once per relation node, so the
+     * cost is bounded by the page size.
+     */
+    private fun mediaListQuery(queryName: String): String = """
+        query $queryName(${'$'}userId: Int, ${'$'}userName: String, ${'$'}chunk: Int, ${'$'}type: MediaType) {
+          MediaListCollection(userId: ${'$'}userId, userName: ${'$'}userName, type: ${'$'}type, chunk: ${'$'}chunk) {
             hasNextChunk
             lists {
               name
@@ -336,14 +352,21 @@ object GraphQLQueries {
               entries {
                 status
                 progress
+                score(format: POINT_100)
                 completedAt { year month day }
                 media {
                   id
+                  type
                   title { romaji english native userPreferred }
                   episodes
+                  chapters
+                  volumes
                   status
                   format
                   countryOfOrigin
+                  season
+                  seasonYear
+                  averageScore
                   startDate { year month day }
                   coverImage { extraLarge large color }
                   nextAiringEpisode { episode airingAt }
@@ -359,6 +382,11 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    val GET_USER_ANIME_LIST: String = mediaListQuery("GetUserAnimeList")
+
+    /** The same list for manga, which the Library tab filters to on demand. */
+    val GET_USER_MANGA_LIST: String = mediaListQuery("GetUserMangaList")
 
     /**
      * The single media record the detail sheet renders.

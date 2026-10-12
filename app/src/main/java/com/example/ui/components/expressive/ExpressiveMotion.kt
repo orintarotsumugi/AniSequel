@@ -280,17 +280,55 @@ object ExpressiveMotion {
  * that re-runs when its own state changes. Converting this to a
  * `ModifierNodeElement` would remove it, and is the single biggest remaining
  * animation win in the app - see TO-DO.md.
+ *
+ * ## Pass the `clickable`'s own `InteractionSource`, and this stops listening
+ *
+ * Two press sources were running at once. The `MutableInteractionSource` a
+ * caller passes in is read through `collectIsPressedAsState`, but when no source
+ * is passed the fallback was a source nothing ever emitted into - so
+ * `isInteractionPressed` was permanently `false` and *all* of the press feedback
+ * came from the raw `pointerInput` loop underneath. That loop tracked "is a
+ * pointer down" and nothing else: it never asked whether the gesture had turned
+ * into a scroll, so flicking a `LazyColumn` with a finger resting on a card left
+ * that card squashed for the whole fling, and released only once every pointer
+ * had lifted. It also cost a second pointer-input node per element - on
+ * `ActivityCard`, one extra coroutine per row of a scrolling feed.
+ *
+ * So when a caller supplies its source, the loop is not installed at all: the
+ * `clickable` that shares that source emits press on down and *cancels* it the
+ * moment the gesture is claimed as a drag, which is the behaviour the loop was
+ * approximating badly. The loop stays for the call sites that have no source to
+ * share - a bare `Button` does not expose one - so their press feedback is
+ * unchanged rather than silently lost.
+ *
+ * ## The loop's remaining flaw, and what it now does about it
+ *
+ * Without a source to read, the loop has to decide for itself whether a gesture
+ * is still a press, and "a pointer is down" is the wrong answer. A fling into
+ * the end of a list holds the pointer down for its whole length, so anything
+ * under the finger stayed depressed and then sprang back - which reads as the
+ * row reacting twice, once on the way in and once on the rebound. The loop now
+ * releases the press the moment the pointer travels further than touch slop,
+ * because past slop the gesture has become a drag and belongs to the scrollable.
+ *
+ * Touch slop rather than `isConsumed` on purpose: a `clickable` sitting on the
+ * same element consumes its own events, so consumption cannot distinguish "this
+ * became a scroll" from "this control handled it". A long press - the heart's
+ * press-and-hold for the likers sheet - does not move, so it survives.
  */
 fun Modifier.bouncyPress(
     pressedScale: Float = 0.94f,
     interactionSource: InteractionSource? = null
 ): Modifier = composed {
-    val fallbackSource = remember { MutableInteractionSource() }
-    val effectiveSource = interactionSource ?: fallbackSource
+    val ownedSource = remember { MutableInteractionSource() }
+    val effectiveSource = interactionSource ?: ownedSource
     val isInteractionPressed by effectiveSource.collectIsPressedAsState()
     val isPointerPressed = remember { mutableStateOf(false) }
 
-    val isPressed = isInteractionPressed || isPointerPressed.value
+    // The fallback is only consulted on the no-source path. Reading a state that
+    // nothing writes is harmless, and keeping the allocation unconditional keeps
+    // this composable's `remember` calls in a fixed order.
+    val isPressed = isInteractionPressed || (interactionSource == null && isPointerPressed.value)
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
@@ -303,21 +341,50 @@ fun Modifier.bouncyPress(
             scaleX = scale
             scaleY = scale
         }
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitFirstDown(requireUnconsumed = false)
-                    isPointerPressed.value = true
-                    try {
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                        } while (event.changes.any { it.pressed })
-                    } finally {
-                        isPointerPressed.value = false
+        .then(
+            if (interactionSource == null) {
+                Modifier.pointerInput(Unit) {
+                    // A tap does not travel; a scroll starts by travelling. Watching
+                    // the pointer leave touch slop is therefore the cheapest honest
+                    // signal that the gesture stopped being a press, and it is what
+                    // stops the loop holding an element down for a whole fling.
+                    val touchSlop = viewConfiguration.touchSlop
+                    awaitPointerEventScope {
+                        while (true) {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            isPointerPressed.value = true
+                            try {
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Main)
+                                    val change = event.changes
+                                        .firstOrNull { it.id == down.id }
+                                        ?: event.changes.firstOrNull()
+                                    if (change != null) {
+                                        // Squared distance against a squared slop:
+                                        // the comparison never needs the square
+                                        // root, and `Offset.getDistance` is an
+                                        // extension in a package this file does not
+                                        // otherwise import from.
+                                        val dx = change.position.x - down.position.x
+                                        val dy = change.position.y - down.position.y
+                                        if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                                            // Past slop: this is a drag, so the
+                                            // scrollable has it now and this is no
+                                            // longer a press.
+                                            isPointerPressed.value = false
+                                        }
+                                    }
+                                } while (event.changes.any { it.pressed })
+                            } finally {
+                                isPointerPressed.value = false
+                            }
+                        }
                     }
                 }
+            } else {
+                Modifier
             }
-        }
+        )
 }
 
 /**

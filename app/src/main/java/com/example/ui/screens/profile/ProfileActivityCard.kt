@@ -4,12 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -87,10 +90,19 @@ fun ActivityCard(
     // what decides whether a manga row reads "Episode" or "Chapter".
     val isManga = media.type.equals("MANGA", ignoreCase = true)
 
+    // Shared with [bouncyPress] rather than kept to itself: the `clickable`
+    // cancels its press as soon as the gesture becomes a scroll, so dragging the
+    // feed no longer leaves the card under the finger squashed, and the press
+    // animation costs one pointer-input node instead of two on every row.
+    val interactionSource = remember { MutableInteractionSource() }
+
     Card(
         modifier = modifier
-            .bouncyPress(pressedScale = 0.97f)
-            .clickable { onOpenDetail(media) }
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                onClick = { onOpenDetail(media) }
+            )
             .testTag("activity_card"),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
@@ -227,7 +239,11 @@ fun ActivityCard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            // 8 rather than 12: the two controls below now carry a
+                            // 48dp minimum each, and at 12 this row needs 182dp of a
+                            // 190dp budget on a 360dp phone - so it fit only until
+                            // somebody turned the font size up.
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             SequelInfoChip(
@@ -359,9 +375,19 @@ private fun ActivityStatusPill(text: String, accent: Boolean) {
  *
  * The tap target is the whole row rather than the 16dp icon, because a 16dp
  * target is below the 48dp minimum and the count is part of what the user is
- * aiming at. [enabled] is false for the heart when AniList has not said whether
- * this activity is liked - see the call site - and the pressed animation is
- * omitted in that case, so a disabled control does not still bounce.
+ * aiming at. The comment above used to claim that and not do it: the row was
+ * only 16dp of icon plus 5dp of spacer plus 4dp of padding each way - about
+ * 24dp tall, so a third under the minimum the comment claimed to be meeting.
+ * [defaultMinSize] is applied *before* the gesture so the minimum is inside the
+ * clickable's hit area, which is what actually makes the target 48dp.
+ *
+ * [enabled] is false for the heart when AniList has not said whether this
+ * activity is liked - see the call site. The press animation used to be omitted
+ * in that case, guarded by `.then(if (enabled) ...)`, because the fallback
+ * pointer loop squashed anything a finger went down on regardless of whether the
+ * control would do anything. Sharing the `combinedClickable`'s own
+ * `InteractionSource` removes the need for the guard: a disabled control emits no
+ * press, so there is nothing to suppress.
  *
  * [onLongClick] is optional; only the heart currently passes it. The long press
  * runs through `combinedClickable` so the tap path itself is unchanged.
@@ -384,11 +410,14 @@ private fun ActivityAction(
     val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val appearance = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .clip(MaterialTheme.shapes.small)
             .combinedClickable(
                 enabled = enabled,
+                interactionSource = interactionSource,
                 onLongClick = onLongClick?.let { open ->
                     {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -398,8 +427,8 @@ private fun ActivityAction(
                 hapticFeedbackEnabled = false,
                 onClick = onClick
             )
-            .then(if (enabled) Modifier.bouncyPress(pressedScale = 0.9f) else Modifier)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
