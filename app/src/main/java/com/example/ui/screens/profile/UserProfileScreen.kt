@@ -136,6 +136,9 @@ fun UserProfileScreen(
     // started and stopped with it would drop a fetch that was already in flight.
     val mangaLibrary by overviewViewModel.mangaLibrary.collectAsStateWithLifecycle()
     val isLoadingManga by overviewViewModel.isLoadingManga.collectAsStateWithLifecycle()
+    // Covers for the bio's AniList links. Arrive after the profile does, so the
+    // bio renders immediately and posters fill in underneath the reader.
+    val mediaCovers by overviewViewModel.mediaCovers.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val detailNodes by activityViewModel.detailNodes.collectAsStateWithLifecycle()
     val loadingDetailIds by activityViewModel.loadingDetailIds.collectAsStateWithLifecycle()
@@ -236,6 +239,7 @@ fun UserProfileScreen(
                         socialViewModel = socialViewModel,
                         mangaLibrary = mangaLibrary,
                         isLoadingManga = isLoadingManga,
+                        mediaCovers = mediaCovers,
                         onLoadManga = { overviewViewModel.loadMangaLibrary() },
                         onOpenUser = onOpenUser,
                         onOpenDetail = { selectedMedia = it }
@@ -292,6 +296,8 @@ private fun ProfileTabsContent(
     socialViewModel: UserSocialViewModel,
     mangaLibrary: List<MediaListEntryItem>?,
     isLoadingManga: Boolean,
+    /** Media id to cover URL, for the AniList preview cards in the bio. */
+    mediaCovers: Map<Int, String>,
     /**
      * Passed rather than the ViewModel itself.
      *
@@ -407,7 +413,8 @@ private fun ProfileTabsContent(
                     state = state,
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,
-                    listState = homeListState
+                    listState = homeListState,
+                    mediaCovers = mediaCovers
                 )
             }
         }

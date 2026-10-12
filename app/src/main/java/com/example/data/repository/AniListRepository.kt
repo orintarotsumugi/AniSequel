@@ -28,6 +28,22 @@ interface AniListRepository {
         forceRefresh: Boolean = false
     ): Result<MediaListCollection>
 
+    /**
+     * Cover art for several media ids, in **one** request.
+     *
+     * Batched because AniList is currently degraded to 30 requests a minute and a
+     * bio with a dozen AniList links would otherwise spend a dozen of them
+     * before the reader had scrolled. Ids that are already cached cost nothing,
+     * and [getMediaCovers] returns the known ones without a round trip when the
+     * batch is entirely satisfied.
+     *
+     * Returns media id to cover URL. A media AniList does not serve, or one with
+     * no cover, is simply absent from the map - the caller draws a placeholder
+     * rather than treating it as an error.
+     */
+    suspend fun getMediaCovers(ids: List<Int>): Result<Map<Int, String>> =
+        unsupported("getMediaCovers")
+
     /** As [getUserAnimeList], for a profile looked up by name. */
     suspend fun getUserAnimeListByUsername(
         userName: String,

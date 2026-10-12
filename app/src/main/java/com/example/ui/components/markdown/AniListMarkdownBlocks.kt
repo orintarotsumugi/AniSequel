@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -317,9 +319,27 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
     }
 }
 
+/**
+ * One AniList entity a bio linked, as a card with its cover art.
+ *
+ * [coverUrl] is looked up by media id by the caller rather than fetched here,
+ * because a bio can carry a dozen of these and one request each would spend a
+ * dozen of AniList's 30-a-minute budget before the reader had scrolled. The
+ * caller batches them and passes a map; a miss simply draws the badge alone,
+ * which is what this rendered before covers existed at all.
+ *
+ * The poster keeps its 2:3 shape rather than being squashed into a square
+ * thumbnail - a cropped portrait face loses the one thing a poster is good for,
+ * which is being recognised.
+ */
 @Composable
-fun RenderAniListPreview(preview: MarkdownNode.AniListPreviewBlock) {
+fun RenderAniListPreview(
+    preview: MarkdownNode.AniListPreviewBlock,
+    coverUrl: String? = null
+) {
     val context = LocalContext.current
+    val mediaId = preview.id.toIntOrNull()
+
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -330,44 +350,77 @@ fun RenderAniListPreview(preview: MarkdownNode.AniListPreviewBlock) {
             .clickable { openExternalUrl(context, preview.url) }
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ) {
-                Text(
-                    text = preview.type,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            if (coverUrl != null) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .width(44.dp)
+                        .aspectRatio(POSTER_ASPECT)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    contentScale = ContentScale.Crop,
+                    placeholder = rememberVectorPainter(previewFallback(preview.type))
                 )
             }
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = preview.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = "AniList • #${preview.id}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = ExpressiveShapes.pill,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            text = preview.type.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    Text(
+                        text = "#${preview.id}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
+
             Icon(
                 imageVector = AppVectorIcons.OpenInNew,
-                contentDescription = "Open",
+                contentDescription = "Open on AniList",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )
         }
     }
 }
+
+/** The type-appropriate icon drawn while a cover loads, or when there is none. */
+private fun previewFallback(type: String) =
+    if (type.equals("MANGA", ignoreCase = true)) {
+        AppVectorIcons.FavouriteManga
+    } else {
+        AppVectorIcons.FavouriteAnime
+    }
+
+/** AniList covers are 2:3. */
+private const val POSTER_ASPECT = 2f / 3f
 

@@ -38,7 +38,34 @@ val MediaNode.posterColor: String? get() = coverImage?.color
 val MediaNode.isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
 
 val MediaNode.formatLabel: String get() = format ?: if (isManga) "MANGA" else "ANIME"
-val MediaNode.statusLabel: String get() = status ?: "UNKNOWN"
+
+/**
+ * Airing status, worded the way a person writes it.
+ *
+ * Was `status ?: "UNKNOWN"`, which printed the **raw GraphQL enum name** into
+ * the Info tab: a currently-airing show read "RELEASING", a finished one
+ * "FINISHED", and an unrecognised or absent value read "UNKNOWN". Every one of
+ * those is an implementation detail of the API's vocabulary, set in the same
+ * typeface as "24 episodes · Winter 2023" beside it.
+ *
+ * [formatLabel] already solved this for `format` - it is why the grid says "TV
+ * Short" and not "TV_SHORT". Status needed the same treatment and did not get
+ * it, which is the same class of drift the favourites rows used to have.
+ *
+ * Unknown values are passed through untouched rather than replaced. A status
+ * AniList adds later should read as what it is, not be silently rewritten into
+ * "Unknown" - the honest failure is showing an unfamiliar word, and the
+ * dishonest one is a confident label that is wrong.
+ */
+val MediaNode.statusLabel: String get() = when (status?.uppercase(Locale.ROOT)) {
+    "FINISHED" -> "Finished"
+    "RELEASING" -> "Airing"
+    "NOT_YET_RELEASED" -> "Upcoming"
+    "CANCELLED" -> "Cancelled"
+    "HIATUS" -> "On hiatus"
+    null -> "Unknown"
+    else -> status
+}
 val MediaNode.episodesLabel: String get() = if (isManga) {
     chapters?.let { "$it chs" } ?: "Chapters TBA"
 } else {

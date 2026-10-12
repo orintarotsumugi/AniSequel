@@ -1,8 +1,10 @@
 package com.example.data.network
 
 import android.content.Context
+import android.os.Build
 import coil.ImageLoader
 import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.example.BuildConfig
@@ -186,6 +188,18 @@ object NetworkClient {
             // can never be hit and duplicate 32MB of the covers on disk.
             .respectCacheHeaders(false)
             .components {
+                // `ImageDecoderDecoder` is the platform decoder, and it is what
+                // decodes *animated* WebP and APNG - not just GIF. AniList bios
+                // are full of animated WebP, and without this those render as
+                // their first frame with no indication anything is missing, which
+                // reads as a broken image rather than a still one.
+                //
+                // It needs API 28. Below that, `GifDecoder` is the only animated
+                // decoder available and it stays as the fallback, so a GIF still
+                // animates on the oldest device this app supports.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(ImageDecoderDecoder.Factory())
+                }
                 add(GifDecoder.Factory())
             }
             .build()

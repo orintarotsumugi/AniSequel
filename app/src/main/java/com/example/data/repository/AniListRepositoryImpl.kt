@@ -60,6 +60,16 @@ class AniListRepositoryImpl(
         const val MAX_DETAIL_CACHE_NODES = 128
 
         /**
+         * Soft cap on cached cover URLs.
+         *
+         * Far larger than [MAX_DETAIL_CACHE_NODES] because a cover URL is a string
+         * rather than a full media node with a cast and studio tree, and because
+         * bios link to each other - the same handful of hall-of-fame titles
+         * recurs across profiles, so a small cache here would miss constantly.
+         */
+        const val MAX_COVER_CACHE_ENTRIES = 512
+
+        /**
          * AniList's `MediaType` enum names, as the GraphQL variables carry them.
          *
          * Strings rather than an enum because these travel into a query variable
@@ -86,6 +96,16 @@ class AniListRepositoryImpl(
      */
     private val readCoalescer = RequestCoalescer<String>()
     private val detailCache = ConcurrentHashMap<Int, MediaNode>()
+
+    /**
+     * Media id to cover URL, for the markdown preview cards.
+     *
+     * Separate from [detailCache] because the two are asked for at completely
+     * different moments and want opposite lifetimes: a detail node is fetched when
+     * a person taps one card and is worth keeping, whereas covers arrive a dozen
+     * at a time just to decorate a bio and are cheap to re-fetch if dropped.
+     */
+    private val coverCache = ConcurrentHashMap<Int, String>()
 
     /**
      * Completed list responses, kept briefly so re-entering the app does not
@@ -398,6 +418,48 @@ class AniListRepositoryImpl(
             }
             detailCache[mediaId] = node
             node
+        }
+    }
+
+    override suspend fun getMediaCovers(ids: List<Int>): Result<Map<Int, String>> {
+        if (ids.isEmpty()) return Result.success(emptyMap())
+
+        // Already-known covers are answered without touching the network. This is
+        // the common case for a profile the reader has already opened once, and
+        // it is what stops a re-open from spending a request at all.
+        val resolved = LinkedHashMap<Int, String>()
+        val missing = mutableListOf<Int>()
+        ids.distinct().forEach { id ->
+            val cached = coverCache[id]
+            if (cached != null) resolved[id] = cached else missing += id
+        }
+        if (missing.isEmpty()) return Result.success(resolved)
+
+        // One alias per id, so the response is read back by position. The list is
+        // deduplicated above so two aliases never ask for the same media.
+        val variables = missing.withIndex().associate { (index, id) -> "id$index" to id }
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.getMediaCoversQuery(missing),
+                variables = variables
+            ),
+            apiService::getMediaCovers
+        ).map { byAlias ->
+            // `execute` already unwrapped GraphQLResponse.data, so what arrives
+            // here *is* the alias map - there is no `.data` on it to reach for.
+            missing.forEachIndexed { index, id ->
+                val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]
+                val cover = node?.coverImage?.bestUrl
+                if (cover != null) {
+                    if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
+                    coverCache[id] = cover
+                    resolved[id] = cover
+                }
+            }
+            // A media with no cover is absent from the answer rather than an error:
+            // the caller draws a placeholder, and one missing poster must not
+            // blank the other eleven cards beside it.
+            resolved
         }
     }
 

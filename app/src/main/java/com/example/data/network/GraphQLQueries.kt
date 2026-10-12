@@ -389,6 +389,51 @@ object GraphQLQueries {
     val GET_USER_MANGA_LIST: String = mediaListQuery("GetUserMangaList")
 
     /**
+     * Many media in one request, one aliased root field each.
+     *
+     * The preview cards in a bio each name an AniList entity, and the obvious
+     * implementation - one `getMediaDetail` per card - spends one of AniList's 30
+     * requests a minute per card. A typical "hall of fame" bio has a dozen links,
+     * so opening one profile could exhaust the budget and hand the next person who
+     * opens anything a 429.
+     *
+     * `Media` takes a single id, but aliasing the *root* field is ordinary
+     * GraphQL: `m0: Media(id: 1)`, `m1: Media(id: 2)` in one document, one
+     * round trip. This is distinct from the `Page` limitation noted on
+     * [AniListApiService.getUserFollowers], which is about two child fields
+     * *inside* a single `Page` and not about two fields at the root.
+     *
+     * Only the fields a preview card draws. The full [GET_MEDIA_DETAIL] carries a
+     * description, banner and studio per entry, and a bio's dozen cards would
+     * turn that into a payload the screen cannot use.
+     */
+    fun getMediaCoversQuery(ids: List<Int>): String {
+        require(ids.isNotEmpty()) { "a cover batch needs at least one id" }
+        val fields = ids.mapIndexed { index, id ->
+            """
+            m$index: Media(id: ${'$'}id$index) {
+              id
+              type
+              title { romaji english userPreferred }
+              format
+              averageScore
+              coverImage { extraLarge large }
+              siteUrl
+            }
+            """.trimIndent()
+        }.joinToString("\n")
+        val variables = ids.indices.joinToString(", ") { "id$it: Int" }
+        return """
+            query MediaCovers($variables) {
+            $fields
+            }
+        """.trimIndent()
+    }
+
+    /** The alias [getMediaCoversQuery] gives the nth id, so results can be read back. */
+    fun mediaCoverAlias(index: Int): String = "m$index"
+
+    /**
      * The single media record the detail sheet renders.
      *
      * This was once the *heavy* fields only - description, banner, studios - on

@@ -9,6 +9,7 @@ import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.MediaListCollectionData
 import com.example.data.model.MediaDetailData
+import com.example.data.model.MediaNode
 import com.example.data.model.SaveActivityReplyData
 import com.example.data.model.SaveMediaListEntryData
 import com.example.data.model.ToggleLikeData
@@ -51,6 +52,19 @@ interface AniListApiService {
     suspend fun getMediaDetail(
         @Body request: GraphQLRequest
     ): GraphQLResponse<MediaDetailData>
+
+    /**
+     * Cover art for many media in one round trip.
+     *
+     * `Map<String, MediaNode>` rather than a generated class because the response
+     * keys are aliases the query builds at runtime (`m0`, `m1`, ...), so the
+     * shape of the answer is not known until the request is written.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getMediaCovers(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<Map<String, MediaNode>>
 
     /** Bio, list statistics, favourites and aggregate stats. Profile screen only. */
     @POST("/")

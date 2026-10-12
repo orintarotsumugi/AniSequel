@@ -33,6 +33,7 @@ import com.example.data.model.nativeName
 import com.example.data.model.romajiName
 import com.example.data.model.seasonLabel
 import com.example.data.model.sourceLabel
+import com.example.data.model.statusLabel
 import com.example.data.model.studioName
 import com.example.ui.components.AppVectorIcons
 
@@ -102,6 +103,30 @@ fun AnimeSpecsGrid(
                 icon = AppVectorIcons.Calendar,
                 title = if (isManga) "Release Date" else "Season & Year",
                 value = if (isManga) (media.startDate?.formatted ?: "TBA") else (media.seasonLabel ?: "TBA"),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Row 3: Status / Score & Popularity
+        //
+        // The two facts every detail page leads with, and the two the grid did
+        // not have. "Finished" and "8.4" are what a person opens a title's page
+        // to find; the grid had studio, format and dates and nothing about
+        // whether the show is over or whether it is any good.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.height(IntrinsicSize.Min)
+        ) {
+            SpecCard(
+                icon = AppVectorIcons.CheckCircle,
+                title = "Status",
+                value = media.statusLabel,
+                modifier = Modifier.weight(1f)
+            )
+            SpecCard(
+                icon = AppVectorIcons.Star,
+                title = "Score",
+                value = buildScoreSummary(media),
                 modifier = Modifier.weight(1f)
             )
         }
@@ -264,5 +289,25 @@ private fun buildDurationFormatString(media: MediaNode, isDetailLoading: Boolean
         duration != null -> "$format · $duration"
         isDetailLoading -> "Loading..."
         else -> format
+    }
+}
+
+/**
+ * "84%" on its own, with popularity appended only when AniList has one.
+ *
+ * Out of 100 rather than out of ten, because that is what AniList records and
+ * rescaling it here would make this tile disagree with the score chart on the
+ * Stats tab, which uses the same number. Popularity is a rank and belongs in its
+ * own place; it is only added when it is small enough to stay legible beside the
+ * score, and it carries no unit because AniList's popularity is unitless.
+ */
+private fun buildScoreSummary(media: MediaNode): String {
+    val score = media.averageScore
+    val popularity = media.popularity
+    return when {
+        score == null && (popularity == null || popularity == 0) -> "-"
+        score == null -> "#$popularity"
+        popularity == null || popularity == 0 -> "$score%"
+        else -> "$score% · #$popularity"
     }
 }

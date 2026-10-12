@@ -85,7 +85,15 @@ internal fun isBioCollapsible(about: String, blockCount: Int): Boolean =
 fun AboutCard(
     about: String,
     modifier: Modifier = Modifier,
-    maxWidth: Dp = ProfileMaxContentWidth
+    maxWidth: Dp = ProfileMaxContentWidth,
+    /**
+     * Media id to cover URL for the bio's AniList preview cards.
+     *
+     * Fetched by the ViewModel as one batch and threaded down, because a bio can
+     * carry a dozen AniList links and a request per card would spend a dozen of
+     * AniList's 30-a-minute budget before the reader had scrolled.
+     */
+    mediaCovers: Map<Int, String> = emptyMap()
 ) {
     val nodes = remember(about) { AniListMarkdownParser.parse(about) }
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -147,7 +155,8 @@ fun AboutCard(
             Box {
                 AniListMarkdownView(
                     nodes = nodes,
-                    maxLines = if (isCollapsed) MARKDOWN_COLLAPSED_LINES else Int.MAX_VALUE
+                    maxLines = if (isCollapsed) MARKDOWN_COLLAPSED_LINES else Int.MAX_VALUE,
+                    mediaCovers = mediaCovers
                 )
                 // The fade is the point of this block.
                 //

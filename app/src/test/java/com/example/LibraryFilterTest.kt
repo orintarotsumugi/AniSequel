@@ -4,11 +4,14 @@ import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.MediaTitle
 import com.example.ui.screens.profile.LibraryFilter
+import com.example.ui.screens.profile.LibrarySort
 import com.example.ui.screens.profile.LibraryType
 import com.example.ui.screens.profile.filterLibrary
 import com.example.ui.screens.profile.libraryBucketOf
 import com.example.ui.screens.profile.libraryCounts
 import com.example.ui.screens.profile.libraryProgressLabel
+import com.example.ui.screens.profile.sortLibrary
+import com.example.ui.screens.profile.toggleSort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -170,6 +173,79 @@ class LibraryFilterTest {
     }
 
     @Test
+    fun `a manga filter says reading and an anime filter says watching`() {
+        // AniList records one `status` enum for both media types, so a shared
+        // label means every manga row claims the reader is watching something.
+        assertEquals("Reading", LibraryFilter.WATCHING.labelFor(isManga = true))
+        assertEquals("Watching", LibraryFilter.WATCHING.labelFor(isManga = false))
+        assertEquals("Rereading", LibraryFilter.REWATCHING.labelFor(isManga = true))
+        assertEquals("Rewatching", LibraryFilter.REWATCHING.labelFor(isManga = false))
+        // Buckets that mean the same thing either way are not reworded.
+        assertEquals("Completed", LibraryFilter.COMPLETED.labelFor(isManga = true))
+        assertEquals("Completed", LibraryFilter.COMPLETED.labelFor(isManga = false))
+    }
+
+    @Test
+    fun `sorting by title is alphabetical and ignores case`() {
+        val entries = listOf(
+            entry(id = 1, title = "zeta"),
+            entry(id = 2, title = "Alpha"),
+            entry(id = 3, title = "beta")
+        )
+
+        val result = sortLibrary(entries, LibrarySort.TITLE, ascending = true)
+
+        assertEquals(listOf(2, 3, 1), result.map { it.media.id })
+    }
+
+    @Test
+    fun `an unrated title sorts last in both directions`() {
+        // The failure this pins: null coerced to zero is a perfect score's
+        // neighbour, so in a descending list every unrated title floats to the
+        // top and the grid reads as a list of favourites.
+        val entries = listOf(
+            entry(id = 1, score = 50),
+            entry(id = 2, score = null),
+            entry(id = 3, score = 90)
+        )
+
+        assertEquals(
+            "descending must not put an unrated title first",
+            2,
+            sortLibrary(entries, LibrarySort.SCORE, ascending = false).first().media.id
+        )
+        assertEquals(
+            2,
+            sortLibrary(entries, LibrarySort.SCORE, ascending = true).last().media.id
+        )
+    }
+
+    @Test
+    fun `tapping the active sort toggles its direction`() {
+        assertEquals(
+            LibrarySort.TITLE to false,
+            toggleSort(LibrarySort.TITLE, currentAscending = true)
+        )
+        assertEquals(
+            LibrarySort.TITLE to true,
+            toggleSort(LibrarySort.TITLE, currentAscending = false)
+        )
+    }
+
+    @Test
+    fun `recent is left in the order anilist returned it`() {
+        // The list query carries no timestamp, so "Recent" cannot be computed -
+        // it is the order AniList already gave. Re-sorting it would be inventing
+        // a claim about dates the data does not support.
+        val entries = listOf(entry(id = 9), entry(id = 3), entry(id = 7))
+
+        assertEquals(
+            listOf(9, 3, 7),
+            sortLibrary(entries, LibrarySort.RECENT, ascending = true).map { it.media.id }
+        )
+    }
+
+    @Test
     fun `manga progress reads as chapters and anime as episodes`() {
         assertEquals(
             "Ep 12/24",
@@ -202,6 +278,7 @@ class LibraryFilterTest {
         status: String? = null,
         progress: Int? = null,
         episodes: Int? = null,
+        score: Int? = null,
         title: String? = "Entry $id"
     ) = MediaListEntryItem(
         status = status,
@@ -210,7 +287,8 @@ class LibraryFilterTest {
             id = id,
             type = type,
             title = title?.let { MediaTitle(english = it) },
-            episodes = episodes
+            episodes = episodes,
+            averageScore = score
         )
     )
 }

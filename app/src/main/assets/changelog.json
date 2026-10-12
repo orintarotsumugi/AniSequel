@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.1.1",
+      "entries": [
+        {
+          "title": "The Info tab stops printing API jargon",
+          "detail": "A title's status was being shown exactly as AniList names it, so an airing show read RELEASING, an unreleased one read NOT_YET_RELEASED, and an unrecognised one read UNKNOWN - in the same typeface as '24 episodes - Winter 2023' directly beside it. Those now read Airing, Upcoming, On hiatus and Cancelled. A status the app has never seen is shown as it arrives rather than rewritten into 'Unknown', so a new one from AniList is not silently mislabelled."
+        },
+        {
+          "title": "Status and Score on every title",
+          "detail": "The detail sheet now carries a Status and Score pair alongside studio, format and dates - whether a show has finished and whether it is any good are the two facts a detail page is opened for, and neither was on it. The score is AniList's own out of 100 rather than rescaled, so it agrees with the score chart on the Stats tab."
+        },
+        {
+          "title": "Anime and manga links in a bio now show their cover",
+          "detail": "An AniList link in someone's bio - the 'hall of fame' line most profiles are built around - now renders as a card with the title's actual poster art, at its real proportions rather than cropped. All the links in one bio are fetched in a single batched request rather than one each, so opening a profile with a dozen of them stays within AniList's request budget instead of spending a dozen of it."
+        },
+        {
+          "title": "Spoilers in a bio are actually hidden",
+          "detail": "A spoiler written inline inside a paragraph was being printed in full, in brackets, to anyone reading the bio - the exact opposite of hiding one. Inline spoilers are now obscured until the surrounding text is expanded, and the ones on their own line keep their existing tap-to-reveal."
+        },
+        {
+          "title": "Animated images everywhere, not just GIFs",
+          "detail": "Animated WebP and APNG images were decoding to a single first frame with nothing to indicate anything was missing, which reads as a broken image rather than a still one. Bios use these heavily. The platform image decoder is now used on Android 9 and above, with GIF support retained for older devices."
+        },
+        {
+          "title": "Manga lists no longer say you are watching them",
+          "detail": "Filtering a manga list by status offered 'Watching' and 'Rewatching', because the filter labels were shared with anime. They now read 'Reading' and 'Rereading' when the list is filtered to manga."
+        },
+        {
+          "title": "Sort your library",
+          "detail": "The Library tab now sorts by newest added, A-Z, or score, with a tap on the active sort reversing its direction. Titles nobody has scored sort last either way, rather than floating to the top of a descending list as zeroes next to a perfect score. The sort row appears once a list is long enough to need it."
+        }
+      ]
+    },
+    {
       "version": "1.1.0",
       "entries": [
         {

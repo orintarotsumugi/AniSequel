@@ -64,6 +64,75 @@ import java.util.Locale
 enum class LibraryType { ALL, ANIME, MANGA }
 
 /**
+ * How the Library is ordered.
+ *
+ * A grid needs an order the reader chose, because "the order AniList returned"
+ * is an implementation detail of a paginated API rather than an answer to
+ * anything. It matters most once a status filter is on: 131 completed entries in
+ * no meaningful order is a wall, and which one you are looking for depends on
+ * whether you are after the newest or the highest rated.
+ *
+ * [TITLE] is always ascending - "Z-A" would be a sort nobody asks for, and the
+ * control that offered it would be busywork.
+ */
+enum class LibrarySort(val label: String) {
+    RECENT("Recent"),
+    TITLE("A-Z"),
+    SCORE("Score")
+}
+
+/**
+ * Applies an ordering, and undoes it when asked for the same order twice.
+ *
+ * Tapping the active sort toggles its direction, which is the convention every
+ * list header shares and the reason the reader does not have to hunt for a
+ * separate ascending control. Returns the toggled order.
+ */
+internal fun toggleSort(current: LibrarySort, currentAscending: Boolean): Pair<LibrarySort, Boolean> =
+    when (current) {
+        LibrarySort.TITLE -> current to !currentAscending
+        // Cycling score -> recent rather than score-descending -> score-ascending:
+        // a score list that starts highest-first is useless, because the entries
+        // you are actually hunting for are at the bottom, out of sight.
+        LibrarySort.SCORE ->
+            if (currentAscending) {
+                LibrarySort.SCORE to true
+            } else {
+                LibrarySort.RECENT to false
+            }
+        LibrarySort.RECENT -> current to !currentAscending
+    }
+
+/**
+ * Orders entries for display.
+ *
+ * Pure and separate from the chips so the rule can be pinned: the interesting
+ * failure is a score sort that puts unrated entries *above* rated ones, because
+ * a null coerced to zero is a perfect score's neighbour and a list of zeroes
+ * looks like a list of favourites.
+ */
+internal fun sortLibrary(
+    entries: List<MediaListEntryItem>,
+    sort: LibrarySort,
+    ascending: Boolean
+): List<MediaListEntryItem> {
+    val comparator: Comparator<MediaListEntryItem> = when (sort) {
+        LibrarySort.TITLE -> compareBy { it.media.title?.displayTitle?.lowercase(Locale.ROOT) ?: "" }
+        // `null` sorts last in *both* directions. An unrated title has no score to
+        // rank, so it belongs at the bottom either way rather than pretending to
+        // be zero - which in a descending list would put it at the very top.
+        LibrarySort.SCORE -> compareBy(
+            { it.media.averageScore == null },
+            { it.media.averageScore ?: 0 }
+        )
+        // No timestamp is carried on the list query, so "Recent" is the order
+        // AniList returned, which for a status group is already newest-first.
+        LibrarySort.RECENT -> return entries
+    }
+    return entries.sortedWith(if (ascending) comparator else comparator.reversed())
+}
+
+/**
  * The list buckets the Library can be narrowed to.
  *
  * Dropped and Rewatching are here even though they are less prominent than the
@@ -72,15 +141,31 @@ enum class LibraryType { ALL, ANIME, MANGA }
  * under "All" - a list you cannot narrow is a list you cannot finish working
  * through.
  */
-enum class LibraryFilter(val label: String) {
+enum class LibraryFilter(
+    /**
+     * The label as written for a *reading* list, which is the wording people
+     * recognise for both.
+     *
+     * A manga row labelled "Watching" is the same class of mistake as the one
+     * `displayStatusFor` documents on the activity feed: the status is a single
+     * enum on AniList and both media types share it, but nobody says they are
+     * watching a book. [animeLabel] is the alternative, and
+     * [labelFor] picks between them per entry.
+     */
+    val label: String,
+    val animeLabel: String = label
+) {
     ALL("All"),
-    WATCHING("Watching"),
+    WATCHING("Reading", "Watching"),
     COMPLETED("Completed"),
     PAUSED("Paused"),
     PLANNING("Planning"),
     DROPPED("Dropped"),
-    REWATCHING("Rewatching"),
-    FAVOURITES("Favourites")
+    REWATCHING("Rereading", "Rewatching"),
+    FAVOURITES("Favourites");
+
+    /** The chip label for a row whose media type is known. */
+    fun labelFor(isManga: Boolean): String = if (isManga) label else animeLabel
 }
 
 /**
@@ -233,6 +318,8 @@ fun ProfileLibraryTab(
     var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
     var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
+    var sort by rememberSaveable { mutableStateOf(LibrarySort.RECENT) }
+    var sortAscending by rememberSaveable { mutableStateOf(true) }
 
     // The type scope decides what the counts describe, so it is applied first and
     // the counts are tallied over that - never over the already-narrowed set.
@@ -244,8 +331,12 @@ fun ProfileLibraryTab(
         }
     }
     val counts = remember(scoped, favouriteIds) { libraryCounts(scoped, favouriteIds) }
-    val visible = remember(scoped, type, filter, favouriteIds, query) {
-        filterLibrary(scoped, type, filter, favouriteIds, query)
+    val visible = remember(scoped, type, filter, favouriteIds, query, sort, sortAscending) {
+        sortLibrary(
+            filterLibrary(scoped, type, filter, favouriteIds, query),
+            sort,
+            sortAscending
+        )
     }
 
     LaunchedEffect(type) {
@@ -274,6 +365,13 @@ fun ProfileLibraryTab(
                 filter = filter,
                 counts = counts,
                 scopeSize = scoped.size,
+                scopeIsManga = type == LibraryType.MANGA,
+                sort = sort,
+                sortAscending = sortAscending,
+                onSortChange = { nextSort, nextAscending ->
+                    sort = nextSort
+                    sortAscending = nextAscending
+                },
                 isLoadingManga = isLoadingManga,
                 query = query,
                 onType = {
@@ -318,6 +416,16 @@ private fun LibraryControls(
     counts: Map<LibraryFilter, Int>,
     /** Size of the current type scope, so the search row can decide for itself. */
     scopeSize: Int,
+    /**
+     * Whether the current scope is manga, so the filter chips can say "Reading"
+     * rather than "Watching". Under "All" the chips are worded for anime, because
+     * that is the majority of any list and the alternative would mislabel every
+     * manga row above it.
+     */
+    scopeIsManga: Boolean,
+    sort: LibrarySort,
+    sortAscending: Boolean,
+    onSortChange: (LibrarySort, Boolean) -> Unit,
     isLoadingManga: Boolean,
     query: String,
     onType: (LibraryType) -> Unit,
@@ -359,12 +467,49 @@ private fun LibraryControls(
             items(LibraryFilter.entries, key = { it.name }) { option ->
                 val count = counts[option] ?: 0
                 ExpressiveStateChip(
-                    label = "${option.label} ($count)",
+                    label = "${option.labelFor(scopeIsManga)} ($count)",
                     selected = option == filter,
                     onClick = { onFilter(option) },
                     minTouchTargetHeight = 44.dp,
                     modifier = Modifier.testTag("library_filter_${option.name.lowercase()}")
                 )
+            }
+        }
+
+        // Sort sits on its own row rather than in the filter row, because it
+        // answers a different question: the filters say *which* entries, this
+        // says *in what order*. Under 12 entries the order is obvious without
+        // being asked for.
+        if (scopeSize > SEARCH_THRESHOLD) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Sort",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LibrarySort.entries.forEach { option ->
+                    val active = option == sort
+                    ExpressiveStateChip(
+                        // The direction is on the chip that is already active,
+                        // so it cannot contradict itself: the chip you did not
+                        // touch has no direction to show.
+                        label = when {
+                            active && option != LibrarySort.RECENT && sortAscending -> "${option.label} ↑"
+                            active && option != LibrarySort.RECENT -> "${option.label} ↓"
+                            else -> option.label
+                        },
+                        selected = active,
+                        onClick = {
+                            val next = toggleSort(sort, sortAscending)
+                            onSortChange(next.first, next.second)
+                        },
+                        minTouchTargetHeight = 40.dp,
+                        modifier = Modifier.testTag("library_sort_${option.name.lowercase()}")
+                    )
+                }
             }
         }
     }

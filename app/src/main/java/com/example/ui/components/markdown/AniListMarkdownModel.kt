@@ -33,6 +33,78 @@ sealed interface MarkdownNode {
     object Divider : MarkdownNode
 }
 
+/**
+ * The media ids a raw Markdown document links to that a cover lookup could resolve.
+ *
+ * Parses and collects in one step, so a caller holding only the bio string does
+ * not have to know that the ids live in the AST - and so the parse done for this
+ * is the *same* parse the renderer will do, rather than a second one that could
+ * disagree about what counts as a preview line.
+ */
+internal fun mediaPreviewIdsIn(markdown: String): List<Int> =
+    mediaPreviewIdsIn(AniListMarkdownParser.parse(markdown))
+
+/**
+ * The media ids in a parsed document that a cover art lookup could resolve.
+ *
+ * ## Why this filters rather than passing everything through
+ *
+ * An AniList link can name six different things, and only two of them are media.
+ * A character, staff member, studio or user id is a *different* id in a different
+ * namespace - `anilist.co/studio/128893` is not the anime 128893 - so sending
+ * those to a `Media(id:)` query would fetch an unrelated anime and put the wrong
+ * poster on a studio card.
+ *
+ * The link's own pattern also accepts a slug as the id
+ * (`anilist.co/anime/one-piece`), which is not numeric and would be asked for as
+ * the integer 0 by any caller that did not check. Both checks live here rather
+ * than at the call site, because every caller would otherwise have to remember
+ * them, and forgetting produces a confidently wrong poster.
+ *
+ * Distinct and in document order, so a bio that links the same anime twice asks
+ * for it once.
+ */
+internal fun mediaPreviewIdsIn(nodes: List<MarkdownNode>): List<Int> {
+    val ids = LinkedHashSet<Int>()
+    fun walk(node: MarkdownNode) {
+        when (node) {
+            is MarkdownNode.AniListPreviewBlock -> node.mediaIdOrNull()?.let(ids::add)
+            // Only these two nest. Walking into every other node type would be
+            // dead code today and a source of surprises the day another gains a
+            // `children` field.
+            is MarkdownNode.CenteredBlock -> node.children.forEach(::walk)
+            is MarkdownNode.Header,
+            is MarkdownNode.Paragraph,
+            is MarkdownNode.Blockquote,
+            is MarkdownNode.CodeBlock,
+            is MarkdownNode.ListBlock,
+            is MarkdownNode.CheckListBlock,
+            is MarkdownNode.ImageBlock,
+            is MarkdownNode.VideoBlock,
+            is MarkdownNode.SpoilerBlock,
+            is MarkdownNode.TableBlock,
+            MarkdownNode.Divider -> Unit
+        }
+    }
+    nodes.forEach(::walk)
+    return ids.toList()
+}
+
+/**
+ * This link's media id, or null when it does not name media.
+ *
+ * The single definition of "is this card a media card", shared by the batch
+ * collector and the renderer that looks the cover up. They have to agree: the
+ * collector decides which ids to request, and the renderer decides which cards
+ * to look them up for, and two definitions would mean either fetching covers no
+ * card asks for or drawing a blank on cards that have one.
+ */
+internal fun MarkdownNode.AniListPreviewBlock.mediaIdOrNull(): Int? {
+    val type = type.lowercase()
+    if (type != "anime" && type != "manga") return null
+    return id.toIntOrNull()?.takeIf { it > 0 }
+}
+
 data class CheckListItem(
     val checked: Boolean,
     val inlines: List<InlineToken>

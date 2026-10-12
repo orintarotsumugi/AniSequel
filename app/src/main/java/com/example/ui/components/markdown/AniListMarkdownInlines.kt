@@ -20,9 +20,19 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 
 /**
+ * Stands in for an inline spoiler's characters where they cannot be revealed.
+ *
+ * One unit-width glyph, so the obscured run occupies roughly the width the real
+ * text will when the paragraph is expanded and the sentence does not reflow. It
+ * is *not* a box-drawing character: those are not guaranteed to render at a
+ * consistent advance width across the app's font stack, and a spoiler block that
+ * is subtly a different width after revealing is a visible jump.
+ */
+private const val SPOILER_PLACEHOLDER = "▓"
+
+/**
  * Builds an [AnnotatedString] from a list of [InlineToken]s with Material 3 styling
  * and clickable link annotations.
- *
  * ## Links actually go somewhere
  *
  * [onLinkClick] used to be accepted and then ignored, on the assumption that a
@@ -176,6 +186,15 @@ private fun AnnotatedString.Builder.appendTokens(
                 }
             }
 
+            // An inline spoiler in a plain `AnnotatedString` cannot be tapped, so it has
+            // nowhere to put a reveal. It is drawn obscured rather than printed.
+            //
+            // It used to append "[Spoiler: ${token.text}]", which is the exact
+            // opposite of hiding one: every spoiler written inline inside a
+            // paragraph - a plot point in a review, a twist in a recommendation -
+            // was rendered in full, in brackets, to anyone reading the bio. The
+            // placeholders are one per character so the surrounding sentence keeps
+            // its shape and does not reflow when the paragraph is expanded.
             is InlineToken.Spoiler -> withStyle(
                 SpanStyle(
                     background = spoilerBackground,
@@ -183,7 +202,7 @@ private fun AnnotatedString.Builder.appendTokens(
                     fontWeight = FontWeight.Medium
                 )
             ) {
-                append(" [Spoiler: ${token.text}] ")
+                append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
             }
         }
     }

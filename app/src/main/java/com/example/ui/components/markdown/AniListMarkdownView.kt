@@ -32,12 +32,20 @@ const val MARKDOWN_COLLAPSED_BLOCK_LIMIT = 4
  * one-line paragraphs would otherwise cost a collapsed card the same height as
  * an expanded one. Callers that collapse should fade the bottom edge, because a
  * dropped block is otherwise indistinguishable from the author never writing it.
+ *
+ * [mediaCovers] is media id to cover URL for the AniList preview cards. Passed in
+ * rather than fetched from here so a document's worth of links costs **one**
+ * request: a bio is a dozen preview cards, and a fetch per card would spend a
+ * dozen of AniList's 30-a-minute budget before the reader had scrolled. A miss
+ * draws the badge alone, which is what these cards looked like before covers
+ * existed.
  */
 @Composable
 fun AniListMarkdownView(
     nodes: List<MarkdownNode>,
     modifier: Modifier = Modifier,
-    maxLines: Int = Int.MAX_VALUE
+    maxLines: Int = Int.MAX_VALUE,
+    mediaCovers: Map<Int, String> = emptyMap()
 ) {
     Column(
         modifier = modifier.testTag("anilist_markdown_view"),
@@ -66,10 +74,13 @@ fun AniListMarkdownView(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AniListMarkdownView(nodes = node.children, maxLines = maxLines)
+                        AniListMarkdownView(nodes = node.children, maxLines = maxLines, mediaCovers = mediaCovers)
                     }
                 }
-                is MarkdownNode.AniListPreviewBlock -> RenderAniListPreview(node)
+                is MarkdownNode.AniListPreviewBlock -> RenderAniListPreview(
+                    node,
+                    coverUrl = node.mediaIdOrNull()?.let { mediaCovers[it] }
+                )
                 is MarkdownNode.Divider -> HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     modifier = Modifier.padding(vertical = 4.dp)

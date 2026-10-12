@@ -37,6 +37,8 @@ fun ProfileHomeTab(
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier,
+    /** Media id to cover URL, for the AniList cards inside the bio. */
+    mediaCovers: Map<Int, String> = emptyMap(),
     /**
      * Hoisted by the screen so this tab's scroll position outlives a tab switch.
      *
@@ -75,7 +77,7 @@ fun ProfileHomeTab(
 
         item(key = "about") {
             if (state.about != null) {
-                AboutCard(about = state.about)
+                AboutCard(about = state.about, mediaCovers = mediaCovers)
             } else {
                 NoBioNote()
             }

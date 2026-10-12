@@ -16,6 +16,7 @@ import com.example.data.repository.AniListRepository
 import com.example.domain.usecase.BuildActivityCalendarUseCase
 import com.example.domain.usecase.BuildListEntryInsightsUseCase
 import com.example.domain.usecase.BuildListInsightsUseCase
+import com.example.ui.components.markdown.mediaPreviewIdsIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +93,44 @@ class UserOverviewViewModel(
      * profile fetch could leave the screen showing the older result.
      */
     private var loadJob: Job? = null
+
+    /**
+     * Cover art for the AniList preview cards in this person's bio.
+     *
+     * Media id to URL, fetched as **one** batch after the profile loads rather
+     * than per card. A "hall of fame" bio carries a dozen AniList links, and a
+     * request each would spend a dozen of AniList's 30-a-minute budget before the
+     * reader had scrolled - then the next screen they opened would be handed a
+     * 429.
+     *
+     * Failure is silent by design: a missing cover leaves the card as it was
+     * before covers existed, and that is a far better outcome than an error
+     * banner over somebody's bio.
+     */
+    private val _mediaCovers = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val mediaCovers: StateFlow<Map<Int, String>> = _mediaCovers.asStateFlow()
+
+    /**
+     * Asks for the cover of every media this bio links to, in one request.
+     *
+     * Called after the profile itself has loaded, and deliberately not awaited by
+     * it: the reader should see the bio immediately and have posters arrive into
+     * the cards afterwards.
+     */
+    private fun loadMediaCovers(about: String?) {
+        val bio = about?.takeIf { it.isNotBlank() } ?: return
+        val ids = mediaPreviewIdsIn(bio)
+        if (ids.isEmpty()) return
+
+        coverJob?.cancel()
+        coverJob = viewModelScope.launch {
+            aniListRepository.getMediaCovers(ids).onSuccess { covers ->
+                _mediaCovers.value = covers
+            }
+        }
+    }
+
+    private var coverJob: Job? = null
 
     /**
      * The manga half of the Library tab, loaded only on demand.
@@ -177,6 +216,10 @@ class UserOverviewViewModel(
             val list = listDeferred.await().getOrNull()
 
             _uiState.value = buildState(overview, list, isRefreshing = false)
+            // After the state is published, and not awaited by it: the reader
+            // should see the bio immediately and have posters arrive into the
+            // cards a moment later.
+            loadMediaCovers(overview.about)
         }
     }
 
