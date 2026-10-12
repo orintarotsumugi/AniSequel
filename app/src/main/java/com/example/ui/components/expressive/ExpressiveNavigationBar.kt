@@ -79,6 +79,15 @@ data class NavigationDestination(
  * `graphicsLayer`, so both are draw-phase only and neither recomposes this bar -
  * it sits over a list that is being scrolled underneath it.
  */
+/**
+ * How much of the bar's width the selected destination may claim.
+ *
+ * A little over one item's share. Enough that the longest label fits beside its
+ * icon on the narrowest phone the app supports, and no more: a much larger value
+ * makes the bar visibly breathe around the selection as you move between tabs.
+ */
+private const val SELECTED_WEIGHT = 1.6f
+
 @Composable
 fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
@@ -109,14 +118,26 @@ fun ExpressiveNavigationBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             destinations.forEachIndexed { index, destination ->
+                val selected = index == selectedIndex
                 NavigationItem(
                     destination = destination,
-                    selected = index == selectedIndex,
+                    selected = selected,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     },
-                    modifier = Modifier.weight(1f)
+                    // The selected item is given extra width rather than every
+                    // item an equal share.
+                    //
+                    // Equal shares look deliberate and are wrong the moment one
+                    // item has to spell its label: five destinations in a 560dp
+                    // bar leaves 112dp each, and after the capsule's own padding
+                    // there is not enough for a 22dp icon, a 9dp gap and "Activity"
+                    // side by side - so the label was clipped to nothing. Since
+                    // only one item is ever labelled, giving that item the extra
+                    // width keeps the bar's overall width stable while leaving
+                    // the four icon-only items exactly the 48dp they need.
+                    modifier = Modifier.weight(if (selected) SELECTED_WEIGHT else 1f)
                 )
             }
         }
