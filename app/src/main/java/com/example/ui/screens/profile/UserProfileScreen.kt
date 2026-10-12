@@ -10,6 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,8 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
@@ -66,26 +71,49 @@ import com.example.ui.viewmodel.UserOverviewViewModel
 import com.example.ui.viewmodel.UserSocialViewModel
 
 /**
- * How much room a tab's list leaves for the floating navigation capsule.
+ * How much room a tab's list leaves for the floating navigation capsule,
+ * *below the system navigation inset*.
  *
- * A shared constant because each tab would otherwise guess it, and a guess that
- * is slightly short is not visibly wrong - the last item just ends up behind the
- * bar until the user scrolls again. The capsule is 52dp of item plus 5dp of
- * padding either side plus 12dp of margin, so 96dp clears it with the gesture
- * inset on top.
+ * This is the capsule's own height - 52dp of item, 5dp of padding either side,
+ * 12dp of margin - and deliberately **not** the whole clearance. The system inset
+ * that follows it is read from the device at draw time by
+ * [navigationBarClearance], because it is not a constant: a gesture bar, a
+ * three-button bar and a cutout are three different heights, and hardcoding the
+ * largest of them either wastes space or leaves the last row of a list sitting
+ * under the bar. That mismatch is also what produces the "bounce back" snap when
+ * the list reaches its end and the padding disagrees with where the bar really
+ * is.
  */
 internal val NavigationBarClearance = 96.dp
+
+/**
+ * The full clearance a list needs: the capsule, plus the device's own navigation
+ * inset beneath it.
+ *
+ * Composable because it reads a `WindowInsets`, which is only available during
+ * composition. Read rather than assumed - see [NavigationBarClearance] for why a
+ * constant is the wrong answer here.
+ */
+@Composable
+internal fun navigationBarClearance(): Dp {
+    val systemInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    return CAPSULE_CLEARANCE + systemInset
+}
+
+/** The capsule's own height above the system inset. */
+private val CAPSULE_CLEARANCE = 96.dp
 
 /**
  * The padding every tab's scrollable content uses.
  *
  * The bottom is *not* the Scaffold's. The navigation capsule is meant to float
  * over the content rather than push it, so the Scaffold's bottom inset is
- * replaced with [NavigationBarClearance].
+ * replaced with [navigationBarClearance].
  */
+@Composable
 internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues()): PaddingValues = PaddingValues(
     top = contentPadding.calculateTopPadding() + 8.dp,
-    bottom = NavigationBarClearance
+    bottom = navigationBarClearance()
 )
 
 /**
@@ -206,10 +234,30 @@ fun UserProfileScreen(
             )
         }
     ) { paddingValues ->
+        // Read once and passed to both, rather than read twice at the call site:
+        // a CompositionLocal read is a dependency, and taking it in the same
+        // lambda that consumes it keeps this to one.
+        val layoutDirection = LocalLayoutDirection.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
+                // Start/end insets are applied; the bottom deliberately is not,
+                // because the navigation capsule floats over the content rather
+                // than pushing it, and its clearance is handled by
+                // [profileListPadding] instead.
+                //
+                // Only the top was applied here, which is the safe-area bug this
+                // fixes: `padding(top = ...)` discarded the start and end insets
+                // the Scaffold had already resolved, so on a landscape device
+                // with a display cutout along one edge the header, the bio and
+                // every poster ran underneath it. The cutout was invisible as a
+                // cutout - it looked like the layout was simply using more of
+                // the screen than it should.
+                .padding(
+                    start = paddingValues.calculateStartPadding(layoutDirection),
+                    end = paddingValues.calculateEndPadding(layoutDirection),
+                    top = paddingValues.calculateTopPadding()
+                )
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {

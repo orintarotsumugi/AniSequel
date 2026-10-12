@@ -13,6 +13,7 @@ import com.example.ui.screens.profile.libraryProgressLabel
 import com.example.ui.screens.profile.sortLibrary
 import com.example.ui.screens.profile.toggleSort
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -243,6 +244,36 @@ class LibraryFilterTest {
             listOf(9, 3, 7),
             sortLibrary(entries, LibrarySort.RECENT, ascending = true).map { it.media.id }
         )
+    }
+
+    @Test
+    fun `a completed entry with no progress still shows its total`() {
+        // AniList does not fill `progress` from the episode count when a title is
+        // marked finished, so `status` becomes "completed" while `progress` stays
+        // null. The badge used to vanish at exactly that moment - when the person
+        // had just finished watching it, and most wanted the number.
+        val done = entry(id = 1, type = "ANIME", status = "completed", episodes = 24)
+
+        assertEquals("Ep 24/24", libraryProgressLabel(done))
+    }
+
+    @Test
+    fun `an unrated but completed entry with no episode count still has no badge`() {
+        // Nothing is known, so there is nothing honest to draw. Inventing "Ep 0"
+        // would be worse than no badge.
+        val unknown = entry(id = 1, status = "completed", episodes = null)
+
+        assertNull(libraryProgressLabel(unknown))
+    }
+
+    @Test
+    fun `selecting score sorts highest first, not lowest`() {
+        // Entering the list kept the previous direction, so the first thing shown
+        // was the title the reader liked least.
+        val order = toggleSort(LibrarySort.SCORE, currentAscending = true)
+
+        assertEquals(LibrarySort.SCORE, order.first)
+        assertFalse("score must open descending", order.second)
     }
 
     @Test

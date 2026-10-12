@@ -96,7 +96,12 @@ internal fun toggleSort(current: LibrarySort, currentAscending: Boolean): Pair<L
         // you are actually hunting for are at the bottom, out of sight.
         LibrarySort.SCORE ->
             if (currentAscending) {
-                LibrarySort.SCORE to true
+                // Entering the score list *descending*: highest first. Keeping the
+                // previous direction put the lowest-scored entry on top, so the
+                // first thing the list showed was the show they liked least -
+                // and the comment here used to claim the opposite of what the
+                // code did, which is how it survived.
+                LibrarySort.SCORE to false
             } else {
                 LibrarySort.RECENT to false
             }
@@ -261,9 +266,25 @@ internal fun filterLibrary(
  * progress badge it does not have.
  */
 internal fun libraryProgressLabel(entry: MediaListEntryItem): String? {
-    val progress = entry.progress ?: return null
-    val total = if (entry.media.isManga) entry.media.chapters else entry.media.episodes
-    val unit = if (entry.media.isManga) "Ch" else "Ep"
+    val isManga = entry.media.isManga
+    val unit = if (isManga) "Ch" else "Ep"
+    val total = if (isManga) entry.media.chapters else entry.media.episodes
+    val progress = entry.progress
+
+    if (progress == null) {
+        // A completed entry with no progress is the common case, not an edge
+        // case: AniList does not fill `progress` from the episode count when a
+        // title is marked finished, so `status` becomes "completed" while
+        // `progress` stays null. The badge therefore vanished at exactly the
+        // moment the person had finished watching something - the one time they
+        // most want to see the number.
+        //
+        // Falling back to the total shows what they actually know ("24/24"),
+        // and is only claimed when the entry really is complete.
+        val finished = entry.status.equals("completed", ignoreCase = true)
+        return if (finished && total != null && total > 0) "$unit $total/$total" else null
+    }
+
     return if (total != null && total > 0) "$unit $progress/$total" else "$unit $progress"
 }
 
