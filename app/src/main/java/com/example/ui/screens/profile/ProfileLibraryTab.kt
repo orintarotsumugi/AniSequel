@@ -91,11 +91,22 @@ enum class LibrarySort(val label: String) {
      * unchanged.
      *
      * Renamed to say what it is rather than adding a fake date. A sort the user
-     * can identify from the result is worth more than a plausible name, and
-     * asking AniList for `sort: UPDATED_AT` is the real fix - which needs the
-     * query to take a sort argument.
+     * can identify from the result is worth more than a plausible name, and the
+     * real recency sort now exists beside it: [UPDATED_AT] reads the entry's own
+     * update time, which is the thing "Recent" was pretending to be.
      */
     LIST_ORDER("List order"),
+
+    /**
+     * Your own last edit, newest first - "you last updated this on ...".
+     *
+     * The recency sort that "List order" never was. AniList's list entry carries
+     * `updatedAt`: the moment the viewer last changed its progress, score or
+     * status, which is the honest answer to "what have I been working on". A title
+     * finished this week sits above one added in 2019, whatever status group each
+     * happens to arrive in.
+     */
+    UPDATED_AT("Recently updated"),
 
     TITLE("A-Z"),
     SCORE("Score"),
@@ -125,11 +136,40 @@ internal fun toggleSort(current: LibrarySort, currentAscending: Boolean): Pair<L
             } else {
                 LibrarySort.TITLE to true
             }
+        // Same shape as Score: the newest update is the answer somebody sorting by
+        // recency came for, so the first tap opens newest-first.
+        LibrarySort.UPDATED_AT ->
+            if (currentAscending) {
+                LibrarySort.UPDATED_AT to false
+            } else {
+                LibrarySort.TITLE to true
+            }
         // List order has no direction to toggle, so the tap moves on instead of
         // appearing to do nothing. Every control that visibly ignores a tap is a
         // control the reader learns to distrust.
         LibrarySort.LIST_ORDER -> LibrarySort.TITLE to true
     }
+
+/**
+ * The state a sort opens in when its chip is *selected*.
+ *
+ * Deliberately separate from [toggleSort], which answers the different question
+ * "the reader tapped the sort that is already active". The chip row used to call
+ * [toggleSort] for *every* chip, so pressing "Score" while "List order" was
+ * active selected "A-Z" - the chip that was pressed and the sort that was applied
+ * were different controls. Selecting a chip is not the same gesture as re-tapping
+ * the active one.
+ */
+internal fun selectSort(sort: LibrarySort): Pair<LibrarySort, Boolean> = when (sort) {
+    LibrarySort.LIST_ORDER -> LibrarySort.LIST_ORDER to true
+    // Newest first: "recently updated" sorted oldest-first would open on the
+    // titles the reader has not touched in years.
+    LibrarySort.UPDATED_AT -> LibrarySort.UPDATED_AT to false
+    LibrarySort.TITLE -> LibrarySort.TITLE to true
+    LibrarySort.SCORE -> LibrarySort.SCORE to false
+    // Newest release first, which is what "Year" is asked for in practice.
+    LibrarySort.RELEASE_YEAR -> LibrarySort.RELEASE_YEAR to false
+}
 
 /**
  * Orders entries for display.
@@ -153,6 +193,7 @@ internal fun sortLibrary(
         LibrarySort.TITLE -> compareBy { it.media.title?.displayTitle?.lowercase(Locale.ROOT) ?: "" }
         LibrarySort.SCORE -> return rankedBlanksLast(entries, { it.media.averageScore }, ascending)
         LibrarySort.RELEASE_YEAR -> return rankedBlanksLast(entries, ::releaseYearOf, ascending)
+        LibrarySort.UPDATED_AT -> return rankedBlanksLast(entries, { it.updatedAt }, ascending)
     }
     return entries.sortedWith(if (ascending) comparator else comparator.reversed())
 }
@@ -597,27 +638,48 @@ private fun LibraryControls(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                LibrarySort.entries.forEach { option ->
-                    val active = option == sort
-                    ExpressiveStateChip(
-                        // The direction is on the chip that is already active,
-                        // so it cannot contradict itself: the chip you did not
-                        // touch has no direction to show.
-                        label = when {
-                            // No arrow on a sort that has no direction: an arrow
-                            // that cannot change is a lie about the control.
-                            !option.isDirectional -> option.label
-                            sortAscending -> "${option.label} ↑"
-                            else -> "${option.label} ↓"
-                        },
-                        selected = active,
-                        onClick = {
-                            val next = toggleSort(sort, sortAscending)
-                            onSortChange(next.first, next.second)
-                        },
-                        minTouchTargetHeight = 40.dp,
-                        modifier = Modifier.testTag("library_sort_${option.name.lowercase()}")
-                    )
+                // A scrolling row rather than a plain one. There are five sorts
+                // now and "Recently updated" is a long label; laid out edge to
+                // edge they overflowed the screen and the last chip was simply
+                // unreachable.
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(LibrarySort.entries, key = { it.name }) { option ->
+                        val active = option == sort
+                        ExpressiveStateChip(
+                            // The direction is only on the chip that is already
+                            // active, so it cannot contradict itself: the chip you
+                            // did not touch has no direction to show. It used to be
+                            // drawn on every directional chip, which claimed each
+                            // one would sort the way the current sort does.
+                            label = when {
+                                // No arrow on a sort that has no direction: an arrow
+                                // that cannot change is a lie about the control.
+                                !option.isDirectional -> option.label
+                                !active -> option.label
+                                sortAscending -> "${option.label} ↑"
+                                else -> "${option.label} ↓"
+                            },
+                            selected = active,
+                            // Selecting a chip is not the same gesture as re-tapping
+                            // the active one. Every chip used to call `toggleSort`
+                            // with the *current* sort, so pressing "Score" while
+                            // "List order" was active selected "A-Z" - the chip
+                            // pressed and the sort applied were different controls.
+                            onClick = {
+                                val next = if (active) {
+                                    toggleSort(sort, sortAscending)
+                                } else {
+                                    selectSort(option)
+                                }
+                                onSortChange(next.first, next.second)
+                            },
+                            minTouchTargetHeight = 40.dp,
+                            modifier = Modifier.testTag("library_sort_${option.name.lowercase()}")
+                        )
+                    }
                 }
             }
         }

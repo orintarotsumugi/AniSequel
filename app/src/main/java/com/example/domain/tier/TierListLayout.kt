@@ -1,12 +1,12 @@
 package com.example.domain.tier
 
 /**
- * The geometry of a tier list, computed once and drawn three ways.
+ * The geometry of a tier list, computed once and drawn two ways.
  *
- * Compose, the SVG writer and the PDF writer all read this and nothing else. A
- * separate arrangement in each renderer is how an exported PNG ends up with the
- * labels in a different order from the screen it was exported from, which is the
- * kind of bug nobody reports because the file "looks fine".
+ * Compose and the SVG writer both read this and nothing else. A separate
+ * arrangement in each renderer is how an exported file ends up with the labels in
+ * a different order from the screen it was exported from, which is the kind of bug
+ * nobody reports because the file "looks fine".
  */
 
 /**

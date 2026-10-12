@@ -5,10 +5,9 @@ package com.example.domain.tier
  *
  * Everything here is pure: no Android, no Compose, no coroutines. That is not
  * tidiness for its own sake. The same layout produced by [layoutTierList] is
- * drawn three ways - on screen by Compose, into an SVG by [tierListToSvg], and
- * into a PDF page by the exporter - and three independent arrangements of the
- * same list is exactly the situation where one of them quietly disagrees with
- * the other two. One geometry, three renderers.
+ * drawn two ways - on screen by Compose and into an SVG by [tierListToSvg] - and
+ * two independent arrangements of the same list is exactly the situation where
+ * one of them quietly disagrees with the other. One geometry, two renderers.
  */
 
 /**
@@ -25,8 +24,8 @@ data class TierDefinition(
      * The row's fill, as an ARGB `Long` in the `0xAARRGGBB` layout.
      *
      * A packed long rather than a Compose `Color` on purpose: this is the layer
-     * the SVG and PDF writers read, and an `Int` that has to be masked differently
-     * in each of the three renderers is a bug waiting for the one that forgets.
+     * the SVG writer reads, and an `Int` that has to be masked differently by each
+     * renderer is a bug waiting for the one that forgets.
      */
     val colorArgb: Long
 )

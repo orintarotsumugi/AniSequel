@@ -153,21 +153,28 @@ fun UserProfileScreen(
      */
     libraryPreferences: LibraryPreferences = LibraryPreferences(LocalContext.current),
     /**
+     * Whether this profile is the signed-in viewer's own.
+     *
+     * The tier list is a single personal ranking, stored keyed on the signed-in
+     * account - it is a judgement about the reader's own library, not about
+     * whoever this profile happens to be about. So the trophy only means
+     * something here when the profile *is* the reader's own.
+     *
+     * It used to be drawn on every profile, including a follower's and a scanned
+     * stranger's. Opening one of those and tapping it ranked the *viewer's* titles
+     * while the screen showed somebody else's library, which is the exact thing
+     * the stored format refuses. A control that opens the wrong account's list is
+     * worse than a missing one, so it is hidden off your own profile rather than
+     * shown and re-explained.
+     */
+    isOwnProfile: Boolean = true,
+    /**
      * Opens the tier list for this library.
      *
      * A callback rather than a navigation call so the screen keeps no reference to
      * the `NavController`, which is the same split `ProfileDestination` already
      * makes: every route decision lives in one place, and the screen only says
      * what it wants to happen.
-     *
-     * ## Whose tier list this opens
-     *
-     * `TierListPreferences` stores *one* personal ranking, keyed on the signed-in
-     * viewer's AniList id - it is a judgement about the reader's own library, not
-     * about whoever this profile happens to be about. So reaching this from a
-     * scanned or followed profile opens the viewer's own list, not that person's.
-     * That is the stored format's rule rather than this button's, and the screen
-     * cannot widen it from here.
      */
     onOpenTierList: () -> Unit = {},
     onSignInAgain: () -> Unit = {},
@@ -228,28 +235,34 @@ fun UserProfileScreen(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1
                         )
-                        // Beside the name rather than in `actions`, because the
-                        // tier list ranks the library this profile is showing and
-                        // is worth reaching while looking at that library. In the
-                        // actions slot it would sit among the links and read as
-                        // another place this profile goes, rather than as a way of
-                        // ordering what is on it.
-                        IconButton(
-                            onClick = onOpenTierList,
-                            modifier = Modifier
-                                .testTag("profile_open_tier_list_button")
-                                .bouncyPress(pressedScale = 0.9f)
-                        ) {
-                            // The glyph is a shade under the bar's 24dp rather
-                            // than shrunk to match: it keeps the full 48dp touch
-                            // target, so the button stays easy to hit while
-                            // reading as lighter than the back arrow and the
-                            // AniList link beside it.
-                            Icon(
-                                imageVector = AppVectorIcons.Trophy,
-                                contentDescription = "Open tier list",
-                                modifier = Modifier.size(20.dp)
-                            )
+                        // Only on the reader's own profile: the tier list is their
+                        // personal ranking, and the trophy used to appear here on
+                        // everyone's - tapping it from a follower's page opened the
+                        // viewer's own list over somebody else's library.
+                        if (isOwnProfile) {
+                            // Beside the name rather than in `actions`, because the
+                            // tier list ranks the library this profile is showing and
+                            // is worth reaching while looking at that library. In the
+                            // actions slot it would sit among the links and read as
+                            // another place this profile goes, rather than as a way of
+                            // ordering what is on it.
+                            IconButton(
+                                onClick = onOpenTierList,
+                                modifier = Modifier
+                                    .testTag("profile_open_tier_list_button")
+                                    .bouncyPress(pressedScale = 0.9f)
+                            ) {
+                                // The glyph is a shade under the bar's 24dp rather
+                                // than shrunk to match: it keeps the full 48dp touch
+                                // target, so the button stays easy to hit while
+                                // reading as lighter than the back arrow and the
+                                // AniList link beside it.
+                                Icon(
+                                    imageVector = AppVectorIcons.Trophy,
+                                    contentDescription = "Open tier list",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 },

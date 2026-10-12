@@ -352,6 +352,7 @@ object GraphQLQueries {
               entries {
                 status
                 progress
+                updatedAt
                 score(format: POINT_100)
                 completedAt { year month day }
                 media {

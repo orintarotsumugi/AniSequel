@@ -49,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -209,6 +210,28 @@ internal fun tierItemAt(items: List<TierItemBox>, x: Float, y: Float): Int? =
     items.lastOrNull {
         x >= it.x && x <= it.right && y >= it.y && y <= it.bottom
     }?.mediaId
+
+/**
+ * The tiles the board draws, given the one currently lifted under a finger.
+ *
+ * The dragged tile is drawn as a ghost that follows the pointer, not in the place
+ * it started, so it must not be emitted as a child of the layout. Leaving it in
+ * its old slot would draw a second copy underneath the ghost - the release would
+ * then read as landing on a tile that never moved.
+ *
+ * A named function rather than an inline `filterNot` because **both** the content
+ * lambda and the slot list have to apply the exact same rule. The measure policy
+ * asserts the two stayed in step, so applying the skip to one and not the other is
+ * not a cosmetic glitch: it is an exception that takes the screen down. It was
+ * precisely that - the skip lived only in the content lambda, so the first
+ * long-press threw `TierGeometry emitted N children for N+1 slots` and killed the
+ * tier list the moment a drag began.
+ */
+internal fun visibleTierItems(
+    items: List<TierItemBox>,
+    skipMediaId: Int?
+): List<TierItemBox> =
+    if (skipMediaId == null) items else items.filterNot { it.mediaId == skipMediaId }
 
 /** The heading this screen and any export of the same layout carry. */
 private const val TIER_LIST_TITLE = "Tier List"
@@ -694,16 +717,24 @@ private fun TierBoard(
     }
     val candidateById = remember(candidates) { candidates.associateBy { it.mediaId } }
 
-    val dragPosition = dragOrigin + dragTravel.value
-    val hoveredTierId = remember(draggingId, dragPosition, arrangement, zoom, density) {
-        if (draggingId == null) {
-            null
-        } else {
-            tierDropTarget(
-                rows = arrangement.rows,
-                x = dragPosition.x / density.density / zoom,
-                y = dragPosition.y / density.density / zoom
-            )
+    // Derived rather than recomputed on every pointer move. Reading `dragTravel`
+    // straight into composition made the whole board recompose each frame of a
+    // drag, only to redraw the same hint; a `derivedStateOf` notifies its readers
+    // only when the tier *under the finger* changes, so dragging across one row is
+    // a draw invalidation (the ghost's `graphicsLayer` already reads the travel in
+    // the draw phase) instead of a full recomposition of every row and poster.
+    val hoveredTierId = remember(draggingId, arrangement, zoom, density) {
+        derivedStateOf<String?> {
+            if (draggingId == null) {
+                null
+            } else {
+                val position = dragOrigin + dragTravel.value
+                tierDropTarget(
+                    rows = arrangement.rows,
+                    x = position.x / density.density / zoom,
+                    y = position.y / density.density / zoom
+                )
+            }
         }
     }
 
@@ -745,7 +776,7 @@ private fun TierBoard(
                             // every row, and a null tier id is exactly how
                             // `moveTo` un-files a title. This is the only route to
                             // an empty row that does not delete the row too.
-                            onMove(mediaId, hoveredTierId)
+                            onMove(mediaId, hoveredTierId.value)
                         }
                         draggingId = null
                         dragTravel.value = Offset.Zero
@@ -762,7 +793,7 @@ private fun TierBoard(
             options = options,
             zoom = zoom,
             candidateById = candidateById,
-            hoveredTierId = hoveredTierId,
+            hoveredTierId = hoveredTierId.value,
             skipMediaId = draggingId,
             onItemTap = onItemTap
         )
@@ -779,19 +810,32 @@ private fun TierBoard(
         }
 
         if (draggingId != null) {
-            Text(
-                text = if (hoveredTierId != null) {
-                    "Release to file it under ${tierLabel(tiers, hoveredTierId)}."
-                } else {
-                    "Release anywhere else to take it out of the list."
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // A pill rather than bare text. The hint sits over the board, and a
+            // label drawn straight onto a row's colour or across a poster is
+            // unreadable exactly when it is needed most - mid-drag, on whatever
+            // tier the finger happens to be over. A surface behind it keeps it
+            // legible against every tier colour and every cover.
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 4.dp)
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag("tier_drag_hint")
-            )
+            ) {
+                Text(
+                    text = if (hoveredTierId != null) {
+                        "Release to file under ${tierLabel(tiers, hoveredTierId.value!!)}"
+                    } else {
+                        "Release here to take it out of the list"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -808,10 +852,16 @@ private fun tierLabel(tiers: List<TierDefinition>, tierId: String): String =
  * in the app that knows about positions, and it knows about nothing else.
  *
  * The content lambda and [slots] are two views of the same ordered list - rows,
- * then items - and the `check` is what keeps them that way. Compose hands the
+ * then the tiles - and the `check` is what keeps them that way. Compose hands the
  * measure policy its children in emission order and offers no way to ask which is
  * which, so a row added to one list and not the other would otherwise place every
  * tile one row too high, and it would read as a layout bug for ever.
+ *
+ * Both halves read the same [visibleTierItems] list rather than filtering for
+ * themselves. They used to disagree - the dragged tile was skipped from the
+ * emitted children only - so starting a drag made the two counts differ by one and
+ * the `check` below threw. Sharing the list is what makes that impossible rather
+ * than merely fixed.
  *
  * Named `arrangement` rather than `layout` because a parameter called `layout`
  * would shadow `MeasureScope.layout` at the `layout(width, height)` call at the
@@ -827,10 +877,15 @@ private fun TierGeometry(
     skipMediaId: Int?,
     onItemTap: (Int) -> Unit
 ) {
-    val slots = remember(arrangement) {
+    // The one tile list the whole layout is built from, so the emitted children
+    // and the positions they are measured against cannot drift apart.
+    val drawnItems = remember(arrangement, skipMediaId) {
+        visibleTierItems(arrangement.items, skipMediaId)
+    }
+    val slots = remember(arrangement, drawnItems) {
         buildList<Slot> {
             arrangement.rows.forEach { add(Slot(it.x, it.y, it.width, it.height)) }
-            arrangement.items.forEach { add(Slot(it.x, it.y, it.width, it.height)) }
+            drawnItems.forEach { add(Slot(it.x, it.y, it.width, it.height)) }
         }
     }
 
@@ -843,8 +898,7 @@ private fun TierGeometry(
                     highlighted = row.tierId == hoveredTierId
                 )
             }
-            arrangement.items.forEach { box ->
-                if (box.mediaId == skipMediaId) return@forEach
+            drawnItems.forEach { box ->
                 TierPosterTile(
                     candidate = candidateById[box.mediaId],
                     width = box.width,
@@ -1200,7 +1254,14 @@ private fun TierAddTitlesSheet(
                 TierChoiceList(
                     tiers = tiers,
                     currentTierId = currentTierOf(picking.mediaId),
-                    onPick = { tierId -> onMove(picking.mediaId, tierId) },
+                    onPick = { tierId ->
+                        onMove(picking.mediaId, tierId)
+                        // Back to the unranked list, so placing one title flows
+                        // straight into placing the next. The picker used to stay
+                        // open on the title it had just filed, which read as the
+                        // sheet being stuck rather than as a place to keep working.
+                        pickingId = null
+                    },
                     onRemove = null
                 )
             }

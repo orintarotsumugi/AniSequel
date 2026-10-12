@@ -11,6 +11,7 @@ import com.example.ui.screens.profile.filterLibrary
 import com.example.ui.screens.profile.libraryBucketOf
 import com.example.ui.screens.profile.libraryCounts
 import com.example.ui.screens.profile.libraryProgressLabel
+import com.example.ui.screens.profile.selectSort
 import com.example.ui.screens.profile.sortLibrary
 import com.example.ui.screens.profile.toggleSort
 import org.junit.Assert.assertEquals
@@ -291,6 +292,60 @@ class LibraryFilterTest {
         assertTrue(LibrarySort.TITLE.isDirectional)
         assertTrue(LibrarySort.SCORE.isDirectional)
         assertTrue(LibrarySort.RELEASE_YEAR.isDirectional)
+        assertTrue(LibrarySort.UPDATED_AT.isDirectional)
+    }
+
+    @Test
+    fun `recently updated orders by the viewer's own last edit`() {
+        // The recency sort "List order" never was: AniList's entry carries no
+        // date, so this reads `updatedAt`, the moment the viewer last changed it.
+        val entries = listOf(
+            entry(id = 1, updatedAt = 1_700_000_000),
+            entry(id = 2, updatedAt = 1_760_000_000),
+            entry(id = 3, updatedAt = 1_730_000_000)
+        )
+
+        assertEquals(
+            listOf(2, 3, 1),
+            sortLibrary(entries, LibrarySort.UPDATED_AT, ascending = false).map { it.media.id }
+        )
+        assertEquals(
+            listOf(1, 3, 2),
+            sortLibrary(entries, LibrarySort.UPDATED_AT, ascending = true).map { it.media.id }
+        )
+    }
+
+    @Test
+    fun `a title with no update time sorts last when sorting by recency`() {
+        val entries = listOf(
+            entry(id = 1, updatedAt = 1_700_000_000),
+            entry(id = 2, updatedAt = null)
+        )
+
+        assertEquals(
+            2,
+            sortLibrary(entries, LibrarySort.UPDATED_AT, ascending = false).last().media.id
+        )
+        assertEquals(
+            2,
+            sortLibrary(entries, LibrarySort.UPDATED_AT, ascending = true).last().media.id
+        )
+    }
+
+    /**
+     * The chip row's bug.
+     *
+     * Every chip sent its tap through `toggleSort` with the *current* sort, so
+     * pressing "Score" while "List order" was active selected "A-Z": the chip the
+     * reader pressed and the sort they got were different controls. Selecting a
+     * chip now selects that chip, in its own opening direction.
+     */
+    @Test
+    fun `selecting a sort opens it in its own direction rather than advancing`() {
+        assertEquals(LibrarySort.SCORE to false, selectSort(LibrarySort.SCORE))
+        assertEquals(LibrarySort.UPDATED_AT to false, selectSort(LibrarySort.UPDATED_AT))
+        assertEquals(LibrarySort.TITLE to true, selectSort(LibrarySort.TITLE))
+        assertEquals(LibrarySort.LIST_ORDER to true, selectSort(LibrarySort.LIST_ORDER))
     }
 
     @Test
@@ -389,10 +444,12 @@ class LibraryFilterTest {
         score: Int? = null,
         seasonYear: Int? = null,
         startYear: Int? = null,
+        updatedAt: Int? = null,
         title: String? = "Entry $id"
     ) = MediaListEntryItem(
         status = status,
         progress = progress,
+        updatedAt = updatedAt,
         media = MediaNode(
             id = id,
             type = type,

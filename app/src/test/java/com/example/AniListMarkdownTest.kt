@@ -4,6 +4,7 @@ import com.example.ui.components.markdown.AniListMarkdownParser
 import com.example.ui.components.markdown.InlineToken
 import com.example.ui.components.markdown.MarkdownNode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -230,11 +231,29 @@ class AniListMarkdownTest {
     }
 
     @Test
-    fun `keeps a non-image URL inline as a link`() {
+    fun `an AniList entity URL inside a sentence is recognised as media`() {
+        // It used to stay a plain link, so the renderer had no card to draw and
+        // the title printed as underlined text - the reported bug.
         val inlines = AniListMarkdownParser.parseInlines("See https://anilist.co/anime/1 for more")
+
         assertTrue(inlines.none { it is InlineToken.Image })
-        val link = inlines.filterIsInstance<InlineToken.Link>().firstOrNull()
-        assertEquals("https://anilist.co/anime/1", link?.url)
+        val media = inlines.filterIsInstance<InlineToken.MediaLink>().firstOrNull()
+        assertEquals("https://anilist.co/anime/1", media?.url)
+        assertEquals("ANIME", media?.type)
+        assertEquals("1", media?.id)
+    }
+
+    @Test
+    fun `a non-AniList URL stays an ordinary link`() {
+        // Only AniList entity links become cards. Treating every URL as one would
+        // put a poster frame on a link to an article.
+        val inlines = AniListMarkdownParser.parseInlines("See https://example.com/x for more")
+
+        assertTrue(inlines.none { it is InlineToken.MediaLink })
+        assertEquals(
+            "https://example.com/x",
+            inlines.filterIsInstance<InlineToken.Link>().firstOrNull()?.url
+        )
     }
 
     /**
@@ -255,7 +274,10 @@ class AniListMarkdownTest {
         val bold = inlines.filterIsInstance<InlineToken.Bold>().firstOrNull()
         assertNotNull("the emphasis run must survive as a Bold token", bold)
 
-        val nestedLink = bold!!.children.filterIsInstance<InlineToken.Link>().firstOrNull()
+        // An AniList link, so it is a `MediaLink` rather than a bare `Link` - but
+        // the point stands: the inner link survives as a child token instead of
+        // being flattened into the bold run's text.
+        val nestedLink = bold!!.children.filterIsInstance<InlineToken.MediaLink>().firstOrNull()
         assertEquals("Hell's Paradise", nestedLink?.label)
         assertEquals("https://anilist.co/anime/128893", nestedLink?.url)
 
@@ -313,5 +335,66 @@ class AniListMarkdownTest {
         val preview = nodes[0] as MarkdownNode.AniListPreviewBlock
         assertEquals("ANIME", preview.type)
         assertEquals("16498", preview.id)
+    }
+
+    /**
+     * The bug the reference screenshots show.
+     *
+     * `**✨ [#1] [Hell's Paradise](url)**` is the shape every "hall of fame" bio
+     * uses, and it rendered as plain underlined text because the block-level
+     * preview only matched a line that was nothing but the bare URL. The link has
+     * to be lifted out of the paragraph and drawn as a card.
+     */
+    @Test
+    fun `a labelled AniList link in a bold run becomes a preview card`() {
+        val nodes = AniListMarkdownParser.parse(
+            "**✨ [#1] [Hell's Paradise](https://anilist.co/anime/128893)**"
+        )
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull("the link must be lifted into a preview card", preview)
+        assertEquals("https://anilist.co/anime/128893", preview!!.url)
+        assertEquals("ANIME", preview.type)
+        assertEquals("128893", preview.id)
+        // The label is the title, not a slug guessed from the URL - that URL has no
+        // readable name in it at all.
+        assertEquals("Hell's Paradise", preview.title)
+
+        // The surrounding text survives, and the link's own text is gone from it
+        // so the title is not printed twice (once as text, once on the card).
+        val paragraph = nodes.filterIsInstance<MarkdownNode.Paragraph>().singleOrNull()
+        assertNotNull("the text around the link must survive as a paragraph", paragraph)
+        val text = paragraph!!.inlines
+            .filterIsInstance<InlineToken.Bold>()
+            .flatMap { it.children }
+            .filterIsInstance<InlineToken.Plain>()
+            .joinToString("") { it.text }
+        assertTrue("the leading text must stay: was '$text'", text.contains("#1"))
+        assertFalse("the link label must not be printed as well", text.contains("Hell's Paradise"))
+    }
+
+    @Test
+    fun `a paragraph with only ordinary links produces no cards`() {
+        val nodes = AniListMarkdownParser.parse(
+            "Just a sentence about anime with a [link](https://example.com)."
+        )
+
+        assertTrue(nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().isEmpty())
+        assertEquals(1, nodes.size)
+    }
+
+    @Test
+    fun `a media link inside a list item is not turned into a card`() {
+        // Cards are a paragraph treatment; a list item stays a line. The link must
+        // still survive as a media link so a card-capable renderer can use it, and
+        // the inline renderer falls back to a titled link rather than dropping it.
+        val nodes = AniListMarkdownParser.parse("- [Hell's Paradise](https://anilist.co/anime/128893)")
+
+        assertTrue(nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().isEmpty())
+        val list = nodes.filterIsInstance<MarkdownNode.ListBlock>().singleOrNull()
+        assertNotNull(list)
+        assertNotNull(
+            list!!.items.flatten().filterIsInstance<InlineToken.MediaLink>().firstOrNull()
+        )
     }
 }

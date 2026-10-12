@@ -150,6 +150,17 @@ data class MediaListEntryItem(
      * and Moshi leaves an unasked-for field null rather than failing.
      */
     val completedAt: FuzzyDate? = null,
+    /**
+     * When the viewer last touched this entry, as a Unix timestamp in seconds.
+     *
+     * This is the only real recency signal an AniList list entry carries: the
+     * collection arrives grouped by list *status*, with no date on the entry and
+     * no sort argument on the query, which is why "List order" cannot honestly be
+     * called "Recent". `updatedAt` is what AniList itself orders by, and it is
+     * what the Library's "Recently updated" sort reads - "you last updated this
+     * title on ...".
+     */
+    val updatedAt: Int? = null,
     val media: MediaNode
 )
 

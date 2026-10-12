@@ -97,6 +97,15 @@ fun ProfileDestination(
     navController: NavHostController,
     onSignInAgain: () -> Unit,
     /**
+     * True only for the signed-in viewer's own profile.
+     *
+     * Controls whether the tier-list trophy is offered. Defaulted to false so a
+     * route that forgets to say lands on the safe side - a followed or scanned
+     * profile - rather than offering a control that opens the wrong account's
+     * ranking.
+     */
+    isOwnProfile: Boolean = false,
+    /**
      * The Library tab's remembered media type.
      *
      * Passed in rather than built here so there is exactly one DataStore reader
@@ -152,6 +161,7 @@ fun ProfileDestination(
             navController.navigate(ProfileRoutes.byId(person.id))
         },
         onNavigateBack = { navController.popBackStack() },
+        isOwnProfile = isOwnProfile,
         onOpenTierList = { navController.navigate(AppRoutes.TIER_LIST) },
         libraryPreferences = libraryPreferences,
         onSignInAgain = onSignInAgain,

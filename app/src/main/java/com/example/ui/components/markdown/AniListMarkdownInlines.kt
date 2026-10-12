@@ -162,6 +162,24 @@ private fun AnnotatedString.Builder.appendTokens(
                 allowLinks = allowLinks
             )
 
+            // The fallback for an AniList media link. `AniListMarkdownView`
+            // lifts these out of a paragraph into a cover card; everywhere a card
+            // cannot be drawn - a list item, a header, a table cell, a truncated
+            // bio - the link has to still read as a link, or the title would
+            // simply vanish from the sentence.
+            is InlineToken.MediaLink -> appendLink(
+                url = token.url,
+                label = token.label,
+                children = emptyList(),
+                styles = linkStyles,
+                onLinkClick = onLinkClick,
+                mentionStyles = mentionStyles,
+                codeBackground = codeBackground,
+                spoilerBackground = spoilerBackground,
+                spoilerColor = spoilerColor,
+                allowLinks = allowLinks
+            )
+
             is InlineToken.Mention -> {
                 val label = "@${token.username}"
                 if (allowLinks) {

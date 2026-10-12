@@ -85,4 +85,19 @@ class MarkdownMediaPreviewTest {
     fun `zero is not a valid media id`() {
         assertTrue(mediaPreviewIdsIn("https://anilist.co/anime/0").isEmpty())
     }
+
+    /**
+     * The half that makes a card show a *cover*.
+     *
+     * This collector drives the single batched request, so a link it cannot see is
+     * a card with a title and a permanently empty poster frame. The shape that
+     * matters is the labelled link inside a bold run every "hall of fame" bio
+     * uses - not the bare-URL line this already handled.
+     */
+    @Test
+    fun `a labelled link inside a bold run still yields its id`() {
+        val bio = "**✨ [#1] [Hell's Paradise](https://anilist.co/anime/128893)**\n\n*Loyal to it.*"
+
+        assertEquals(listOf(128893), mediaPreviewIdsIn(bio))
+    }
 }

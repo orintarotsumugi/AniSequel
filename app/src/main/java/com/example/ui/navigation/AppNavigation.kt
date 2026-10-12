@@ -528,6 +528,10 @@ fun AppNavigation(
                 isDemo = signedInViewer == null,
                 navController = navController,
                 onSignInAgain = authViewModel::logout,
+                // This is the viewer's own profile, so the tier list - a ranking
+                // of their own saved work - belongs on its bar. The scanned and
+                // followed routes leave this defaulted off.
+                isOwnProfile = true,
                 libraryPreferences = libraryPreferences,
                 initialTab = if (requestedTab == ProfileRoutes.TAB_ACTIVITY) {
                     ProfileRoutes.ACTIVITY_TAB_INDEX

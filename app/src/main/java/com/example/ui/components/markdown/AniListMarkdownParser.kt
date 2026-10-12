@@ -116,11 +116,14 @@ object AniListMarkdownParser {
             if (anilistPreviewMatch != null) {
                 val type = anilistPreviewMatch.groupValues[1].uppercase()
                 val id = anilistPreviewMatch.groupValues[2]
-                val rawSlug = anilistPreviewMatch.groupValues[3].ifEmpty { "$type #$id" }
-                val title = rawSlug.replace('-', ' ').replace('_', ' ').split(' ').joinToString(" ") { word ->
-                    word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                }
-                nodes.add(MarkdownNode.AniListPreviewBlock(url = trimmedLine, type = type, id = id, title = title))
+                nodes.add(
+                    MarkdownNode.AniListPreviewBlock(
+                        url = trimmedLine,
+                        type = type,
+                        id = id,
+                        title = anilistTitleFromSlug(anilistPreviewMatch.groupValues[3], type, id)
+                    )
+                )
                 i++
                 continue
             }
@@ -313,11 +316,63 @@ object AniListMarkdownParser {
             }
             if (paragraphLines.isNotEmpty()) {
                 val fullText = paragraphLines.joinToString(" ")
-                nodes.add(MarkdownNode.Paragraph(parseInlines(fullText)))
+                // AniList links are lifted out of the paragraph and drawn as cards.
+                //
+                // The block-level check above cannot see the shape bios actually
+                // use: it matches a line that is nothing but the URL, while the
+                // standard "hall of fame" entry is a labelled link inside a bold
+                // run (`**✨ [#1] [Title](https://anilist.co/anime/123)**`). That
+                // rendered as plain text, which is the reported bug - the card
+                // existed only for a bio nobody writes.
+                val (text, mediaLinks) = splitMediaLinks(parseInlines(fullText))
+                if (text.isNotEmpty()) nodes.add(MarkdownNode.Paragraph(text))
+                mediaLinks.forEach { link ->
+                    nodes.add(
+                        MarkdownNode.AniListPreviewBlock(
+                            url = link.url,
+                            type = link.type,
+                            id = link.id,
+                            title = link.label
+                        )
+                    )
+                }
             }
         }
 
         return nodes
+    }
+
+    /**
+     * A readable title for an AniList URL, taken from its slug when it has one.
+     *
+     * `anilist.co/anime/128893/Hells-Paradise` carries the name;
+     * `anilist.co/anime/128893` does not, so the fallback names the type and id
+     * rather than leaving the card heading blank.
+     */
+    private fun anilistTitleFromSlug(slug: String, type: String, id: String): String {
+        val raw = slug.ifEmpty { "$type #$id" }
+        return raw.replace('-', ' ').replace('_', ' ')
+            .split(' ')
+            .joinToString(" ") { word ->
+                word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+    }
+
+    /**
+     * An AniList entity link written *inside* a line, as a [InlineToken.MediaLink].
+     *
+     * Null when [url] is not an AniList entity address, so an ordinary link like
+     * `[docs](https://example.com)` keeps its plain [InlineToken.Link] treatment and
+     * is not turned into a card. The label wins over the URL's slug because a
+     * labelled link is the title the author chose, and it is the shape every
+     * "hall of fame" bio uses.
+     */
+    private fun anilistMediaLink(label: String, url: String): InlineToken.MediaLink? {
+        val match = ANILIST_PREVIEW_PATTERN.matchEntire(url) ?: return null
+        val type = match.groupValues[1].uppercase()
+        val id = match.groupValues[2]
+        val title = label.trim().ifEmpty { anilistTitleFromSlug(match.groupValues[3], type, id) }
+        return InlineToken.MediaLink(label = title, url = url, type = type, id = id)
     }
 
     /**
@@ -390,19 +445,28 @@ object AniListMarkdownParser {
                 "LINK" -> {
                     val label = firstMatch.groupValues[1]
                     val url = firstMatch.groupValues[2]
-                    // A label may itself be emphasised (`[**AniList**](url)`),
-                    // which used to print the asterisks verbatim.
-                    tokens.add(InlineToken.Link(label, url, nested(label, depth)))
+                    // An AniList entity link is kept as a media link so the renderer
+                    // can draw a cover card for it; anything else stays a plain link.
+                    val mediaLink = anilistMediaLink(label, url)
+                    if (mediaLink != null) {
+                        tokens.add(mediaLink)
+                    } else {
+                        // A label may itself be emphasised (`[**AniList**](url)`),
+                        // which used to print the asterisks verbatim.
+                        tokens.add(InlineToken.Link(label, url, nested(label, depth)))
+                    }
                 }
                 "AUTO_URL" -> {
                     val url = firstMatch.value
-                    // A bare URL that points at an image gets embedded rather than
-                    // linked, so `https://.../cat.gif` between two words animates.
+                    val mediaLink = anilistMediaLink(label = "", url = url)
                     tokens.add(
-                        if (IMAGE_EXTENSION.containsMatchIn(url)) {
-                            InlineToken.Image(url)
-                        } else {
-                            InlineToken.Link(url, url)
+                        when {
+                            mediaLink != null -> mediaLink
+                            // A bare URL that points at an image gets embedded rather
+                            // than linked, so `https://.../cat.gif` between two words
+                            // animates.
+                            IMAGE_EXTENSION.containsMatchIn(url) -> InlineToken.Image(url)
+                            else -> InlineToken.Link(url, url)
                         }
                     )
                 }

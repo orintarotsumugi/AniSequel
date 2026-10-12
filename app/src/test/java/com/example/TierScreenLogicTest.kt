@@ -14,6 +14,7 @@ import com.example.ui.screens.tier.tierDropTarget
 import com.example.ui.screens.tier.tierItemAt
 import com.example.ui.screens.tier.tierListSubtitle
 import com.example.ui.screens.tier.tierRowColor
+import com.example.ui.screens.tier.visibleTierItems
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -226,6 +227,53 @@ class TierScreenLogicTest {
         // The label gutter belongs to the row, not to the tile beside it, so a
         // long press there must not start a drag.
         assertNull(tierItemAt(layout.items, 1f, layout.rows[0].y + 10f))
+    }
+
+    // ---- Drag emission -----------------------------------------------------
+
+    /**
+     * The dragged tile is dropped from the drawn list, and *only* that tile.
+     *
+     * This pins the failure that crashed the screen: the skip was applied to the
+     * emitted children but not to the slot list the measure policy positions them
+     * against, so `check(measurables.size == slots.size)` failed by one the instant
+     * a long-press began a drag. The fix is that both halves read one filtered
+     * list, which this asserts is the same list.
+     */
+    @Test
+    fun `the tile under the finger is dropped from the drawn list`() {
+        val layout = board()
+        val dragged = layout.items[2]
+
+        val drawn = visibleTierItems(layout.items, dragged.mediaId)
+
+        assertEquals(
+            "the dragged tile must not be emitted as a board child, or the geometry " +
+                "emits one poster fewer than it has slots and the board throws",
+            layout.items.size - 1,
+            drawn.size
+        )
+        assertTrue(
+            "the tile being dragged is still in the drawn list",
+            drawn.none { it.mediaId == dragged.mediaId }
+        )
+        // Order is preserved, because the emitted children and the slots are
+        // matched by index rather than by id.
+        assertEquals(layout.items.filterNot { it.mediaId == dragged.mediaId }, drawn)
+    }
+
+    @Test
+    fun `with nothing dragged every tile is drawn`() {
+        val layout = board()
+
+        assertEquals(layout.items, visibleTierItems(layout.items, null))
+    }
+
+    @Test
+    fun `a skip id that matches no tile drops nothing`() {
+        val layout = board()
+
+        assertEquals(layout.items, visibleTierItems(layout.items, 9999))
     }
 
     // ---- Colour ------------------------------------------------------------

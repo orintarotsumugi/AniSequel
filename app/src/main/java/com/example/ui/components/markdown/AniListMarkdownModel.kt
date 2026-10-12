@@ -91,6 +91,87 @@ internal fun mediaPreviewIdsIn(nodes: List<MarkdownNode>): List<Int> {
 }
 
 /**
+ * Splits a paragraph's inline tree into the text that stays and the AniList
+ * links that become cards.
+ *
+ * A media link does not have to be a top-level token to be found: the commonest
+ * bio shape wraps it in a bold run (`**✨ [#1] [Title](url)**`), so the walk
+ * descends into every emphasis run and link label. An emphasis run left with no
+ * children is dropped rather than kept as an empty wrapper, and the returned text
+ * list keeps the original order so the surrounding sentence still reads.
+ *
+ * Returns the text tokens first and the extracted links second, in document
+ * order. The caller emits the paragraph it is given and then one card per link,
+ * which is the reading order the reference clients use.
+ */
+internal fun splitMediaLinks(
+    inlines: List<InlineToken>
+): Pair<List<InlineToken>, List<InlineToken.MediaLink>> {
+    val kept = mutableListOf<InlineToken>()
+    val links = mutableListOf<InlineToken.MediaLink>()
+
+    inlines.forEach { token ->
+        when (token) {
+            is InlineToken.MediaLink -> links += token
+
+            is InlineToken.Bold,
+            is InlineToken.Italic,
+            is InlineToken.BoldItalic,
+            is InlineToken.Underline,
+            is InlineToken.Strikethrough,
+            is InlineToken.Link -> {
+                val (children, found) = splitMediaLinks(token.nestedTokens())
+                links += found
+                if (found.isEmpty()) {
+                    // Nothing was lifted out, so the original token is kept
+                    // untouched. Rebuilding it would fill in `children` that the
+                    // depth cap deliberately left empty, and would allocate a new
+                    // token for every emphasis run in every bio for no gain.
+                    kept += token
+                } else {
+                    token.withNested(children)?.let(kept::add)
+                }
+            }
+
+            else -> kept += token
+        }
+    }
+
+    return kept to links
+}
+
+/** The inner expression of an emphasis run or link label, empty for anything else. */
+private fun InlineToken.nestedTokens(): List<InlineToken> = when (this) {
+    is InlineToken.Bold -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
+    is InlineToken.Italic -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
+    is InlineToken.BoldItalic -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
+    is InlineToken.Underline -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
+    is InlineToken.Strikethrough -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
+    is InlineToken.Link -> children
+    else -> emptyList()
+}
+
+/**
+ * The same wrapper carrying [children], or null when nothing is left inside it.
+ *
+ * Null is the point: a bold run that was *entirely* a media link has no text of
+ * its own once the link is lifted out, and emitting it would draw an empty
+ * emphasis wrapper - a blank line where the card already says everything.
+ */
+private fun InlineToken.withNested(children: List<InlineToken>): InlineToken? {
+    if (children.isEmpty()) return null
+    return when (this) {
+        is InlineToken.Bold -> copy(children = children)
+        is InlineToken.Italic -> copy(children = children)
+        is InlineToken.BoldItalic -> copy(children = children)
+        is InlineToken.Underline -> copy(children = children)
+        is InlineToken.Strikethrough -> copy(children = children)
+        is InlineToken.Link -> copy(children = children)
+        else -> this
+    }
+}
+
+/**
  * This link's media id, or null when it does not name media.
  *
  * The single definition of "is this card a media card", shared by the batch
@@ -145,6 +226,35 @@ sealed interface InlineToken {
         val label: String,
         val url: String,
         val children: List<InlineToken> = emptyList()
+    ) : InlineToken
+
+    /**
+     * A link to an AniList entity, kept apart from a plain [Link] so the renderer
+     * can draw a cover card for it instead of an underlined title.
+     *
+     * ## Why this is its own token
+     *
+     * The block-level preview only ever matched a line that was *nothing but* a
+     * bare AniList URL. Bios almost never write one that way - the standard
+     * "hall of fame" entry is a labelled link inside a bold run:
+     *
+     * ```
+     * **✨ [#1] [Hell's Paradise](https://anilist.co/anime/128893)**
+     * ```
+     *
+     * That fell through to the paragraph path and rendered as plain text, so the
+     * preview card existed for a shape of bio nobody writes. Recognising the link
+     * wherever it appears in a line is what makes the card actually show up.
+     *
+     * [label] is the link's own text (the title a reader recognises) rather than a
+     * slug guessed from the URL, which for `anime/128893` has nothing readable in
+     * it at all.
+     */
+    data class MediaLink(
+        val label: String,
+        val url: String,
+        val type: String,
+        val id: String
     ) : InlineToken
     data class Mention(val username: String) : InlineToken
     data class Spoiler(val text: String) : InlineToken

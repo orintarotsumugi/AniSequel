@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -325,12 +326,19 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
  * [coverUrl] is looked up by media id by the caller rather than fetched here,
  * because a bio can carry a dozen of these and one request each would spend a
  * dozen of AniList's 30-a-minute budget before the reader had scrolled. The
- * caller batches them and passes a map; a miss simply draws the badge alone,
- * which is what this rendered before covers existed at all.
+ * caller batches them and passes a map; a miss leaves the type icon sitting in
+ * the poster frame rather than an empty hole, so the card keeps its shape.
  *
  * The poster keeps its 2:3 shape rather than being squashed into a square
  * thumbnail - a cropped portrait face loses the one thing a poster is good for,
  * which is being recognised.
+ *
+ * The poster slot is reserved whether or not [coverUrl] resolved. It used to be
+ * omitted entirely on a miss, so the card started as a single column of text and
+ * jumped to two the moment the cover arrived - which re-laid out the whole bio
+ * under the reader's eyes. The type icon underneath keeps the frame from reading
+ * as a broken image in the meantime, and for an entity that will never have a
+ * cover (a studio, a staff member) the frame still matches every other card.
  */
 @Composable
 fun RenderAniListPreview(
@@ -338,7 +346,6 @@ fun RenderAniListPreview(
     coverUrl: String? = null
 ) {
     val context = LocalContext.current
-    val mediaId = preview.id.toIntOrNull()
 
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -354,18 +361,30 @@ fun RenderAniListPreview(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (coverUrl != null) {
-                AsyncImage(
-                    model = coverUrl,
+            // One poster frame, always drawn, so the card has a single shape
+            // whether the cover has loaded, is missing, or can never exist.
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .aspectRatio(POSTER_ASPECT)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = previewFallback(preview.type),
                     contentDescription = null,
-                    modifier = Modifier
-                        .width(44.dp)
-                        .aspectRatio(POSTER_ASPECT)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberVectorPainter(previewFallback(preview.type))
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
                 )
+                if (coverUrl != null) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = preview.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
 
             Column(modifier = Modifier.weight(1f)) {
@@ -377,7 +396,7 @@ fun RenderAniListPreview(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -394,8 +413,12 @@ fun RenderAniListPreview(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
+                    // The numeric id used to be printed here. It told the reader
+                    // nothing they could act on and made every card look like a
+                    // debug row; the badge plus the link icon says what this is
+                    // and where tapping goes.
                     Text(
-                        text = "#${preview.id}",
+                        text = "AniList",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1

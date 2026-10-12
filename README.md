@@ -56,12 +56,14 @@ counts, and the screen used to discard all of it once it had tallied what it
 needed. Manga is the one half nothing else needed, so it is fetched the first
 time somebody filters to it and then cached.
 
-### The tier list (domain layer only, not yet reachable)
+### The tier list
 
 `domain/tier/` holds the rules, the geometry and the exporter as pure Kotlin with
-no Android or Compose imports. **No screen is wired to it yet** — it is the part
-that can be tested without a device, built first so the approach is proven before
-Compose is written on top of it.
+no Android or Compose imports, so the whole arrangement is testable without a
+device. The profile's top bar opens it from a small trophy beside the name — and
+**only on your own profile**: the ranking is stored keyed to the signed-in
+account, so it means nothing on somebody else's, which is why the control is
+hidden off your own rather than shown and re-explained.
 
 One layout is computed and intended for several renderers, rather than each
 arranging the list for itself — three independent arrangements is how an export
