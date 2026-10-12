@@ -209,6 +209,36 @@ class TierListTest {
     }
 
     @Test
+    fun `a tile carries its poster height, not just its full height`() {
+        // Found by reading the SVG writer against the layout: it recovered the
+        // poster by multiplying `height` by 1.5, but `height` is poster *plus
+        // caption*. At the default options that inflated every poster by 86% and
+        // put the caption baseline inside the artwork.
+        val options = TierLayoutOptions(itemWidth = 72f, captionHeight = 26f)
+        val layout = layoutTierList(
+            tiers = StandardTiers,
+            assignment = TierAssignment(mapOf(1 to "s")),
+            candidates = listOf(candidate(1)),
+            title = "T",
+            options = options
+        )
+
+        val box = layout.boxByMediaId.getValue(1)
+        assertEquals(options.posterHeight, box.posterHeight, 0.001f)
+        assertEquals(
+            "the poster must not be taller than the whole tile",
+            true,
+            box.posterHeight < box.height
+        )
+        assertEquals(
+            "tile height is poster + caption",
+            options.posterHeight + options.captionHeight,
+            box.height,
+            0.001f
+        )
+    }
+
+    @Test
     fun `every item is reachable through the id map`() {
         val layout = layoutTierList(
             tiers = StandardTiers,

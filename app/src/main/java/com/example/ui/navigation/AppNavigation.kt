@@ -36,13 +36,16 @@ import com.example.data.repository.AuthRepository
 import com.example.data.repository.HiddenSequelsPreferences
 import com.example.data.repository.RefreshIntervalPreferences
 import com.example.data.repository.ThemePreferences
+import com.example.data.repository.TierListPreferences
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.tier.TierListScreen
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.DashboardUiState
 import com.example.ui.viewmodel.DashboardViewModel
+import com.example.ui.viewmodel.TierListViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
 object AppRoutes {
@@ -51,6 +54,7 @@ object AppRoutes {
     const val DASHBOARD_DEMO = "dashboard_demo"
     const val DASHBOARD_USER = "dashboard_user/{username}"
     const val SETTINGS = "settings"
+    const val TIER_LIST = "tier_list"
 
     fun userDashboard(username: String) = "dashboard_user/$username"
 }
@@ -145,6 +149,22 @@ fun AppNavigation(
 
     val quickAddPreferences = remember(context) {
         com.example.data.repository.QuickAddPreferences(context.applicationContext)
+    }
+
+    // The Library tab's remembered media type. Application-scoped and built here
+    // for the same reason as the rest: one DataStore reader per process, so the
+    // tab cannot disagree with itself about what was last chosen.
+    val libraryPreferences = remember(context) {
+        com.example.data.repository.LibraryPreferences(context.applicationContext)
+    }
+
+    // Application-scoped for the same reason as the rest: the tier list is the
+    // reader's own saved work, and a tier list built one visit and thrown away on
+    // the next is worse than no feature at all. `remember` keyed on `context` is
+    // what keeps one DataStore reader per process, so a second destination cannot
+    // disagree with this one about what is filed where.
+    val tierListPreferences = remember(context) {
+        TierListPreferences(context.applicationContext)
     }
 
     // The cache window is a supplier rather than a value because the user can
@@ -255,7 +275,16 @@ fun AppNavigation(
             }
             is AuthUiState.Unauthenticated -> {
                 val currentRoute = navController.currentDestination?.route
-                if (currentRoute == AppRoutes.DASHBOARD || currentRoute == AppRoutes.SETTINGS) {
+                // The tier list is named here for the same reason the other two
+                // are. It reads one person's saved work and needs no session of
+                // its own, so nothing would ever move the user off it - which is
+                // precisely the failure: an AniList 401 that lands while the list
+                // is open would drop the session and leave the ranking on screen
+                // with no dashboard, no sign-in and no way forward but Back.
+                if (currentRoute == AppRoutes.DASHBOARD ||
+                    currentRoute == AppRoutes.SETTINGS ||
+                    currentRoute == AppRoutes.TIER_LIST
+                ) {
                     // `popUpTo(0)` is not a destination - it popped nothing and
                     // left the dashboard underneath the login screen, so signing
                     // out and back in replayed the old dashboard state.
@@ -499,6 +528,7 @@ fun AppNavigation(
                 isDemo = signedInViewer == null,
                 navController = navController,
                 onSignInAgain = authViewModel::logout,
+                libraryPreferences = libraryPreferences,
                 initialTab = if (requestedTab == ProfileRoutes.TAB_ACTIVITY) {
                     ProfileRoutes.ACTIVITY_TAB_INDEX
                 } else {
@@ -523,7 +553,8 @@ fun AppNavigation(
                 userId = null,
                 isDemo = false,
                 navController = navController,
-                onSignInAgain = authViewModel::logout
+                onSignInAgain = authViewModel::logout,
+                libraryPreferences = libraryPreferences
             )
         }
 
@@ -541,7 +572,37 @@ fun AppNavigation(
                 userId = userId,
                 isDemo = false,
                 navController = navController,
-                onSignInAgain = authViewModel::logout
+                onSignInAgain = authViewModel::logout,
+                libraryPreferences = libraryPreferences
+            )
+        }
+
+        composable(AppRoutes.TIER_LIST) {
+            // Built at the destination rather than hoisted beside the dashboard's,
+            // because unlike the dashboard it is not shared between two routes and
+            // the whole cost of holding it is one person's list: scoping it here
+            // means leaving the screen discards nothing, because everything worth
+            // keeping was already written to DataStore by the ViewModel.
+            val tierListViewModel: TierListViewModel = viewModel(
+                factory = TierListViewModel.Factory(
+                    preferences = tierListPreferences,
+                    // The tier list is a ranking of the *signed-in viewer's* own
+                    // library, so it needs their id and their session. Opening
+                    // somebody else's profile must never rank their titles into
+                    // the viewer's list.
+                    aniListRepository = aniListRepository,
+                    userId = signedInViewer?.id,
+                    isDemo = signedInViewer == null
+                )
+            )
+
+            // No Scaffold or TopAppBar here. Every other destination hands its
+            // screen a back lambda and lets the screen own its bar - Settings does
+            // it this way too - and a bar added around the screen instead would be
+            // a second one stacked on top of the tier list's own header.
+            TierListScreen(
+                tierListViewModel = tierListViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

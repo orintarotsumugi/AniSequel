@@ -1,8 +1,20 @@
 {
   "versions": [
     {
-      "version": "1.1.1",
+      "version": "1.1.3",
       "entries": [
+        {
+          "title": "Library sorting that actually sorts",
+          "detail": "The sort control was partly a no-op. 'Recent' did not sort by recency at all - AniList returns your library grouped by list status with no date on an entry, so it showed every Completed title, then every Watching one, then every Planned one, under a name that promised otherwise. It is now 'List order', which is what it genuinely is, and the sorts that can be done properly are the ones offered: A-Z, score, and release year. Scores open highest-first rather than lowest."
+        },
+        {
+          "title": "Your Library remembers anime or manga",
+          "detail": "The tab used to open on 'All', which mixes your manga in among your anime and splits them across a page boundary. If you pick one, it is remembered and reopened there - only the choice, never the data, so the library itself is still fetched once and cached as before. The toggle row also gains Release year, and a direction arrow only appears on sorts that actually have a direction."
+        },
+        {
+          "title": "Your tier list",
+          "detail": "A small trophy beside the profile name opens it. Your list is saved as you build it and survives leaving the screen, keyed to your own AniList account so somebody else's profile can never rank titles into it. Start empty and drag titles in, or rank everything from AniList scores in one tap - titles nobody has scored are counted and left for you rather than being silently ranked at the bottom. Tiers can be renamed, added and removed, pinch to zoom, and long-press to drag between rows."
+        },
         {
           "title": "The Info tab stops printing API jargon",
           "detail": "A title's status was being shown exactly as AniList names it, so an airing show read RELEASING, an unreleased one read NOT_YET_RELEASED, and an unrecognised one read UNKNOWN - in the same typeface as '24 episodes - Winter 2023' directly beside it. Those now read Airing, Upcoming, On hiatus and Cancelled. A status the app has never seen is shown as it arrives rather than rewritten into 'Unknown', so a new one from AniList is not silently mislabelled."

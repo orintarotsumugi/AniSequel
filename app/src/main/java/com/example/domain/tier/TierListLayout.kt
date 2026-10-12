@@ -9,13 +9,25 @@ package com.example.domain.tier
  * kind of bug nobody reports because the file "looks fine".
  */
 
-/** Where one item's tile sits, in output units. */
+/**
+ * Where one item's tile sits, in output units.
+ *
+ * [posterHeight] is carried separately from [height] because the two are
+ * different things and re-deriving one from the other is how a renderer gets it
+ * wrong. [height] is the poster *plus its caption*.
+ *
+ * The SVG writer previously recovered the poster by multiplying [height] by 1.5,
+ * which inflated every poster by 86% at the default options and put the caption
+ * baseline inside the artwork. Nothing about a multiply can recover a sum, so the
+ * number the layout already knew is now handed over directly.
+ */
 data class TierItemBox(
     val mediaId: Int,
     val x: Float,
     val y: Float,
     val width: Float,
-    val height: Float
+    val height: Float,
+    val posterHeight: Float
 ) {
     val right: Float get() = x + width
     val bottom: Float get() = y + height
@@ -142,7 +154,8 @@ fun layoutTierList(
                 x = x,
                 y = y,
                 width = o.itemWidth,
-                height = itemHeight
+                height = itemHeight,
+                posterHeight = o.posterHeight
             )
         }
 

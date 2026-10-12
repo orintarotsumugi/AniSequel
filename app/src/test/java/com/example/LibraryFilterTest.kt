@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.model.FuzzyDate
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.MediaTitle
@@ -15,6 +16,7 @@ import com.example.ui.screens.profile.toggleSort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -210,14 +212,23 @@ class LibraryFilterTest {
             entry(id = 3, score = 90)
         )
 
+        // Both directions check `.last()`. An earlier version of this asserted
+        // `.first()` while the message demanded it not be first - so the test
+        // passed on the very behaviour it was written to catch, because it was
+        // asserting the ordering was wrong rather than that it was right.
         assertEquals(
             "descending must not put an unrated title first",
             2,
-            sortLibrary(entries, LibrarySort.SCORE, ascending = false).first().media.id
+            sortLibrary(entries, LibrarySort.SCORE, ascending = false).last().media.id
         )
         assertEquals(
             2,
             sortLibrary(entries, LibrarySort.SCORE, ascending = true).last().media.id
+        )
+        assertEquals(
+            "descending still orders the rated titles among themselves",
+            listOf(3, 1, 2),
+            sortLibrary(entries, LibrarySort.SCORE, ascending = false).map { it.media.id }
         )
     }
 
@@ -242,7 +253,73 @@ class LibraryFilterTest {
 
         assertEquals(
             listOf(9, 3, 7),
-            sortLibrary(entries, LibrarySort.RECENT, ascending = true).map { it.media.id }
+            sortLibrary(entries, LibrarySort.LIST_ORDER, ascending = true).map { it.media.id }
+        )
+    }
+
+    @Test
+    fun `list order is left exactly as anilist returned it`() {
+        // AniList returns the library grouped by status - all Completed, then
+        // all Watching, then all Planned - and the list query carries no sort
+        // argument and no timestamp on an entry. So this is not recency, and the
+        // old "Recent" label claimed it was. The order is preserved rather than
+        // reversed, because a direction on a sort that has none is a lie.
+        val entries = listOf(entry(id = 1), entry(id = 2), entry(id = 3))
+
+        assertEquals(
+            listOf(1, 2, 3),
+            sortLibrary(entries, LibrarySort.LIST_ORDER, ascending = true).map { it.media.id }
+        )
+        assertEquals(
+            listOf(1, 2, 3),
+            sortLibrary(entries, LibrarySort.LIST_ORDER, ascending = false).map { it.media.id }
+        )
+    }
+
+    @Test
+    fun `tapping list order moves on instead of appearing to do nothing`() {
+        // A control that visibly ignores a tap is one the reader learns to
+        // distrust, and this one used to do exactly that.
+        val order = toggleSort(LibrarySort.LIST_ORDER, currentAscending = true)
+
+        assertEquals(LibrarySort.TITLE, order.first)
+    }
+
+    @Test
+    fun `only sorts with a real direction claim one`() {
+        assertFalse(LibrarySort.LIST_ORDER.isDirectional)
+        assertTrue(LibrarySort.TITLE.isDirectional)
+        assertTrue(LibrarySort.SCORE.isDirectional)
+        assertTrue(LibrarySort.RELEASE_YEAR.isDirectional)
+    }
+
+    @Test
+    fun `release year sorts by season year, falling back to the start date`() {
+        val entries = listOf(
+            entry(id = 1, seasonYear = 2019),
+            entry(id = 2, startYear = 2011),
+            entry(id = 3, seasonYear = 2024)
+        )
+
+        val result = sortLibrary(entries, LibrarySort.RELEASE_YEAR, ascending = true)
+
+        assertEquals(listOf(2, 1, 3), result.map { it.media.id })
+    }
+
+    @Test
+    fun `an undated title sorts last in either direction`() {
+        val entries = listOf(
+            entry(id = 1, seasonYear = 2019),
+            entry(id = 2, seasonYear = null, startYear = null)
+        )
+
+        assertEquals(
+            2,
+            sortLibrary(entries, LibrarySort.RELEASE_YEAR, ascending = false).last().media.id
+        )
+        assertEquals(
+            2,
+            sortLibrary(entries, LibrarySort.RELEASE_YEAR, ascending = true).last().media.id
         )
     }
 
@@ -310,6 +387,8 @@ class LibraryFilterTest {
         progress: Int? = null,
         episodes: Int? = null,
         score: Int? = null,
+        seasonYear: Int? = null,
+        startYear: Int? = null,
         title: String? = "Entry $id"
     ) = MediaListEntryItem(
         status = status,
@@ -319,7 +398,9 @@ class LibraryFilterTest {
             type = type,
             title = title?.let { MediaTitle(english = it) },
             episodes = episodes,
-            averageScore = score
+            averageScore = score,
+            seasonYear = seasonYear,
+            startDate = startYear?.let { FuzzyDate(year = it) }
         )
     )
 }

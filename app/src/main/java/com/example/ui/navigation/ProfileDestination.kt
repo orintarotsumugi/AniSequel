@@ -96,6 +96,14 @@ fun ProfileDestination(
     isDemo: Boolean,
     navController: NavHostController,
     onSignInAgain: () -> Unit,
+    /**
+     * The Library tab's remembered media type.
+     *
+     * Passed in rather than built here so there is exactly one DataStore reader
+     * per process. Two readers of the same file is how the tab ends up
+     * disagreeing with itself about what was last chosen.
+     */
+    libraryPreferences: com.example.data.repository.LibraryPreferences,
     initialTab: Int = 0
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
@@ -144,6 +152,8 @@ fun ProfileDestination(
             navController.navigate(ProfileRoutes.byId(person.id))
         },
         onNavigateBack = { navController.popBackStack() },
+        onOpenTierList = { navController.navigate(AppRoutes.TIER_LIST) },
+        libraryPreferences = libraryPreferences,
         onSignInAgain = onSignInAgain,
         initialTab = initialTab
     )

@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
+import com.example.data.repository.LibraryPreferences
 import com.example.data.model.isManga
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveEmptyOrb
@@ -58,6 +60,8 @@ import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.components.expressive.ExpressiveStateChip
 import com.example.ui.components.expressive.bouncyPress
 import com.example.ui.theme.AniSequelTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** Which media type the Library is showing. */
@@ -76,9 +80,29 @@ enum class LibraryType { ALL, ANIME, MANGA }
  * control that offered it would be busywork.
  */
 enum class LibrarySort(val label: String) {
-    RECENT("Recent"),
+    /**
+     * The order AniList returned, which is grouped by list status.
+     *
+     * This used to be called "Recent" and it was a lie. `MediaListCollection`
+     * returns one list per *status group* - all Completed, then all Currently
+     * Watching, then all Planning - with no timestamp on an entry and no sort
+     * argument in the query. So "Recent" showed a status-grouped blob, and
+     * toggling it did nothing at all, because the branch returned the input
+     * unchanged.
+     *
+     * Renamed to say what it is rather than adding a fake date. A sort the user
+     * can identify from the result is worth more than a plausible name, and
+     * asking AniList for `sort: UPDATED_AT` is the real fix - which needs the
+     * query to take a sort argument.
+     */
+    LIST_ORDER("List order"),
+
     TITLE("A-Z"),
-    SCORE("Score")
+    SCORE("Score"),
+    RELEASE_YEAR("Year");
+
+    /** True when this sort has a meaningful ascending/descending direction. */
+    val isDirectional: Boolean get() = this != LIST_ORDER
 }
 
 /**
@@ -91,21 +115,20 @@ enum class LibrarySort(val label: String) {
 internal fun toggleSort(current: LibrarySort, currentAscending: Boolean): Pair<LibrarySort, Boolean> =
     when (current) {
         LibrarySort.TITLE -> current to !currentAscending
-        // Cycling score -> recent rather than score-descending -> score-ascending:
-        // a score list that starts highest-first is useless, because the entries
-        // you are actually hunting for are at the bottom, out of sight.
+        LibrarySort.RELEASE_YEAR -> current to !currentAscending
+        // Entering Score opens *descending*: highest first. Keeping the previous
+        // direction put the lowest-scored entry on top, so the first thing the
+        // list showed was the show they liked least.
         LibrarySort.SCORE ->
             if (currentAscending) {
-                // Entering the score list *descending*: highest first. Keeping the
-                // previous direction put the lowest-scored entry on top, so the
-                // first thing the list showed was the show they liked least -
-                // and the comment here used to claim the opposite of what the
-                // code did, which is how it survived.
                 LibrarySort.SCORE to false
             } else {
-                LibrarySort.RECENT to false
+                LibrarySort.TITLE to true
             }
-        LibrarySort.RECENT -> current to !currentAscending
+        // List order has no direction to toggle, so the tap moves on instead of
+        // appearing to do nothing. Every control that visibly ignores a tap is a
+        // control the reader learns to distrust.
+        LibrarySort.LIST_ORDER -> LibrarySort.TITLE to true
     }
 
 /**
@@ -122,20 +145,56 @@ internal fun sortLibrary(
     ascending: Boolean
 ): List<MediaListEntryItem> {
     val comparator: Comparator<MediaListEntryItem> = when (sort) {
+        LibrarySort.LIST_ORDER ->
+            // Deliberately untouched. This is the order AniList returned, and
+            // the label says so - there is no date on an entry to reorder by,
+            // so reversing it would only swap two status groups for two others.
+            return entries
         LibrarySort.TITLE -> compareBy { it.media.title?.displayTitle?.lowercase(Locale.ROOT) ?: "" }
-        // `null` sorts last in *both* directions. An unrated title has no score to
-        // rank, so it belongs at the bottom either way rather than pretending to
-        // be zero - which in a descending list would put it at the very top.
-        LibrarySort.SCORE -> compareBy(
-            { it.media.averageScore == null },
-            { it.media.averageScore ?: 0 }
-        )
-        // No timestamp is carried on the list query, so "Recent" is the order
-        // AniList returned, which for a status group is already newest-first.
-        LibrarySort.RECENT -> return entries
+        LibrarySort.SCORE -> return rankedBlanksLast(entries, { it.media.averageScore }, ascending)
+        LibrarySort.RELEASE_YEAR -> return rankedBlanksLast(entries, ::releaseYearOf, ascending)
     }
     return entries.sortedWith(if (ascending) comparator else comparator.reversed())
 }
+
+/**
+ * Sorts by a number some entries may not have, putting those entries at the
+ * bottom in *both* directions.
+ *
+ * The obvious spelling is `compareBy { it.value == null }` followed by
+ * `.reversed()` for descending, and it is wrong in the way that reads as
+ * right: reversing the comparator reverses the flag along with the value, so
+ * descending puts every blank at the **top**. A library sorted by score then
+ * opens on its unrated titles, which is indistinguishable from a list of
+ * favourites - the exact failure the flag was added to prevent.
+ *
+ * So the flag leaves the comparator. Partitioning keeps the direction's reach
+ * over the value and nothing else, and the unrankable are appended afterwards
+ * where no direction can reach them.
+ */
+private fun rankedBlanksLast(
+    entries: List<MediaListEntryItem>,
+    value: (MediaListEntryItem) -> Int?,
+    ascending: Boolean
+): List<MediaListEntryItem> {
+    val (rankable, blank) = entries.partition { value(it) != null }
+    // `Int.MIN_VALUE` is unreachable - every element here has a value - and
+    // exists only to give the selector a non-null return type.
+    val byValue = compareBy<MediaListEntryItem> { value(it) ?: Int.MIN_VALUE }
+    return rankable.sortedWith(if (ascending) byValue else byValue.reversed()) + blank
+}
+
+/**
+ * The year a title first aired or was first published.
+ *
+ * `seasonYear` first because AniList populates it more reliably than
+ * `startDate`, which is frequently partial - a year with no month, or a month
+ * with no year. Falling back rather than preferring the other way round means a
+ * dated title wins even when its second source is absent.
+ */
+internal fun releaseYearOf(entry: MediaListEntryItem): Int? =
+    entry.media.seasonYear
+        ?: entry.media.startDate?.year?.takeIf { it > 0 }
 
 /**
  * The list buckets the Library can be narrowed to.
@@ -334,12 +393,34 @@ fun ProfileLibraryTab(
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier,
+    /** Remembers the last chosen media type. Not defaulted: a caller that forgot
+     *  it would silently never remember, which looks identical to the bug. */
+    libraryPreferences: LibraryPreferences,
     gridState: LazyGridState = rememberLazyGridState()
 ) {
-    var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
-    var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
+    val scope = rememberCoroutineScope()
+    /**
+ * The media type, remembered across visits.
+ *
+ * Null rather than `ALL` until the stored answer arrives, so the grid shows
+ * nothing for one frame instead of briefly rendering the combined list that the
+ * person chose to *avoid*. Once it resolves, the stored name wins; an
+ * unrecognised stored value falls back to ALL rather than leaving the tab empty.
+ */
+val rememberedType by libraryPreferences.lastType.collectAsStateWithLifecycle(initialValue = null)
+var typeChosen by rememberSaveable { mutableStateOf(false) }
+var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
+
+LaunchedEffect(rememberedType) {
+    if (typeChosen) return@LaunchedEffect
+    type = rememberedType?.let { name ->
+        LibraryType.entries.firstOrNull { it.name == name }
+    } ?: LibraryType.ALL
+}
+
+var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(LibrarySort.RECENT) }
+    var sort by rememberSaveable { mutableStateOf(LibrarySort.LIST_ORDER) }
     var sortAscending by rememberSaveable { mutableStateOf(true) }
 
     // The type scope decides what the counts describe, so it is applied first and
@@ -395,9 +476,14 @@ fun ProfileLibraryTab(
                 },
                 isLoadingManga = isLoadingManga,
                 query = query,
-                onType = {
-                    type = it
+                onType = { chosen ->
+                    type = chosen
+                    // Recorded on the tap, not on a save button: the memory is
+                    // there so they are not asked again, and asking them to
+                    // confirm the choice would defeat it.
+                    typeChosen = true
                     query = ""
+                    scope.launch { libraryPreferences.setType(chosen.name) }
                 },
                 onFilter = { filter = it },
                 onQueryChange = { query = it }
@@ -518,9 +604,11 @@ private fun LibraryControls(
                         // so it cannot contradict itself: the chip you did not
                         // touch has no direction to show.
                         label = when {
-                            active && option != LibrarySort.RECENT && sortAscending -> "${option.label} ↑"
-                            active && option != LibrarySort.RECENT -> "${option.label} ↓"
-                            else -> option.label
+                            // No arrow on a sort that has no direction: an arrow
+                            // that cannot change is a lie about the control.
+                            !option.isDirectional -> option.label
+                            sortAscending -> "${option.label} ↑"
+                            else -> "${option.label} ↓"
                         },
                         selected = active,
                         onClick = {

@@ -111,7 +111,10 @@ object TierListSvg {
 
         layout.items.forEach { box ->
             val candidate = candidates.firstOrNull { it.mediaId == box.mediaId }
-            val posterHeightForBox = box.height * 1.5f
+            // Read from the layout, never re-derived. `box.height` is poster
+            // *plus caption*, so multiplying it by 1.5 inflated every poster by
+            // 86% and dropped the caption baseline inside the artwork.
+            val posterHeightForBox = box.posterHeight
 
             append("  <g>\n")
             append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
