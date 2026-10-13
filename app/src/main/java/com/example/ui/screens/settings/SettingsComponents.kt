@@ -60,6 +60,7 @@ fun SectionCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     subtitle: String? = null,
+    badge: (@Composable () -> Unit)? = null,
     /**
      * The icon tile's background. Defaults to the quiet `secondaryContainer`
      * role; the Theme tab passes richer roles so its sections read as the
@@ -112,6 +113,10 @@ fun SectionCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+                if (badge != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    badge()
                 }
             }
             Spacer(modifier = Modifier.height(14.dp))

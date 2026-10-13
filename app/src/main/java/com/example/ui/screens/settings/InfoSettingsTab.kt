@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -28,6 +30,7 @@ import com.example.data.changelog.ChangelogRepository
 import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListOAuth
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.StatsBanner
 import com.example.ui.components.openExternalUrl
 
 @Composable
@@ -64,12 +67,34 @@ fun InfoSettingsTab(
             SectionCard(
                 title = "Not signed in",
                 icon = AppVectorIcons.Login,
-                subtitle = "Demo mode"
+                subtitle = "Demo mode active",
+                badge = {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Text(
+                            text = "DEMO",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             ) {
                 Text(
-                    text = "You are browsing in read-only demo mode. Sign in with your AniList account to scan your completed list and plan sequels.",
+                    text = "You are browsing in read-only demo mode. Sign in with your AniList account to scan your completed list, follow franchise trees, and add sequels to Planning in one tap.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsButton(
+                    text = "Sign in with AniList",
+                    onClick = onNavigateToLogin,
+                    icon = AppVectorIcons.Login,
+                    variant = SettingsButtonVariant.Filled,
+                    fillWidth = true
                 )
             }
         }
@@ -80,9 +105,12 @@ fun InfoSettingsTab(
                 icon = AppVectorIcons.List,
                 subtitle = "Snapshot of the current scan"
             ) {
-                InfoRow(label = "Completed", value = totalWatchedCount.toString())
-                Spacer(modifier = Modifier.height(10.dp))
-                InfoRow(label = "Missed sequels", value = totalMissedCount.toString())
+                StatsBanner(
+                    totalWatched = totalWatchedCount,
+                    missedCount = totalMissedCount
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(10.dp))
                 InfoRow(
                     label = "Planning sync",
@@ -124,50 +152,50 @@ fun InfoSettingsTab(
         SectionCard(
             title = "What's new",
             icon = AppVectorIcons.NewReleases,
-            // The version the notes were written *for*, which is not always this
-            // build's version - see the comment on `changelog` above. Showing the
-            // app's own version here would claim notes belong to a release they
-            // were never part of.
             subtitle = changelog?.version?.let { "Release notes for $it" }
                 ?: BuildConfig.VERSION_NAME
         ) {
             if (changelogEntries.isEmpty()) {
-                // Reachable, and not a cosmetic problem: it is what an install
-                // from a build shipped before the notes were added shows.
-                // Previously this card rendered an empty section, because the
-                // notes were a hardcoded list that nothing could be missing from.
                 Text(
-                    text = "No release notes for this version yet. They are on the " +
-                        "download page in the meantime.",
+                    text = "No release notes for this version yet. They are on the download page in the meantime.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 changelogEntries.forEachIndexed { index, entry ->
                     if (index > 0) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 6.dp, end = 10.dp)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.secondary)
-                        )
-                        Column {
-                            Text(
-                                text = entry.title.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 6.dp, end = 10.dp)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
-                            entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-                                Spacer(modifier = Modifier.height(2.dp))
+                            Column {
                                 Text(
-                                    text = detail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = entry.title.orEmpty(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
                                 )
+                                entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = detail,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -193,10 +221,6 @@ fun InfoSettingsTab(
             text = if (viewer != null) "Sign out" else "Sign in",
             onClick = {
                 if (viewer != null) {
-                    // "Sign out" previously only hopped back to the dashboard
-                    // while the session was still on disk - the one thing a
-                    // button labelled Sign out exists to do was exactly what
-                    // it did not do.
                     onSignOut()
                 } else {
                     onNavigateToLogin()

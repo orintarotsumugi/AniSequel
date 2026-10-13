@@ -43,7 +43,7 @@ class BuildListEntryInsightsUseCase {
         val entries = collection?.lists
             ?.flatMap { it.entries.orEmpty() }
             .orEmpty()
-            .filter { it.status != null && it.media != null }
+            .filter { it.status != null }
 
         val countries = buckets(
             entries.mapNotNull { entry ->

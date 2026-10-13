@@ -94,17 +94,20 @@ class UpdateInstallation(private val context: Context) {
             apk
         )
 
+        @Suppress("DEPRECATION")
+        val fallbackInstallIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            setData(uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
         return listOf(
             Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, APK_MIME_TYPE)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             },
-            Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-                setData(uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            fallbackInstallIntent
         )
     }
 
