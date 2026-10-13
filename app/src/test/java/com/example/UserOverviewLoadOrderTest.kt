@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaListGroup
@@ -92,6 +94,83 @@ class UserOverviewLoadOrderTest {
             assertEquals(11, settled.libraryAnime.single().media.id)
         }
 
+    /**
+     * The bio's cover batch must not be queued behind the chunked list download.
+     *
+     * `getUserAnimeList` is the app's single most expensive query - chunked, one
+     * request per 500 entries, sequentially. `loadMediaCovers` used to be called
+     * *after* `listDeferred.await()`, so every AniList card in a "hall of fame"
+     * bio sat on its placeholder icon for the whole length of that download and
+     * then popped a poster in, and the comment above that call said the opposite
+     * of what the code did.
+     *
+     * The assertion is made while the list is still suspended, which is the only
+     * moment the ordering is observable: once the gate opens both have landed and
+     * the map looks identical either way.
+     */
+    @Test
+    fun `a bio's cover batch is requested while the list download is still in flight`() =
+        runTest(testDispatcher) {
+            val listGate = CompletableDeferred<Unit>()
+            // Named so the assertion can read what the *repository* was asked for.
+            // The ViewModel exposes the answer (`mediaCovers`) but not the question,
+            // and this test is about the question - the batch had to be issued while
+            // the list was still suspended, not merely have landed by the end.
+            val repository = GatedListRepository(
+                listGate = listGate,
+                bio = "**Favourites**\n\nhttps://anilist.co/anime/128893"
+            )
+            val viewModel = UserOverviewViewModel(repository, userId = 1)
+
+            // Idles with the list still suspended: `gate.await()` never completes,
+            // so the scheduler reaches idle with the download in flight, which is
+            // the only moment the ordering is observable.
+            advanceUntilIdle()
+
+            val settled = viewModel.uiState.value as UserOverviewUiState.Success
+            assertTrue("the list must still be in flight", settled.isLibraryLoading)
+            assertTrue("the list has not landed yet", settled.libraryAnime.isEmpty())
+            assertEquals(
+                "covers must be requested without waiting for the list download",
+                listOf(MediaCoverKey("ANIME", 128893)),
+                repository.requestedCoverKeys
+            )
+
+            listGate.complete(Unit)
+            advanceUntilIdle()
+        }
+
+    /**
+     * Covers fetched before the list lands must survive it.
+     *
+     * The state is published twice - once with the list still loading, once with
+     * it - so the cover map has to be owned by something other than the final
+     * publish. Publishing the list-less state over the top of the first would
+     * empty it and put every card back on its placeholder.
+     */
+    @Test
+    fun `covers fetched during the list download are still there once it lands`() =
+        runTest(testDispatcher) {
+            val listGate = CompletableDeferred<Unit>()
+            val viewModel = UserOverviewViewModel(
+                GatedListRepository(
+                    listGate = listGate,
+                    bio = "https://anilist.co/anime/128893"
+                ),
+                userId = 1
+            )
+            advanceUntilIdle()
+            assertTrue(viewModel.mediaCovers.value.isNotEmpty())
+
+            listGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertTrue(
+                "the cover must survive the publish that carries the list",
+                viewModel.mediaCovers.value.containsKey(MediaCoverKey("ANIME", 128893))
+            )
+        }
+
     @Test
     fun `a failed list fetch still shows the profile and stops claiming to be loading`() =
         runTest(testDispatcher) {
@@ -120,8 +199,19 @@ class UserOverviewLoadOrderTest {
      * which is the other half of the contract.
      */
     private class GatedListRepository(
-        private val listGate: CompletableDeferred<Unit>?
+        private val listGate: CompletableDeferred<Unit>?,
+        /** The bio the fake profile carries. Null for the tests that have none. */
+        private val bio: String? = null
     ) : AniListRepository {
+
+        /**
+         * Every key the profile asked a cover for, in order.
+         *
+         * Recorded rather than inferred from the published state, because the
+         * question these tests ask is *when* the batch was requested - and by the
+         * time the list lands, the map looks the same either way.
+         */
+        val requestedCoverKeys = mutableListOf<MediaCoverKey>()
 
         override suspend fun getViewer(): Result<ViewerProfile> = failure()
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> = failure()
@@ -167,10 +257,20 @@ class UserOverviewLoadOrderTest {
             userName: String?,
             forceRefresh: Boolean
         ): Result<UserOverview> = Result.success(
-            // No bio, so the cover batch the profile fires afterwards is skipped:
-            // this test is about the two fetches that build the page.
-            UserOverview(id = 1, name = "Bocchi", about = null)
+            // `bio` is null for the tests that have none, which skips the cover
+            // batch: those are about the two fetches that build the page. The two
+            // ordering tests pass one so the batch exists to be observed.
+            UserOverview(id = 1, name = "Bocchi", about = bio)
         )
+
+        override suspend fun getMediaCovers(
+            keys: List<MediaCoverKey>
+        ): Result<Map<MediaCoverKey, MediaCover>> {
+            requestedCoverKeys += keys
+            return Result.success(
+                keys.associateWith { MediaCover(url = "https://img.anili.st/${it.type}/${it.id}.jpg") }
+            )
+        }
 
         override fun getDemoProfile(): ViewerProfile = ViewerProfile(1, "Demo", null, null)
         override fun getDemoAnimeList(): MediaListCollection = MediaListCollection(emptyList())

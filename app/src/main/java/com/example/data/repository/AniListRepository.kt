@@ -4,6 +4,8 @@ import com.example.data.model.ActivityLikeState
 import com.example.data.model.ActivityReply
 import com.example.data.model.FollowUser
 import com.example.data.model.ListActivity
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.SimpleMediaListEntry
@@ -29,19 +31,24 @@ interface AniListRepository {
     ): Result<MediaListCollection>
 
     /**
-     * Cover art for several media ids, in **one** request.
+     * Cover art for several media, in **one** request.
      *
      * Batched because AniList is currently degraded to 30 requests a minute and a
      * bio with a dozen AniList links would otherwise spend a dozen of them
-     * before the reader had scrolled. Ids that are already cached cost nothing,
-     * and [getMediaCovers] returns the known ones without a round trip when the
-     * batch is entirely satisfied.
+     * before the reader had scrolled. Keys already cached cost nothing, and this
+     * returns the known ones without a round trip when the batch is entirely
+     * satisfied.
      *
-     * Returns media id to cover URL. A media AniList does not serve, or one with
-     * no cover, is simply absent from the map - the caller draws a placeholder
-     * rather than treating it as an error.
+     * Keyed by [MediaCoverKey] rather than by a bare id, because an id is only
+     * unique *within* a media type and `anilist.co/anime/1` and
+     * `anilist.co/manga/1` are different shows. Keying on the id alone makes the
+     * two cards share one poster, which looks correct and is not.
+     *
+     * The title comes back beside the URL in the same response. A media AniList
+     * does not serve, or one with no cover, is simply absent from the map - the
+     * caller draws a placeholder rather than treating it as an error.
      */
-    suspend fun getMediaCovers(ids: List<Int>): Result<Map<Int, String>> =
+    suspend fun getMediaCovers(keys: List<MediaCoverKey>): Result<Map<MediaCoverKey, MediaCover>> =
         unsupported("getMediaCovers")
 
     /** As [getUserAnimeList], for a profile looked up by name. */

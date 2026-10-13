@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.MediaCover
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.ExpressiveShapes
@@ -323,11 +324,19 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
 /**
  * One AniList entity a bio linked, as a card with its cover art.
  *
- * [coverUrl] is looked up by media id by the caller rather than fetched here,
+ * [cover] is looked up by media key by the caller rather than fetched here,
  * because a bio can carry a dozen of these and one request each would spend a
  * dozen of AniList's 30-a-minute budget before the reader had scrolled. The
  * caller batches them and passes a map; a miss leaves the type icon sitting in
  * the poster frame rather than an empty hole, so the card keeps its shape.
+ *
+ * The card's title prefers [MediaCover.title] over the one parsed out of the URL.
+ * A bio link of `https://anilist.co/anime/1` has no readable name in it, so the
+ * fallback for it is `ANIME #1` - a debug row, on the single most common link
+ * shape there is, because that is what the address bar hands you. The real title
+ * arrives in the same response as the poster and is always right about what the
+ * image depicts; the URL's contribution is only used when there is no fetched
+ * cover at all.
  *
  * The poster keeps its 2:3 shape rather than being squashed into a square
  * thumbnail - a cropped portrait face loses the one thing a poster is good for,
@@ -343,9 +352,13 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
 @Composable
 fun RenderAniListPreview(
     preview: MarkdownNode.AniListPreviewBlock,
-    coverUrl: String? = null
+    cover: MediaCover? = null
 ) {
     val context = LocalContext.current
+    // An unblank fetched title wins. `ANIME #1` is a fallback, not a title, and
+    // the whole point of fetching the cover in the first place is that AniList
+    // told us what this media is actually called.
+    val title = cover?.title?.takeIf { it.isNotBlank() } ?: preview.title
 
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -377,10 +390,10 @@ fun RenderAniListPreview(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
-                if (coverUrl != null) {
+                cover?.let { fetched ->
                     AsyncImage(
-                        model = coverUrl,
-                        contentDescription = preview.title,
+                        model = fetched.url,
+                        contentDescription = title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -389,7 +402,7 @@ fun RenderAniListPreview(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = preview.title,
+                    text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,

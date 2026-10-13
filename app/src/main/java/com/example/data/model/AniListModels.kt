@@ -316,6 +316,21 @@ data class MediaTitle(
             ?: userPreferred?.takeIf { it.isNotBlank() }
             ?: romaji?.takeIf { it.isNotBlank() }
             ?: native ?: "Unknown Title"
+
+    /**
+     * The same preference order, but null instead of `"Unknown Title"`.
+     *
+     * [displayTitle]'s placeholder is right for a list row - an entry with no
+     * title at all still occupies a slot and needs *something* - and wrong for
+     * the bio's preview cards. Those are only ever built for a media AniList
+     * resolved, so a card whose title reads "Unknown Title" has learned nothing
+     * and should fall back to what the URL gave it instead.
+     */
+    val bestTitleOrNull: String?
+        get() = english?.takeIf { it.isNotBlank() }
+            ?: userPreferred?.takeIf { it.isNotBlank() }
+            ?: romaji?.takeIf { it.isNotBlank() }
+            ?: native?.takeIf { it.isNotBlank() }
 }
 
 @JsonClass(generateAdapter = true)

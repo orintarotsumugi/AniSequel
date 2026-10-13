@@ -43,6 +43,7 @@ import com.example.data.model.posterUrl
 import com.example.data.model.releaseLabel
 import com.example.data.model.romajiName
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.PannableBackdrop
 import com.example.ui.components.cards.toCoverColorOrNull
 import com.example.ui.components.expressive.expressiveHoldGesture
 
@@ -83,32 +84,44 @@ fun DetailHeader(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(216.dp)
+            .height(280.dp)
             .clip(MaterialTheme.shapes.large)
             .background(backdropBase)
     ) {
         if (backdrop != null) {
-            AsyncImage(
+            // Pannable rather than cropped.
+            //
+            // Banners are authored wide and a 280dp box is not, so `ContentScale
+            // .Crop` threw away the left and right thirds of the artwork permanently
+            // - and the composition is authored for the whole frame. Now it scales to
+            // cover and the reader can drag to the rest.
+            //
+            // `FillWidth` rather than `Crop` because the picture is being panned, not
+            // cropped: a crop would fight the translation and the two would disagree
+            // about what is on screen as soon as the offset was non-zero.
+            PannableBackdrop(
                 model = backdrop,
                 contentDescription = null,
-                modifier = Modifier.fillMaxWidth().height(216.dp),
-                // Banners are authored wide and a cover is not, so a cover used as
-                // the backdrop is cropped from the top - where the title lockup and
-                // the faces are - rather than from the middle of a torso.
-                alignment = Alignment.TopCenter,
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.FillWidth
             )
         }
 
+        // `matchParentSize`, not a literal height: this scrim was 216dp while the box
+        // holding it grew to 280dp, so the bottom 64dp of a taller, pannable image
+        // was going to sit under the title lockup with no scrim over it at all.
+        //
+        // Lighter than the old 0.45/0.85 pair for the same reason the profile
+        // banner's was: the reader can now move the artwork, so the scrim darkens
+        // whichever part happens to be on screen. A heavy one means the same
+        // artwork is legible in one position and murky in another.
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(216.dp)
+                .matchParentSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.45f),
-                            Color.Black.copy(alpha = 0.85f)
+                            Color.Black.copy(alpha = 0.18f),
+                            Color.Black.copy(alpha = 0.62f)
                         )
                     )
                 )

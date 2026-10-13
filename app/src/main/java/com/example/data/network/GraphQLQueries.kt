@@ -1,5 +1,7 @@
 package com.example.data.network
 
+import com.example.data.model.MediaCoverKey
+
 /**
  * GraphQL documents sent to `graphql.anilist.co`.
  *
@@ -398,9 +400,15 @@ object GraphQLQueries {
      * so opening one profile could exhaust the budget and hand the next person who
      * opens anything a 429.
      *
-     * `Media` takes a single id, but aliasing the *root* field is ordinary
-     * GraphQL: `m0: Media(id: 1)`, `m1: Media(id: 2)` in one document, one
-     * round trip. This is distinct from the `Page` limitation noted on
+     * `Media` takes a single id *per field*, but aliasing the *root* field is
+     * ordinary GraphQL: `m0: Media(id: 1, type: ANIME)`, `m1: Media(id: 1,
+     * type: MANGA)` in one document, one round trip. Aliasing the field is what
+     * makes it possible to ask for both sides of an id that is used by *both*
+     * media namespaces in the same batch - a bare id would have collapsed them
+     * to one entry and answered with only one of the two posters. See
+     * [MediaCoverKey] for why the type cannot be dropped.
+     *
+     * This is distinct from the `Page` limitation noted on
      * [AniListApiService.getUserFollowers], which is about two child fields
      * *inside* a single `Page` and not about two fields at the root.
      *
@@ -408,11 +416,11 @@ object GraphQLQueries {
      * description, banner and studio per entry, and a bio's dozen cards would
      * turn that into a payload the screen cannot use.
      */
-    fun getMediaCoversQuery(ids: List<Int>): String {
-        require(ids.isNotEmpty()) { "a cover batch needs at least one id" }
-        val fields = ids.mapIndexed { index, id ->
+    fun getMediaCoversQuery(keys: List<MediaCoverKey>): String {
+        require(keys.isNotEmpty()) { "a cover batch needs at least one id" }
+        val fields = keys.indices.joinToString("\n") { index ->
             """
-            m$index: Media(id: ${'$'}id$index) {
+            m$index: Media(id: ${'$'}id$index, type: ${'$'}type$index) {
               id
               type
               title { romaji english userPreferred }
@@ -422,8 +430,10 @@ object GraphQLQueries {
               siteUrl
             }
             """.trimIndent()
-        }.joinToString("\n")
-        val variables = ids.indices.joinToString(", ") { "id$it: Int" }
+        }
+        // `type` is nullable in AniList's `Media` field, so the variable is too.
+        // Declaring it `MediaType!` would make the whole document invalid.
+        val variables = keys.indices.joinToString(", ") { "id$it: Int, type$it: MediaType" }
         return """
             query MediaCovers($variables) {
             $fields
@@ -431,7 +441,13 @@ object GraphQLQueries {
         """.trimIndent()
     }
 
-    /** The alias [getMediaCoversQuery] gives the nth id, so results can be read back. */
+    /**
+     * The alias [getMediaCoversQuery] gives the nth id, so results can be read back.
+     *
+     * Indexed by *position* in the requested list rather than by media id, because
+     * two entries in one batch may share an id across the anime and manga
+     * namespaces - a single key per alias would collide and drop one of them.
+     */
     fun mediaCoverAlias(index: Int): String = "m$index"
 
     /**

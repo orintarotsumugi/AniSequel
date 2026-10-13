@@ -1,6 +1,71 @@
 {
   "versions": [
     {
+      "version": "1.1.8",
+      "entries": [
+        {
+          "title": "Opening a profile no longer spends requests you did not ask for",
+          "detail": "Looking somebody up by name used to immediately fetch their activity feed and their followers and following - three requests - before you had touched either tab, all because a list you never opened had decided it was wanted. Scanning a profile you then back out of cost a third of the allowance AniList allows in a minute. The Activity and Social tabs now fetch when you actually open them, which they were always meant to do."
+        },
+        {
+          "title": "The board stops rebuilding itself on every frame you scroll it",
+          "detail": "Publishing the row positions the pool's drag reads had quietly made every scrolled frame invalidate the whole board - every row and every poster redrawn, each with its own animation and image request, on a fling and on every frame of a drag that reached the edge. It now watches the scroll instead of being rebuilt by it, which is the difference between a board that tracks a finger and one that stutters under it."
+        },
+        {
+          "title": "The big pictures can be dragged now",
+          "detail": "A profile banner and an anime's background image are both drawn much wider than a phone is, so they used to be cropped - and the left and right thirds of the artwork were thrown away for good, because the picture is composed for the whole frame. They are taller now, and you can drag sideways to see the rest of them. The text over them was lightened at the same time, so the artwork is not dimmed differently depending on where you happened to stop scrolling."
+        },
+        {
+          "title": "Posters in the tier board no longer ignore the zoom",
+          "detail": "Pinch to zoom and the coloured rows and the gaps grew, but the cover images and the titles inside them stayed the size they started - so a zoomed-in poster rendered as a squashed wide crop with empty space beneath its title, and zooming all the way out made every title vanish. Picking a poster up also visibly changed its size, because the thing following your finger was the correct size. All fixed."
+        },
+        {
+          "title": "Dragging a poster out of the pool works properly",
+          "detail": "Three bugs in one gesture. The poster followed your finger up and down but never sideways, so it stayed pinned to the left of the screen. After scrolling the pool sideways, holding a poster picked up a different one - or none at all - and filed the wrong title. And the tier list kept answering where its rows were after the board had been replaced by the empty state, so a drop could land in a tier that was no longer on screen."
+        },
+        {
+          "title": "Tier lists are tidier and faster",
+          "detail": "Six empty tiers reserved six posters' worth of space between them rather than a compact band each, which is what the layout option had always asked for and never got. The board also stops rebuilding its entire geometry on every frame of a pinch - that was thousands of map operations a frame on a large library - and a title can no longer be filed under a tier that has been deleted, which left it invisible with no way to put it back. Empty tiers are now worth filling."
+        },
+        {
+          "title": "Drag a poster out of the pool and onto a tier",
+          "detail": "Titles you have not ranked now sit in a tray along the bottom of the board. Hold one and drag it up onto any tier - one gesture, instead of tapping the poster, waiting for a sheet, and picking a tier. Drop it back on the tray and it goes back to being unranked, so a slip is undone by putting the poster back where it came from. The tray stays put while the board scrolls, and the board keeps exactly enough space reserved that the last tier can always be scrolled clear of it."
+        },
+        {
+          "title": "A bio with a pipe character no longer freezes the app",
+          "detail": "Writing a small table - a score list, a status breakdown - without the '|---|---|' line under the heading left the bio parser stuck in a loop, and it runs on the screen's own thread, so the app froze until you closed it. The line you wrote now shows as written. This was the most serious of the fixes in this release."
+        },
+        {
+          "title": "The right poster on every AniList card",
+          "detail": "An anime and a manga can share a number in their addresses - anilist.co/anime/1 and anilist.co/manga/1 are two different shows - and the cards were being looked up by number alone, so a bio linking both drew the same picture on both. Cards are now asked for by type as well as number, which is also what AniList needs to answer unambiguously."
+        },
+        {
+          "title": "Posters show up with the bio instead of after the list downloads",
+          "detail": "The covers for a bio's AniList links were fetched after your whole media list finished downloading, which is one request per 500 entries. Every card sat empty until then and then popped a poster in. They are now fetched alongside the profile, so the pictures arrive while you are reading."
+        },
+        {
+          "title": "Cards name the show, not its number",
+          "detail": "A link with no readable name in it - anilist.co/anime/1, which is what copying from a browser gives you - produced a card headed 'Anime #1'. The real title arrives in the same response as the poster, so the card is now headed with the name of the show in the picture."
+        },
+        {
+          "title": "More AniList links are recognised",
+          "detail": "A link with a share suffix on it (anilist.co/anime/1?utm_source=discord, which is what copying an address bar gives you) drew a plain blue link where every other entry in the list drew a card. So did a link at the end of a sentence, where the full stop was being read as part of the address. Both are cards now, and neither picks up a stray slash or query string in the title."
+        },
+        {
+          "title": "Bios that were showing their own punctuation",
+          "detail": "A checkbox after a plain bullet printed the literal text '[x]' as the bullet's content and never drew a box. A three-tilde divider in the middle of a paragraph printed '~~~'. A title written as bold text inside a link showed its asterisks on the card. And an underscore inside a word - anilist_api_key - was read as italics, so the underscores disappeared."
+        },
+        {
+          "title": "The Library remembers your choice without showing the wrong list first",
+          "detail": "If you had chosen Manga, opening the Library tab flashed the combined anime and manga grid for a frame before switching - and each of those covers started loading before being thrown away. It now waits for your remembered choice instead of drawing the list you chose to avoid."
+        },
+        {
+          "title": "A rewatching title shows how far through it is",
+          "detail": "A title marked Rewatching kept its finished progress number, so a 24-episode series on episode 3 of the second watch read '24/24' - which says you are done. It shows a percentage instead, so the number stays true while you are watching it again."
+        }
+      ]
+    },
+    {
       "version": "1.1.7",
       "entries": [
         {

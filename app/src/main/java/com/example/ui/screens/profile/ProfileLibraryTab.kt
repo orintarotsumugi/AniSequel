@@ -385,6 +385,15 @@ internal fun libraryProgressLabel(entry: MediaListEntryItem): String? {
         return if (finished && total != null && total > 0) "$unit $total/$total" else null
     }
 
+    // A rewatch sits at its finished progress while `status` says `REPEATING`, so
+    // "24/24" is the badge for a person who is on episode 3 of a show they have
+    // already finished once - it says they are done, which is the opposite of what
+    // `REPEATING` records. The percentage is the only number that stays true.
+    if (entry.status.equals("repeating", ignoreCase = true) && total != null && total > 0) {
+        val percent = (progress.coerceAtMost(total) * 100) / total
+        return "$unit $percent%"
+    }
+
     return if (total != null && total > 0) "$unit $progress/$total" else "$unit $progress"
 }
 
@@ -453,14 +462,28 @@ fun ProfileLibraryTab(
     /**
  * The media type, remembered across visits.
  *
- * Null rather than `ALL` until the stored answer arrives, so the grid shows
- * nothing for one frame instead of briefly rendering the combined list that the
- * person chose to *avoid*. Once it resolves, the stored name wins; an
- * unrecognised stored value falls back to ALL rather than leaving the tab empty.
+ * [rememberedType] is null until DataStore answers, which is asynchronous, so for
+ * one composition there is no stored answer to apply. `type` starts at
+ * [LibraryType.ALL] - it has to, because `rememberSaveable` cannot hold a
+ * nullable here without every read below unwrapping it - and so
+ * [rememberedTypePending] is what keeps the grid from *drawing* that default.
+ *
+ * The comment here used to claim the type itself was "null rather than ALL until
+ * the stored answer arrives", which was not what the code did: `type` was `ALL`
+ * from the first frame and the first `LaunchedEffect` emission assigned `ALL` as
+ * well. A manga-only reader therefore saw a flash of the interleaved anime+manga
+ * grid every time they opened the tab, and every one of those posters started an
+ * `AsyncImage` load that was thrown away a frame later.
+ *
+ * Once it resolves, the stored name wins. An unrecognised stored value falls
+ * back to ALL rather than leaving the tab empty - a stored value the enum no
+ * longer has means the preference was written by a build that knew a type this
+ * one does not, and showing the combined list is the recoverable outcome.
  */
 val rememberedType by libraryPreferences.lastType.collectAsStateWithLifecycle(initialValue = null)
 var typeChosen by rememberSaveable { mutableStateOf(false) }
 var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
+val rememberedTypePending = rememberedType == null
 
 LaunchedEffect(rememberedType) {
     if (typeChosen) return@LaunchedEffect
@@ -517,6 +540,29 @@ var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Nothing at all until DataStore has answered, because `type` is `ALL`
+        // for exactly that window and `ALL` is the list the person chose to avoid
+        // remembering a narrower type for. A spinner rather than an empty state:
+        // an empty grid here would be indistinguishable from the account having
+        // no library, which is the same false answer the pending note below
+        // exists to avoid.
+        if (rememberedTypePending) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_resolving_type") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp)
+                        .testTag("library_resolving_type"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(30.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
         item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls") {
             LibraryControls(
                 type = type,

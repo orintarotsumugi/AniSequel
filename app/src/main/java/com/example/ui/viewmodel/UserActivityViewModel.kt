@@ -145,11 +145,30 @@ class UserActivityViewModel(
 
     /**
      * Updates the user id once resolved from a profile overview scan.
+     *
+     * ## Why this does not fetch
+     *
+     * It used to treat `Idle` as "go and get it", and `Idle` is this flow's
+     * *initial* state - so the id arriving from the profile overview started a
+     * fetch immediately, as soon as the header was on screen and before the reader
+     * had touched the Activity tab. On the one route where the id is scanned rather
+     * than known up front - a profile opened by name - that spent a request per
+     * profile the reader merely glanced at.
+     *
+     * The KDoc on [loadFirstPage] says the feed is fetched when the tab is selected
+     * precisely so that "a profile the user glanced at must not have spent AniList's
+     * request budget on a scrollback". The tab calls `loadFirstPage` itself, so
+     * dropping the fetch here costs the reader nothing and the API one request
+     * they did not ask for.
+     *
+     * `Error` and `Loading` are still reloaded: those are states where a fetch was
+     * genuinely wanted - a retry, or one that started before the id was known.
      */
     fun updateUserId(newUserId: Int) {
         if (this.userId == newUserId) return
         this.userId = newUserId
-        if (_state.value is ActivityState.Error || _state.value is ActivityState.Idle || _state.value is ActivityState.Loading) {
+        val current = _state.value
+        if (current is ActivityState.Error || current is ActivityState.Loading) {
             started = false
             loadFirstPage(forceRefresh = true)
         }

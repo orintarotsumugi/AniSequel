@@ -1,5 +1,8 @@
 package com.example.ui.components.markdown
 
+import com.example.data.model.MediaCoverKey
+import java.util.Locale
+
 /**
  * Structural AST nodes produced by [AniListMarkdownParser].
  */
@@ -34,18 +37,18 @@ sealed interface MarkdownNode {
 }
 
 /**
- * The media ids a raw Markdown document links to that a cover lookup could resolve.
+ * The media a raw Markdown document links to that a cover lookup could resolve.
  *
  * Parses and collects in one step, so a caller holding only the bio string does
- * not have to know that the ids live in the AST - and so the parse done for this
+ * not have to know that the keys live in the AST - and so the parse done for this
  * is the *same* parse the renderer will do, rather than a second one that could
  * disagree about what counts as a preview line.
  */
-internal fun mediaPreviewIdsIn(markdown: String): List<Int> =
-    mediaPreviewIdsIn(AniListMarkdownParser.parse(markdown))
+internal fun mediaCoverKeysIn(markdown: String): List<MediaCoverKey> =
+    mediaCoverKeysIn(AniListMarkdownParser.parse(markdown))
 
 /**
- * The media ids in a parsed document that a cover art lookup could resolve.
+ * The media in a parsed document that a cover art lookup could resolve.
  *
  * ## Why this filters rather than passing everything through
  *
@@ -61,14 +64,21 @@ internal fun mediaPreviewIdsIn(markdown: String): List<Int> =
  * than at the call site, because every caller would otherwise have to remember
  * them, and forgetting produces a confidently wrong poster.
  *
+ * ## Why the result is a set of *keys* and not a set of ids
+ *
+ * Because a bare id is not unique across media types - see [MediaCoverKey]. Two
+ * links in one bio sharing an id across the anime and manga namespaces are two
+ * different shows, and collapsing them here is what made both cards draw the same
+ * poster.
+ *
  * Distinct and in document order, so a bio that links the same anime twice asks
  * for it once.
  */
-internal fun mediaPreviewIdsIn(nodes: List<MarkdownNode>): List<Int> {
-    val ids = LinkedHashSet<Int>()
+internal fun mediaCoverKeysIn(nodes: List<MarkdownNode>): List<MediaCoverKey> {
+    val keys = LinkedHashSet<MediaCoverKey>()
     fun walk(node: MarkdownNode) {
         when (node) {
-            is MarkdownNode.AniListPreviewBlock -> node.mediaIdOrNull()?.let(ids::add)
+            is MarkdownNode.AniListPreviewBlock -> node.mediaCoverKeyOrNull()?.let(keys::add)
             // Only these two nest. Walking into every other node type would be
             // dead code today and a source of surprises the day another gains a
             // `children` field.
@@ -87,7 +97,7 @@ internal fun mediaPreviewIdsIn(nodes: List<MarkdownNode>): List<Int> {
         }
     }
     nodes.forEach(::walk)
-    return ids.toList()
+    return keys.toList()
 }
 
 /**
@@ -172,18 +182,22 @@ private fun InlineToken.withNested(children: List<InlineToken>): InlineToken? {
 }
 
 /**
- * This link's media id, or null when it does not name media.
+ * This link's media key, or null when it does not name media.
  *
  * The single definition of "is this card a media card", shared by the batch
  * collector and the renderer that looks the cover up. They have to agree: the
- * collector decides which ids to request, and the renderer decides which cards
+ * collector decides which media to request, and the renderer decides which cards
  * to look them up for, and two definitions would mean either fetching covers no
  * card asks for or drawing a blank on cards that have one.
+ *
+ * Carries the type as well as the id, because that is what [MediaCoverKey] needs
+ * to keep `anilist.co/anime/1` and `anilist.co/manga/1` apart.
  */
-internal fun MarkdownNode.AniListPreviewBlock.mediaIdOrNull(): Int? {
+internal fun MarkdownNode.AniListPreviewBlock.mediaCoverKeyOrNull(): MediaCoverKey? {
     val type = type.lowercase()
     if (type != "anime" && type != "manga") return null
-    return id.toIntOrNull()?.takeIf { it > 0 }
+    val mediaId = id.toIntOrNull()?.takeIf { it > 0 } ?: return null
+    return MediaCoverKey(type = type.uppercase(Locale.ROOT), id = mediaId)
 }
 
 data class CheckListItem(

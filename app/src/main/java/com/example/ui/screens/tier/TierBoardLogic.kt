@@ -3,6 +3,7 @@ package com.example.ui.screens.tier
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.example.domain.tier.TierDefinition
@@ -214,11 +215,21 @@ internal fun tierDropCaret(
     drop: TierDrop,
     rows: List<TierRowBox>,
     items: List<TierItemBox>,
-    options: TierLayoutOptions
+    options: TierLayoutOptions,
+    skipMediaId: Int? = null
 ): TierCaret? {
     val tierId = drop.tierId ?: return null
     val row = rows.firstOrNull { it.tierId == tierId } ?: return null
-    val inRow = items.filter { it.y >= row.y && it.bottom <= row.bottom }
+    // The dragged tile is excluded here for the same reason [tierDropPlacement]
+    // excludes it, and it used not to be - so the two disagreed about which tiles
+    // existed mid-drag. Drag the *last* poster of a row to "the end of that row"
+    // and the placement correctly answered `TierDrop(tier, null)`, while the caret
+    // fell through to its `anchor == null` branch and used `inRow.last()` - the
+    // dragged tile. The "it lands here" mark was then drawn at the ghost's own edge,
+    // which is the one case where the indicator for "at the end" disappears.
+    val inRow = items.filter {
+        it.mediaId != skipMediaId && it.y >= row.y && it.bottom <= row.bottom
+    }
     if (inRow.isEmpty()) {
         return TierCaret(x = row.x + options.labelGutter, y = row.y, height = row.height)
     }
@@ -338,8 +349,40 @@ internal class TierBoardViewport {
     var viewportTop by mutableFloatStateOf(0f)
     var viewportHeight by mutableFloatStateOf(0f)
 
+    /**
+     * Window-space left of the viewport, in px.
+     *
+     * Published beside [viewportTop] because both are read by the same thing - the
+     * tray's ghost, which is positioned relative to the viewport's own origin - and
+     * reading one without the other would put the poster under the finger on a
+     * screen with a display cutout along one edge.
+     */
+    var viewportLeft by mutableFloatStateOf(0f)
+
     /** Window-space top of the board, in px. Moves as the board scrolls. */
     var boardTop by mutableFloatStateOf(0f)
+
+    /** Window-space left of the board, in px. Needed for the same reason as [boardTop]. */
+    var boardLeft by mutableFloatStateOf(0f)
+
+    /** Window-space width of the board, in px. Pairs with [boardLeft] as a span. */
+    var boardWidth by mutableFloatStateOf(0f)
+
+    /**
+     * Where each tier row actually is, in window pixels.
+     *
+     * Published by the board rather than recomputed by the tray because the board
+     * is the only thing that knows the answer: the rows come from `layoutTierList`
+     * in layout dp, then get scaled by the zoom, then offset by wherever the board
+     * has been scrolled to. A tray that worked it out for itself would be holding a
+     * third opinion about the same geometry, and the two would disagree the moment
+     * a gap or a zoom step changed in one of them - which is exactly the class of
+     * bug the shared layout exists to prevent.
+     *
+     * Empty until the board has composed, so a drop in that first frame resolves to
+     * no tier and un-files rather than filing under a guess.
+     */
+    var rowBands by mutableStateOf<List<TierRowBand>>(emptyList())
 
     val viewportBottom: Float get() = viewportTop + viewportHeight
 }

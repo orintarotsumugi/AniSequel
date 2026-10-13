@@ -83,7 +83,14 @@ data class TierLayoutOptions(
     val captionHeight: Float = 26f,
     /** Height of the heading, above the first row. */
     val headerHeight: Float = 76f,
-    /** Shortest a row may be, when it holds nothing. Empty rows still have to read as rows. */
+    /**
+     * Shortest a row may be, when it holds nothing.
+     *
+     * Empty rows still have to read as rows: they are drop targets, and a tier
+     * somebody made but has not filled yet is exactly what they are about to aim
+     * at. Reachable only because an empty tier now lays out zero lines - see
+     * `layoutTierList`.
+     */
     val minRowHeight: Float = 56f,
     /**
      * Floor for the whole drawing, whatever the rows add up to.
@@ -122,15 +129,33 @@ fun layoutTierList(
     )
 
     val candidateById = candidates.associateBy { it.mediaId }
+    val membersByTier = groupAssignmentByTier(tiers, assignment)
     val rows = mutableListOf<TierRowBox>()
     val items = mutableListOf<TierItemBox>()
 
     var cursorY = o.padding + o.headerHeight
 
     tiers.forEach { tier ->
-        val members = assignment.membersOf(tier.id)
-        val lines = maxOf(1, ceilDiv(members.size, itemsPerRow))
-        val rowHeight = maxOf(o.minRowHeight, lines * itemHeight + (lines - 1) * o.itemGap)
+        val members = membersByTier[tier.id].orEmpty()
+        // Zero lines for an empty tier, so `minRowHeight` can actually bind.
+        //
+        // It used to be `maxOf(1, ...)`, which made an empty tier compute
+        // `1 * itemHeight` - one whole tile's worth - and so `minRowHeight` was
+        // unreachable on every path: six empty tiers reserved ~768dp of board
+        // instead of the ~336dp the option asked for, and `TIER_DROP_SNAP_SLOP` was
+        // measured against a 128dp row that the caller believed was 48dp. The
+        // option and the arithmetic were telling different stories about the same
+        // number.
+        //
+        // A row with nothing in it is still a row - it has to be droppable, and it
+        // has to be visible as a target - so it keeps the floor rather than
+        // collapsing to zero.
+        val lines = ceilDiv(members.size, itemsPerRow)
+        val rowHeight = if (lines == 0) {
+            o.minRowHeight
+        } else {
+            maxOf(o.minRowHeight, lines * itemHeight + (lines - 1) * o.itemGap)
+        }
 
         rows += TierRowBox(
             tierId = tier.id,
@@ -180,7 +205,32 @@ fun layoutTierList(
 
 /** Integer ceiling division that does not lose a remainder of zero. */
 private fun ceilDiv(value: Int, divisor: Int): Int =
-    if (value <= 0) 0 else (value + divisor - 1) / divisor
+    if (value <= 0 || divisor <= 0) 0 else (value + divisor - 1) / divisor
+
+/**
+ * The assignment's ids, grouped by tier, in one pass.
+ *
+ * `TierAssignment.membersOf` filters and maps the whole map, so calling it once per
+ * tier is O(tiers x entries) - and `layoutTierList` calls it for every tier, on
+ * every frame of a pinch. At 300 ranked titles across 6 tiers that is roughly 1,800
+ * map iterations and 300 list allocations per frame, at the display's refresh rate,
+ * while the board is also re-measuring every child.
+ *
+ * One grouping pass is O(entries), and it preserves the map's insertion order within
+ * each tier exactly as `membersOf` does - which matters, because a drag must not
+ * reshuffle a row.
+ */
+fun groupAssignmentByTier(
+    tiers: List<TierDefinition>,
+    assignment: TierAssignment
+): Map<String, List<Int>> {
+    val grouped = HashMap<String, MutableList<Int>>(tiers.size)
+    tiers.forEach { tier -> grouped[tier.id] = mutableListOf() }
+    assignment.tierIdByMediaId.forEach { (mediaId, tierId) ->
+        grouped[tierId]?.add(mediaId)
+    }
+    return grouped
+}
 
 /** The cover URL for a box, for renderers that draw one. */
 fun TierListLayout.coverUrlFor(mediaId: Int, candidates: List<TierCandidate>): String? =

@@ -62,12 +62,28 @@ class UserSocialViewModel(
 
     /**
      * Updates the user id once resolved from a profile overview scan.
+     *
+     * ## Why `Idle` does not fetch
+     *
+     * `Idle` is this flow's initial state, so treating it as "go and get it" meant
+     * every scanned profile spent two requests - followers *and* following, because
+     * [load] fetches the other list alongside - asking who follows somebody the
+     * reader had not decided to look at yet.
+     *
+     * The KDoc on [load] says this tab is "fetched on demand" and that "opening a
+     * profile and looking at your favourites should not have spent two requests
+     * asking who follows you". The tab calls [load] itself, so nothing is lost by
+     * waiting - and `SocialList.FOLLOWERS` is the tab's own default, which is what
+     * this used to fall back to.
+     *
+     * `Error` and `Loading` still reload, because those are states where a fetch
+     * was genuinely wanted.
      */
     fun updateUserId(newUserId: Int) {
         if (this.userId == newUserId) return
         this.userId = newUserId
         val current = _state.value
-        if (current is SocialState.Error || current is SocialState.Idle || current is SocialState.Loading) {
+        if (current is SocialState.Error || current is SocialState.Loading) {
             val selected = when (current) {
                 is SocialState.Error -> current.list
                 is SocialState.Loading -> current.list

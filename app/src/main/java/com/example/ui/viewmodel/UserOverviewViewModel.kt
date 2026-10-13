@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.FavouriteCharacter
 import com.example.data.model.FavouriteStaff
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
@@ -16,7 +18,7 @@ import com.example.data.repository.AniListRepository
 import com.example.domain.usecase.BuildActivityCalendarUseCase
 import com.example.domain.usecase.BuildListEntryInsightsUseCase
 import com.example.domain.usecase.BuildListInsightsUseCase
-import com.example.ui.components.markdown.mediaPreviewIdsIn
+import com.example.ui.components.markdown.mediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -107,24 +109,45 @@ class UserOverviewViewModel(
      * before covers existed, and that is a far better outcome than an error
      * banner over somebody's bio.
      */
-    private val _mediaCovers = MutableStateFlow<Map<Int, String>>(emptyMap())
-    val mediaCovers: StateFlow<Map<Int, String>> = _mediaCovers.asStateFlow()
+    private val _mediaCovers = MutableStateFlow<Map<MediaCoverKey, MediaCover>>(emptyMap())
+    val mediaCovers: StateFlow<Map<MediaCoverKey, MediaCover>> = _mediaCovers.asStateFlow()
 
     /**
      * Asks for the cover of every media this bio links to, in one request.
      *
-     * Called after the profile itself has loaded, and deliberately not awaited by
-     * it: the reader should see the bio immediately and have posters arrive into
-     * the cards afterwards.
+     * Called as soon as the *overview* has been published, and deliberately not
+     * awaited by it: the reader should see the bio immediately and have posters
+     * arrive into the cards afterwards.
+     *
+     * ## Why it cannot wait for the list
+     *
+     * It used to be called after `listDeferred.await()`, which is the app's single
+     * most expensive query - chunked, one request per 500 entries, sequentially.
+     * Every card in a "hall of fame" bio therefore showed its placeholder icon for
+     * the whole duration of that download and then popped a poster in, on a large
+     * account after ten sequential requests of blanks. The comment above the call
+     * said the opposite of what the code did, which is how it survived.
+     *
+     * ## Why the state is cleared even when there is nothing to fetch
+     *
+     * Both early returns below happen *before* the previous `coverJob` was
+     * cancelled, and nothing else reset `_mediaCovers`. So a refresh after the
+     * author removed their AniList links left the old map published, and an
+     * in-flight request could still land and overwrite it. `coverJob` is a child
+     * of `viewModelScope` rather than of `loadJob`, so cancelling a reload does
+     * not stop it either. Clearing first makes the state honest: whatever is
+     * published belongs to the bio currently on screen.
      */
     private fun loadMediaCovers(about: String?) {
-        val bio = about?.takeIf { it.isNotBlank() } ?: return
-        val ids = mediaPreviewIdsIn(bio)
-        if (ids.isEmpty()) return
-
         coverJob?.cancel()
+        _mediaCovers.value = emptyMap()
+
+        val bio = about?.takeIf { it.isNotBlank() } ?: return
+        val keys = mediaCoverKeysIn(bio)
+        if (keys.isEmpty()) return
+
         coverJob = viewModelScope.launch {
-            aniListRepository.getMediaCovers(ids).onSuccess { covers ->
+            aniListRepository.getMediaCovers(keys).onSuccess { covers ->
                 _mediaCovers.value = covers
             }
         }
@@ -240,6 +263,13 @@ class UserOverviewViewModel(
                 )
             }
 
+            // Here rather than after the list is awaited, so the bio's posters
+            // are fetched in parallel with the chunked list download instead of
+            // queued behind the length of it. See [loadMediaCovers]: a card that
+            // shows its placeholder for the whole download and then fills in is
+            // the bug this position avoids.
+            loadMediaCovers(overview.about)
+
             // If fetching the anime list fails (for instance on accounts with private lists
             // or temporary rate limits), gracefully build the profile with null list data
             // rather than failing the entire profile screen when the overview succeeded.
@@ -251,10 +281,6 @@ class UserOverviewViewModel(
                 isRefreshing = false,
                 isLibraryLoading = false
             )
-            // After the state is published, and not awaited by it: the reader
-            // should see the bio immediately and have posters arrive into the
-            // cards a moment later.
-            loadMediaCovers(overview.about)
         }
     }
 

@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.expressive.ExpressiveMotion
 import com.example.ui.components.expressive.bouncyPress
@@ -87,13 +89,13 @@ fun AboutCard(
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth,
     /**
-     * Media id to cover URL for the bio's AniList preview cards.
+     * Media key to cover for the bio's AniList preview cards.
      *
      * Fetched by the ViewModel as one batch and threaded down, because a bio can
      * carry a dozen AniList links and a request per card would spend a dozen of
      * AniList's 30-a-minute budget before the reader had scrolled.
      */
-    mediaCovers: Map<Int, String> = emptyMap()
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
     val nodes = remember(about) { AniListMarkdownParser.parse(about) }
     var expanded by rememberSaveable { mutableStateOf(false) }

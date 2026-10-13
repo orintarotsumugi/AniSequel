@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.domain.tier.TierAssignment
 import com.example.domain.tier.TierCandidate
-import com.example.domain.tier.TierDefinition
 import com.example.domain.tier.TierListDocument
 import com.example.domain.tier.unseedableCount
 import com.example.ui.components.AppVectorIcons
@@ -99,6 +99,12 @@ internal fun TierBoardScreen(
     var addingTitles by rememberSaveable { mutableStateOf(false) }
     var managingTiers by rememberSaveable { mutableStateOf(false) }
     var dragHint by remember { mutableStateOf<String?>(null) }
+
+    // The pool's drag, hoisted above both the tray that writes it and the overlay
+    // below that draws its ghost. The ghost has to be a sibling of the board rather
+    // than a child of the tray, because the tray's own surface clips its content -
+    // and a ghost clipped to the tray is invisible for the whole gesture.
+    val trayDrag = remember { TierTrayDrag() }
 
     val ranked = assignment.tierIdByMediaId.size
     val subtitle = tierListSubtitle(ranked, candidates.size)
@@ -171,7 +177,9 @@ internal fun TierBoardScreen(
                 // `localToWindow(Offset.Zero)` is the current spelling of
                 // `positionInWindow()`, which Compose UI has removed.
                 .onGloballyPositioned { coordinates ->
-                    viewport.viewportTop = coordinates.localToWindow(Offset.Zero).y
+                    val window = coordinates.localToWindow(Offset.Zero)
+                    viewport.viewportTop = window.y
+                    viewport.viewportLeft = window.x
                     viewport.viewportHeight = coordinates.size.height.toFloat()
                 }
         ) {
@@ -179,6 +187,11 @@ internal fun TierBoardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
+                    // Exactly the tray's height, so the last tier row can always be
+                    // scrolled clear of it. Without this the tray covers whichever
+                    // row happens to be at the bottom, and a drop onto a row the
+                    // finger is not over looks like a dropped gesture.
+                    .padding(bottom = if (unranked.isEmpty()) 0.dp else TIER_TRAY_HEIGHT)
             ) {
                 TierBoardCounts(subtitle = subtitle)
 
@@ -243,6 +256,51 @@ internal fun TierBoardScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // The pool, pinned over the bottom of the scroll, and the ghost it
+            // drags. Both are siblings of the scrolling column on purpose: the tray
+            // has to stay put while the board scrolls under it, and the ghost has to
+            // be able to leave it.
+            if (!unranked.isEmpty()) {
+                TierTray(
+                    candidates = unranked,
+                    drag = trayDrag,
+                    resolveTier = { windowX, windowY ->
+                        tierRowAt(
+                            bands = viewport.rowBands,
+                            windowX = windowX,
+                            windowY = windowY,
+                            leftEdge = viewport.boardLeft,
+                            rightEdge = viewport.boardLeft + viewport.boardWidth
+                        )
+                    },
+                    // A null tier id is the instruction to un-file, and dropping a
+                    // poster back into the pool is exactly that - so a mis-drop is
+                    // undone by dropping it where it started.
+                    onDrop = { mediaId, tierId -> onMove(mediaId, tierId, null) },
+                    onItemTap = { mediaId -> placingMediaId = mediaId },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+
+                val draggingId = trayDrag.mediaId
+                val ghostCandidate = unranked.firstOrNull { it.mediaId == draggingId }
+                if (ghostCandidate != null) {
+                    TierTrayGhost(
+                        candidate = ghostCandidate,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .graphicsLayer {
+                                // The drag tracks the finger in *window* pixels and
+                                // this box is laid out from the viewport's own top-left,
+                                // so the difference between the two is the whole
+                                // translation. Read in the draw phase, so moving the
+                                // ghost costs a repaint rather than a recomposition.
+                                translationX = trayDrag.posterX - viewport.viewportLeft
+                                translationY = trayDrag.liftedY - viewport.viewportTop
+                            }
                     )
                 }
             }

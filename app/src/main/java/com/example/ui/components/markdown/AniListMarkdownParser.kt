@@ -1,5 +1,7 @@
 package com.example.ui.components.markdown
 
+import java.util.Locale
+
 /**
  * Tokenizer and AST parser for AniList-flavored Markdown.
  *
@@ -95,7 +97,33 @@ object AniListMarkdownParser {
      */
     private val TILDE_CENTER_PATTERN = Regex("""^~~~(?!~)(.+?)~~~$""")
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
-    private val ANILIST_PREVIEW_PATTERN = Regex("""^https?://(?:www\.)?anilist\.co/(anime|manga|character|staff|studio|user)/(\d+|[a-zA-Z0-9_-]+)(?:/([^\s)]+))?/?$""", RegexOption.IGNORE_CASE)
+    /**
+     * An AniList entity address, which a bio link may carry in its full form.
+     *
+     * ## Why the query string and fragment are allowed
+     *
+     * The pattern used to be anchored at `$` with nothing after the path, so
+     * `anilist.co/anime/1?utm_source=discord` matched nothing. It then fell
+     * through to the ordinary-link path and rendered as a blue underlined title
+     * where every *other* entry in the same hall-of-fame bio drew a card, and
+     * `mediaCoverKeysIn` never saw it, so its poster was never even requested.
+     * Sharing a bio is the mechanism by which these links spread, and the share
+     * text carries the query string.
+     *
+     * ## Why the slug is matched lazily
+     *
+     * Group three was `[^\s)]+`, which includes `/` - so it swallowed the trailing
+     * slash and the card's title came out as `Cowboy Bebop/`. Lazy plus the
+     * explicit `/?` leaves the slash to its own group, where the anchor can match
+     * it, and the slug arrives clean. The `?` and `#` follow the same argument:
+     * a slug that swallowed `?ref=share` produced a title of
+     * `Cowboy Bebop?ref=share`, which is the same failure one character later.
+     */
+    private val ANILIST_PREVIEW_PATTERN = Regex(
+        """^https?://(?:www\.)?anilist\.co/(anime|manga|character|staff|studio|user)/""" +
+            """(\d+|[a-zA-Z0-9_-]+)(?:/([^\s?#)]+?))?/?(?:\?[^\s]*)?(?:#\S*)?$""",
+        RegexOption.IGNORE_CASE
+    )
 
     // Inline regex patterns
     private val INLINE_LINKED_IMG = Regex("""\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)""")
@@ -113,9 +141,66 @@ object AniListMarkdownParser {
     private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
-    private val INLINE_BOLD_ITALIC = Regex("""(?:\*\*\*|___)(.+?)(?:\*\*\*|___)""")
-    private val INLINE_BOLD = Regex("""(?:\*\*|__)(.+?)(?:\*\*|__)|<b>(.+?)</b>|<strong>(.+?)</strong>""", RegexOption.IGNORE_CASE)
-    private val INLINE_ITALIC = Regex("""(?:\*|_)(.+?)(?:\*|_)|<i>(.+?)</i>|<em>(.+?)</em>""", RegexOption.IGNORE_CASE)
+    /**
+     * Italic. `_` counts as a delimiter only at a word boundary.
+     *
+     * ## Why the pattern was split in two
+     *
+     * The single pattern used to accept `*` or `_` anywhere, so it treated the
+     * underscore in `anilist_api_key` as an emphasis delimiter: the underscores
+     * vanished and the middle run was italicised. Markdown requires a delimiter
+     * run to be left- or right-flanking before it counts as one, which is what
+     * the `(?<![\w])` / `(?![\w])` guards below express.
+     *
+     * The guards cannot simply be added to the old single pattern, because that
+     * pattern's first alternative pairs a `*` with a `_` freely - `**bold**`
+     * matches `*` + `*bold` + `*`. Adding a boundary test to the *opening* `_`
+     * fixes `snake_case` and breaks `**bold**`, since the `*` that opens bold
+     * satisfies no boundary requirement. So the two delimiters need different
+     * rules and therefore different patterns; [parseInlines] tries both and takes
+     * whichever starts earlier, which keeps `*x*` and `_x_` a single token each.
+     *
+     * `*` is left unguarded because AniList accepts `*italic*` mid-word and this
+     * app has always done so.
+     */
+    private val INLINE_ITALIC = Regex(
+        """\*(?=\S)(.+?)(?<=\S)\*|<i>(.+?)</i>|<em>(.+?)</em>""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Bold and bold-italic, split by delimiter because the two behave differently.
+     *
+     * The single pattern used to be `(?:\*\*\*|___)|(?:\*\*|__)`, which matched
+     * `___text_` - opening three underscores, closing one - and produced a
+     * bold-italic whose trailing underscore was silently dropped from the bio.
+     * Kept as two alternatives over their own delimiter pair so each spelling has
+     * exactly one opening and one closing run.
+     *
+     * `__` bold is deliberately **not** guarded by a word boundary the way `_`
+     * italic is: `snake__case` is vanishingly rare, while `**` is the delimiter
+     * AniList users reach for, and guarding it would be a trade with no upside.
+     */
+    private val INLINE_BOLD = Regex(
+        """\*\*(?=\S)(.+?)(?<=\S)\*\*|__(?=\S)(.+?)(?<=\S)__|<b>(.+?)</b>|<strong>(.+?)</strong>""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * `***text***` and `___text___`, one delimiter pair each.
+     *
+     * Was `(?:\*\*\*|___)(.+?)(?:\*\*\*|___)`, which also matched `___text***`.
+     */
+    private val INLINE_BOLD_ITALIC = Regex(
+        """(?:\*\*\*|___)(?=\S)(.+?)(?<=\S)(?:\*\*\*|___)""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** The `_` form of [INLINE_ITALIC], with the flanking rule applied. */
+    private val INLINE_UNDERSCORE_ITALIC = Regex(
+        """(?<![\w])_(?=\S)(.+?)(?<=\S)_(?![\w])""",
+        RegexOption.IGNORE_CASE
+    )
     private val INLINE_UNDERLINE = Regex("""<u>(.+?)</u>""", RegexOption.IGNORE_CASE)
     private val INLINE_STRIKETHROUGH = Regex("""~~(.+?)~~|<s>(.+?)</s>|<del>(.+?)</del>""", RegexOption.IGNORE_CASE)
     /**
@@ -148,12 +233,12 @@ object AniListMarkdownParser {
             // A single centred line: `~~~text~~~`.
             val tildeCentered = TILDE_CENTER_PATTERN.matchEntire(trimmedLine)
             if (tildeCentered != null) {
-                nodes.add(
-                    MarkdownNode.Paragraph(
-                        inlines = parseInlines(tildeCentered.groupValues[1].trim()),
-                        centered = true
-                    )
-                )
+                // Through the shared paragraph builder, so an AniList link inside
+                // `~~~...~~~` becomes a card exactly as it does outside it. This
+                // branch used to build the `Paragraph` itself and was therefore the
+                // one paragraph path that never lifted media links: identical text
+                // drew a card un-centred and a plain link centred.
+                nodes.addAll(paragraphNodes(tildeCentered.groupValues[1].trim(), centered = true))
                 i++
                 continue
             }
@@ -163,7 +248,7 @@ object AniListMarkdownParser {
                 trimmedLine.equals("<center>", ignoreCase = true) ||
                 trimmedLine.equals("<div align=\"center\">", ignoreCase = true) ||
                 trimmedLine.equals("<div style=\"text-align: center;\">", ignoreCase = true) ||
-                (trimmedLine == "~~~" && (i + 1 < lines.size))
+                (trimmedLine == "~~~")
             ) {
                 val centerLines = mutableListOf<String>()
                 i++
@@ -352,7 +437,16 @@ object AniListMarkdownParser {
             // Unordered list
             if (UNORDERED_LIST_PATTERN.matches(trimmedLine)) {
                 val items = mutableListOf<List<InlineToken>>()
-                while (i < lines.size && UNORDERED_LIST_PATTERN.matches(lines[i].trim())) {
+                // `!CHECKLIST_PATTERN.matches(...)` is load-bearing, not tidying.
+                // `UNORDERED_LIST_PATTERN` also matches `- [x] done`, so a plain
+                // bullet followed by a checkbox pulled the checkbox into this
+                // list and printed the literal text `[x] done` as the bullet's own
+                // content - the checkbox never rendered at all. A list of mixed
+                // bullets and boxes is ordinary in a "currently watching" bio.
+                while (i < lines.size &&
+                    UNORDERED_LIST_PATTERN.matches(lines[i].trim()) &&
+                    !CHECKLIST_PATTERN.matches(lines[i].trim())
+                ) {
                     val itemText = UNORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
                     items.add(parseInlines(itemText))
                     i++
@@ -401,6 +495,32 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // Every handler above this point is reached only when it matches the
+            // line at `i`, so each is guaranteed to advance. `tryParseTable` is
+            // the exception: it declines a `|` line that has no `|---|` separator
+            // under it, that has a separator carrying anything but `| : -`, or
+            // that is the last line of the bio. The paragraph loop below refuses
+            // to consume a `|` line (it exists so a paragraph stops and lets the
+            // table handler have its turn), so on exactly that input the loop body
+            // never runs, nothing is appended and `i` does not move.
+            //
+            // That is not a slow parse. `parse` is called from `AboutCard` inside
+            // `remember(about)` on the **Compose main thread**, and again from the
+            // ViewModel's dispatcher, so it spins the UI thread forever on a bio
+            // containing a single stray pipe - an ANR, reachable by writing
+            // `| Completed | 100 |` on two lines with no separator between them.
+            //
+            // So a `|` line that no handler claimed is emitted as its own
+            // paragraph rather than dropped. Dropping it would lose the author's
+            // text; keeping it as a paragraph means the pipe characters still
+            // reach the reader as the literal line they wrote.
+            val orphanPipeLine = trimmedLine.startsWith("|")
+            if (orphanPipeLine) {
+                nodes.add(MarkdownNode.Paragraph(parseInlines(trimmedLine)))
+                i++
+                continue
+            }
+
             // General Paragraph
             val paragraphLines = mutableListOf<String>()
             while (i < lines.size && lines[i].isNotBlank() &&
@@ -414,6 +534,12 @@ object AniListMarkdownParser {
                 !HORIZONTAL_RULE_PATTERN.matches(lines[i].trim()) &&
                 !lines[i].trim().equals("~~~center", ignoreCase = true) &&
                 !lines[i].trim().equals("<center>", ignoreCase = true) &&
+                // A bare `~~~`, because it opens a centered block and the block
+                // handler above now takes it even as the bio's final line. It was
+                // absent here, so a `~~~` in the middle of a paragraph was absorbed
+                // as the literal text "~~~" - the very delimiter the same parser
+                // honours when it happens to start a line.
+                !lines[i].trim().equals("~~~") &&
                 !ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !MD_IMG_PATTERN.matches(lines[i].trim()) &&
                 !BARE_IMAGE_URL_PATTERN.matches(lines[i].trim()) &&
@@ -428,30 +554,53 @@ object AniListMarkdownParser {
                 i++
             }
             if (paragraphLines.isNotEmpty()) {
-                val fullText = paragraphLines.joinToString(" ")
-                // AniList links are lifted out of the paragraph and drawn as cards.
-                //
-                // The block-level check above cannot see the shape bios actually
-                // use: it matches a line that is nothing but the URL, while the
-                // standard "hall of fame" entry is a labelled link inside a bold
-                // run (`**✨ [#1] [Title](https://anilist.co/anime/123)**`). That
-                // rendered as plain text, which is the reported bug - the card
-                // existed only for a bio nobody writes.
-                val (text, mediaLinks) = splitMediaLinks(parseInlines(fullText))
-                if (text.isNotEmpty()) nodes.add(MarkdownNode.Paragraph(text))
-                mediaLinks.forEach { link ->
-                    nodes.add(
-                        MarkdownNode.AniListPreviewBlock(
-                            url = link.url,
-                            type = link.type,
-                            id = link.id,
-                            title = link.label
-                        )
-                    )
-                }
+                nodes.addAll(paragraphNodes(paragraphLines.joinToString(" ")))
+            } else {
+                // Belt and braces on the ANR above. Every path into this branch is
+                // supposed to have advanced `i` already, and the `|` case is now
+                // handled explicitly; if a future handler is added that forgets to,
+                // the parser degrades to one plain paragraph per stuck line rather
+                // than hanging the main thread. An empty paragraph is never added,
+                // so the visible cost of a bug here is a duplicate line, not a
+                // freeze.
+                nodes.add(MarkdownNode.Paragraph(parseInlines(lines[i].trim())))
+                i++
             }
         }
 
+        return nodes
+    }
+
+    /**
+     * One paragraph's worth of nodes: the text, then a card per AniList link it
+     * contained.
+     *
+     * Shared by every path that produces a paragraph, which is what keeps the
+     * card treatment uniform. The block-level [ANILIST_PREVIEW_PATTERN] check
+     * cannot see the shape bios actually use: it matches a line that is nothing
+     * but the URL, while the standard "hall of fame" entry is a labelled link
+     * inside a bold run (`**✨ [#1] [Title](https://anilist.co/anime/123)**`).
+     * That rendered as plain text, which is the reported bug - the card existed
+     * only for a bio nobody writes.
+     *
+     * The text paragraph comes first and the cards follow, in document order,
+     * which is the reading order the reference clients use.
+     */
+    private fun paragraphNodes(text: String, centered: Boolean = false): List<MarkdownNode> {
+        if (text.isBlank()) return emptyList()
+        val (kept, mediaLinks) = splitMediaLinks(parseInlines(text))
+        val nodes = mutableListOf<MarkdownNode>()
+        if (kept.isNotEmpty()) {
+            nodes += MarkdownNode.Paragraph(inlines = kept, centered = centered)
+        }
+        mediaLinks.forEach { link ->
+            nodes += MarkdownNode.AniListPreviewBlock(
+                url = link.url,
+                type = link.type,
+                id = link.id,
+                title = link.label
+            )
+        }
         return nodes
     }
 
@@ -461,13 +610,26 @@ object AniListMarkdownParser {
      * `anilist.co/anime/128893/Hells-Paradise` carries the name;
      * `anilist.co/anime/128893` does not, so the fallback names the type and id
      * rather than leaving the card heading blank.
+     *
+     * ## Why the fallback is a label and not `ANIME #1`
+     *
+     * Because the fetched cover's real title replaces it on every card that
+     * resolved - see `RenderAniListPreview` - so this text is only ever *read*
+     * for a media whose request failed or came back with no cover: a rate limit,
+     * a deleted entry, or a card that is still loading. And `#1` reads as a rank
+     * to somebody scanning a numbered hall-of-fame list, which is the single most
+     * common shape a bio has. `Anime #1` is a name; the type is already on the
+     * card's badge, so shouting it in the title was never useful.
      */
     private fun anilistTitleFromSlug(slug: String, type: String, id: String): String {
-        val raw = slug.ifEmpty { "$type #$id" }
+        val prettyType = type.lowercase().replaceFirstChar { it.titlecase(Locale.ROOT) }
+        val raw = slug.ifEmpty { "$prettyType #$id" }
         return raw.replace('-', ' ').replace('_', ' ')
             .split(' ')
             .joinToString(" ") { word ->
-                word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                word.replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
+                }
             }
     }
 
@@ -498,14 +660,83 @@ object AniListMarkdownParser {
      * is not turned into a card. The label wins over the URL's slug because a
      * labelled link is the title the author chose, and it is the shape every
      * "hall of fame" bio uses.
+     *
+     * The pattern is matched against the URL with any trailing sentence
+     * punctuation removed first. A bio that ends a sentence with a link wrote
+     * `[Title](https://anilist.co/anime/1).`, and `matchEntire` against that
+     * failed - so the link fell back to a plain underlined title and no card was
+     * drawn for it. The stop is the sentence's, not the URL's, and is restored as
+     * plain text by the caller.
      */
     private fun anilistMediaLink(label: String, url: String): InlineToken.MediaLink? {
-        val match = ANILIST_PREVIEW_PATTERN.matchEntire(url) ?: return null
+        // `INLINE_LINK` stops its URL at whitespace, `)` or a space, but *not* at
+        // a full stop - so `[Title](https://anilist.co/anime/1).` arrives here with
+        // the sentence's stop still attached and matches nothing. The stop belongs
+        // to the sentence; the caller puts it back as plain text.
+        val bareUrl = url.trimEnd('.', ',', ';', ':', '!', '?')
+        val match = ANILIST_PREVIEW_PATTERN.matchEntire(bareUrl) ?: return null
         val type = match.groupValues[1].uppercase()
         val id = match.groupValues[2]
-        val title = label.trim().ifEmpty { anilistTitleFromSlug(match.groupValues[3], type, id) }
-        return InlineToken.MediaLink(label = title, url = url, type = type, id = id)
+        val title = mediaLinkTitle(label, match.groupValues[3], type, id)
+        return InlineToken.MediaLink(label = title, url = bareUrl, type = type, id = id)
     }
+
+    /**
+     * The card heading for a labelled AniList link.
+     *
+     * ## Why the label is not used raw
+     *
+     * [label] is the link's *source* text, never parsed. A bio writes
+     * `[**#1 Cowboy Bebop**](https://anilist.co/anime/1)` whenever it wants the
+     * entry emphasised, and the asterisks went straight into the card heading.
+     * The emphasis inside a plain link's label is already parsed into `children`
+     * (see the `Link` branch of `parseInlines`); this is that same flattening,
+     * done for the one branch whose text ends up as a *heading* rather than as
+     * styled prose.
+     *
+     * Only the run text survives. A link's own label is a title, not prose, so
+     * nothing is lost by flattening it - and the alternative was a card that
+     * read `**#1 Cowboy Bebop**` with visible markup in it.
+     */
+    private fun mediaLinkTitle(label: String, slug: String, type: String, id: String): String {
+        val plain = parseInlines(label).flatText().trim()
+        return plain.ifEmpty { anilistTitleFromSlug(slug, type, id) }
+    }
+
+    /**
+     * This token's text with all emphasis flattened out.
+     *
+     * The nested expression is preferred over [InlineToken]'s flat `text` where
+     * one exists, because the flat field still holds the markup source for a run
+     * whose label was itself a link.
+     *
+     * ## Why every emphasis run has its own branch
+     *
+     * They all carry the same two fields, so the obvious grouping -
+     * `is Bold, is Italic, ... ->` on one line - is what this was written as first,
+     * and it does not compile. A multi-condition branch smart-casts only to the
+     * common supertype of the listed types, which is `InlineToken`, so `children`
+     * and `text` do not resolve on it. Five near-identical lines is the price of
+     * the cast, and `nestedTokens()` and `childrenOrText()` in this file pay the
+     * same one for the same reason.
+     */
+    private fun InlineToken.runText(): String = when (this) {
+        is InlineToken.Plain -> text
+        is InlineToken.Bold -> children.flatText().ifEmpty { text }
+        is InlineToken.Italic -> children.flatText().ifEmpty { text }
+        is InlineToken.BoldItalic -> children.flatText().ifEmpty { text }
+        is InlineToken.Underline -> children.flatText().ifEmpty { text }
+        is InlineToken.Strikethrough -> children.flatText().ifEmpty { text }
+        is InlineToken.Link -> children.flatText().ifEmpty { label }
+        is InlineToken.Code -> code
+        is InlineToken.MediaLink -> label
+        is InlineToken.Mention -> "@$username"
+        is InlineToken.Spoiler -> text
+        is InlineToken.Image -> alt.orEmpty()
+    }
+
+    /** The flattened text of a nested expression. */
+    private fun List<InlineToken>.flatText(): String = joinToString("") { it.runText() }
 
     /**
      * Parses inline tokens: links, inline images/GIFs, spoilers, bold/italic,
@@ -538,6 +769,20 @@ object AniListMarkdownParser {
             val boldItalicMatch = INLINE_BOLD_ITALIC.find(remaining)
             val boldMatch = INLINE_BOLD.find(remaining)
             val italicMatch = INLINE_ITALIC.find(remaining)
+            // Tried as a separate pattern so the word-boundary rule applies to `_`
+            // alone. Both `*italic*` and `_italic_` are matched here and the
+            // earlier one wins by start offset, so `*x*` and `_x_` still produce a
+            // single Italic token each.
+            val underscoreItalicMatch = INLINE_UNDERSCORE_ITALIC.find(remaining)
+            // The same reason, for the same reason as the italic split: the single
+            // bold pattern paired `**` with `__` freely, so `___text_` matched with
+            // an opening run of three and a closing run of one and the stray
+            // underscore was dropped from the bio. Each pattern now spells out one
+            // delimiter pair per alternative.
+            //
+            // `**bold**` is checked before italic and wins on the earlier start
+            // offset, so bold is never stolen by the italic rule - the reason the
+            // sort below exists at all.
             val underlineMatch = INLINE_UNDERLINE.find(remaining)
             val strikeMatch = INLINE_STRIKETHROUGH.find(remaining)
             val mentionMatch = INLINE_MENTION.find(remaining)
@@ -551,6 +796,7 @@ object AniListMarkdownParser {
                 boldItalicMatch?.let { it to "BOLD_ITALIC" },
                 boldMatch?.let { it to "BOLD" },
                 italicMatch?.let { it to "ITALIC" },
+                underscoreItalicMatch?.let { it to "ITALIC" },
                 underlineMatch?.let { it to "UNDERLINE" },
                 strikeMatch?.let { it to "STRIKE" },
                 mentionMatch?.let { it to "MENTION" },
@@ -621,12 +867,21 @@ object AniListMarkdownParser {
                     tokens.add(InlineToken.BoldItalic(content, nested(content, depth)))
                 }
                 "BOLD" -> {
+                    // Groups 1 and 2 are `**` and `__`; 3 and 4 are `<b>` and
+                    // `<strong>`. `groupValues` on an unmatched group is the empty
+                    // string, which is why this reads as a chain of `ifEmpty`.
                     val content = firstMatch.groupValues[1].ifEmpty {
-                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
+                        firstMatch.groupValues[2].ifEmpty {
+                            firstMatch.groupValues[3].ifEmpty { firstMatch.groupValues[4] }
+                        }
                     }
                     tokens.add(InlineToken.Bold(content, nested(content, depth)))
                 }
                 "ITALIC" -> {
+                    // Group 1 for the `*x*` / `_x_` alternation, 2 and 3 for the
+                    // `<i>` / `<em>` spellings. `groupValues` is safe on any of
+                    // them: an unmatched group is the empty string, which is why
+                    // `ifEmpty` chains read this way.
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }

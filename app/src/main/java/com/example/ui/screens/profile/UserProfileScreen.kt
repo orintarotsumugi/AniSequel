@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.FollowUser
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaListEntryItem
 import com.example.data.model.MediaNode
 import com.example.data.model.withSummaryProgress
@@ -414,8 +416,8 @@ private fun ProfileTabsContent(
     isLoadingManga: Boolean,
     /** Forwarded to the Library tab, which owns the remembered media type. */
     libraryPreferences: LibraryPreferences,
-    /** Media id to cover URL, for the AniList preview cards in the bio. */
-    mediaCovers: Map<Int, String>,
+    /** Media key to cover, for the AniList preview cards in the bio. */
+    mediaCovers: Map<MediaCoverKey, MediaCover>,
     /**
      * Passed rather than the ViewModel itself.
      *

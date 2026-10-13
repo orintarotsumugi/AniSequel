@@ -229,6 +229,68 @@ class ProfileViewModelTest {
         assertEquals(1, repository.followersFetchCount)
     }
 
+    /**
+     * A profile the reader only glanced at must not spend three requests.
+     *
+     * `updateUserId` used to treat `Idle` as "go and get it", and `Idle` is the
+     * *initial* state of both flows - so the id arriving from the profile overview
+     * started a fetch the moment the header was on screen, before the Activity or
+     * Social tab had been touched. On the by-username route, which is the only one
+     * where the id is scanned rather than known up front, that was one activity
+     * request plus two social ones (followers *and* following, because `load`
+     * prefetches the other list) for every profile opened and immediately backed out
+     * of.
+     *
+     * Both tabs fetch themselves on selection, so waiting costs the reader nothing.
+     */
+    @Test
+    fun `an activity feed is not fetched until the tab asks for it`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(activityPages = mapOf(1 to List(5) { createActivity(it + 1) }))
+        val viewModel = UserActivityViewModel(repository, userId = null, pageSize = 25)
+
+        // Exactly what the profile screen does once the overview resolves.
+        viewModel.updateUserId(1)
+        advanceUntilIdle()
+
+        assertEquals(
+            "resolving the id must not spend a request on a tab nobody opened",
+            0,
+            repository.activityFetchCount
+        )
+        assertTrue(
+            "and the feed must be left asking, not failed",
+            viewModel.state.value is UserActivityViewModel.ActivityState.Idle
+        )
+
+        // Selecting the tab is what fetches it.
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.activityFetchCount)
+        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Success)
+    }
+
+    @Test
+    fun `a social list is not fetched until the tab asks for it`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(followersResult = listOf(FollowUser(1, "Follower1")))
+        val viewModel = UserSocialViewModel(repository, userId = null)
+
+        viewModel.updateUserId(1)
+        advanceUntilIdle()
+
+        assertEquals(
+            "resolving the id must not spend two requests on a tab nobody opened",
+            0,
+            repository.followersFetchCount
+        )
+
+        viewModel.load(SocialList.FOLLOWERS)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.followersFetchCount)
+        assertTrue(viewModel.state.value is UserSocialViewModel.SocialState.Success)
+    }
+
     @Test
     fun `toggling a like is optimistic and settles on the server's answer`() = runTest(testDispatcher) {
         val repository = FakeProfileRepository(

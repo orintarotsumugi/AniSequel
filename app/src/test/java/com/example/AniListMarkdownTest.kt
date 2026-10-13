@@ -383,6 +383,81 @@ class AniListMarkdownTest {
         assertEquals(1, nodes.size)
     }
 
+    /**
+     * A bio writes `[**#1 Cowboy Bebop**](url)` whenever it wants the entry
+ * emphasised, and the asterisks went straight into the card's *heading* - because
+ * the link label is read as raw source on this branch, while every other link in
+ * the parser has its label parsed. So the one place the markup is visible rather
+ * than rendered is the card title.
+ */
+    @Test
+    fun `a card title is the link label with its markup stripped`() {
+        val nodes = AniListMarkdownParser.parse("[**#1 Cowboy Bebop**](https://anilist.co/anime/1)")
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull(preview)
+        assertEquals("#1 Cowboy Bebop", preview!!.title)
+    }
+
+    @Test
+    fun `an emphasised label in a tilde-centred line is still a card`() {
+        // `~~~...~~~` built its `Paragraph` directly and was therefore the one
+        // paragraph path that never lifted media links: identical text drew a card
+        // un-centred and a plain link centred.
+        val nodes = AniListMarkdownParser.parse("~~[**Cowboy Bebop**](https://anilist.co/anime/1)~~~")
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull("a centred AniList link must be a card too", preview)
+        assertEquals("Cowboy Bebop", preview!!.title)
+    }
+
+    /**
+     * An AniList link that ends a sentence.
+     *
+     * `INLINE_LINK` stops a URL at whitespace or `)`, but not at a full stop, so
+     * `[Title](https://anilist.co/anime/1).` arrived with the sentence's stop still
+     * attached. `matchEntire` against that failed, so the link fell back to a plain
+     * underlined title and no card was drawn at all.
+     */
+    @Test
+    fun `a sentence-final AniList link is still a card`() {
+        val nodes = AniListMarkdownParser.parse("My pick is [Cowboy Bebop](https://anilist.co/anime/1).")
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull(preview)
+        assertEquals("https://anilist.co/anime/1", preview!!.url)
+        assertEquals("Cowboy Bebop", preview.title)
+
+        // The stop belongs to the sentence, so it is still there.
+        val text = nodes.filterIsInstance<MarkdownNode.Paragraph>()
+            .flatMap { it.inlines.filterIsInstance<InlineToken.Plain>() }
+            .joinToString("") { it.text }
+        assertTrue("the sentence must keep its full stop, was '$text'", text.trimEnd().endsWith("."))
+    }
+
+    @Test
+    fun `a share query string does not stop a link being a card`() {
+        val nodes = AniListMarkdownParser.parse(
+            "[Cowboy Bebop](https://anilist.co/anime/1?utm_source=discord)"
+        )
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull("a pasted address must draw a card like any other", preview)
+        assertEquals("ANIME", preview!!.type)
+        assertEquals("1", preview.id)
+    }
+
+    @Test
+    fun `a slug is not swallowed by the trailing slash or a query`() {
+        val nodes = AniListMarkdownParser.parse("https://anilist.co/anime/16498/Death-Note/?ref=share")
+
+        val preview = nodes.filterIsInstance<MarkdownNode.AniListPreviewBlock>().singleOrNull()
+        assertNotNull(preview)
+        // Was `Death-Note/?ref=share`, because the slug pattern took `/` and `?`
+        // as slug characters.
+        assertEquals("Death Note", preview!!.title)
+    }
+
     @Test
     fun `a media link inside a list item is not turned into a card`() {
         // Cards are a paragraph treatment; a list item stays a line. The link must
@@ -396,6 +471,32 @@ class AniListMarkdownTest {
         assertNotNull(
             list!!.items.flatten().filterIsInstance<InlineToken.MediaLink>().firstOrNull()
         )
+    }
+
+    /**
+     * A checklist line after a plain bullet.
+     *
+     * `UNORDERED_LIST_PATTERN` also matches `- [x] done`, so the bullet run above
+     * pulled the checkbox in and printed the literal text `[x] done` as the
+     * bullet's own content - the checkbox never rendered at all. A list mixing
+     * bullets and boxes is ordinary in a "currently watching" bio.
+     */
+    @Test
+    fun `a checklist line after a plain bullet is a checklist`() {
+        val nodes = AniListMarkdownParser.parse("- Watching now\n- [x] Finished last season")
+
+        val list = nodes.filterIsInstance<MarkdownNode.ListBlock>().singleOrNull()
+        assertNotNull("the leading bullet is a list", list)
+        assertEquals(
+            "the checkbox must not be pulled into the bullet list",
+            1,
+            list!!.items.size
+        )
+
+        val checklist = nodes.filterIsInstance<MarkdownNode.CheckListBlock>().singleOrNull()
+        assertNotNull("the checkbox must render as a checkbox", checklist)
+        assertEquals(1, checklist!!.items.size)
+        assertTrue("and it must be ticked", checklist.items.single().checked)
     }
 
     @Test
@@ -492,5 +593,64 @@ class AniListMarkdownTest {
         val inlines = AniListMarkdownParser.parseInlines("mail me at hi@example.com thanks")
 
         assertTrue(inlines.none { it is InlineToken.Mention })
+    }
+
+    /**
+     * A snake_case handle in a bio is prose, not emphasis.
+     *
+     * The italic pattern accepted `_` anywhere, so `anilist_api_key` lost its
+     * underscores and the middle run was italicised. Markdown requires a
+     * delimiter to be left- or right-flanking before it counts as one, which is
+     * what the boundary guards on the `_` form express.
+     */
+    @Test
+    fun `an underscore inside a word is not italic`() {
+        val inlines = AniListMarkdownParser.parseInlines("My anilist_api_key is secret")
+
+        assertTrue("snake_case must not become italics", inlines.none { it is InlineToken.Italic })
+        assertEquals(
+            listOf("My anilist_api_key is secret"),
+            inlines.filterIsInstance<InlineToken.Plain>().map { it.text }
+        )
+    }
+
+    @Test
+    fun `a deliberate underscore emphasis still works`() {
+        val inlines = AniListMarkdownParser.parseInlines("say _this_ out loud")
+
+        val italic = inlines.filterIsInstance<InlineToken.Italic>().singleOrNull()
+        assertNotNull(italic)
+        assertEquals("this", italic!!.text)
+    }
+
+    /**
+     * The guards on the `_` pattern must not cost `**bold**` its delimiters.
+     *
+     * This is the reason the italic pattern was split in two rather than one
+     * pattern with a boundary test added: a single pattern pairs `*` with `_`
+     * freely, so `**bold**` matches `*` + `*bold` + `*`, and testing the opening
+     * `*` for a word boundary breaks it. The two delimiters need different rules,
+     * and the earliest-start match keeps each spelling to one token.
+     */
+    @Test
+    fun `bold with stars still wins over the underscore italic rule`() {
+        val inlines = AniListMarkdownParser.parseInlines("**#1 Cowboy Bebop** and _aside_")
+
+        val bold = inlines.filterIsInstance<InlineToken.Bold>().singleOrNull()
+        assertNotNull("`**...**` must stay a single bold run", bold)
+        assertEquals("#1 Cowboy Bebop", bold!!.text)
+
+        val italic = inlines.filterIsInstance<InlineToken.Italic>().singleOrNull()
+        assertNotNull("`_..._` must still be italic", italic)
+        assertEquals("aside", italic!!.text)
+    }
+
+    @Test
+    fun `underscore bold is still bold`() {
+        val inlines = AniListMarkdownParser.parseInlines("__loud__")
+
+        val bold = inlines.filterIsInstance<InlineToken.Bold>().singleOrNull()
+        assertNotNull("`__...__` must stay a single bold run", bold)
+        assertEquals("loud", bold!!.text)
     }
 }

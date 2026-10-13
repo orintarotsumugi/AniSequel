@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -192,6 +193,48 @@ private fun TierBoard(
     }
     val candidateById = remember(candidates) { candidates.associateBy { it.mediaId } }
 
+    // Where the rows actually are, in window px, for the tray's drag to resolve
+    // against.
+    //
+    // `boardTop` is read inside `snapshotFlow`, never as a composition key.
+    //
+    // It used to be a `LaunchedEffect` key, and `boardTop` is a
+    // `mutableFloatStateOf` - so every frame the board moved, *reading* it
+    // invalidated the whole `TierBoard` recompose scope: a coroutine relaunch, a
+    // fresh band list, and every `TierRowStrip` and `TierPosterTile` re-executing,
+    // each with its own `animateColorAsState` and `AsyncImage`. On a fling, and on
+    // every frame of the drag auto-scroll loop, which is precisely the
+    // frame-rate-sensitive path.
+    //
+    // `snapshotFlow` observes the same state from a coroutine, which is not a
+    // composition, so the board keeps moving without recomposing anything.
+    LaunchedEffect(arrangement, zoom, density.density, scrollState) {
+        val pxPerDp = density.density
+        snapshotFlow { scrollState.value to viewport.boardTop }.collect {
+            val boardTop = viewport.boardTop
+            viewport.rowBands = arrangement.rows.map { row ->
+                TierRowBand(
+                    tierId = row.tierId,
+                    top = boardTop + row.y * zoom * pxPerDp,
+                    bottom = boardTop + row.bottom * zoom * pxPerDp
+                )
+            }
+        }
+    }
+
+    // ...and un-published when this board leaves the composition.
+    //
+    // `viewport` is remembered by the *screen*, so it outlives the board, and the
+    // board is not always composed - "Empty every tier" replaces it with an empty
+    // state while the pool stays. The bands were the one piece of state with no
+    // writer on that path, so a tray drop resolved against rows that were no
+    // longer drawn, at window positions that no longer lined up with anything: the
+    // title was filed under a tier id nobody could see and the board came back with
+    // a poster in it, placed by a phantom.
+    DisposableEffect(Unit) {
+        onDispose { viewport.rowBands = emptyList() }
+    }
+
     // Derived rather than recomputed on every pointer move. Reading `dragTravel`
     // straight into composition made the whole board recompose each frame of a
     // drag, only to redraw the same hint and caret; a `derivedStateOf` notifies its
@@ -216,12 +259,15 @@ private fun TierBoard(
         }
     }
     val dropTarget = drop.value
-    val caret = remember(dropTarget, arrangement, options) {
+    val caret = remember(dropTarget, arrangement, options, draggingId) {
         tierDropCaret(
             drop = dropTarget,
             rows = arrangement.rows,
             items = arrangement.items,
-            options = options
+            options = options,
+            // The same exclusion the placement uses, so the mark and the answer are
+            // computed from one list of "tiles that will still be here".
+            skipMediaId = draggingId
         )
     }
 
@@ -282,7 +328,10 @@ private fun TierBoard(
             // compiles against nothing. This is its documented equivalent - the
             // window position of this node's top-left corner.
             .onGloballyPositioned { coordinates ->
-                viewport.boardTop = coordinates.localToWindow(Offset.Zero).y
+                val window = coordinates.localToWindow(Offset.Zero)
+                viewport.boardTop = window.y
+                viewport.boardLeft = window.x
+                viewport.boardWidth = coordinates.size.width.toFloat()
             }
             .transformable(state = transformState)
             .pointerInput(arrangement, zoom) {
@@ -418,11 +467,22 @@ private fun TierGeometry(
                 )
             }
             drawnItems.forEach { box ->
+                // The *scaled* numbers, not the layout's own. The slot below is
+                // measured at `slot.height * zoom`, and the tile's content was
+                // asking for unscaled heights - so the box grew with the rows while
+                // the artwork inside it stayed the size it started. At maximum zoom
+                // every poster rendered as a wide 4:3 crop with a band of dead space
+                // under its caption; at `TIER_MIN_ZOOM` the caption was handed
+                // `maxHeight = 96 - 96 = 0` and every title vanished.
+                //
+                // `TierDragGhost` was already given the scaled pair, which is why
+                // picking a poster up visibly resized it - the ghost is the correct
+                // version of a tile and the tile was not.
                 TierPosterTile(
                     candidate = candidateById[box.mediaId],
                     width = box.width,
-                    posterHeight = options.posterHeight,
-                    captionHeight = options.captionHeight,
+                    posterHeight = options.posterHeight * zoom,
+                    captionHeight = options.captionHeight * zoom,
                     onTap = { onItemTap(box.mediaId) }
                 )
             }

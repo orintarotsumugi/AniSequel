@@ -296,9 +296,24 @@ class TierListViewModel(
             }
         }
         edit(label) { document ->
-            document.copy(
-                assignment = document.assignment.withPlacement(mediaId, tierId, beforeMediaId)
-            )
+            // Refuse a tier that is not in this document.
+            //
+            // The invariant "a title is either in a tier that exists or in none" is
+            // enforced on the way *out* - `withoutOrphans` and `liveAssignment` both
+            // exist for it - and was never enforced on the way in, because
+            // `withPlacement` writes whatever id it is handed. A tier removed while a
+            // board was on screen could still be named by a drop resolving against a
+            // stale row band, and the result was the worst state this feature has:
+            // the title vanished from the board, the counter dropped, and the notice
+            // offered no way out, because the row it had been filed under no longer
+            // existed to place it into again.
+            if (tierId != null && document.tiers.none { it.id == tierId }) {
+                document
+            } else {
+                document.copy(
+                    assignment = document.assignment.withPlacement(mediaId, tierId, beforeMediaId)
+                )
+            }
         }
     }
 

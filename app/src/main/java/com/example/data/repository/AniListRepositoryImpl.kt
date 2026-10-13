@@ -6,6 +6,8 @@ import com.example.data.model.FollowUser
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.ListActivity
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.SimpleMediaListEntry
@@ -98,14 +100,19 @@ class AniListRepositoryImpl(
     private val detailCache = ConcurrentHashMap<Int, MediaNode>()
 
     /**
-     * Media id to cover URL, for the markdown preview cards.
+     * Media key to cover, for the markdown preview cards.
      *
      * Separate from [detailCache] because the two are asked for at completely
      * different moments and want opposite lifetimes: a detail node is fetched when
      * a person taps one card and is worth keeping, whereas covers arrive a dozen
      * at a time just to decorate a bio and are cheap to re-fetch if dropped.
+     *
+     * Keyed on [MediaCoverKey] rather than a bare id so `anime/1` and `manga/1` -
+     * which are different shows - do not overwrite each other in here. Keyed on an
+     * id, this cache would serve one of the two posters for both cards
+     * indefinitely, not just for the length of one request.
      */
-    private val coverCache = ConcurrentHashMap<Int, String>()
+    private val coverCache = ConcurrentHashMap<MediaCoverKey, MediaCover>()
 
     /**
      * Completed list responses, kept briefly so re-entering the app does not
@@ -421,23 +428,33 @@ class AniListRepositoryImpl(
         }
     }
 
-    override suspend fun getMediaCovers(ids: List<Int>): Result<Map<Int, String>> {
-        if (ids.isEmpty()) return Result.success(emptyMap())
+    override suspend fun getMediaCovers(
+        keys: List<MediaCoverKey>
+    ): Result<Map<MediaCoverKey, MediaCover>> {
+        if (keys.isEmpty()) return Result.success(emptyMap())
 
         // Already-known covers are answered without touching the network. This is
         // the common case for a profile the reader has already opened once, and
         // it is what stops a re-open from spending a request at all.
-        val resolved = LinkedHashMap<Int, String>()
-        val missing = mutableListOf<Int>()
-        ids.distinct().forEach { id ->
-            val cached = coverCache[id]
-            if (cached != null) resolved[id] = cached else missing += id
+        val resolved = LinkedHashMap<MediaCoverKey, MediaCover>()
+        val missing = mutableListOf<MediaCoverKey>()
+        // Distinct on the *key*, not the id. `anilist.co/anime/1` and
+        // `anilist.co/manga/1` are two different shows that happen to share an id,
+        // and deduplicating on the id would fetch one and show it on both cards.
+        keys.distinct().forEach { key ->
+            val cached = coverCache[key]
+            if (cached != null) resolved[key] = cached else missing += key
         }
         if (missing.isEmpty()) return Result.success(resolved)
 
-        // One alias per id, so the response is read back by position. The list is
-        // deduplicated above so two aliases never ask for the same media.
-        val variables = missing.withIndex().associate { (index, id) -> "id$index" to id }
+        // One alias per key, so the response is read back by position - two keys
+        // sharing an id would otherwise need two aliases on the same field.
+        val variables = buildMap {
+            missing.forEachIndexed { index, key ->
+                put("id$index", key.id)
+                put("type$index", key.graphqlType)
+            }
+        }
         return execute(
             GraphQLRequest(
                 query = GraphQLQueries.getMediaCoversQuery(missing),
@@ -447,13 +464,26 @@ class AniListRepositoryImpl(
         ).map { byAlias ->
             // `execute` already unwrapped GraphQLResponse.data, so what arrives
             // here *is* the alias map - there is no `.data` on it to reach for.
-            missing.forEachIndexed { index, id ->
+            missing.forEachIndexed { index, key ->
                 val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]
-                val cover = node?.coverImage?.bestUrl
-                if (cover != null) {
+                val url = node?.coverImage?.bestUrl
+                if (url != null) {
+                    // The key comes from the request rather than from
+                    // `node.type`. They should agree, but if AniList ever answers
+                    // with a different type than the one asked for, the card has to
+                    // find the cover under the key it requested it by or it draws
+                    // the placeholder over a request it already paid for.
+                    val cover = MediaCover(
+                        url = url,
+                        // The real title, which the query asks for on every entry.
+                        // A bio link of `anilist.co/anime/1` has no readable name in
+                        // it, so this is the only thing that can label the card with
+                        // anything but the type and a number.
+                        title = node.title?.bestTitleOrNull
+                    )
                     if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
-                    coverCache[id] = cover
-                    resolved[id] = cover
+                    coverCache[key] = cover
+                    resolved[key] = cover
                 }
             }
             // A media with no cover is absent from the answer rather than an error:

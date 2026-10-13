@@ -15,6 +15,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AppVectorIcons
 import com.example.ui.components.openExternalUrl
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 import com.example.data.model.MediaNode
 import com.example.ui.viewmodel.UserOverviewUiState
 
@@ -37,8 +39,8 @@ fun ProfileHomeTab(
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier,
-    /** Media id to cover URL, for the AniList cards inside the bio. */
-    mediaCovers: Map<Int, String> = emptyMap(),
+    /** Media key to cover, for the AniList cards inside the bio. */
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
     /**
      * Hoisted by the screen so this tab's scroll position outlives a tab switch.
      *

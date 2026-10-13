@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.data.model.MediaCover
+import com.example.data.model.MediaCoverKey
 
 /**
  * How many top-level blocks a *collapsed* render keeps.
@@ -33,7 +35,7 @@ const val MARKDOWN_COLLAPSED_BLOCK_LIMIT = 4
  * an expanded one. Callers that collapse should fade the bottom edge, because a
  * dropped block is otherwise indistinguishable from the author never writing it.
  *
- * [mediaCovers] is media id to cover URL for the AniList preview cards. Passed in
+ * [mediaCovers] is media key to cover for the AniList preview cards. Passed in
  * rather than fetched from here so a document's worth of links costs **one**
  * request: a bio is a dozen preview cards, and a fetch per card would spend a
  * dozen of AniList's 30-a-minute budget before the reader had scrolled. A miss
@@ -45,7 +47,7 @@ fun AniListMarkdownView(
     nodes: List<MarkdownNode>,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
-    mediaCovers: Map<Int, String> = emptyMap()
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
     Column(
         modifier = modifier.testTag("anilist_markdown_view"),
@@ -79,7 +81,9 @@ fun AniListMarkdownView(
                 }
                 is MarkdownNode.AniListPreviewBlock -> RenderAniListPreview(
                     node,
-                    coverUrl = node.mediaIdOrNull()?.let { mediaCovers[it] }
+                    // One lookup by key, so an anime and a manga that happen to
+                    // share an id each draw their own poster.
+                    cover = node.mediaCoverKeyOrNull()?.let { mediaCovers[it] }
                 )
                 is MarkdownNode.Divider -> HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),

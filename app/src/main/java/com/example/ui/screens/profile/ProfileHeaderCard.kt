@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.ui.components.AppVectorIcons
+import com.example.ui.components.PannableBackdrop
 import com.example.ui.components.expressive.ExpressiveShapes
 import com.example.ui.viewmodel.UserOverviewUiState
 
@@ -247,31 +248,33 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .height(260.dp)
             .clip(MaterialTheme.shapes.extraLarge)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         val banner = state.bannerUrl
         if (banner != null) {
-            AsyncImage(
+            PannableBackdrop(
                 model = banner,
                 contentDescription = "Profile Banner",
-                modifier = Modifier.matchParentSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-                error = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-                fallback = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
+                contentScale = ContentScale.FillWidth
             )
             // Weighted toward the bottom so the artwork stays visible at the top
             // while the identity line below has a surface to sit on.
+            //
+            // The stops are `Copy` of black at a *low* alpha above the midpoint
+            // rather than the previous 0.10/0.28: a scrim that darkens a banner the
+            // reader can now drag sideways darkens whichever part of the picture is
+            // currently on screen, so a heavy one darkens different artwork
+            // depending on where they stopped scrolling.
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            0.0f to Color.Black.copy(alpha = 0.10f),
-                            0.35f to Color.Transparent,
-                            0.70f to Color.Black.copy(alpha = 0.28f),
+                            0.0f to Color.Black.copy(alpha = 0.06f),
+                            0.40f to Color.Transparent,
+                            0.72f to Color.Black.copy(alpha = 0.22f),
                             1.0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                         )
                     )
