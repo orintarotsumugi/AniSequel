@@ -48,6 +48,24 @@ paginated list history), Stats, Library, and Social. Each keeps its own scroll
 position across a tab switch, because `AnimatedContent` disposes the tab it
 animates away from and anything remembered inside it dies with it.
 
+**A profile paints after one request.** The overview — identity, bio,
+favourites, and AniList's own aggregates — is published the moment it arrives.
+The media list is merged in behind it, because it is one request per 500 entries
+and only two of the five tabs read it; the profile used to wait for the whole
+download before drawing a bio that had already come back. Between the two
+publishes `UserOverviewUiState.Success.isLibraryLoading` is true, and Stats and
+Library render "still counting" rather than a tally of zero — an empty list is a
+real answer for an account that tracks nothing, so the flag, not the emptiness, is
+what the screen reads.
+
+**Bios** are AniList-flavoured Markdown, rendered by
+`ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
+spoilers (`~!like this!~`), inline GIFs, `~~~a centred line~~~`, AniList links
+lifted into cover cards, and images. Two deliberate gaps: tables and
+`(video)`-style embeds are only partly AniList-documented, so they are parsed
+conservatively, and underline has no working AniList syntax (`<u>` is accepted
+anyway rather than dropped, since dropping it would print the tag).
+
 **Library** browses every anime and manga on the account as a poster grid with
 per-status counts and search. It costs no extra requests: the Stats tab already
 forces the whole anime list to be fetched and chunk-merged, because AniList
@@ -58,12 +76,51 @@ time somebody filters to it and then cached.
 
 ### The tier list
 
-`domain/tier/` holds the rules, the geometry and the exporter as pure Kotlin with
-no Android or Compose imports, so the whole arrangement is testable without a
-device. The profile's top bar opens it from a small trophy beside the name — and
-**only on your own profile**: the ranking is stored keyed to the signed-in
-account, so it means nothing on somebody else's, which is why the control is
-hidden off your own rather than shown and re-explained.
+`domain/tier/` holds the rules, the geometry, the storage format and the exporter
+as pure Kotlin with no Android or Compose imports, so the whole arrangement is
+testable without a device. The profile's top bar opens it from a small trophy
+beside the name — and **only on your own profile**: the ranking is stored against
+the signed-in account, so it means nothing on somebody else's, which is why the
+control is hidden off your own rather than shown and re-explained.
+
+#### Lists are saved projects, and the screen opens on them
+
+The trophy opens a **library**: the lists you have, with the one you opened last
+offered to carry on with, a button for a new empty one, and rename/delete on every
+row. Picking one opens its board. There is one route and one piece of state behind
+that choice (`opened == null` is the library), so a deep link, a restored back
+stack and the system back gesture cannot disagree about where they are.
+
+Each list is a `TierListDocument` — an id, a name, its tiers and its placements —
+stored under its own key, with an index of ids beside it. That is deliberate:
+`Preferences` is an unordered map, so enumerating its keys would hand the library
+whatever order the file happened to be written in, and an interrupted delete would
+leave a document behind that still looked like a list. Writes are per document, so
+editing one list cannot rewrite another, and every edit is one `edit` transaction
+— a removed tier and the placements it drops are no longer two writes that could
+be separated by a crash. The list that existed before this change is migrated into
+the library once, from the two legacy keys, which are then left in place as the
+only copy of an upgrade that cannot be repeated.
+
+#### Every edit is undoable, and the undo is the previous document
+
+The ViewModel keeps a bounded stack of the documents as they were. A snapshot
+rather than a delta, because a delta has to be inverted correctly for a move, for
+a removal that dropped entries filed under the removed row, and for a seeding — and
+the one that is inverted wrong corrupts the list silently instead of failing.
+
+The snapshot is read *inside* the store's write transaction, which is what makes
+it exactly the state the edit replaced: a snapshot taken by the caller can be one
+write behind, and undo would then jump back past work the person wants to keep.
+
+#### Dragging is positional, and reaches past the screen
+
+A drop names a tier **and** a tile to go above, so dropping a poster between two
+others means what it looks like. A caret marks the seam it will land on. Holding a
+tile within 72dp of the top or bottom of the viewport scrolls the screen at up to
+9dp a frame, scaled by how close the finger is, and the ghost is translated by how
+far the board has moved since the tile was picked up — without that half, the tile
+slides out from under the finger exactly when the drag is longest.
 
 One layout is computed and intended for several renderers, rather than each
 arranging the list for itself — three independent arrangements is how an export
@@ -305,6 +362,8 @@ BOM. This is not inertia:
 | `ExpressiveShapesTest` | Capsule geometry is not a stretched polygon |
 | `RefreshIntervalTest`, `ListFreshnessWatchTest` | Staleness boundary, foreground re-fetch, timer, retry floor |
 | `RefreshIntervalPreferencesTest` | The interval survives storage and reaches the repository |
+| `AniListMarkdownTest` | Bio Markdown: which constructs parse, and which of them AniList writes differently from GFM |
+| `UserOverviewLoadOrderTest` | The profile is published before the media list lands, and says so while it waits |
 | `AuthRedirectTest`, `AniListOAuthTest` | OAuth redirect and token handling |
 
 `test` is a **gate**; `lintRelease` is not (`abortOnError = false` in

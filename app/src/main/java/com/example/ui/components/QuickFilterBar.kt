@@ -42,13 +42,24 @@ fun QuickFilterBar(
     onClearAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // Four segments, not six. This is a fixed-width segmented control, so the two
+    // rarer states - On Hiatus and Cancelled - live in the filter sheet, which
+    // draws every value in `StatusFilter`. Crowding them in here would leave six
+    // labels sharing one capsule, and "Cancelled" is the one that would truncate.
     val statuses = listOf(StatusFilter.ALL, StatusFilter.RELEASING, StatusFilter.FINISHED, StatusFilter.NOT_YET_RELEASED)
     val statusLabels = listOf("All", "Airing", "Finished", "Upcoming")
 
     // The selected index follows the criteria rather than being stored
     // separately, so the control cannot drift out of sync with the filter it
     // claims to represent.
-    val selectedIndex = statuses.indexOf(filterCriteria.statusFilter).coerceAtLeast(0)
+    //
+    // -1 when the active filter is one this bar does not offer. The old
+    // `coerceAtLeast(0)` turned that into 0, so a list narrowed to "On Hiatus"
+    // showed **All** highlighted - the bar claiming nothing was filtered while
+    // the sheet was filtering by a status the bar has no segment for. A `-1`
+    // selects nothing, which is the honest picture; the row underneath says
+    // which status it is.
+    val selectedIndex = statuses.indexOf(filterCriteria.statusFilter)
 
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
@@ -71,6 +82,14 @@ fun QuickFilterBar(
             .filter { (key, _) -> filterCriteria.selectedFormat == key }
             .map { (_, label) -> label }
 
+        // The active status is restated only when the bar above cannot show it.
+        // A status the segmented control already highlights would otherwise be
+        // printed twice on the same line.
+        val activeStatus = filterCriteria.statusFilter
+            .takeIf { it != StatusFilter.ALL && selectedIndex < 0 }
+            ?.displayName
+        val activeFilters = listOfNotNull(activeStatus) + activeFormats
+
         // The shared predicate rather than a local copy. This row's own
         // version used to look at status, search and "include unreleased" only,
         // so a viewer who hid already-planned entries - or widened the relation
@@ -87,10 +106,10 @@ fun QuickFilterBar(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (activeFormats.isEmpty()) {
+                        text = if (activeFilters.isEmpty()) {
                             "Filtered"
                         } else {
-                            "Filtered · ${activeFormats.joinToString(", ")}"
+                            "Filtered · ${activeFilters.joinToString(", ")}"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,

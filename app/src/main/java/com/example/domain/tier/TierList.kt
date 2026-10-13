@@ -151,3 +151,107 @@ fun seedFromScores(
  */
 fun unseedableCount(candidates: List<TierCandidate>): Int =
     candidates.count { (it.averageScore ?: 0) <= 0 }
+
+/**
+ * Drops every placement that names a tier which no longer exists.
+ *
+ * This is the invariant the whole feature rests on: a title is either in a tier
+ * that exists or in none. Storage can hold the other state - a document saved
+ * before a row was removed, or one written by an older build - and the fix
+ * belongs here rather than in each reader, because there is more than one reader
+ * now (the board, the exports, the library's counts) and two of them disagreeing
+ * about whether an entry is placed is not a display bug: it is the export and the
+ * screen showing different lists. [TierListViewModel.orphanedCount] still reports
+ * them, so the person can see that something was dropped instead of wondering
+ * where a poster went.
+ */
+fun TierAssignment.withoutOrphans(tiers: List<TierDefinition>): TierAssignment {
+    if (tierIdByMediaId.isEmpty()) return this
+    val live = tiers.map { it.id }.toSet()
+    val filtered = tierIdByMediaId.filterValues { it in live }
+    // The same instance when nothing was dropped, which is not a micro-optimisation
+    // here: this runs on every emission of the open list, and a fresh equal value
+    // is a new `StateFlow` value - which recomposes the board's whole arrangement
+    // for a list that did not change.
+    if (filtered.size == tierIdByMediaId.size) return this
+    return TierAssignment(filtered)
+}
+
+/** How many placements name a tier that no longer exists. */
+fun TierAssignment.orphanedCount(tiers: List<TierDefinition>): Int {
+    val live = tiers.map { it.id }.toSet()
+    return tierIdByMediaId.count { it.value !in live }
+}
+
+/**
+ * Files [mediaId] into [tierId] at a chosen position, or un-files it.
+ *
+ * ## Why this is not [moveTo]'s "put it in the tier"
+ *
+ * Dropping a poster *onto another poster* has to mean "here, above this one".
+ * The old move only knew a tier, so the dropped title landed wherever its media id
+ * happened to sit in the map - which for an id filed under that tier a year ago is
+ * the top of the row, nowhere near the finger. `beforeMediaId` is the tile the drop
+ * landed on top of, and the new entry goes immediately before it.
+ *
+ * ## Order is the storage order, deliberately
+ *
+ * There is no separate position field. The assignment is one ordered map, written
+ * out in iteration order and read back in it, so rebuilding the map *is* the
+ * reorder - and there is only one place for the order to live, which is what keeps
+ * the screen and an export of it in the same order. The previous code's ordering
+ * was a side effect of insertion; that is still true, it is just now deliberate.
+ *
+ * An anchor that is not in [tierId] (the finger was over the dragged tile itself,
+ * or the tile was moved a frame earlier), or no anchor at all, means "the end of
+ * that tier" - not the end of the whole map, which would file it below rows it is
+ * not in.
+ */
+fun TierAssignment.withPlacement(
+    mediaId: Int,
+    tierId: String?,
+    beforeMediaId: Int? = null
+): TierAssignment {
+    // Dropping a tile onto its own slot is a no-op rather than "move it to the end
+    // of the row". The board can name the tile itself as the anchor for a frame
+    // while the finger is still over it, and reordering under a stationary finger
+    // reads as the board rearranging itself.
+    if (beforeMediaId == mediaId) return this
+
+    val rest = tierIdByMediaId.filterKeys { it != mediaId }
+    if (tierId == null) {
+        if (rest.size == tierIdByMediaId.size) return this
+        return TierAssignment(rest)
+    }
+
+    val rebuilt = LinkedHashMap<Int, String>(rest.size + 1)
+    var placed = false
+    rest.forEach { (id, existingTier) ->
+        if (!placed && id == beforeMediaId && existingTier == tierId) {
+            rebuilt[mediaId] = tierId
+            placed = true
+        }
+        rebuilt[id] = existingTier
+    }
+
+    if (!placed) {
+        // The anchor was absent, so the entry goes after the last one already in
+        // this tier - not at the end of the map. Appending would put it below every
+        // *other* tier's entries too, which is invisible on the board (each row
+        // filters by tier) and visible the moment anything walks the map in order,
+        // which the exports and the "add titles" list both do.
+        val entries = rest.entries.toList()
+        val lastOfTier = entries.indexOfLast { it.value == tierId }
+        val ordered = LinkedHashMap<Int, String>(rest.size + 1)
+        entries.forEachIndexed { index, entry ->
+            ordered[entry.key] = entry.value
+            if (index == lastOfTier) ordered[mediaId] = tierId
+        }
+        // A tier with nothing in it has no "after the last entry", so this is the
+        // one case that lands at the end.
+        if (lastOfTier < 0) ordered[mediaId] = tierId
+        return TierAssignment(ordered)
+    }
+
+    return TierAssignment(rebuilt)
+}

@@ -430,6 +430,16 @@ fun ProfileLibraryTab(
     mangaEntries: List<MediaListEntryItem>?,
     favouriteIds: Set<Int>,
     isLoadingManga: Boolean,
+    /**
+     * Whether the anime list is still on its way.
+     *
+     * The Library reads entries the Stats tab's tallies forced a download for, so
+     * it used to inherit two possible states - here, or not yet - and rendered the
+     * second as "Nothing in this list yet" over an account with 900 entries. Null
+     * entries cannot express the difference, so the flag does. Defaulted because a
+     * caller that does not know is a caller whose list is already in hand.
+     */
+    isAnimeLoading: Boolean = false,
     onLoadManga: () -> Unit,
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
@@ -474,6 +484,11 @@ var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
         }
     }
     val counts = remember(scoped, favouriteIds) { libraryCounts(scoped, favouriteIds) }
+
+    // Only a scope that reads the anime list is waiting on it: a Manga-only view
+    // is waiting on its own, separate request, and a spinner for the wrong one
+    // would be a second, quieter version of the same lie as the zeroes.
+    val awaitingAnime = isAnimeLoading && type != LibraryType.MANGA
     val visible = remember(scoped, type, filter, favouriteIds, query, sort, sortAscending) {
         sortLibrary(
             filterLibrary(scoped, type, filter, favouriteIds, query),
@@ -531,10 +546,17 @@ var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
             )
         }
 
+        if (awaitingAnime) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending") {
+                PendingDataNote("Still fetching this list - these counts are not final yet")
+            }
+        }
+
         if (visible.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty") {
                 LibraryEmpty(
-                    isLoading = type == LibraryType.MANGA && isLoadingManga,
+                    isLoading = (type == LibraryType.MANGA && isLoadingManga) ||
+                        (awaitingAnime && animeEntries.isEmpty()),
                     query = query
                 )
             }

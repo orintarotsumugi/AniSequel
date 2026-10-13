@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
@@ -106,6 +107,10 @@ object AppVectorIcons {
     val Download = Icons.Default.Download
     val Pause = Icons.Default.PauseCircle
     val OverflowMenu = Icons.Default.MoreHoriz
+
+    // The library's "make one" action. Named for what it makes, not for the shape
+    // it is drawn with, so the day it is redrawn nobody has to rename a screen.
+    val NewList = Icons.Default.Add
     val ExpandMore = Icons.Default.ExpandMore
     val ExpandLess = Icons.Default.ExpandLess
 

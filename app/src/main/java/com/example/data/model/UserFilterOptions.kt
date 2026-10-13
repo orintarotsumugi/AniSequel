@@ -8,10 +8,28 @@ enum class SequelSortOption(val displayName: String) {
     SCORE("Highest Rated")
 }
 
+/**
+ * The airing states a sequel can be narrowed to.
+ *
+ * ## Why Hiatus and Cancelled are here
+ *
+ * AniList has five media statuses, and this enum had three of them plus `ALL`.
+ * The two missing ones were not invisible - `SequelStatusChip` has drawn "Hiatus"
+ * and "Cancelled" chips, with their own colours and icons, since it existed - so
+ * a reader could see a cancelled entry on a card and had no way to ask for the
+ * cancelled ones. A status the UI can display and the filter cannot select is a
+ * dead end: the only route to those entries was scrolling the unfiltered list.
+ *
+ * The order is the order the filter sheet draws, so Upcoming stays last and the
+ * two in-between states sit beside `RELEASING`: an entry is on hiatus *having*
+ * been airing, and cancelled *having* been announced.
+ */
 enum class StatusFilter(val displayName: String) {
     ALL("All Statuses"),
     FINISHED("Finished Airing"),
     RELEASING("Currently Airing"),
+    HIATUS("On Hiatus"),
+    CANCELLED("Cancelled"),
     NOT_YET_RELEASED("Upcoming / Unreleased")
 }
 

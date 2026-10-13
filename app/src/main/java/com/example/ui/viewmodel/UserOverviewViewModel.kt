@@ -186,10 +186,18 @@ class UserOverviewViewModel(
         loadJob = viewModelScope.launch {
             val name = username?.takeUnless { it.isBlank() }
 
-            // Neither half is worth showing alone: the header and the favourites
-            // come from one, three of the Stats charts from the other, and a page
-            // with a name and a "7 Watching" is more useful than either a spinner
-            // or a half-populated screen.
+            // One request for the page, and the expensive half beside it.
+            //
+            // The two used to be awaited together, on the argument that a page
+            // with a name and a "7 Watching" is worse than a spinner. That
+            // reasoning cost the reader the whole chunk-merged list download
+            // before seeing anything: the overview is one request, the list is one
+            // per 500 entries, and only two of the profile's five tabs read it.
+            // The overview is published on its own below and the list is merged in
+            // when it lands, so the bio and the favourites are on screen while the
+            // tallies are still being counted. `isLibraryLoading` is what keeps the
+            // two tabs that need the list from showing zeroes as if they were
+            // answers.
             val overviewDeferred = async {
                 if (isDemo) {
                     Result.success(aniListRepository.getDemoUserOverview())
@@ -210,12 +218,39 @@ class UserOverviewViewModel(
                 return@launch
             }
 
+            // Published before the list is awaited, and deliberately so: see the
+            // note above. `isLibraryLoading` is the flag that stops the Stats and
+            // Library tabs from rendering "0 completed" for the length of the
+            // download - an empty answer and an unasked question are different, and
+            // the screen has to be able to tell them apart.
+            //
+            // Only when there is nothing to replace, though. On a *refresh* this
+            // page is already painted, and publishing the list-less state over it
+            // would empty the Library grid and blank every entry-derived chart for
+            // the length of the download - trading a slow first paint for a slow
+            // every refresh. The previous tallies are seconds old and the refresh
+            // bar is already saying the page is being replaced.
+            val alreadyShowing = (_uiState.value as? UserOverviewUiState.Success)?.userId == overview.id
+            if (!alreadyShowing) {
+                _uiState.value = buildState(
+                    overview = overview,
+                    list = null,
+                    isRefreshing = false,
+                    isLibraryLoading = true
+                )
+            }
+
             // If fetching the anime list fails (for instance on accounts with private lists
             // or temporary rate limits), gracefully build the profile with null list data
             // rather than failing the entire profile screen when the overview succeeded.
             val list = listDeferred.await().getOrNull()
 
-            _uiState.value = buildState(overview, list, isRefreshing = false)
+            _uiState.value = buildState(
+                overview = overview,
+                list = list,
+                isRefreshing = false,
+                isLibraryLoading = false
+            )
             // After the state is published, and not awaited by it: the reader
             // should see the bio immediately and have posters arrive into the
             // cards a moment later.
@@ -244,7 +279,8 @@ class UserOverviewViewModel(
     private fun buildState(
         overview: UserOverview,
         list: MediaListCollection?,
-        isRefreshing: Boolean
+        isRefreshing: Boolean,
+        isLibraryLoading: Boolean = false
     ): UserOverviewUiState.Success {
         val favourites = overview.favourites
         val animeStats = overview.statistics?.anime
@@ -296,6 +332,7 @@ class UserOverviewViewModel(
                 ?: aggregate?.animeListScores?.meanScore?.toDouble(),
             standardDeviation = aggregate?.animeListScores?.standardDeviation,
             isRefreshing = isRefreshing,
+            isLibraryLoading = isLibraryLoading,
             isDemoMode = isDemo
         )
     }

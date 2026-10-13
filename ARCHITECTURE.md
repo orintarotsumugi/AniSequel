@@ -209,6 +209,7 @@ AniList exclusively uses GraphQL over HTTP POST. `AniListApiService` defines the
 - `RefreshIntervalPreferences`: Stores auto-refresh interval settings (`Always`, `15 min`, `30 min`, `1 hour`, `Manual`).
 - `HiddenSequelsPreferences`: Persists a set of media IDs explicitly hidden by the user.
 - `ArrivingPreferences`: Persists user toggles for showing/hiding upcoming airing entries.
+- `TierListPreferences`: Persists a *library* of tier lists. Each list is a `TierListDocument` (id, name, tiers, placements, updatedAt) under its own key (`list_<id>_v1`), with an index of ids (`library_ids_v1`) and the last opened id (`last_opened_v1`) beside it. An index rather than enumerating the store's keys, because `Preferences` is unordered; a key per document rather than one blob, so an edit rewrites one list and not the others. `mutate(listId, change)` applies an edit in a single transaction and returns the document as it was *before*, which is what the ViewModel's undo stack stores. `migrateLegacyList()` moves the pre-library `tiers_v1`/`assignment_v1` pair into the library once, and leaves them in place.
 
 ---
 
@@ -262,8 +263,9 @@ private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> get() =
 #### Screen & Component Breakdown
 - **`DashboardScreen`**: Primary feed. Features header profile summary, search bar, quick filter chips, stats banner, arriving sequels section, missed sequels list/grid, and bottom sheets (`SequelDetailSheet`, `FilterSortSheet`).
 - **`LoginScreen`**: Multi-auth entry point supporting OAuth2 PKCE login, public username scanning, and instant Demo mode.
-- **`UserProfileScreen`**: Profile hub containing four tabs: **Home** (overview & favorites), **Activity** (timeline & heatmap), **Social** (followers/following), and **Stats** (charts & genre breakdown).
+- **`UserProfileScreen`**: Profile hub containing five tabs: **Home** (identity, bio & pinned favourites), **Activity** (timeline & heatmap), **Stats** (charts & genre breakdown), **Library** (poster grid with per-status counts, reusing the list Stats already forced) and **Social** (followers/following). The tab bar and the `when` that renders them read one `NavigationDestination` list, so they cannot disagree.
 - **`SettingsScreen`**: Configuration hub for themes, palettes, refresh intervals, changelog view, and manual/auto app update management.
+- **`TierListScreen`**: The tier list destination, and the host that chooses between its two screens: `TierLibraryScreen` when no list is open (new list, carry on with the last one, rename, delete) and `TierBoardScreen` when one is. The board's arrangement, geometry and gestures live in `TierBoard.kt` and its pure helpers in `TierBoardLogic.kt`; the sheets are in `TierPlacementSheets.kt`. One route and one piece of state (`opened == null`) decide which screen is up, so the back gesture and the bar's arrow cannot disagree.
 
 ---
 
@@ -298,6 +300,35 @@ private fun recomputeDashboardState() {
     }
 }
 ```
+
+#### `UserOverviewViewModel` — two publishes, not one
+
+The profile screen is built from two requests: the overview (`GET_USER_OVERVIEW`) and the media
+list (`MediaListCollection`, one request per 500 entries, chunk-merged). Only three of the Stats
+tab's charts and the Library tab read the second, so the two are no longer awaited together:
+
+```kotlin
+val overview = overviewDeferred.await().getOrElse { listDeferred.cancel(); … }
+_uiState.value = buildState(overview, list = null, isLibraryLoading = true)   // paint now
+val list = listDeferred.await().getOrNull()
+_uiState.value = buildState(overview, list, isLibraryLoading = false)         // merge
+```
+
+`isLibraryLoading` is what makes the early publish safe rather than "zeroes for a moment": an
+empty `libraryAnime` is a real answer for an account that tracks nothing, so `ProfileStatsTab`
+and `ProfileLibraryTab` read the flag and render `PendingDataNote` instead of a tally. A failed
+list fetch still clears the flag - it is an answer, not a wait.
+
+#### `TierListViewModel` — the library, and one write per edit
+
+The tier list is a set of documents rather than one, so the ViewModel exposes the
+library, the open list (`opened`), and what the library offers to carry on with
+(`recent` — the last one *opened*, falling back to the most recently edited). Every
+edit goes through one private `edit(label, change)` helper, which hands the change
+to `TierListPreferences.mutate`, and pushes the returned *previous* document onto a
+bounded `TierUndoStack`. A change that does not change anything is reported as one
+and writes nothing, so a drag that puts a title back where it was cannot reorder
+the library by "recently edited".
 
 #### Foreground Staleness Observer (`ListFreshnessWatch.kt`)
 `ListFreshnessWatch` works with `LifecycleResumeEffect` in `DashboardScreen`:
@@ -470,6 +501,12 @@ The codebase includes an extensive JVM unit test suite running on Gradle (`./gra
 | `KeystoreIntegrityTest` | Ensures zero keystore secrets/binaries are committed to git repository. |
 | `ApkPackagingTest` | Asserts `dex.useLegacyPackaging = true` setting in Gradle config. |
 | `ExpressiveShapesTest` | Verifies capsule shape math avoiding stretched polygon distortions. |
+| `AniListMarkdownTest` | Bio Markdown constructs, including the AniList-specific ones (`~~~centred~~~`, parenthesised embeds, `===` headings) and the URL/mention boundaries. |
+| `UserOverviewLoadOrderTest` | The profile is published before the media list arrives and clears `isLibraryLoading` when it lands - or when it fails. |
+| `TierListSerialisationTest` | The tier list's on-disk format: tiers, placements, documents, the id index, and the escaping that lets a tier be named with a comma. |
+| `TierListPlacementTest` | Where a dropped tile lands, including that the anchor tile is excluded from its own placement search; the live-tier invariant. |
+| `TierListDocumentTest` | Library rules: name numbering, id uniqueness, which list is offered to carry on with, and the bounded undo stack. |
+| `TierScreenLogicTest` | The board's own decisions: drop targeting, the positional drop, the drop caret, edge auto-scroll, zoom clamping, hit testing and drag emission. |
 
 ---
 

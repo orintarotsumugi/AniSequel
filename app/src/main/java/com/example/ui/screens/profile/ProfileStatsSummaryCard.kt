@@ -39,7 +39,11 @@ internal fun SummaryCard(
     ) {
         SummaryRow(
             cells = listOf(
-                SummaryCell(state.animeCount.toString(), "Total"),
+                // "Anime", not "Total". The cell sits in the same card as a
+                // "Manga" one and is AniList's anime count, so "Total" read as the
+                // total of both - a number that is right beside a second number it
+                // does not include.
+                SummaryCell(state.animeCount.toString(), "Anime"),
                 SummaryCell(state.episodesWatched.toString(), "Episodes\nWatched"),
                 SummaryCell(formatWatchTime(state.minutesWatched), "Time\nWatched")
             )

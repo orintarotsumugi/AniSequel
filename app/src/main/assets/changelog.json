@@ -1,6 +1,48 @@
 {
   "versions": [
     {
+      "version": "1.1.7",
+      "entries": [
+        {
+          "title": "Your profile opens in one request now",
+          "detail": "Opening a profile waited for the whole media list before it drew anything - your bio, your banner and your favourites sat behind a download that is one request per 500 entries, while the profile itself is a single request. The page now appears as soon as AniList answers, and the two tabs that do need the full list - Stats and Library - say they are still counting rather than showing zeroes, because '0 completed' is a wrong answer rather than a loading one. Signed-in profiles get the list back from the dashboard's own copy, so the second half usually costs nothing at all."
+        },
+        {
+          "title": "Two more statuses to filter by",
+          "detail": "On Hiatus and Cancelled. The cards have drawn those two chips - with their own icons and colours - since the chips existed, but the status filter only offered Finished, Airing and Upcoming, so an entry could be seen on a card and never searched for. Both are in the filter sheet now. The quick filter row stays at four segments, and when you pick one of the others the row no longer keeps 'All' highlighted while the sheet says otherwise - it states which status is narrowing the list."
+        },
+        {
+          "title": "Bios render more of what AniList accepts",
+          "detail": "A centred line written the short way (three tildes around it), a video or clip URL in round brackets - the form AniList's own guide documents, which arrived as a string of parentheses and a plain link - and a title underlined with '==='. Bios that use any of these used to print the syntax instead of applying it."
+        },
+        {
+          "title": "Two small bio bugs",
+          "detail": "A URL that ended a sentence kept the sentence's full stop, so the link - and the cover card drawn for it - pointed one character further than the page that exists. And an email address in a bio was read as a username mention: 'someone@example.com' turned into three coloured words and a dangling '.com'. Both are fixed."
+        }
+      ]
+    },
+    {
+      "version": "1.1.6",
+      "entries": [
+        {
+          "title": "Tier lists are saved projects now",
+          "detail": "The trophy used to open a single board, which meant one ranking of one kind was all the app could hold - starting over and keeping what you had were the same button. It now opens your lists. Carry on with the one you opened last, open any of them, make a new empty list, or rename and delete the ones you are finished with. Each list is stored as its own document, so editing one no longer rewrites the others, and the list you already have is read exactly as it was."
+        },
+        {
+          "title": "Drag and drop you can aim",
+          "detail": "Dropping a poster between two others now puts it exactly there, rather than wherever it happened to sit in the row, and a caret marks the seam it will land on. Holding a tile near the top or bottom edge scrolls the screen for you, so a row that is off-screen is reachable without letting go - and the tile stays under your finger while it scrolls. The hint naming the tier under your finger is pinned to the screen instead of scrolling away with the board, and releasing off the rows still takes a title out of the list."
+        },
+        {
+          "title": "Undo the last edit",
+          "detail": "Every change to a list offers to be taken back, named for what it would undo. That includes removing a tier, which brings back the titles that were filed under it, and 'Empty every tier', a new action that puts every title back as unranked while leaving your tiers, names and colours alone."
+        },
+        {
+          "title": "A tier name can no longer break the list",
+          "detail": "Renaming a tier to something containing a comma broke the format the list is saved in - the field was split at the comma, and the row came back renamed with the list shifted around it. Names are escaped now, so a tier can be called whatever you like."
+        }
+      ]
+    },
+    {
       "version": "1.1.5",
       "entries": [
         {

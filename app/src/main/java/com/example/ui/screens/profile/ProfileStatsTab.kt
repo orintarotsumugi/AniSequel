@@ -78,6 +78,15 @@ fun ProfileStatsTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         state = listState
     ) {
+        // The charts that come from AniList's own aggregates are already right;
+        // the ones tallied from the media list are not, and the note says which
+        // rather than leaving a reader to wonder why "Country" is half empty.
+        if (state.isLibraryLoading) {
+            item(key = "pending_data") {
+                PendingDataNote("Still counting this list - the entry tallies are on their way")
+            }
+        }
+
         item(key = "summary") {
             SummaryCard(state = state)
         }

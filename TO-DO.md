@@ -11,7 +11,20 @@ problem and should jump the queue.
 
 ## 0. Correctness
 
-### 0.1 The dashboard detail cache has no size bound
+### 0.1 The tier list's `seeded_for_v1` is written and never read
+
+`TierListPreferences.markSeededFor` records which AniList account has been offered
+the "rank from scores" seeding, and nothing reads it back. It was introduced so the
+offer could be made once per account, and the UI never did that — the offer is on
+the empty state of every list instead, which is arguably the better behaviour now
+that lists are documents (a new list *is* a new offer).
+
+Nothing is broken by it: it is one small string, and it has been that way since the
+tier list shipped. The cost is that it reads as load-bearing state that a future
+reader has to work out is dead. Either use it — the library could mark which of
+the person's own lists was seeded for them — or delete the key and the write.
+
+### 0.2 The dashboard detail cache has no size bound
 
 `detailCache` is a `Map` in `DashboardViewModel`, cleared on a new list load but
 not evicted on its own. A large account fills it with one entry per discovered

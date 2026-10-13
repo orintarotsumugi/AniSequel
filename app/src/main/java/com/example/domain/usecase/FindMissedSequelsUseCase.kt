@@ -182,6 +182,11 @@ class FindMissedSequelsUseCase {
                 StatusFilter.ALL -> true
                 StatusFilter.FINISHED -> sequel.status.equals("FINISHED", ignoreCase = true)
                 StatusFilter.RELEASING -> sequel.status.equals("RELEASING", ignoreCase = true)
+                // Through the model's own predicate, which the status chip also
+                // reads. A second case-insensitive string compare here is how the
+                // card and the filter end up disagreeing about one entry.
+                StatusFilter.HIATUS -> sequel.isHiatus
+                StatusFilter.CANCELLED -> sequel.status.equals("CANCELLED", ignoreCase = true)
                 StatusFilter.NOT_YET_RELEASED -> sequel.isUnreleased
             }
 

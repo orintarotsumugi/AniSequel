@@ -397,4 +397,100 @@ class AniListMarkdownTest {
             list!!.items.flatten().filterIsInstance<InlineToken.MediaLink>().firstOrNull()
         )
     }
+
+    @Test
+    fun `a single tilde-wrapped line is centred, and the tildes are gone`() {
+        // AniList's other centring form. It used to print the six tildes and the
+        // sentence between them, left-aligned.
+        val nodes = AniListMarkdownParser.parse("~~~Here is my list~~~")
+
+        val paragraph = nodes.filterIsInstance<MarkdownNode.Paragraph>().singleOrNull()
+        assertNotNull(paragraph)
+        assertTrue("the line must be flagged as centred", paragraph!!.centered)
+        val text = paragraph.inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+        assertEquals("Here is my list", text)
+    }
+
+    @Test
+    fun `a parenthesised URL is embedded the way AniList embeds it`() {
+        val video = AniListMarkdownParser.parse("(https://www.youtube.com/watch?v=dQw4w9WgXcQ)")
+        assertEquals(1, video.size)
+        assertTrue(video[0] is MarkdownNode.VideoBlock)
+        assertEquals(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            (video[0] as MarkdownNode.VideoBlock).url
+        )
+        assertTrue((video[0] as MarkdownNode.VideoBlock).isYoutube)
+
+        val clip = AniListMarkdownParser.parse("(https://cdn.example.test/op.webm)")
+        assertEquals(1, clip.size)
+        assertTrue(clip[0] is MarkdownNode.VideoBlock)
+        assertFalse((clip[0] as MarkdownNode.VideoBlock).isYoutube)
+    }
+
+    @Test
+    fun `a parenthesised ordinary link stays a link with its parentheses`() {
+        // Only a video or an image is an embed. Lifting every bracketed URL out
+        // would replace a sentence's parenthetical citation with a play button.
+        val nodes = AniListMarkdownParser.parse("My scores (https://example.com/scoring)")
+        assertTrue(nodes.none { it is MarkdownNode.VideoBlock })
+        assertTrue(nodes.none { it is MarkdownNode.ImageBlock })
+        assertEquals(1, nodes.size)
+    }
+
+    @Test
+    fun `a bare video URL on its own line is played rather than linked`() {
+        val nodes = AniListMarkdownParser.parse("https://youtu.be/dQw4w9WgXcQ")
+
+        assertEquals(1, nodes.size)
+        assertTrue(nodes[0] is MarkdownNode.VideoBlock)
+        assertTrue((nodes[0] as MarkdownNode.VideoBlock).isYoutube)
+    }
+
+    @Test
+    fun `an equals sign underline makes a heading and is consumed`() {
+        val nodes = AniListMarkdownParser.parse("My ratings\n===\n\ntext")
+
+        assertEquals(2, nodes.size)
+        val header = nodes[0] as MarkdownNode.Header
+        assertEquals(1, header.level)
+        assertEquals(
+            "My ratings",
+            header.inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+        )
+        assertTrue(nodes[1] is MarkdownNode.Paragraph)
+    }
+
+    @Test
+    fun `a dash rule is still a rule, not a heading underline`() {
+        // `---` is the ambiguity the community markdown guide warns about, and the
+        // rule is the reading a bio almost always means.
+        val nodes = AniListMarkdownParser.parse("above\n\n---\n\nbelow")
+
+        assertTrue(nodes.any { it is MarkdownNode.Divider })
+        assertTrue(nodes.none { it is MarkdownNode.Header })
+    }
+
+    @Test
+    fun `a URL ending a sentence does not swallow the full stop`() {
+        // The full stop used to be part of the link, so the card and the tapped
+        // address both pointed at a path one character too long.
+        val inlines = AniListMarkdownParser.parseInlines("Watch it at https://anilist.co/anime/1.")
+
+        val media = inlines.filterIsInstance<InlineToken.MediaLink>().singleOrNull()
+        assertNotNull(media)
+        assertEquals("https://anilist.co/anime/1", media!!.url)
+        assertEquals("1", media.id)
+        assertTrue(
+            "the sentence's full stop must still be printed",
+            inlines.any { it is InlineToken.Plain && it.text == "." }
+        )
+    }
+
+    @Test
+    fun `an email address is not a mention`() {
+        val inlines = AniListMarkdownParser.parseInlines("mail me at hi@example.com thanks")
+
+        assertTrue(inlines.none { it is InlineToken.Mention })
+    }
 }

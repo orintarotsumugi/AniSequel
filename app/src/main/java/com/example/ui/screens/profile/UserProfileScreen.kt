@@ -508,6 +508,11 @@ private fun ProfileTabsContent(
                     mangaEntries = mangaLibrary,
                     favouriteIds = favouriteIds,
                     isLoadingManga = isLoadingManga,
+                    // The list is only on the critical path of this tab and Stats,
+                    // so the flag is threaded here rather than baked into
+                    // `libraryAnime` being empty - an empty list is a real answer
+                    // for an account that tracks nothing.
+                    isAnimeLoading = state.isLibraryLoading,
                     onLoadManga = onLoadManga,
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,

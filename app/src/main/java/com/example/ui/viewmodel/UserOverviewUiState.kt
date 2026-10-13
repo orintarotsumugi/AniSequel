@@ -67,6 +67,18 @@ sealed interface UserOverviewUiState {
         val meanScore: Double?,
         val standardDeviation: Int?,
         val isRefreshing: Boolean = false,
+        /**
+         * Whether the media list this profile's tallies are built from is still
+         * on its way.
+         *
+         * True between the two publishes in `UserOverviewViewModel.load`: the
+         * profile arrives in one request and is shown immediately, and the list -
+         * one request per 500 entries, chunk-merged - follows. The distinction
+         * exists so the two tabs that read it can say "counting" instead of
+         * rendering zeroes, because "0 completed" is a wrong answer rather than a
+         * loading one, and it is what a reader would have seen.
+         */
+        val isLibraryLoading: Boolean = false,
         val isDemoMode: Boolean = false
     ) : UserOverviewUiState
 

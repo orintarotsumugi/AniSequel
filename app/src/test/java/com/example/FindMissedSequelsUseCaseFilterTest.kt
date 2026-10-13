@@ -113,6 +113,49 @@ class FindMissedSequelsUseCaseFilterTest {
     }
 
     @Test
+    fun `the two statuses the chip could draw but the filter could not select are selectable`() {
+        // Hiatus and Cancelled were drawn by `SequelStatusChip` - with their own
+        // colours and icons - and absent from `StatusFilter`, so a cancelled entry
+        // could be seen on a card with no way to ask for the cancelled ones. The
+        // only route to them was scrolling the unfiltered list.
+        val hiatus = MediaNode(
+            id = 401,
+            title = MediaTitle(english = "On hold"),
+            format = "TV",
+            status = "HIATUS"
+        )
+        val cancelled = MediaNode(
+            id = 402,
+            title = MediaTitle(english = "Never finished"),
+            format = "TV",
+            status = "CANCELLED"
+        )
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, airedSequel, upcomingSequel, hiatus, cancelled)
+            )
+        )
+
+        assertEquals(
+            listOf(401),
+            useCase.execute(list, FilterCriteria(statusFilter = StatusFilter.HIATUS))
+                .map { it.sequelId }
+        )
+        assertEquals(
+            listOf(402),
+            useCase.execute(list, FilterCriteria(statusFilter = StatusFilter.CANCELLED))
+                .map { it.sequelId }
+        )
+        // The pre-existing statuses keep meaning what they meant.
+        assertEquals(
+            listOf(201),
+            useCase.execute(list, FilterCriteria(statusFilter = StatusFilter.FINISHED))
+                .map { it.sequelId }
+        )
+    }
+
+    @Test
     fun `search matches both the sequel title and the parent it came from`() {
         val list = collection(
             MediaListEntryItem(status = "COMPLETED", media = parent(100, airedSequel))

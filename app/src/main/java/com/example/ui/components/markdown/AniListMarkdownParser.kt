@@ -12,8 +12,9 @@ package com.example.ui.components.markdown
  *  - Bare image/GIF URLs on their own line (`https://.../x.gif`) as an embed
  *  - Inline images and GIFs inside a paragraph (`Text ![alt](x.gif) more`)
  *  - Videos (`youtube(id/url)`, `webm(url)`)
- *  - Centered blocks (`~~~center`, `<center>`, `~~~`)
+ *  - Centered blocks (`~~~center`, `<center>`, `~~~`) and centred lines (`~~~text~~~`)
  *  - Horizontal dividers (`---`, `***`, `___`)
+ *  - Setext headings (a line underlined with `===`)
  *  - Spoilers (`~!spoiler!~`)
  *  - Links (`[label](url)`), raw auto-URLs, and user mentions (`@username`)
  *  - Bold (`**`, `__`, `<b>`), Italic (`*`, `_`, `<i>`), Underline (`<u>`), Strikethrough (`~~`, `<s>`)
@@ -43,8 +44,56 @@ object AniListMarkdownParser {
         """^https?://\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
         RegexOption.IGNORE_CASE
     )
+
+    /** A line that is nothing but a URL, which AniList may play or embed. */
+    private val BARE_URL_PATTERN = Regex("""^https?://\S+$""")
     private val YOUTUBE_PATTERN = Regex("""^youtube\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
     private val WEBM_PATTERN = Regex("""^webm\(([^)]+)\)$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A parenthesised URL on a line of its own, which is AniList's embed form.
+     *
+     * This is the shape the community's AniList-Flavored Markdown guide documents
+     * for video: the URL in round brackets, converted in place, with the video id
+     * on its own being enough for YouTube. The parser only understood the
+     * `youtube(id)` / `webm(url)` spellings, which AniList does not render - so a
+     * bio written the way the site itself documents came through as a string of
+     * parentheses and a bare link.
+     */
+    private val PARENTHESISED_URL_PATTERN = Regex("""^\((https?://[^\s)]+)\)$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A video file AniList would play in place, by extension.
+     *
+     * The extension is the whole test, exactly as with [BARE_IMAGE_URL_PATTERN]:
+     * there is no content type to consult before the request is made.
+     */
+    private val VIDEO_EXTENSION = Regex(
+        """\.(?:webm|mp4|m4v|mov|gifv)(?:\?\S*)?$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * A line of `=` under a line of text, which AniList renders as a top-level
+     * heading.
+     *
+     * `---` is deliberately *not* read the same way even though Markdown allows it:
+     * it is already the horizontal rule above, and the community guide warns that
+     * a rule and a setext heading are written identically. Between the two, the
+     * rule is the one people mean - a bio is far more likely to divide itself than
+     * to set a heading that way.
+     */
+    private val SETEXT_H1_PATTERN = Regex("""^=+\s*$""")
+
+    /**
+     * `~~~text~~~` on one line - the other way AniList centers.
+     *
+     * Distinct from the three-tilde *block* below, which opens on a line that is
+     * nothing but `~~~` and closes on the next one. A single line that wraps its
+     * own closing tildes is a complete centred line, and it used to reach the
+     * paragraph path and print its tildes.
+     */
+    private val TILDE_CENTER_PATTERN = Regex("""^~~~(?!~)(.+?)~~~$""")
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
     private val ANILIST_PREVIEW_PATTERN = Regex("""^https?://(?:www\.)?anilist\.co/(anime|manga|character|staff|studio|user)/(\d+|[a-zA-Z0-9_-]+)(?:/([^\s)]+))?/?$""", RegexOption.IGNORE_CASE)
 
@@ -69,7 +118,14 @@ object AniListMarkdownParser {
     private val INLINE_ITALIC = Regex("""(?:\*|_)(.+?)(?:\*|_)|<i>(.+?)</i>|<em>(.+?)</em>""", RegexOption.IGNORE_CASE)
     private val INLINE_UNDERLINE = Regex("""<u>(.+?)</u>""", RegexOption.IGNORE_CASE)
     private val INLINE_STRIKETHROUGH = Regex("""~~(.+?)~~|<s>(.+?)</s>|<del>(.+?)</del>""", RegexOption.IGNORE_CASE)
-    private val INLINE_MENTION = Regex("""@([a-zA-Z0-9_-]+)""")
+    /**
+     * A username mention, which must not be the tail of an email address.
+     *
+     * Without the lookbehind, `someone@example.com` in a bio became a mention of
+     * "example" - three words of somebody's contact address rendered as a
+     * coloured username, with `.com` left dangling after it.
+     */
+    private val INLINE_MENTION = Regex("""(?<![\w.+\-])@([a-zA-Z0-9_-]+)""")
 
     fun parse(raw: String): List<MarkdownNode> {
         val clean = raw.replace("\r\n", "\n").replace("\r", "\n").replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n").trim()
@@ -87,8 +143,22 @@ object AniListMarkdownParser {
                 continue
             }
 
-            // Centered block (~~~center, <center>, <div align="center">, etc.)
             val trimmedLine = line.trim()
+
+            // A single centred line: `~~~text~~~`.
+            val tildeCentered = TILDE_CENTER_PATTERN.matchEntire(trimmedLine)
+            if (tildeCentered != null) {
+                nodes.add(
+                    MarkdownNode.Paragraph(
+                        inlines = parseInlines(tildeCentered.groupValues[1].trim()),
+                        centered = true
+                    )
+                )
+                i++
+                continue
+            }
+
+            // Centered block (~~~center, <center>, <div align="center">, etc.)
             if (trimmedLine.equals("~~~center", ignoreCase = true) ||
                 trimmedLine.equals("<center>", ignoreCase = true) ||
                 trimmedLine.equals("<div align=\"center\">", ignoreCase = true) ||
@@ -205,6 +275,16 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // A bare video URL on its own line, which AniList plays in place.
+            // It used to become an ordinary link, so a clip posted the way the
+            // site accepts it arrived as a blue address instead of the video.
+            val bareVideo = if (BARE_URL_PATTERN.matches(trimmedLine)) videoEmbedFor(trimmedLine) else null
+            if (bareVideo != null) {
+                nodes.add(bareVideo)
+                i++
+                continue
+            }
+
             // Video embeds
             val ytMatch = YOUTUBE_PATTERN.matchEntire(trimmedLine)
             if (ytMatch != null) {
@@ -220,6 +300,27 @@ object AniListMarkdownParser {
                 nodes.add(MarkdownNode.VideoBlock(webmMatch.groupValues[1].trim(), isYoutube = false))
                 i++
                 continue
+            }
+
+            // A parenthesised URL, which is AniList's own embed syntax. Only a
+            // video or something that is unmistakably an image is lifted out; a
+            // parenthesised *page* link falls through to the paragraph below so it
+            // keeps its link and its parentheses rather than silently becoming a
+            // card for something the author never offered as one.
+            val parenthesised = PARENTHESISED_URL_PATTERN.matchEntire(trimmedLine)
+            if (parenthesised != null) {
+                val url = parenthesised.groupValues[1]
+                val embed = videoEmbedFor(url)
+                if (embed != null) {
+                    nodes.add(embed)
+                    i++
+                    continue
+                }
+                if (IMAGE_EXTENSION.containsMatchIn(url)) {
+                    nodes.add(MarkdownNode.ImageBlock(url = url))
+                    i++
+                    continue
+                }
             }
 
             // Blockquote
@@ -281,6 +382,17 @@ object AniListMarkdownParser {
                 continue
             }
 
+            // A heading written as a line of `=` under the title.
+            val underline = lines.getOrNull(i + 1)?.trim()
+            if (underline != null &&
+                SETEXT_H1_PATTERN.matches(underline) &&
+                !SETEXT_H1_PATTERN.matches(trimmedLine)
+            ) {
+                nodes.add(MarkdownNode.Header(1, parseInlines(trimmedLine)))
+                i += 2
+                continue
+            }
+
             // Markdown Table check
             val tableResult = tryParseTable(lines, i) { parseInlines(it) }
             if (tableResult != null) {
@@ -305,6 +417,7 @@ object AniListMarkdownParser {
                 !ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !MD_IMG_PATTERN.matches(lines[i].trim()) &&
                 !BARE_IMAGE_URL_PATTERN.matches(lines[i].trim()) &&
+                !(BARE_URL_PATTERN.matches(lines[i].trim()) && videoEmbedFor(lines[i].trim()) != null) &&
                 !LINKED_MD_IMG_PATTERN.matches(lines[i].trim()) &&
                 !LINKED_ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !YOUTUBE_PATTERN.matches(lines[i].trim()) &&
@@ -356,6 +469,25 @@ object AniListMarkdownParser {
             .joinToString(" ") { word ->
                 word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
+    }
+
+    /**
+     * The video a bare URL names, or null when it names anything else.
+     *
+     * A YouTube link is recognised by host because it has no useful extension -
+     * `watch?v=` tells you nothing - and everything else by file extension, which
+     * is the only signal available before the request is made. Shared by the
+     * parenthesised embed above and the bare-URL path, because AniList plays both
+     * and two copies of this test would eventually disagree about one of them.
+     */
+    private fun videoEmbedFor(url: String): MarkdownNode.VideoBlock? {
+        val lower = url.lowercase()
+        val isYoutube = lower.contains("youtube.com/") || lower.contains("youtu.be/")
+        return when {
+            isYoutube -> MarkdownNode.VideoBlock(url, isYoutube = true)
+            VIDEO_EXTENSION.containsMatchIn(lower) -> MarkdownNode.VideoBlock(url, isYoutube = false)
+            else -> null
+        }
     }
 
     /**
@@ -457,7 +589,14 @@ object AniListMarkdownParser {
                     }
                 }
                 "AUTO_URL" -> {
-                    val url = firstMatch.value
+                    val matched = firstMatch.value
+                    // A URL ending a sentence used to keep the sentence's full
+                    // stop: `... anilist.co/anime/1.` linked to a path that does
+                    // not exist, so the link the reader tapped was one character
+                    // too long. The punctuation is put back as plain text behind
+                    // it, because the sentence still needs its full stop.
+                    val url = matched.trimEnd('.', ',', ';', ':', '!', '?')
+                    val trailing = matched.substring(url.length)
                     val mediaLink = anilistMediaLink(label = "", url = url)
                     tokens.add(
                         when {
@@ -469,6 +608,7 @@ object AniListMarkdownParser {
                             else -> InlineToken.Link(url, url)
                         }
                     )
+                    if (trailing.isNotEmpty()) tokens.add(InlineToken.Plain(trailing))
                 }
                 "SPOILER" -> {
                     tokens.add(InlineToken.Spoiler(firstMatch.groupValues[1]))
