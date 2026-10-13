@@ -1,9 +1,11 @@
 package com.example.ui.screens.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MediaNode
 import com.example.domain.usecase.ActivityCalendar
@@ -196,7 +200,22 @@ fun ProfileActivityTab(
                         )
                     }
 
-                    if (activityState.hasMore) {
+                    if (activityState.loadMoreError != null) {
+                        // Drawn instead of the spinner, and *before* the
+                        // `hasMore` check: `hasMore` is still true after a failed
+                        // page, so a plain spinner here would sit under a feed
+                        // that has stopped growing with nothing to indicate why.
+                        //
+                        // A tap, rather than relying on the reader to scroll away
+                        // from the end and back to re-trigger `shouldPage`, which
+                        // is the only thing that used to retry a page.
+                        item(key = "activity_more_error") {
+                            ActivityPagingRetry(
+                                message = activityState.loadMoreError,
+                                onRetry = onLoadNextPage
+                            )
+                        }
+                    } else if (activityState.hasMore) {
                         item(key = "activity_more") {
                             ActivityPagingIndicator(loading = activityState.isLoadingMore)
                         }
@@ -303,5 +322,48 @@ private fun ActivityPagingIndicator(loading: Boolean) {
                 color = MaterialTheme.colorScheme.primary
             )
         }
+    }
+}
+
+/**
+ * The way back to a page that failed.
+ *
+ * A button rather than a message, because the failure is not the reader's to fix -
+ * it is a rate limit or a dropped connection that has already passed, and the
+ * request that would succeed is one tap away.
+ *
+ * Says what failed *and* that retrying is the next action, since the alternative
+ * on offer used to be scrolling seven rows away and back, which nobody would
+ * think to try.
+ */
+@Composable
+private fun ActivityPagingRetry(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .testTag("activity_paging_retry"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = "Try again",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .bouncyPress()
+                .clickable(onClick = onRetry)
+                .defaultMinSize(minHeight = 48.dp)
+                .padding(horizontal = 12.dp)
+        )
     }
 }

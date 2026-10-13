@@ -515,6 +515,8 @@ private fun ProfileTabsContent(
                     // `libraryAnime` being empty - an empty list is a real answer
                     // for an account that tracks nothing.
                     isAnimeLoading = state.isLibraryLoading,
+                    // A list that could not be read is not an empty one.
+                    libraryError = state.libraryError,
                     onLoadManga = onLoadManga,
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,

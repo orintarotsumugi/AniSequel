@@ -256,8 +256,7 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
         if (banner != null) {
             PannableBackdrop(
                 model = banner,
-                contentDescription = "Profile Banner",
-                contentScale = ContentScale.FillWidth
+                contentDescription = "Profile Banner"
             )
             // Weighted toward the bottom so the artwork stays visible at the top
             // while the identity line below has a surface to sit on.

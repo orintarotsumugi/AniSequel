@@ -334,26 +334,42 @@ class TierListViewModel(
 
         _isSeeding.value = true
         viewModelScope.launch {
-            val assignment = seedFromScores(pool, current.tiers)
-            val mutation = preferences.mutate(listId) { it.copy(assignment = assignment) }
-            if (mutation != null && mutation.after != mutation.before) {
-                undoStack.push(TierUndoEntry(mutation.before, "Ranked from AniList scores"))
-                _undoLabel.value = "Ranked from AniList scores"
-            }
-            if (userId != null) preferences.markSeededFor(userId)
+            // `try`/`finally` rather than clearing the flag on the happy path.
+            //
+            // Anything thrown between here and the end - a DataStore corruption on
+            // the index, a failure inside `mutate` - used to skip the reset and
+            // leave "Rank from AniList scores" spinning forever. Re-tapping it was a
+            // no-op, because the guard above is `if (_isSeeding.value) return`, so
+            // an empty-state board was stuck until the screen was left and
+            // re-entered. The failure is also surfaced, because a seed that did
+            // nothing must not look like one that is still working.
+            try {
+                val assignment = seedFromScores(pool, current.tiers)
+                val mutation = preferences.mutate(listId) { it.copy(assignment = assignment) }
+                if (mutation != null && mutation.after != mutation.before) {
+                    undoStack.push(TierUndoEntry(mutation.before, "Ranked from AniList scores"))
+                    _undoLabel.value = "Ranked from AniList scores"
+                }
+                if (userId != null) preferences.markSeededFor(userId)
 
-            val skipped = unseedableCount(pool)
-            val placed = assignment.tierIdByMediaId.size
-            _notice.value = when {
-                placed == 0 -> "Nothing to rank yet - none of your titles has a score."
-                skipped > 0 -> "Ranked $placed titles. $skipped " +
-                    (if (skipped == 1) "has" else "have") +
-                    " no score yet and " +
-                    (if (skipped == 1) "was" else "were") +
-                    " left for you to place."
-                else -> "Ranked $placed titles."
+                val skipped = unseedableCount(pool)
+                val placed = assignment.tierIdByMediaId.size
+                _notice.value = when {
+                    placed == 0 -> "Nothing to rank yet - none of your titles has a score."
+                    skipped > 0 -> "Ranked $placed titles. $skipped " +
+                        (if (skipped == 1) "has" else "have") +
+                        " no score yet and " +
+                        (if (skipped == 1) "was" else "were") +
+                        " left for you to place."
+                    else -> "Ranked $placed titles."
+                }
+            } catch (error: Throwable) {
+                _notice.value = "Couldn't rank from scores - ${
+                    error.message ?: "something went wrong"
+                }. Nothing was changed."
+            } finally {
+                _isSeeding.value = false
             }
-            _isSeeding.value = false
         }
     }
 

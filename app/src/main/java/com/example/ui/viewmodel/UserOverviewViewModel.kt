@@ -273,13 +273,26 @@ class UserOverviewViewModel(
             // If fetching the anime list fails (for instance on accounts with private lists
             // or temporary rate limits), gracefully build the profile with null list data
             // rather than failing the entire profile screen when the overview succeeded.
-            val list = listDeferred.await().getOrNull()
+            //
+            // The *reason* is carried through rather than discarded. `getOrNull()`
+            // threw away the only evidence that "no list" and "could not read the
+            // list" were different answers, and the Library tab then rendered
+            // "Nothing in this list yet" over an account with nine hundred entries,
+            // with every chip reading (0) and no way to try again.
+            val listResult = listDeferred.await()
+            val list = listResult.getOrNull()
 
             _uiState.value = buildState(
                 overview = overview,
                 list = list,
                 isRefreshing = false,
-                isLibraryLoading = false
+                isLibraryLoading = false,
+                libraryError = if (list == null) {
+                    listResult.exceptionOrNull()?.message
+                        ?: "AniList didn't return this list."
+                } else {
+                    null
+                }
             )
         }
     }
@@ -306,7 +319,9 @@ class UserOverviewViewModel(
         overview: UserOverview,
         list: MediaListCollection?,
         isRefreshing: Boolean,
-        isLibraryLoading: Boolean = false
+        isLibraryLoading: Boolean = false,
+        /** Null on the way in; see [UserOverviewUiState.Success.libraryError]. */
+        libraryError: String? = null
     ): UserOverviewUiState.Success {
         val favourites = overview.favourites
         val animeStats = overview.statistics?.anime
@@ -359,6 +374,7 @@ class UserOverviewViewModel(
             standardDeviation = aggregate?.animeListScores?.standardDeviation,
             isRefreshing = isRefreshing,
             isLibraryLoading = isLibraryLoading,
+            libraryError = libraryError,
             isDemoMode = isDemo
         )
     }

@@ -101,8 +101,7 @@ fun DetailHeader(
             // about what is on screen as soon as the offset was non-zero.
             PannableBackdrop(
                 model = backdrop,
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth
+                contentDescription = null
             )
         }
 

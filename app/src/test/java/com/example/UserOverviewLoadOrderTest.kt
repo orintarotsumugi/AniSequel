@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -188,6 +189,19 @@ class UserOverviewLoadOrderTest {
                 state.isLibraryLoading
             )
             assertTrue(state.libraryAnime.isEmpty())
+
+            // And it is the *wrong* answer if it reads as an empty list.
+            //
+            // `getOrNull()` flattened "the list is empty" and "AniList refused to
+            // send the list" into the same null, so the Library tab rendered
+            // "Nothing in this list yet" with every chip at (0) - over a nine
+            // hundred entry account behind a private list, or after one rate
+            // limit. The app was asserting the one thing it had the least evidence
+            // for, with no retry anywhere on the screen.
+            assertNotNull(
+                "a failed fetch must not be indistinguishable from an empty list",
+                state.libraryError
+            )
         }
 
     /**

@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -46,6 +47,8 @@ class ProfileViewModelTest {
 
     private class FakeProfileRepository(
         var activityPages: Map<Int, List<ListActivity>> = emptyMap(),
+        /** Pages this repository refuses, so a failure path can be exercised. */
+        var failPages: Set<Int> = emptySet(),
         var followersResult: List<FollowUser> = emptyList(),
         var followingResult: List<FollowUser> = emptyList(),
         var likeResult: Result<ActivityLikeState> =
@@ -76,6 +79,12 @@ class ProfileViewModelTest {
             forceRefresh: Boolean
         ): Result<List<ListActivity>> {
             activityFetchCount++
+            // `failPages` is mutable so a test can fail a page and then clear it to
+            // model a retry succeeding - the two halves of "the feed has to be
+            // resumable", which is the thing being pinned.
+            if (page in failPages) {
+                return Result.failure(RuntimeException("AniList is rate limiting right now."))
+            }
             val list = activityPages[page] ?: emptyList()
             return Result.success(list)
         }
@@ -205,6 +214,64 @@ class ProfileViewModelTest {
         val success = viewModel.state.value as UserActivityViewModel.ActivityState.Success
         assertEquals(5, success.activities.size)
         assertEquals(1, repository.activityFetchCount)
+    }
+
+    /**
+     * A failed *extra* page has to leave a way back.
+     *
+     * Pagination is driven by `LaunchedEffect(shouldPage)`, where `shouldPage` is a
+     * `derivedStateOf` over scroll geometry. A reader parked at the bottom of the
+     * feed leaves it `true`, so if a failed page changed nothing observable the
+     * effect never fired again and the feed stopped growing for the rest of the
+     * session - with `hasMore` still true and a spinner under a list that was
+     * never going to get longer. Recovering meant scrolling seven rows away and
+     * back, which nobody would think to try.
+     *
+     * The error is recorded rather than swallowed so the tab can offer a tap.
+     */
+    @Test
+    fun `a failed extra page is recorded so the feed can be resumed`() = runTest(testDispatcher) {
+        val page1 = List(25) { createActivity(it + 1) }
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(
+                1 to page1,
+                2 to List(25) { createActivity(it + 26) }
+            ),
+            failPages = setOf(2)
+        )
+        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        val loaded = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(25, loaded.activities.size)
+        assertNull("no page has failed yet", loaded.loadMoreError)
+
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+
+        val afterFailure = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(
+            "the rows already read must survive a failed extra page",
+            25,
+            afterFailure.activities.size
+        )
+        assertFalse("the footer must not stay spinning", afterFailure.isLoadingMore)
+        assertTrue(
+            "the failure must be recorded, or there is no way back",
+            afterFailure.loadMoreError != null
+        )
+        assertTrue("there is still more to read", afterFailure.hasMore)
+
+        // Retrying, which is what the tab's retry row does.
+        repository.failPages = emptySet()
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+
+        val recovered = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertNull("a successful retry clears the failure", recovered.loadMoreError)
+        assertEquals(50, recovered.activities.size)
     }
 
     @Test

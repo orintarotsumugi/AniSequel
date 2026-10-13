@@ -65,7 +65,24 @@ class UserActivityViewModel(
              * the first response would toggle twice, and AniList would be right to
              * end up back where it started while the UI showed one change.
              */
-            val pendingLikes: Set<Int> = emptySet()
+            val pendingLikes: Set<Int> = emptySet(),
+            /**
+             * Why the *next page* failed, or null when it has not.
+             *
+             * This exists because a failed page used to leave no trace at all. The
+             * append branch kept the rows it had, cleared the footer spinner, and
+             * discarded the error - and pagination is driven by
+             * `LaunchedEffect(shouldPage)`, where `shouldPage` is a `derivedStateOf`
+             * over scroll geometry. A reader parked at the bottom of the feed leaves
+             * it `true`, so the effect never re-fired: one offline blip or one 429
+             * ended the feed for the rest of the session, with `hasMore` still true
+             * and nothing on screen saying why. Recovering needed scrolling seven
+             * rows away and back.
+             *
+             * The tab turns this into a retry row, so the way back is a tap rather
+             * than a scroll nobody would think to make.
+             */
+            val loadMoreError: String? = null
         ) : ActivityState
         data class Error(val message: String, val isAuthError: Boolean = false) : ActivityState
     }
@@ -243,6 +260,9 @@ class UserActivityViewModel(
                     _state.value = ActivityState.Success(
                         activities = combined.distinctBy { it.id },
                         isLoadingMore = false,
+                        // Cleared on success, so a retry that works does not leave
+                        // the failure row sitting under a feed that is growing.
+                        loadMoreError = null,
                         // A short page means the end. One short page is the only
                         // signal AniList gives here - `Page.pageInfo` is not asked
                         // for, because for a union-typed field the parse cost is
@@ -259,10 +279,16 @@ class UserActivityViewModel(
                         // read. It used to replace the whole state with an error
                         // screen, so one transient failure while scrolling threw
                         // away twenty-five loaded rows and showed a retry button
-                        // where the feed had been. Keep the feed and just clear
-                        // the footer spinner; the next scroll retries the page.
+                        // where the feed had been. Keep the feed and clear the
+                        // footer spinner - but *record* the failure, because
+                        // discarding it left pagination with no way back: see
+                        // [ActivityState.Success.loadMoreError].
                         (_state.value as? ActivityState.Success)?.let { current ->
-                            _state.value = current.copy(isLoadingMore = false)
+                            _state.value = current.copy(
+                                isLoadingMore = false,
+                                loadMoreError = error.message
+                                    ?: "Couldn't load more activity."
+                            )
                         }
                     } else {
                         _state.value = ActivityState.Error(

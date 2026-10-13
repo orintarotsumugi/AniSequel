@@ -148,14 +148,25 @@ fun SequelDetailSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {
+            // Full-bleed, above the padded content rather than inside it.
+            //
+            // The hero used to sit inside a column with `padding(horizontal =
+            // 20.dp)`, so the artwork was inset on both sides - and an image that
+            // does not reach the edges of a screen reads as a card floating in
+            // space, not as the top of the page. The padding belongs to the text
+            // below it, not to the picture above it.
             DetailHeader(media = media)
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            val isManga = media.type.equals("MANGA", ignoreCase = true)
+                val isManga = media.type.equals("MANGA", ignoreCase = true)
             val tabLabels = if (sequel != null) {
                 listOf("Story & Gaps", if (isManga) "Manga Info & Specs" else "Anime Info & Specs")
             } else {
@@ -315,18 +326,19 @@ fun SequelDetailSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
 
-            DetailActionRow(
-                subject = subject,
-                canWriteToAniList = canWriteToAniList,
-                onAddToPlanning = onAddToPlanning,
-                onAddToWatching = onAddToWatching,
-                holdDurationSeconds = holdDurationSeconds,
-                swipeEnabled = swipeEnabled,
-                context = context
-            )
+                DetailActionRow(
+                    subject = subject,
+                    canWriteToAniList = canWriteToAniList,
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching,
+                    holdDurationSeconds = holdDurationSeconds,
+                    swipeEnabled = swipeEnabled,
+                    context = context
+                )
+            }
         }
     }
 }

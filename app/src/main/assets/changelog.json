@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.1.9",
+      "entries": [
+        {
+          "title": "A dropped connection no longer ends your activity feed for the session",
+          "detail": "When the next page failed, the app kept the rows it had and quietly stopped asking for more - no message, and a spinner under a list that was never going to grow. The only way to restart it was to scroll up and back down, which nobody would think to try. It now says what failed and offers a Try again button."
+        },
+        {
+          "title": "A list the app could not read is no longer shown as an empty one",
+          "detail": "If your media list could not be fetched - a private list, a rate limit, a dropped connection - the Library tab used to say 'Nothing in this list yet' with every count at zero, over an account with nine hundred entries. It now says what went wrong and that the rest of your profile is still fine. An empty list and a list we could not read are different facts, and only one of them is about you."
+        },
+        {
+          "title": "Ranking from AniList scores cannot get stuck",
+          "detail": "If anything went wrong while ranking your library from scores, the button kept spinning for ever and re-tapping it did nothing, because it thought the job was still running. The only way out was to leave the screen and come back. It now stops on failure and tells you nothing was changed."
+        }
+      ]
+    },
+    {
       "version": "1.1.8",
       "entries": [
         {

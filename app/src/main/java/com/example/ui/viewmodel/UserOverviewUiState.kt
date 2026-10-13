@@ -79,6 +79,20 @@ sealed interface UserOverviewUiState {
          * loading one, and it is what a reader would have seen.
          */
         val isLibraryLoading: Boolean = false,
+        /**
+         * Why the media list could not be fetched, or null when it was.
+         *
+         * A failed list fetch was flattened to "no list", so the flag above went
+         * back to false and the Library tab asserted the thing it had least
+         * evidence for: "Nothing in this list yet", over an account with nine
+         * hundred entries, with every chip reading (0) and no retry anywhere.
+         * Private lists, a 429 and a dropped connection all produced the same
+         * confident wrong answer.
+         *
+         * Null is the real answer - an empty list and a list that could not be
+         * read are different, and only one of them is a thing about the person.
+         */
+        val libraryError: String? = null,
         val isDemoMode: Boolean = false
     ) : UserOverviewUiState
 

@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -449,6 +450,15 @@ fun ProfileLibraryTab(
      * caller that does not know is a caller whose list is already in hand.
      */
     isAnimeLoading: Boolean = false,
+    /**
+     * Why the anime list could not be read, or null when it was.
+     *
+     * Distinct from [isAnimeLoading] on purpose: a list that is still arriving is
+     * "counting", and a list that could not be read is "unknown". Rendering the
+     * second as the first - or as an empty list - states a fact about the account
+     * that nothing established.
+     */
+    libraryError: String? = null,
     onLoadManga: () -> Unit,
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
@@ -598,11 +608,35 @@ var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
             }
         }
 
+        // A failed fetch, said plainly, in place of "nothing here".
+        //
+        // These two were the same message for every account whose list could not be
+        // read - a private list, a rate limit, a dropped connection all produced
+        // "Nothing in this list yet" and chips reading (0), which is the app
+        // asserting the one thing it has the least evidence for. The counts below
+        // are still zeroes for the same reason and are not faked here.
+        if (libraryError != null && !awaitingAnime) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_error") {
+                PendingDataNote(
+                    "Couldn't load this list - $libraryError. Your bio, " +
+                        "favourites and stats are still here."
+                )
+            }
+        }
+
         if (visible.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty") {
                 LibraryEmpty(
                     isLoading = (type == LibraryType.MANGA && isLoadingManga) ||
                         (awaitingAnime && animeEntries.isEmpty()),
+                    // A failed fetch is not an empty list. Saying "nothing here"
+                    // when the truth is "we could not read it" is the false answer
+                    // this whole path exists to stop.
+                    failedMessage = if (libraryError != null && !awaitingAnime) {
+                        "Couldn't load this list - $libraryError"
+                    } else {
+                        null
+                    },
                     query = query
                 )
             }
@@ -913,7 +947,9 @@ private fun LibraryPoster(
 @Composable
 private fun LibraryEmpty(
     isLoading: Boolean,
-    query: String
+    query: String,
+    /** Why the list could not be read, or null when it was. Never both empty and failed. */
+    failedMessage: String? = null
 ) {
     Column(
         modifier = Modifier
@@ -928,16 +964,29 @@ private fun LibraryEmpty(
             )
             return@Column
         }
+        val failed = failedMessage != null
         ExpressiveEmptyOrb(
-            icon = if (query.isBlank()) AppVectorIcons.StatEpisodeCount else AppVectorIcons.Search,
+            icon = when {
+                failed -> AppVectorIcons.Info
+                query.isBlank() -> AppVectorIcons.StatEpisodeCount
+                else -> AppVectorIcons.Search
+            },
             containerColor = AniSequelTheme.statusColors.infoContainer,
             iconTint = AniSequelTheme.statusColors.info
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = if (query.isBlank()) "Nothing in this list yet" else "No matches for \"$query\"",
+            // A failed read is never "nothing here". These are different facts
+            // about the account and only one of them is a thing about the person,
+            // so they are different sentences.
+            text = when {
+                failed -> failedMessage
+                query.isBlank() -> "Nothing in this list yet"
+                else -> "No matches for \"$query\""
+            },
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
