@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.2.1",
+      "entries": [
+        {
+          "title": "A downloaded update no longer gets forgotten",
+          "detail": "The APK was saved into the app's cache directory - the one place Android is free to empty whenever it likes, including the moment anyone taps Clear cache in Settings. So an update could finish downloading, send you off to Settings to grant the install permission, lose its file while you were gone, and then start the same download over from the beginning. It is saved somewhere that survives that trip now."
+        },
+        {
+          "title": "Reopening the app tells you the update is already downloaded",
+          "detail": "If AniSequel was closed after downloading a release but before installing it, the next launch still offered 'Download & install'. Pressing it transferred nothing at all - the file was already on disk - which is indistinguishable from the app downloading everything a second time. It now goes straight to installing the copy it already has."
+        },
+        {
+          "title": "A failed update download no longer throws away the one you had",
+          "detail": "The old copy was deleted before the new download started, so a retry that failed left you with nothing at all: the previous release's file gone and the new one never arriving. Cleanup now happens only after a download has actually succeeded."
+        },
+        {
+          "title": "The download bar stops flickering",
+          "detail": "Progress was reported on every 8 KB the network delivered, which for a 2.5 MB file is about 325 separate redraws of the dialog - each one recomposing the whole screen for a change too small to see. It updates about eighty times instead, which looks the same and costs a quarter of the work."
+        },
+        {
+          "title": "Built on a newer toolchain",
+          "detail": "Gradle 9.3.1 to 9.6.1, the Android Gradle Plugin 9.1.1 to 9.4.1, Kotlin 2.2.10 to 2.4.21 and KSP 2.3.5 to 2.3.12. Nothing here changes how the app looks or behaves; it is three years of build fixes, and the Android Gradle Plugin refuses to start at all on the Gradle it used to be paired with."
+        }
+      ]
+    },
+    {
       "version": "1.2.0",
       "entries": [
         {

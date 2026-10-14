@@ -18,7 +18,10 @@ lifecycleRuntimeKtx = "2.8.7"
 lifecycleViewmodelCompose = "2.8.7"
 lifecycleRuntimeCompose = "2.8.7"
 activityCompose = "1.10.1"
-kotlin = "2.2.10"
+# 2.4.21, the newest stable. The Compose compiler plugin below is versioned
+# from this same key, so it moves in lockstep and there is nothing to keep in
+# step by hand.
+kotlin = "2.4.21"
 # 2025.11.01 is the first BOM that resolves androidx.compose.material3 to
 # 1.4.0 - the first stable Material 3 Expressive release.
 composeBom = "2025.11.01"
@@ -36,7 +39,12 @@ composeBom = "2025.11.01"
 # Verified by extracting each artifact and compiling against the real signatures,
 # not by reading release notes.
 material3 = "1.5.0-alpha14"
-googleDevtoolsKsp = "2.3.5"
+# KSP2's own versioning, which since 2.3.0 is decoupled from the Kotlin version
+# above - it is not the old `2.2.10-2.0.2` shape. That is why this is safe to
+# move independently, and also why it is worth noticing if it ever goes back to
+# being pinned to a Kotlin version: the two would have to be read together
+# again.
+googleDevtoolsKsp = "2.3.12"
 navigationCompose = "2.8.9"
 kotlinxCoroutinesTest = "1.10.2"
 core = "1.6.1"
