@@ -8,11 +8,26 @@ Not on the Play Store. Distributed as a signed universal APK from
 [GitHub Releases](https://github.com/LOST-4EVER/AniSequel/releases), with an
 in-app updater.
 
+This file is about **how the app works and why it is built that way**. Three
+others share the job, and each is linked from here because knowing which one to
+open is most of the work:
+
+| Document | For |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The exhaustive spec: every package, layer-by-layer deep dive, sequence diagrams and the multi-module blueprint |
+| [AGENTS.md](AGENTS.md) | The rules. Every one exists because the obvious alternative cost something |
+| [TO-DO.md](TO-DO.md) | Deliberately unimproved things, each with the reason it was left |
+
 ---
 
 ## Table of contents
 
 - [What it does](#what-it-does)
+  - [The profile screen](#the-profile-screen)
+  - [The tier list](#the-tier-list)
+  - [Home-screen widgets](#home-screen-widgets)
+  - [Release notes](#release-notes)
+  - [Deliberate non-goals](#deliberate-non-goals)
 - [How the update flow works](#how-the-update-flow-works)
 - [Architecture](#architecture)
 - [Building it](#building-it)
@@ -21,6 +36,7 @@ in-app updater.
 - [Continuous integration](#continuous-integration)
 - [Project layout](#project-layout)
 - [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -43,6 +59,12 @@ in-app updater.
   Watching, Reading, Rewatching, Completed, Planning, Paused and Dropped, sets
   progress, score and both dates, and marks the entry private — staged locally
   and sent as one write, so nothing reaches AniList until "Save changes".
+- **Home-screen widgets.** Four tiles — your recent activity, missed sequels,
+  arriving sequels, and one featured recommendation — drawn by the system
+  launcher from the data the app already has.
+- **Release notes in the app.** "What's new" in Settings → Info reads
+  `assets/changelog.json`, the same file the release workflow writes the GitHub
+  release body from.
 - **Self-contained updater.** No update library and no Play Services.
 
 ### The profile screen
@@ -138,6 +160,77 @@ Posters are embedded as base64 rather than linked, which costs roughly 40-60KB
 each and buys a file that opens correctly in every viewer and every app it is
 shared into — a linked poster is blocked or skipped often enough that a tier list
 would otherwise arrive as a wall of empty tiles.
+
+### Home-screen widgets
+
+Four tiles, each answering one question without opening the app:
+
+| Widget | Answers | Tapping it opens |
+| --- | --- | --- |
+| AniSequel | How much have I logged recently — avatar, handle, latest title | Profile → Activity |
+| Missed Sequels | How many unwatched sequels are waiting, and the top one's poster | The dashboard |
+| Arriving Sequels | How many are airing or announced soon | The dashboard, arriving section |
+| Featured Sequel | One recommendation, given a whole poster — and what it is a sequel *to* | The detail sheet |
+
+They are `RemoteViews`, not Compose, which is the one place in the app where
+layout is XML: the launcher inflates them in its own process, so a `Composable`
+would not be reachable. `res/layout/widget_*.xml` and the three `res/drawable/
+widget_*.xml` shapes are therefore the **only** XML in the UI, and the
+"vectors only" rule in [APK size](#apk-size) holds for the Compose surface, not
+for these.
+
+Three decisions are load-bearing:
+
+- **The provider *is* the receiver.** There was once an `AniSequelWidgetReceiver`
+  in front of each provider, and it read only `EXTRA_APPWIDGET_ID` — the system
+  sends the update list as `EXTRA_APPWIDGET_IDS`, so the extra was almost always
+  absent and a freshly placed tile never received its first update at all.
+  `AppWidgetProvider` already unpacks both forms, so extending it is the whole
+  fix and there is no forwarding class left to get wrong.
+- **The shared update path is an `object`, not a base class.** The four
+  providers differ in exactly one thing: which layout they inflate and which
+  data they read. The placeholder render, the off-main-thread cover fetch and
+  the "always finish the pending result" contract were copy-pasted between them
+  verbatim, so a fix to the fetch had to be made four times and a mistake in one
+  copy shipped quietly in the other three. `WidgetUpdater` holds it — as an
+  object because `WidgetDeclarationTest` reads each provider's source and
+  requires the literal `: AppWidgetProvider()`, which a base class would hide.
+- **Every instance is painted immediately, without a cover.** The count and
+  caption are data the app already has; drawing them first is what stops a new
+  tile from sitting blank while a bitmap is fetched.
+
+`exported="false"` with no permission: the system broadcast is delivered either
+way and nothing outside the app needs to send one. The old
+`android.permission.BIND_APPWIDGET` declaration was in no Google sample and
+restricted the declaration for no gain.
+
+### Release notes
+
+`app/src/main/assets/changelog.json` is the single source of the app's release
+notes, and it has two consumers: the "What's new" card in Settings → Info reads
+it from inside the APK, and the release workflow reads the same file from the
+checkout to write the GitHub release body. Two consumers, one source, so they
+cannot drift — which is the whole point, because the notes used to be a
+hardcoded `listOf` in the Info tab that still described v1.0.21 features at
+v1.0.23, with no version attached to check it against.
+
+**The card shows the newest block in the file, not the block for
+`BuildConfig.VERSION_NAME`.** An exact lookup looks more correct and cannot work:
+the workflow *derives* the version it publishes by advancing the patch number
+past whatever release is newest, so a repo at 1.0.23 publishes as 1.0.29 and no
+changelog file can be written ahead of a number that does not exist until the
+build runs. A build one patch ahead of its notes then honestly says "what
+changed through 1.2.5" instead of showing an empty card or silently borrowing
+the wrong block. `ChangelogTest` pins the newest-first ordering, so "newest" means
+new *notes* rather than "whatever is at the top of the file".
+
+Every field is nullable and a malformed file degrades to an empty card, because
+this is a hand-edited file read by code that must not throw over a missing comma
+and take the Settings screen down with it.
+
+Shipping changes without adding a block is a broken build, not an oversight —
+[AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
+together, and `ChangelogTest` and `VersionBaselineTest` enforce it.
 
 ### Deliberate non-goals
 
@@ -261,6 +354,23 @@ asks for the rest:
 `ApkDownloader` moves the bytes; `UpdateManager` judges them (zip magic, package
 name, signature) and is the only thing allowed to rename the file.
 
+The progress line also carries a speed, and it is measured over a rolling window
+rather than averaged across the whole transfer — so it reports the connection you
+have *now*. An average is dominated by the part of the transfer that already
+happened, which is exactly the number that is no longer true.
+`TransferRateTest` pins the window.
+
+### A download that cannot be installed stays downloaded
+
+When `openInstaller` failed, the app used to discard its record of the file it had
+already fetched and close the pop-up, so the update looked gone and the only way
+back to it was a fresh check. The APK is still on disk and still verified, so the
+failure message now sits above the button that tries again rather than replacing
+it. `UpdateDownloadStateTest` covers the same ground across a relaunch.
+
+This is the same instinct as the cache keyed by release version: the expensive,
+already-verified thing should survive a failure of something downstream of it.
+
 ### What the updater will not do
 
 It cannot install without a user-visible confirmation — that has been true since
@@ -279,22 +389,35 @@ is the absence of proof, not a substitute for it.
 
 ```
 ui/          Compose screens + ViewModels          (presentation)
+  widget/    AppWidgetProviders + RemoteViews      (the only XML UI)
 domain/      Use cases                             (pure logic, no Android)
+  usecase/   sequel detection, arriving, insights
+  tier/      tier-list rules, geometry, SVG export (no Android, no Compose)
 data/
   network/   Retrofit + OkHttp + GraphQL + coalescing
   repository/ AniListRepository, AuthRepository, DataStore preferences
   update/    UpdateManager (check + verify), ApkDownloader (transfer), UpdateManifest
+  changelog/ assets/changelog.json -> release notes
 ui/components/update/   controller, states, dialogs, permission handling
 ```
 
-- **UI** — Jetpack Compose, Material 3 Expressive, `StateFlow` + ViewModel.
+- **UI** — Jetpack Compose, Material 3 Expressive, `StateFlow` + ViewModel. The
+  one exception is `ui/widget/`, which cannot be Compose because the launcher
+  inflates it in another process — see [Home-screen widgets](#home-screen-widgets).
 - **Domain** — `FindMissedSequelsUseCase`, `SaveToPlanningUseCase`,
-  `GetViewerProfileUseCase`. Pure functions over data classes; this is where the
+  `GetViewerProfileUseCase`, `FindArrivingEntriesUseCase`,
+  `BuildListInsightsUseCase`. Pure functions over data classes; this is where the
   sequel-detection rules live, and where the tests are densest because that logic
-  is exactly what regresses silently.
+  is exactly what regresses silently. `domain/tier/` holds the tier list for the
+  same reason: rules, geometry, storage and the SVG exporter in one testable
+  package with no Android imports at all.
 - **Data** — Retrofit/Moshi/OkHttp, DataStore preferences, and a separate
   `OkHttpClient` for the update manifest so the AniList auth interceptor can
   never attach a bearer token to a public file.
+
+[ARCHITECTURE.md](ARCHITECTURE.md) is the exhaustive version of this section:
+every package, the layer deep dives, the OAuth and scan sequence diagrams, and
+the multi-module blueprint this is planned to grow into.
 
 ### GraphQL over REST
 
@@ -359,9 +482,15 @@ again, so one dropped request cannot become a tight retry loop.
 
 | Tool | Version | Why that one |
 | --- | --- | --- |
-| JDK | **21** (Temurin) | Newest LTS that AGP 9.1.1, Gradle 9.3.1 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
-| Android SDK | compileSdk **36.1** | `minorApiLevel = 1` on the 36 line. |
-| Gradle | **9.3.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used 9.3.1. |
+| JDK | **21** (Temurin) | Newest LTS that AGP 9.4.1, Gradle 9.6.1 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
+| Android SDK | compileSdk **36.1**, targetSdk **36**, minSdk **31** | `minorApiLevel = 1` on the 36 line. See [Minimum Android version](#minimum-android-version). |
+| Gradle | **9.6.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. |
+| AGP | **9.4.1** | The newest stable; 9.5.0 existed only as alpha when the pin was written. An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. AGP also checks the Gradle it is running on and fails the build if it is too old, so the two versions move together. |
+
+`settings.gradle.kts` applies the `foojay-resolver-convention` plugin, so a
+non-21 JDK does not fail with a bare toolchain error — it provisions one. That is
+convenience, not permission to drift: 21 is the version CI runs and the version
+the Robolectric step is verified against.
 
 ### Commands
 
@@ -389,6 +518,17 @@ BOM. This is not inertia:
   on Compose UI 1.11+, which requires compileSdk 37. This app compiles against
   36.1, so every later alpha fails AAR metadata checking.
 
+The second one that looks like a mistake is **KSP 2.3.12 next to Kotlin 2.4.21**.
+Since KSP 2.3.0 its versioning is decoupled from the Kotlin version, so the two
+move independently and the mismatched-looking pairing is the correct one. The
+moment it becomes a red flag is the moment it starts reading like the old
+`2.2.10-2.0.2` shape again, which would mean Kotlin and KSP have to be read
+together. The Compose compiler plugin, by contrast, *is* versioned from the same
+`kotlin` key and moves in lockstep with nothing to keep in step by hand.
+
+Both pins carry their reasoning inline in `gradle/libs.versions.toml`, which is
+the only record of why they exist.
+
 ---
 
 ## Testing
@@ -397,28 +537,51 @@ BOM. This is not inertia:
 ./gradlew test
 ```
 
-| Suite | Covers |
-| --- | --- |
-| `FindMissedSequelsUseCase*` | Sequel detection, relation kinds, filter interaction |
-| `AniListJsonTest`, `AniListErrorMappingTest` | GraphQL response → model, error classification |
-| `RequestCoalescerTest`, `RateLimitInterceptorTest` | Query dedup, burst handling |
-| `MissedSequelCachingTest`, `RelationGapTest` | Cache correctness, relation graph gaps |
-| `KeystoreIntegrityTest` | No key material committed; workflow reads secrets, not literals |
-| `VersionBaselineTest` | The three version copies agree |
-| `ApkPackagingTest` | `dex.useLegacyPackaging` is set, and in the dex block |
-| `UpdateManifestTest` | Manifest parsing, version comparison |
-| `ExpressiveShapesTest` | Capsule geometry is not a stretched polygon |
-| `RefreshIntervalTest`, `ListFreshnessWatchTest` | Staleness boundary, foreground re-fetch, timer, retry floor |
-| `RefreshIntervalPreferencesTest` | The interval survives storage and reaches the repository |
-| `AniListMarkdownTest` | Bio Markdown: which constructs parse, and which of them AniList writes differently from GFM |
-| `UserOverviewLoadOrderTest` | The profile is published before the media list lands, and says so while it waits |
-| `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variable declarations it needs, and why every alias goes through a `Page` |
-| `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
-| `AuthRedirectTest`, `AniListOAuthTest` | OAuth redirect and token handling |
+There are 58 JVM unit suites and **no instrumented tests** — `androidTest/` does
+not exist, so there is nothing to run on a device and no test that needs an
+emulator to pass. Everything below is `testImplementation` and Robolectric or
+pure JUnit.
 
-`test` is a **gate**; `lintRelease` is not (`abortOnError = false` in
-`app/build.gradle.kts`, which is why the workflow treats it as advisory rather
-than claiming otherwise).
+| Area | Suite | Covers |
+| --- | --- | --- |
+| Sequel detection | `FindMissedSequelsUseCaseTest`, `…FilterTest`, `…CurrentlyWatchingTest` | The core rules, relation kinds, and two filter bugs that produced empty or misleading lists |
+| | `RelationGapTest` | Franchise gaps that are not "the next season" |
+| | `MissedSequelCachingTest`, `MissedSequelDetailTest` | Memoised derived values; what the card says about progress and air date |
+| | `FilterCriteriaNarrowingTest` | The one `isNarrowing` definition the badge, the filtered row and the chip all read |
+| | `UnreleasedMediaTest` | What counts as unaired |
+| | `FindArrivingEntriesUseCaseTest` | The "Currently arriving" section's derivation |
+| Network | `AniListJsonTest`, `AniListErrorMappingTest` | GraphQL response → model; failure classification behind "Try again" vs "Sign in again" |
+| | `RequestCoalescerTest`, `RateLimitInterceptorTest` | Identical in-flight queries cost one call; burst handling and `Retry-After` |
+| Profile | `UserOverviewLoadOrderTest` | The profile is published before the media list lands, and says so while it waits |
+| | `UserOverviewJsonTest`, `UserOverviewQueryTest` | Captured AniList responses, and the documents against what AniList actually serves |
+| | `ProfileViewModelTest`, `ProfileBioCollapseTest`, `ProfileTextFormattingTest` | Profile state; the bio card's collapse rule and its non-Markdown fallback text |
+| | `BuildActivityCalendarUseCaseTest`, `BuildListInsightsUseCaseTest` | The activity grid's layout; the Stats tab's reshaping of AniList's aggregates |
+| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library tab logic, status display, Info & Specs tab |
+| | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
+| | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers; the demo-mode activity fixture |
+| Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
+| | `MarkdownMediaPreviewTest` | How long one bio parse may take before the watchdog calls it looping |
+| | `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variables it needs, and why every alias goes through a `Page` |
+| Auth | `AuthRedirectTest`, `AniListOAuthTest` | Redirect handling, token storage, and the silent OAuth failures |
+| Updater | `UpdateManifestTest` | Manifest parsing and the version comparison everything rests on |
+| | `ApkDownloadResumeTest`, `TransferRateTest` | 206/200/416 range handling against a `.part` on disk; the speed shown under the bar |
+| | `UpdateDownloadStateTest` | The downloaded APK survives a relaunch and a failed installer handoff |
+| | `UpdateFileProviderPathsTest` | The declared `FileProvider` paths against the directory actually written to |
+| Tier list | `TierListTest`, `TierListSerialisationTest` | The rules and geometry; the on-disk format, which holds somebody's afternoon |
+| | `TierListDocumentTest`, `TierListPreferencesTest` | A list as a saved project; the library of documents written one at a time |
+| | `TierListPlacementTest`, `TierTrayDropTest`, `TierScreenLogicTest` | Where a dropped title lands, including out of the tray; the screen's un-drawn decisions |
+| Freshness | `RefreshIntervalTest`, `RefreshIntervalPreferencesTest`, `ListFreshnessWatchTest` | Staleness boundary, the interval surviving storage, foreground re-fetch, timer, retry floor |
+| Preferences & UI | `ThemePreferencesTest` | Appearance settings, and what happens after the switch is flipped |
+| | `ExpressiveShapesTest`, `VectorIconsTest`, `BackdropTransformTest` | Capsule geometry is not a stretched polygon; every hand-authored icon's name and 24×24 frame; hero image placement |
+| Build & release | `KeystoreIntegrityTest` | No key material committed; the workflow reads secrets, not literals |
+| | `VersionBaselineTest`, `ChangelogTest` | The three version copies agree; the bundled notes are ordered and match the version |
+| | `ApkPackagingTest` | `dex.useLegacyPackaging` is set, and in the dex block |
+| | `WidgetDeclarationTest` | Each provider's declaration, and the literal `: AppWidgetProvider()` the shared updater's shape depends on |
+| | `ExampleRobolectricTest` | The Robolectric harness itself — if the runner breaks, it should break here first |
+
+`test` is a **gate**; `lintRelease` is not (`abortOnError = false` *and*
+`checkReleaseBuilds = false` in `app/build.gradle.kts`, which is why the workflow
+treats it as advisory rather than claiming otherwise).
 
 ### Tests that exist because something broke
 
@@ -449,6 +612,19 @@ than claiming otherwise).
   The suite pins the three things that fix had to get right: an overdue list is
   re-fetched on resume, a fresh one is not (twenty resumes inside an interval cost
   zero requests), and a failed fetch cannot become a tight retry loop.
+- **`WidgetDeclarationTest`** — v1.0.42 shipped a widget that could not be added
+  at all, from three declaration bugs no build step could see: `android:configure`
+  pointing at a provider rather than an Activity, a missing `initialLayout`, and
+  the `EXTRA_APPWIDGET_ID` / `EXTRA_APPWIDGET_IDS` mismatch described in
+  [Home-screen widgets](#home-screen-widgets). All three only surface when a user
+  drops the tile, and the launcher reports them as *the app is not installed*.
+- **`ChangelogTest`** — the release workflow reads `assets/changelog.json` without
+  any of this repo's tests running, so the file has to be right on its own. It is
+  hand-edited and prepend-only: a version with no written notes renders an empty
+  card and a generic release page, and a newest entry that drifts to the bottom
+  silently becomes the oldest. Malformed JSON is worse still, because
+  `ChangelogRepository` deliberately swallows parse errors so Settings cannot
+  crash — the safety net is exactly what would hide a broken file from a release.
 
 ---
 
@@ -578,22 +754,36 @@ AniSequel/
 │   ├── build.gradle.kts          version baseline, packaging, R8, dependencies
 │   ├── proguard-rules.pro        Moshi/Retrofit reflection keep rules
 │   └── src/
-│       ├── main/java/com/anisequel/
-│       │   ├── data/             network, repository, update
-│       │   ├── domain/usecase/   pure sequel-detection logic
-│       │   ├── domain/tier/      tier-list rules, layout, SVG export
-│       │   └── ui/               screens, components, theme, viewmodel
-│       ├── main/res/
-│       │   ├── drawable/         adaptive-icon layers only
-│       │   ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
-│       │   └── xml/              backup rules, FileProvider paths
-│       ├── test/                 JVM unit tests
-│       └── androidTest/          instrumented tests
+│       ├── main/
+│       │   ├── java/com/anisequel/
+│       │   │   ├── data/         network, repository, update, changelog
+│       │   │   ├── domain/usecase/  pure sequel-detection logic
+│       │   │   ├── domain/tier/     tier-list rules, layout, SVG export
+│       │   │   └── ui/            screens, components, theme, viewmodel, widget
+│       │   ├── assets/
+│       │   │   └── changelog.json   release notes, one source for two readers
+│       │   └── res/
+│       │       ├── drawable/      adaptive-icon layers + the three widget shapes
+│       │       ├── layout/        widget RemoteViews layouts (no Compose lives here)
+│       │       ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
+│       │       ├── values/        strings, colours, the system splash theme
+│       │       └── xml/           backup rules, FileProvider paths, widget configs
+│       └── test/                 58 JVM unit suites (there is no androidTest/)
 ├── gradle/libs.versions.toml     every version, with the reasoning kept inline
 ├── AGENTS.md                     the rules for working in this repo
+├── ARCHITECTURE.md               the exhaustive system specification
 ├── TO-DO.md                      the improvement backlog
+├── metadata.json                 AI Studio template leftovers, kept minimal
+├── update.json                   what the updater reads from the release asset
 └── .github/workflows/
 ```
+
+`applicationId` is `com.aistudio.anisequel.app`, not `com.anisequel`. The Kotlin
+package was renamed away from the Android Studio default, but the application ID
+is the identity every installed copy answers to and **cannot** be changed:
+editing it makes the next release a different app, every existing install
+rejects it as foreign, and there is no update path. The same trap as the key
+rotation below.
 
 ### APK size
 
@@ -601,10 +791,15 @@ R8 and `shrinkResources` are both on, with the *optimized* default proguard
 file, and there are deliberately **no `-keep` rules on `androidx.compose`** —
 adding any would be a large, avoidable regression. What that buys:
 
-- `material-icons-extended` ships ~30,000 icon classes; R8 prunes to the ~49 the
-  app actually references. Disabling shrinking would ship all of them.
-- All iconography is Compose `ImageVector`. There is not one PNG, SVG or XML
-  drawable in the app's own UI, no `res/anim`, no `res/font`.
+- `material-icons-extended` ships ~30,000 icon classes; R8 prunes them to the
+  **54** the app actually references, all of them listed by name in
+  `ui/components/AppVectorIcons.kt` so the reachable set stays reviewable.
+  Disabling shrinking would ship all 30,000.
+- All iconography in the Compose UI is an `ImageVector`. There is not one PNG,
+  SVG or XML drawable in it, and no `res/anim` and no `res/font` anywhere.
+  The three `res/drawable/widget_*.xml` shapes are the exception, and not by
+  preference — a widget is `RemoteViews` inflated by the launcher in its own
+  process, so it cannot be a `Composable`.
 - `dependenciesInfo.includeInApk = false` keeps dependency metadata out of the
   APK.
 - `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see
@@ -654,12 +849,18 @@ The short version:
 - Keep files focused, ideally **250–400 lines**.
 - No emoji as UI icons. Vectors only.
 - Look up docs before adding a dependency, plugin or experimental API.
-- Never commit key material.
+- Never commit key material, and never rewrite history to hide it.
 - Bump the version in all three places and run `VersionBaselineTest`.
+- **Add a `changelog.json` block in the same change as the version bump.** The
+  release workflow publishes notes it did not write, and the in-app "What's new"
+  card reads the same file.
+- If you fixed a bug that reached a build, the regression test is the
+  deliverable — not the fix.
 - `./gradlew test` must be green. Lint will not save you.
 
 Known improvements that are deliberately *not* done are tracked in
-[TO-DO.md](TO-DO.md).
+[TO-DO.md](TO-DO.md), each with the reason it was left. The exhaustive system
+design is [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
