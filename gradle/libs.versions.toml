@@ -1,5 +1,15 @@
 [versions]
-agp = "9.1.1"
+# 9.4.1, the newest *stable* AGP. 9.5.0 exists only as alpha09 at the time of
+# writing, and an alpha build system is a different decision from an alpha UI
+# library: material3 above is pinned to an alpha deliberately and for a written
+# reason, whereas this one gates every build the project makes.
+#
+# This is not independent of the Gradle version. AGP checks the Gradle it is
+# running on and fails the build if it is too old, so the two move together -
+# see gradle/wrapper/gradle-wrapper.properties. It is also the reason a failure
+# here would surface as an unhelpful "AAR metadata" or "minimum Gradle" message
+# rather than pointing at this line.
+agp = "9.4.1"
 coreKtx = "1.18.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"

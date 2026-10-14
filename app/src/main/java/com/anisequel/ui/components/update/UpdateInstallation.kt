@@ -49,7 +49,7 @@ import java.io.File
  * fetch or download belongs to [UpdateController], which holds the one real
  * `com.anisequel.data.update.UpdateManager`.
  */
-class UpdateInstallation(private val context: Context) {
+open class UpdateInstallation(private val context: Context) {
 
     /**
      * Whether the system will let this app open the installer right now.
@@ -60,7 +60,7 @@ class UpdateInstallation(private val context: Context) {
      * "below Android 8, installing is not gated at all" - a device class the app
      * can no longer be installed on.
      */
-    fun canInstallPackages(): Boolean =
+    open fun canInstallPackages(): Boolean =
         context.packageManager.canRequestPackageInstalls()
 
     /**
@@ -120,7 +120,7 @@ class UpdateInstallation(private val context: Context) {
      * because losing a downloaded APK to a crash at the last step is the worst
      * possible outcome for a feature the user asked for.
      */
-    fun openInstaller(apk: File): Boolean {
+    open fun openInstaller(apk: File): Boolean {
         // `installIntents` builds a FileProvider URI, which throws when the file
         // sits outside the provider's configured paths or the provider is
         // misconfigured. That is exactly the last-step crash this method exists
@@ -138,7 +138,7 @@ class UpdateInstallation(private val context: Context) {
      * the difference between "off you go" and "this device has no Settings app",
      * rather than telling the user to look for a screen that never appeared.
      */
-    fun openInstallPermissionSettings(): Boolean {
+    open fun openInstallPermissionSettings(): Boolean {
         val intent = installPermissionSettings()
         return runCatching { context.startActivity(intent) }.isSuccess
     }
@@ -156,7 +156,7 @@ class UpdateInstallation(private val context: Context) {
      * Failures are swallowed deliberately: a device with no browser at all should
      * lose the link, not crash the dialog.
      */
-    fun openReleasePage(url: String?): Boolean {
+    open fun openReleasePage(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         return runCatching {
             context.startActivity(

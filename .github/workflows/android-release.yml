@@ -83,7 +83,18 @@ jobs:
           # shipped that week while every local build used 9.3.1 — meaning a build
           # could pass here and fail on a developer's machine, or the reverse, with
           # nothing in the repository to explain the difference.
-          gradle-version: '9.3.1'
+          #
+          # 9.6.1, not the newest. Current is 9.8.1; this is a deliberate step
+          # rather than a jump to the head, because a Gradle major bump is the
+          # one dependency change here that can break the build in ways nothing
+          # in this repository would catch first.
+          #
+          # 9.6 and not the 9.5.1 this started at, because AGP 9.4.1 refuses to
+          # start on anything older and says exactly so: "Minimum supported
+          # Gradle version is 9.6.0. Current version is 9.5.1." The two are not
+          # independent pins - AGP checks the Gradle it runs against before it
+          # does any work at all.
+          gradle-version: '9.6.1'
           cache-disabled: false
 
       - name: Make Gradlew Executable

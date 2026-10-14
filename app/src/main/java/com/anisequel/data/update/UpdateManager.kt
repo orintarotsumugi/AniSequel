@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit
  * when the order is the file's shape. What stays here is everything that is
  * true regardless of which device is asking.
  */
-class UpdateManager(private val context: Context) {
+open class UpdateManager(private val context: Context) {
 
     private val moshi = Moshi.Builder().build()
 
@@ -65,7 +65,7 @@ class UpdateManager(private val context: Context) {
      * asked, so every failure path is folded into [UpdateCheckResult.Failed]
      * with a message that can be shown verbatim.
      */
-    suspend fun checkForUpdate(): UpdateCheckResult = withContext(Dispatchers.IO) {
+    open suspend fun checkForUpdate(): UpdateCheckResult = withContext(Dispatchers.IO) {
         val installedVersion = BuildConfig.VERSION_NAME
 
         val body = try {
@@ -126,7 +126,7 @@ class UpdateManager(private val context: Context) {
      * which fails with an opaque `INSTALL_PARSE_FAILED_NO_CERTIFICATES` or, worse,
      * appears to succeed.
      */
-    suspend fun download(
+    open suspend fun download(
         manifest: UpdateManifest,
         onProgress: (bytesRead: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): UpdateDownloadResult = withContext(Dispatchers.IO) {
@@ -174,6 +174,7 @@ class UpdateManager(private val context: Context) {
                             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                             val total = body.contentLength().takeIf { it > 0 } ?: declaredSize
                             var read: Long = 0
+                            var lastReported: Long = 0
 
                             // The pre-check above is a fast reject, but it compares against
                             // `contentLength()`, which is -1 for chunked transfer
@@ -191,7 +192,29 @@ class UpdateManager(private val context: Context) {
                                     )
                                 }
                                 output.write(buffer, 0, count)
-                                onProgress(read, total)
+                                // Throttled, not per-read. Every callback here
+                                // writes Compose state and recomposes the
+                                // progress bar, and the default buffer is 8 KB:
+                                // a 2.5 MB APK is ~325 of them, each one
+                                // recomposing the whole dialog for a change no
+                                // eye can see. A step per 32 KB is still ~80
+                                // updates on a real download - smooth to watch,
+                                // and a quarter of the work.
+                                //
+                                // The last one is always emitted, so the bar
+                                // cannot be left short of 100% by rounding.
+                                if (read - lastReported >= PROGRESS_STEP_BYTES) {
+                                    lastReported = read
+                                    onProgress(read, total)
+                                }
+                            }
+
+                            // The last update is emitted unconditionally, so a body that
+                            // stops short of the next 32 KB step cannot leave
+                            // the bar showing 97%.
+                            if (read >= lastReported) {
+                                lastReported = read
+                                onProgress(read, read)
                             }
 
                             output.flush()
@@ -288,7 +311,7 @@ class UpdateManager(private val context: Context) {
      * right APK or nothing at all. A zero-length file, or one that somehow lost
      * its zip header, is rejected here rather than at the installer.
      */
-    fun downloadedApkFor(manifest: UpdateManifest): File? {
+    open fun downloadedApkFor(manifest: UpdateManifest): File? {
         val file = targetFileFor(downloadDirectory(), manifest)
         if (!file.isFile || file.length() <= 0L) return null
 
@@ -318,8 +341,31 @@ class UpdateManager(private val context: Context) {
     private fun targetFileFor(directory: File, manifest: UpdateManifest): File =
         File(directory, "anisequel-${manifest.versionCode ?: "unversioned"}.apk")
 
+    /**
+     * `filesDir`, not `cacheDir`, and that distinction is the whole reason this
+     * line is worth reading twice.
+     *
+     * A downloaded APK is not a cache entry. It is a ~2.5 MB file the user is
+     * waiting on in order to install, and it has to survive at least until they
+     * come back from granting `REQUEST_INSTALL_PACKAGES` in Settings - which is
+     * a guaranteed trip out of the app, and can be a long one. `cacheDir` is
+     * the one directory Android is explicitly free to delete whenever it likes:
+     * under storage pressure, or the moment anybody taps "Clear cache" in the
+     * system settings. There is no warning and no callback.
+     *
+     * That made the updater lose its work in precisely the flow it exists for.
+     * The download finished, the app handed the user off to Settings, the cache
+     * was cleared, and on the way back there was nothing to install - so the
+     * only way forward was to fetch the same bytes a second time. Which is the
+     * symptom this whole change is about: an app that forgets where it saved
+     * the file, and downloads it again.
+     *
+     * It would also have been wrong for a subtler reason: "did we already
+     * download this?" is answered entirely by the file still being there, so
+     * any directory the system may empty turns that answer into a lie.
+     */
     private fun downloadDirectory(): File =
-        File(context.cacheDir, DOWNLOAD_DIR).apply { mkdirs() }
+        File(context.filesDir, DOWNLOAD_DIR).apply { mkdirs() }
 
     /**
      * Whether [apk] is signed by AniSequel's official key or matches the running app's key.
@@ -445,14 +491,37 @@ class UpdateManager(private val context: Context) {
         return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
-    /** Releases the last downloaded APK, if any. Called before a fresh download. */
-    fun clearDownloadedApk() {
-        val directory = File(context.cacheDir, DOWNLOAD_DIR)
-        directory.listFiles()?.forEach { it.delete() }
+    /**
+     * Deletes downloaded APKs, optionally keeping one.
+     *
+     * This used to delete every file in the directory. It is called from the one
+     * place that has already established the *current* version's APK is not
+     * among them, so on the happy path it removed nothing useful - but it also
+     * removed any other release still on disk, and it did so *before* the
+     * replacement download had succeeded. A download that then failed left the
+     * user with nothing at all, where a still-valid previous APK would have been
+     * something to fall back on.
+     *
+     * [keep] is the file the caller wants preserved - the one it has just found
+     * and is about to install. Null when there was none.
+     */
+    open fun clearDownloadedApk(keep: File? = null) {
+        val directory = File(context.filesDir, DOWNLOAD_DIR)
+        directory.listFiles()?.forEach { file ->
+            if (keep == null || file.absolutePath != keep.absolutePath) file.delete()
+        }
     }
 
     private companion object {
         const val DOWNLOAD_DIR = "updates"
+
+        /**
+         * How many bytes must land before the progress bar is told about them.
+         *
+         * 32 KB: about eighty updates across a real APK, which animates
+         * smoothly, against three hundred for an unthrottled per-read callback.
+         */
+        const val PROGRESS_STEP_BYTES = 32L * 1024
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
         const val OFFICIAL_SIGNER_SHA256 = "01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82"
     }

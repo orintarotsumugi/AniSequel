@@ -61,15 +61,34 @@ class UpdateController(
         state = UpdateUiState.Checking
 
         scope.launch {
-            state = when (val result = updateManager.checkForUpdate()) {
+            when (val result = updateManager.checkForUpdate()) {
                 is UpdateCheckResult.UpToDate ->
-                    UpdateUiState.UpToDate(result.installedVersion)
+                    state = UpdateUiState.UpToDate(result.installedVersion)
 
-                is UpdateCheckResult.Available ->
-                    UpdateUiState.Available(result.manifest)
+                // Rehydrate before offering the download. This process may have
+                // no memory of a download this device already made - the app was
+                // killed, or the user force-stopped it, or the APK was fetched on
+                // a launch that never got as far as installing. The file is still
+                // on disk and still valid, so showing "Download & install" would
+                // be a lie: the user presses it, and the button quietly returns
+                // without transferring anything, which reads as the app having
+                // downloaded the file all over again.
+                //
+                // Not an `elvis` on the result: `settleDownloaded` assigns the
+                // state itself and returns Unit, so folding it into an
+                // expression would lose the branch and then overwrite whatever
+                // it had set.
+                is UpdateCheckResult.Available -> {
+                    val onDisk = updateManager.downloadedApkFor(result.manifest)
+                    if (onDisk != null) {
+                        settleDownloaded(onDisk, result.manifest, sentToSettings = false)
+                    } else {
+                        state = UpdateUiState.Available(result.manifest)
+                    }
+                }
 
                 is UpdateCheckResult.Failed ->
-                    UpdateUiState.Failed(result.reason)
+                    state = UpdateUiState.Failed(result.reason)
             }
         }
     }
@@ -103,17 +122,18 @@ class UpdateController(
         )
 
         scope.launch {
-            // Any APK from an earlier attempt goes first. Two copies of the
-            // same APK in the cache directory is not harmful, but it is wasted
-            // storage on a phone that may not have much, and the old one is
-            // never valid again once the user has tapped update.
-            updateManager.clearDownloadedApk()
-
             when (val result = updateManager.download(manifest) { read, total ->
                 state = UpdateUiState.Downloading(manifest, read, total)
             }) {
-                is UpdateDownloadResult.Success ->
+                is UpdateDownloadResult.Success -> {
+                    // Only now, with the new APK safely renamed into place, are
+                    // the stale ones removed. This used to run *before* the
+                    // download started, which meant a failed retry left the user
+                    // with nothing at all - having thrown away a previous
+                    // release's APK that was perfectly installable.
+                    updateManager.clearDownloadedApk(keep = result.file)
                     settleDownloaded(result.file, result.manifest, sentToSettings = false)
+                }
 
                 is UpdateDownloadResult.Failed ->
                     state = UpdateUiState.Failed(result.reason)
