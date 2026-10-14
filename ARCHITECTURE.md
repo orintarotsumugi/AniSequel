@@ -156,7 +156,7 @@ UpdateController / UI              UpdateManager                     GitHub Asse
         │   ├── AndroidManifest.xml          # Permissions, FileProvider, OAuth intent filter
         │   ├── assets/changelog.json        # Release history and feature logs
         │   ├── res/                         # Adaptive vector launcher icon & XML configs
-        │   └── java/com/example/
+        │   └── java/com/anisequel/
         │       ├── AniSequelApplication.kt  # Global Application class
         │       ├── MainActivity.kt          # Edge-to-edge Activity entry point
         │       │

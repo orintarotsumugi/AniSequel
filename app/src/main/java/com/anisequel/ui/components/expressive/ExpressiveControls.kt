@@ -1,0 +1,381 @@
+package com.anisequel.ui.components.expressive
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+private const val EXPRESSIVE_TAG = "expressive_"
+
+/** One segment item of [ExpressivePolygonSegmentedBar]. */
+data class SegmentedOption(
+    val label: String,
+    val icon: ImageVector? = null
+)
+
+/**
+ * Material 3 Expressive tab bar with lively spring physics and morphing pill shapes.
+ */
+@Composable
+fun ExpressiveTabBar(
+    tabs: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    icons: List<ImageVector?> = List(tabs.size) { null }
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .testTag("${EXPRESSIVE_TAG}tab_bar"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        tabs.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.95f,
+                animationSpec = ExpressiveMotion.SelectionScale,
+                label = "tab_scale_$label"
+            )
+            val container by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "tab_container_$label"
+            )
+            val content by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "tab_content_$label"
+            )
+
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .clip(ExpressiveShapes.pill)
+                    .background(container)
+                    .clickable {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSelect(index)
+                    }
+                    .semantics {
+                        this.selected = selected
+                        role = Role.Tab
+                    }
+                    .testTag("${EXPRESSIVE_TAG}tab_$label"),
+                contentAlignment = Alignment.Center
+            ) {
+                val icon = icons.getOrNull(index)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = content,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = content,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A segmented bar styled with MaterialShapes polygons and vector icons with playful bounciness.
+ */
+@Composable
+fun ExpressivePolygonSegmentedBar(
+    options: List<SegmentedOption>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(ExpressiveShapes.pill)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(4.dp)
+            .testTag("${EXPRESSIVE_TAG}polygon_segmented_bar"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+
+            val container by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segment_container_${option.label}"
+            )
+            val content by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segment_content_${option.label}"
+            )
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.95f,
+                animationSpec = ExpressiveMotion.SelectionScale,
+                label = "segment_scale_${option.label}"
+            )
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .clip(ExpressiveShapes.pillSoft)
+                    .background(container)
+                    .clickable { onSelect(index) }
+                    .semantics {
+                        this.selected = selected
+                        role = Role.RadioButton
+                    }
+                    .testTag("${EXPRESSIVE_TAG}polygon_segment_${option.label}"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (option.icon != null) {
+                    Icon(
+                        imageVector = option.icon,
+                        contentDescription = null,
+                        tint = content,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = content,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Segmented control with outer rounded edges and inner joint shapes.
+ */
+@Composable
+fun ExpressiveSegmentedBar(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(4.dp)
+            .testTag("${EXPRESSIVE_TAG}segmented_bar"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.96f,
+                animationSpec = ExpressiveMotion.SelectionScale,
+                label = "segmented_scale_$label"
+            )
+            val cornerOuter by animateDpAsState(
+                targetValue = if (selected) 18.dp else 12.dp,
+                animationSpec = ExpressiveMotion.FastSpatialDp,
+                label = "segmented_outer_$label"
+            )
+            val cornerInner by animateDpAsState(
+                targetValue = if (selected) 8.dp else 4.dp,
+                animationSpec = ExpressiveMotion.FastSpatialDp,
+                label = "segmented_inner_$label"
+            )
+            val containerColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceContainer,
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segmented_container_$label"
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "segmented_text_$label"
+            )
+
+            val shape = when {
+                index == 0 && options.size > 1 -> RoundedCornerShape(
+                    topStart = cornerOuter, bottomStart = cornerOuter, topEnd = cornerInner, bottomEnd = cornerInner
+                )
+                index == options.lastIndex && options.size > 1 -> RoundedCornerShape(
+                    topStart = cornerInner, bottomStart = cornerInner, topEnd = cornerOuter, bottomEnd = cornerOuter
+                )
+                else -> RoundedCornerShape(cornerInner)
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .clip(shape)
+                    .background(containerColor)
+                    .clickable { onSelect(index) }
+                    .testTag("${EXPRESSIVE_TAG}segment_$label"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = textColor,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Filter chip whose corners and padding smoothly animate on selection.
+ *
+ * [minTouchTargetHeight] opts a call site into a full-size tap target. The chip
+ * is `labelMedium` inside 7dp of vertical padding, which is about 30dp - short of
+ * the 48dp minimum - and it is used both as a small filter and as a *tab
+ * selector*, which are not the same job: a chip that selects which of two long
+ * lists you are looking at is the primary control of its tab, and a fingertip
+ * finds a 30dp target rather than the user aiming at it. Defaulting it on would
+ * have resized every filter in the app, so the bigger target is asked for by the
+ * call sites that are actually a primary control.
+ */
+@Composable
+fun ExpressiveStateChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    selectedContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    selectedContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    minTouchTargetHeight: Dp = 0.dp
+) {
+    val background by animateColorAsState(
+        targetValue = if (selected) selectedContainerColor else containerColor,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "chip_container"
+    )
+    val foreground by animateColorAsState(
+        targetValue = if (selected) selectedContentColor else contentColor,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "chip_content"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.97f,
+        animationSpec = ExpressiveMotion.SelectionScale,
+        label = "chip_scale"
+    )
+    val cornerRadius by animateDpAsState(
+        targetValue = if (selected) 12.dp else 20.dp,
+        animationSpec = ExpressiveMotion.FastSpatialDp,
+        label = "chip_corner_radius"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            // Before the clip and the click, so the minimum is inside the hit
+            // area rather than padding the chip after the fact.
+            .defaultMinSize(minHeight = minTouchTargetHeight)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(background)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+            .testTag("${EXPRESSIVE_TAG}chip_$label"),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}

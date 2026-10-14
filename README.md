@@ -536,7 +536,7 @@ AniSequel/
 │   ├── build.gradle.kts          version baseline, packaging, R8, dependencies
 │   ├── proguard-rules.pro        Moshi/Retrofit reflection keep rules
 │   └── src/
-│       ├── main/java/com/example/
+│       ├── main/java/com/anisequel/
 │       │   ├── data/             network, repository, update
 │       │   ├── domain/usecase/   pure sequel-detection logic
 │       │   ├── domain/tier/      tier-list rules, layout, SVG export

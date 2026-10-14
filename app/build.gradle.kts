@@ -16,10 +16,30 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  // The Kotlin package. This used to be `com.example`, the Android Studio
+  // default, which said nothing about who wrote the code.
+  //
+  // It is NOT the app's identity and does not have to match `applicationId`
+  // below - see that comment for why those two are deliberately different.
+  namespace = "com.anisequel"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
+    // The identity every installed copy already answers to, and the one the
+    // in-app updater checks a downloaded APK against.
+    //
+    // `aistudio` in it is the Google AI Studio repository template this project
+    // was started from, and it is ugly. **It cannot be changed.** Android
+    // identifies an app by `applicationId`, so editing this makes the next
+    // release a different app: every existing install would reject it as a
+    // foreign package, there would be no update path, and users would have to
+    // uninstall - losing the list, the tier documents and the refresh settings.
+    //
+    // That is the same trap as the key rotation in README § Release signing:
+    // a string in a build file that looks like cruft and is actually load-
+    // bearing for every user who ever installed the app. Renaming the Kotlin
+    // package removes the template default everywhere it is safe to; this one
+    // stays because it is the only part of the name that users are pinned to.
     applicationId = "com.aistudio.anisequel.app"
     // Android 12 (API 31) is the floor, raised from 29 (Android 10).
     //

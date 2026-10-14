@@ -1,0 +1,462 @@
+package com.anisequel.ui.components.markdown
+
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.anisequel.data.model.MediaCover
+import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.openExternalUrl
+
+@Composable
+fun RenderHeader(header: MarkdownNode.Header) {
+    val style = when (header.level) {
+        1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        2 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        3 -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        else -> MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+    }
+    val context = LocalContext.current
+    val annotated = buildInlineAnnotatedString(header.inlines, onLinkClick = { openExternalUrl(context, it) })
+    Text(
+        text = annotated,
+        style = style,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@Composable
+fun RenderBlockquote(quote: MarkdownNode.Blockquote) {
+    val context = LocalContext.current
+    val annotated = buildInlineAnnotatedString(quote.inlines, onLinkClick = { openExternalUrl(context, it) })
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+            .padding(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(20.dp)
+                .clip(ExpressiveShapes.pill)
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun RenderCodeBlock(block: MarkdownNode.CodeBlock) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = block.code,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(12.dp)
+        )
+    }
+}
+
+@Composable
+fun RenderList(list: MarkdownNode.ListBlock) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        list.items.forEachIndexed { index, itemInlines ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                val bullet = if (list.ordered) "${index + 1}." else "•"
+                // 26dp and `softWrap = false`, not 20dp: an ordered list past its
+                // ninth item prints "10.", which does not fit the old column and
+                // wrapped onto a second line - so the tenth item of every
+                // numbered list in every bio was indented by one blank row.
+                Text(
+                    text = bullet,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    softWrap = false,
+                    maxLines = 1,
+                    modifier = Modifier.width(26.dp)
+                )
+                val annotated = buildInlineAnnotatedString(itemInlines, onLinkClick = { openExternalUrl(context, it) })
+                Text(
+                    text = annotated,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RenderCheckList(checklist: MarkdownNode.CheckListBlock) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        checklist.items.forEach { item ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (item.checked) AppVectorIcons.CheckCircle else AppVectorIcons.BookmarkDone,
+                    contentDescription = null,
+                    tint = if (item.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                val annotated = buildInlineAnnotatedString(item.inlines, onLinkClick = { openExternalUrl(context, it) })
+                Text(
+                    text = annotated,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textDecoration = if (item.checked) TextDecoration.LineThrough else TextDecoration.None
+                    ),
+                    color = if (item.checked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RenderImage(image: MarkdownNode.ImageBlock) {
+    val context = LocalContext.current
+    val clickableModifier = if (image.targetUrl != null) {
+        Modifier
+            .bouncyPress()
+            .clickable { openExternalUrl(context, image.targetUrl) }
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(clickableModifier),
+        contentAlignment = if (image.centered) Alignment.Center else Alignment.CenterStart
+    ) {
+        AsyncImage(
+            model = image.url,
+            contentDescription = image.alt ?: "Markdown image",
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentScale = ContentScale.FillWidth,
+            placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
+            error = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
+        )
+    }
+}
+
+@Composable
+fun RenderVideo(video: MarkdownNode.VideoBlock) {
+    val context = LocalContext.current
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bouncyPress()
+            .clickable { openExternalUrl(context, video.url) }
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Play,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (video.isYoutube) "Watch on YouTube" else "Watch Media Clip",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = video.url,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = AppVectorIcons.OpenInNew,
+                contentDescription = "Open",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
+    // `rememberSaveable`, not `remember`.
+    //
+    // This renders inside the profile's `LazyColumn`, and a plain `remember` is
+    // discarded as soon as the card leaves the viewport - so a revealed spoiler
+    // re-hid itself the moment the reader scrolled past it and back. The state is
+    // small enough to save (one boolean), and `rememberSaveable` also survives a
+    // configuration change, so the reveal is not undone by a rotation either.
+    var revealed by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (revealed) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .bouncyPress()
+            .clickable { revealed = !revealed }
+            // Revealing swaps a one-line prompt for the hidden text, so the block
+            // changes height. Animating that here means the surrounding list does
+            // not jump; the token is the `IntSize` one for exactly this reason.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+    ) {
+        if (!revealed) {
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Visibility,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Spoiler (tap to reveal)",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
+            val annotated = buildInlineAnnotatedString(spoiler.inlines, onLinkClick = { openExternalUrl(context, it) })
+            // The icon stays, as a cue that the same tap hides it again. It used
+            // to vanish with the prompt, which left a revealed spoiler looking
+            // like plain text - nothing said it could be tapped back shut.
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Done,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = annotated,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One AniList entity a bio linked, as a card with its cover art.
+ *
+ * [cover] is looked up by media key by the caller rather than fetched here,
+ * because a bio can carry a dozen of these and one request each would spend a
+ * dozen of AniList's 30-a-minute budget before the reader had scrolled. The
+ * caller batches them and passes a map; a miss leaves the type icon sitting in
+ * the poster frame rather than an empty hole, so the card keeps its shape.
+ *
+ * The card's title prefers [MediaCover.title] over the one parsed out of the URL.
+ * A bio link of `https://anilist.co/anime/1` has no readable name in it, so the
+ * fallback for it is `ANIME #1` - a debug row, on the single most common link
+ * shape there is, because that is what the address bar hands you. The real title
+ * arrives in the same response as the poster and is always right about what the
+ * image depicts; the URL's contribution is only used when there is no fetched
+ * cover at all.
+ *
+ * The poster keeps its 2:3 shape rather than being squashed into a square
+ * thumbnail - a cropped portrait face loses the one thing a poster is good for,
+ * which is being recognised.
+ *
+ * The poster slot is reserved whether or not [coverUrl] resolved. It used to be
+ * omitted entirely on a miss, so the card started as a single column of text and
+ * jumped to two the moment the cover arrived - which re-laid out the whole bio
+ * under the reader's eyes. The type icon underneath keeps the frame from reading
+ * as a broken image in the meantime, and for an entity that will never have a
+ * cover (a studio, a staff member) the frame still matches every other card.
+ */
+@Composable
+fun RenderAniListPreview(
+    preview: MarkdownNode.AniListPreviewBlock,
+    cover: MediaCover? = null
+) {
+    val context = LocalContext.current
+    // An unblank fetched title wins. `ANIME #1` is a fallback, not a title, and
+    // the whole point of fetching the cover in the first place is that AniList
+    // told us what this media is actually called.
+    val title = cover?.title?.takeIf { it.isNotBlank() } ?: preview.title
+
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bouncyPress()
+            .clickable { openExternalUrl(context, preview.url) }
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // One poster frame, always drawn, so the card has a single shape
+            // whether the cover has loaded, is missing, or can never exist.
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .aspectRatio(POSTER_ASPECT)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = previewFallback(preview.type),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+                cover?.let { fetched ->
+                    AsyncImage(
+                        model = fetched.url,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = ExpressiveShapes.pill,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            text = preview.type.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    // The numeric id used to be printed here. It told the reader
+                    // nothing they could act on and made every card look like a
+                    // debug row; the badge plus the link icon says what this is
+                    // and where tapping goes.
+                    Text(
+                        text = "AniList",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = AppVectorIcons.OpenInNew,
+                contentDescription = "Open on AniList",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+/** The type-appropriate icon drawn while a cover loads, or when there is none. */
+private fun previewFallback(type: String) =
+    if (type.equals("MANGA", ignoreCase = true)) {
+        AppVectorIcons.FavouriteManga
+    } else {
+        AppVectorIcons.FavouriteAnime
+    }
+
+/** AniList covers are 2:3. */
+private const val POSTER_ASPECT = 2f / 3f
+

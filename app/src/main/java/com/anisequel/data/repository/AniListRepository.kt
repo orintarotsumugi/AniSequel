@@ -1,0 +1,211 @@
+package com.anisequel.data.repository
+
+import com.anisequel.data.model.ActivityLikeState
+import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.FollowUser
+import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.MediaCover
+import com.anisequel.data.model.MediaCoverKey
+import com.anisequel.data.model.MediaEntryEdit
+import com.anisequel.data.model.MediaListCollection
+import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.UserOverview
+import com.anisequel.data.model.ViewerProfile
+
+interface AniListRepository {
+    suspend fun getViewer(): Result<ViewerProfile>
+    suspend fun getUserByName(userName: String): Result<ViewerProfile>
+    /**
+     * The user's full anime list.
+     *
+     * [forceRefresh] skips the short-lived response cache and re-asks AniList.
+     * It exists because a cache that every caller can bypass is not a cache, it
+     * is a stale-data generator: pull-to-refresh went through the cached copy
+     * and silently did nothing, which is the exact opposite of what the gesture
+     * promises. Default values live here and not on the overrides, which is
+     * where Kotlin requires them for an interface method.
+     */
+    suspend fun getUserAnimeList(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection>
+
+    /**
+     * Cover art for several media, in **one** request.
+     *
+     * Batched because AniList is currently degraded to 30 requests a minute and a
+     * bio with a dozen AniList links would otherwise spend a dozen of them
+     * before the reader had scrolled. Keys already cached cost nothing, and this
+     * returns the known ones without a round trip when the batch is entirely
+     * satisfied.
+     *
+     * Keyed by [MediaCoverKey] rather than by a bare id, because an id is only
+     * unique *within* a media type and `anilist.co/anime/1` and
+     * `anilist.co/manga/1` are different shows. Keying on the id alone makes the
+     * two cards share one poster, which looks correct and is not.
+     *
+     * The title comes back beside the URL in the same response. A media AniList
+     * does not serve, or one with no cover, is simply absent from the map - the
+     * caller draws a placeholder rather than treating it as an error.
+     */
+    suspend fun getMediaCovers(keys: List<MediaCoverKey>): Result<Map<MediaCoverKey, MediaCover>> =
+        unsupported("getMediaCovers")
+
+    /** As [getUserAnimeList], for a profile looked up by name. */
+    suspend fun getUserAnimeListByUsername(
+        userName: String,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection>
+
+    /**
+     * The user's manga list, for the profile's Library tab.
+     *
+     * Fetched only when somebody actually filters the Library to manga, unlike
+     * the anime list which a profile opens with because the Stats tab needs it.
+     */
+    suspend fun getUserMangaList(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<MediaListCollection> = unsupported("getUserMangaList")
+
+    /**
+     * Description, banner and studio for one entry, fetched on demand because
+     * the list query omits them (they are only rendered for the entry the user
+     * opens, and asking for them up front makes AniList fail on large lists).
+     */
+    suspend fun getMediaDetail(mediaId: Int): Result<MediaNode>
+    suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
+    suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")
+
+    /**
+     * The viewer's own entry for one media, as the editor tab opens on it.
+     *
+     * A missing entry is an *empty* [SimpleMediaListEntry] rather than a failure:
+     * "not on my list yet" is the state the editor is most likely to be opened in
+     * for an arriving show, and turning it into an error would draw a failure over
+     * a form that is perfectly able to create the entry.
+     *
+     * [userId] is the viewer's own id and is required by the editor; the demo and
+     * test doubles that do not implement this answer with [unsupported].
+     */
+    suspend fun getMediaListEntry(
+        mediaId: Int,
+        userId: Int?
+    ): Result<SimpleMediaListEntry> = unsupported("getMediaListEntry")
+
+    /** Creates or replaces the viewer's entry with the fields [edit] carries. */
+    suspend fun saveMediaListEntry(edit: MediaEntryEdit): Result<SimpleMediaListEntry> =
+        unsupported("saveMediaListEntry")
+
+    /** Removes the entry with this list-entry id from the viewer's list. */
+    suspend fun deleteMediaListEntry(entryId: Int): Result<Unit> =
+        unsupported("deleteMediaListEntry")
+
+    /**
+     * Bio, list statistics and favourites for the profile screen.
+     *
+     * Exactly one of [userId] / [userName] identifies who; passing neither
+     * resolves to nothing and AniList answers with an error the caller surfaces.
+     *
+     * [forceRefresh] skips the short-lived response cache for the same reason
+     * [getUserAnimeList]'s does: a refresh that returns the cached copy is not a
+     * refresh.
+     */
+    suspend fun getUserOverview(
+        userId: Int?,
+        userName: String?,
+        forceRefresh: Boolean = false
+    ): Result<UserOverview> = unsupported("getUserOverview")
+
+    /**
+     * One page of the person's list activity, newest first.
+     *
+     * [userId] only - the feed is not addressable by name, and the profile
+     * screen always has the id it arrived with. [page] is 1-based, as everywhere
+     * else on this API.
+     */
+    suspend fun getUserActivity(
+        userId: Int,
+        page: Int = 1,
+        forceRefresh: Boolean = false
+    ): Result<List<ListActivity>> = unsupported("getUserActivity")
+
+    /** The people who follow this account. Empty list means no followers. */
+    suspend fun getUserFollowers(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<List<FollowUser>> = unsupported("getUserFollowers")
+
+    /** The people this account follows. */
+    suspend fun getUserFollowing(
+        userId: Int,
+        forceRefresh: Boolean = false
+    ): Result<List<FollowUser>> = unsupported("getUserFollowing")
+
+    /**
+     * One activity's comment thread, oldest first as AniList returns them.
+     *
+     * Fetched when the sheet opens rather than with the feed, so a person who
+     * never taps a comment never pays for a thread.
+     */
+    suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
+        unsupported("getActivityReplies")
+
+    /**
+     * The people who liked one activity.
+     *
+     * The default is an empty list rather than [unsupported], unlike every sibling
+     * above. Liking is the one engagement feature whose answer is still useful
+     * without a session - anyone can read who liked a public activity - so a
+     * repository that cannot serve it degrades to "no likers" instead of throwing.
+     * Only test doubles exercise the default, and none of them opens this sheet.
+     */
+    suspend fun getActivityLikes(activityId: Int): Result<List<FollowUser>> =
+        Result.success(emptyList())
+
+    /**
+     * Likes an activity if it is not liked, un-likes it if it is. AniList does
+     * not have a separate "unlike"; the same call toggles, which is why the
+     * return value - not the request - is what the UI trusts.
+     *
+     * Requires a session. Called with none (the demo feed) it fails with
+     * [com.anisequel.data.network.AniListErrorKind.INVALID_SESSION], and the UI
+     * hides the control rather than offering an action that cannot work.
+     */
+    suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =
+        unsupported("toggleActivityLike")
+
+    /** Posts [text] as a comment on an activity, returning the created reply. */
+    suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> =
+        unsupported("postActivityReply")
+
+    fun getDemoProfile(): ViewerProfile
+    fun getDemoAnimeList(): MediaListCollection
+
+    /**
+     * The same shape as the real thing, so the demo profile screen is the real
+     * screen - including its failures, which is the point.
+     */
+    fun getDemoUserOverview(): UserOverview = unsupported("getDemoUserOverview")
+    fun getDemoUserActivity(): List<ListActivity> = unsupported("getDemoUserActivity")
+    fun getDemoFollowers(): List<FollowUser> = unsupported("getDemoFollowers")
+    fun getDemoFollowing(): List<FollowUser> = unsupported("getDemoFollowing")
+    fun clearDetailCache() {}
+}
+
+/**
+ * The default for a screen an implementation does not serve.
+ *
+ * Thrown rather than returned as an empty list, on purpose. An empty activity
+ * feed and a failed one look identical on screen - both are a blank list - so a
+ * silent default would turn "this repository cannot answer that" into "this
+ * person has not done anything", which is the one claim this screen must never
+ * make about somebody.
+ *
+ * `AniListRepositoryImpl` overrides every one. Only the test doubles that exist
+ * to exercise the dashboard's two calls rely on the default, and none of them
+ * opens a profile.
+ */
+private fun unsupported(operation: String): Nothing =
+    throw UnsupportedOperationException("AniListRepository does not serve $operation")
