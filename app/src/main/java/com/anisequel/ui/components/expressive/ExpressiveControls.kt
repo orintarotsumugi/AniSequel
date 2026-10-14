@@ -33,6 +33,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -219,7 +221,23 @@ fun ExpressivePolygonSegmentedBar(
                     style = MaterialTheme.typography.labelLarge,
                     color = content,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1
+                    // Two lines, not one, and deliberately with no `overflow`.
+                    //
+                    // This was `maxLines = 1` and nothing else, which is
+                    // `TextOverflow.Clip` - so a label too long for its segment
+                    // was cut through the middle of a letter rather than
+                    // shortened with an ellipsis. The segment has a fixed 44dp
+                    // height, so it could not simply grow either, which is what
+                    // made it a clip and not a wrap in the first place.
+                    //
+                    // Two `labelLarge` lines fit inside 44dp, so the full name
+                    // is shown and the bar keeps the height it is designed
+                    // around. The alternative - an ellipsis - tells the user
+                    // nothing about which option they were looking at, on a
+                    // control where being wrong means editing the wrong setting.
+                    maxLines = 2,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp
                 )
             }
         }

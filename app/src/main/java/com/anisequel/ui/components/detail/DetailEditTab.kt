@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.isManga
 import com.anisequel.ui.components.AppVectorIcons
 import kotlinx.coroutines.launch
@@ -207,52 +208,66 @@ fun DetailEditTab(
             }
         }
 
-        // Progress.
-        EditorCard(
-            icon = AppVectorIcons.BookmarkDone,
-            title = "Progress",
-            subtitle = if (totalUnits > 0) "${state.progress} / $totalUnits" else "${state.progress}",
-            testTag = "edit_progress_row"
-        ) {
-            Column(modifier = Modifier.padding(top = 10.dp)) {
-                if (totalUnits > 0) {
-                    Slider(
-                        value = state.progress.coerceIn(0, totalUnits).toFloat(),
-                        onValueChange = { draft = state.copy(progress = it.toInt()) },
-                        valueRange = 0f..totalUnits.toFloat(),
-                        steps = (totalUnits - 1).coerceAtLeast(0),
-                        modifier = Modifier.testTag("edit_progress_slider")
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StepButton(
-                        icon = AppVectorIcons.StepDown,
-                        contentDescription = "Decrease progress",
-                        testTag = "edit_progress_minus",
-                        onClick = {
-                            draft = state.copy(progress = (state.progress - 1).coerceAtLeast(0))
-                        }
-                    )
-                    Text(
-                        text = "${state.progress}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.testTag("edit_progress_value")
-                    )
-                    StepButton(
-                        icon = AppVectorIcons.StepUp,
-                        contentDescription = "Increase progress",
-                        testTag = "edit_progress_plus",
-                        onClick = {
-                            val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
-                            draft = state.copy(progress = (state.progress + 1).coerceAtMost(ceiling))
-                        }
-                    )
+        // Progress, hidden for a title that has not aired.
+        //
+        // Asking somebody how many episodes of something they have not seen,
+        // of something that does not exist yet, is not a useful question - and
+        // the slider is not a neutral one either: it opens on the episode
+        // count, invites a tap, and writes that number to AniList. A planner
+        // entry for a show two years out is the common case here, so this is
+        // the row most likely to be wrong rather than right.
+        //
+        // `hasAired` is deliberately about *AniList's* status and not the
+        // user's own `startedAt` date: someone who marks a show as started
+        // before it airs has an opinion about it, and hiding the row would then
+        // take away the one field they were reaching for.
+        if (!media.hasNotAired) {
+            EditorCard(
+                icon = AppVectorIcons.BookmarkDone,
+                title = "Progress",
+                subtitle = if (totalUnits > 0) "${state.progress} / $totalUnits" else "${state.progress}",
+                testTag = "edit_progress_row"
+            ) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    if (totalUnits > 0) {
+                        Slider(
+                            value = state.progress.coerceIn(0, totalUnits).toFloat(),
+                            onValueChange = { draft = state.copy(progress = it.toInt()) },
+                            valueRange = 0f..totalUnits.toFloat(),
+                            steps = (totalUnits - 1).coerceAtLeast(0),
+                            modifier = Modifier.testTag("edit_progress_slider")
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        StepButton(
+                            icon = AppVectorIcons.StepDown,
+                            contentDescription = "Decrease progress",
+                            testTag = "edit_progress_minus",
+                            onClick = {
+                                draft = state.copy(progress = (state.progress - 1).coerceAtLeast(0))
+                            }
+                        )
+                        Text(
+                            text = "${state.progress}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.testTag("edit_progress_value")
+                        )
+                        StepButton(
+                            icon = AppVectorIcons.StepUp,
+                            contentDescription = "Increase progress",
+                            testTag = "edit_progress_plus",
+                            onClick = {
+                                val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
+                                draft = state.copy(progress = (state.progress + 1).coerceAtMost(ceiling))
+                            }
+                        )
+                    }
                 }
             }
         }

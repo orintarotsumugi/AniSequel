@@ -37,6 +37,23 @@ val MediaNode.posterColor: String? get() = coverImage?.color
 
 val MediaNode.isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
 
+/**
+ * Whether this title has not aired yet, so there is no episode of it to have watched.
+ *
+ * AniList's own `status`, not an inference from a missing start date: a show can
+ * carry a date and still be unreleased, and a planner entry for a title two years
+ * out is exactly the case the entry editor must not ask "how many episodes?".
+ *
+ * `CANCELLED` is included because a cancelled show is not going to air either.
+ * `null` status is *not* treated as unaired: AniList leaves it null for media it
+ * has little data on, and hiding the row on a missing field would take the
+ * control away from a title the user can plainly see episodes of. Guessing
+ * wrong in that direction is worse than asking one extra question.
+ */
+val MediaNode.hasNotAired: Boolean
+    get() = status.equals("NOT_YET_RELEASED", ignoreCase = true) ||
+        status.equals("CANCELLED", ignoreCase = true)
+
 val MediaNode.formatLabel: String get() = format ?: if (isManga) "MANGA" else "ANIME"
 
 /**

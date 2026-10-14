@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.2.4",
+      "entries": [
+        {
+          "title": "AniSequel no longer asks an unaired show how many episodes you have watched",
+          "detail": "Every title in the editor had a Progress row, including ones that have not aired. For a planned sequel that meant the slider opened on the announced episode count, invited a tap, and wrote that number to AniList - for a show where no episode exists yet. Since most of what this app finds is unreleased, that was the common case rather than an edge one. The row is now simply not there until there is something to have watched."
+        },
+        {
+          "title": "A long option name is no longer cut through the middle of a letter",
+          "detail": "The segmented controls that size their segments to a fixed height were told to keep their label to one line, without being told what to do with the overflow. The answer Compose gives by default is to clip, so anything too long was sliced sideways through the text with no ellipsis and nothing to tell you it had happened. Longer names now wrap onto a second line, which fits inside the control's height anyway."
+        }
+      ]
+    },
+    {
       "version": "1.2.1",
       "entries": [
         {
