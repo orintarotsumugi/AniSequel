@@ -138,7 +138,24 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             }
 
             is UpdateUiState.ReadyToInstall -> {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Why the last attempt to open the installer did not work.
+                //
+                // The state is still ReadyToInstall and the file is still on disk,
+                // so the row does not say "failed" and does not drop its button:
+                // the APK is one more press away from installed, and saying
+                // otherwise is what made this look like the download had been
+                // thrown away.
+                state.notice?.let { notice ->
+                    Text(
+                        text = notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 SettingsButton(
                     text = "Install now",
                     onClick = { controller.install() },
@@ -161,6 +178,19 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                // The same notice the ready-to-install branch carries: the file
+                // is downloaded either way, so a launcher that would not open is
+                // one more press away from being installed, not a dead end.
+                state.notice?.let { notice ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsButton(
                     text = if (state.sentToSettings) "Open settings again" else "Open Settings",

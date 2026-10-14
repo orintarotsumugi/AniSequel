@@ -8,6 +8,37 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /**
+ * What happened when the installer was asked to open.
+ *
+ * Two answers rather than a boolean, because the failure used to be reported as
+ * the one thing it almost never was.
+ *
+ * [CouldNotOpen] covers a `FileProvider` URI that could not even be built - the
+ * provider's paths no longer match the directory the app downloads into - and
+ * that was previously swallowed into "nothing opened", so `openInstaller` said no
+ * and the updater said "This device has no app installer". #61 moved the
+ * downloads out of the cache and left the provider behind, so every APK threw
+ * here, and every user on every device was told their phone could not install
+ * apps. A bug in this app, reported as a fact about their hardware, sending
+ * nobody to the only place the answer was.
+ *
+ * There is deliberately no separate "this device has no installer" case. It
+ * cannot be told apart from the above: on API 30+ a `resolveActivity` probe for
+ * the package installer returns null whenever the app has not declared the
+ * installer in a `<queries>` element, so such a check cannot distinguish the two -
+ * and guessing wrong in the direction of "your phone is broken" is what caused
+ * this in the first place. Both causes are answered by the same advice, which
+ * works for both: take the release from GitHub.
+ */
+sealed interface InstallerLaunch {
+    /** Something took the intent and opened. */
+    data object Opened : InstallerLaunch
+
+    /** Nothing opened - the file could not be shared, or nothing could install it. */
+    data object CouldNotOpen : InstallerLaunch
+}
+
+/**
  * The three questions the install flow has to ask the platform, in one place.
  *
  * These used to be methods scattered across [UpdateManager] and the update
@@ -114,21 +145,24 @@ open class UpdateInstallation(private val context: Context) {
     /**
      * Opens the installer on [apk], trying each known route in turn.
      *
-     * Returns true if something opened. False means this device has no package
-     * installer registered at all - a headless build, or an OEM image with the
-     * component removed - which is worth reporting rather than crashing over,
-     * because losing a downloaded APK to a crash at the last step is the worst
-     * possible outcome for a feature the user asked for.
+     * Returns [InstallerLaunch.Opened] if something took it, and
+     * [InstallerLaunch.CouldNotOpen] otherwise. Losing a downloaded APK to a
+     * crash here would be the worst possible outcome for a feature the user asked
+     * for, which is why building the intents and firing them are each contained -
+     * but contained is not the same as indistinguishable, and collapsing both
+     * failures into one "no" is what turned a provider misconfiguration into
+     * "This device has no app installer" for every user of the app.
      */
-    open fun openInstaller(apk: File): Boolean {
-        // `installIntents` builds a FileProvider URI, which throws when the file
-        // sits outside the provider's configured paths or the provider is
-        // misconfigured. That is exactly the last-step crash this method exists
-        // to avoid, so building the intents is inside the `runCatching` too.
-        val intents = runCatching { installIntents(apk) }.getOrElse { return false }
-        return intents.any { intent ->
+    open fun openInstaller(apk: File): InstallerLaunch {
+        val intents = runCatching { installIntents(apk) }.getOrElse {
+            return InstallerLaunch.CouldNotOpen
+        }
+
+        val opened = intents.any { intent ->
             runCatching { context.startActivity(intent) }.isSuccess
         }
+
+        return if (opened) InstallerLaunch.Opened else InstallerLaunch.CouldNotOpen
     }
 
     /**

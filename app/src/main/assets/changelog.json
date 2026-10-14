@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.2.5",
+      "entries": [
+        {
+          "title": "Updates install again",
+          "detail": "Every update ended with 'This device has no app installer', on phones that install apps perfectly well. The APK is handed to the system installer as a shared link, and the list of what may be shared still pointed at the folder the app used to download into, so the link could not be built and the failure was reported as a fact about your phone instead of a fault in the app. The download was always fine - it was the last step, and it is fixed."
+        },
+        {
+          "title": "An update that will not open stays downloaded",
+          "detail": "When opening the installer failed, the app threw away its record of the file it had already downloaded and closed the pop-up, so the update looked gone and the way back to it was a fresh check. The APK is still on disk and still verified, so the message now sits above the button that tries again."
+        },
+        {
+          "title": "An interrupted download carries on instead of starting over",
+          "detail": "A dropped connection, a phone call or the app being closed mid-download used to throw away everything already fetched, so the next attempt began again at zero bytes. Partial downloads are now continued from where they stopped, and they survive the app being closed - which matters most exactly where it used to hurt: the first update sends you to Settings to allow installs, and that trip is no longer paid for twice."
+        },
+        {
+          "title": "The download line tells you how fast it is going",
+          "detail": "'Downloading' on its own looks identical to a transfer that has stopped, which is not something you can tell from a bar that is not moving. The speed now shows under the progress bar, measured over the last couple of seconds rather than averaged across the whole transfer - so it reports the connection you have now, not the one you had in the tunnel."
+        },
+        {
+          "title": "The update pop-up stays put while it is downloading",
+          "detail": "Dismissing it mid-download did not cancel anything - the transfer carried on in the background and the pop-up reappeared by itself minutes later, over whatever you were doing, for an update you had just dismissed. It now stays where it is until the download finishes or fails."
+        }
+      ]
+    },
+    {
       "version": "1.2.4",
       "entries": [
         {

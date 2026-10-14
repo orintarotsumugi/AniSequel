@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.update
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,17 @@ class UpdateController(
      * scope and take every later attempt with it.
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * The speed readout for the progress line.
+     *
+     * Kept here rather than in [UpdateManager] because it is a presentation
+     * concern: the transfer reports bytes, and what those bytes mean per second
+     * on *this* screen is the UI's business. One instance per download, reset
+     * when a new one starts so a previous transfer's window cannot leak into
+     * the next reading.
+     */
+    private val rate = TransferRate()
 
     var state: UpdateUiState by mutableStateOf(UpdateUiState.Idle)
         private set
@@ -103,10 +115,19 @@ class UpdateController(
      * over a setting they may have already granted since last launch.
      *
      * An APK already on disk for this exact version is reused rather than
-     * fetched again. That is what makes the first-run Settings round trip cost
-     * one download instead of two - see [UpdateManager.downloadedApkFor].
+     * fetched again, and so is a *partial* one: the transfer asks for the rest
+     * of the bytes it already has. That is what makes the first-run Settings
+     * round trip cost one download instead of two - see
+     * [UpdateManager.downloadedApkFor] - and it is why an interrupted transfer
+     * is not the whole file again.
      */
     fun download() {
+        // The cast is the re-entry guard: `state` becomes `Downloading`
+        // synchronously below, before anything is launched, so a second tap
+        // arriving in the same frame finds a state that is not `Available` and
+        // returns. Without that, two taps would put two transfers on one
+        // `.part` file and the result would be an APK made of two interleaved
+        // downloads.
         val manifest = (state as? UpdateUiState.Available)?.manifest ?: return
 
         val alreadyOnDisk = updateManager.downloadedApkFor(manifest)
@@ -115,6 +136,7 @@ class UpdateController(
             return
         }
 
+        rate.reset()
         state = UpdateUiState.Downloading(
             manifest,
             bytesRead = 0,
@@ -123,7 +145,15 @@ class UpdateController(
 
         scope.launch {
             when (val result = updateManager.download(manifest) { read, total ->
-                state = UpdateUiState.Downloading(manifest, read, total)
+                // The callback runs on OkHttp's IO thread, so the clock is read
+                // here rather than captured once: elapsed time has to be measured
+                // where it happens for the rate to mean anything.
+                state = UpdateUiState.Downloading(
+                    manifest,
+                    read,
+                    total,
+                    bytesPerSecond = rate.sample(read, SystemClock.elapsedRealtime())
+                )
             }) {
                 is UpdateDownloadResult.Success -> {
                     // Only now, with the new APK safely renamed into place, are
@@ -160,6 +190,17 @@ class UpdateController(
      * Called by the user pressing Install, and - the point of the whole
      * permission dance - called for them by [onAppResumed] once the permission
      * has actually been granted.
+     *
+     * ## What a failed launch does to the state
+     *
+     * Nothing, except write down what went wrong. This used to replace the state
+     * with [UpdateUiState.Failed], which took the downloaded file *out of the
+     * state entirely*: the pop-up disappeared, the Settings row showed the error
+     * as if nothing had been downloaded, and the only way back to the APK was a
+     * re-check that happened to rehydrate it again. The file is still on disk and
+     * still verified, so the state stays what it was and the message rides along
+     * as [UpdateUiState.ReadyToInstall.notice] - one more press away from
+     * working.
      */
     fun install() {
         val file = when (val current = state) {
@@ -168,13 +209,25 @@ class UpdateController(
             else -> return
         }
 
-        // startActivity can still throw even with the permission granted: some
-        // OEM builds have no package installer registered at all, and a
-        // headless device has none. Losing the downloaded APK to a crash here
-        // would be the worst possible outcome for a feature the user asked for.
-        if (!installation.openInstaller(file)) {
-            state = UpdateUiState.Failed("This device has no app installer.")
+        // startActivity can still fail even with the permission granted: some OEM
+        // builds have no package installer registered at all, and a headless
+        // device has none. Losing the downloaded APK to a crash here would be the
+        // worst possible outcome for a feature the user asked for - which is why
+        // `openInstaller` contains that rather than letting it throw.
+        val notice = when (installation.openInstaller(file)) {
+            InstallerLaunch.Opened -> null
+            InstallerLaunch.CouldNotOpen ->
+                "Android would not open the installer for this update. It is " +
+                    "still downloaded - press Install again, or take the APK " +
+                    "from the release page."
         }
+
+        // Both states carry the file, so both keep it and only gain the message.
+        // An elvis rather than a second `when`, because there is no third case:
+        // firing the installer cannot have moved the state out from under this.
+        state = (state as? UpdateUiState.ReadyToInstall)?.copy(notice = notice)
+            ?: (state as? UpdateUiState.NeedsInstallPermission)?.copy(notice = notice)
+            ?: state
     }
 
     /**

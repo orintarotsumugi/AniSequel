@@ -219,6 +219,48 @@ Opening the installer unprompted on resume is safe in the sense that matters:
 the system install dialog still requires the user's own confirmation, and no
 version of this app can install itself silently.
 
+### Two directories, and why the FileProvider is part of this
+
+An update is handed to the installer as a `content://` URI, because the
+installer runs as a different app and cannot read this app's private storage by
+path. That URI is minted by a `FileProvider`, and what it may publish is declared
+in `app/src/main/res/xml/update_file_paths.xml`.
+
+So the directory the updater downloads into and the directory that file declares
+are a pair, and nothing in the build connects them. They came apart in #61, when
+downloads moved out of `cacheDir` — deliberately, because the system may empty
+the cache whenever it likes, and a download that vanished during the trip to
+Settings had to be paid for twice — and the provider's paths stayed behind
+pointing at the now-empty cache directory. `getUriForFile` then threw on every
+downloaded APK, `openInstaller` contained the throw (correctly: the last step of
+an install must not crash the app), and every user on every device was told
+**"This device has no app installer."** A bug in the app, reported as a fact
+about their hardware.
+
+`UpdateFileProviderPathsTest` reads that XML and checks it against
+`UPDATE_DOWNLOAD_DIR`, so the pair cannot drift apart again.
+
+### Interrupted downloads continue
+
+The transfer writes `anisequel-<version_code>.apk.part` and only renames it into
+place once the bytes have been read back and vetted, so an interrupted transfer
+can never leave a truncated APK for the installer to choke on.
+
+It used to delete that `.part` on every failure and start again from zero. Now it
+asks for the rest:
+
+- a `206` continues from the bytes on disk, and the progress bar starts from
+  where the transfer is rather than from zero;
+- a `200` answering a ranged request means the server ignored the range and is
+  sending the whole file again — the `.part` is discarded and the transfer
+  restarts, because appending would produce a valid-looking zip of the wrong
+  bytes;
+- a `416` means the `.part` is longer than the file, so it cannot belong to this
+  asset; it is deleted and the single retry starts clean.
+
+`ApkDownloader` moves the bytes; `UpdateManager` judges them (zip magic, package
+name, signature) and is the only thing allowed to rename the file.
+
 ### What the updater will not do
 
 It cannot install without a user-visible confirmation — that has been true since
@@ -241,7 +283,7 @@ domain/      Use cases                             (pure logic, no Android)
 data/
   network/   Retrofit + OkHttp + GraphQL + coalescing
   repository/ AniListRepository, AuthRepository, DataStore preferences
-  update/    UpdateManager, UpdateManifest, manifest result types
+  update/    UpdateManager (check + verify), ApkDownloader (transfer), UpdateManifest
 ui/components/update/   controller, states, dialogs, permission handling
 ```
 

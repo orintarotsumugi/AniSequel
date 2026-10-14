@@ -15,6 +15,23 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
+ * The subdirectory of the app's own storage that holds downloaded releases.
+ *
+ * Top level rather than tucked into the class because it is a *contract*, not an
+ * implementation detail: `res/xml/update_file_paths.xml` has to publish the same
+ * directory through the `FileProvider`, because the system installer is handed a
+ * `content://` URI and runs as a different app that cannot read this app's
+ * storage directly. When the downloads moved out of `cacheDir` (#61) the
+ * provider's paths did not follow them, `getUriForFile` threw on the downloaded
+ * APK, and every update ended on "This device has no app installer" - on phones
+ * with a working package installer.
+ *
+ * `UpdateFileProviderPathsTest` compares this against that XML, so the two
+ * cannot drift apart again without a test going red.
+ */
+internal const val UPDATE_DOWNLOAD_DIR = "updates"
+
+/**
  * Fetches the published update manifest, downloads a release, and vets the file
  * it produced.
  *
@@ -22,7 +39,7 @@ import java.util.concurrent.TimeUnit
  *
  * There is no updater library here, deliberately. The only job is: fetch a
  * small JSON file, compare one integer against `BuildConfig.VERSION_CODE`, and
- * stream a ~2.5 MB APK into the cache directory. A library would add a
+ * stream a ~2.5 MB APK into a file of the app's own. A library would add a
  * dependency and a Play Services requirement for that, and the app is
  * deliberately not on the Play Store - which is also why the install handoff
  * uses `ACTION_VIEW` on a `FileProvider` URI rather than Play Core's in-app
@@ -37,13 +54,20 @@ import java.util.concurrent.TimeUnit
  *
  * ## What this no longer does
  *
- * The permission check, the Settings hand-off and the installer intents used to
- * live here too. They moved to `UpdateInstallation` in the presentation layer,
- * because they are all about *this device's* UI and none of them are about
- * fetching or verifying a release - and because the order they have to be
- * called in is the actual logic of the install flow, which is easier to read
- * when the order is the file's shape. What stays here is everything that is
- * true regardless of which device is asking.
+ * Two things, both of which used to be here and neither of which is about
+ * deciding whether a release may be installed:
+ *
+ *  - The transfer. [ApkDownloader] writes the `.part` file and continues one
+ *    that is already there; this class still decides what those bytes are worth.
+ *  - The permission check, the Settings hand-off and the installer intents. They
+ *    moved to `UpdateInstallation` in the presentation layer, because they are all
+ *    about *this device's* UI and none of them are about fetching or verifying a
+ *    release - and because the order they have to be called in is the actual logic
+ *    of the install flow, which is easier to read when the order is the file's
+ *    shape.
+ *
+ * What stays here is everything that is true regardless of which device is
+ * asking.
  */
 open class UpdateManager(private val context: Context) {
 
@@ -56,6 +80,14 @@ open class UpdateManager(private val context: Context) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    /**
+     * The bytes, as opposed to the judgement.
+     *
+     * Held rather than constructed per download so the connection pool and the
+     * thread pool are the ones configured above, not a fresh pair per press.
+     */
+    private val downloader = ApkDownloader(client)
 
     /**
      * Asks GitHub whether something newer exists.
@@ -118,174 +150,110 @@ open class UpdateManager(private val context: Context) {
     }
 
     /**
-     * Streams the APK into the cache directory.
+     * Fetches the release into the app's own storage, then vets it.
      *
-     * Writes to a `.part` file and renames on completion, so a download
-     * interrupted by a phone call or a process death cannot leave a truncated
-     * APK behind that a later run would happily hand to the package installer -
-     * which fails with an opaque `INSTALL_PARSE_FAILED_NO_CERTIFICATES` or, worse,
-     * appears to succeed.
+     * The transfer is [ApkDownloader]'s: it writes a `.part` file, continuing
+     * one that is already there, and this method is what decides whether those
+     * bytes are an installable APK.
+     *
+     * ## The `.part` file is the point
+     *
+     * Nothing renames a `.part` into its final name until it has been read back
+     * and checked, so a transfer interrupted by a phone call, a process death or
+     * a lift cannot leave a truncated APK behind for a later run to hand to the
+     * package installer - which fails with an opaque
+     * `INSTALL_PARSE_FAILED_NO_CERTIFICATES`, or worse, appears to succeed.
+     *
+     * And it is *kept*, rather than deleted on every failure, because it is a
+     * valid prefix of the same asset: the next press asks for the rest of it
+     * instead of fetching the first 2.6 MB again. The one thing that does throw
+     * the file away is [verifyAndInstall] refusing it - at that point the bytes
+     * are not a prefix of anything installable, and resuming onto them would
+     * only produce a file that fails the same check with more of itself.
      */
     open suspend fun download(
         manifest: UpdateManifest,
         onProgress: (bytesRead: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): UpdateDownloadResult = withContext(Dispatchers.IO) {
-        val url = manifest.downloadUrl.orEmpty()
-        if (url.isBlank()) {
-            return@withContext UpdateDownloadResult.Failed("That release has no download.")
-        }
+        val directory = downloadDirectory()
+        val target = targetFileFor(directory, manifest)
+        val partFile = File(directory, "${target.name}.part")
 
         try {
-            val request = Request.Builder().url(url).build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext UpdateDownloadResult.Failed(
-                        "The download failed (${response.code})."
-                    )
-                }
-
-                val body = response.body ?: return@withContext UpdateDownloadResult.Failed(
-                    "The download came back empty."
-                )
-
-                // Bounded: the manifest declares a size and it matched in every
-                // release so far. A wildly larger body means the URL is not
-                // serving an APK, and writing it to disk would fill the user's
-                // storage on a download they never asked for.
-                val declaredSize = manifest.sizeBytes ?: 0L
-                if (declaredSize > 0 && body.contentLength() > declaredSize * 2) {
-                    return@withContext UpdateDownloadResult.Failed(
-                        "The download was much larger than expected. Skipped."
-                    )
-                }
-
-                val sizeLimit = if (declaredSize > 0) declaredSize * 2 else Long.MAX_VALUE
-
-                var partial: File? = null
-                try {
-                    val directory = downloadDirectory()
-                    val target = targetFileFor(directory, manifest)
-                    val partFile = File(directory, "${target.name}.part")
-                    partial = partFile
-
-                    body.byteStream().use { input ->
-                        partFile.outputStream().use { output ->
-                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                            val total = body.contentLength().takeIf { it > 0 } ?: declaredSize
-                            var read: Long = 0
-                            var lastReported: Long = 0
-
-                            // The pre-check above is a fast reject, but it compares against
-                            // `contentLength()`, which is -1 for chunked transfer
-                            // and then never fails. The bound is enforced here
-                            // too, on bytes actually read, so a body without a
-                            // Content-Length header cannot grow without limit.
-                            while (true) {
-                                val count = input.read(buffer)
-                                if (count == -1) break
-                                read += count
-                                if (read > sizeLimit) {
-                                    partFile.delete()
-                                    return@withContext UpdateDownloadResult.Failed(
-                                        "The download was much larger than expected. Skipped."
-                                    )
-                                }
-                                output.write(buffer, 0, count)
-                                // Throttled, not per-read. Every callback here
-                                // writes Compose state and recomposes the
-                                // progress bar, and the default buffer is 8 KB:
-                                // a 2.5 MB APK is ~325 of them, each one
-                                // recomposing the whole dialog for a change no
-                                // eye can see. A step per 32 KB is still ~80
-                                // updates on a real download - smooth to watch,
-                                // and a quarter of the work.
-                                //
-                                // The last one is always emitted, so the bar
-                                // cannot be left short of 100% by rounding.
-                                if (read - lastReported >= PROGRESS_STEP_BYTES) {
-                                    lastReported = read
-                                    onProgress(read, total)
-                                }
-                            }
-
-                            // The last update is emitted unconditionally, so a body that
-                            // stops short of the next 32 KB step cannot leave
-                            // the bar showing 97%.
-                            if (read >= lastReported) {
-                                lastReported = read
-                                onProgress(read, read)
-                            }
-
-                            output.flush()
-                        }
-                    }
-
-                    // A 200 response is not proof the body is an APK. A redirect
-                    // that lands on an HTML error page, or a rate-limit notice,
-                    // is still a successful HTTP response, and the size guard
-                    // above only catches bodies that are too *large* - so that
-                    // page would be written out as anisequel-<version>.apk and
-                    // handed to the package installer, which fails with an
-                    // opaque parse error and nothing on screen to explain it.
-                    // Every APK is a zip and every zip opens with a local file
-                    // header, so four bytes are enough to tell them apart.
-                    val looksLikeApk = partFile.inputStream().use { stream ->
-                        val magic = ByteArray(4)
-                        stream.read(magic) == 4 &&
-                            magic[0] == 0x50.toByte() &&
-                            magic[1] == 0x4B.toByte() &&
-                            magic[2] == 0x03.toByte() &&
-                            magic[3] == 0x04.toByte()
-                    }
-
-                    if (!looksLikeApk) {
-                        partFile.delete()
-                        return@withContext UpdateDownloadResult.Failed(
-                            "That download was not an APK, so nothing was installed."
-                        )
-                    }
-
-                    // Being a zip is not the same as being *our* app. Until this
-                    // existed, whatever the URL served was handed straight to the
-                    // package installer: a release asset replaced at the CDN, a
-                    // hijacked mirror, or a future mistake in the manifest's
-                    // download_url would all install, and the failure mode is a
-                    // successful install of someone else's code.
-                    //
-                    // Android will not let a different key update an existing
-                    // app, so this mostly protects against a first install from
-                    // a tampered manifest rather than a silent upgrade - but it
-                    // also catches a mismatched build *before* the user reaches a
-                    // system dialog that says only "App not installed".
-                    if (!isSignedByThisApp(partFile)) {
-                        partFile.delete()
-                        return@withContext UpdateDownloadResult.Failed(
-                            "That APK is not signed with AniSequel's key, so it was not " +
-                                "installed. The release may have been tampered with."
-                        )
-                    }
-
-                    if (!partFile.renameTo(target)) {
-                        partFile.delete()
-                        return@withContext UpdateDownloadResult.Failed(
-                            "Could not save the download."
-                        )
-                    }
-
-                    UpdateDownloadResult.Success(target, manifest)
-                } catch (e: Exception) {
-                    partial?.delete()
-                    throw e
-                }
+            when (val transfer = downloader.transfer(manifest, partFile, onProgress)) {
+                is TransferResult.Failed -> UpdateDownloadResult.Failed(transfer.reason)
+                is TransferResult.Completed -> verifyAndInstall(partFile, target, manifest)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            // The `.part` deliberately survives an unexpected failure too: it is
+            // still a valid prefix of the release, and this is the path the
+            // download never used to take (it deleted whatever was on disk).
             UpdateDownloadResult.Failed(
-                e.message?.takeIf { it.isNotBlank() } ?: "The download failed. Check your connection."
+                e.message?.takeIf { it.isNotBlank() }
+                    ?: "The download failed. Check your connection."
             )
         }
+    }
+
+    /**
+     * Reads the finished `.part` back and only then lets it have a real name.
+     *
+     * Every failure below deletes the file rather than leaving it. That is the
+     * opposite of what [download] does with a *transfer* failure, and it is the
+     * right way round: these are not "not enough bytes yet", they are "these
+     * bytes are not the release", and the next attempt has to start from
+     * nothing or it would append a good APK onto them.
+     */
+    private fun verifyAndInstall(
+        partFile: File,
+        target: File,
+        manifest: UpdateManifest
+    ): UpdateDownloadResult {
+        // A 200 response is not proof the body is an APK. A redirect that lands
+        // on an HTML error page, or a rate-limit notice, is still a successful
+        // HTTP response, and the size guard catches only bodies that are too
+        // *large* - so that page would otherwise be written out as
+        // anisequel-<version>.apk and handed to the package installer, which
+        // fails with an opaque parse error and nothing on screen to explain it.
+        // Every APK is a zip and every zip opens with a local file header, so
+        // four bytes are enough to tell them apart.
+        if (!looksLikeApk(partFile)) {
+            partFile.delete()
+            return UpdateDownloadResult.Failed(
+                "That download was not an APK, so nothing was installed."
+            )
+        }
+
+        // Being a zip is not the same as being *our* app. Until this existed,
+        // whatever the URL served was handed straight to the package installer:
+        // a release asset replaced at the CDN, a hijacked mirror, or a future
+        // mistake in the manifest's download_url would all install, and the
+        // failure mode is a successful install of someone else's code.
+        //
+        // Android will not let a different key update an existing app, so this
+        // mostly protects against a first install from a tampered manifest rather
+        // than a silent upgrade - but it also catches a mismatched build *before*
+        // the user reaches a system dialog that says only "App not installed".
+        //
+        // It is also the last line of defence for a resumed download: a `.part`
+        // and a body that came from different versions of the same asset can
+        // produce a file that is a perfectly good zip and the wrong APK.
+        if (!isSignedByThisApp(partFile)) {
+            partFile.delete()
+            return UpdateDownloadResult.Failed(
+                "That APK is not signed with AniSequel's key, so it was not " +
+                    "installed. The release may have been tampered with."
+            )
+        }
+
+        if (!partFile.renameTo(target)) {
+            partFile.delete()
+            return UpdateDownloadResult.Failed("Could not save the download.")
+        }
+
+        return UpdateDownloadResult.Success(target, manifest)
     }
 
     /**
@@ -315,19 +283,27 @@ open class UpdateManager(private val context: Context) {
         val file = targetFileFor(downloadDirectory(), manifest)
         if (!file.isFile || file.length() <= 0L) return null
 
-        val looksLikeApk = runCatching {
-            file.inputStream().use { stream ->
-                val magic = ByteArray(4)
-                stream.read(magic) == 4 &&
-                    magic[0] == 0x50.toByte() &&
-                    magic[1] == 0x4B.toByte() &&
-                    magic[2] == 0x03.toByte() &&
-                    magic[3] == 0x04.toByte()
-            }
-        }.getOrDefault(false)
-
-        return file.takeIf { looksLikeApk }
+        return file.takeIf { looksLikeApk(it) }
     }
+
+    /**
+     * Whether [apk] begins with a zip local file header.
+     *
+     * Every APK is a zip, and a truncated or refused download is the other thing
+     * that ends up at this path - so this is asked of the same bytes twice, in
+     * two places that must not drift: once before a file is accepted as a
+     * finished download, and once when it is offered as an installable one.
+     */
+    private fun looksLikeApk(apk: File): Boolean = runCatching {
+        apk.inputStream().use { stream ->
+            val magic = ByteArray(4)
+            stream.read(magic) == 4 &&
+                magic[0] == 0x50.toByte() &&
+                magic[1] == 0x4B.toByte() &&
+                magic[2] == 0x03.toByte() &&
+                magic[3] == 0x04.toByte()
+        }
+    }.getOrDefault(false)
 
     /**
      * Where the APK for a release is written.
@@ -363,9 +339,23 @@ open class UpdateManager(private val context: Context) {
      * It would also have been wrong for a subtler reason: "did we already
      * download this?" is answered entirely by the file still being there, so
      * any directory the system may empty turns that answer into a lie.
+     *
+     * ## The other half of this decision
+     *
+     * This directory has to be reachable by the `FileProvider` in
+     * `res/xml/update_file_paths.xml`, because the system installer is handed a
+     * `content://` URI rather than a path - it runs as a different app and
+     * cannot read this app's storage directly. When the move from `cacheDir` to
+     * `filesDir` happened, the provider's paths did not follow it, and
+     * `getUriForFile` threw on the downloaded APK at the moment the user pressed
+     * Install. That throw was swallowed into "This device has no app installer",
+     * which is how a working phone ended up being reported as broken.
+     *
+     * `UpdateFileProviderPathsTest` is what stops the two halves drifting again:
+     * it reads that XML and checks it against [UPDATE_DOWNLOAD_DIR].
      */
     private fun downloadDirectory(): File =
-        File(context.filesDir, DOWNLOAD_DIR).apply { mkdirs() }
+        File(context.filesDir, UPDATE_DOWNLOAD_DIR).apply { mkdirs() }
 
     /**
      * Whether [apk] is signed by AniSequel's official key or matches the running app's key.
@@ -506,22 +496,13 @@ open class UpdateManager(private val context: Context) {
      * and is about to install. Null when there was none.
      */
     open fun clearDownloadedApk(keep: File? = null) {
-        val directory = File(context.filesDir, DOWNLOAD_DIR)
+        val directory = File(context.filesDir, UPDATE_DOWNLOAD_DIR)
         directory.listFiles()?.forEach { file ->
             if (keep == null || file.absolutePath != keep.absolutePath) file.delete()
         }
     }
 
     private companion object {
-        const val DOWNLOAD_DIR = "updates"
-
-        /**
-         * How many bytes must land before the progress bar is told about them.
-         *
-         * 32 KB: about eighty updates across a real APK, which animates
-         * smoothly, against three hundred for an unthrottled per-read callback.
-         */
-        const val PROGRESS_STEP_BYTES = 32L * 1024
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
         const val OFFICIAL_SIGNER_SHA256 = "01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82"
     }

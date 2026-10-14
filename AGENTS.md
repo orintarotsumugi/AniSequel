@@ -158,6 +158,15 @@ GitHub does not run workflows for `GITHUB_TOKEN` pushes.
   told when the user flips a switch in another app's Settings screen.
 - **Cache APKs by release version** (`UpdateManager.downloadedApkFor`), so the
   Settings round trip costs one download instead of two.
+- **The download directory and the `FileProvider` paths are one contract.**
+  `res/xml/update_file_paths.xml` has to publish the directory `UpdateManager`
+  writes into, or `getUriForFile` throws and every install ends on "This device
+  has no app installer". Moving one without the other compiles, lints and
+  ships - the only evidence is a message blaming the user's phone.
+- **A `.part` file survives a failed transfer.** It is the valid prefix of the
+  release and `ApkDownloader` continues from it; only a file that fails
+  verification is thrown away, because those bytes are not a prefix of anything
+  installable.
 - **Compare `version_code`, never the version string.** "1.0.9" sorts above
   "1.0.10"; the code is the GitHub run number and is monotonic by construction.
 - **Verify before installing**: zip magic, matching package name, and a signature

@@ -9,6 +9,7 @@ import com.anisequel.data.update.UpdateManifest
 import com.anisequel.ui.components.update.UpdateController
 import com.anisequel.ui.components.update.UpdateInstallation
 import com.anisequel.ui.components.update.UpdateUiState
+import com.anisequel.ui.components.update.InstallerLaunch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -85,7 +86,7 @@ class UpdateDownloadStateTest {
     private fun grantingInstallation(): UpdateInstallation =
         object : UpdateInstallation(context) {
             override fun canInstallPackages(): Boolean = true
-            override fun openInstaller(apk: File): Boolean = true
+            override fun openInstaller(apk: File): InstallerLaunch = InstallerLaunch.Opened
             override fun openInstallPermissionSettings(): Boolean = true
             override fun openReleasePage(url: String?): Boolean = true
         }
@@ -143,7 +144,7 @@ class UpdateDownloadStateTest {
                 managerReporting(alreadyThere),
                 object : UpdateInstallation(context) {
                     override fun canInstallPackages(): Boolean = false
-                    override fun openInstaller(apk: File): Boolean = true
+                    override fun openInstaller(apk: File): InstallerLaunch = InstallerLaunch.Opened
                     override fun openInstallPermissionSettings(): Boolean = true
                     override fun openReleasePage(url: String?): Boolean = true
                 }
@@ -203,6 +204,85 @@ class UpdateDownloadStateTest {
                 cleared
             )
             assertEquals(null, kept)
+        }
+    }
+
+    /**
+     * An installer that will not open, and how the updater reports it.
+     *
+     * This is the flow behind the message every user of #61 saw - "This device
+     * has no app installer" - on phones that install apps perfectly well. Two
+     * things were wrong with it, and both are pinned here:
+     *
+     *  - the message blamed the device for a failure inside this app, and
+     *  - reporting it *replaced* the state, so the downloaded APK was dropped out
+     *    of the UI entirely and the only way back to it was a re-check.
+     */
+    @Test
+    fun `a failed launch keeps the downloaded apk and says what failed`() {
+        val alreadyThere = File("anisequel-9999.apk")
+
+        val refusing = object : UpdateInstallation(context) {
+            override fun canInstallPackages(): Boolean = true
+            override fun openInstaller(apk: File): InstallerLaunch = InstallerLaunch.CouldNotOpen
+            override fun openInstallPermissionSettings(): Boolean = true
+            override fun openReleasePage(url: String?): Boolean = true
+        }
+
+        runTest(dispatcher) {
+            val controller = UpdateController(managerReporting(alreadyThere), refusing)
+
+            controller.check()
+            advanceUntilIdle()
+            controller.install()
+
+            val state = controller.state
+            val ready = state as? UpdateUiState.ReadyToInstall
+
+            assertTrue(
+                "the apk is downloaded and still on disk, so the state must stay " +
+                    "ReadyToInstall rather than becoming Failed. Was $state",
+                ready != null
+            )
+            assertEquals(
+                "the file must still be in the state, or the UI has nothing to " +
+                    "retry with",
+                alreadyThere,
+                ready?.file
+            )
+            assertTrue(
+                "a launch that did not open has to say so. Expected a notice, " +
+                    "got ${ready?.notice}",
+                ready?.notice != null
+            )
+        }
+    }
+
+    @Test
+    fun `a successful launch reports no problem`() {
+        val alreadyThere = File("anisequel-9999.apk")
+
+        runTest(dispatcher) {
+            val controller = UpdateController(
+                managerReporting(alreadyThere),
+                grantingInstallation()
+            )
+
+            controller.check()
+            advanceUntilIdle()
+            controller.install()
+
+            val ready = controller.state as? UpdateUiState.ReadyToInstall
+
+            assertTrue(
+                "expected ReadyToInstall but was ${controller.state}",
+                ready != null
+            )
+            assertEquals(
+                "a launcher that opened has nothing to apologise for",
+                null,
+                ready?.notice
+            )
         }
     }
 }

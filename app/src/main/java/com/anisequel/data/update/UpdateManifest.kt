@@ -112,3 +112,19 @@ fun formatBytes(bytes: Long?): String {
     if (kb < 1024) return String.format("%.0f KB", kb)
     return String.format("%.1f MB", kb / 1024.0)
 }
+
+/**
+ * Human-readable speed, for the download line.
+ *
+ * Empty rather than "0 B/s" when there is no reading yet. The two are different
+ * things to read - "not moving" is worth waiting out, "we do not know yet" is
+ * the first second of every transfer - and printing a rate that is really just
+ * an absence of one would tell the user their download had stopped.
+ *
+ * A byte counter over a second is too small to be worth reading, so it is
+ * reported in KB; there is no number to show below that which is not noise.
+ */
+fun formatRate(bytesPerSecond: Long?): String {
+    if (bytesPerSecond == null || bytesPerSecond < 1024) return ""
+    return "${formatBytes(bytesPerSecond)}/s"
+}
