@@ -330,6 +330,26 @@ bounded `TierUndoStack`. A change that does not change anything is reported as o
 and writes nothing, so a drag that puts a title back where it was cannot reorder
 the library by "recently edited".
 
+#### The detail sheet's editor (`ui/components/detail/`)
+
+The sheet's third tab edits the *viewer's own* AniList entry, and it is the only
+place in the app that writes to the list outside the two quick-add buttons. Three
+decisions hold it together:
+
+- **`EntryEditor` is a parameter, and `null` means the tab does not exist.**
+  `DashboardViewModel` implements the interface for the signed-in viewer; a
+  scanned profile passes nothing, because the entry on screen is somebody else's.
+  Drawing an editor that cannot save was the alternative, and it is
+  indistinguishable from a working one until it silently does nothing.
+- **The draft lives in the tab, not the ViewModel.** Nothing outside the tab
+  renders an in-progress edit, so hoisting it would make every owner of the sheet
+  carry a saving flag and an error string it never reads.
+- **One write, on one button.** Every control moves the local draft; only "Save
+  changes" sends `SaveMediaListEntry`, and it sends the whole form - see
+  `MediaEntryEdit.toSaveVariables` for the arguments that must be *absent* rather
+  than null. `save` and `delete` both reload the dashboard, because "Currently
+  arriving" and every count on the screen are derived from the list.
+
 #### Foreground Staleness Observer (`ListFreshnessWatch.kt`)
 `ListFreshnessWatch` works with `LifecycleResumeEffect` in `DashboardScreen`:
 - Evaluates staleness on every `ON_RESUME` event.
@@ -503,6 +523,8 @@ The codebase includes an extensive JVM unit test suite running on Gradle (`./gra
 | `ExpressiveShapesTest` | Verifies capsule shape math avoiding stretched polygon distortions. |
 | `AniListMarkdownTest` | Bio Markdown constructs, including the AniList-specific ones (`~~~centred~~~`, parenthesised embeds, `===` headings) and the URL/mention boundaries. |
 | `UserOverviewLoadOrderTest` | The profile is published before the media list arrives and clears `isLibraryLoading` when it lands - or when it fails. |
+| `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variable declarations it needs, and why every alias is resolved through a `Page` rather than the `Media` root field. |
+| `MediaEntryEditorTest` | The entry editor's writes: the score scale is not rescaled, volumes read are carried through, and no numeric argument is ever sent as null. |
 | `TierListSerialisationTest` | The tier list's on-disk format: tiers, placements, documents, the id index, and the escaping that lets a tier be named with a comma. |
 | `TierListPlacementTest` | Where a dropped tile lands, including that the anchor tile is excluded from its own placement search; the live-tier invariant. |
 | `TierListDocumentTest` | Library rules: name numbering, id uniqueness, which list is offered to carry on with, and the bounded undo stack. |

@@ -1,7 +1,9 @@
 package com.example
 
 import com.example.data.model.GraphQLResponse
+import com.example.data.model.MediaCoverPage
 import com.example.data.model.MediaListCollectionData
+import com.example.data.model.MediaNode
 import com.example.data.model.UserByNameData
 import com.example.data.model.ViewerData
 import com.squareup.moshi.Moshi
@@ -229,5 +231,65 @@ class AniListJsonTest {
         val unknown = entries[1].media.relations!!.edges!!.single().node
         assertNull(unknown.season)
         assertNull(unknown.seasonYear)
+    }
+
+    /**
+     * The batched cover response: a runtime-keyed map of aliases, each a `Page`.
+     *
+     * This is the one place in the app where a response's *shape* is built at
+     * request time - `m0`, `m1`, ... - and read back by name, so it is the one
+     * place where the generated adapter for a `Map` and the generic unwrapping of
+     * [GraphQLResponse] have to agree without the compiler ever seeing the map.
+     *
+     * The empty `media` list is the important half. It is what a bio link to a
+     * media that no longer exists answers, and the whole reason the query goes
+     * through `Page` is that the `Media` root field answers the same thing with a
+     * **404** instead - which failed the entire batch and left every poster in the
+     * card on its placeholder. See [MediaCoverPage].
+     */
+    @Test
+    fun `a cover batch with an id that resolves to nothing still parses the rest`() {
+        val json = """
+            {
+              "data": {
+                "m0": { "media": [] },
+                "m1": {
+                  "media": [
+                    {
+                      "id": 128893,
+                      "type": "ANIME",
+                      "title": { "romaji": "Jigokuraku", "english": "Hell's Paradise" },
+                      "coverImage": { "extraLarge": "https://s4.anilist.co/file/cover/xl.jpg" },
+                      "siteUrl": "https://anilist.co/anime/128893"
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val responseType = Types.newParameterizedType(
+            GraphQLResponse::class.java,
+            Types.newParameterizedType(Map::class.java, String::class.java, MediaCoverPage::class.java)
+        )
+        val response = moshi.adapter<GraphQLResponse<Map<String, MediaCoverPage>>>(responseType)
+            .fromJson(json)!!
+
+        assertNull(response.errors)
+        val byAlias = response.data!!
+        assertEquals(2, byAlias.size)
+
+        // An id with no media is an empty list, not a failed request, and not a
+        // map entry that throws on the way out.
+        assertEquals(emptyList<MediaNode>(), byAlias["m0"]?.media)
+
+        // The alias beside it keeps its poster, which is the whole point.
+        val resolved = byAlias["m1"]?.media?.firstOrNull()
+        assertNotNull(resolved)
+        assertEquals(
+            "https://s4.anilist.co/file/cover/xl.jpg",
+            resolved?.coverImage?.bestUrl
+        )
+        assertEquals("Hell's Paradise", resolved?.title?.english)
     }
 }

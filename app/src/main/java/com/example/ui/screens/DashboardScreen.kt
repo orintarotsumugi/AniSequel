@@ -38,8 +38,8 @@ import com.example.ui.components.AniTopAppBar
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.FilterSortSheet
 import com.example.ui.components.QuickFilterBar
-import com.example.ui.components.SequelCard
-import com.example.ui.components.SequelDetailSheet
+import com.example.ui.components.cards.SequelCard
+import com.example.ui.components.detail.SequelDetailSheet
 import com.example.ui.components.StatsBanner
 import com.example.ui.components.detail.AnimeDetailSubject
 import com.example.ui.components.detail.toDetailMedia
@@ -359,6 +359,10 @@ fun DashboardScreen(
     }
 
     if (selectedSubject != null) {
+        // One answer for both the write flag and the editor, so the sheet cannot
+        // be told writes are unavailable while still being handed the tab that
+        // writes - or the reverse, a live editor hidden behind a false flag.
+        val canWrite = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
         SequelDetailSheet(
             subject = selectedSubject,
             sheetState = detailSheetState,
@@ -372,7 +376,8 @@ fun DashboardScreen(
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { dashboardViewModel.loadDetail(it) },
             isDetailLoading = isDetailLoading,
-            canWriteToAniList = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
+            canWriteToAniList = canWrite,
+            entryEditor = if (canWrite) dashboardViewModel else null
         )
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiPeople
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -113,6 +116,14 @@ object AppVectorIcons {
     val NewList = Icons.Default.Add
     val ExpandMore = Icons.Default.ExpandMore
     val ExpandLess = Icons.Default.ExpandLess
+
+    // The entry editor's own controls. The stepper pair is named for the
+    // direction it moves a number rather than for the glyph, so a redraw cannot
+    // silently swap them.
+    val StepUp = Icons.Default.Add
+    val StepDown = Icons.Default.Remove
+    val Privacy = Icons.Default.Lock
+    val EditEntry = Icons.Default.Edit
 
     // The profile screen's four destinations. Every one is named for what the
     // destination *is*, and each of the four was picked because it cannot be

@@ -1,5 +1,7 @@
 package com.example.domain.tier
 
+import java.util.Locale
+
 /**
  * One saved tier list, as a thing with a name and an identity of its own.
  *
@@ -54,10 +56,13 @@ data class TierListDocument(
  * everybody except this function.
  */
 fun defaultTierListName(existingNames: Collection<String>): String {
-    val taken = existingNames.map { it.trim().lowercase() }.toSet()
-    if (TIER_LIST_BASE_NAME.lowercase() !in taken) return TIER_LIST_BASE_NAME
+    // Locale.ROOT so "Tier List" and "TIER LIST" compare equal on every device;
+    // a locale that lowercases I differently would let two lists that read as
+    // the same name both be created.
+    val taken = existingNames.map { it.trim().lowercase(Locale.ROOT) }.toSet()
+    if (TIER_LIST_BASE_NAME.lowercase(Locale.ROOT) !in taken) return TIER_LIST_BASE_NAME
     var suffix = 2
-    while ("${TIER_LIST_BASE_NAME.lowercase()} $suffix" in taken) suffix++
+    while ("${TIER_LIST_BASE_NAME.lowercase(Locale.ROOT)} $suffix" in taken) suffix++
     return "$TIER_LIST_BASE_NAME $suffix"
 }
 

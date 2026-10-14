@@ -39,6 +39,10 @@ in-app updater.
   artwork where a shape earns its keep, dynamic colour — drawn from the
   wallpaper, or from an anime's cover art when you view it — and six theme
   palettes.
+- **Edit your own entry.** The detail sheet's third tab moves a title between
+  Watching, Reading, Rewatching, Completed, Planning, Paused and Dropped, sets
+  progress, score and both dates, and marks the entry private — staged locally
+  and sent as one write, so nothing reaches AniList until "Save changes".
 - **Self-contained updater.** No update library and no Play Services.
 
 ### The profile screen
@@ -61,7 +65,9 @@ what the screen reads.
 **Bios** are AniList-flavoured Markdown, rendered by
 `ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
 spoilers (`~!like this!~`), inline GIFs, `~~~a centred line~~~`, AniList links
-lifted into cover cards, and images. Two deliberate gaps: tables and
+lifted into cover cards, and images. A bio's cover cards cost **one** request:
+see `MediaCoversQueryTest` for why that document asks through a `Page`, and what
+used to make AniList reject it. Two deliberate gaps: tables and
 `(video)`-style embeds are only partly AniList-documented, so they are parsed
 conservatively, and underline has no working AniList syntax (`<u>` is accepted
 anyway rather than dropped, since dropping it would print the tag).
@@ -364,6 +370,8 @@ BOM. This is not inertia:
 | `RefreshIntervalPreferencesTest` | The interval survives storage and reaches the repository |
 | `AniListMarkdownTest` | Bio Markdown: which constructs parse, and which of them AniList writes differently from GFM |
 | `UserOverviewLoadOrderTest` | The profile is published before the media list lands, and says so while it waits |
+| `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variable declarations it needs, and why every alias goes through a `Page` |
+| `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
 | `AuthRedirectTest`, `AniListOAuthTest` | OAuth redirect and token handling |
 
 `test` is a **gate**; `lintRelease` is not (`abortOnError = false` in
@@ -379,6 +387,14 @@ than claiming otherwise).
   regression. The rule AGP applies is `minSdk >= 28`, so raising the floor to 31
   does not bring it back — but nothing about that is obvious, which is why the
   test reads `build.gradle.kts` rather than the build output.
+- **`MediaCoversQueryTest`** — every AniList preview card in every bio showed the
+  placeholder icon and no poster, and it did so from the day the feature shipped.
+  The batched cover document declared its variables as `id0: Int` while using
+  them as `$id0`, so AniList answered the whole thing with HTTP 400 - and the
+  assertion that should have caught it asserted the broken spelling instead. The
+  suite now also pins the reason each alias is resolved through a `Page`: the
+  same request written against the `Media` root field answers **404** as soon as
+  one linked id has no media, which blanked every other card in the bio.
 - **`VersionBaselineTest`** — the version lives in three places, and two of them
   used to drift apart silently.
 - **`KeystoreIntegrityTest`** — see below.

@@ -179,9 +179,11 @@ class RefreshIntervalPreferences(private val context: Context) {
     /** The current window, for callers that cannot suspend. See the class comment. */
     fun currentStalenessMillis(): Long = cachedInterval.staleAfterMillis
 
-    suspend fun setInterval(interval: RefreshInterval) {
+    // `newInterval`, not `interval`: the property of that name is the Flow above,
+    // and shadowing it here reads as a call the function might have made itself.
+    suspend fun setInterval(newInterval: RefreshInterval) {
         context.refreshIntervalDataStore.edit { preferences ->
-            preferences[KEY_INTERVAL] = interval.storageValue
+            preferences[KEY_INTERVAL] = newInterval.storageValue
         }
     }
 

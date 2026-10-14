@@ -6,14 +6,13 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.1.9"
-val BASELINE_VERSION_CODE = 149
+val BASELINE_VERSION_NAME = "1.2.0"
+val BASELINE_VERSION_CODE = 150
 
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
-  alias(libs.plugins.secrets)
 }
 
 android {
@@ -150,30 +149,11 @@ android {
   }
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-  ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
-}
-
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
-//
-// Anything commented out here also stops reaching the APK: an `implementation`
-// line for a library the code never imports still gets dexed and packaged,
-// which is why Firebase and Room are no longer listed as live dependencies.
-// Neither has a single import in app/src/main - the AniList client is built on
-// Retrofit + Moshi + Coil alone.
+// The AniList client is built on Retrofit + Moshi + Coil alone; the app has no
+// Firebase, Room, Camera or Play Services dependency.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
-  // implementation(libs.androidx.camera.camera2)
-  // implementation(libs.androidx.camera.core)
-  // implementation(libs.androidx.camera.lifecycle)
-  // implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   // material-icons-extended ships ~30,000 icon classes; R8 prunes the ones this
   // app never draws, which is why shrinking is enabled above. Dropping the
@@ -192,31 +172,14 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
-  // implementation(libs.androidx.room.ktx)
-  // implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.coil.gif)
   implementation(libs.converter.moshi)
-  // implementation(platform(libs.firebase.bom))
-  // implementation(libs.firebase.ai)
-
-  // Uncomment to use Firestore:
-  // implementation(libs.firebase.firestore)
-
-  // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
-  // Sign-In via Credential Manager (and re-add the google-services plugin above):
-  // implementation(libs.firebase.auth)
-  // implementation(libs.androidx.credentials)
-  // implementation(libs.androidx.credentials.play.services)
-  // implementation(libs.googleid)
-  // implementation(libs.firebase.appcheck.recaptcha)
-  // debugImplementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
@@ -235,6 +198,5 @@ dependencies {
   // behind on it - so release builds still packaged the @Preview annotation and
   // its tooling support, for an app with zero @Preview functions in it.
   debugImplementation(libs.androidx.compose.ui.tooling.preview)
-  // "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }

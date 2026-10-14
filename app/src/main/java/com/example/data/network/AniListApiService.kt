@@ -3,11 +3,14 @@ package com.example.data.network
 import com.example.data.model.ActivityDetailData
 import com.example.data.model.ActivityFeedData
 import com.example.data.model.ActivityLikesData
+import com.example.data.model.DeleteMediaListEntryData
 import com.example.data.model.FollowersData
 import com.example.data.model.FollowingData
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
+import com.example.data.model.MediaCoverPage
 import com.example.data.model.MediaListCollectionData
+import com.example.data.model.MediaListEntryData
 import com.example.data.model.MediaDetailData
 import com.example.data.model.MediaNode
 import com.example.data.model.SaveActivityReplyData
@@ -46,6 +49,20 @@ interface AniListApiService {
         @Body request: GraphQLRequest
     ): GraphQLResponse<SaveMediaListEntryData>
 
+    /** The viewer's own list entry for one media. Read-only; the editor tab opens on it. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getMediaListEntry(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MediaListEntryData>
+
+    /** Removes one entry from the viewer's list. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun deleteMediaListEntry(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<DeleteMediaListEntryData>
+
     /** Fetches the fields the list query leaves out, for one entry only. */
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")
@@ -56,15 +73,19 @@ interface AniListApiService {
     /**
      * Cover art for many media in one round trip.
      *
-     * `Map<String, MediaNode>` rather than a generated class because the response
-     * keys are aliases the query builds at runtime (`m0`, `m1`, ...), so the
-     * shape of the answer is not known until the request is written.
+     * `Map<String, ...>` rather than a generated class because the response keys
+     * are aliases the query builds at runtime (`m0`, `m1`, ...), so the shape of
+     * the answer is not known until the request is written.
+     *
+     * The value is a `Page` because the same request written against the `Media`
+     * root field answers **404** - taking every cover in the bio with it - as soon
+     * as one id in the batch has no media. See [MediaCoverPage].
      */
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")
     suspend fun getMediaCovers(
         @Body request: GraphQLRequest
-    ): GraphQLResponse<Map<String, MediaNode>>
+    ): GraphQLResponse<Map<String, MediaCoverPage>>
 
     /** Bio, list statistics, favourites and aggregate stats. Profile screen only. */
     @POST("/")

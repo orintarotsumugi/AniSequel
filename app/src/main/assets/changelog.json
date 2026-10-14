@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.2.0",
+      "entries": [
+        {
+          "title": "AniList preview cards in a bio now show their poster",
+          "detail": "They never did. The one request that fetches the cover art for every card in a profile bio was built with an invalid variable declaration, so AniList rejected the whole document before answering it and not a single poster was ever downloaded - every card in every bio sat on its placeholder icon. Fixed, and checked against the live API rather than against the code that wrote it."
+        },
+        {
+          "title": "One dead link no longer blanks every poster in a bio",
+          "detail": "The cover request asked for each linked title on its own, and AniList answers a batch containing one media it cannot find with a 404 for the entire request - so a single link to a deleted entry, or to an id that belongs to the other media namespace, left every other card on the placeholder beside it. The batch now asks through a connection that filters, so a link that resolves to nothing costs only its own card."
+        },
+        {
+          "title": "Change a show's place on your list without leaving the app",
+          "detail": "The detail sheet has a third tab on your own account: move a title between Watching, Reading, Rewatching, Completed, Planning, Paused and Dropped, set how far into it you are, give it a score, set or clear either date, and mark the entry private. Nothing is written until you press Save changes, so one slip of a slider is not a request to AniList - and Delete takes the entry off your list."
+        },
+        {
+          "title": "Saving an anime no longer fails silently",
+          "detail": "The save sent the volume count as an explicit null, and AniList refuses that whole request - so every Save changes on a show was rejected and nothing was written. The argument is now left out entirely when there is no volume count, while progress and score are always sent as numbers."
+        },
+        {
+          "title": "Your score is kept in the scale you gave it",
+          "detail": "Scores are read and written exactly as AniList holds them. A hundred-point account opens on 85 out of 100 and saves 85, not 8 - the editor no longer rescales anything to a scale of ten, which would have quietly rewritten a score you never touched."
+        }
+      ]
+    },
+    {
       "version": "1.1.9",
       "entries": [
         {

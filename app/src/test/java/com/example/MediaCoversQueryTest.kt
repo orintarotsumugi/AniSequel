@@ -13,9 +13,12 @@ import org.junit.Test
  * ## Why this document has its own test
  *
  * It is the one query in the app whose *shape* is the feature. A bio's dozen
- * AniList links have to cost one request, which is why the `Media` root field is
- * aliased per entry rather than fetched one at a time - see
+ * AniList links have to cost one request, which is why each entry is its own
+ * aliased field rather than fetched one at a time - see
  * [GraphQLQueries.getMediaCoversQuery].
+ *
+ * The second thing its shape decides is whether one bad link takes the rest with
+ * it, which is what the `Page` wrapper below is about.
  *
  * It is also the one query that can silently return the **wrong entity**. AniList
  * media ids are unique only within a media type, so `Media(id: 1)` is ambiguous
@@ -52,7 +55,23 @@ class MediaCoversQueryTest {
 
         assertTrue(
             "AniList's type argument is a MediaType enum and must be declared as one",
-            query.contains("query MediaCovers(id0: Int, type0: MediaType")
+            query.contains("query MediaCovers(\$id0: Int, \$type0: MediaType")
+        )
+        // The sigil is not decoration. A declaration spelled `id0: Int` while the
+        // use site says `$id0` is a syntax error, and AniList answers the *whole*
+        // batch with **HTTP 400, "Expected $, found Name \"id0\""** - so no cover
+        // ever arrived and every card in every bio kept its placeholder, with no
+        // error on screen to say so. This assertion is the only one that could
+        // have caught it, and the version of it that read
+        // `contains("query MediaCovers(id0: Int")` asserted the broken spelling
+        // instead. Verified against the live API.
+        assertFalse(
+            "every variable declaration needs its `$` sigil",
+            Regex("""(?<!\$)id\d+: """).containsMatchIn(query)
+        )
+        assertFalse(
+            "the type declaration needs one too",
+            Regex("""(?<!\$)type\d+: """).containsMatchIn(query)
         )
         // Three entries, three declarations of each. A missing one is a document
         // AniList rejects outright, taking every poster in the bio with it.
@@ -79,12 +98,39 @@ class MediaCoversQueryTest {
         // entry, and the one answer is then drawn on both cards.
         val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 1))
 
-        assertTrue("the first entry is aliased", query.contains("m0: Media("))
-        assertTrue("the second entry is aliased", query.contains("m1: Media("))
+        assertTrue("the first entry is aliased", query.contains("m0: Page {"))
+        assertTrue("the second entry is aliased", query.contains("m1: Page {"))
         assertEquals(
             "two keys sharing an id must still be two aliased fields",
             2,
-            Regex("""m\d+: Media\(""").findAll(query).count()
+            Regex("""m\d+: Page \{""").findAll(query).count()
+        )
+    }
+
+    @Test
+    fun `one unresolvable id cannot fail the whole batch`() {
+        // Verified against the live API rather than reasoned about. Written as
+        // `m0: Media(id: $id0, type: $type0)` - which is what this document was -
+        // a batch containing an id with no media answers **HTTP 404** with
+        // `errors: ["Not Found."]`, and the good aliases in `data` are then
+        // discarded with it. One stale link in a hall-of-fame bio (a deleted
+        // entry, or an id that belongs to the other media namespace) blanked
+        // every poster on the card. `Page.media` filters instead of failing and
+        // answers 200 with `"m0": { "media": [] }`.
+        val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 2))
+
+        assertFalse(
+            "a Media root field 404s the whole document as soon as one id has no media",
+            Regex("""m\d+: Media\(""").containsMatchIn(query)
+        )
+        assertTrue(
+            "every aliased field must be the connection, which cannot fail",
+            query.contains("m0: Page {") && query.contains("m1: Page {")
+        )
+        assertTrue(
+            "the media is still asked for with its type, inside the connection",
+            query.contains("media(id: \$id0, type: \$type0)") &&
+                query.contains("media(id: \$id1, type: \$type1)")
         )
     }
 

@@ -6,8 +6,10 @@ import com.example.data.model.FollowUser
 import com.example.data.model.GraphQLRequest
 import com.example.data.model.GraphQLResponse
 import com.example.data.model.ListActivity
+import com.example.data.model.FuzzyDate
 import com.example.data.model.MediaCover
 import com.example.data.model.MediaCoverKey
+import com.example.data.model.MediaEntryEdit
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.SimpleMediaListEntry
@@ -292,7 +294,11 @@ class AniListRepositoryImpl(
         userName: String,
         forceRefresh: Boolean
     ): Result<MediaListCollection> {
-        val key = "userName:${userName.trim().lowercase()}"
+        // Locale.ROOT, not the device locale: a cache key must be the same
+        // string for the same username on every device. Under a Turkish locale
+        // `"I".lowercase()` is `"ı"`, so a username containing an I would miss
+        // the cache written on another device and fetch the whole list again.
+        val key = "userName:${userName.trim().lowercase(java.util.Locale.ROOT)}"
         if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
 
         val epoch = listEpoch
@@ -465,7 +471,11 @@ class AniListRepositoryImpl(
             // `execute` already unwrapped GraphQLResponse.data, so what arrives
             // here *is* the alias map - there is no `.data` on it to reach for.
             missing.forEachIndexed { index, key ->
-                val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]
+                // `firstOrNull` rather than a single node: the batch asks
+                // `Page.media` precisely so an id with no media is an empty list
+                // instead of a 404 that fails the other eleven cards. See
+                // [MediaCoverPage].
+                val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]?.media?.firstOrNull()
                 val url = node?.coverImage?.bestUrl
                 if (url != null) {
                     // The key comes from the request rather than from
@@ -522,6 +532,56 @@ class AniListRepositoryImpl(
             ),
             apiService::saveMediaListEntry
         ).map { it.entry.require("No response from watching mutation") }
+            .onSuccess {
+                listEpoch++
+                listCache.clear()
+            }
+
+    override suspend fun getMediaListEntry(
+        mediaId: Int,
+        userId: Int?
+    ): Result<SimpleMediaListEntry> {
+        val variables = buildMap<String, Any?> {
+            put("mediaId", mediaId)
+            // Omitted rather than sent as null when the caller has no id, so the
+            // document stays valid: a null `userId` would be a deliberate request
+            // for "nobody's entry", which is never what this wants.
+            if (userId != null) put("userId", userId)
+        }
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_MEDIA_LIST_ENTRY,
+                variables = variables
+            ),
+            apiService::getMediaListEntry
+        ).map { it.entry ?: SimpleMediaListEntry(mediaId = mediaId) }
+    }
+
+    override suspend fun saveMediaListEntry(edit: MediaEntryEdit): Result<SimpleMediaListEntry> {
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.SAVE_MEDIA_LIST_ENTRY,
+                variables = edit.toSaveVariables()
+            ),
+            apiService::saveMediaListEntry
+        ).map { it.entry.require("No response from the entry mutation") }
+            .onSuccess {
+                // The cached list now holds the pre-edit entry. Dropping it is what
+                // makes the dashboard's own counts and the Library row agree with
+                // the form the user just saved, rather than the copy from before.
+                listEpoch++
+                listCache.clear()
+            }
+    }
+
+    override suspend fun deleteMediaListEntry(entryId: Int): Result<Unit> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.DELETE_MEDIA_LIST_ENTRY,
+                variables = mapOf("id" to entryId)
+            ),
+            apiService::deleteMediaListEntry
+        ).map { }
             .onSuccess {
                 listEpoch++
                 listCache.clear()
@@ -851,3 +911,77 @@ class AniListRepositoryImpl(
             )?.errors?.firstOrNull()
         )
 }
+
+/**
+ * The variables for [GraphQLQueries.SAVE_MEDIA_LIST_ENTRY].
+ *
+ * Top-level and `internal` rather than a private member, so the one rule it
+ * encodes - which arguments may be absent - is testable. That rule is not a
+ * style choice: AniList's own input validator rejects an explicit null for all
+ * three numeric arguments, and the failure is a write that never happens.
+ *
+ * ## Why every field is sent, except the one that is not
+ *
+ * The editor's Save is a whole snapshot of the form, so an omitted value would be
+ * an edit the user made and the server never heard about - a cleared finish date
+ * that reappears, or a private toggle that springs back. That part is deliberate.
+ *
+ * `progress`, `score` and `progressVolumes` are the exception, and they were the
+ * bug: sent as null, AniList answers **HTTP 400** with
+ *
+ *     "errors": [{"validation": {"progressVolumes":
+ *                  ["The progress volumes must be an integer."]}}]
+ *
+ * and no part of the entry is saved. Verified against the live API:
+ * `progressVolumes: 0` validates, `progressVolumes: null` does not, and omitting
+ * the argument entirely validates too.
+ *
+ *  - **progress and score default to 0 rather than null.** The form always shows
+ *    a value for both, so an untouched control means zero episodes and no score,
+ *    and sending that is the snapshot the button promises.
+ *  - **progressVolumes is omitted when there is none.** The form has no volume
+ *    control: a manga's loaded value is carried through untouched, and an anime
+ *    (where AniList answers null, not 0) leaves the argument off - which keeps
+ *    the server's value. Sending it as null made every save on an *anime* fail,
+ *    because an anime entry has no volume count at all.
+ *
+ * The dates are always sent, and that is the one place a null is meaningful:
+ * it is how AniList clears a date, and the row's X depends on it.
+ *
+ * The private flag is sent as a boolean, never as null. It is not a *clearing*
+ * control the way the dates are - the toggle always holds a value the user can
+ * see and change - so an unset flag is an entry that is not private, and `false`
+ * is the truth about it. The editor cannot actually build a null here
+ * (`EntryDraft.isPrivate` is a plain `Boolean`), but this function is the thing
+ * that encodes which arguments may be absent, and an explicit null for a boolean
+ * argument is the same class of 400 that used to drop every anime save. Defaulting
+ * it here means the next caller cannot reintroduce that by forgetting the field.
+ */
+internal fun MediaEntryEdit.toSaveVariables(): Map<String, Any?> = buildMap {
+    put("mediaId", mediaId)
+    put("status", status)
+    put("progress", progress ?: 0)
+    progressVolumes?.let { put("progressVolumes", it) }
+    put("score", score ?: 0.0)
+    put("startedAt", startedAt?.toVariables())
+    put("completedAt", completedAt?.toVariables())
+    put("private", isPrivate ?: false)
+}
+
+/**
+ * A [FuzzyDate] as the `FuzzyDateInput` object AniList expects, or null.
+ *
+ * A null field inside is deliberate: AniList's input type has three nullable
+ * integers, and a year with no day is a real date to it - the same partial date
+ * `FuzzyDate` already models on the read side.
+ *
+ * Plain maps rather than the `FuzzyDate` model itself: these travel through the
+ * generic `Map<String, Any?>` variable bag, whose value adapter is the
+ * runtime-type one, and a hand-built map of primitives is the one shape Moshi
+ * serialises without having to resolve a second adapter mid-request.
+ */
+internal fun FuzzyDate.toVariables(): Map<String, Int?> = mapOf(
+    "year" to year,
+    "month" to month,
+    "day" to day
+)

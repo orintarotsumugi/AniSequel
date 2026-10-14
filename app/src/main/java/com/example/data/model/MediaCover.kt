@@ -1,5 +1,6 @@
 package com.example.data.model
 
+import com.squareup.moshi.JsonClass
 import java.util.Locale
 
 /**
@@ -35,6 +36,30 @@ data class MediaCoverKey(
     /** The value AniList's `MediaType` enum expects for this key. */
     val graphqlType: String get() = type.uppercase(Locale.ROOT)
 }
+
+/**
+ * One alias of the batched cover query, as AniList answers it.
+ *
+ * ## Why the batch is a connection and not the `Media` root field
+ *
+ * `Media(id:)` is nullable, and AniList answers a batch containing an id it
+ * cannot resolve with **HTTP 404** and `errors: ["Not Found."]` rather than with
+ * a null field - so one stale link in a bio (a deleted entry, or an id that
+ * belongs to the other media namespace) failed the *whole* response, and every
+ * poster on the card fell back to the placeholder even though the other aliases
+ * had resolved. `Page.media` filters instead of failing: an id with no media is
+ * an empty list, on a 200. See [GraphQLQueries.getMediaCoversQuery], which is
+ * where the shape is written.
+ *
+ * [media] is a list rather than a single node because that is what a connection
+ * gives, and it is null only if the field itself is absent - the caller reads
+ * `firstOrNull()` either way, so an empty list, a null list and a missing alias
+ * are all the same "no cover for this one" rather than three branches.
+ */
+@JsonClass(generateAdapter = true)
+data class MediaCoverPage(
+    val media: List<MediaNode>? = null
+)
 
 /**
  * A cover image for one media, with the title that arrived in the same response.

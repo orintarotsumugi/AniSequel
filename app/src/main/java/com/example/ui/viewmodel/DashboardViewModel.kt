@@ -5,11 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ArrivingEntry
 import com.example.data.model.FilterCriteria
+import com.example.data.model.MediaEntryEdit
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.MissedSequel
 import com.example.data.model.RelationKind
 import com.example.data.model.SequelSortOption
+import com.example.data.model.SimpleMediaListEntry
 import com.example.data.model.StatusFilter
 import com.example.data.model.ViewerProfile
 import com.example.data.network.AniListErrorKind
@@ -22,6 +24,7 @@ import com.example.domain.usecase.FindArrivingEntriesUseCase
 import com.example.domain.usecase.FindMissedSequelsUseCase
 import com.example.domain.usecase.GetViewerProfileUseCase
 import com.example.domain.usecase.SaveToPlanningUseCase
+import com.example.ui.components.detail.EntryEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -86,7 +89,7 @@ class DashboardViewModel(
      * shipped defaults (visible, full cards).
      */
     private val arrivingPreferences: ArrivingPreferences? = null
-) : ViewModel() {
+) : ViewModel(), EntryEditor {
 
     companion object {
         // Re-analysing the whole list on every keystroke visibly stutters once a
@@ -1055,6 +1058,37 @@ class DashboardViewModel(
             )
         }
     }
+
+    // ---------------------------------------------------------------------
+    // EntryEditor - the detail sheet's "My Entry" tab
+    // ---------------------------------------------------------------------
+
+    /**
+     * The viewer's own entry, which the editor tab creates when there is none.
+     *
+     * [cachedViewer] is the id the editor's `MediaList` query needs. A demo or a
+     * scanned profile never reaches here: the screen only builds the tab when the
+     * dashboard can actually write, so there is no session to write with and no
+     * tab to write from.
+     */
+    override suspend fun load(mediaId: Int): Result<SimpleMediaListEntry> =
+        aniListRepository.getMediaListEntry(mediaId, cachedViewer?.id)
+
+    /**
+     * Saves the edited entry and reloads the dashboard.
+     *
+     * The reload is not optional: the "Currently arriving" section and every count
+     * on the screen are derived from the list, and a status moved from Watching to
+     * Completed has to leave that section rather than sit in it until the next
+     * manual refresh. The repository has already dropped its own list cache, so
+     * this is one request, on an explicit button press.
+     */
+    override suspend fun save(edit: MediaEntryEdit): Result<SimpleMediaListEntry> =
+        aniListRepository.saveMediaListEntry(edit).onSuccess { refresh() }
+
+    /** Removes the entry and reloads, for the same reason [save] does. */
+    override suspend fun delete(entryId: Int): Result<Unit> =
+        aniListRepository.deleteMediaListEntry(entryId).onSuccess { refresh() }
 
     /**
      * Factory for the manual construction in AppNavigation.

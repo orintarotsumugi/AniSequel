@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,11 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
-import com.example.ui.components.cards.toCoverColorOrNull
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
@@ -33,19 +29,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.model.MissedSequel
 import com.example.data.model.genreList
 import com.example.data.model.posterColor
@@ -53,11 +54,10 @@ import com.example.data.model.synopsis
 import com.example.data.repository.ThemeMode
 import com.example.data.repository.ThemePreferences
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.expressive.ExpressiveTabBar
+import com.example.ui.components.cards.toCoverColorOrNull
 import com.example.ui.components.expressive.ExpressiveMotion
+import com.example.ui.components.expressive.ExpressiveTabBar
 import com.example.ui.theme.AniSequelTheme
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -73,7 +73,18 @@ fun SequelDetailSheet(
     modifier: Modifier = Modifier,
     onAddToWatching: (MissedSequel) -> Unit = {},
     holdDurationSeconds: Int = 3,
-    swipeEnabled: Boolean = true
+    swipeEnabled: Boolean = true,
+    /**
+     * Read/write access to the viewer's own entry, or null when the sheet is
+     * read-only.
+     *
+     * Null removes the Edit tab entirely rather than drawing it disabled: an
+     * editor that cannot save looks identical to one that can until the moment it
+     * silently does nothing. The dashboard passes a real editor for the signed-in
+     * viewer; a scanned profile passes nothing, because the entry on screen is
+     * somebody else's.
+     */
+    entryEditor: EntryEditor? = null
 ) {
     if (subject == null) return
     val media = subject.media
@@ -167,165 +178,175 @@ fun SequelDetailSheet(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 val isManga = media.type.equals("MANGA", ignoreCase = true)
-            val tabLabels = if (sequel != null) {
-                listOf("Story & Gaps", if (isManga) "Manga Info & Specs" else "Anime Info & Specs")
-            } else {
-                listOf("About", if (isManga) "Manga Info & Specs" else "Anime Info & Specs")
-            }
-            val tabIcons = if (sequel != null) {
-                listOf(AppVectorIcons.FranchiseBranch, AppVectorIcons.Info)
-            } else {
-                listOf(AppVectorIcons.Info, if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.AnimeSparkle)
-            }
-            ExpressiveTabBar(
-                tabs = tabLabels,
-                selectedIndex = detailTab,
-                onSelect = { detailTab = it },
-                icons = tabIcons,
-                modifier = Modifier.padding(horizontal = 0.dp)
-            )
+                // The Edit tab is appended, never inserted: the first tab's index
+                // is persisted by `rememberSaveable`, so a tab that moved would
+                // reopen a sheet on a different tab than it was left on.
+                val editor = entryEditor
+                val firstLabel = if (sequel != null) "Story & Gaps" else "About"
+                val firstIcon = if (sequel != null) AppVectorIcons.FranchiseBranch else AppVectorIcons.Info
+                val specsLabel = if (isManga) "Manga Info & Specs" else "Anime Info & Specs"
+                val specsIcon = if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.AnimeSparkle
+                val tabLabels = buildList {
+                    add(firstLabel)
+                    add(specsLabel)
+                    if (editor != null) add("My Entry")
+                }
+                val tabIcons = buildList {
+                    add(firstIcon)
+                    add(specsIcon)
+                    if (editor != null) add(AppVectorIcons.EditEntry)
+                }
+                ExpressiveTabBar(
+                    tabs = tabLabels,
+                    selectedIndex = detailTab,
+                    onSelect = { detailTab = it },
+                    icons = tabIcons,
+                    modifier = Modifier.padding(horizontal = 0.dp)
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            AnimatedContent(
-                targetState = detailTab,
-                transitionSpec = {
-                    fadeIn(ExpressiveMotion.FastEffects) togetherWith
-                        fadeOut(ExpressiveMotion.FastEffects)
-                },
-                label = "detail_tab_switch"
-            ) { tab ->
-                if (tab == 1) {
-                    DetailSpecsView(
-                        media = media,
-                        isDetailLoading = isDetailLoading
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // The watched entry this one hangs off, with its own
-                        // artwork. This is the relationship that explains why the
-                        // entry is on the screen at all, so it gets an image
-                        // rather than a bare title - and it costs nothing,
-                        // because the list query already returned the parent's
-                        // cover. Only a recommendation has a parent; an arriving
-                        // or activity row is a show the viewer already tracks.
-                        if (sequel != null) {
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                AnimatedContent(
+                    targetState = detailTab,
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
+                    label = "detail_tab_switch"
+                ) { tab ->
+                    if (editor != null && tab == 2) {
+                        DetailEditTab(media = media, editor = editor)
+                    } else if (tab == 1) {
+                        DetailSpecsView(
+                            media = media,
+                            isDetailLoading = isDetailLoading
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // The watched entry this one hangs off, with its own
+                            // artwork. This is the relationship that explains why the
+                            // entry is on the screen at all, so it gets an image
+                            // rather than a bare title - and it costs nothing,
+                            // because the list query already returned the parent's
+                            // cover. Only a recommendation has a parent; an arriving
+                            // or activity row is a show the viewer already tracks.
+                            if (sequel != null) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Icon(
-                                        imageVector = AppVectorIcons.CheckCircle,
-                                        contentDescription = null,
-                                        tint = statusColors.success,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    if (sequel.parentCoverUrl != null) {
-                                        AsyncImage(
-                                            model = sequel.parentCoverUrl,
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = AppVectorIcons.CheckCircle,
                                             contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(MaterialTheme.shapes.extraSmall)
-                                                .background(
-                                                    sequel.parentCoverColor.toCoverColorOrNull()
-                                                        ?: MaterialTheme.colorScheme.surfaceContainerHighest
-                                                )
+                                            tint = statusColors.success,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
-                                    }
+                                        if (sequel.parentCoverUrl != null) {
+                                            AsyncImage(
+                                                model = sequel.parentCoverUrl,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(MaterialTheme.shapes.extraSmall)
+                                                    .background(
+                                                        sequel.parentCoverColor.toCoverColorOrNull()
+                                                            ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                                                    )
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                        }
 
-                                    Column {
-                                        Text(
-                                            text = sequel.relationLabel,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = sequel.parentTitle,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        DetailSpecsGrid(media = media, isDetailLoading = isDetailLoading)
-
-                        if (media.genreList.isNotEmpty()) {
-                            Text(
-                                text = "Genres",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                media.genreList.forEach { genre ->
-                                    Surface(
-                                        shape = MaterialTheme.shapes.extraSmall,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {
-                                        Text(
-                                            text = genre,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
+                                        Column {
+                                            Text(
+                                                text = sequel.relationLabel,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = sequel.parentTitle,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        val desc = media.synopsis
-                        if (isDetailLoading && desc.isNullOrBlank()) {
-                            Text(
-                                text = "Synopsis",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Loading synopsis from AniList...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else if (!desc.isNullOrBlank()) {
-                            Text(
-                                text = "Synopsis",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = desc,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 4,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (desc.length > 160) {
-                                TextButton(
-                                    onClick = { isDescriptionExpanded = !isDescriptionExpanded },
-                                    modifier = Modifier.padding(top = 2.dp)
+                            DetailSpecsGrid(media = media, isDetailLoading = isDetailLoading)
+
+                            if (media.genreList.isNotEmpty()) {
+                                Text(
+                                    text = "Genres",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(if (isDescriptionExpanded) "Show less" else "Read more")
+                                    media.genreList.forEach { genre ->
+                                        Surface(
+                                            shape = MaterialTheme.shapes.extraSmall,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ) {
+                                            Text(
+                                                text = genre,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            val desc = media.synopsis
+                            if (isDetailLoading && desc.isNullOrBlank()) {
+                                Text(
+                                    text = "Synopsis",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Loading synopsis from AniList...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else if (!desc.isNullOrBlank()) {
+                                Text(
+                                    text = "Synopsis",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = desc,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 4,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (desc.length > 160) {
+                                    TextButton(
+                                        onClick = { isDescriptionExpanded = !isDescriptionExpanded },
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Text(if (isDescriptionExpanded) "Show less" else "Read more")
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
 

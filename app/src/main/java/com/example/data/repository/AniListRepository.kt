@@ -6,6 +6,7 @@ import com.example.data.model.FollowUser
 import com.example.data.model.ListActivity
 import com.example.data.model.MediaCover
 import com.example.data.model.MediaCoverKey
+import com.example.data.model.MediaEntryEdit
 import com.example.data.model.MediaListCollection
 import com.example.data.model.MediaNode
 import com.example.data.model.SimpleMediaListEntry
@@ -76,6 +77,30 @@ interface AniListRepository {
     suspend fun getMediaDetail(mediaId: Int): Result<MediaNode>
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
     suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")
+
+    /**
+     * The viewer's own entry for one media, as the editor tab opens on it.
+     *
+     * A missing entry is an *empty* [SimpleMediaListEntry] rather than a failure:
+     * "not on my list yet" is the state the editor is most likely to be opened in
+     * for an arriving show, and turning it into an error would draw a failure over
+     * a form that is perfectly able to create the entry.
+     *
+     * [userId] is the viewer's own id and is required by the editor; the demo and
+     * test doubles that do not implement this answer with [unsupported].
+     */
+    suspend fun getMediaListEntry(
+        mediaId: Int,
+        userId: Int?
+    ): Result<SimpleMediaListEntry> = unsupported("getMediaListEntry")
+
+    /** Creates or replaces the viewer's entry with the fields [edit] carries. */
+    suspend fun saveMediaListEntry(edit: MediaEntryEdit): Result<SimpleMediaListEntry> =
+        unsupported("saveMediaListEntry")
+
+    /** Removes the entry with this list-entry id from the viewer's list. */
+    suspend fun deleteMediaListEntry(entryId: Int): Result<Unit> =
+        unsupported("deleteMediaListEntry")
 
     /**
      * Bio, list statistics and favourites for the profile screen.

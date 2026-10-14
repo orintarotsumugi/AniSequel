@@ -61,7 +61,7 @@ import com.example.data.model.MediaNode
 import com.example.data.model.withSummaryProgress
 import com.example.data.repository.LibraryPreferences
 import com.example.ui.components.AppVectorIcons
-import com.example.ui.components.SequelDetailSheet
+import com.example.ui.components.detail.SequelDetailSheet
 import com.example.ui.components.detail.AnimeDetailSubject
 import com.example.ui.components.expressive.ExpressiveLoadingIndicator
 import com.example.ui.components.expressive.ExpressiveMotion

@@ -385,10 +385,67 @@ data class SimpleMediaListEntry(
     val mediaId: Int? = null,
     /** Episodes watched. Lets a card say "you're 4 episodes in" rather than only "not on your list". */
     val progress: Int? = null,
-    val score: Double? = null
+    /**
+     * Volumes read, for a manga entry.
+     *
+     * Null for anime, where the field does not apply. AniList answers it as null
+     * rather than 0, which is why the editor's stepper hides itself rather than
+     * showing a volume count of zero on a show.
+     */
+    val progressVolumes: Int? = null,
+    val score: Double? = null,
+    /**
+     * Whether the entry is hidden from the public profile.
+     *
+     * `private` is a Kotlin modifier keyword, so the property is `isPrivate` and
+     * the wire name is pinned with `@Json`. Reading a JSON `private` into a field
+     * literally named `private` is not expressible, which is why the annotation
+     * is load-bearing rather than cosmetic.
+     */
+    @Json(name = "private") val isPrivate: Boolean? = null,
+    val notes: String? = null,
+    val startedAt: FuzzyDate? = null,
+    val completedAt: FuzzyDate? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SaveMediaListEntryData(
     @Json(name = "SaveMediaListEntry") val entry: SimpleMediaListEntry?
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaListEntryData(
+    @Json(name = "MediaList") val entry: SimpleMediaListEntry?
+)
+
+@JsonClass(generateAdapter = true)
+data class DeleteMediaListEntryData(
+    @Json(name = "DeleteMediaListEntry") val deleted: Boolean? = null
+)
+
+/**
+ * One edit to the viewer's list entry, as the editor tab hands it to the
+ * repository.
+ *
+ * A type rather than a long parameter list because the mutation has ten
+ * arguments and every one of them is optional in a different sense: a null
+ * [status] means "do not change it" to AniList, whereas a null [startedAt] means
+ * "clear the date". Passing the whole edit keeps that decision in one place
+ * instead of at a call site that has to remember which nulls it is allowed to
+ * send.
+ *
+ * The date fields are [FuzzyDate] - AniList's own input shape - so a partial date
+ * (`year` but no `month`) is expressible. Reusing the read model rather than a
+ * second `FuzzyDateInput` class means the shape written is provably the shape
+ * read back.
+ */
+data class MediaEntryEdit(
+    val mediaId: Int,
+    val status: String? = null,
+    val progress: Int? = null,
+    val progressVolumes: Int? = null,
+    val score: Double? = null,
+    val startedAt: FuzzyDate? = null,
+    val completedAt: FuzzyDate? = null,
+    val isPrivate: Boolean? = null
 )

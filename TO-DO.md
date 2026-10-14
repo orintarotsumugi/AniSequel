@@ -215,32 +215,16 @@ for it. `DashboardUiState.Loading` carries a static message. A real progress
 model would need the scan to emit intermediate results, which is a domain-layer
 change — related to §1.1.
 
-### 4.3 `metadata.json` advertises a capability the app does not have
+### 4.3 AI Studio leftovers removed
 
-```json
-"majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"],
-"requestFramePermissions": []
-```
-
-There is no Firebase or Gemini dependency on the classpath and no
-`com.google.firebase` import anywhere in `app/src/main`. Every Firebase entry in
-`app/build.gradle.kts` is commented out, and `gradle.properties` says outright
-that "no Firebase dependency is live".
-
-A marketplace listing that declares a server-side AI capability the app does not
-implement is a bad look at best and a rejection at worst. Either wire the feature
-or remove the declaration.
-
-### 4.4 The Secrets Gradle plugin is configured for nothing
-
-`com.google.android.libraries.mapsplatform.secrets-gradle-plugin` is applied in
-`app/build.gradle.kts` and given a `secrets { propertiesFileName = ".env" }`
-block — but no code reads any secret. There is no Maps API key in the manifest
-and no `MAPS_API_KEY` reference anywhere.
-
-The plugin is there for a Maps integration that does not exist. Removing it also
-removes the `.env` / `.env.example` convention that a contributor has to be told
-about and that currently guards nothing.
+`metadata.json` declared `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API`, the app
+applied the Secrets Gradle plugin for a Maps integration that never existed, and
+an `.env.example` sat in the root full of Gemini placeholders. None of it was
+imported by the app: there is no Firebase or Gemini dependency on the classpath
+and no `com.google.firebase` import anywhere in `app/src/main`. The capability
+declaration, the plugin and the example file are gone, along with the
+commented-out Firebase/Room/Camera dependencies and their now-unused version
+catalog entries.
 
 ---
 

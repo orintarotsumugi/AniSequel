@@ -401,12 +401,30 @@ object GraphQLQueries {
      * opens anything a 429.
      *
      * `Media` takes a single id *per field*, but aliasing the *root* field is
-     * ordinary GraphQL: `m0: Media(id: 1, type: ANIME)`, `m1: Media(id: 1,
-     * type: MANGA)` in one document, one round trip. Aliasing the field is what
-     * makes it possible to ask for both sides of an id that is used by *both*
-     * media namespaces in the same batch - a bare id would have collapsed them
-     * to one entry and answered with only one of the two posters. See
-     * [MediaCoverKey] for why the type cannot be dropped.
+     * ordinary GraphQL: `m0: Page { media(id: 1, type: ANIME) }`, `m1: Page {
+     * media(id: 1, type: MANGA) }` in one document, one round trip. Aliasing the
+     * field is what makes it possible to ask for both sides of an id that is used
+     * by *both* media namespaces in the same batch - a bare id would have
+     * collapsed them to one entry and answered with only one of the two posters.
+     * See [MediaCoverKey] for why the type cannot be dropped.
+     *
+     * ## Why each alias resolves `Page.media` and not the `Media` root field
+     *
+     * `Media(id:)` is *nullable*, and AniList does not answer it with null: a
+     * batch in which one id has no media - a link to a deleted entry, or an id
+     * that belongs to the other media namespace - comes back as **HTTP 404** with
+     * `errors: ["Not Found."]`, and the whole response is a failure even though
+     * the other aliases resolved. Every poster in the bio then fell back to the
+     * placeholder, because one of a dozen links was stale, and the failure named
+     * nothing the reader could act on. Verified against the live API: the same
+     * request written with `m0: Media(...)` answers 404, and written with
+     * `m0: Page { media(...) }` answers 200 with `"m0": { "media": [] }`.
+     *
+     * `Page.media` is a *connection*, so it filters instead of failing, and an id
+     * with no media is an empty list. That is the one shape this batch can be
+     * asked in without letting the weakest link in a bio take the whole document
+     * down with it. The caller reads `media.firstOrNull()`, which is null for the
+     * empty case - the same "nothing to draw here" it already handled.
      *
      * This is distinct from the `Page` limitation noted on
      * [AniListApiService.getUserFollowers], which is about two child fields
@@ -420,20 +438,34 @@ object GraphQLQueries {
         require(keys.isNotEmpty()) { "a cover batch needs at least one id" }
         val fields = keys.indices.joinToString("\n") { index ->
             """
-            m$index: Media(id: ${'$'}id$index, type: ${'$'}type$index) {
-              id
-              type
-              title { romaji english userPreferred }
-              format
-              averageScore
-              coverImage { extraLarge large }
-              siteUrl
+            m$index: Page {
+              media(id: ${'$'}id$index, type: ${'$'}type$index) {
+                id
+                type
+                title { romaji english userPreferred }
+                format
+                averageScore
+                coverImage { extraLarge large }
+                siteUrl
+              }
             }
             """.trimIndent()
         }
         // `type` is nullable in AniList's `Media` field, so the variable is too.
         // Declaring it `MediaType!` would make the whole document invalid.
-        val variables = keys.indices.joinToString(", ") { "id$it: Int, type$it: MediaType" }
+        //
+        // The `$` sigil is `\$` here because a declaration needs one and a
+        // template is not one: `"id$it: Int"` produced `id0: Int`, which is not
+        // a variable declaration at all. The use sites below were written with
+        // the sigil, so the document asked for a variable it never declared -
+        // and AniList answered **HTTP 400, "Expected $, found Name \"id0\""**
+        // for the whole batch. Every poster in every bio therefore stayed on its
+        // placeholder, with nothing on screen saying why, because the covers
+        // request is one of the few the user never sees fail. Verified against
+        // the live API: the same batch written with `\$id0` answers 200.
+        val variables = keys.indices.joinToString(", ") { index ->
+            "${'$'}id$index: Int, ${'$'}type$index: MediaType"
+        }
         return """
             query MediaCovers($variables) {
             $fields
@@ -547,6 +579,86 @@ object GraphQLQueries {
             id
             status
             mediaId
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The viewer's own entry for one media, with every field the editor can change.
+     *
+     * `userId` is passed explicitly rather than left to the server. AniList's
+     * `MediaList` does not implicitly select the authenticated user when the id is
+     * omitted - the answer is the same shape whether it is yours or a stranger's -
+     * so the caller supplies the id it already holds and the editor can never
+     * silently open somebody else's entry.
+     */
+    val GET_MEDIA_LIST_ENTRY = """
+        query MediaListEntry(${'$'}mediaId: Int, ${'$'}userId: Int) {
+          MediaList(mediaId: ${'$'}mediaId, userId: ${'$'}userId) {
+            id
+            mediaId
+            status
+            progress
+            progressVolumes
+            score
+            private
+            startedAt { year month day }
+            completedAt { year month day }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Creates or replaces the viewer's entry with every field the editor owns.
+     *
+     * A complete snapshot rather than a diff: the editor's "Save changes" has one
+     * button and the user has just seen the whole form, so sending every field is
+     * what makes clearing a date or un-privating an entry actually stick. A
+     * partial mutation would leave the removed value on the server, which reads as
+     * the toggle springing back.
+     *
+     * `completedAt`, not `finishedAt` - AniList has no `finishedAt` argument, and a
+     * document that sent one would be rejected outright with no partial save.
+     */
+    val SAVE_MEDIA_LIST_ENTRY = """
+        mutation SaveMediaListEntry(
+            ${'$'}mediaId: Int
+            ${'$'}status: MediaListStatus
+            ${'$'}progress: Int
+            ${'$'}progressVolumes: Int
+            ${'$'}score: Float
+            ${'$'}startedAt: FuzzyDateInput
+            ${'$'}completedAt: FuzzyDateInput
+            ${'$'}private: Boolean
+        ) {
+          SaveMediaListEntry(
+              mediaId: ${'$'}mediaId
+              status: ${'$'}status
+              progress: ${'$'}progress
+              progressVolumes: ${'$'}progressVolumes
+              score: ${'$'}score
+              startedAt: ${'$'}startedAt
+              completedAt: ${'$'}completedAt
+              private: ${'$'}private
+          ) {
+            id
+            mediaId
+            status
+            progress
+            progressVolumes
+            score
+            private
+            startedAt { year month day }
+            completedAt { year month day }
+          }
+        }
+    """.trimIndent()
+
+    /** Removes one entry from the viewer's list by its own entry id. */
+    val DELETE_MEDIA_LIST_ENTRY = """
+        mutation DeleteMediaListEntry(${'$'}id: Int) {
+          DeleteMediaListEntry(id: ${'$'}id) {
+            deleted
           }
         }
     """.trimIndent()
