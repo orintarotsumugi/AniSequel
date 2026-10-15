@@ -112,6 +112,11 @@ class EntryEditStateTest {
         // The guard keys off a held draft, not off "has been asked". A failure
         // holds nothing, so coming back to the tab is allowed to try again -
         // otherwise a single dropped request would need a full app restart.
+        //
+        // Asserted as `1`, not `2`: the retry is a *second editor*, so counting
+        // its calls proves the retry was not blocked. An earlier version of this
+        // test asserted 2 and failed, because it was counting calls on a fresh
+        // object as though it were the same one that had already been called.
         val state = EntryEditState()
         val failing = FakeEditor(Result.failure(IllegalStateException("offline")))
         state.load(failing, mediaId = 42)
@@ -120,8 +125,12 @@ class EntryEditStateTest {
         val recovered = FakeEditor(Result.success(entry))
         state.load(recovered, mediaId = 42)
 
-        assertEquals(2, recovered.loadCalls)
-        assertNull(state.loadError)
+        assertEquals(
+            "the retry must actually reach the editor, not be blocked by the guard",
+            1,
+            recovered.loadCalls
+        )
+        assertNull("a successful retry clears the earlier failure", state.loadError)
         assertNotNull(state.draft)
     }
 
