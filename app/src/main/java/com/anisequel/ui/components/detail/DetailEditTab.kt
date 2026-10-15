@@ -78,7 +78,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailEditTab(
+internal fun DetailEditTab(
     media: MediaNode,
     editor: EntryEditor,
     state: EntryEditState,

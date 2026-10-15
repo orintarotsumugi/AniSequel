@@ -128,26 +128,32 @@ object ExpressiveMotion {
     /**
      * Coming *back up*: past rest, then settle. This is the bounce.
      *
-     * `bounce` is the asymmetric half of Compose's spring — it governs overshoot
-     * only on the return, which a plain `dampingRatio` cannot express because
-     * the same ratio governs both directions. This is what a press was missing:
-     * with one symmetric spring for both halves, the button squashed and then
-     * simply returned, which reads as a fade rather than as something with
-     * weight.
+     * ## Why two tokens rather than one spring with a `bounce` argument
      *
-     * 0.35 is deliberate rather than larger. Past about 0.5 the return starts
-     * feeling like the button is being thrown at the user, and a control that
-     * overshoots visibly on every tap is tiring over a long session.
+     * Compose has a `bounce` parameter on `spring()` that governs overshoot only
+     * on the return, which is exactly this effect. **It does not exist in the
+     * Compose version this project pins** — the build fails with *"No parameter
+     * with name 'bounce' found"* — so the asymmetry is expressed the other way
+     * round instead: two separate specs, chosen by direction at the call site.
      *
-     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees it — `SMOOTH`
-     * is `NoBouncy` by design and `INSTANT` snaps, so on those styles the press
-     * behaves exactly as it always has.
+     * The mechanism is equivalent. This one is `LowBouncy`, so *its* return leg
+     * overshoots past rest; [PressSpatialIn] is `NoBouncy`, so *its* travel down
+     * cannot flicker below the pressed scale. A press only ever runs one spec or
+     * the other, so neither half ever sees the other's overshoot.
+     *
+     * `LowBouncy` (0.75) rather than `MediumBouncy` (0.5) deliberately. Past
+     * about the midpoint the return starts feeling like the button is being
+     * thrown at the user, and a control that overshoots visibly on every tap is
+     * tiring over a long session.
+     *
+     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees either token —
+     * `SMOOTH` is `NoBouncy` by design and `INSTANT` snaps, so on those styles a
+     * press behaves exactly as it always has.
      */
     val PressSpatialOut: FiniteAnimationSpec<Float> get() =
         spatial(
-            expressiveDamping = Spring.DampingRatioNoBouncy,
-            expressiveStiffness = Spring.StiffnessMediumLow,
-            expressiveBounce = 0.35f
+            expressiveDamping = Spring.DampingRatioLowBouncy,
+            expressiveStiffness = Spring.StiffnessMediumLow
         )
 
     /**
@@ -261,8 +267,7 @@ object ExpressiveMotion {
 
     private fun spatial(
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
-        expressiveStiffness: Float = Spring.StiffnessMedium,
-        expressiveBounce: Float = 0f
+        expressiveStiffness: Float = Spring.StiffnessMedium
     ): FiniteAnimationSpec<Float> =
         when (speed) {
             com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
@@ -272,8 +277,7 @@ object ExpressiveMotion {
             )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = expressiveDamping,
-                stiffness = expressiveStiffness,
-                bounce = expressiveBounce
+                stiffness = expressiveStiffness
             )
         }
 
