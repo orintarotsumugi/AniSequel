@@ -26,6 +26,14 @@
         {
           "title": "A tap no longer makes the trailer link twitch",
           "detail": "The 'Watch Official Trailer' banner was deciding it had been pressed the instant your finger landed on it, before it could tell a tap from the start of a scroll - so dragging across it made it bounce twice on the way past. It now takes the press from the button itself, which knows the difference."
+        },
+        {
+          "title": "Buttons bounce when you let go",
+          "detail": "Anything you press used to squash down and then simply come back, which felt like a fade rather than like something with weight. The same spring was driving both halves of the press, and a spring cannot overshoot on the way back without also overshooting on the way down - where you would see it flicker past the pressed size just as your finger landed. Presses are now driven as a pair: tight going down, and a small overshoot on the way back that settles. It is a deliberately small one - past a certain point a button that overshoots on every tap starts to feel tiring rather than playful. Only the expressive motion style sees this; if you have the app set to smooth, presses are unchanged."
+        },
+        {
+          "title": "Every corner is now from the same set",
+          "detail": "The app had no shape scale at all - sixty-four separately typed corner sizes across fourteen different values, so two corners two units apart read as two unrelated shapes and the same kind of card was a different shape on different screens. There was already a deliberate set of five sizes chosen to look softer and rounder than the stock ones; the corners just had never been moved onto it. They have been. Almost nothing visibly moves: most were already the right size and are now simply named, so the set cannot drift apart again. A few grew by two units and a couple shrank, which is the point - they were neighbours before, and now they are steps in the same family. A portrait and a small calendar marker are deliberately left alone, because their size is a proportion of themselves rather than a step on a family."
         }
       ]
     },
