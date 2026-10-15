@@ -34,9 +34,17 @@ permissions:
 
 # Two pushes landing together would both mint a release tag and race to write
 # update.json. Serialising per ref keeps the newest run the one that publishes.
+#
+# A pull request is the exception, and only a pull request: a superseded PR run
+# is cancelled rather than queued, because pushing a fix three times in a row
+# used to leave two full APK builds - each one R8 over the whole app, plus the
+# unit tests - finishing behind the one that matters. Nothing is published from
+# a PR (every publishing step is gated on `github.event_name != 'pull_request'`),
+# so cancelling one cannot leave a half-written release. Branch and tag runs
+# keep the serialisation above.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-release:
@@ -68,10 +76,15 @@ jobs:
       - name: Set up Java 21 (JDK 21)
         uses: actions/setup-java@v5
         with:
-          # JDK 21 is the newest LTS that AGP 9.1.1, Gradle 9.3.1 and the
+          # JDK 21 is the newest LTS that AGP 9.5.0, Gradle 9.7.0 and the
           # Robolectric runner in this repo are all verified against. Newer JDKs
           # would run the build but break the JVM test step, which is the one
           # step that is a real gate rather than advisory.
+          #
+          # (This named AGP 9.1.1 and Gradle 9.3.1 - two versions the project no
+          # longer builds with. A comment that is two major-and-minor releases
+          # behind is read as the currently verified set, so it is corrected
+          # whenever the pair moves.)
           java-version: '21'
           distribution: 'temurin'
 
@@ -80,21 +93,22 @@ jobs:
         with:
           # Pinned to the same version as gradle/wrapper/gradle-wrapper.properties
           # and ./gradlew. This was 'current', so CI resolved whatever Gradle
-          # shipped that week while every local build used 9.3.1 — meaning a build
+          # shipped that week while the wrapper pinned a different version —
+          # meaning a build
           # could pass here and fail on a developer's machine, or the reverse, with
           # nothing in the repository to explain the difference.
           #
-          # 9.6.1, not the newest. Current is 9.8.1; this is a deliberate step
-          # rather than a jump to the head, because a Gradle major bump is the
-          # one dependency change here that can break the build in ways nothing
-          # in this repository would catch first.
+          # 9.7.0, matched to gradle/wrapper/gradle-wrapper.properties and
+          # ./gradlew. Deliberately not the newest Gradle (9.8.1): Kotlin
+          # 2.4.21's Gradle plugin is only verified through Gradle 9.7.0, and AGP
+          # 9.5.0 requires 9.6.0 minimum, so 9.7.0 is the one version inside both
+          # ranges.
           #
-          # 9.6 and not the 9.5.1 this started at, because AGP 9.4.1 refuses to
-          # start on anything older and says exactly so: "Minimum supported
-          # Gradle version is 9.6.0. Current version is 9.5.1." The two are not
-          # independent pins - AGP checks the Gradle it runs against before it
-          # does any work at all.
-          gradle-version: '9.6.1'
+          # AGP 9.5.0 and not the 9.4.1 this started at, because 9.5 has since
+          # gone stable. The two are not independent pins - AGP checks the Gradle
+          # it runs against before it does any work at all, and refuses with a
+          # "Minimum supported Gradle version" message rather than pointing here.
+          gradle-version: '9.7.0'
           cache-disabled: false
 
       - name: Make Gradlew Executable
@@ -348,6 +362,24 @@ jobs:
           ./gradlew lintRelease --continue || echo "::warning::lint reported issues (see annotations)"
           echo "::endgroup::"
 
+      # Robolectric does not fetch its framework jars through Gradle. It runs its
+      # own Maven resolver during the *test* task, which is why the jars are in no
+      # Gradle cache and a cold runner downloads ~100 MB of them before the first
+      # test starts - the download, not the suite, is what makes the unit-test
+      # step the slowest in this workflow.
+      #
+      # Keyed on libs.versions.toml because that is where the Robolectric version
+      # lives: a bump has to miss the exact key, or the runner would keep testing
+      # against the previous release's framework jars. The `restore-keys` prefix
+      # lets a bump reuse the old download and fetch only what is new.
+      - name: Cache Robolectric framework jars
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            robolectric-${{ runner.os }}-
+
       - name: Unit tests
         run: |
           # A real gate, not an advisory step.
@@ -589,7 +621,13 @@ jobs:
           fi
 
       - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
+        # v3, not v2: v2 targets Node.js 20, which GitHub deprecated and then
+        # removed from the runners, so every run printed
+        # "Node.js 20 is deprecated ... softprops/action-gh-release@v2" as a
+        # workflow warning. v3 runs on Node.js 24. The action's own README names
+        # this as the fix, and nothing about how the release is published changes
+        # between them.
+        uses: softprops/action-gh-release@v3
         # Publish on every green main build, on tags, and on manual dispatch.
         # Pull requests are excluded: they must not create releases.
         if: github.event_name != 'pull_request'

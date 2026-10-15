@@ -199,9 +199,9 @@ class UserOverviewJsonTest {
         val statistics = parse<UserOverviewData>(capturedOverview).user!!.statistics!!
 
         assertEquals(258, statistics.anime!!.count)
-        assertEquals(78350L, statistics.anime!!.minutesWatched)
+        assertEquals(78350L, statistics.anime.minutesWatched)
         // AniList sends a Float; it has to land in a Double without being lost.
-        assertEquals(76.41, statistics.anime!!.meanScore!!, 0.001)
+        assertEquals(76.41, statistics.anime.meanScore!!, 0.001)
         // Genuinely zero - a person with no manga, not a failed request.
         assertEquals(0, statistics.manga!!.count)
     }
@@ -212,12 +212,12 @@ class UserOverviewJsonTest {
 
         assertEquals(79918, stats.watchedTime)
         assertEquals(2, stats.activityHistory!!.size)
-        assertEquals(1, stats.activityHistory!![0].level)
-        assertEquals(5, stats.activityHistory!![1].level)
+        assertEquals(1, stats.activityHistory[0].level)
+        assertEquals(5, stats.activityHistory[1].level)
         assertEquals(5, stats.animeStatusDistribution!!.size)
-        assertEquals(202, stats.animeStatusDistribution!!.first { it.status == "COMPLETED" }.amount)
+        assertEquals(202, stats.animeStatusDistribution.first { it.status == "COMPLETED" }.amount)
         assertEquals(74, stats.animeListScores!!.meanScore)
-        assertEquals(17, stats.animeListScores!!.standardDeviation)
+        assertEquals(17, stats.animeListScores.standardDeviation)
         assertEquals(121, stats.favouredFormats!!.first().amount)
         assertEquals(2014, stats.favouredYears!!.first().year)
         assertEquals("Drama", stats.favouredGenres!!.first().genre)
@@ -250,7 +250,7 @@ class UserOverviewJsonTest {
         val shuffle = parse<UserOverviewData>(capturedOverview).user!!.favourites!!.anime!!.nodes!![1]
 
         assertNull(shuffle.title!!.english)
-        assertEquals("SHUFFLE!", shuffle.title!!.displayTitle)
+        assertEquals("SHUFFLE!", shuffle.title.displayTitle)
     }
 
     @Test
@@ -276,7 +276,7 @@ class UserOverviewJsonTest {
         val kurisu = parse<UserOverviewData>(capturedOverview).user!!.favourites!!.characters!!.nodes!![1]
 
         assertEquals(7, kurisu.name!!.alternative!!.size)
-        assertEquals("Christina", kurisu.name!!.alternative!![0])
+        assertEquals("Christina", kurisu.name.alternative!![0])
     }
 
     @Test
@@ -388,8 +388,8 @@ class UserActivityJsonTest {
         assertEquals(0, activity.replyCount)
         assertEquals(1726929411, activity.createdAt)
         assertEquals("ANIME", activity.media!!.type)
-        assertEquals(1, activity.media!!.episodes)
-        assertEquals("https://s4.anilist.co/bx100465.png", activity.media!!.coverImage!!.large)
+        assertEquals(1, activity.media.episodes)
+        assertEquals("https://s4.anilist.co/bx100465.png", activity.media.coverImage!!.large)
     }
 
     @Test

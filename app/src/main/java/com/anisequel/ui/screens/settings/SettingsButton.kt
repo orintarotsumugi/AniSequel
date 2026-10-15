@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -79,8 +81,14 @@ fun SettingsButton(
     val height = if (variant == SettingsButtonVariant.Text) 40.dp else 48.dp
     val shape = MaterialTheme.shapes.large
 
+    // Shared with `bouncyPress` so the press comes from each button's own
+    // `clickable` - which cancels the moment the gesture is claimed as a drag -
+    // rather than from `bouncyPress`'s fallback pointer loop, which springs the
+    // control down on the first pointer-down and holds it for the whole of a
+    // scroll. One source for all four variants, since only one is ever drawn.
+    val interactionSource = remember { MutableInteractionSource() }
     val baseModifier = modifier
-        .bouncyPress(pressedScale = 0.96f)
+        .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
         .height(height)
         .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
         .then(testTag?.let { Modifier.testTag(it) } ?: Modifier)
@@ -124,6 +132,7 @@ fun SettingsButton(
             onClick = onClick,
             enabled = enabled,
             modifier = baseModifier,
+            interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.buttonColors(
                 disabledContainerColor = disabledContainer,
@@ -136,6 +145,7 @@ fun SettingsButton(
             onClick = onClick,
             enabled = enabled,
             modifier = baseModifier,
+            interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -150,6 +160,7 @@ fun SettingsButton(
             onClick = onClick,
             enabled = enabled,
             modifier = baseModifier,
+            interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.outlinedButtonColors(
                 disabledContentColor = disabledContent
@@ -161,6 +172,7 @@ fun SettingsButton(
             onClick = onClick,
             enabled = enabled,
             modifier = baseModifier,
+            interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.textButtonColors(
                 contentColor = MaterialTheme.colorScheme.primary

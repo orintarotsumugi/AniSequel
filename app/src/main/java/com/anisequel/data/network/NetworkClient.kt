@@ -1,9 +1,7 @@
 package com.anisequel.data.network
 
 import android.content.Context
-import android.os.Build
 import coil.ImageLoader
-import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
@@ -194,13 +192,16 @@ object NetworkClient {
                 // their first frame with no indication anything is missing, which
                 // reads as a broken image rather than a still one.
                 //
-                // It needs API 28. Below that, `GifDecoder` is the only animated
-                // decoder available and it stays as the fallback, so a GIF still
-                // animates on the oldest device this app supports.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    add(ImageDecoderDecoder.Factory())
-                }
-                add(GifDecoder.Factory())
+                // This used to be `if (SDK_INT >= P) { ImageDecoderDecoder }
+                // add(GifDecoder)`, because `ImageDecoder` arrived in API 28 and
+                // `GifDecoder` was the only animated decoder below it. `minSdk`
+                // is 31 now, so the guard could not be false on any device this
+                // app installs on and the fallback was unreachable - and
+                // unreachable code still ships its dependency: `coil-gif` was in
+                // every APK to decode GIFs on Android versions that cannot run
+                // this app at all. Both are deleted rather than left to rot; see
+                // AGENTS.md §2, "raising minSdk is a deletion".
+                add(ImageDecoderDecoder.Factory())
             }
             .build()
 

@@ -11,6 +11,7 @@ import com.anisequel.ui.components.update.UpdateInstallation
 import com.anisequel.ui.components.update.UpdateUiState
 import com.anisequel.ui.components.update.InstallerLaunch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -51,6 +52,13 @@ import java.io.File
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
+// `Dispatchers.setMain` / `resetMain` and `advanceUntilIdle` are still annotated
+// experimental in kotlinx-coroutines, and every use of them was a warning on
+// every build. A class-level opt-in is how the library documents accepting them:
+// it states the dependency once for the file that has it, instead of nine times
+// at the call sites - and it keeps the "no warnings" state of the build honest
+// rather than carrying nine exceptions to it.
+@OptIn(ExperimentalCoroutinesApi::class)
 class UpdateDownloadStateTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

@@ -41,6 +41,14 @@ val DarkSurface = Color(0xFF141F2B)
 val DarkSurfaceContainer = Color(0xFF1A2734)
 val DarkSurfaceContainerHigh = Color(0xFF21303F)
 val DarkSurfaceContainerHighest = Color(0xFF2A3B4C)
+// The two surface roles the app was leaving at their M3 defaults. Expressive
+// components (sheets, menus, the tonal app-bar states) read `surfaceDim` and
+// `surfaceBright` directly, and the Material defaults are derived from a
+// purple-grey seed - so they sat a shade off this app's navy scale and read as
+// a different palette wherever one appeared. Pinning them keeps the whole
+// surface ladder on the one hue.
+val DarkSurfaceDim = Color(0xFF0D151E)
+val DarkSurfaceBright = Color(0xFF34485C)
 val DarkBorder = Color(0xFF33465A)
 val DarkTextPrimary = Color(0xFFE8EFF6)
 val DarkTextSecondary = Color(0xFFA3B4C6)
@@ -51,6 +59,8 @@ val LightSurface = Color(0xFFFFFFFF)
 val LightSurfaceContainer = Color(0xFFEDF2F9)
 val LightSurfaceContainerHigh = Color(0xFFE4EBF5)
 val LightSurfaceContainerHighest = Color(0xFFDCE5F2)
+val LightSurfaceDim = Color(0xFFDDE4EF)
+val LightSurfaceBright = Color(0xFFFFFFFF)
 val LightBorder = Color(0xFFC3D0E0)
 val LightTextPrimary = Color(0xFF0D1520)
 val LightTextSecondary = Color(0xFF51637A)

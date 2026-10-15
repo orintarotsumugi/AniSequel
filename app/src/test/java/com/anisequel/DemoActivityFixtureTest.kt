@@ -66,7 +66,7 @@ class DemoActivityFixtureTest {
     @Test
     fun `every demo activity resolves to a titled media node`() {
         val blank = feed.filter {
-            it.media == null || it.media?.title?.displayTitle.isNullOrBlank()
+            it.media == null || it.media.title?.displayTitle.isNullOrBlank()
         }
 
         assertTrue(

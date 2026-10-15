@@ -51,12 +51,12 @@ class ActivityEngagementJsonTest {
         val activity = parse<ActivityDetailData>(json).activity!!
         assertEquals(790618779, activity.id)
         assertEquals(1, activity.replies!!.size)
-        val reply = activity.replies!![0]
+        val reply = activity.replies[0]
         assertEquals("Nice!", reply.text)
         assertEquals(2, reply.likeCount)
         assertEquals(true, reply.isLiked)
         assertEquals("Josh", reply.user!!.name)
-        assertEquals("https://s4.anilist.co/l.png", reply.user!!.avatar!!.large)
+        assertEquals("https://s4.anilist.co/l.png", reply.user.avatar!!.large)
     }
 
     @Test

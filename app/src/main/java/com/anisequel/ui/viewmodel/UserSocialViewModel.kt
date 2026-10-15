@@ -84,10 +84,15 @@ class UserSocialViewModel(
         this.userId = newUserId
         val current = _state.value
         if (current is SocialState.Error || current is SocialState.Loading) {
+            // No `else` branch: the guard above narrows `current` to those two
+            // states, so a fallback to `SocialList.FOLLOWERS` could never run.
+            // The compiler reported it on every build ("'when' is exhaustive so
+            // 'else' is redundant here"); removing it means the day someone
+            // widens the guard, this stops compiling instead of quietly fetching
+            // a different list than the one the user is looking at.
             val selected = when (current) {
                 is SocialState.Error -> current.list
                 is SocialState.Loading -> current.list
-                else -> SocialList.FOLLOWERS
             }
             load(selected, forceRefresh = true)
         }

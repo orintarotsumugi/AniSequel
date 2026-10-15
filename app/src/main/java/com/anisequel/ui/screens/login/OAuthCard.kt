@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +55,19 @@ fun OAuthCard(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    // One source per control, shared between the button and its `bouncyPress`.
+    //
+    // `bouncyPress` can find the press itself when it is not given a source, but
+    // its fallback is a pointer loop that has no idea whether the gesture became
+    // a scroll - so a finger that lands on the button and drags squashed it for
+    // the whole drag and then sprang back, which reads as two presses. The card
+    // sits in the login screen's scrolling column. Reading each button's own
+    // source means the press is emitted on down and *cancelled* when the gesture
+    // is claimed, and it keeps the ripple and the scale from disagreeing about
+    // when the button is pressed.
+    val connectButtonSource = remember { MutableInteractionSource() }
+    val pasteTokenSource = remember { MutableInteractionSource() }
+    val clientIdSource = remember { MutableInteractionSource() }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Card(
@@ -142,9 +157,10 @@ fun OAuthCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
-                    .bouncyPress(pressedScale = 0.96f)
+                    .bouncyPress(pressedScale = 0.96f, interactionSource = connectButtonSource)
                     .testTag("connect_anilist_button"),
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.small,
+                interactionSource = connectButtonSource
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Login,
@@ -170,7 +186,8 @@ fun OAuthCard(
                     onClick = onShowManualToken,
                     modifier = Modifier
                         .testTag("paste_token_button")
-                        .bouncyPress(pressedScale = 0.94f)
+                        .bouncyPress(pressedScale = 0.94f, interactionSource = pasteTokenSource),
+                    interactionSource = pasteTokenSource
                 ) {
                     Text("Paste Token")
                 }
@@ -183,7 +200,8 @@ fun OAuthCard(
                     onClick = onShowClientId,
                     modifier = Modifier
                         .testTag("custom_client_id_button")
-                        .bouncyPress(pressedScale = 0.94f)
+                        .bouncyPress(pressedScale = 0.94f, interactionSource = clientIdSource),
+                    interactionSource = clientIdSource
                 ) {
                     Text("Client ID")
                 }

@@ -1,19 +1,30 @@
 [versions]
-# 9.4.1, the newest *stable* AGP. 9.5.0 exists only as alpha09 at the time of
-# writing, and an alpha build system is a different decision from an alpha UI
-# library: material3 above is pinned to an alpha deliberately and for a written
-# reason, whereas this one gates every build the project makes.
+# 9.5.0, the newest stable AGP. It requires Gradle 9.6.0 minimum, which the
+# wrapper satisfies at 9.7.0.
 #
 # This is not independent of the Gradle version. AGP checks the Gradle it is
 # running on and fails the build if it is too old, so the two move together -
 # see gradle/wrapper/gradle-wrapper.properties. It is also the reason a failure
 # here would surface as an unhelpful "AAR metadata" or "minimum Gradle" message
 # rather than pointing at this line.
-agp = "9.4.1"
-coreKtx = "1.18.0"
+#
+# The wrapper stops at 9.7.0 rather than the newest Gradle (9.8.1): Kotlin
+# 2.4.21's Gradle plugin is only verified through Gradle 9.7.0, and AGP 9.5's
+# own floor is 9.6.0, so 9.7.0 is the one version inside both.
+#
+# AGP 9.5 supports API 37 as a ceiling; compileSdk stays 36.1 because moving it
+# is a separate, coordinated decision - see the note on material3 below.
+agp = "9.5.0"
+# 1.19.1, newest stable. `core` is the conservative half of AndroidX and does
+# not ride the Compose line, so it is safe to move on its own.
+coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
+# NOT bumped, deliberately. activity and lifecycle are Compose-adjacent -
+# activity-compose and lifecycle-runtime-compose pull the Compose line in - so
+# their newest releases ride the same compileSdk 37 floor as the BOM below and
+# have to move as one with it rather than independently.
 lifecycleRuntimeKtx = "2.8.7"
 lifecycleViewmodelCompose = "2.8.7"
 lifecycleRuntimeCompose = "2.8.7"
@@ -24,6 +35,14 @@ activityCompose = "1.10.1"
 kotlin = "2.4.21"
 # 2025.11.01 is the first BOM that resolves androidx.compose.material3 to
 # 1.4.0 - the first stable Material 3 Expressive release.
+#
+# NOT bumped to the current BOM (2026.08.00) here, and the reason is a hard
+# floor rather than caution: every Compose BOM from 2026.04 onward resolves the
+# core Compose libraries to the 1.11/1.12 line, which requires compileSdk 37,
+# while this app compiles against 36.1. Raising the BOM alone fails the AAR
+# metadata check. The BOM, material3 and compileSdk are one coordinated move
+# that has to be verified by a real build (see AGENTS.md §4), so they are left
+# together until that build can run.
 composeBom = "2025.11.01"
 # 1.4.0 stable ships the *theming* half of Expressive (MaterialExpressiveTheme,
 # MotionScheme, MaterialShapes) but not the component set. LoadingIndicator,
@@ -38,6 +57,10 @@ composeBom = "2025.11.01"
 #
 # Verified by extracting each artifact and compiling against the real signatures,
 # not by reading release notes.
+#
+# Still alpha14 by that same rule: the 1.5.0 line has since reached beta01 (Oct
+# 2026), but it sits above the same compileSdk 37 floor and is not reachable
+# from 36.1 either, so there is nothing newer to move to in this change.
 material3 = "1.5.0-alpha14"
 # KSP2's own versioning, which since 2.3.0 is decoupled from the Kotlin version
 # above - it is not the old `2.2.10-2.0.2` shape. That is why this is safe to
@@ -45,22 +68,47 @@ material3 = "1.5.0-alpha14"
 # being pinned to a Kotlin version: the two would have to be read together
 # again.
 googleDevtoolsKsp = "2.3.12"
+# NOT bumped. navigation-compose is built on the Compose line, so its newest
+# releases share the compileSdk 37 floor with the BOM above and cannot move
+# independently of it.
 navigationCompose = "2.8.9"
-kotlinxCoroutinesTest = "1.10.2"
+# 1.11.0, newest stable. The core/android/test artifacts below are all the same
+# release line and are bumped together.
+kotlinxCoroutinesTest = "1.11.0"
 core = "1.6.1"
 runner = "1.6.2"
+# NOT bumped to Coil 3.x, because that is a migration rather than a version
+# bump: the group changes to `io.coil-kt.coil3`, every `coil.*` package becomes
+# `coil3.*` across ~25 files, core no longer ships a network fetcher (so it also
+# needs `coil-network-okhttp`), and `ImageLoaderFactory` becomes
+# `SingletonImageLoader.Factory`. That has to be compiled to be trusted, so it
+# is kept out of a version sweep.
 coilCompose = "2.7.0"
-retrofit = "2.12.0"
-converterMoshi = "2.12.0"
-kotlinxCoroutinesAndroid = "1.10.2"
-kotlinxCoroutinesCore = "1.10.2"
-loggingInterceptor = "4.10.0"
-okhttp = "4.12.0"
+# 3.0.0, newest stable. Retrofit 3 keeps the `com.squareup.retrofit2` coordinates
+# and its release notes state forward binary compatibility with 2.x, so the
+# service interfaces and the Moshi converter factory are unchanged.
+retrofit = "3.0.0"
+converterMoshi = "3.0.0"
+kotlinxCoroutinesAndroid = "1.11.0"
+kotlinxCoroutinesCore = "1.11.0"
+# 5.5.0, newest stable. OkHttp 5 keeps the `com.squareup.okhttp3` coordinates
+# and Gradle module metadata now selects the Android or JVM variant
+# automatically, so no artifact name changes. It is a new major, so this is the
+# one networking bump worth a build: Retrofit 3.0.0 still declares OkHttp 4.12
+# as its published baseline and neither project's notes say the pairing was
+# tested, so treat the two as an unverified pair.
+loggingInterceptor = "5.5.0"
+okhttp = "5.5.0"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
-datastorePreferences = "1.1.7"
-browser = "1.8.0"
-robolectric = "4.16.1"
+# 1.2.1, newest stable on the 1.2 line.
+datastorePreferences = "1.2.1"
+# 1.10.0, newest stable.
+browser = "1.10.0"
+# 4.17, newest stable. Test-only. Its release notes flag changes to
+# `AndroidVersions` and `ShadowCameraCharacteristics.set`, neither of which this
+# suite touches, and note that JDK 17+ may need JVM flags.
+robolectric = "4.17"
 
 
 [libraries]
@@ -91,8 +139,13 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 # transitively; depending on it directly is what makes the graphics-shapes types
 # in our own signatures resolvable.
 androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version = "1.0.1" }
+# `coil-gif` used to be declared here, for the `GifDecoder` fallback that
+# existed because `ImageDecoder` needs API 28. `minSdk` is 31, so the fallback
+# was unreachable on every device this app can be installed on while still
+# packaging the artifact - the animated WebP/GIF/APNG decoding the app actually
+# needs comes from the platform decoder registered in `NetworkClient`. Removed
+# rather than left declared; do not re-add it without a device below API 28.
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
-coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coilCompose" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }

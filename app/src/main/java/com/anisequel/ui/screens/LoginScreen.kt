@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,11 +60,32 @@ fun LoginScreen(
     onScanUsername: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    // `rememberSaveable` for the tab, matching `SettingsScreen` - the one other
+    // tabbed screen in the app. This one used a plain `remember`, so rotating the
+    // phone mid-setup silently dropped the user back on the Sign In tab from
+    // Scan, which is the tab a first-time user is most likely to be reading.
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showClientIdDialog by remember { mutableStateOf(false) }
     var showManualTokenDialog by remember { mutableStateOf(false) }
+    // Hoisted out of `UsernameScanCard` so a typed username survives a tab
+    // switch. The tabs live in an `AnimatedContent`, which disposes the tab it
+    // animates away from - so the field was cleared the moment the user looked
+    // at Sign In and came back. `rememberSaveable` also carries it across a
+    // rotation.
+    var scanUsername by rememberSaveable { mutableStateOf("") }
     val currentClientId by authViewModel.clientId.collectAsState()
+    // Built once per client id rather than on every recomposition of the tab
+    // content, which re-runs on every crossfade.
+    val authUrl = remember(currentClientId) { authViewModel.getAuthorizationUrl() }
     val haptic = LocalHapticFeedback.current
+    // Shared with `bouncyPress` below, so the press comes from the button's own
+    // `clickable` - which cancels the moment the gesture is claimed as a scroll -
+    // instead of from `bouncyPress`'s fallback pointer loop. The fallback springs
+    // the button down on the first pointer-down and holds it there for the whole
+    // drag, so starting a scroll with a finger on this button squashed it until
+    // the finger lifted. This screen scrolls, so that was reachable on every
+    // launch.
+    val demoButtonSource = remember { MutableInteractionSource() }
 
     Scaffold(
         modifier = modifier
@@ -123,13 +146,15 @@ fun LoginScreen(
                     if (tab == 0) {
                         OAuthCard(
                             authState = authState,
-                            authUrl = authViewModel.getAuthorizationUrl(),
+                            authUrl = authUrl,
                             onRetry = authViewModel::dismissAuthError,
                             onShowManualToken = { showManualTokenDialog = true },
                             onShowClientId = { showClientIdDialog = true }
                         )
                     } else {
                         UsernameScanCard(
+                            username = scanUsername,
+                            onUsernameChange = { scanUsername = it },
                             onScanUsername = onScanUsername
                         )
                     }
@@ -147,8 +172,9 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .height(48.dp)
                         .testTag("explore_demo_button")
-                        .bouncyPress(pressedScale = 0.97f),
-                    shape = MaterialTheme.shapes.small
+                        .bouncyPress(pressedScale = 0.97f, interactionSource = demoButtonSource),
+                    shape = MaterialTheme.shapes.small,
+                    interactionSource = demoButtonSource
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Visibility,
