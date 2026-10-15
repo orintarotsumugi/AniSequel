@@ -33,8 +33,9 @@ data class UserOverview(
      * the app. That stopped being true when `ui/components/markdown/` was added,
      * and `AboutCard` has rendered these nodes rich ever since, so the sentence was
      * describing a renderer that no longer exists while the one that does went
-     * unmentioned. (`stripMarkdown` in `ProfileAboutCard` is the leftover from that
-     * approach: no UI calls it any more - only `ProfileTextFormattingTest` does.)
+     * unmentioned. (`stripMarkdown` was the leftover from that approach. Nothing
+     * ever rendered it — only its own test suite did — and it has since been
+     * deleted along with those tests.)
      * The API's `ParsedMarkdown` is still not the path: it answers with a GFM AST
      * rather than anything renderable.
      */

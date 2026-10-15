@@ -203,27 +203,18 @@ internal fun NoBioNote() {
     )
 }
 
-private val STRIP_LINK_REGEX = Regex("""\[([^\]]+)]\([^)]*\)""")
-private val STRIP_IMAGE_REGEX = Regex("""!\[[^\]]*]\([^)]*\)""")
-private val STRIP_HEADER_REGEX = Regex("""^[ \t]{0,3}#{1,6}[ \t]*""", RegexOption.MULTILINE)
-private val STRIP_BLOCKQUOTE_REGEX = Regex("""^[ \t]{0,3}>[ \t]?""")
-private val STRIP_BOLD_REGEX = Regex("""(\*\*|__)(.+?)\1""")
-private val STRIP_ITALIC_REGEX = Regex("""(\*|_)(.+?)\1""")
-private val STRIP_LIST_REGEX = Regex("""^[ \t]{0,3}[-*+][ \t]+""", RegexOption.MULTILINE)
-private val STRIP_CODE_REGEX = Regex("""`([^`]+)`""")
-private val STRIP_NEWLINES_REGEX = Regex("""\n{3,}""")
-
-/**
- * Reduce Markdown to plain text.
- */
-internal fun stripMarkdown(source: String): String = source
-    .replace(STRIP_LINK_REGEX, "$1")
-    .replace(STRIP_IMAGE_REGEX, "")
-    .replace(STRIP_HEADER_REGEX, "")
-    .replace(STRIP_BLOCKQUOTE_REGEX, "")
-    .replace(STRIP_BOLD_REGEX, "$2")
-    .replace(STRIP_ITALIC_REGEX, "$2")
-    .replace(STRIP_LIST_REGEX, "")
-    .replace(STRIP_CODE_REGEX, "$1")
-    .replace(STRIP_NEWLINES_REGEX, "\n\n")
-    .trim()
+// `stripMarkdown` and its nine regexes used to live here, with a test suite in
+// ProfileTextFormattingTest.kt.
+//
+// Nothing rendered it. `AboutCard` draws the parsed AST through
+// `AniListMarkdownView`, so the only thing keeping a Markdown-to-plain-text
+// formatter alive was its own test - and that is the worst kind of evidence,
+// because a tested-but-uncalled function reads as "some screen must be using
+// this" to the next person who opens the file.
+//
+// It is deleted rather than wired up. A single-line preview of a bio is a real
+// thing to want (a search result, a future social row), but when it is wanted it
+// should be written against the real requirement, which is that over-stripping
+// is worse than under-stripping: a bio that loses its asterisks and also loses
+// its apostrophes is a person's own words edited by their app. Those tests are
+// worth keeping in that form, and are re-added then.

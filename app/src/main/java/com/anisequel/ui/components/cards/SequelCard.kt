@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.cards
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -39,11 +41,25 @@ fun SequelCard(
     holdDurationSeconds: Int = 3,
     swipeEnabled: Boolean = true
 ) {
+    // Shared with `bouncyPress`, so the press state comes from the `Card` rather
+    // than from `bouncyPress`'s own pointer-input loop.
+    //
+    // This is the most consequential of the call sites that were missing one.
+    // `bouncyPress`'s own KDoc names this card as the case that matters most,
+    // because there is one of these on every row of the dashboard's LazyColumn -
+    // and a loop that sets "pressed" on every pointer-down springs each row in
+    // and back out as a fling passes over it, and costs a second pointer-input
+    // node per row while it does it. The `Card(onClick =)` overload takes an
+    // `interactionSource`, and given one, it emits press on down and cancels the
+    // moment the gesture is claimed as a drag - which is the thing the loop was
+    // approximating badly. With a source shared, the loop is not installed.
+    val interactionSource = remember { MutableInteractionSource() }
+
     Card(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.98f)
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .testTag("sequel_card_${sequel.sequelId}"),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
@@ -53,7 +69,8 @@ fun SequelCard(
             defaultElevation = 2.dp,
             pressedElevation = 6.dp
         ),
-        border = CardDefaults.outlinedCardBorder()
+        border = CardDefaults.outlinedCardBorder(),
+        interactionSource = interactionSource
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Relation banner

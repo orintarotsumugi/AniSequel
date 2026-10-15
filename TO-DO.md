@@ -11,18 +11,13 @@ problem and should jump the queue.
 
 ## 0. Correctness
 
-### 0.1 The tier list's `seeded_for_v1` is written and never read
+**Nothing open.** This queue is for correctness and security problems and should
+jump everything below it. It held one entry — a tier-list key that was written and
+never read — which is now deleted rather than wired up; see [Closed](#closed).
 
-`TierListPreferences.markSeededFor` records which AniList account has been offered
-the "rank from scores" seeding, and nothing reads it back. It was introduced so the
-offer could be made once per account, and the UI never did that — the offer is on
-the empty state of every list instead, which is arguably the better behaviour now
-that lists are documents (a new list *is* a new offer).
-
-Nothing is broken by it: it is one small string, and it has been that way since the
-tier list shipped. The cost is that it reads as load-bearing state that a future
-reader has to work out is dead. Either use it — the library could mark which of
-the person's own lists was seeded for them — or delete the key and the write.
+The section is kept rather than renumbered away so that the `§N.M` references
+throughout this file, and in the code comments that point at it, keep pointing at
+the right thing. If you add something here, it goes above `## 1`.
 
 ---
 
@@ -76,7 +71,7 @@ The version that would actually work:
 Do not start at the end. The filters first is not busywork; it is what makes the
 pipeline's inputs explicit enough to hand to a class.
 
-### 1.3 `bouncyPress` is a `composed { }` modifier, and 44 call sites skip its fix — medium effort
+### 1.3 `bouncyPress` is a `composed { }` modifier, and 43 call sites skip its fix — medium effort
 
 `ExpressiveMotion.bouncyPress` uses `Modifier.composed`, which is deprecated in
 favour of `Modifier.Node` / `ModifierNodeElement`. The cost is not just the
@@ -90,24 +85,40 @@ should measure the frame time before and after with a macrobenchmark; there is n
 benchmark module in the repo yet.
 
 **The bigger half of this is the `interactionSource` argument, not `composed`.**
-Of 56 call sites, only **11** pass a source. The other **44** get the fallback
-path, which installs a second `pointerInput` node that sets "pressed" on every
-pointer-down before anything knows whether the gesture is a tap or the start of a
-fling — so a finger dragged across one of those elements springs it down and
-then back: two springs per gesture. Passing the source costs one line per site
-and removes the node entirely.
+Of 56 call sites, 13 now pass a source and **43** do not. The other 43 get the
+fallback path, which installs a second `pointerInput` node that sets "pressed" on
+every pointer-down — so a finger dragged across one of those elements springs it
+down and back up again: two springs per gesture.
 
-`AnimeTrailerBanner` was one of the 44 and is now fixed; it was the one inside a
-scrolling sheet, which is where it is most visible. The rest are single-line
-mechanical changes, but there are 44 of them and **no device in the development
-environment to check any of them on** — so this is a good candidate for doing in
-one pass with a real phone afterwards, rather than one at a time.
+**The fallback cannot be fixed centrally, and that is worth knowing before anyone
+tries.** The obvious repair is to defer the press until the first movement
+confirms the gesture is still within touch slop — but a genuinely still tap may
+produce no movement event at all before lift, and deferring would silently
+remove press feedback from every tap in the app. `Modifier.clickable` does not
+have this problem because it cancels press the moment the gesture is *claimed*,
+which is information this heuristic does not have and cannot get later. So the
+fix is per-site, and it is one line each.
 
-### 1.4 `UpdateManifest.kt` mixes the model, the comparison logic, the URL and a byte formatter
+Fixed so far, both because they are the two a finger meets most:
 
-129 lines, but it means `formatBytes` (a UI helper) and `isNewerThan` (a policy
-decision) sit in the same file as the DTO. Splitting them is cheap and would let
-`isNewerThan` get a proper test without constructing a full manifest.
+| Site | Why it mattered |
+| --- | --- |
+| `SequelCard` | One of these is on every row of the dashboard's `LazyColumn`, and `bouncyPress`'s own KDoc names it as the case that matters most |
+| `AnimeTrailerBanner` | Inside the detail sheet's scroll, and directly implicated in a reported "bounces twice" |
+
+The remaining 43 are **not** all the same, and the split has not been measured —
+it needs reading each one rather than pattern-matching the file:
+
+- some have a `clickable` / `combinedClickable` / `Button(onClick=)` in the same
+  modifier chain and can share a source, which is a one-line change each;
+- some are decorative presses on elements that are not themselves interactive, and
+  there is no source to share — the honest fix there may be to drop the press
+  rather than wire it up, which is a different change with a different review.
+
+**Do these as one pass, with a real phone afterwards.** There is no Android SDK in
+the development environment, so none of them can be checked from here, and a
+press-behaviour regression is invisible in review. Doing forty of them blind in
+small batches is how one of them ships broken.
 
 ---
 
@@ -242,75 +253,6 @@ for it. `DashboardUiState.Loading` carries a static message. A real progress
 model would need the scan to emit intermediate results, which is a domain-layer
 change — related to §1.2.
 
----
-
-## 5. Profile UI follow-ups
-
-The profile screen got a visual pass — hero header, summary strip, blurred
-activity backdrops, a scan-friendly friends grid, and nested-markdown rendering.
-What that pass deliberately did **not** do is listed here so the next person does
-not mistake each one for an oversight.
-
-### 5.1 `stripMarkdown` is UI-dead and only its test keeps it alive
-
-`ProfileAboutCard.stripMarkdown` strips Markdown to plain text. No screen calls
-it any more — `AboutCard` renders the parsed AST — but `StripMarkdownTest` (the
-class inside `ProfileTextFormattingTest.kt`, which is a misleading filename)
-still exercises it, so it cannot simply be deleted without removing that suite
-too.
-
-Either wire it back in where a single-line preview of a bio is wanted (a search
-result, a future social feed row) or delete both the function and its tests in
-one change. Leaving a tested-but-unused formatter is how the next reader assumes
-some screen is using it.
-
-### 5.2 Blur has no cost measurement on a long activity feed
-
-`ActivityCard` blurs every cover it draws (`Modifier.blur(28.dp)`), and an
-activity feed is unbounded — it pages. On a low-end device, a screenful of
-blurred layers is the first thing likely to drop frames, and there is no
-benchmark module to say whether it does (see §2.3 / §3.4).
-
-First step: measure with `macrobenchmark` on one scrolling test, then either cap
-the blur to the visible cards or replace it with a pre-blurred server-side
-transform. Do not guess either way.
-
-### 5.3 The hero header does not collapse on scroll
-
-The banner is a fixed **260dp** block (it was 200dp when this was written, and is
-now horizontally pannable via `PannableBackdrop`, so it is draggable but still
-does not yield its height). The reference design it follows collapses it into the
-top app bar as the page scrolls, reclaiming that height for the bio and
-favourites.
-
-This needs the header to be a `LazyColumn` item that reports a scroll offset
-to a `TopAppBar`'s `scrollBehavior`, plus a decision about what the bar shows
-while collapsed. Worth doing only with a screenshot test in place first, because
-the failure mode (a header that flickers between two states) is exactly what a
-review cannot see.
-
-### 5.4 Markdown nesting stops at four levels and then degrades to raw text
-
-`AniListMarkdownParser` re-parses an emphasis run's or link label's inner
-expression, capped at `MAX_INLINE_DEPTH = 4`. Past the cap the renderer falls
-back to the flat source text, so a pathological bio would still print asterisks.
-
-Real bios never get close, and the cap is what prevents unbounded recursion. If
-it ever needs raising, raise it with a test that pins the cap rather than
-removing the guard.
-
-### 5.5 No screenshot tests for the profile tabs
-
-The five profile tabs — Home, Activity, Stats, Library, Social — are the most
-shape-variable screens in the app (they change entirely between an account that
-pinned nothing and one that pinned fifty), and nothing asserts what they look
-like. Every visual claim in this pass was verified by reading code and comparing
-against a reference image, not by a test.
-
-A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
-already builds, would turn §5.2 and §5.3 into measurements and catch the next
-regression in the header the way `ExpressiveShapesTest` catches capsule geometry.
-
 ### 4.2 The detail sheet bounces twice at the ends — OPEN, needs a device
 
 Reported as: fling the "Anime Info & Specs" tab to the bottom and it bounces
@@ -340,11 +282,123 @@ line and reversible, and record which one it actually was here.
 
 ---
 
+## 5. Profile UI follow-ups
+
+The profile screen got a visual pass — hero header, summary strip, blurred
+activity backdrops, a scan-friendly friends grid, and nested-markdown rendering.
+What that pass deliberately did **not** do is listed here so the next person does
+not mistake each one for an oversight.
+
+### 5.1 Blur has no cost measurement on a long activity feed
+
+`ActivityCard` blurs every cover it draws (`Modifier.blur(28.dp)`), and an
+activity feed is unbounded — it pages. On a low-end device, a screenful of
+blurred layers is the first thing likely to drop frames, and there is no
+benchmark module to say whether it does (see §2.3 / §3.4).
+
+First step: measure with `macrobenchmark` on one scrolling test, then either cap
+the blur to the visible cards or replace it with a pre-blurred server-side
+transform. Do not guess either way.
+
+### 5.2 The hero header does not collapse on scroll
+
+The banner is a fixed **260dp** block (it was 200dp when this was written, and is
+now horizontally pannable via `PannableBackdrop`, so it is draggable but still
+does not yield its height). The reference design it follows collapses it into the
+top app bar as the page scrolls, reclaiming that height for the bio and
+favourites.
+
+This needs the header to be a `LazyColumn` item that reports a scroll offset
+to a `TopAppBar`'s `scrollBehavior`, plus a decision about what the bar shows
+while collapsed. Worth doing only with a screenshot test in place first, because
+the failure mode (a header that flickers between two states) is exactly what a
+review cannot see.
+
+### 5.3 ~~Markdown nesting stops at four levels~~ — not a defect, moved out of the backlog
+
+`AniListMarkdownParser` re-parses an emphasis run's or link label's inner
+expression, capped at `MAX_INLINE_DEPTH = 4`, and past the cap the renderer falls
+back to the flat source text.
+
+This is a **working guard, not a known problem**, and it was only ever in this
+list because it reads like one: a cap is a thing that might need raising. It does
+not, and it should not be "fixed". The cap is what prevents unbounded recursion
+on a hand-edited string, a real bio never comes close to it, and the degradation
+below it is a legible fallback rather than a crash.
+
+If it ever genuinely needs raising, raise it *with a test that pins the new
+value* rather than by removing the guard. Nothing to do.
+
+### 5.4 No screenshot tests for the profile tabs
+
+The five profile tabs — Home, Activity, Stats, Library, Social — are the most
+shape-variable screens in the app (they change entirely between an account that
+pinned nothing and one that pinned fifty), and nothing asserts what they look
+like. Every visual claim in this pass was verified by reading code and comparing
+against a reference image, not by a test.
+
+A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
+already builds, would turn §5.1 and §5.2 into measurements and catch the next
+regression in the header the way `ExpressiveShapesTest` catches capsule geometry.
+
+---
+
 ## Closed
 
 Entries that used to live above and are no longer true. Kept rather than
 deleted, because in each case the *reason* is the part worth not re-deriving —
 see [AGENTS.md §1](AGENTS.md).
+
+### The tier list's `seeded_for_v1` was written and never read
+
+`TierListPreferences.markSeededFor` recorded which AniList account had been
+offered "Rank from AniList scores", so the offer could be made once per account.
+Nothing ever read it back — the offer ended up on the empty state of every list,
+which is the better behaviour now that lists are documents: a new list *is* a new
+offer, with no flag to keep in step.
+
+Deleted rather than wired up, because "have we already seeded this account" is not
+a question the library has. The key stays in stored preferences and does not need
+removing: DataStore is a map and an unread key is inert.
+
+### `UpdateManifest.kt` mixed the wire model with UI display helpers
+
+`formatBytes` and `formatRate` are pure display formatting for the settings and
+update dialogs; they were sitting next to the manifest DTO, which meant
+`UpdateManifestTest` had to import a UI helper to check a unit conversion. Both
+are in `UpdateFormatting.kt` now, same package, so no call site changed.
+
+The original entry proposed moving `isNewerThan` out too, "so it could get a
+proper test without constructing a full manifest". **That test already existed** —
+four dedicated cases, and every manifest field defaults, so
+`UpdateManifest(versionCode = 17)` is the whole fixture. `isNewerThan` stayed on
+the manifest, which is where a fact about a manifest belongs.
+
+### `stripMarkdown` was UI-dead and only its own test kept it alive
+
+`ProfileAboutCard.stripMarkdown` reduced a bio to plain text. Nothing rendered it
+— `AboutCard` draws the parsed AST — but twelve cases in `ProfileTextFormattingTest`
+exercised it, which is the worst kind of evidence: a tested-but-uncalled function
+reads as "some screen must be using this".
+
+Both went together. The property those tests pinned is preserved in a note at the
+site, because it is right and worth keeping if a single-line bio preview is ever
+wanted: **over-stripping is the real risk.** A bio that loses its asterisks and
+also loses its apostrophes is a person's words edited by their app.
+
+### The nav pill's label never fitted
+
+`ExpressiveNavigationBar`'s `SELECTED_WEIGHT` was 1.6, described as "enough that
+the longest label fits". It was not — it was tuned against the label *clipping*
+rather than its fitting. On a 360dp phone the selected slot was 86dp, leaving
+29.3dp of label room against the ~55dp "Activity" needs, so **every** destination
+ellipsized at every phone width. Now 2.3, with the bar's and item's own padding
+trimmed to hand the difference to the label: 60.2dp of room, with the four
+unselected items still at 49.2dp against the 48dp tap-target floor.
+
+`ExpressiveTabBar` had the same problem with longer labels and could not be fixed
+by geometry — "Anime Info & Specs" needs ~133dp of a 78.7dp budget. Those labels
+are shortened instead.
 
 ### The dashboard detail cache had no size bound
 

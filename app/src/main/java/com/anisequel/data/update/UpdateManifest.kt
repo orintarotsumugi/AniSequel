@@ -104,27 +104,8 @@ sealed interface UpdateDownloadResult {
 const val UPDATE_MANIFEST_URL: String =
     "https://github.com/LOST-4EVER/AniSequel/releases/latest/download/update.json"
 
-/** Human-readable size, for the "12.4 MB" line under the update button. */
-fun formatBytes(bytes: Long?): String {
-    if (bytes == null || bytes < 0) return "unknown size"
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.0f KB", kb)
-    return String.format("%.1f MB", kb / 1024.0)
-}
-
-/**
- * Human-readable speed, for the download line.
- *
- * Empty rather than "0 B/s" when there is no reading yet. The two are different
- * things to read - "not moving" is worth waiting out, "we do not know yet" is
- * the first second of every transfer - and printing a rate that is really just
- * an absence of one would tell the user their download had stopped.
- *
- * A byte counter over a second is too small to be worth reading, so it is
- * reported in KB; there is no number to show below that which is not noise.
- */
-fun formatRate(bytesPerSecond: Long?): String {
-    if (bytesPerSecond == null || bytesPerSecond < 1024) return ""
-    return "${formatBytes(bytesPerSecond)}/s"
-}
+// `formatBytes` and `formatRate` used to live here. They are display helpers for
+// the settings and update dialogs, not part of the wire model, and keeping them
+// next to the DTO meant a UI test had to import the manifest to check a unit
+// conversion. Both are in UpdateFormatting.kt now, same package, so no call site
+// changed.
