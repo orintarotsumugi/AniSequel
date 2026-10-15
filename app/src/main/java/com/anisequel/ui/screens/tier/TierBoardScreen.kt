@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.tier
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -387,7 +388,7 @@ private fun TierNotice(text: String, onDismiss: (() -> Unit)?) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
             .background(AniSequelTheme.statusColors.infoContainer)
             .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -435,7 +436,7 @@ private fun TierUndoRow(label: String, onUndo: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically

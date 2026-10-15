@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -154,7 +155,7 @@ private fun TitlesCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier.fillMaxWidth()
     ) {
@@ -241,7 +242,7 @@ private fun SpecCard(
     // dragging past a spec tile made it pulse under the thumb. A surface that
     // cannot be pressed should look like one.
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier.fillMaxHeight()
     ) {

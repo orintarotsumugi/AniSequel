@@ -11,29 +11,13 @@ problem and should jump the queue.
 
 ## 0. Correctness
 
-### 0.1 The tier list's `seeded_for_v1` is written and never read
+**Nothing open.** This queue is for correctness and security problems and should
+jump everything below it. It held one entry — a tier-list key that was written and
+never read — which is now deleted rather than wired up; see [Closed](#closed).
 
-`TierListPreferences.markSeededFor` records which AniList account has been offered
-the "rank from scores" seeding, and nothing reads it back. It was introduced so the
-offer could be made once per account, and the UI never did that — the offer is on
-the empty state of every list instead, which is arguably the better behaviour now
-that lists are documents (a new list *is* a new offer).
-
-Nothing is broken by it: it is one small string, and it has been that way since the
-tier list shipped. The cost is that it reads as load-bearing state that a future
-reader has to work out is dead. Either use it — the library could mark which of
-the person's own lists was seeded for them — or delete the key and the write.
-
-### 0.2 The dashboard detail cache has no size bound
-
-`detailCache` is a `Map` in `DashboardViewModel`, cleared on a new list load but
-not evicted on its own. A large account fills it with one entry per discovered
-candidate and it stays that size for the life of the ViewModel.
-
-Low severity — it is bounded by the account's own completed list, so it cannot
-grow without limit from one session — but it is unbounded *by design* rather than
-by measurement. An LRU with a sane cap, or a size assertion in a test, would
-make the current behaviour deliberate.
+The section is kept rather than renumbered away so that the `§N.M` references
+throughout this file, and in the code comments that point at it, keep pointing at
+the right thing. If you add something here, it goes above `## 1`.
 
 ---
 
@@ -41,11 +25,11 @@ make the current behaviour deliberate.
 
 ### 1.1 Split `UpdateManager` — medium effort, mechanical once started
 
-Roughly 420 lines, of which the manifest fetch, the download loop, the
-certificate verification and the cache management are four unrelated jobs. This
-was left as-is because the signing block depends on Android APIs that need
-careful test setup, and there is no local Android SDK in the development
-environment to verify a split against.
+508 lines, of which the manifest fetch, the download loop, the certificate
+verification and the cache management are four unrelated jobs. This was left as-is
+because the signing block depends on Android APIs that need careful test setup,
+and there is no local Android SDK in the development environment to verify a split
+against.
 
 Suggested split, in dependency order:
 
@@ -60,8 +44,9 @@ The cache half is pure file operations and is the easiest to test — a
 
 ### 1.2 Split `DashboardViewModel`'s recompute pipeline — medium effort, needs care
 
-The file is ~780 lines including comments, and ~450 excluding them. The public
-contract (`DashboardUiState`, `DashboardEvent`) is already extracted to
+The file is ~1120 lines including comments, well past the 250–400 in
+[AGENTS.md §1](AGENTS.md) and the largest file in the repo by a wide margin. The
+public contract (`DashboardUiState`, `DashboardEvent`) is already extracted to
 `DashboardUiState.kt`, and the triplicated cache-invalidation is now one
 `invalidateDerivedState()` function with its divergence made explicit.
 
@@ -86,7 +71,7 @@ The version that would actually work:
 Do not start at the end. The filters first is not busywork; it is what makes the
 pipeline's inputs explicit enough to hand to a class.
 
-### 1.2 `bouncyPress` is a `composed { }` modifier — medium effort, decent win
+### 1.3 `bouncyPress` is a `composed { }` modifier, and 43 call sites skip its fix — medium effort
 
 `ExpressiveMotion.bouncyPress` uses `Modifier.composed`, which is deprecated in
 favour of `Modifier.Node` / `ModifierNodeElement`. The cost is not just the
@@ -99,11 +84,41 @@ same and already removes the deprecation. The full `ModifierNodeElement` rewrite
 should measure the frame time before and after with a macrobenchmark; there is no
 benchmark module in the repo yet.
 
-### 1.3 `UpdateManifest.kt` mixes the model, the comparison logic, the URL and a byte formatter
+**The bigger half of this is the `interactionSource` argument, not `composed`.**
+Of 56 call sites, 13 now pass a source and **43** do not. The other 43 get the
+fallback path, which installs a second `pointerInput` node that sets "pressed" on
+every pointer-down — so a finger dragged across one of those elements springs it
+down and back up again: two springs per gesture.
 
-Small, but it means `formatBytes` (a UI helper) and `isNewerThan` (a policy
-decision) sit in the same file as the DTO. Splitting them is cheap and would let
-`isNewerThan` get a proper test without constructing a full manifest.
+**The fallback cannot be fixed centrally, and that is worth knowing before anyone
+tries.** The obvious repair is to defer the press until the first movement
+confirms the gesture is still within touch slop — but a genuinely still tap may
+produce no movement event at all before lift, and deferring would silently
+remove press feedback from every tap in the app. `Modifier.clickable` does not
+have this problem because it cancels press the moment the gesture is *claimed*,
+which is information this heuristic does not have and cannot get later. So the
+fix is per-site, and it is one line each.
+
+Fixed so far, both because they are the two a finger meets most:
+
+| Site | Why it mattered |
+| --- | --- |
+| `SequelCard` | One of these is on every row of the dashboard's `LazyColumn`, and `bouncyPress`'s own KDoc names it as the case that matters most |
+| `AnimeTrailerBanner` | Inside the detail sheet's scroll, and directly implicated in a reported "bounces twice" |
+
+The remaining 43 are **not** all the same, and the split has not been measured —
+it needs reading each one rather than pattern-matching the file:
+
+- some have a `clickable` / `combinedClickable` / `Button(onClick=)` in the same
+  modifier chain and can share a source, which is a one-line change each;
+- some are decorative presses on elements that are not themselves interactive, and
+  there is no source to share — the honest fix there may be to drop the press
+  rather than wire it up, which is a different change with a different review.
+
+**Do these as one pass, with a real phone afterwards.** There is no Android SDK in
+the development environment, so none of them can be checked from here, and a
+press-behaviour regression is invisible in review. Doing forty of them blind in
+small batches is how one of them ships broken.
 
 ---
 
@@ -180,11 +195,15 @@ Nothing is *wrong*, but several entries are behind:
 | --- | --- | --- |
 | `composeBom` | 2025.11.01 | Governs the Compose stack; bumping means re-checking the `material3` alpha pin against it |
 | `navigationCompose` | 2.8.9 | Upgrade path is unrelated to the Material 3 pin |
-| `roomRuntime` | 2.7.0 | Migration touches the database layer and needs a real device test |
 | `coilCompose` | 2.7.0 | Newer majors changed the API surface |
 
-Upgrade one at a time, with `./gradlew test` green in between, and update the
-version table in `README.md` in the same PR.
+Room used to be listed here. It is gone — no `roomRuntime` entry exists in
+`gradle/libs.versions.toml`, and there is no database in the app at all (see
+[Closed](#closed)). Nothing here should be read as "needs migrating"; these are
+ordinary libraries that can move a version at a time.
+
+Upgrade one at a time, with `./gradlew test` green in between, and keep the
+reasoning inline in `gradle/libs.versions.toml` in the same change.
 
 ### 3.4 No benchmark or screenshot-testing module
 
@@ -196,35 +215,70 @@ and §2.3 from opinions into measurements.
 This is the highest-leverage item in the whole list for the quality of future
 animation work, and the most expensive to start.
 
+### 3.5 A docs-only push to `main` cannot pass branch protection
+
+Found by trying to push a README-only commit. `main` requires **2 status
+checks**, and `android-release.yml` declares `paths-ignore: ['update.json',
+'**.md']` on its `push` trigger. Those two settings contradict each other:
+
+1. a markdown-only push starts **no** workflow run;
+2. therefore no check reports against that commit;
+3. therefore the required checks are unsatisfied and the push is rejected.
+
+It only appeared to work because the push credential used had admin rights —
+GitHub answered `Bypassed rule violations for refs/heads/main: 2 of 2 required
+status checks are expected`. **Anyone without that bypass cannot land a docs-only
+change.** In 124 commits this had never surfaced, because every commit to date
+also touched source and so always ran the workflow.
+
+Pick one deliberately rather than leaving it to whoever pushes next:
+
+- **Accept the bypass** as the documented path for docs, and say so in
+  [README § CI](README.md).
+- **Add a cheap docs workflow** — `on: push: paths: ['**.md']` — running a link
+  and anchor check. It satisfies the required checks without building an APK, and
+  it would also catch the broken `#anchor` links the README accumulates.
+
+The second is the better fix and is genuinely useful on its own: nothing
+currently verifies that the README's own table of contents matches its headings.
+
 ---
 
 ## 4. Product
 
-### 4.1 No in-app way to see what changed between versions
-
-The dialog links to the GitHub release page, which is correct. The manifest's
-`notes` field is a build number and commit hash and is deliberately not shown —
-see the comment in `UpdateDialogs.kt`.
-
-Worth adding a real changelog asset, so "What's new" does not require a browser.
-
-### 4.2 Scan progress is not reported
+### 4.1 Scan progress is not reported
 
 Scanning a large account walks every relation and the UI has no progress state
 for it. `DashboardUiState.Loading` carries a static message. A real progress
 model would need the scan to emit intermediate results, which is a domain-layer
-change — related to §1.1.
+change — related to §1.2.
 
-### 4.3 AI Studio leftovers removed
+### 4.2 The detail sheet bounces twice at the ends — OPEN, needs a device
 
-`metadata.json` declared `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API`, the app
-applied the Secrets Gradle plugin for a Maps integration that never existed, and
-an `.env.example` sat in the root full of Gemini placeholders. None of it was
-imported by the app: there is no Firebase or Gemini dependency on the classpath
-and no `com.google.firebase` import anywhere in `app/src/main`. The capability
-declaration, the plugin and the example file are gone, along with the
-commented-out Firebase/Room/Camera dependencies and their now-unused version
-catalog entries.
+Reported as: fling the "Anime Info & Specs" tab to the bottom and it bounces
+twice; same again at the top. The **top** half is now explained and fixed — the
+hero image's `transformable` gesture gate was a tautology, so the sheet could not
+be scrolled by dragging its own first row, and the spring settling afterwards read
+as the double bounce (see Closed).
+
+**The bottom half is not.** There is no hero and no gesture handler at the bottom
+of that tab; the content there is static. Two candidates, neither provable from the
+code alone:
+
+1. **Double overscroll.** `overscrollEffect` is never configured anywhere in the
+   app, so `Modifier.verticalScroll` installs the platform effect, and
+   `ModalBottomSheet` has its own nested-scroll handoff into the sheet's anchored
+   drag. A fling that exhausts the inner scroll may fire both. The one-line thing
+   to try is `verticalScroll(state, overscrollEffect = null)` on the sheet's
+   content, which leaves exactly one of them reacting.
+2. **`AnimatedContent`'s size transform.** The default animates the container
+   height between tabs, which changes `maxValue` under the scroll state while a
+   fling is still settling.
+
+This needs a device and a finger, not a JVM test — which is exactly the gap
+[§2.2](#22-no-animation-regression-tests) and [§3.4](#34-no-benchmark-or-screenshot-testing-module)
+describe. Do not "fix" it by guessing: try candidate 1 first, since it is one
+line and reversible, and record which one it actually was here.
 
 ---
 
@@ -235,19 +289,7 @@ activity backdrops, a scan-friendly friends grid, and nested-markdown rendering.
 What that pass deliberately did **not** do is listed here so the next person does
 not mistake each one for an oversight.
 
-### 5.1 `stripMarkdown` is UI-dead and only its test keeps it alive
-
-`ProfileAboutCard.stripMarkdown` strips Markdown to plain text. No screen calls
-it any more — `AboutCard` renders the parsed AST — but
-`ProfileTextFormattingTest` still exercises it, so it cannot simply be deleted
-without removing that suite too.
-
-Either wire it back in where a single-line preview of a bio is wanted (a search
-result, a future social feed row) or delete both the function and its tests in
-one change. Leaving a tested-but-unused formatter is how the next reader assumes
-some screen is using it.
-
-### 5.2 Blur has no cost measurement on a long activity feed
+### 5.1 Blur has no cost measurement on a long activity feed
 
 `ActivityCard` blurs every cover it draws (`Modifier.blur(28.dp)`), and an
 activity feed is unbounded — it pages. On a low-end device, a screenful of
@@ -258,11 +300,13 @@ First step: measure with `macrobenchmark` on one scrolling test, then either cap
 the blur to the visible cards or replace it with a pre-blurred server-side
 transform. Do not guess either way.
 
-### 5.3 The hero header does not collapse on scroll
+### 5.2 The hero header does not collapse on scroll
 
-The new banner is a fixed 200dp block. The reference design it follows collapses
-it into the top app bar as the page scrolls, reclaiming that height for the
-bio and favourites.
+The banner is a fixed **260dp** block (it was 200dp when this was written, and is
+now horizontally pannable via `PannableBackdrop`, so it is draggable but still
+does not yield its height). The reference design it follows collapses it into the
+top app bar as the page scrolls, reclaiming that height for the bio and
+favourites.
 
 This needs the header to be a `LazyColumn` item that reports a scroll offset
 to a `TopAppBar`'s `scrollBehavior`, plus a decision about what the bar shows
@@ -270,24 +314,161 @@ while collapsed. Worth doing only with a screenshot test in place first, because
 the failure mode (a header that flickers between two states) is exactly what a
 review cannot see.
 
-### 5.4 Markdown nesting stops at four levels and then degrades to raw text
+### 5.3 ~~Markdown nesting stops at four levels~~ — not a defect, moved out of the backlog
 
 `AniListMarkdownParser` re-parses an emphasis run's or link label's inner
-expression, capped at `MAX_INLINE_DEPTH = 4`. Past the cap the renderer falls
-back to the flat source text, so a pathological bio would still print asterisks.
+expression, capped at `MAX_INLINE_DEPTH = 4`, and past the cap the renderer falls
+back to the flat source text.
 
-Real bios never get close, and the cap is what prevents unbounded recursion. If
-it ever needs raising, raise it with a test that pins the cap rather than
-removing the guard.
+This is a **working guard, not a known problem**, and it was only ever in this
+list because it reads like one: a cap is a thing that might need raising. It does
+not, and it should not be "fixed". The cap is what prevents unbounded recursion
+on a hand-edited string, a real bio never comes close to it, and the degradation
+below it is a legible fallback rather than a crash.
 
-### 5.5 No screenshot tests for the profile tabs
+If it ever genuinely needs raising, raise it *with a test that pins the new
+value* rather than by removing the guard. Nothing to do.
 
-The four profile tabs — Home, Activity, Stats, Social — are the most
+### 5.4 No screenshot tests for the profile tabs
+
+The five profile tabs — Home, Activity, Stats, Library, Social — are the most
 shape-variable screens in the app (they change entirely between an account that
 pinned nothing and one that pinned fifty), and nothing asserts what they look
 like. Every visual claim in this pass was verified by reading code and comparing
 against a reference image, not by a test.
 
 A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
-already builds, would turn §5.2 and §5.3 into measurements and catch the next
+already builds, would turn §5.1 and §5.2 into measurements and catch the next
 regression in the header the way `ExpressiveShapesTest` catches capsule geometry.
+
+---
+
+## Closed
+
+Entries that used to live above and are no longer true. Kept rather than
+deleted, because in each case the *reason* is the part worth not re-deriving —
+see [AGENTS.md §1](AGENTS.md).
+
+### The tier list's `seeded_for_v1` was written and never read
+
+`TierListPreferences.markSeededFor` recorded which AniList account had been
+offered "Rank from AniList scores", so the offer could be made once per account.
+Nothing ever read it back — the offer ended up on the empty state of every list,
+which is the better behaviour now that lists are documents: a new list *is* a new
+offer, with no flag to keep in step.
+
+Deleted rather than wired up, because "have we already seeded this account" is not
+a question the library has. The key stays in stored preferences and does not need
+removing: DataStore is a map and an unread key is inert.
+
+### `UpdateManifest.kt` mixed the wire model with UI display helpers
+
+`formatBytes` and `formatRate` are pure display formatting for the settings and
+update dialogs; they were sitting next to the manifest DTO, which meant
+`UpdateManifestTest` had to import a UI helper to check a unit conversion. Both
+are in `UpdateFormatting.kt` now, same package, so no call site changed.
+
+The original entry proposed moving `isNewerThan` out too, "so it could get a
+proper test without constructing a full manifest". **That test already existed** —
+four dedicated cases, and every manifest field defaults, so
+`UpdateManifest(versionCode = 17)` is the whole fixture. `isNewerThan` stayed on
+the manifest, which is where a fact about a manifest belongs.
+
+### `stripMarkdown` was UI-dead and only its own test kept it alive
+
+`ProfileAboutCard.stripMarkdown` reduced a bio to plain text. Nothing rendered it
+— `AboutCard` draws the parsed AST — but twelve cases in `ProfileTextFormattingTest`
+exercised it, which is the worst kind of evidence: a tested-but-uncalled function
+reads as "some screen must be using this".
+
+Both went together. The property those tests pinned is preserved in a note at the
+site, because it is right and worth keeping if a single-line bio preview is ever
+wanted: **over-stripping is the real risk.** A bio that loses its asterisks and
+also loses its apostrophes is a person's words edited by their app.
+
+### The nav pill's label never fitted
+
+`ExpressiveNavigationBar`'s `SELECTED_WEIGHT` was 1.6, described as "enough that
+the longest label fits". It was not — it was tuned against the label *clipping*
+rather than its fitting. On a 360dp phone the selected slot was 86dp, leaving
+29.3dp of label room against the ~55dp "Activity" needs, so **every** destination
+ellipsized at every phone width. Now 2.3, with the bar's and item's own padding
+trimmed to hand the difference to the label: 60.2dp of room, with the four
+unselected items still at 49.2dp against the 48dp tap-target floor.
+
+`ExpressiveTabBar` had the same problem with longer labels and could not be fixed
+by geometry — "Anime Info & Specs" needs ~133dp of a 78.7dp budget. Those labels
+are shortened instead.
+
+### The dashboard detail cache had no size bound
+
+It was a `Map` in `DashboardViewModel`, never evicted. The cache has since moved
+down to `AniListRepositoryImpl` alongside the rest of the media fetching, and
+now carries a soft cap: `MAX_DETAIL_CACHE_NODES = 128`, cleared wholesale rather
+than evicted one at a time. Clearing is the deliberate choice — holding every
+full cast/studio tree the user has ever tapped costs more than the occasional
+refetch does. The entry named the wrong file the whole time it was open.
+
+### There was no in-app way to see what changed between versions
+
+The notes were a hardcoded `listOf` in the Info tab, stale since v1.0.21 and with
+no version attached to check it against. `app/src/main/assets/changelog.json` is
+now the single source, read by the "What's new" card and by the release workflow
+when it writes the GitHub release body. `ChangelogTest` exists because the
+workflow reads that file without any of this repo's tests running. See
+[README § Release notes](README.md#release-notes).
+
+### AI Studio leftovers were removed
+
+`metadata.json` declared `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API`, the app
+applied the Secrets Gradle plugin for a Maps integration that never existed, and
+an `.env.example` sat in the root full of Gemini placeholders. None of it was
+imported by the app: there was no Firebase or Gemini dependency on the classpath
+and no `com.google.firebase` import anywhere in `app/src/main`. All of it is
+gone, along with the commented-out Firebase/Room/Camera dependencies and their
+version catalog entries — which is why [§3.3](#33-dependency-currency) no longer
+lists Room.
+
+### Partial: the empty-state orb animates while off-screen
+
+Two of the three costs are gone — the instant motion style no longer runs the
+clock at all, and the morph progress is read while drawing rather than in
+composition. What remains is the transition ticking behind an orb that has been
+scrolled out of view; it is still tracked as [§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
+
+### The detail sheet could not be scrolled from its own hero
+
+`PannableBackdrop`'s `hasOverflow` asked "is there anywhere to drag to?" as
+`width overflows || height overflows`. That is a near-tautology, because the
+cover fit is a `max` of the two axis ratios and over-covers the other axis *by
+definition* — its own doc comment says so. So the gate was true for essentially
+every image and `canPan` never once declined.
+
+`Modifier.transformable` consumes a single-pointer drag in **both** axes when
+`canPan` is true, and `canPan` is one boolean for the whole gesture rather than a
+per-axis decision. So the hero ate every vertical drag aimed at it, including the
+ones that should have scrolled the sheet — and then `backdropTransform` clamped
+the pan straight back to zero, because a 1920x1080 banner over a 360x280 hero has
+0.0000dp of vertical slack. Gesture consumed and discarded, sheet unscrolled, and
+the release spring read as the hero bouncing twice.
+
+The gate is now shut at the cover fit and opens once the picture is zoomed. The
+trade is that the banner can no longer be panned sideways at zoom 1 to reach the
+cropped left and right thirds; pinch still zooms, and panning returns once
+zoomed. `BackdropTransformTest` pins all three states, including that the
+geometry really does overflow horizontally — otherwise the test would just be
+asserting the new answer.
+
+### The edit tab refetched the entry on every tab switch
+
+The draft was `remember`ed *inside* `DetailEditTab`, and the tabs live in an
+`AnimatedContent`, which disposes the tab it animates away from. So every switch
+away and back tore the form down: blank fields, the spinner again, and
+`editor.load()` firing a second request for an entry AniList had already sent.
+
+The state moved to `EntryEditState`, remembered by the sheet one level up, so it
+outlives the tab — still deliberately not in the ViewModel, since nothing outside
+the tab renders an in-progress edit. `load()` also refuses to fetch an entry it
+already holds, which is the part that cannot be seen from the UI;
+`EntryEditStateTest` pins it as "three visits to the tab must still cost exactly
+one request".

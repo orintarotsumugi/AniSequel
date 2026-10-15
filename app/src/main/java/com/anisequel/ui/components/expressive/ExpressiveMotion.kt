@@ -101,9 +101,60 @@ object ExpressiveMotion {
      * `expressiveHoldGesture` cannot drift into feeling like two different
      * buttons. Previously each spelled out its own `spring(...)`, so a change
      * to the feel of one press had to be remembered in the other.
+     *
+     * Kept as the symmetric default so any call site still reading it keeps its
+     * current behaviour. New press work should use [PressSpatialIn] and
+     * [PressSpatialOut] together, which is the pair that actually feels like a
+     * press rather than a fade.
      */
     val PressSpatial: FiniteAnimationSpec<Float> get() =
         spatial(expressiveDamping = Spring.DampingRatioMediumBouncy, expressiveStiffness = Spring.StiffnessMedium)
+
+    /**
+     * Going *down*: tight, and explicitly no overshoot.
+     *
+     * A spring's overshoot is a thing it does on the way **back** to rest. On the
+     * way down it would show as the element briefly passing *below* the pressed
+     * scale and recovering — a flicker at the exact moment the finger lands,
+     * which is the one instant the eye is already tracking. So this half is
+     * `NoBouncy` and moderately stiff: down fast, straight to the target.
+     */
+    val PressSpatialIn: FiniteAnimationSpec<Float> get() =
+        spatial(
+            expressiveDamping = Spring.DampingRatioNoBouncy,
+            expressiveStiffness = Spring.StiffnessMedium
+        )
+
+    /**
+     * Coming *back up*: past rest, then settle. This is the bounce.
+     *
+     * ## Why two tokens rather than one spring with a `bounce` argument
+     *
+     * Compose has a `bounce` parameter on `spring()` that governs overshoot only
+     * on the return, which is exactly this effect. **It does not exist in the
+     * Compose version this project pins** — the build fails with *"No parameter
+     * with name 'bounce' found"* — so the asymmetry is expressed the other way
+     * round instead: two separate specs, chosen by direction at the call site.
+     *
+     * The mechanism is equivalent. This one is `LowBouncy`, so *its* return leg
+     * overshoots past rest; [PressSpatialIn] is `NoBouncy`, so *its* travel down
+     * cannot flicker below the pressed scale. A press only ever runs one spec or
+     * the other, so neither half ever sees the other's overshoot.
+     *
+     * `LowBouncy` (0.75) rather than `MediumBouncy` (0.5) deliberately. Past
+     * about the midpoint the return starts feeling like the button is being
+     * thrown at the user, and a control that overshoots visibly on every tap is
+     * tiring over a long session.
+     *
+     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees either token —
+     * `SMOOTH` is `NoBouncy` by design and `INSTANT` snaps, so on those styles a
+     * press behaves exactly as it always has.
+     */
+    val PressSpatialOut: FiniteAnimationSpec<Float> get() =
+        spatial(
+            expressiveDamping = Spring.DampingRatioLowBouncy,
+            expressiveStiffness = Spring.StiffnessMediumLow
+        )
 
     /**
      * The spatial counterpart for `IntOffset`-based placement motion.
@@ -332,7 +383,20 @@ fun Modifier.bouncyPress(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
-        animationSpec = ExpressiveMotion.PressSpatial,
+        // Two specs chosen by direction, not one.
+        //
+        // A single spring has to treat the press and the release identically, so
+        // the element squashed and then merely returned - which reads as a fade
+        // rather than as a button with weight. Compose's `bounce` parameter is the
+        // asymmetric half: it governs overshoot only on the way *back*, which a
+        // shared `dampingRatio` cannot express. So the way down is tight and
+        // cannot flicker below the pressed scale, and the way back overshoots
+        // slightly past rest and settles.
+        animationSpec = if (isPressed) {
+            ExpressiveMotion.PressSpatialIn
+        } else {
+            ExpressiveMotion.PressSpatialOut
+        },
         label = "bouncy_press_scale"
     )
 

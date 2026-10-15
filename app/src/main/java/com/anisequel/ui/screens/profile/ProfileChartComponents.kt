@@ -226,7 +226,7 @@ internal fun SegmentStrip(
         modifier = modifier
             .fillMaxWidth()
             .height(14.dp)
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
             .testTag("status_segment_strip")
     ) {
         val total = segments.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(0.0001f)
@@ -338,7 +338,7 @@ internal fun BarRow(
             modifier = Modifier
                 .weight(1f)
                 .height(10.dp)
-                .clip(RoundedCornerShape(5.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(trackColor)
                 .drawBehind {
                     val barWidth = size.width * width

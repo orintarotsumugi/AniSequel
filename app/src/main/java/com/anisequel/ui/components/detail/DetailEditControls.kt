@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -128,6 +133,77 @@ internal fun SimpleMediaListEntry.toDraft(): EntryDraft {
 internal fun formatScore(score: Double): String =
     if (score == score.toInt().toDouble()) score.toInt().toString() else "$score"
 
+/**
+ * The edit form's state, held *above* the tab switch rather than inside the tab.
+ *
+ * ## Why this is not just `remember` inside [DetailEditTab]
+ *
+ * Because the tabs live in an `AnimatedContent`, which disposes the tab it
+ * animates away from. Everything remembered inside the tab therefore died with
+ * it, and coming back rebuilt the form from nothing: the draft was gone, the
+ * loading spinner was up again, and `editor.load()` fired a second request for an
+ * entry AniList had already answered. That is the worst possible moment for it -
+ * a person flicking between tabs to compare a score against a status is exactly
+ * who does that - and it spent the account's request budget on nothing.
+ *
+ * So the state is remembered by the sheet, which outlives the tab. The draft
+ * survives every switch and the entry is fetched once per title.
+ *
+ * ## Why this is still not in the ViewModel
+ *
+ * The original argument for keeping the draft local was layering, not lifetime:
+ * nothing outside this tab renders an in-progress edit, so hoisting it that far
+ * up would make every owner of the sheet carry a saving flag and an error string
+ * it never reads. That argument still holds - this sits directly under the sheet,
+ * one level up, and never leaves the detail surface.
+ */
+@Stable
+internal class EntryEditState {
+    /** Null until the entry has loaded, and again if the load failed. */
+    var draft by mutableStateOf<EntryDraft?>(null)
+
+    var loadError by mutableStateOf<String?>(null)
+    var statusMessage by mutableStateOf<String?>(null)
+    var isSaving by mutableStateOf(false)
+    var statusMenuOpen by mutableStateOf(false)
+
+    /** Which date, if any, has its picker open. One value, not a flag per field. */
+    var openDatePicker by mutableStateOf<DateField?>(null)
+
+    /**
+     * Fetch the entry once.
+     *
+     * A no-op when a draft is already loaded, so a recomposition - or a second
+     * `LaunchedEffect` firing on the same media - cannot turn into a second
+     * request.
+     */
+    suspend fun load(editor: EntryEditor, mediaId: Int) {
+        if (draft != null) return
+        editor.load(mediaId).fold(
+            onSuccess = {
+                draft = it.toDraft()
+                loadError = null
+            },
+            onFailure = { loadError = it.message ?: "Couldn't load your entry." }
+        )
+    }
+
+    /** Back to an entry that does not exist, so the form is ready to create one. */
+    fun cleared() {
+        draft = EntryDraft(
+            entryId = null,
+            status = null,
+            progress = 0,
+            progressVolumes = null,
+            score = 0.0,
+            scoreMax = 10,
+            startedAt = null,
+            completedAt = null,
+            isPrivate = false
+        )
+    }
+}
+
 /** A label for a status the entry already has, including one this build predates. */
 internal fun statusLabel(status: String?, isManga: Boolean): String {
     if (status == null) return "Not on your list"
@@ -168,7 +244,7 @@ internal fun EditorCard(
                         .size(38.dp)
                         .background(
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -234,7 +310,7 @@ internal fun DateRow(
                     .size(38.dp)
                     .background(
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
                     ),
                 contentAlignment = Alignment.Center
             ) {

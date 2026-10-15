@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.settings
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -80,7 +81,7 @@ internal fun AccentColourSection(
         if (settings.useDynamicColor) {
             Spacer(modifier = Modifier.padding(top = 2.dp))
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -204,8 +205,8 @@ private fun PaletteCard(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "palette_border_color"
     )
-    val cardShape = RoundedCornerShape(16.dp)
-    val swatchShape = RoundedCornerShape(14.dp)
+    val cardShape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
+    val swatchShape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
 
     Column(
         modifier = Modifier

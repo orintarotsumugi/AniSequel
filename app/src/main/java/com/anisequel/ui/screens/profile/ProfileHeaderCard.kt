@@ -99,6 +99,15 @@ fun ProfileHeaderCard(
                     .offset(y = 22.dp)
                     .padding(start = 16.dp)
                     .size(92.dp)
+                    // Not on the corner scale, and deliberately so.
+                    //
+                    // The sweep that put every surface radius onto
+                    // `ExpressiveShapes` walked this too and moved the avatar from
+                    // 24dp to the scale's 28dp. That is the wrong kind of change:
+                    // a portrait is not a card, and its radius is a proportion of
+                    // its own 92dp box (24/92) rather than a step on a family. At
+                    // 28 it reads as a different shape sitting on the banner
+                    // rather than the same one sitting on it.
                     .clip(RoundedCornerShape(24.dp))
                     .border(4.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))

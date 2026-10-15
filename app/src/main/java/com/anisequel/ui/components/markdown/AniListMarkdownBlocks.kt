@@ -380,7 +380,7 @@ fun RenderAniListPreview(
                 modifier = Modifier
                     .width(56.dp)
                     .aspectRatio(POSTER_ASPECT)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {

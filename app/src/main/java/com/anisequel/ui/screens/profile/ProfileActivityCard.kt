@@ -161,7 +161,7 @@ fun ActivityCard(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .clip(RoundedCornerShape(9.dp))
+                                    .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                                 contentScale = ContentScale.Crop
                             )

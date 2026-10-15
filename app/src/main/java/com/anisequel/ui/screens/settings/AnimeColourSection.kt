@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.settings
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -68,7 +69,7 @@ internal fun AnimeColourSection(
         // feature is never a mystery while it is active.
         if (animeColor != null) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -77,7 +78,7 @@ internal fun AnimeColourSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner),
                         color = animeColor,
                         border = BorderStroke(
                             1.dp,

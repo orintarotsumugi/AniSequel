@@ -538,7 +538,7 @@ private data class Slot(val x: Float, val y: Float, val width: Float, val height
  */
 @Composable
 private fun TierRowStrip(row: TierRowBox, labelGutter: Float, highlighted: Boolean) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
     val border by animateColorAsState(
         targetValue = if (highlighted) {
             MaterialTheme.colorScheme.onSurface
@@ -642,7 +642,7 @@ private fun TierPosterTile(
             modifier = Modifier
                 .width(width.dp)
                 .height(posterHeight.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             AsyncImage(

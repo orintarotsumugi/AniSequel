@@ -103,6 +103,44 @@ fun SequelDetailSheet(
 
     var isDescriptionExpanded by remember(subject.mediaId) { mutableStateOf(false) }
     var detailTab by rememberSaveable(subject.mediaId) { mutableIntStateOf(0) }
+
+    // One scroll state for the whole sheet, but re-based to the top on every tab
+    // change.
+    //
+    // It used to be `rememberScrollState()` written inline in the modifier chain,
+    // which kept the offset across tabs. The three tabs are wildly different
+    // heights - "Story & Gaps" is a scrolling column, "Anime Info & Specs" is a
+    // stack of cards - so carrying an offset from a tall tab into a short one
+    // lands past that tab's `maxValue`, the scroll state clamps, and the content
+    // jumps *up* under the finger. That clamp races the `AnimatedContent` size
+    // animation underneath it, which is what read as the sheet reversing at
+    // random: it only bit when the offset was far enough down to be clamped, and
+    // which tab you came from decided whether it was.
+    //
+    // Re-basing to 0 cannot be clamped, so the fight is gone. The profile screen
+    // deliberately does the opposite - it keeps a scroll position *per* tab,
+    // because `AnimatedContent` disposes the tab it animates away from and would
+    // otherwise lose it. That needs one remembered state per tab; here there are
+    // three fixed tabs sharing a sheet, and starting each at the top is both
+    // cheaper and what a person switching tabs expects.
+    val detailScrollState = rememberScrollState()
+    LaunchedEffect(detailTab) { detailScrollState.scrollTo(0) }
+
+    // Hoisted above `AnimatedContent` for the same disposal reason, and it is a
+    // network request rather than a scroll offset.
+    //
+    // `AnimatedContent` disposes the tab it animates away from, so everything
+    // `remember`ed inside `DetailEditTab` died with it: switch to another tab and
+    // back and the draft was gone, the spinner was showing again, and
+    // `editor.load()` had fired a second time for a list AniList had already
+    // answered once. Held here, the entry loads once per media and the draft
+    // survives every switch. Still deliberately not in the ViewModel - nothing
+    // outside this tab renders an in-progress edit.
+    val editState = remember(subject.mediaId) { EntryEditState() }
+    val editor = entryEditor
+    LaunchedEffect(subject.mediaId, editor) {
+        if (editor != null) editState.load(editor, subject.mediaId)
+    }
     val statusColors = AniSequelTheme.statusColors
 
     LaunchedEffect(subject.mediaId) {
@@ -158,7 +196,7 @@ fun SequelDetailSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(detailScrollState)
                 .padding(bottom = 32.dp)
         ) {
             // Full-bleed, above the padded content rather than inside it.
@@ -181,10 +219,20 @@ fun SequelDetailSheet(
                 // The Edit tab is appended, never inserted: the first tab's index
                 // is persisted by `rememberSaveable`, so a tab that moved would
                 // reopen a sheet on a different tab than it was left on.
-                val editor = entryEditor
-                val firstLabel = if (sequel != null) "Story & Gaps" else "About"
+                // Short labels, because [ExpressiveTabBar] splits the width evenly
+                // and three tabs cannot spell "Anime Info & Specs" on a phone.
+                //
+                // They were "Story & Gaps" and "Anime Info & Specs", which left
+                // about 79dp of label room against the ~133dp the second one needs
+                // - so both ellipsized, and the first tab of the detail sheet read
+                // "Story & Ga...". No amount of geometry fixes that: three labels
+                // that long do not fit three across on a 360dp screen, so the fix
+                // is the copy rather than the layout. In a sheet that is already
+                // about one title, "Specs" and "Story" are not less clear for
+                // being short.
+                val firstLabel = if (sequel != null) "Story" else "About"
                 val firstIcon = if (sequel != null) AppVectorIcons.FranchiseBranch else AppVectorIcons.Info
-                val specsLabel = if (isManga) "Manga Info & Specs" else "Anime Info & Specs"
+                val specsLabel = "Specs"
                 val specsIcon = if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.AnimeSparkle
                 val tabLabels = buildList {
                     add(firstLabel)
@@ -215,7 +263,7 @@ fun SequelDetailSheet(
                     label = "detail_tab_switch"
                 ) { tab ->
                     if (editor != null && tab == 2) {
-                        DetailEditTab(media = media, editor = editor)
+                        DetailEditTab(media = media, editor = editor, state = editState)
                     } else if (tab == 1) {
                         DetailSpecsView(
                             media = media,

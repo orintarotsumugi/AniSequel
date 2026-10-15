@@ -4,114 +4,24 @@ import com.anisequel.ui.screens.profile.formatJoinYear
 import com.anisequel.ui.screens.profile.formatMeanScore
 import com.anisequel.ui.screens.profile.formatRelativeSeconds
 import com.anisequel.ui.screens.profile.formatWatchTime
-import com.anisequel.ui.screens.profile.stripMarkdown
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.util.Locale
 
-/**
- * Guards the bio card's text handling.
- *
- * AniList bios are Markdown and there is no Markdown renderer in the app. What
- * is rendered instead is plain text with the four things that actually appear in
- * a bio - headings, emphasis, links and bullets - un-done, and nothing else
- * touched. The risk being pinned here is over-stripping: a bio that loses its
- * asterisks but also loses its apostrophes, or a link whose text is thrown away
- * along with its URL, is a person's own words edited by their app.
- */
-class StripMarkdownTest {
-
-    @Test
-    fun `removes heading markers but keeps the heading text`() {
-        // No bullet in the input on purpose: bullets are a separate rule with
-        // their own test, and having one here meant this asserted two things and
-        // failed on the one it was not named for.
-        val result = stripMarkdown("### How I rate\n\n10 / 10 - peak fiction")
-
-        assertEquals("How I rate\n\n10 / 10 - peak fiction", result)
-    }
-
-    @Test
-    fun `keeps link text and drops the url`() {
-        val result = stripMarkdown("I play [visual novels](https://vndb.org/u57774) instead.")
-
-        assertEquals("I play visual novels instead.", result)
-        assertFalse(result.contains("vndb.org"))
-    }
-
-    @Test
-    fun `removes bold and italic markers`() {
-        assertEquals("leave a comment", stripMarkdown("**leave a comment**"))
-        assertEquals("leave a comment", stripMarkdown("*leave a comment*"))
-        assertEquals("leave a comment", stripMarkdown("__leave a comment__"))
-        assertEquals("leave a comment", stripMarkdown("_leave a comment_"))
-    }
-
-    @Test
-    fun `keeps apostrophes and punctuation inside emphasised text`() {
-        // The regex is `(\*|_)(.+?)\1`, so the risk is an apostrophe being read as
-        // an emphasis marker and swallowing the rest of the sentence.
-        val result = stripMarkdown("**You're** always welcome here, *don't* worry")
-
-        assertEquals("You're always welcome here, don't worry", result)
-    }
-
-    @Test
-    fun `removes bullet markers but keeps the item text`() {
-        val result = stripMarkdown("* Watching 7\n* Completed 128\n* Dropped 0")
-
-        assertEquals("Watching 7\nCompleted 128\nDropped 0", result)
-    }
-
-    @Test
-    fun `collapses the blank lines markdown leaves behind`() {
-        // A bio that alternates heading, list and paragraph is three paragraphs
-        // once rendered, not fifteen blank-spaced lines.
-        val result = stripMarkdown("### One\n\n\n\ntext\n\n\n\n### Two")
-
-        assertEquals("One\n\ntext\n\nTwo", result)
-    }
-
-    @Test
-    fun `drops blockquote markers`() {
-        assertEquals("a quoted line", stripMarkdown("> a quoted line"))
-    }
-
-    @Test
-    fun `strips inline code fences but keeps the code`() {
-        assertEquals("SaveMediaListEntry", stripMarkdown("`SaveMediaListEntry`"))
-    }
-
-    @Test
-    fun `leaves prose with no markdown in it completely alone`() {
-        val source = "I watch too much television and I have no regrets about it."
-        assertEquals(source, stripMarkdown(source))
-    }
-
-    @Test
-    fun `an empty bio stays empty rather than becoming blank lines`() {
-        assertEquals("", stripMarkdown("   \n\n  "))
-    }
-
-    @Test
-    fun `an empty heading leaves no heading marker behind`() {
-        val result = stripMarkdown("###\n\nSome text")
-
-        assertFalse(result.contains("#"))
-        assertEquals("Some text", result)
-    }
-
-    @Test
-    fun `a bullet with no text after it is still removed`() {
-        // `[-*+]\s+` needs something after the marker, so a trailing lone dash
-        // survives. Left as it is rather than special-cased: a bio that ends in a
-        // hyphen is a person's typo, and stripping it would mean guessing.
-        assertEquals("**\n\n-", stripMarkdown("###\n\n**\n\n-"))
-    }
-}
+// This file also held `StripMarkdownTest`, twelve cases against a
+// `stripMarkdown` that nothing in the app called - the bio card renders the
+// parsed AST, so a tested-but-uncalled formatter read as "some screen uses this"
+// to whoever opened the file next. The function and those cases are deleted
+// together; see the note left where it used to live in `ProfileAboutCard.kt`.
+//
+// The property they were pinning is worth keeping in mind if a single-line bio
+// preview is ever wanted: over-stripping is the real risk. A bio that loses its
+// asterisks and also loses its apostrophes is a person's words edited by their
+// app, and the trailing-lone-dash case below was deliberately left alone for the
+// same reason - a hyphen at the end of a bio is a typo, and guessing at it would
+// be worse than leaving it.
 
 /**
  * The two numbers the header card quotes.

@@ -350,7 +350,6 @@ class TierListViewModel(
                     undoStack.push(TierUndoEntry(mutation.before, "Ranked from AniList scores"))
                     _undoLabel.value = "Ranked from AniList scores"
                 }
-                if (userId != null) preferences.markSeededFor(userId)
 
                 val skipped = unseedableCount(pool)
                 val placed = assignment.tierIdByMediaId.size

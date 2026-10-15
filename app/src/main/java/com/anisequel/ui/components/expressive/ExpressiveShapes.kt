@@ -12,7 +12,9 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import kotlin.math.max
@@ -79,6 +81,49 @@ object ExpressiveShapes {
      * want a capsule, and the bug was having them be anything else.
      */
     val pillSoft: Shape = RoundedCornerShape(percent = 50)
+
+    // --- The corner radius scale ------------------------------------------------
+    //
+    // These are *numbers*, not shapes: a corner radius in dp to hand to
+    // `RoundedCornerShape(...)`. They exist because the app had no scale at all -
+    // sixty-four inlined literals across fourteen different radii (5, 6, 7, 8, 9,
+    // 10, 12, 14, 16, 18, 20, 24, 28, 50). Corners two dp apart read as two
+    // unrelated shapes rather than as neighbours in a family, and that is what
+    // makes unrelated screens feel like they were drawn by different people.
+    //
+    // **These are the theme's values, not Material's.** The app already had a
+    // deliberate shape scale in `ExpressiveTheme.kt` - 10 / 14 / 20 / 28 / 36,
+    // rounder than M3's 4 / 8 / 12 / 16 / 28 on purpose, so cards read as curved
+    // panels rather than hard rectangles. The literals simply had not been moved
+    // onto it. So these four are the first four steps of *that* scale, named, and
+    // [ExpressiveTheme.kt] is the single place the fifth (36) is applied.
+    //
+    // Naming them here is what stops the drift coming back: a new literal cannot
+    // be spelled next to an existing one without the mismatch being visible.
+    //
+    // `RoundedCornerShape(percent = 50)` is deliberately absent - that is [pill],
+    // and a percentage is not a radius.
+
+    /** 10dp — the theme's `extraSmall`. Chips, badges, dense list rows. */
+    val ExtraSmallCorner = 10.dp
+
+    /** 14dp — the theme's `small`. Small cards and controls. */
+    val SmallCorner = 14.dp
+
+    /** 20dp — the theme's `medium`. The default: cards, sheets, list items. */
+    val MediumCorner = 20.dp
+
+    /** 28dp — the theme's `large`. Panels and prominent surfaces. */
+    val LargeCorner = 28.dp
+
+    /**
+     * 24dp — half of a 48dp button, so a control at this radius is a true
+     * capsule by measurement.
+     *
+     * A number rather than [pill] because it is compared against a `Dp` in
+     * `animateDpAsState` and [pill] is a `Shape`, which cannot be added to one.
+     */
+    val PillCorner = 24.dp
 }
 
 /**

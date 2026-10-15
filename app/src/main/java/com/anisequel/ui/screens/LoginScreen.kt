@@ -97,7 +97,11 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 ExpressiveTabBar(
-                    tabs = listOf("Sign In", "Username Scan"),
+                    // Two tabs split evenly, so each gets about half the width -
+                    // enough for "Sign In" but not quite for "Username Scan",
+                    // which ellipsized. "Scan" says the same thing: this tab takes
+                    // somebody else's public profile rather than an account.
+                    tabs = listOf("Sign In", "Scan"),
                     selectedIndex = selectedTab,
                     onSelect = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

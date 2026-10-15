@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.tier
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -361,7 +362,7 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
             modifier = Modifier
                 .width(TIER_TRAY_ITEM_WIDTH)
                 .height(TIER_TRAY_ITEM_HEIGHT)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop,
             placeholder = placeholder,
@@ -396,7 +397,7 @@ internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifi
                 scaleX = 1.15f
                 scaleY = 1.15f
             }
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .testTag("tier_tray_ghost")
     ) {

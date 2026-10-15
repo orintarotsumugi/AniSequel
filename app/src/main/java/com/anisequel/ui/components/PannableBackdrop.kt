@@ -90,10 +90,13 @@ fun PannableBackdrop(
     // a `ModalBottomSheet` over a scrolling column, and the hero is the first thing
     // under the finger.
     //
-    // `canPan` is what settles it: the gesture declines to take a pan when there is
-    // nowhere to pan to, so at zoom-out the sheet scrolls normally, and only a
-    // picture that is genuinely off-frame takes the drag. A pinch is always
-    // consumed, because two fingers on a hero mean zoom and nothing else.
+    // `canPan` is what settles it, and it is a blunt instrument - one boolean for
+    // the whole gesture, because [Modifier.transformable] cannot ask which way the
+    // finger is going before it has already consumed the drag. So it is shut at the
+    // cover fit, which is the state the sheet opens in, and the sheet's own
+    // vertical scroll takes the drag. It opens once the picture is zoomed, where
+    // panning is what the user asked for and both axes have slack. A pinch is
+    // always consumed, because two fingers on a hero mean zoom and nothing else.
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextZoom = (zoom * zoomChange).coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
         zoom = nextZoom
@@ -155,6 +158,12 @@ fun PannableBackdrop(
                     }
                     .transformable(
                         state = transformState,
+                        // Opens once the picture is zoomed, not once it merely
+                        // overflows. See [hasOverflow]: at the cover fit the hero
+                        // declines single-pointer drags outright, because a gate
+                        // that asked "is there slack?" was always open, and an
+                        // open gate eats the sheet's own vertical scroll while
+                        // the transform clamps the pan back to zero.
                         canPan = { hasOverflow(containerWidth, containerHeight, imageSize, zoom) },
                         lockRotationOnZoomPan = true
                     ),
@@ -184,12 +193,41 @@ internal data class BackdropTransform(
 )
 
 /**
- * Whether the picture has anywhere to be dragged to right now.
+ * Whether the picture may take a single-pointer drag at all right now.
  *
- * The gate on the pan gesture. False at zoom-out on an axis the cover fit already
- * fills, and the sheet's own vertical scroll takes the drag instead - which is what
- * a hero in a scrolling sheet has to do, or the sheet cannot be scrolled by
- * dragging the one thing at the top of it.
+ * ## It used to ask the wrong question, and the answer was always yes
+ *
+ * This was "is there anywhere to drag to", tested as
+ * `width overflows || height overflows`. That is a near-tautology, because
+ * [backdropCoverScale] is a `max` of the two axis ratios and the cover fit
+ * over-covers the other axis *by definition* - its own doc comment says so. So
+ * for essentially any image at least one axis overflows, `hasOverflow` returned
+ * true, and the `canPan` gate never once declined.
+ *
+ * That mattered because `Modifier.transformable` consumes a single-pointer drag in
+ * **both** axes when `canPan` is true, and its `canPan` is one boolean for the
+ * whole gesture rather than a per-axis decision. So a hero at the top of the
+ * detail sheet ate every vertical drag aimed at it - including the ones that
+ * should have scrolled the sheet - and then, because the vertical pan range at
+ * the fit is zero, [backdropTransform] clamped the offset straight back to 0. The
+ * picture did not move and the sheet did not scroll: the gesture was consumed and
+ * thrown away. On release the spring settled it, which is what read as the hero
+ * bouncing twice.
+ *
+ * ## Why the answer is now "only once zoomed"
+ *
+ * `canPan` cannot be made axis-aware - the API has no way to ask which way the
+ * finger is going before it has already consumed the drag. So the choice is
+ * between a gate that is always open and one that is shut until the user has
+ * asked for the image to be manipulated. It is shut at the fit, which is the
+ * state the sheet opens in and the state a finger meets first.
+ *
+ * The cost is real and deliberate: at zoom 1 the banner can no longer be panned
+ * sideways to reach the left and right thirds the cover fit crops off. Pinching
+ * still zooms (a pinch is consumed separately, and does not consult this), and
+ * panning returns the moment the picture is zoomed, where both axes genuinely
+ * have slack. Losing a cosmetic pan is a better trade than a sheet that cannot be
+ * scrolled from its own first row.
  */
 internal fun hasOverflow(
     containerWidth: Float,
@@ -199,8 +237,13 @@ internal fun hasOverflow(
 ): Boolean {
     if (containerWidth <= 0f || containerHeight <= 0f) return false
     if (imageSize.width <= 0f || imageSize.height <= 0f) return false
+    val clampedZoom = zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
+    // At the fit the answer is no regardless of the geometry. See the KDoc: the
+    // per-axis question below cannot be expressed through `canPan`, and asking it
+    // anyway is what consumed the sheet's own scroll.
+    if (clampedZoom <= BACKDROP_MIN_ZOOM) return false
     val scale = backdropCoverScale(containerWidth, containerHeight, imageSize.width, imageSize.height) *
-        zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
+        clampedZoom
     return imageSize.width * scale > containerWidth + 0.5f ||
         imageSize.height * scale > containerHeight + 0.5f
 }

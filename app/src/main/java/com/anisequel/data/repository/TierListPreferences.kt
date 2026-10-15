@@ -74,8 +74,17 @@ class TierListPreferences(private val context: Context) {
          */
         val LAST_OPENED = stringPreferencesKey("last_opened_v1")
 
-        /** Which AniList account has already been offered the score seeding. */
-        val SEEDED_FOR = stringPreferencesKey("seeded_for_v1")
+        // There used to be a `seeded_for_v1` key here, recording which AniList
+        // account had been offered "Rank from AniList scores" so the offer could
+        // be made once per account. Nothing ever read it back: the offer ended up
+        // on the empty state of every list, which is the better behaviour now that
+        // lists are documents - a new list *is* a new offer, with no flag to keep
+        // in step. The write stayed behind as a string that looked load-bearing and
+        // had to be reasoned about by every reader. It is gone rather than wired
+        // up, because "already seeded" is not a question the library has.
+        //
+        // The key itself is not deleted from anyone's stored preferences, and does
+        // not need to be: DataStore is a map and an unread key is inert.
 
         /**
          * The single list this store held before lists became documents.
@@ -104,8 +113,7 @@ class TierListPreferences(private val context: Context) {
             documents = documents,
             // An id that is not in the index is stale - the list was deleted - and
             // offering to continue it would open nothing.
-            lastOpenedId = prefs[Keys.LAST_OPENED]?.takeIf { opened -> opened in ids },
-            seededFor = prefs[Keys.SEEDED_FOR]
+            lastOpenedId = prefs[Keys.LAST_OPENED]?.takeIf { opened -> opened in ids }
         )
     }
 
@@ -238,16 +246,6 @@ class TierListPreferences(private val context: Context) {
     }
 
     /**
-     * Records which profile the current ranking belongs to.
-     *
-     * A tier list is a personal judgement about one person's library, so opening
-     * somebody else's profile must not seed titles into it.
-     */
-    suspend fun markSeededFor(userId: Int) {
-        context.tierListDataStore.edit { it[Keys.SEEDED_FOR] = userId.toString() }
-    }
-
-    /**
      * Brings the pre-library list into the library, once.
      *
      * Called on the way into the screen rather than from the flow, because a `map`
@@ -295,9 +293,7 @@ data class TierListMutation(
 data class StoredTierLibrary(
     val documents: List<TierListDocument> = emptyList(),
     /** The list the board was last showing, or null when it was never recorded. */
-    val lastOpenedId: String? = null,
-    /** The AniList id the seed offer was last shown to, or null if never. */
-    val seededFor: String? = null
+    val lastOpenedId: String? = null
 ) {
     /** The list with [id], or null when there is no such list (yet). */
     fun document(id: String?): TierListDocument? =

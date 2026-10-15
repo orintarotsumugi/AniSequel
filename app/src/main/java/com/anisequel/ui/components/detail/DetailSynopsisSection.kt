@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +27,7 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 
 /**
  * Synopsis section powered by AniList Markdown parsing.
@@ -72,11 +72,13 @@ fun DetailSynopsisSection(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(vertical = 4.dp)
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                // The app's own loader, not a raw `CircularProgressIndicator`.
+                // Seventeen call sites across the profile tabs, the sheets and
+                // the dashboard use this wrapper; this was one of the last three
+                // still on the stock spinner, so the one moment the detail sheet
+                // admitted to waiting was also the moment it looked like a
+                // different app.
+                ExpressiveLoadingIndicator(modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "Loading synopsis from AniList...",

@@ -82,11 +82,35 @@ data class NavigationDestination(
 /**
  * How much of the bar's width the selected destination may claim.
  *
- * A little over one item's share. Enough that the longest label fits beside its
- * icon on the narrowest phone the app supports, and no more: a much larger value
- * makes the bar visibly breathe around the selection as you move between tabs.
+ * Picked so the **whole** label fits at the default font scale, which is the only
+ * version of this that is worth having - a selected pill reading "Activ..." is
+ * worse than no label at all, because it costs the width and still does not say
+ * what the tab is.
+ *
+ * ## The arithmetic, because it is not a taste value
+ *
+ * Five destinations. On the narrowest phone worth supporting (360dp) the bar's
+ * inner width is 360 - 32 (this Row's own padding) - 10 (the pill's inner
+ * padding) - 8 (four 2dp gaps) = 310dp to share. At a weight of 2.3 against four
+ * unselected items at 1.0:
+ *
+ * - selected slot = 310 x 2.3/6.3 = **113dp**, leaving 113 - 22 (item padding)
+ *   - 22 (icon) - 9 (gap) = **60dp** of label, against the ~55dp "Activity"
+ *   needs at `labelLarge`;
+ * - each unselected item = 310/6.3 = **49dp**, which clears the 48dp minimum tap
+ *   target with a dp to spare.
+ *
+ * At the old 1.6 the same phone gave the label 29dp, so every destination
+ * ellipsized - "Activity" was the worst case but none of them were legible. The
+ * weight was tuned against the label's *clipping* rather than its fitting.
+ *
+ * Past ~2.4 the unselected items drop under the 48dp minimum, and `defaultMinSize`
+ * starts fighting the weight rather than helping it, so this is the ceiling as
+ * well as the floor. At extreme font scales no fixed five-slot bar can spell every
+ * label; the `TextOverflow.Ellipsis` is the graceful degradation for that, and
+ * the semantics still carry the full name to a screen reader.
  */
-private const val SELECTED_WEIGHT = 1.6f
+private const val SELECTED_WEIGHT = 2.3f
 
 @Composable
 fun ExpressiveNavigationBar(
@@ -106,7 +130,10 @@ fun ExpressiveNavigationBar(
         Row(
             modifier = Modifier
                 .widthIn(max = 560.dp)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                // 16 rather than 20: the four dp are handed straight to the
+                // selected pill, and the selected pill's whole job is to fit a
+                // word. See SELECTED_WEIGHT for what that buys.
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 // Elevated rather than outlined: it floats over scrolling
                 // content, and a hairline border on a shape with a 50% radius
                 // sits exactly on the curve's own edge and reads as a smudge.
@@ -126,17 +153,17 @@ fun ExpressiveNavigationBar(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     },
-                    // The selected item is given extra width rather than every
+                    // The selected item takes the extra width rather than every
                     // item an equal share.
                     //
                     // Equal shares look deliberate and are wrong the moment one
-                    // item has to spell its label: five destinations in a 560dp
-                    // bar leaves 112dp each, and after the capsule's own padding
-                    // there is not enough for a 22dp icon, a 9dp gap and "Activity"
-                    // side by side - so the label was clipped to nothing. Since
-                    // only one item is ever labelled, giving that item the extra
-                    // width keeps the bar's overall width stable while leaving
-                    // the four icon-only items exactly the 48dp they need.
+                    // item has to spell its label: five destinations split evenly
+                    // leaves no room for a 22dp icon, a 9dp gap and "Activity" side
+                    // by side, and the label was clipped to nothing. Since only one
+                    // item is ever labelled, giving that item the extra width keeps
+                    // the bar's overall width stable - the Row fills its parent, so
+                    // this redistributes within a fixed bar rather than resizing it
+                    // - while leaving the four icon-only items their tap target.
                     modifier = Modifier.weight(if (selected) SELECTED_WEIGHT else 1f)
                 )
             }
@@ -205,7 +232,9 @@ private fun NavigationItem(
             // is under the 48dp minimum tap target and gets found by a fingertip
             // rather than by the user aiming at it.
             .defaultMinSize(minWidth = 48.dp)
-            .padding(horizontal = 13.dp)
+            // 11 rather than 13, for the same reason as the bar's own padding:
+            // every dp here is a dp the selected item's label does not get.
+            .padding(horizontal = 11.dp)
             .semantics {
                 this.selected = selected
                 role = Role.Tab

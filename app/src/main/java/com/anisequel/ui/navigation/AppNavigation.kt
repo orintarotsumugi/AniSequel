@@ -10,7 +10,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.ArrivingPreferences
@@ -659,6 +659,6 @@ private fun RestoringPlaceholder(modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        ExpressiveLoadingIndicator()
     }
 }

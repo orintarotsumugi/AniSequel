@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.2.6",
+      "entries": [
+        {
+          "title": "The detail sheet scrolls from its own picture",
+          "detail": "Dragging down on the artwork at the top of a title's details did nothing at all, and on a hard fling it looked like the picture bouncing twice. The artwork's pan gesture was gated on 'is there anywhere to drag to', which asks whether the image overflows its box on either side - and the cover fit always overflows on one of them, so the answer was always yes. The gate then took every vertical swipe aimed at the artwork, including the ones meant to scroll the sheet, and snapped it back to where it started. It now steps aside until you pinch to zoom, so the sheet scrolls normally from the top. You can no longer drag the banner sideways at rest to see its cropped edges; pinch first and dragging comes back."
+        },
+        {
+          "title": "Switching tabs no longer throws your edit away",
+          "detail": "Moving between a title's tabs and coming back to 'My Entry' blanked the form, showed the loading spinner again, and fetched your entry from AniList a second time - every single time. The tabs swap by animating, and the one being animated away is thrown away with anything it remembered, so the half-finished edit went with it. The edit is now held by the sheet instead, so it survives the switch and AniList is asked once per title rather than once per glance."
+        },
+        {
+          "title": "Switching tabs no longer jumps the page",
+          "detail": "Moving between the tabs of a title's details sometimes threw the page back up under your finger, and which direction it went seemed to depend on which tab you came from. The three tabs are very different heights and shared one scroll position, so arriving at a shorter tab from a long way down meant the page was past the new tab's end and got pulled back - while the tab change was still animating underneath it. Each tab now starts at the top."
+        },
+        {
+          "title": "The bottom bar spells out where you are",
+          "detail": "The pill around the selected tab was never wide enough to hold its own name, so every one of them was cut short - 'Activity' was the worst, but none of them were legible. It now has the room to show the full word beside its icon, and the four unselected icons are still a comfortable tap target. The names on the details screen's tabs have been shortened too, since three of them side by side on a phone cannot spell 'Anime Info & Specs' - they are 'Story', 'Specs' and 'My Entry' now."
+        },
+        {
+          "title": "Every loading spinner is now the same spinner",
+          "detail": "Most of the app waits using the Material 3 loading shape that morphs as it spins. Three places still used the plain old circle: the synopsis while it fetches, the sign-in button while it works, and the screen shown while the app restores your session. Those were the moments the app looked like a different app, so they now match everything else."
+        },
+        {
+          "title": "A tap no longer makes the trailer link twitch",
+          "detail": "The 'Watch Official Trailer' banner was deciding it had been pressed the instant your finger landed on it, before it could tell a tap from the start of a scroll - so dragging across it made it bounce twice on the way past. It now takes the press from the button itself, which knows the difference."
+        },
+        {
+          "title": "Buttons bounce when you let go",
+          "detail": "Anything you press used to squash down and then simply come back, which felt like a fade rather than like something with weight. The same spring was driving both halves of the press, and a spring cannot overshoot on the way back without also overshooting on the way down - where you would see it flicker past the pressed size just as your finger landed. Presses are now driven as a pair: tight going down, and a small overshoot on the way back that settles. It is a deliberately small one - past a certain point a button that overshoots on every tap starts to feel tiring rather than playful. Only the expressive motion style sees this; if you have the app set to smooth, presses are unchanged."
+        },
+        {
+          "title": "Every corner is now from the same set",
+          "detail": "The app had no shape scale at all - sixty-four separately typed corner sizes across fourteen different values, so two corners two units apart read as two unrelated shapes and the same kind of card was a different shape on different screens. There was already a deliberate set of five sizes chosen to look softer and rounder than the stock ones; the corners just had never been moved onto it. They have been. Almost nothing visibly moves: most were already the right size and are now simply named, so the set cannot drift apart again. A few grew by two units and a couple shrank, which is the point - they were neighbours before, and now they are steps in the same family. A portrait and a small calendar marker are deliberately left alone, because their size is a proportion of themselves rather than a step on a family."
+        }
+      ]
+    },
+    {
       "version": "1.2.5",
       "entries": [
         {

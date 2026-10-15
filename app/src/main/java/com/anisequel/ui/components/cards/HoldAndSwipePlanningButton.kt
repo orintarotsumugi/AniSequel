@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.cards
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -144,7 +145,7 @@ fun HoldAndSwipePlanningButton(
         label = "btn_press_scale"
     )
 
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
 
     Box(
         modifier = modifier
@@ -340,7 +341,7 @@ private fun WatchingCompletedBadge(
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "Currently Watching" }
             .testTag("watching_button_$sequelId"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.info,
             disabledContainerColor = statusColors.infoContainer
@@ -374,7 +375,7 @@ private fun PlanningCompletedBadge(
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "On Planning list" }
             .testTag("planned_button_$sequelId"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.success,
             disabledContainerColor = statusColors.successContainer
