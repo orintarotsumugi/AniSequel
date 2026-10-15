@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import android.content.Context
 import android.content.Intent
@@ -64,12 +65,12 @@ fun AnimeTrailerBanner(
     val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier
             .fillMaxWidth()
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
             .clickable(interactionSource = interactionSource) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 runCatching {

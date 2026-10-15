@@ -1,4 +1,5 @@
 package com.anisequel.ui.components
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -233,7 +234,7 @@ private fun Avatar(viewer: ViewerProfile?) {
             contentDescription = null,
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentScale = ContentScale.Crop
         )
@@ -241,7 +242,7 @@ private fun Avatar(viewer: ViewerProfile?) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {

@@ -274,7 +274,7 @@ private fun TierCandidateRow(candidate: TierCandidate, onClick: () -> Unit) {
             contentDescription = null,
             modifier = Modifier
                 .size(width = 32.dp, height = 48.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop,
             placeholder = placeholder,

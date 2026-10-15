@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -243,7 +244,7 @@ internal fun EditorCard(
                         .size(38.dp)
                         .background(
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -309,7 +310,7 @@ internal fun DateRow(
                     .size(38.dp)
                     .background(
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
                     ),
                 contentAlignment = Alignment.Center
             ) {

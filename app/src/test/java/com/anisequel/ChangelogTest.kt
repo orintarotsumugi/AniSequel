@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.changelog.Changelog
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.data.update.UpdateManifest
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -123,6 +124,62 @@ class ChangelogTest {
     }
 
     /** No duplicates: two blocks for one version means two answers to one question. */
+    /**
+     * The manifest's `notes` must describe the release it claims to be.
+     *
+     * `update.json` is *generated*: the release workflow reads this file and
+     * writes the notes into the manifest, so nobody has to write them by hand.
+     * But the workflow's commit of the manifest back to `main` is rejected by
+     * branch protection — GitHub does not run workflows for `GITHUB_TOKEN`
+     * pushes — so the committed copy is brought forward by hand, and that is
+     * where it goes stale.
+     *
+     * It already had: the file said 1.2.6 while still carrying 1.2.5's notes.
+     * The updater compares `version_code`, so it would still have offered the
+     * update and shown the reader a description of a release they had already
+     * installed — the same class of failure as the v1.0.15–v1.0.18 manifest,
+     * one layer up.
+     *
+     * The workflow appends a "Build <run> from <sha>." line this committed copy
+     * cannot know, so the assertion is containment rather than equality.
+     */
+    @Test
+    fun `the update manifest notes describe the release it names`() {
+        var dir = File(".").absoluteFile
+        while (!File(dir, "settings.gradle.kts").exists()) {
+            dir = dir.parentFile ?: error("no settings.gradle.kts above the working directory")
+        }
+        val manifest = File(dir, "update.json")
+        assertTrue("no update.json found at ${manifest.path}", manifest.exists())
+
+        val parsed = Moshi.Builder().build()
+            .adapter(UpdateManifest::class.java)
+            .fromJson(manifest.readText())
+        assertNotNull("update.json did not parse into a manifest", parsed)
+
+        assertNotNull("update.json has no version", parsed!!.version)
+        assertNotNull(
+            "update.json has no notes; the updater dialog would fall back to a " +
+                "build number and no explanation",
+            parsed.notes
+        )
+
+        val newest = changelog.versionsWithNotes().firstOrNull()
+        assertNotNull("the changelog has no version with usable notes", newest)
+
+        val firstTitle = newest!!.entries.orEmpty()
+            .firstOrNull { !it.title.isNullOrBlank() }?.title
+        assertNotNull("the newest changelog block has no titled entry", firstTitle)
+
+        assertTrue(
+            "update.json says ${parsed.version} but its notes do not mention " +
+                "\"$firstTitle\" - the notes describe an older release. They are " +
+                "generated from assets/changelog.json by the release workflow, so " +
+                "regenerate them rather than writing new ones by hand.",
+            parsed.notes!!.contains(firstTitle!!)
+        )
+    }
+
     @Test
     fun `no version is listed twice`() {
         val names = changelog.load().versions!!.mapNotNull { it.version }

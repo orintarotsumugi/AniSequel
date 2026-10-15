@@ -101,9 +101,54 @@ object ExpressiveMotion {
      * `expressiveHoldGesture` cannot drift into feeling like two different
      * buttons. Previously each spelled out its own `spring(...)`, so a change
      * to the feel of one press had to be remembered in the other.
+     *
+     * Kept as the symmetric default so any call site still reading it keeps its
+     * current behaviour. New press work should use [PressSpatialIn] and
+     * [PressSpatialOut] together, which is the pair that actually feels like a
+     * press rather than a fade.
      */
     val PressSpatial: FiniteAnimationSpec<Float> get() =
         spatial(expressiveDamping = Spring.DampingRatioMediumBouncy, expressiveStiffness = Spring.StiffnessMedium)
+
+    /**
+     * Going *down*: tight, and explicitly no overshoot.
+     *
+     * A spring's overshoot is a thing it does on the way **back** to rest. On the
+     * way down it would show as the element briefly passing *below* the pressed
+     * scale and recovering — a flicker at the exact moment the finger lands,
+     * which is the one instant the eye is already tracking. So this half is
+     * `NoBouncy` and moderately stiff: down fast, straight to the target.
+     */
+    val PressSpatialIn: FiniteAnimationSpec<Float> get() =
+        spatial(
+            expressiveDamping = Spring.DampingRatioNoBouncy,
+            expressiveStiffness = Spring.StiffnessMedium
+        )
+
+    /**
+     * Coming *back up*: past rest, then settle. This is the bounce.
+     *
+     * `bounce` is the asymmetric half of Compose's spring — it governs overshoot
+     * only on the return, which a plain `dampingRatio` cannot express because
+     * the same ratio governs both directions. This is what a press was missing:
+     * with one symmetric spring for both halves, the button squashed and then
+     * simply returned, which reads as a fade rather than as something with
+     * weight.
+     *
+     * 0.35 is deliberate rather than larger. Past about 0.5 the return starts
+     * feeling like the button is being thrown at the user, and a control that
+     * overshoots visibly on every tap is tiring over a long session.
+     *
+     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees it — `SMOOTH`
+     * is `NoBouncy` by design and `INSTANT` snaps, so on those styles the press
+     * behaves exactly as it always has.
+     */
+    val PressSpatialOut: FiniteAnimationSpec<Float> get() =
+        spatial(
+            expressiveDamping = Spring.DampingRatioNoBouncy,
+            expressiveStiffness = Spring.StiffnessMediumLow,
+            expressiveBounce = 0.35f
+        )
 
     /**
      * The spatial counterpart for `IntOffset`-based placement motion.
@@ -216,7 +261,8 @@ object ExpressiveMotion {
 
     private fun spatial(
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
-        expressiveStiffness: Float = Spring.StiffnessMedium
+        expressiveStiffness: Float = Spring.StiffnessMedium,
+        expressiveBounce: Float = 0f
     ): FiniteAnimationSpec<Float> =
         when (speed) {
             com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
@@ -226,7 +272,8 @@ object ExpressiveMotion {
             )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = expressiveDamping,
-                stiffness = expressiveStiffness
+                stiffness = expressiveStiffness,
+                bounce = expressiveBounce
             )
         }
 
@@ -332,7 +379,20 @@ fun Modifier.bouncyPress(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) pressedScale else 1f,
-        animationSpec = ExpressiveMotion.PressSpatial,
+        // Two specs chosen by direction, not one.
+        //
+        // A single spring has to treat the press and the release identically, so
+        // the element squashed and then merely returned - which reads as a fade
+        // rather than as a button with weight. Compose's `bounce` parameter is the
+        // asymmetric half: it governs overshoot only on the way *back*, which a
+        // shared `dampingRatio` cannot express. So the way down is tight and
+        // cannot flicker below the pressed scale, and the way back overshoots
+        // slightly past rest and settles.
+        animationSpec = if (isPressed) {
+            ExpressiveMotion.PressSpatialIn
+        } else {
+            ExpressiveMotion.PressSpatialOut
+        },
         label = "bouncy_press_scale"
     )
 

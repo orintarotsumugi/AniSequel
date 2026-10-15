@@ -877,7 +877,7 @@ private fun LibraryPoster(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(POSTER_ASPECT)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             AsyncImage(

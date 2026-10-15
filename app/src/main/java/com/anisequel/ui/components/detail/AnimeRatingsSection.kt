@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,7 @@ fun AnimeRatingsSection(
         modifier = modifier
             .fillMaxWidth()
             .testTag("spec_ratings_section"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )

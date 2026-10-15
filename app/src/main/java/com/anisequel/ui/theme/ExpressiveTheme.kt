@@ -15,10 +15,15 @@ import androidx.compose.ui.unit.dp
  * large enough that cards read as curved panels rather than hard rectangles,
  * but still inside the scale where adjacent slots stay visually related.
  */
+// Aliased rather than imported: this file's own `ExpressiveShapes` shadows the
+// token object of the same name, and a bare `import ...ExpressiveShapes` would
+// resolve to whichever one wins and silently change every radius below.
+private val Corner = com.anisequel.ui.components.expressive.ExpressiveShapes
+
 val ExpressiveShapes: Shapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp),
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(Corner.ExtraSmallCorner),
+    small = RoundedCornerShape(Corner.SmallCorner),
+    medium = RoundedCornerShape(Corner.MediumCorner),
+    large = RoundedCornerShape(Corner.LargeCorner),
     extraLarge = RoundedCornerShape(36.dp)
 )

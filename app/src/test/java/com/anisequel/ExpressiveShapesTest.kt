@@ -152,6 +152,59 @@ class ExpressiveShapesTest {
         assertEquals("capsule radius must be circular", 20f, rect.topLeftCornerRadius.y, TOLERANCE)
     }
 
+    /**
+     * The corner radius scale has to be ordered, or it is just four numbers.
+     *
+     * It is here because the app had no scale at all - sixty-four inlined
+     * literals across fourteen radii - and a scale nobody checks the order of
+     * stops being a scale the moment someone adds a value in the wrong place.
+     */
+    @Test
+    fun `the corner scale increases at every step`() {
+        val scale = listOf(
+            "ExtraSmallCorner" to ExpressiveShapes.ExtraSmallCorner,
+            "SmallCorner" to ExpressiveShapes.SmallCorner,
+            "MediumCorner" to ExpressiveShapes.MediumCorner,
+            "LargeCorner" to ExpressiveShapes.LargeCorner
+        )
+
+        scale.zipWithNext().forEach { (lower, upper) ->
+            assertTrue(
+                "the corner scale must increase: ${lower.first} " +
+                    "(${lower.second.value}) is not smaller than ${upper.first} " +
+                    "(${upper.second.value})",
+                lower.second < upper.second
+            )
+        }
+    }
+
+    /**
+     * The scale carries the values the theme documents, not Material's.
+     *
+     * `ExpressiveTheme.kt` says, in its own doc comment, that this scale runs
+     * 10 / 14 / 20 / 28 / 36 — deliberately rounder than M3's 4 / 8 / 12 / 16 / 28
+     * so cards read as curved panels rather than hard rectangles. The four tokens
+     * below are the first four steps of *that*, and the theme now reads them
+     * rather than repeating them.
+     *
+     * Pinning the numbers is what makes a later change to either one deliberate:
+     * if someone edits the scale and forgets the theme, or the reverse, this
+     * fails and names which side moved.
+     *
+     * Deliberately *not* asserted here: that the theme's `Shapes` slots actually
+     * render at these radii. That needs `CornerSize.toPx(size, layoutDirection,
+     * density)` and a `Shapes` that has no `equals`, so the only way to check it
+     * is by rasterising an outline — which a plain JVM test cannot do, and which
+     * is the same limit the capsule tests above already state.
+     */
+    @Test
+    fun `the scale carries the theme's documented values`() {
+        assertEquals("ExtraSmallCorner", 10f, ExpressiveShapes.ExtraSmallCorner.value, TOLERANCE)
+        assertEquals("SmallCorner", 14f, ExpressiveShapes.SmallCorner.value, TOLERANCE)
+        assertEquals("MediumCorner", 20f, ExpressiveShapes.MediumCorner.value, TOLERANCE)
+        assertEquals("LargeCorner", 28f, ExpressiveShapes.LargeCorner.value, TOLERANCE)
+    }
+
     private companion object {
         /**
          * Radii come back as exact halves in Compose, but the outline is built

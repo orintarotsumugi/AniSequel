@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.settings
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -85,7 +86,7 @@ fun ThemePreviewCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("theme_live_preview_card"),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(ExpressiveShapes.LargeCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 2.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -156,7 +157,7 @@ fun ThemePreviewCard(
                 // Mockup card
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(1.dp, heroAccent.copy(alpha = 0.5f))
                 ) {
@@ -169,7 +170,7 @@ fun ThemePreviewCard(
                             Box(
                                 modifier = Modifier
                                     .size(48.dp, 64.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                                     .background(heroAccent.copy(alpha = 0.22f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -236,7 +237,7 @@ fun ThemePreviewCard(
                                     .height(38.dp)
                                     .bouncyPress(pressedScale = 0.94f)
                                     .testTag("preview_plan_button"),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
                                 colors = if (isPlanned) {
                                     ButtonDefaults.buttonColors(
                                         containerColor = statusColors.successContainer,
@@ -269,7 +270,7 @@ fun ThemePreviewCard(
                                     .height(38.dp)
                                     .bouncyPress(pressedScale = 0.94f)
                                     .testTag("preview_watch_button"),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
                                 colors = if (isWatching) {
                                     ButtonDefaults.outlinedButtonColors(
                                         containerColor = statusColors.infoContainer,

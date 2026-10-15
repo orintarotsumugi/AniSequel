@@ -2,6 +2,7 @@ package com.anisequel.ui.components.expressive
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,19 +41,28 @@ fun ExpressivePrimaryButton(
     enabled: Boolean = true
 ) {
     val cornerRadius by animateDpAsState(
-        targetValue = if (loading) 24.dp else 16.dp,
+        targetValue = if (loading) ExpressiveShapes.PillCorner else ExpressiveShapes.MediumCorner,
         animationSpec = ExpressiveMotion.FastSpatialDp,
         label = "button_corner_radius"
     )
+
+    // Shared with `bouncyPress` so the press comes from the `Button`, which knows
+    // the difference between a tap and a drag. Without it, `bouncyPress` installs
+    // a pointer-input loop that calls this button pressed the instant a finger
+    // lands and releases it when the finger travels — so a drag that started on
+    // this button could spring it twice, which on the app's primary action is
+    // both wrong and very visible.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
         modifier = modifier
             .height(48.dp)
-            .bouncyPress(pressedScale = 0.96f)
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .testTag("${EXPRESSIVE_TAG}primary_button"),
-        shape = RoundedCornerShape(cornerRadius)
+        shape = RoundedCornerShape(cornerRadius),
+        interactionSource = interactionSource
     ) {
         if (loading) {
             ExpressiveContainedLoadingIndicator(
@@ -85,11 +96,13 @@ fun ExpressiveIconBadge(
     badge: String? = null
 ) {
     Box(modifier = modifier) {
+        val interactionSource = remember { MutableInteractionSource() }
         IconButton(
             onClick = onClick,
             modifier = Modifier
-                .bouncyPress(pressedScale = 0.92f)
-                .testTag("${EXPRESSIVE_TAG}icon_badge_$contentDescription")
+                .bouncyPress(pressedScale = 0.92f, interactionSource = interactionSource)
+                .testTag("${EXPRESSIVE_TAG}icon_badge_$contentDescription"),
+            interactionSource = interactionSource
         ) {
             Icon(imageVector = icon, contentDescription = contentDescription)
         }

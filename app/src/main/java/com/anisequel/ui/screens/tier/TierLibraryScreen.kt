@@ -245,7 +245,7 @@ private fun TierContinueCard(list: TierListDocument, onOpen: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, onClick = onOpen)
