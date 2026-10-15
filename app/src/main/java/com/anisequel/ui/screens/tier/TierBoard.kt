@@ -308,11 +308,14 @@ private fun TierBoard(
         }
     }
 
-    // The transform block is `suspend` and returns a Boolean, so the assignment
-    // cannot be the last expression without a type error.
+    // No trailing return value: `rememberTransformableState`'s callback returns
+    // `Unit` in this Compose version, so the `true` that used to end this lambda
+    // was an unused expression - the compiler said so on every release build.
+    // (The comment above it claimed the callback "is `suspend` and returns a
+    // Boolean", which describes an API shape this project has never compiled
+    // against.)
     val transformState = rememberTransformableState { zoomChange, _, _ ->
         zoom = clampTierZoom(zoom * zoomChange)
-        true
     }
 
     val dragBox = draggingId?.let { arrangement.boxByMediaId[it] }

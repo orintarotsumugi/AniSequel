@@ -8,6 +8,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +68,13 @@ fun AniTopAppBar(
         scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
-            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            // One step stronger than the un-scrolled container. The bar used
+            // `surfaceContainer` here, which in the dark palette is barely a
+            // shade off `surface`, so scrolling the feed under the bar changed
+            // almost nothing and the elevation signal the scroll behavior is
+            // meant to give was invisible. `surfaceContainerHigh` is the first
+            // step that actually reads as "content is passing under this now".
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             titleContentColor = MaterialTheme.colorScheme.onSurface
         ),
         title = {
@@ -79,7 +87,11 @@ fun AniTopAppBar(
                 Column {
                     Text(
                         text = "AniSequel",
-                        style = MaterialTheme.typography.titleMedium,
+                        // `titleLarge` is the M3 top-app-bar title role; the bar
+                        // was rendering `titleMedium`, one step small, which is
+                        // why the app's own name read as a section header rather
+                        // than as the screen's title.
+                        style = MaterialTheme.typography.titleLarge,
                         maxLines = 1
                     )
                     if (viewer != null) {
@@ -95,14 +107,31 @@ fun AniTopAppBar(
             }
         },
         actions = {
+            // One interaction source per action, shared between the `IconButton`
+            // and `bouncyPress`. Without a source `bouncyPress` falls back to
+            // its own pointer loop, which springs the control down on the first
+            // pointer-down and releases only once the finger travels past touch
+            // slop - so a finger that lands here and starts a scroll squashes
+            // the icon for the whole drag and then springs back, reading as two
+            // presses. Reading the button's own source emits the press on down
+            // and *cancels* it the moment the gesture is claimed as a drag.
+            //
+            // It also puts the ripple and the scale on the same source, so the
+            // highlight bounds and the press animation cannot disagree about
+            // when the button is down.
+            val filterSource = remember { MutableInteractionSource() }
+            val refreshSource = remember { MutableInteractionSource() }
+            val settingsSource = remember { MutableInteractionSource() }
+
             IconButton(
                 onClick = {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                     onOpenFilter()
                 },
                 modifier = Modifier
-                    .bouncyPress()
-                    .testTag("filter_button")
+                    .bouncyPress(interactionSource = filterSource)
+                    .testTag("filter_button"),
+                interactionSource = filterSource
             ) {
                 BadgedBox(
                     badge = {
@@ -130,8 +159,9 @@ fun AniTopAppBar(
                 },
                 enabled = !isRefreshing,
                 modifier = Modifier
-                    .bouncyPress()
-                    .testTag("refresh_button")
+                    .bouncyPress(interactionSource = refreshSource)
+                    .testTag("refresh_button"),
+                interactionSource = refreshSource
             ) {
                 if (isRefreshing) {
                     ExpressiveLoadingIndicator(
@@ -152,8 +182,9 @@ fun AniTopAppBar(
                     onOpenSettings()
                 },
                 modifier = Modifier
-                    .bouncyPress()
-                    .testTag("settings_button")
+                    .bouncyPress(interactionSource = settingsSource)
+                    .testTag("settings_button"),
+                interactionSource = settingsSource
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Settings,

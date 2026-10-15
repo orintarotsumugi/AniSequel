@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.2.6"
-val BASELINE_VERSION_CODE = 216
+val BASELINE_VERSION_NAME = "1.2.7"
+val BASELINE_VERSION_CODE = 217
 
 plugins {
   alias(libs.plugins.android.application)
@@ -155,6 +155,29 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  androidResources {
+    // English-only resources, on purpose.
+    //
+    // Every string this app ships is in the default `res/values/strings.xml`;
+    // there is not one translated string in the repository. The other ~100
+    // locales in a release APK come from the libraries it depends on - AndroidX
+    // and Material both carry fully translated resource sets, and this app has no
+    // Firebase or Play Services dependency to blame instead - and they are
+    // unreachable: nothing in this app can draw them, so the only thing
+    // they can do is sit in the resource table and in the APK.
+    //
+    // `localeFilters` is the current spelling. `resourceConfigurations` did the
+    // same thing and was deprecated in AGP 8.8 (this project is on 9.5, well
+    // past that), and the two cannot be combined with automatic locale
+    // generation - which this app does not use, because it does not have a
+    // locale list to generate.
+    //
+    // What this costs: if the app is ever translated, the new locale has to be
+    // added here or its strings will be filtered out of the build and the app
+    // will fall back to English. That is the one thing to remember about this
+    // block, and it fails visibly (untranslated UI) rather than silently.
+    localeFilters += listOf("en")
+  }
   packaging {
     dex {
       useLegacyPackaging = true
@@ -193,6 +216,12 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.coil.compose)
+  // Kept, and not removable with the dead branch it used to justify: the
+  // decoder the app actually registers, `coil.decode.ImageDecoderDecoder`,
+  // lives in this artifact alongside the `GifDecoder` fallback that `minSdk = 31`
+  // made unreachable. Dropping it compiles nothing - CI answered a change that
+  // tried with "Unresolved reference 'ImageDecoderDecoder'". The unreachable
+  // `GifDecoder` call site is gone, so R8 prunes those classes instead.
   implementation(libs.coil.gif)
   implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)

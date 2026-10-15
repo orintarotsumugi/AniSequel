@@ -484,8 +484,8 @@ again, so one dropped request cannot become a tight retry loop.
 | --- | --- | --- |
 | JDK | **21** (Temurin) | Newest LTS that AGP 9.4.1, Gradle 9.6.1 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
 | Android SDK | compileSdk **36.1**, targetSdk **36**, minSdk **31** | `minorApiLevel = 1` on the 36 line. See [Minimum Android version](#minimum-android-version). |
-| Gradle | **9.6.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. |
-| AGP | **9.4.1** | The newest stable; 9.5.0 existed only as alpha when the pin was written. An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. AGP also checks the Gradle it is running on and fails the build if it is too old, so the two versions move together. |
+| Gradle | **9.6.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. It is also the Gradle the committed AGP is green with; the two are one decision, because AGP refuses to start on an older Gradle. |
+| AGP | **9.4.1** | The newest stable — and still is. Moving this pin to 9.5.0 on the belief that the line had gone stable is what CI caught with `Plugin [id: 'com.android.application', version: '9.5.0'] was not found`; Google's metadata still lists `9.5.0-alpha10` as the newest, so there is no stable 9.5.0 to move to. An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. |
 
 `settings.gradle.kts` applies the `foojay-resolver-convention` plugin, so a
 non-21 JDK does not fail with a bare toolchain error — it provisions one. That is
@@ -708,13 +708,13 @@ One workflow, `.github/workflows/android-release.yml`, on push to `main`, on
 tags, on pull requests, and on manual dispatch.
 
 ```
-checkout → JDK 21 → Gradle 9.3.1 → actionlint (validates this file itself)
+checkout → JDK 21 → Gradle 9.6.1 → actionlint (validates this file itself)
    ↓
 ephemeral key (PR)  |  restore key from secrets (non-PR)
    ↓
 validate the key with keytool → resolve version → lint (advisory)
    ↓
-test  ← THE GATE
+cache Robolectric's framework jars → test  ← THE GATE
    ↓
 assembleRelease → collect artifact
    ↓
@@ -736,6 +736,19 @@ Notable properties, each of which was a bug once:
 - **`actionlint` runs first.** A duplicate YAML key makes the whole file invalid
   and the only symptom is "this run likely failed because of a workflow file
   issue". The workflow validates itself.
+- **Robolectric's framework jars are cached.** They are fetched by Robolectric's
+  own Maven resolver *during the test task*, not through Gradle, so they are in
+  no Gradle cache and a cold runner downloads ~100 MB of them before the first
+  test starts. That download — not the suite — is what makes the test step the
+  slowest in the workflow. The cache is keyed on `gradle/libs.versions.toml`,
+  which is where the Robolectric version lives, so a bump cannot silently keep
+  testing against the previous release's jars.
+- **A superseded pull-request run is cancelled.** Pushing a fix three times left
+  two full builds — R8 over the whole app, plus the tests — finishing behind the
+  one that mattered. `cancel-in-progress` is an expression rather than `true`:
+  it applies to pull requests only, because branch and tag runs are serialised
+  on purpose (two pushes landing together would both mint a release tag and race
+  to write `update.json`).
 - **The manifest commit is reported, not swallowed.** `main` is protected and
   rejects `GITHUB_TOKEN` pushes, so `gradle.properties` and `update.json` still
   need bringing forward by hand after a release. A `|| echo "Nothing to push."`
@@ -769,7 +782,7 @@ AniSequel/
 │       │       ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
 │       │       ├── values/        strings, colours, the system splash theme
 │       │       └── xml/           backup rules, FileProvider paths, widget configs
-│       └── test/                 59 JVM unit suites (there is no androidTest/)
+│       └── test/                 60 JVM unit suites (there is no androidTest/)
 ├── gradle/libs.versions.toml     every version, with the reasoning kept inline
 ├── AGENTS.md                     the rules for working in this repo
 ├── ARCHITECTURE.md               the exhaustive system specification
@@ -803,6 +816,26 @@ adding any would be a large, avoidable regression. What that buys:
   process, so it cannot be a `Composable`.
 - `dependenciesInfo.includeInApk = false` keeps dependency metadata out of the
   APK.
+- `androidResources.localeFilters += listOf("en")` drops the library locales.
+  Every string in this app is in the default `res/values/strings.xml`; there is
+  not one translated string in the repository. The other ~100 locales in a
+  release APK come from AndroidX, Material and friends, and nothing in this app
+  can draw them. If the app is ever translated, the new locale has to be added
+  there or its strings are filtered out of the build — which is exactly the
+  constraint to remember about that block, and it fails visibly (English UI in a
+  translated app) rather than silently. `resourceConfigurations` did this
+  before and was deprecated in AGP 8.8.
+- The animated-image decoder set is down to the one that can run. `NetworkClient`
+  used to register `ImageDecoderDecoder` behind `if (SDK_INT >= P)` and
+  `GifDecoder` below it; at `minSdk = 31` that guard is always true, so the
+  fallback could not execute on any device this app installs on. The branch and
+  the fallback are gone and R8 prunes the unused decoder's classes.
+  **`coil-gif` is still a dependency, though** — both decoders live in that one
+  artifact (`coil-gif-2.7.0.aar` contains `ImageDecoderDecoder.class`;
+  `coil-base` contains neither), so removing it breaks the build rather than
+  shrinking the APK. `MinimumSdkReachabilityTest` now fails the build if a
+  `Build.VERSION.SDK_INT` branch is decided before the app starts, so the next
+  raise of `minSdk` cannot quietly leave one behind.
 - `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see
   `ApkPackagingTest` for the 1.9 MB this is worth.
 - The launcher is a pure adaptive icon (`mipmap-anydpi-v26`). The density-bucket
@@ -825,6 +858,7 @@ behaviour:
 | `GET_SIGNING_CERTIFICATES or GET_SIGNATURES` | `GET_SIGNING_CERTIFICATES` |
 | deprecated `getPackageInfo(path, int)` on API 33+ | `PackageInfoFlags` |
 | `PackageInfo.signatures` signer fallback | `signingInfo` only |
+| Coil `if (SDK_INT >= P) ImageDecoderDecoder else GifDecoder` | `ImageDecoderDecoder`; `coil-gif` dropped |
 
 What 31 buys beyond tidiness: Material You works on every supported device, so
 the wallpaper theming that was previously "unavailable on some phones" is

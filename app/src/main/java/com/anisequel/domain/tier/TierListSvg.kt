@@ -36,10 +36,16 @@ object TierListSvg {
      */
     data class Palette(
         val background: Long = 0xFF14110F,
-        val headingText: Long = 0xFFFFFFFF.toLong(),
+        // No `.toLong()` on these three. A hex literal above `Int.MAX_VALUE` is
+        // already a `Long`, so the call was a no-op the compiler warned about on
+        // every build (`Redundant call of conversion method`). The rest are typed
+        // by the `Long` parameter they are assigned to - `tileStroke` is the only
+        // one small enough to be an `Int` literal, which is why it never carried
+        // a conversion to begin with.
+        val headingText: Long = 0xFFFFFFFF,
         val subheadingText: Long = 0xB3FFFFFF,
-        val labelText: Long = 0xFFFFFFFF.toLong(),
-        val captionText: Long = 0xE6FFFFFF.toLong(),
+        val labelText: Long = 0xFFFFFFFF,
+        val captionText: Long = 0xE6FFFFFF,
         val tileFill: Long = 0xFF2A2522,
         val tileStroke: Long = 0x33FFFFFF
     )

@@ -565,7 +565,7 @@ class TierScreenLogicTest {
         // packed colour every other `Color` in the app holds, and asserting the
         // unmasked one would pin a value Compose never builds by itself.
         assertEquals(0xFFFFFFFF00000000uL, tierRowColor(-1L).value)
-        assertEquals(0xFFFFFFFF00000000uL, tierRowColor(0xFFFFFFFF.toLong()).value)
+        assertEquals(0xFFFFFFFF00000000uL, tierRowColor(0xFFFFFFFF).value)
     }
 
     // ---- Wording -----------------------------------------------------------

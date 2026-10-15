@@ -144,7 +144,7 @@ class AniListJsonTest {
         assertNull(response.data)
         assertNotNull(response.errors)
         assertEquals("Invalid token", response.errors!!.single().message)
-        assertEquals(401, response.errors!!.single().status)
+        assertEquals(401, response.errors.single().status)
     }
 
     @Test

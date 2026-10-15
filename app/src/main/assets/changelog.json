@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.2.7",
+      "entries": [
+        {
+          "title": "Signing in no longer forgets where you were",
+          "detail": "Looking at the Sign In tab and coming back to Scan wiped the username you had typed, because the two tabs are swapped by animating one of them away and anything remembered inside it goes with it. Rotating the phone dropped you back on the first tab as well. Both are remembered now, and a rotation keeps them too."
+        },
+        {
+          "title": "The sign-in buttons press when you press them",
+          "detail": "Connect AniList, Scan Username, Paste Token, Client ID and the demo button all used to know you had touched them and nothing more - so a finger that landed on one and then scrolled kept that button squashed for the whole drag before it sprang back. Each one now takes its press from the tap itself, so the highlight appears the moment you touch down and clears as soon as the gesture turns into a scroll."
+        },
+        {
+          "title": "The top bar reads as the app's title, and reacts when you scroll",
+          "detail": "AniSequel's own name was drawn a size smaller than the rest of the app uses for a screen title, so it read like a section header on top of the screen rather than the name of it. The bar also barely changed shade once you scrolled a list under it. It is now the right size, and it steps a shade stronger as content passes beneath it, so it is obvious there is a list moving under something."
+        },
+        {
+          "title": "Sheets and menus are the same navy as the page",
+          "detail": "Two surface shades - the dimmed one a sheet sits on and the bright one tonal bars use - were the only colours in the app still coming from the theme's default purple-grey seed. Wherever one appeared it sat a shade off the navy everything around it was using. They are pinned to the app's own palette now."
+        },
+        {
+          "title": "A smaller download",
+          "detail": "The release no longer carries the second animated-image decoder it kept for Android versions this app cannot be installed on, nor the roughly one hundred languages of library text the app has no translations for. Nothing on screen changes - animated profile art still plays exactly as it did; the file you download is just smaller, and there is less of it for the build to process."
+        }
+      ]
+    },
+    {
       "version": "1.2.6",
       "entries": [
         {

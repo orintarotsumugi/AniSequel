@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.login
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,10 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -30,11 +28,25 @@ import com.anisequel.ui.components.expressive.bouncyPress
 
 @Composable
 fun UsernameScanCard(
+    /**
+     * The typed username, hoisted to the caller so it outlives this card. The
+     * login tabs are an `AnimatedContent`, which disposes the tab it animates
+     * away from - so state held here was wiped every time the user switched to
+     * Sign In and back.
+     */
+    username: String,
+    onUsernameChange: (String) -> Unit,
     onScanUsername: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var publicUsernameInput by remember { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
+    // Shared with `bouncyPress` on the button below: the card sits inside the
+    // login screen's scrolling column, and without a source the press effect
+    // came from `bouncyPress`'s own pointer loop, which keeps the button pressed
+    // for as long as the finger is down - so beginning a scroll on it left the
+    // button visibly squashed. The button's own `clickable` cancels the press as
+    // soon as the gesture is claimed as a scroll.
+    val scanButtonSource = remember { MutableInteractionSource() }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -58,8 +70,8 @@ fun UsernameScanCard(
             )
             Spacer(modifier = Modifier.height(14.dp))
             OutlinedTextField(
-                value = publicUsernameInput,
-                onValueChange = { publicUsernameInput = it },
+                value = username,
+                onValueChange = onUsernameChange,
                 label = { Text("AniList Username") },
                 placeholder = { Text("e.g. MyAnimeList") },
                 singleLine = true,
@@ -71,18 +83,19 @@ fun UsernameScanCard(
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
-                    if (publicUsernameInput.isNotBlank()) {
+                    if (username.isNotBlank()) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onScanUsername(publicUsernameInput.trim())
+                        onScanUsername(username.trim())
                     }
                 },
-                enabled = publicUsernameInput.isNotBlank(),
+                enabled = username.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
-                    .bouncyPress(pressedScale = 0.96f)
+                    .bouncyPress(pressedScale = 0.96f, interactionSource = scanButtonSource)
                     .testTag("scan_username_button"),
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.small,
+                interactionSource = scanButtonSource
             ) {
                 Icon(
                     imageVector = AppVectorIcons.Search,
