@@ -482,10 +482,10 @@ again, so one dropped request cannot become a tight retry loop.
 
 | Tool | Version | Why that one |
 | --- | --- | --- |
-| JDK | **21** (Temurin) | Newest LTS that AGP 9.5.0, Gradle 9.7.0 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
+| JDK | **21** (Temurin) | Newest LTS that AGP 9.4.1, Gradle 9.6.1 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
 | Android SDK | compileSdk **36.1**, targetSdk **36**, minSdk **31** | `minorApiLevel = 1` on the 36 line. See [Minimum Android version](#minimum-android-version). |
-| Gradle | **9.7.0** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. 9.7.0 and not the newest (9.8.1) because Kotlin 2.4.21's Gradle plugin is only verified through 9.7.0, while AGP 9.5.0 needs 9.6.0 minimum — 9.7.0 is the one version inside both. |
-| AGP | **9.5.0** | The newest stable (9.5.0 existed only as alpha when the pin was first written). An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. AGP also checks the Gradle it is running on and fails the build if it is too old, so the two versions move together. |
+| Gradle | **9.6.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. It is also the Gradle the committed AGP is green with; the two are one decision, because AGP refuses to start on an older Gradle. |
+| AGP | **9.4.1** | The newest stable — and still is. Moving this pin to 9.5.0 on the belief that the line had gone stable is what CI caught with `Plugin [id: 'com.android.application', version: '9.5.0'] was not found`; Google's metadata still lists `9.5.0-alpha10` as the newest, so there is no stable 9.5.0 to move to. An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. |
 
 `settings.gradle.kts` applies the `foojay-resolver-convention` plugin, so a
 non-21 JDK does not fail with a bare toolchain error — it provisions one. That is
@@ -708,7 +708,7 @@ One workflow, `.github/workflows/android-release.yml`, on push to `main`, on
 tags, on pull requests, and on manual dispatch.
 
 ```
-checkout → JDK 21 → Gradle 9.7.0 → actionlint (validates this file itself)
+checkout → JDK 21 → Gradle 9.6.1 → actionlint (validates this file itself)
    ↓
 ephemeral key (PR)  |  restore key from secrets (non-PR)
    ↓

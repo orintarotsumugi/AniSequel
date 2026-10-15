@@ -76,15 +76,18 @@ jobs:
       - name: Set up Java 21 (JDK 21)
         uses: actions/setup-java@v5
         with:
-          # JDK 21 is the newest LTS that AGP 9.5.0, Gradle 9.7.0 and the
+          # JDK 21 is the newest LTS that AGP 9.4.1, Gradle 9.6.1 and the
           # Robolectric runner in this repo are all verified against. Newer JDKs
           # would run the build but break the JVM test step, which is the one
           # step that is a real gate rather than advisory.
           #
-          # (This named AGP 9.1.1 and Gradle 9.3.1 - two versions the project no
-          # longer builds with. A comment that is two major-and-minor releases
-          # behind is read as the currently verified set, so it is corrected
-          # whenever the pair moves.)
+          # The pair above is the committed one, and naming it exactly matters:
+          # a change listed AGP 9.5.0 / Gradle 9.7.0 here as the versions this
+          # project builds with, and neither pin existed - CI failed at
+          # configuration with "Plugin [id: 'com.android.application', version:
+          # '9.5.0'] was not found". A comment that names versions the build
+          # cannot resolve is worse than no comment, because the next reader
+          # treats it as the verified set.
           java-version: '21'
           distribution: 'temurin'
 
@@ -98,17 +101,17 @@ jobs:
           # could pass here and fail on a developer's machine, or the reverse, with
           # nothing in the repository to explain the difference.
           #
-          # 9.7.0, matched to gradle/wrapper/gradle-wrapper.properties and
-          # ./gradlew. Deliberately not the newest Gradle (9.8.1): Kotlin
-          # 2.4.21's Gradle plugin is only verified through Gradle 9.7.0, and AGP
-          # 9.5.0 requires 9.6.0 minimum, so 9.7.0 is the one version inside both
-          # ranges.
+          # 9.6.1, matched to gradle/wrapper/gradle-wrapper.properties and
+          # ./gradlew - the version the committed AGP 9.4.1 was last green with.
+          # The two are not independent pins: AGP checks the Gradle it runs
+          # against before it does any work at all and refuses with a "Minimum
+          # supported Gradle version" message rather than pointing here.
           #
-          # AGP 9.5.0 and not the 9.4.1 this started at, because 9.5 has since
-          # gone stable. The two are not independent pins - AGP checks the Gradle
-          # it runs against before it does any work at all, and refuses with a
-          # "Minimum supported Gradle version" message rather than pointing here.
-          gradle-version: '9.7.0'
+          # Not the head of the list. "Current is 9.8.1" was written here by a
+          # change that also raised the AGP pin to a version that does not exist,
+          # and both numbers came from the same unverified report; only the pair
+          # CI has actually run is named here now.
+          gradle-version: '9.6.1'
           cache-disabled: false
 
       - name: Make Gradlew Executable
