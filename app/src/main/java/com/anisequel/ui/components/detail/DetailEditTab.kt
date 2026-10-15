@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -27,12 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -43,6 +37,8 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.isManga
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveContainedLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import kotlinx.coroutines.launch
 
 /**
@@ -63,6 +59,11 @@ import kotlinx.coroutines.launch
  * saving flag and an error string it never reads. The one thing that *is* shared
  * is [EntryEditor], which is where the request actually goes.
  *
+ * It is held one level up, on [EntryEditState], because `AnimatedContent` disposes
+ * the tab it animates away from - so state remembered *here* was rebuilt from
+ * nothing on every tab switch, spinner and all, and the entry was fetched again
+ * for a list AniList had already answered. See [EntryEditState] for that.
+ *
  * ## Why edits are staged rather than saved as you touch them
  *
  * Every control moves the local draft and nothing else; only "Save changes" sends
@@ -80,31 +81,15 @@ import kotlinx.coroutines.launch
 fun DetailEditTab(
     media: MediaNode,
     editor: EntryEditor,
+    state: EntryEditState,
     modifier: Modifier = Modifier
 ) {
     val isManga = media.isManga
     val scope = rememberCoroutineScope()
 
-    var draft by remember(media.id) { mutableStateOf<EntryDraft?>(null) }
-    var loadError by remember(media.id) { mutableStateOf<String?>(null) }
-    var statusMessage by remember(media.id) { mutableStateOf<String?>(null) }
-    var isSaving by remember(media.id) { mutableStateOf(false) }
-
-    // Which date, if any, has its picker open. One value rather than one flag per
-    // field, so the two pickers can never both be up.
-    var openDatePicker by remember(media.id) { mutableStateOf<DateField?>(null) }
-
-    LaunchedEffect(media.id) {
-        editor.load(media.id).fold(
-            onSuccess = {
-                draft = it.toDraft()
-                loadError = null
-            },
-            onFailure = { loadError = it.message ?: "Couldn't load your entry." }
-        )
-    }
-
-    val currentError = loadError
+    // The entry is fetched by the sheet, which owns [state]. Nothing to launch
+    // here any more, and nothing to re-fetch when this tab is rebuilt.
+    val currentError = state.loadError
     if (currentError != null) {
         Surface(
             shape = MaterialTheme.shapes.medium,
@@ -132,8 +117,16 @@ fun DetailEditTab(
         return
     }
 
-    val state = draft
-    if (state == null) {
+    val entryState = state.draft
+    if (entryState == null) {
+        // The morphing loader, not a bare `CircularProgressIndicator`.
+        //
+        // This is the app's own `LoadingIndicator` wrapper, used in twenty-odd
+        // places across the profile tabs, the sheets and the dashboard. The
+        // detail tab was one of the few still on the plain M3 spinner, so the
+        // one moment this screen admits to waiting looked like a different app
+        // from the moment before it - and a tab that rebuilds on every switch
+        // showed it repeatedly.
         Row(
             modifier = modifier
                 .fillMaxWidth()
@@ -141,7 +134,7 @@ fun DetailEditTab(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            ExpressiveLoadingIndicator(modifier = Modifier.size(22.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = "Loading your entry...",
@@ -155,8 +148,8 @@ fun DetailEditTab(
     val totalUnits = if (isManga) media.chapters ?: 0 else media.episodes ?: 0
 
     fun persist(updated: EntryDraft) {
-        isSaving = true
-        statusMessage = null
+        state.isSaving = true
+        state.statusMessage = null
         scope.launch {
             editor.save(
                 MediaEntryEdit(
@@ -171,12 +164,12 @@ fun DetailEditTab(
                 )
             ).fold(
                 onSuccess = { saved ->
-                    draft = saved.toDraft()
-                    statusMessage = "Saved to your AniList list"
+                    state.draft = saved.toDraft()
+                    state.statusMessage = "Saved to your AniList list"
                 },
-                onFailure = { statusMessage = it.message ?: "Couldn't save your changes." }
+                onFailure = { state.statusMessage = it.message ?: "Couldn't save your changes." }
             )
-            isSaving = false
+            state.isSaving = false
         }
     }
 
@@ -184,24 +177,25 @@ fun DetailEditTab(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        var statusMenuOpen by remember(media.id) { mutableStateOf(false) }
-
         // Status.
         Box {
             EditorCard(
                 icon = AppVectorIcons.Info,
                 title = "Status",
-                subtitle = statusLabel(state.status, isManga),
-                onClick = { statusMenuOpen = true },
+                subtitle = statusLabel(entryState.status, isManga),
+                onClick = { state.statusMenuOpen = true },
                 testTag = "edit_status_row"
             )
-            DropdownMenu(expanded = statusMenuOpen, onDismissRequest = { statusMenuOpen = false }) {
+            DropdownMenu(
+                expanded = state.statusMenuOpen,
+                onDismissRequest = { state.statusMenuOpen = false }
+            ) {
                 ENTRY_STATUSES.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option.labelFor(isManga)) },
                         onClick = {
-                            statusMenuOpen = false
-                            draft = state.copy(status = option.apiValue)
+                            state.statusMenuOpen = false
+                            state.draft = entryState.copy(status = option.apiValue)
                         }
                     )
                 }
@@ -225,14 +219,20 @@ fun DetailEditTab(
             EditorCard(
                 icon = AppVectorIcons.BookmarkDone,
                 title = "Progress",
-                subtitle = if (totalUnits > 0) "${state.progress} / $totalUnits" else "${state.progress}",
+                subtitle = if (totalUnits > 0) {
+                    "${entryState.progress} / $totalUnits"
+                } else {
+                    "${entryState.progress}"
+                },
                 testTag = "edit_progress_row"
             ) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
                     if (totalUnits > 0) {
                         Slider(
-                            value = state.progress.coerceIn(0, totalUnits).toFloat(),
-                            onValueChange = { draft = state.copy(progress = it.toInt()) },
+                            value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
+                            onValueChange = {
+                                state.draft = entryState.copy(progress = it.toInt())
+                            },
                             valueRange = 0f..totalUnits.toFloat(),
                             steps = (totalUnits - 1).coerceAtLeast(0),
                             modifier = Modifier.testTag("edit_progress_slider")
@@ -248,11 +248,13 @@ fun DetailEditTab(
                             contentDescription = "Decrease progress",
                             testTag = "edit_progress_minus",
                             onClick = {
-                                draft = state.copy(progress = (state.progress - 1).coerceAtLeast(0))
+                                state.draft = entryState.copy(
+                                    progress = (entryState.progress - 1).coerceAtLeast(0)
+                                )
                             }
                         )
                         Text(
-                            text = "${state.progress}",
+                            text = "${entryState.progress}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -264,7 +266,9 @@ fun DetailEditTab(
                             testTag = "edit_progress_plus",
                             onClick = {
                                 val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
-                                draft = state.copy(progress = (state.progress + 1).coerceAtMost(ceiling))
+                                state.draft = entryState.copy(
+                                    progress = (entryState.progress + 1).coerceAtMost(ceiling)
+                                )
                             }
                         )
                     }
@@ -277,15 +281,15 @@ fun DetailEditTab(
         EditorCard(
             icon = AppVectorIcons.Star,
             title = "Score",
-            subtitle = "${formatScore(state.score)} / ${state.scoreMax}",
+            subtitle = "${formatScore(entryState.score)} / ${entryState.scoreMax}",
             testTag = "edit_score_row"
         ) {
             Column(modifier = Modifier.padding(top = 10.dp)) {
                 Slider(
-                    value = state.score.coerceIn(0.0, state.scoreMax.toDouble()).toFloat(),
-                    onValueChange = { draft = state.copy(score = it.toDouble()) },
-                    valueRange = 0f..state.scoreMax.toFloat(),
-                    steps = (state.scoreMax - 1).coerceAtLeast(0),
+                    value = entryState.score.coerceIn(0.0, entryState.scoreMax.toDouble()).toFloat(),
+                    onValueChange = { state.draft = entryState.copy(score = it.toDouble()) },
+                    valueRange = 0f..entryState.scoreMax.toFloat(),
+                    steps = (entryState.scoreMax - 1).coerceAtLeast(0),
                     modifier = Modifier.testTag("edit_score_slider")
                 )
             }
@@ -295,17 +299,17 @@ fun DetailEditTab(
         // than as today, which is what makes clearing one meaningful.
         DateRow(
             label = "Start Date",
-            value = state.startedAt,
+            value = entryState.startedAt,
             testTag = "edit_start_date_row",
-            onPick = { openDatePicker = DateField.START },
-            onClear = { draft = state.copy(startedAt = null) }
+            onPick = { state.openDatePicker = DateField.START },
+            onClear = { state.draft = entryState.copy(startedAt = null) }
         )
         DateRow(
             label = "Finish Date",
-            value = state.completedAt,
+            value = entryState.completedAt,
             testTag = "edit_finish_date_row",
-            onPick = { openDatePicker = DateField.FINISH },
-            onClear = { draft = state.copy(completedAt = null) }
+            onPick = { state.openDatePicker = DateField.FINISH },
+            onClear = { state.draft = entryState.copy(completedAt = null) }
         )
 
         // Private entry.
@@ -316,15 +320,17 @@ fun DetailEditTab(
             testTag = "edit_private_row"
         ) {
             Switch(
-                checked = state.isPrivate,
-                onCheckedChange = { checked -> draft = state.copy(isPrivate = checked) },
+                checked = entryState.isPrivate,
+                onCheckedChange = { checked ->
+                    state.draft = entryState.copy(isPrivate = checked)
+                },
                 modifier = Modifier
                     .padding(top = 8.dp)
                     .testTag("edit_private_switch")
             )
         }
 
-        statusMessage?.let { message ->
+        state.statusMessage?.let { message ->
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
@@ -339,36 +345,27 @@ fun DetailEditTab(
         ) {
             OutlinedButton(
                 onClick = {
-                    val entryId = state.entryId ?: return@OutlinedButton
-                    isSaving = true
-                    statusMessage = null
+                    val entryId = entryState.entryId ?: return@OutlinedButton
+                    state.isSaving = true
+                    state.statusMessage = null
                     scope.launch {
                         editor.delete(entryId).fold(
                             onSuccess = {
                                 // Back to an entry that does not exist yet, so the
                                 // form is ready to create a fresh one rather than
                                 // showing the values that were just removed.
-                                draft = EntryDraft(
-                                    entryId = null,
-                                    status = null,
-                                    progress = 0,
-                                    progressVolumes = null,
-                                    score = 0.0,
-                                    scoreMax = 10,
-                                    startedAt = null,
-                                    completedAt = null,
-                                    isPrivate = false
-                                )
-                                statusMessage = "Removed from your list"
+                                state.cleared()
+                                state.statusMessage = "Removed from your list"
                             },
                             onFailure = {
-                                statusMessage = it.message ?: "Couldn't remove this entry."
+                                state.statusMessage =
+                                    it.message ?: "Couldn't remove this entry."
                             }
                         )
-                        isSaving = false
+                        state.isSaving = false
                     }
                 },
-                enabled = !isSaving && state.entryId != null,
+                enabled = !state.isSaving && entryState.entryId != null,
                 modifier = Modifier
                     .weight(1f)
                     .height(46.dp)
@@ -379,19 +376,23 @@ fun DetailEditTab(
             }
 
             Button(
-                onClick = { persist(state) },
-                enabled = !isSaving,
+                onClick = { persist(entryState) },
+                enabled = !state.isSaving,
                 modifier = Modifier
                     .weight(1.3f)
                     .height(46.dp)
                     .testTag("edit_save_button"),
                 shape = MaterialTheme.shapes.small
             ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
+                if (state.isSaving) {
+                    // The contained loader, sized to the button, on the button's own
+                    // container colour - the same pairing `ExpressiveButtons` uses,
+                    // so a saving button looks like every other busy button in the
+                    // app rather than like a different control.
+                    ExpressiveContainedLoadingIndicator(
                         modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        containerColor = MaterialTheme.colorScheme.onPrimary,
+                        indicatorColor = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
@@ -400,29 +401,29 @@ fun DetailEditTab(
         }
     }
 
-    val picker = openDatePicker
+    val picker = state.openDatePicker
     if (picker != null) {
         val initial = when (picker) {
-            DateField.START -> state.startedAt
-            DateField.FINISH -> state.completedAt
+            DateField.START -> entryState.startedAt
+            DateField.FINISH -> entryState.completedAt
         }
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = initial.toEpochMillisUtc())
         DatePickerDialog(
-            onDismissRequest = { openDatePicker = null },
+            onDismissRequest = { state.openDatePicker = null },
             confirmButton = {
                 TextButton(onClick = {
                     val picked = pickerState.selectedDateMillis?.toFuzzyDateUtc()
                     if (picked != null) {
-                        draft = when (picker) {
-                            DateField.START -> state.copy(startedAt = picked)
-                            DateField.FINISH -> state.copy(completedAt = picked)
+                        state.draft = when (picker) {
+                            DateField.START -> entryState.copy(startedAt = picked)
+                            DateField.FINISH -> entryState.copy(completedAt = picked)
                         }
                     }
-                    openDatePicker = null
+                    state.openDatePicker = null
                 }) { Text("Set") }
             },
             dismissButton = {
-                TextButton(onClick = { openDatePicker = null }) { Text("Cancel") }
+                TextButton(onClick = { state.openDatePicker = null }) { Text("Cancel") }
             }
         ) {
             DatePicker(state = pickerState)

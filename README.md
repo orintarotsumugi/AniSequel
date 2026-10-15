@@ -537,7 +537,7 @@ the only record of why they exist.
 ./gradlew test
 ```
 
-There are 58 JVM unit suites and **no instrumented tests** — `androidTest/` does
+There are 59 JVM unit suites and **no instrumented tests** — `androidTest/` does
 not exist, so there is nothing to run on a device and no test that needs an
 emulator to pass. Everything below is `testImplementation` and Robolectric or
 pure JUnit.
@@ -572,7 +572,8 @@ pure JUnit.
 | | `TierListPlacementTest`, `TierTrayDropTest`, `TierScreenLogicTest` | Where a dropped title lands, including out of the tray; the screen's un-drawn decisions |
 | Freshness | `RefreshIntervalTest`, `RefreshIntervalPreferencesTest`, `ListFreshnessWatchTest` | Staleness boundary, the interval surviving storage, foreground re-fetch, timer, retry floor |
 | Preferences & UI | `ThemePreferencesTest` | Appearance settings, and what happens after the switch is flipped |
-| | `ExpressiveShapesTest`, `VectorIconsTest`, `BackdropTransformTest` | Capsule geometry is not a stretched polygon; every hand-authored icon's name and 24×24 frame; hero image placement |
+| | `ExpressiveShapesTest`, `VectorIconsTest`, `BackdropTransformTest` | Capsule geometry is not a stretched polygon; every hand-authored icon's name and 24×24 frame; hero image placement, and the gesture gate that decides whether it takes a drag at all |
+| | `EntryEditStateTest` | The entry editor loads once per title, survives tab switches, and keeps a hundred-point score scale and a manga's volumes |
 | Build & release | `KeystoreIntegrityTest` | No key material committed; the workflow reads secrets, not literals |
 | | `VersionBaselineTest`, `ChangelogTest` | The three version copies agree; the bundled notes are ordered and match the version |
 | | `ApkPackagingTest` | `dex.useLegacyPackaging` is set, and in the dex block |
@@ -768,7 +769,7 @@ AniSequel/
 │       │       ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
 │       │       ├── values/        strings, colours, the system splash theme
 │       │       └── xml/           backup rules, FileProvider paths, widget configs
-│       └── test/                 58 JVM unit suites (there is no androidTest/)
+│       └── test/                 59 JVM unit suites (there is no androidTest/)
 ├── gradle/libs.versions.toml     every version, with the reasoning kept inline
 ├── AGENTS.md                     the rules for working in this repo
 ├── ARCHITECTURE.md               the exhaustive system specification

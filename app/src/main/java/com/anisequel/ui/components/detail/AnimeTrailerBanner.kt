@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,15 +51,26 @@ fun AnimeTrailerBanner(
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    // Shared with `bouncyPress`, so the press state comes from the `clickable`
+    // rather than from `bouncyPress`'s own pointer-input loop.
+    //
+    // Without it, `bouncyPress` installs a second pointer-input node that sets
+    // "pressed" on every pointer-down, before anything knows whether the gesture
+    // is a tap or the start of a fling - so a finger dragged across the banner
+    // sprang it down and then back up: two springs per gesture. The `clickable`
+    // sharing this source emits press on down and cancels it the moment the
+    // gesture is claimed as a drag, and the loop is not installed at all.
+    // Eleven other call sites already pass a source this way; this one did not.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier
             .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.97f)
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
             .clip(RoundedCornerShape(16.dp))
-            .clickable {
+            .clickable(interactionSource = interactionSource) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 runCatching {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl))

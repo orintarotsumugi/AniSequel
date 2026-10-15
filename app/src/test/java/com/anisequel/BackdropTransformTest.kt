@@ -1,8 +1,11 @@
 package com.anisequel
 
+import androidx.compose.ui.geometry.Size
 import com.anisequel.ui.components.backdropCoverScale
 import com.anisequel.ui.components.backdropTransform
+import com.anisequel.ui.components.hasOverflow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -129,5 +132,61 @@ class BackdropTransformTest {
         assertEquals(1f, noImage.scale, 0.0001f)
         assertEquals(0f, noImage.offsetX, 0.0001f)
         assertEquals(0f, noImage.offsetY, 0.0001f)
+    }
+
+    // --- The gesture gate -----------------------------------------------------
+    //
+    // `hasOverflow` is what decides whether the hero takes a drag at all, and it
+    // had no test of its own - `backdropCoverScale` and `backdropTransform` were
+    // both covered, and the two of them disagreeing is what the sheet was living
+    // with. It ORed the two axes, and the cover fit over-covers one axis by
+    // definition, so it was true for essentially every image and the gate never
+    // once declined.
+
+    @Test
+    fun `at the fit the hero must not take a drag, however much the cover overflows`() {
+        // A 1920x1080 banner over a 360x280 box is 498 wide and exactly 280 tall:
+        // a genuine 138dp of horizontal overflow. The old question ("is there
+        // anywhere to drag to?") answered yes, so `canPan` was true and
+        // `transformable` consumed every vertical drag aimed at the hero - while
+        // `backdropTransform` clamped the offset to 0, because there is no
+        // vertical slack at all. Gesture eaten, nothing moved, sheet unscrolled.
+        assertTrue(
+            "this geometry really does overflow horizontally, which is what made " +
+                "the old answer wrong",
+            bannerWidth * cover() > boxWidth
+        )
+        assertFalse(
+            "at the fit the hero must decline the drag so the sheet can scroll",
+            hasOverflow(boxWidth, boxHeight, Size(bannerWidth, bannerHeight), zoom = 1f)
+        )
+    }
+
+    @Test
+    fun `zooming in reopens the drag`() {
+        // The compensation: once the user has asked for the image to be
+        // manipulated, both axes have slack and consuming the gesture is right.
+        assertTrue(
+            hasOverflow(boxWidth, boxHeight, Size(bannerWidth, bannerHeight), zoom = 2f)
+        )
+    }
+
+    @Test
+    fun `a zoom below the fit is clamped back to the fit, so the gate stays shut`() {
+        // 0.1 is out of range on purpose - `BACKDROP_MIN_ZOOM` clamps it to 1, and
+        // a gate that opened at a zoom the picture cannot actually be drawn at
+        // would reintroduce the consumed-gesture bug from underneath.
+        assertFalse(
+            hasOverflow(boxWidth, boxHeight, Size(bannerWidth, bannerHeight), zoom = 0.1f)
+        )
+    }
+
+    @Test
+    fun `nothing measured never opens the gate`() {
+        // The same "unmeasured is an identity, not a guess" rule the transform
+        // follows: an unmeasured box or image must not be read as permission to
+        // consume the drag.
+        assertFalse(hasOverflow(0f, 0f, Size(bannerWidth, bannerHeight), zoom = 2f))
+        assertFalse(hasOverflow(boxWidth, boxHeight, Size(0f, 0f), zoom = 2f))
     }
 }
