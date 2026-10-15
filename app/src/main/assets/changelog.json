@@ -21,7 +21,7 @@
         },
         {
           "title": "A smaller download",
-          "detail": "The APK no longer carries an animated-image decoder for Android versions this app cannot be installed on, nor the roughly one hundred languages of library text the app has no translations for. Nothing on screen changes; the file you download is just smaller, and there is less of it for the release build to process."
+          "detail": "The release no longer carries the second animated-image decoder it kept for Android versions this app cannot be installed on, nor the roughly one hundred languages of library text the app has no translations for. Nothing on screen changes - animated profile art still plays exactly as it did; the file you download is just smaller, and there is less of it for the build to process."
         }
       ]
     },

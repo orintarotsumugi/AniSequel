@@ -105,13 +105,21 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 # transitively; depending on it directly is what makes the graphics-shapes types
 # in our own signatures resolvable.
 androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version = "1.0.1" }
-# `coil-gif` used to be declared here, for the `GifDecoder` fallback that
-# existed because `ImageDecoder` needs API 28. `minSdk` is 31, so the fallback
-# was unreachable on every device this app can be installed on while still
-# packaging the artifact - the animated WebP/GIF/APNG decoding the app actually
-# needs comes from the platform decoder registered in `NetworkClient`. Removed
-# rather than left declared; do not re-add it without a device below API 28.
+# `coil-gif` must stay, and this is worth knowing before anyone "tidies" it
+# away: it is not the GIF-only artifact its name suggests. **Both**
+# `coil.decode.ImageDecoderDecoder` - the decoder `NetworkClient` registers, and
+# the only one that can run on this app's `minSdk = 31` - and the older
+# `coil.decode.GifDecoder` live in it. A change removed it on the belief that
+# `ImageDecoderDecoder` belonged to coil-base, and CI answered with
+# "Unresolved reference 'ImageDecoderDecoder'" at the import. Verified against
+# the published artifact rather than a release note:
+# `coil-gif-2.7.0.aar` contains `coil/decode/ImageDecoderDecoder.class`;
+# `coil-base-2.7.0.aar` contains neither decoder.
+#
+# The unreachable `GifDecoder` fallback is gone from the code, so R8 prunes its
+# classes - but the artifact itself is load-bearing.
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
+coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coilCompose" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }

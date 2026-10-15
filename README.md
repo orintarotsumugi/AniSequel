@@ -825,11 +825,15 @@ adding any would be a large, avoidable regression. What that buys:
   constraint to remember about that block, and it fails visibly (English UI in a
   translated app) rather than silently. `resourceConfigurations` did this
   before and was deprecated in AGP 8.8.
-- `coil-gif` is **not** a dependency. It existed for Coil's `GifDecoder`, the
-  only animated-image decoder below API 28 — and `minSdk` is 31, so that
-  fallback could not run on any device this app installs on while still being
-  packaged into every APK. `ImageDecoderDecoder` covers GIF, animated WebP and
-  APNG from 28. `MinimumSdkReachabilityTest` now fails the build if a
+- The animated-image decoder set is down to the one that can run. `NetworkClient`
+  used to register `ImageDecoderDecoder` behind `if (SDK_INT >= P)` and
+  `GifDecoder` below it; at `minSdk = 31` that guard is always true, so the
+  fallback could not execute on any device this app installs on. The branch and
+  the fallback are gone and R8 prunes the unused decoder's classes.
+  **`coil-gif` is still a dependency, though** — both decoders live in that one
+  artifact (`coil-gif-2.7.0.aar` contains `ImageDecoderDecoder.class`;
+  `coil-base` contains neither), so removing it breaks the build rather than
+  shrinking the APK. `MinimumSdkReachabilityTest` now fails the build if a
   `Build.VERSION.SDK_INT` branch is decided before the app starts, so the next
   raise of `minSdk` cannot quietly leave one behind.
 - `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see

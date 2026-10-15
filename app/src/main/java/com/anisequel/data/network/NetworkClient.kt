@@ -196,11 +196,17 @@ object NetworkClient {
                 // add(GifDecoder)`, because `ImageDecoder` arrived in API 28 and
                 // `GifDecoder` was the only animated decoder below it. `minSdk`
                 // is 31 now, so the guard could not be false on any device this
-                // app installs on and the fallback was unreachable - and
-                // unreachable code still ships its dependency: `coil-gif` was in
-                // every APK to decode GIFs on Android versions that cannot run
-                // this app at all. Both are deleted rather than left to rot; see
-                // AGENTS.md §2, "raising minSdk is a deletion".
+                // app installs on and the fallback below it was unreachable. The
+                // guard and the fallback are deleted; see AGENTS.md §2, "raising
+                // minSdk is a deletion".
+                //
+                // `coil-gif` is NOT a dependency that can be dropped with them.
+                // Both decoders live in that one artifact - removing it makes
+                // this line fail to resolve, which is exactly how CI answered a
+                // change that tried. What is gone is the unreachable
+                // `GifDecoder`: no call site references it any more, so R8 prunes
+                // its classes out of the release, while the artifact stays for
+                // the decoder that actually runs.
                 add(ImageDecoderDecoder.Factory())
             }
             .build()

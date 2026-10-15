@@ -215,11 +215,14 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
-  // `coil-gif` was dropped: it existed only for the `GifDecoder` fallback that
-  // `minSdk = 31` makes unreachable (`ImageDecoder` covers GIF, animated WebP
-  // and APNG from API 28). One less artifact in every APK, and one less
-  // dependency for R8 to run over on every release build.
   implementation(libs.coil.compose)
+  // Kept, and not removable with the dead branch it used to justify: the
+  // decoder the app actually registers, `coil.decode.ImageDecoderDecoder`,
+  // lives in this artifact alongside the `GifDecoder` fallback that `minSdk = 31`
+  // made unreachable. Dropping it compiles nothing - CI answered a change that
+  // tried with "Unresolved reference 'ImageDecoderDecoder'". The unreachable
+  // `GifDecoder` call site is gone, so R8 prunes those classes instead.
+  implementation(libs.coil.gif)
   implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
