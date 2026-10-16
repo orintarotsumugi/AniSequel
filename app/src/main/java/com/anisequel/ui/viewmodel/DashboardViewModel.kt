@@ -692,8 +692,18 @@ class DashboardViewModel(
         }
     }
 
+    /**
+     * Folds an already-fetched detail into a sequel card, without a request.
+     *
+     * Namespaced like the fetch it reads from: the cache is keyed on
+     * [MediaCoverKey], so a manga's detail is not read back out of the anime's slot
+     * when the two ids happen to collide. Falls back to the card's own node, which
+     * is the behaviour that predates the namespacing.
+     */
     private fun withCachedDetail(sequel: MissedSequel): MissedSequel =
-        detailStore.cached(sequel.sequelId)?.let(sequel::withDetail) ?: sequel
+        detailStore.cached(sequel.sequelId, sequel.sequelMedia.type)
+            ?.let(sequel::withDetail)
+            ?: sequel
 
     /**
      * The arriving rows, recomputed only when the collection itself changes.
@@ -718,8 +728,16 @@ class DashboardViewModel(
      * accounts. Demo data is already complete, so [MediaDetailStore] skips the
      * call.
      */
-    fun loadDetail(mediaId: Int) {
-        detailStore.load(mediaId)
+    /**
+     * Fetches the heavy fields for one entry, namespaced by media type.
+     *
+     * The type is a parameter rather than being looked up from the id because the
+     * two are not interchangeable: AniList numbers `anime/` and `manga/`
+     * independently, and an untyped fetch resolves against both. See
+     * [MediaDetailStore.load].
+     */
+    fun loadDetail(mediaId: Int, mediaType: String? = null) {
+        detailStore.load(mediaId, mediaType)
     }
 
     /**

@@ -22,7 +22,7 @@ import com.anisequel.data.model.MediaCoverKey
  *     returns HTTP 500 "Internal Server Error" and the app shows an error
  *     screen instead of the user's list.
  *
- * `GET_MEDIA_DETAIL` exists because of rule 1. `description`, `bannerImage`,
+ * `getMediaDetailQuery` exists because of rule 1. `description`, `bannerImage`,
  * `studios`, `trailer`, and `synonyms` are only ever rendered for the one entry
  * a user taps open, so they are fetched on demand rather than shipped for all
  * ~1,500 relation nodes on every load.
@@ -279,6 +279,7 @@ object GraphQLQueries {
      */
     private const val RELATED_NODE_FIELDS = """
                 id
+                type
                 title { romaji english native userPreferred }
                 format
                 status
@@ -430,7 +431,8 @@ object GraphQLQueries {
      * [AniListApiService.getUserFollowers], which is about two child fields
      * *inside* a single `Page` and not about two fields at the root.
      *
-     * Only the fields a preview card draws. The full [GET_MEDIA_DETAIL] carries a
+     * Only the fields a preview card draws. The full detail query
+     * ([getMediaDetailQuery]) carries a
      * description, banner and studio per entry, and a bio's dozen cards would
      * turn that into a payload the screen cannot use.
      */
@@ -494,138 +496,150 @@ object GraphQLQueries {
      * answered. Widening the query costs nothing worth protecting - it is one
      * item per open, not one per relation node - whereas the alternative was a
      * null-filled header on the profile feed.
+     *
+     * ## Why `type` is a variable and not a constant
+     *
+     * This asked `Media(id: $id)` with no type, and AniList media ids are **not
+     * unique across namespaces**: `anilist.co/anime/1` and `anilist.co/manga/1`
+     * are different entities. A bare id is resolved against both, and AniList
+     * answers with whichever it prefers.
+     *
+     * The failure was silent and looked like missing content rather than wrong
+     * content, which is why it survived a release. Opening a *manga* from the
+     * Library resolved to the anime sharing that id, so the sheet rendered the
+     * anime's title, synopsis, cast and relations; where no media matched at all,
+     * AniList answered 404, `require("That entry is no longer available on
+     * AniList.")` threw, and `MediaDetailStore` swallowed the failure by design -
+     * leaving the thin summary node, with no cast, no staff and no relations.
+     * That is the "the relations and the character list do not work when I open
+     * a title" report, from a sheet that was working perfectly for every anime.
+     *
+     * [MediaCoverKey] documents the same collision for covers, and
+     * [getMediaCoversQuery] is the fix there: `Page.media(id:, type:)`, which
+     * filters rather than 404ing. The type is threaded in as a variable so the
+     * caller that already knows the media's namespace decides it, rather than
+     * this document hardcoding the one it happened to be written for.
+     *
+     * Nullable, because a summary node from a source that never carried `type`
+     * cannot supply one; passing null reproduces the old untyped behaviour
+     * rather than failing the document, which is why it is declared `MediaType`
+     * and not `MediaType!`.
      */
-    val GET_MEDIA_DETAIL = """
-        query GetMediaDetail(${'$'}id: Int) {
-          Media(id: ${'$'}id) {
-            id
-            title {
-              romaji
-              english
-              native
-              userPreferred
-            }
-            format
-            type
-            status
-            episodes
-            chapters
-            volumes
-            season
-            seasonYear
-            averageScore
-            popularity
-            genres
-            siteUrl
-            startDate {
-              year
-              month
-              day
-            }
-            coverImage {
-              extraLarge
-              large
-              color
-            }
-            nextAiringEpisode {
-              episode
-              airingAt
-            }
-            description(asHtml: false)
-            bannerImage
-            studios(isMain: true) {
-              nodes { name }
-            }
-            source
-            duration
-            trailer {
+    fun getMediaDetailQuery(mediaType: String?): String {
+        val typed = mediaType != null
+        val queryName = if (typed) "GetMediaDetailTyped" else "GetMediaDetail"
+        val variables = if (typed) "\$id: Int, \$type: MediaType" else "\$id: Int"
+        val arguments = if (typed) "\$id, type: \$type" else "\$id"
+        return buildString {
+            appendLine("query $queryName($variables) {")
+            appendLine("  Media(id: $arguments) {")
+            append(MEDIA_DETAIL_FIELDS)
+            appendLine("  }")
+            appendLine("}")
+        }
+    }
+
+    /**
+     * The `Media` selection both forms of the detail query share.
+     *
+     * One constant rather than a second copy in the typed branch: the untyped and
+     * typed documents differ only in whether they pass `type:` to the field, and a
+     * field list that exists twice is one that eventually forgets half a relation
+     * or a sort argument.
+     *
+     * Assembled with [buildString] rather than by concatenating two `trimIndent()`
+     * literals. Concatenation silently eats the newline at each seam, which
+     * GraphQL tolerates - it ignores whitespace - but which produces a document
+     * reading `Media(id: $id) {id`, and makes any test that compares the two forms
+     * line by line compare the seam instead of the fields.
+     *
+     * `idMal` is kept because it is the field that distinguishes an entry from its
+     * adult variant, and the parser already knows to drop one.
+     */
+    private val MEDIA_DETAIL_FIELDS = """
+        id
+        type
+        idMal
+        format
+        status
+        episodes
+        chapters
+        volumes
+        duration
+        countryOfOrigin
+        isAdult
+        averageScore
+        meanScore
+        popularity
+        season
+        seasonYear
+        siteUrl
+        genres
+        synonyms
+        source
+        description(asHtml: false)
+        studios(isMain: true) { nodes { id name isAnimationStudio } }
+        coverImage { extraLarge large color }
+        bannerImage
+        nextAiringEpisode { episode airingAt timeUntilAiring }
+        startDate { year month day }
+        mediaListEntry { status progress score(format: POINT_100) }
+        trailer { id site }
+        rankings {
+          id
+          rank
+          type
+          context
+          year
+          season
+          allTime
+        }
+        tags {
+          id
+          name
+          rank
+          isMediaSpoiler
+        }
+        relations {
+          edges {
+            relationType
+            node {
               id
-              site
-            }
-            synonyms
-            meanScore
-            rankings {
-              id
-              rank
               type
-              context
-              year
-              season
-              allTime
-            }
-            tags {
-              id
-              name
-              rank
-              isMediaSpoiler
-            }
-            relations {
-              edges {
-                relationType
-                node {
-                  id
-                  type
-                  title {
-                    romaji
-                    english
-                    userPreferred
-                  }
-                  format
-                  status
-                  episodes
-                  coverImage {
-                    large
-                    color
-                  }
-                }
-              }
-            }
-            characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {
-              edges {
-                role
-                node {
-                  id
-                  name {
-                    full
-                    native
-                  }
-                  image {
-                    large
-                    medium
-                  }
-                }
-                voiceActors(language: JAPANESE) {
-                  id
-                  name {
-                    full
-                    native
-                  }
-                  image {
-                    large
-                    medium
-                  }
-                }
-              }
-            }
-            staff(sort: [RELEVANCE, ID], perPage: 12) {
-              edges {
-                role
-                node {
-                  id
-                  name {
-                    full
-                    native
-                  }
-                  image {
-                    large
-                    medium
-                  }
-                }
-              }
+              title { romaji english native userPreferred }
+              format
+              status
+              episodes
+              coverImage { large color }
             }
           }
         }
-    """.trimIndent()
+        characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {
+          edges {
+            role
+            node {
+              id
+              name { full native }
+              image { large medium }
+            }
+            voiceActors(language: JAPANESE) {
+              id
+              name { full native }
+              image { large medium }
+            }
+          }
+        }
+        staff(sort: [RELEVANCE, ID], perPage: 12) {
+          edges {
+            role
+            node {
+              id
+              name { full native }
+              image { large medium }
+            }
+          }
+        }
+    """
 
     val ADD_TO_PLANNING = """
         mutation AddToPlanning(${'$'}mediaId: Int) {

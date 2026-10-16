@@ -74,7 +74,7 @@ interface AniListRepository {
      * the list query omits them (they are only rendered for the entry the user
      * opens, and asking for them up front makes AniList fail on large lists).
      */
-    suspend fun getMediaDetail(mediaId: Int): Result<MediaNode>
+    suspend fun getMediaDetail(mediaId: Int, mediaType: String? = null): Result<MediaNode>
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
     suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")
 

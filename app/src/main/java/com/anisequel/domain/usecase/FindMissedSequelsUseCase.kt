@@ -190,8 +190,16 @@ class FindMissedSequelsUseCase {
                 StatusFilter.NOT_YET_RELEASED -> sequel.isUnreleased
             }
 
+            // Compared against the *raw* field, not `sequel.format`.
+            //
+            // `MissedSequel.format` is `MediaNode.formatLabel`, which now spells the
+            // enum for a reader - "TV Short", "Movie". The filter chips hold AniList's
+            // own keys ("TV", "MOVIE", "SPECIAL"), so comparing the readable label to
+            // a raw key silently matched nothing: choosing "Movies" would have
+            // filtered the list to zero entries. Read the raw field, and let
+            // `formatLabel` do the spelling for the UI that shows it.
             val matchesFormat = filterCriteria.selectedFormat == null ||
-                    sequel.format.equals(filterCriteria.selectedFormat, ignoreCase = true)
+                    sequel.sequelMedia.format.equals(filterCriteria.selectedFormat, ignoreCase = true)
 
             // Both year axes are off by default, so the common path is two
             // boolean checks. An undiscovered date (null year) never equals

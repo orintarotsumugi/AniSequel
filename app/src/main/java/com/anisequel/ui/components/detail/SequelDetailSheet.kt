@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.repository.ThemeMode
@@ -62,13 +64,29 @@ fun SequelDetailSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
-    onLoadDetail: (Int) -> Unit,
+    /**
+     * Fetches the heavy fields for the opened title.
+     *
+     * Takes the media's AniList type as well as its id because the id alone does
+     * not identify a title - `anime/1` and `manga/1` are different entries sharing a
+     * number - and the sheet is reachable from a manga list as well as an anime one.
+     */
+    onLoadDetail: (Int, String?) -> Unit,
     isDetailLoading: Boolean,
     canWriteToAniList: Boolean,
     modifier: Modifier = Modifier,
     onAddToWatching: (MissedSequel) -> Unit = {},
     holdDurationSeconds: Int = 3,
     swipeEnabled: Boolean = true,
+    /**
+     * Opens a related title in place of the current one.
+     *
+     * The host owns the subject, so "go to the next title in this franchise" is a
+     * state change on its side rather than a second sheet. See
+     * [com.anisequel.ui.components.detail.info.InfoRelationsSection] for why this
+     * replaces rather than stacks.
+     */
+    onOpenMedia: (MediaNode) -> Unit = {},
     /**
      * Read/write access to the viewer's own entry, or null when the sheet is
      * read-only.
@@ -99,15 +117,21 @@ fun SequelDetailSheet(
     // on the card the reader left, and the draft in the editor survives the round
     // trip - it used to be re-fetched from AniList on every switch, which is a network
     // request per tap on the capsule.
-    val infoListState = rememberLazyListState()
+    // Keyed on the media id, which is what makes walking a franchise work: tapping a
+    // relation swaps the subject, and without the key the new title would inherit the
+    // old one's scroll offset - so following a prequel dropped the reader into the
+    // middle of a page they had never seen. `key` rather than putting the id in a
+    // `remember` key, because `rememberLazyListState` takes no keys and the state has
+    // to be *discarded*, not re-read.
+    val infoListState = key(subject.mediaId) { rememberLazyListState() }
 
     val editState = remember(subject.mediaId) { EntryEditState() }
     LaunchedEffect(subject.mediaId, entryEditor) {
         if (entryEditor != null) editState.load(entryEditor, subject.mediaId)
     }
 
-    LaunchedEffect(subject.mediaId) {
-        onLoadDetail(subject.mediaId)
+    LaunchedEffect(subject.mediaId, subject.media.type) {
+        onLoadDetail(subject.mediaId, subject.media.type)
         if (themeSettings.animeThemeActive) {
             val colorHex = media.posterColor ?: "#0057B7"
             themePreferences.setAnimeThemeActive(true, colorHex)
@@ -210,6 +234,7 @@ fun SequelDetailSheet(
                         onAddToPlanning = onAddToPlanning,
                         onAddToWatching = onAddToWatching,
                         onClose = handleDismiss,
+                        onOpenMedia = onOpenMedia,
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
                         bottomContentPadding = navClearance

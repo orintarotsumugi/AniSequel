@@ -420,6 +420,45 @@ class LibraryFilterTest {
         )
     }
 
+    /**
+     * A rewatch sits at its finished progress while `status` says `REPEATING`, so
+     * the plain total reads "24/24" - which says the reader is *done*, the exact
+     * opposite of what `REPEATING` records. They are three episodes into a second
+     * pass of a show they have already finished once.
+     *
+     * The percentage is the only number that stays true in that state.
+     */
+    @Test
+    fun `a repeating entry shows a percentage rather than a finished total`() {
+        assertEquals(
+            "Ep 100%",
+            libraryProgressLabel(
+                entry(id = 1, type = "ANIME", progress = 24, episodes = 24, status = "REPEATING")
+            )
+        )
+        assertEquals(
+            "a manga rewatch reads as a percentage too, not a finished chapter total",
+            "Ch 25%",
+            libraryProgressLabel(
+                entry(id = 2, type = "MANGA", progress = 50, chapters = 200, status = "REPEATING")
+            )
+        )
+    }
+
+    /**
+     * `progress` can exceed the announced total on a show that gained episodes
+     * after AniList recorded the entry, and the badge must not read past 100%.
+     */
+    @Test
+    fun `a rewatch past the announced total does not exceed 100%`() {
+        assertEquals(
+            "Ep 100%",
+            libraryProgressLabel(
+                entry(id = 1, type = "ANIME", progress = 26, episodes = 24, status = "REPEATING")
+            )
+        )
+    }
+
     @Test
     fun `no progress means no badge rather than a zero`() {
         assertNull(libraryProgressLabel(entry(id = 1, type = "ANIME")))
@@ -441,6 +480,7 @@ class LibraryFilterTest {
         status: String? = null,
         progress: Int? = null,
         episodes: Int? = null,
+        chapters: Int? = null,
         score: Int? = null,
         seasonYear: Int? = null,
         startYear: Int? = null,
@@ -455,6 +495,7 @@ class LibraryFilterTest {
             type = type,
             title = title?.let { MediaTitle(english = it) },
             episodes = episodes,
+            chapters = chapters,
             averageScore = score,
             seasonYear = seasonYear,
             startDate = startYear?.let { FuzzyDate(year = it) }

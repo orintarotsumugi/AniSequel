@@ -121,7 +121,16 @@ private fun AnnotatedString.Builder.appendTokens(
         when (token) {
             is InlineToken.Plain -> append(token.text)
 
-            is InlineToken.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+            // Bold is `ExtraBold`, not `Bold`.
+            //
+            // At `bodyMedium` on a phone the two are close enough to be a coin toss,
+            // so `**bold**` in a bio rendered as very slightly heavier body text and a
+            // reader could not tell it had been emphasised at all. AniList bios lean
+            // on bold hard - the "hall of fame" convention is a whole bold line per
+            // entry - so this is not a rare case. `ExtraBold` is the step that reads
+            // as a deliberate emphasis against `Normal` while still staying a weight
+            // the typeface can render rather than a synthetic embolden.
+            is InlineToken.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
                 appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
             }
 
@@ -130,12 +139,19 @@ private fun AnnotatedString.Builder.appendTokens(
             }
 
             is InlineToken.BoldItalic -> withStyle(
-                SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+                SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
             ) {
                 appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
             }
 
-            is InlineToken.Underline -> withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+            // Underlined *and* coloured, for the same reason as bold above: an
+            // underline alone on body text is a hairline at this size, and it is the
+            // one decoration that reads as a broken link rather than as emphasis.
+            // It is not given the link's own colour - that would make emphasised text
+            // indistinguishable from a hyperlink, and the two mean different things.
+            is InlineToken.Underline -> withStyle(
+                SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
+            ) {
                 appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
             }
 

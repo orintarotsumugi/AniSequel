@@ -56,6 +56,18 @@ object ProfileRoutes {
     /** [OWN] opening directly on the Activity tab. Used by the widget. */
     const val OWN_ACTIVITY = "profile?tab=activity"
 
+    /**
+     * The tab a profile opens on when nothing asks for one in particular.
+     *
+     * [OWN_TAB_ARG] with an **empty** value rather than [OWN] on its own, because a
+     * `composable()` route is matched exactly: navigating to `"profile"` finds no
+     * match for `"profile?tab={tab}"` and silently does nothing, so the avatar tap
+     * from the dashboard - and the demo dashboard - were dead. The empty value is
+     * the optional argument left unset, which is the one thing this route *can* be
+     * reached by.
+     */
+    const val OWN_DEFAULT = "profile?tab="
+
     fun byUsername(username: String) = "profile_user/$username"
     fun byId(userId: Int) = "profile_id/$userId"
 }
@@ -165,6 +177,9 @@ fun ProfileDestination(
         onOpenTierList = { navController.navigate(AppRoutes.TIER_LIST) },
         libraryPreferences = libraryPreferences,
         onSignInAgain = onSignInAgain,
-        initialTab = initialTab
+        initialTab = initialTab,
+        // The same key the ViewModels are built on, handed to the screen so its saved
+        // tab is scoped per profile too - see `UserProfileScreen`.
+        viewModelKey = viewModelKey
     )
 }

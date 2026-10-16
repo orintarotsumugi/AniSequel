@@ -26,6 +26,7 @@ import com.anisequel.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
 import retrofit2.HttpException
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -83,6 +84,15 @@ class AniListRepositoryImpl(
          */
         const val LIST_TYPE_ANIME = "ANIME"
         const val LIST_TYPE_MANGA = "MANGA"
+
+        /**
+         * The [MediaCoverKey] type used for a detail fetched with no media type.
+         *
+         * AniList's own `MediaType` enum has an `UNSPECIFIED` member, and reusing its
+         * spelling keeps the placeholder a value the parser could one day produce,
+         * rather than a magic string that exists only in this cache.
+         */
+        const val UNSPECIFIED_MEDIA_TYPE = "UNSPECIFIED"
     }
 
     /**
@@ -99,7 +109,21 @@ class AniListRepositoryImpl(
      * never collide.
      */
     private val readCoalescer = RequestCoalescer<String>()
-    private val detailCache = ConcurrentHashMap<Int, MediaNode>()
+
+    /**
+     * Fetched detail nodes, keyed on [MediaCoverKey] rather than a bare id.
+     *
+     * AniList ids are unique per media namespace, not globally, so `anime/1` and
+     * `manga/1` are two different entries sharing a number. Keyed on the id alone
+     * this cache served whichever of the two was fetched first to *both* callers -
+     * a manga's detail sheet rendering an anime's synopsis and cast - which reads
+     * as "this title has no relations" rather than as a bug. Keyed the same way as
+     * [coverCache], deliberately.
+     *
+     * An entry fetched with no type at all lands under [UNSPECIFIED_MEDIA_TYPE], so
+     * it cannot be served to a caller that asked for a specific namespace.
+     */
+    private val detailCache = ConcurrentHashMap<MediaCoverKey, MediaNode>()
 
     /**
      * Media key to cover, for the markdown preview cards.
@@ -410,15 +434,25 @@ class AniListRepositoryImpl(
      * Keeping these out of the list query is what stops AniList returning HTTP
      * 500 for large accounts, and it means opening a card no longer re-parses
      * 1,500 nodes' worth of synopses. The query itself is the full display
-     * record - see [GraphQLQueries.GET_MEDIA_DETAIL] - because the profile feed
+     * record - see [GraphQLQueries.getMediaDetailQuery] - because the profile feed
      * and the arriving section open entries the list query only summarised.
      */
-    override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> {
-        detailCache[mediaId]?.let { return Result.success(it) }
+    override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> {
+        // Keyed by namespace *and* id, never by id alone. AniList media ids are not
+        // unique across `anime/` and `manga/`, so a bare-id cache handed the manga's
+        // caller the anime's record whenever the two happened to share an id - the
+        // same collision [MediaCoverKey] documents for covers. `UNSPECIFIED` is the
+        // bucket for callers that genuinely have no type, so an untyped fetch and a
+        // typed one cannot collide either.
+        val cacheKey = MediaCoverKey(mediaType ?: UNSPECIFIED_MEDIA_TYPE, mediaId)
+        detailCache[cacheKey]?.let { return Result.success(it) }
         return execute(
             GraphQLRequest(
-                query = GraphQLQueries.GET_MEDIA_DETAIL,
-                variables = mapOf("id" to mediaId)
+                query = GraphQLQueries.getMediaDetailQuery(mediaType),
+                variables = buildMap {
+                    put("id", mediaId)
+                    mediaType?.let { put("type", it.uppercase(Locale.ROOT)) }
+                }
             ),
             apiService::getMediaDetail
         ).map {
@@ -429,7 +463,7 @@ class AniListRepositoryImpl(
                 // user has ever tapped.
                 detailCache.clear()
             }
-            detailCache[mediaId] = node
+            detailCache[cacheKey] = node
             node
         }
     }

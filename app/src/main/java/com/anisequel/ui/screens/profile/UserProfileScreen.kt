@@ -140,6 +140,16 @@ private val ProfileTabs = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileScreen(
+    /**
+     * Identifies *which* profile this is, for state that must not be shared between
+     * two of them.
+     *
+     * `ProfileDestination` already builds one for its ViewModels; this is that same
+     * key, passed through so the profile's saved tab can be scoped by it. Without
+     * it, opening a second profile from the Social grid hands that profile whichever
+     * tab the first was left on.
+     */
+    viewModelKey: String = "",
     overviewViewModel: UserOverviewViewModel,
     activityViewModel: UserActivityViewModel,
     socialViewModel: UserSocialViewModel,
@@ -210,7 +220,16 @@ fun UserProfileScreen(
     val loadingDetailIds by activityViewModel.loadingDetailIds.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    // `rememberSaveable` keys its registry entry on the *composition slot*, not on
+    // the value passed here, so an unkeyed call shares one saved tab between every
+    // profile opened from this composable: following a follower landed that person
+    // on whichever tab the reader had left the previous profile on. `viewModelKey`
+    // gives each profile its own entry in that same registry.
+    //
+    // `initialTab` is deliberately *not* part of the key. The widget asks for the
+    // Activity tab on one profile, and keying on it would make that request
+    // outrank the tab the reader last chose here.
+    var selectedTab by rememberSaveable(viewModelKey) { mutableIntStateOf(initialTab) }
     // The activity row that was tapped, as the row's own media node so the
     // sheet has something to draw on the first frame. The fetched detail
     // supersedes it once it lands.
@@ -383,9 +402,13 @@ fun UserProfileScreen(
             subject = subject,
             sheetState = detailSheetState,
             onDismiss = { selectedMedia = null },
+            // A relation replaces the subject rather than stacking a sheet: see
+            // `InfoRelationsSection`. The summary is kept alongside the fetched
+            // detail so the viewer's own progress survives the hop.
+            onOpenMedia = { media -> selectedMedia = media },
             onAddToPlanning = {},
             onAddToWatching = {},
-            onLoadDetail = { activityViewModel.loadDetail(it) },
+            onLoadDetail = { id, type -> activityViewModel.loadDetail(id, type) },
             isDetailLoading = detailLoading,
             canWriteToAniList = false
         )

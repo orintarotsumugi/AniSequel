@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
+import com.anisequel.data.model.displayName
+import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.model.isManga
@@ -913,7 +915,11 @@ private fun LibraryPoster(
         ) {
             AsyncImage(
                 model = media.coverImage?.bestUrl,
-                contentDescription = media.title?.displayTitle,
+                // The title is printed directly beneath this poster, so describing
+                // the image with it announced the same name twice in a row as the
+                // reader moved through the grid. Null here: the `Text` below is the
+                // one accessible name for this cell.
+                contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
                 placeholder = rememberVectorPainter(placeholder),
@@ -964,14 +970,46 @@ private fun LibraryPoster(
 
         Spacer(modifier = Modifier.height(5.dp))
 
+        // The title, and then one line of context - which is what makes this grid
+        // readable rather than just a wall of posters. Three columns at labelMedium
+        // leaves room for roughly eighteen characters a line, so a title that wraps
+        // to two lines is consuming the row that the context line needs; it is
+        // capped at one and given the full width instead.
+        //
+        // The context line is only drawn when it says something the title does not.
+        // A second title-shaped string under a poster in a grid is the poster
+        // repeated, not information.
+        // `media.displayName`, not `media.title?.displayName`. The extension is on
+        // [MediaNode] and falls back to "Unknown Title"; there is no `displayName`
+        // on `MediaTitle`, so the safe-call version was a receiver mismatch - a
+        // compile error, which is why this line has never run.
+        val title = media.displayName
+        val score = media.averageScore?.takeIf { it > 0 }?.let { "$it%" }
+        val context = score ?: media.formatLabel.takeIf { it.isNotBlank() }
+        val contextIsDistinct = !context.isNullOrBlank() && !title.contains(context, ignoreCase = true)
+
         Text(
-            text = media.title?.displayTitle.orEmpty(),
+            text = title,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )
+
+        if (contextIsDistinct) {
+            Spacer(modifier = Modifier.height(1.dp))
+            Text(
+                text = context,
+                style = MaterialTheme.typography.labelSmall,
+                // A shade quieter than the title, so the eye reads the title first
+                // and the score second - the same order the two were worth being in.
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

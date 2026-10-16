@@ -68,7 +68,7 @@ class ProfileViewModelTest {
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> = Result.failure(UnsupportedOperationException())
         override suspend fun getUserAnimeList(userId: Int, forceRefresh: Boolean): Result<MediaListCollection> = Result.success(MediaListCollection(emptyList()))
         override suspend fun getUserAnimeListByUsername(userName: String, forceRefresh: Boolean): Result<MediaListCollection> = Result.success(MediaListCollection(emptyList()))
-        override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> = Result.failure(UnsupportedOperationException())
+        override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> = Result.failure(UnsupportedOperationException())
         override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> = Result.failure(UnsupportedOperationException())
         override fun getDemoProfile() = ViewerProfile(1, "Demo", null, null)
         override fun getDemoAnimeList() = MediaListCollection(emptyList())

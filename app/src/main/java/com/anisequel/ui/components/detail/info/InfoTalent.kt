@@ -2,6 +2,7 @@ package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,8 +60,12 @@ fun InfoSectionHeading(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
+    // The inset arrives on the modifier rather than being applied here, because this
+    // heading is used two ways: inside `InfoSection`, where the page has already
+    // padded it, and standalone above a `LazyRow` that bleeds to the screen edge. It
+    // used to hardcode 20.dp, which silently doubled the inset in the first case.
     Row(
-        modifier = modifier.padding(horizontal = 20.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -101,10 +106,11 @@ fun InfoCharactersSection(
     ) {
         InfoSectionHeading(
             title = "Characters & Voice Actors",
-            icon = AppVectorIcons.FavouriteCharacters
+            icon = AppVectorIcons.FavouriteCharacters,
+            modifier = Modifier.padding(horizontal = PAGE_INSET)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
+            contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = cast, key = { edge -> "cast_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
@@ -213,9 +219,13 @@ fun InfoStaffSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        InfoSectionHeading(title = "Staff", icon = AppVectorIcons.FavouriteStaff)
+        InfoSectionHeading(
+            title = "Staff",
+            icon = AppVectorIcons.FavouriteStaff,
+            modifier = Modifier.padding(horizontal = PAGE_INSET)
+        )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
+            contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = crew, key = { edge -> "staff_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
@@ -234,11 +244,13 @@ private fun StaffCard(edge: MediaStaffEdge) {
                 .height(154.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .bouncyPress(pressedScale = 0.97f)
         ) {
             AsyncImage(
                 model = edge.node?.image?.bestUrl,
-                contentDescription = edge.node?.name?.full,
+                // The name is spoken by the `Text` immediately below this portrait, so
+                // describing the image with the same string announces it twice in a row
+                // as the reader swipes through the row.
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize()
             )
@@ -270,13 +282,26 @@ private fun StaffCard(edge: MediaStaffEdge) {
  * show was adapted from, the guidebook, the character song - so the list is filtered
  * to anime before it gets here. See [com.anisequel.data.model.relatedAnime].
  *
- * The cards are deliberately not clickable: this page is already a sheet, and a
- * sheet opened from inside a sheet has no way back that the reader can see. The
- * relation is stated, not offered.
+ * The cards are clickable, and tapping one *replaces* this page's subject rather
+ * than opening a second sheet. That was the whole of the "universal info page"
+ * question: a sheet stacked on a sheet has no back affordance the reader can see,
+ * so the relation row was left inert and a franchise could only be walked one
+ * title at a time by dismissing and starting again from the list.
+ *
+ * Replacing the subject in place gets both - a chain of related titles is
+ * walkable, and there is still exactly one sheet with exactly one close control.
+ * The cost is that a relation is one-way: the reader goes deeper, and back means
+ * dismissing and finding the entry again. That is the trade the reference app
+ * makes too, and it is a better one than a row of artwork that does nothing.
+ *
+ * The node handed to [onOpen] is the *relation's* own node, which carries `type` -
+ * that is what lets the next open be scoped to the right AniList namespace
+ * instead of resolving the id against both.
  */
 @Composable
 fun InfoRelationsSection(
     media: MediaNode,
+    onOpen: (MediaNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val related = media.relatedAnime
@@ -286,20 +311,27 @@ fun InfoRelationsSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        InfoSectionHeading(title = "Seasons & Relations", icon = AppVectorIcons.FranchiseBranch)
+        InfoSectionHeading(
+            title = "Seasons & Relations",
+            icon = AppVectorIcons.FranchiseBranch,
+            modifier = Modifier.padding(horizontal = PAGE_INSET)
+        )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
+            contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = related, key = { edge -> "relation_${edge.node.id}" }) { edge ->
-                RelationCard(edge)
+                RelationCard(edge = edge, onOpen = onOpen)
             }
         }
     }
 }
 
 @Composable
-private fun RelationCard(edge: MediaRelationEdge) {
+private fun RelationCard(
+    edge: MediaRelationEdge,
+    onOpen: (MediaNode) -> Unit
+) {
     Column(modifier = Modifier.width(132.dp)) {
         Box(
             modifier = Modifier
@@ -307,6 +339,9 @@ private fun RelationCard(edge: MediaRelationEdge) {
                 .height(186.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .clickable(onClick = { onOpen(edge.node) })
+                .bouncyPress(pressedScale = 0.97f)
+                .testTag("info_relation_${edge.node.id}")
         ) {
             AsyncImage(
                 model = edge.node.coverImage?.bestUrl,

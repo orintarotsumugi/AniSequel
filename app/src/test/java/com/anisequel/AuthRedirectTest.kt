@@ -257,7 +257,7 @@ class AuthRedirectTest {
         ): Result<MediaListCollection> =
             Result.failure(UnsupportedOperationException())
 
-        override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> =
+        override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> =
             Result.failure(UnsupportedOperationException())
 
         override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> =

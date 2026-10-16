@@ -54,7 +54,40 @@ val MediaNode.hasNotAired: Boolean
     get() = status.equals("NOT_YET_RELEASED", ignoreCase = true) ||
         status.equals("CANCELLED", ignoreCase = true)
 
-val MediaNode.formatLabel: String get() = format ?: if (isManga) "MANGA" else "ANIME"
+/**
+ * The format, in the words a person uses for it.
+ *
+ * Was the raw enum with an underscore in it - `TV_SHORT`, `ONE_SHOT` - uppercased
+ * at the call site into `TV_SHORT`, printed in a hero chip and in the Details grid
+ * beside "Episodes" and "Season". That is the raw GraphQL vocabulary of the API
+ * appearing in the same typeface as the show's name, and it is exactly what the
+ * KDoc on [statusLabel] says was fixed for status and left broken for format.
+ *
+ * `MANGA` and `NOVEL` are kept as the words rather than lowercased, because that is
+ * how they are written on a shelf; `TV` and `OVA`/`ONA` are acronyms and stay
+ * upper. An unrecognised value is passed through untouched rather than replaced,
+ * for the same reason [statusLabel] does it: an unfamiliar word honestly signals
+ * that it is unfamiliar, where a confident wrong label does not.
+ */
+val MediaNode.formatLabel: String
+    get() {
+        val raw = format?.trim()?.takeIf { it.isNotBlank() } ?: return if (isManga) "Manga" else "TV"
+        return when (raw.uppercase(Locale.ROOT)) {
+            "TV" -> "TV"
+            "TV_SHORT" -> "TV Short"
+            "MOVIE" -> "Movie"
+            "SPECIAL" -> "Special"
+            "OVA" -> "OVA"
+            "ONA" -> "ONA"
+            "MANGA" -> "Manga"
+            "NOVEL" -> "Novel"
+            "ONE_SHOT" -> "One Shot"
+            "MUSIC_VIDEO" -> "Music Video"
+            else -> raw.lowercase(Locale.ROOT)
+                .replace('_', ' ')
+                .replaceFirstChar { it.uppercase(Locale.ROOT) }
+        }
+    }
 
 /**
  * Airing status, worded the way a person writes it.
@@ -221,6 +254,67 @@ val MediaNode.isAiringNow: Boolean get() = status == "RELEASING"
 val MediaNode.isOnHiatus: Boolean get() = status.equals("HIATUS", ignoreCase = true)
 
 val MediaNode.rankingList: List<MediaRanking> get() = rankings ?: emptyList()
+
+/**
+ * Whether this title has a ranking worth drawing.
+ *
+ * The Info page adds its rankings row as a `LazyColumn` item, and an item that
+ * renders nothing still costs a slot in the list's `Arrangement.spacedBy` - a
+ * zero-height item is followed by the full gap anyway, so a title with no ranking
+ * ended up with a 14dp hole above the extras card. The page has to be able to ask
+ * this *before* it adds the item, and it has to get the same answer the section
+ * gives, so the predicate is derived here rather than in the composable.
+ *
+ * Equivalent to "any ranking carries a rank", which is also exactly what
+ * [topRankingLabel] and the section's own guard reduce to: a ranking with a null
+ * rank has neither a badge to draw nor a fallback to print.
+ */
+val MediaNode.hasRankings: Boolean get() = rankingList.any { it.rank != null }
+
+/**
+ * Whether this title has a progress card worth drawing.
+ *
+ * The two conditions are the ones [com.anisequel.ui.components.detail.info.InfoProgressCard]
+ * returns early on, kept together so the page cannot disagree with the card: a title
+ * the viewer has not started is not at 0%, it is not being watched at all, and a
+ * 0% bar would be a claim about a thing that does not exist.
+ */
+val MediaNode.hasProgressCard: Boolean
+    get() = watchFraction() != null && progressCountLabel != null
+
+/**
+ * The alternative-titles rows the Info page shows, as label to value.
+ *
+ * Deduplicated against [displayName], which is the fix for a row that was
+ * duplicated on most titles rather than on some. The card used to open with a
+ * "Main title" row and then list Romaji, English and Native underneath it - and
+ * `displayName` *prefers* English, so on any title AniList has an English name for
+ * (nearly all of them) the first two rows read:
+ *
+ *     Main title   Cowboy Bebop
+ *     English      Cowboy Bebop
+ *
+ * Verbatim, one under the other, in a card whose whole job is to list the names
+ * this title goes by. Where the preferred title fell back to Romaji it was the
+ * Romaji row that repeated instead. Listing only the names that differ from the
+ * one the hero already shows in full removes the duplicate without losing
+ * anything: a title whose three names are all identical now correctly shows
+ * nothing rather than the same string three times.
+ *
+ * The labels stay on the *named* forms rather than dropping a single
+ * "Main title", because "Romaji / Cowboy Bebop" and "Native / カウボーイビバップ"
+ * are the facts a reader is looking up this card for.
+ */
+val MediaNode.alternativeTitleRows: List<Pair<String, String>>
+    get() {
+        val preferred = displayName
+        return buildList {
+            romajiName?.let { add("Romaji" to it) }
+            englishName?.let { add("English" to it) }
+            nativeName?.let { add("Native" to it) }
+            if (synonymList.isNotEmpty()) add("Synonyms" to synonymList.joinToString(", "))
+        }.filterNot { (_, value) -> value == preferred }
+    }
 
 /** AniList's best ranking for this entry, formatted, or null. */
 val MediaNode.topRankingLabel: String?

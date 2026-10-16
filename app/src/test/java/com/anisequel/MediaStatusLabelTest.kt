@@ -14,9 +14,11 @@ import org.junit.Test
  * "24 episodes · Winter 2023" directly beside them. Those are names in AniList's
  * API vocabulary, not words anybody writes.
  *
- * `formatLabel` already solved exactly this for `format` - it is why the grid
- * says "TV Short" and not "TV_SHORT". Status was never given the same treatment,
- * which is why the two can disagree in the same card.
+ * `formatLabel` was *supposed* to have solved exactly this for `format`, and it had
+ * not: it returned the field unchanged, so the two defects were visible side by side
+ * in the Details card - status saying "Finished" while format said `TV_SHORT`. It is
+ * fixed now, and pinned by `MediaFormatLabelTest`; this line previously asserted a
+ * fix that did not exist, which is why it was not looked for again.
  */
 class MediaStatusLabelTest {
 

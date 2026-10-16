@@ -23,11 +23,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.alternativeTitleRows
+import com.anisequel.data.model.characterList
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.genreList
+import com.anisequel.data.model.hasProgressCard
+import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.pageUrl
-import com.anisequel.data.model.rankingList
+import com.anisequel.data.model.relatedAnime
+import com.anisequel.data.model.staffList
 import com.anisequel.data.model.weightLabel
 import com.anisequel.data.model.weightedTags
 import com.anisequel.ui.components.AppVectorIcons
@@ -76,6 +82,14 @@ fun AnimeInfoPage(
     onAddToPlanning: (MissedSequel) -> Unit,
     onAddToWatching: (MissedSequel) -> Unit,
     onClose: () -> Unit,
+    /**
+     * Opens a related title in place of this one.
+     *
+     * Replaces rather than stacks: the page is already inside a sheet, and a sheet
+     * opened from a sheet has no back control the reader can see. The host swaps its
+     * own subject and the same page renders the new title.
+     */
+    onOpenMedia: (MediaNode) -> Unit = {},
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the sheet, because the capsule's other destination disposes this
@@ -102,6 +116,15 @@ fun AnimeInfoPage(
     val showFloatingBar by remember {
         derivedStateOf { collapse.value > DOCKED_BAR_AT }
     }
+
+    // Read once, before the list, because a section that decides for itself that it
+    // has nothing to show cannot also be the thing that decides not to take up a
+    // slot. `Arrangement.spacedBy` gives every item its trailing gap whether or not
+    // that item drew anything, so a `LazyColumn` item whose content returned early
+    // leaves a full 14dp hole in the page - and four of the sections here return
+    // early for ordinary titles (no progress on an unstarted show, no staff, no
+    // relations, no alternative titles). Hence the explicit `if` on each below.
+    val altTitles = media.alternativeTitleRows
 
     var showCover by remember(media.id) { mutableStateOf(false) }
     if (showCover) {
@@ -154,8 +177,10 @@ fun AnimeInfoPage(
                 )
             }
 
-            item(key = "progress") {
-                InfoProgressCard(media = media, modifier = Modifier.infoSection(3))
+            if (media.hasProgressCard) {
+                item(key = "progress") {
+                    InfoProgressCard(media = media, modifier = Modifier.infoSection(3))
+                }
             }
 
             item(key = "synopsis") {
@@ -199,31 +224,45 @@ fun AnimeInfoPage(
                 }
             }
 
-            item(key = "alt_titles") {
-                InfoAltTitlesCard(media = media, modifier = Modifier.infoSection(8))
+            if (altTitles.isNotEmpty()) {
+                item(key = "alt_titles") {
+                    InfoAltTitlesCard(rows = altTitles, modifier = Modifier.infoSection(8))
+                }
             }
 
             // The one section the reference has no equivalent for, and the reason it
             // is kept: an all-time AniList ranking is a fact about this title that
             // nothing else on the page can state.
-            if (media.rankingList.isNotEmpty()) {
+            if (media.hasRankings) {
                 item(key = "rankings") {
-                    Box(modifier = Modifier.infoSection(9)) {
-                        AnimeRankingsSection(media = media)
-                    }
+                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(9))
                 }
             }
 
-            item(key = "cast") {
-                InfoCharactersSection(media = media, modifier = Modifier.sectionReveal(10))
+            // `sectionReveal` rather than `infoSection` on the three below, and that
+            // is deliberate: they are not cards, so they draw their own heading inset
+            // and their own `LazyRow` content padding, and adding the page inset on top
+            // would double it. See `InfoTalent.kt`.
+            if (media.characterList.isNotEmpty()) {
+                item(key = "cast") {
+                    InfoCharactersSection(media = media, modifier = Modifier.sectionReveal(10))
+                }
             }
 
-            item(key = "relations") {
-                InfoRelationsSection(media = media, modifier = Modifier.sectionReveal(11))
+            if (media.relatedAnime.isNotEmpty()) {
+                item(key = "relations") {
+                    InfoRelationsSection(
+                        media = media,
+                        onOpen = onOpenMedia,
+                        modifier = Modifier.sectionReveal(11)
+                    )
+                }
             }
 
-            item(key = "staff") {
-                InfoStaffSection(media = media, modifier = Modifier.sectionReveal(12))
+            if (media.staffList.isNotEmpty()) {
+                item(key = "staff") {
+                    InfoStaffSection(media = media, modifier = Modifier.sectionReveal(12))
+                }
             }
 
             item(key = "extras") {
@@ -250,13 +289,13 @@ fun AnimeInfoPage(
  *
  * Every card but the hero and the three artwork rows takes exactly this, and writing
  * it out thirteen times is how they drift apart.
+ *
+ * [PAGE_INSET] is the one in `InfoCards.kt`, not a second literal: the artwork rows
+ * draw their own inset from that same value, and it used to exist twice in two files.
  */
 @Composable
 private fun Modifier.infoSection(index: Int): Modifier =
     padding(horizontal = PAGE_INSET).sectionReveal(index)
-
-/** The page's left and right inset. The hero and the artwork rows deliberately ignore it. */
-private val PAGE_INSET = 20.dp
 
 /**
  * How far the page scrolls before the hero counts as collapsed.

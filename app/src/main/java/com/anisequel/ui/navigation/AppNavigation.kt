@@ -423,7 +423,7 @@ fun AppNavigation(
                     // request this wiring exists to avoid.
                     onOpenProfile = { viewer ->
                         if (viewer != null) {
-                            navController.navigate(ProfileRoutes.OWN)
+                            navController.navigate(ProfileRoutes.OWN_DEFAULT)
                         }
                     }
                 )
@@ -445,7 +445,7 @@ fun AppNavigation(
                 },
                 onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) },
                 onOpenProfile = {
-                    navController.navigate(ProfileRoutes.OWN) {
+                    navController.navigate(ProfileRoutes.OWN_DEFAULT) {
                         // A demo profile is not on AniList, so the viewer can
                         // change what it says from there and come back to
                         // something that no longer matches. Replacing it rather
@@ -498,8 +498,12 @@ fun AppNavigation(
         }
 
         // The base route and the widget's `profile?tab=activity` are one
-        // destination: the query argument is optional, so `navigate(OWN)` from
-        // the dashboard still lands here and leaves the tab untouched.
+        // destination: the query argument is optional, so every way in lands here
+        // and only the widget names a tab.
+        //
+        // `OWN_DEFAULT` (`profile?tab=`) rather than `OWN` is what the callers use,
+        // because a `composable()` route is matched *exactly* - `navigate("profile")`
+        // matches no route at all and silently does nothing. See `ProfileRoutes.OWN_DEFAULT`.
         composable(
             route = ProfileRoutes.OWN_ROUTE,
             arguments = listOf(

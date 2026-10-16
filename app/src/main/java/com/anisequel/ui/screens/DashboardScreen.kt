@@ -31,6 +31,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.withSummaryProgress
@@ -149,8 +150,21 @@ fun DashboardScreen(
     // A sequel keeps its parent narrative; an arriving row is a summary the
     // detail query fills in, so its subject prefers the fetched node and keeps
     // the summary's progress either way.
-    val selectedSubject = remember(selectedSequelId, selectedArrivingId, successState, detailNodes) {
+    // A title reached by tapping a relation card, which replaces the subject rather
+    // than stacking a sheet on one. Cleared when a list row is tapped instead, so
+    // dismissing and re-opening from the list does not land the reader back in
+    // whatever franchise they had wandered into.
+    var navigatedRelation by remember { mutableStateOf<MediaNode?>(null) }
+
+    val selectedSubject = remember(
+        selectedSequelId,
+        selectedArrivingId,
+        navigatedRelation,
+        successState,
+        detailNodes
+    ) {
         when {
+            navigatedRelation != null -> navigatedRelation?.let { AnimeDetailSubject.Media(it) }
             selectedSequelId != null -> successState?.missedSequels
                 ?.firstOrNull { it.sequelId == selectedSequelId }
                 ?.let { AnimeDetailSubject.Sequel(it) }
@@ -261,7 +275,10 @@ fun DashboardScreen(
                                         entries = state.arriving,
                                         compact = arrivingCompact,
                                         maxWidth = MaxContentWidth,
-                                        onEntryClick = { selectedArrivingId = it.mediaId }
+                                        onEntryClick = {
+                                            selectedArrivingId = it.mediaId
+                                            navigatedRelation = null
+                                        }
                                     )
                                 }
                             }
@@ -310,7 +327,10 @@ fun DashboardScreen(
                                 ) { item ->
                                     SequelCard(
                                         sequel = item,
-                                        onClick = { selectedSequelId = item.sequelId },
+                                        onClick = {
+                                            selectedSequelId = item.sequelId
+                                            navigatedRelation = null
+                                        },
                                         onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
                                         onAddToWatching = { dashboardViewModel.addToWatching(item) },
                                         holdDurationSeconds = quickAddSettings.holdDurationSeconds,
@@ -369,12 +389,14 @@ fun DashboardScreen(
             onDismiss = {
                 selectedSequelId = null
                 selectedArrivingId = null
+                navigatedRelation = null
             },
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
             swipeEnabled = quickAddSettings.swipeEnabled,
-            onLoadDetail = { dashboardViewModel.loadDetail(it) },
+            onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
+            onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,
             entryEditor = if (canWrite) dashboardViewModel else null

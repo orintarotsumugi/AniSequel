@@ -232,13 +232,22 @@ private fun favouriteCaption(media: MediaNode): String {
 }
 
 /**
- * A horizontal row of favourite characters or staff.
+ * A horizontal row of the people an account has pinned: characters and staff both.
  *
  * One function for both because they are the same shape - a portrait, a name, and
- * a number of other people who agree - and the two calls differ only in the
- * portrait URL, the name and the secondary line. Two near-identical row
- * implementations is how the staff row ends up with a 68dp portrait and the
- * character row with a 56dp one.
+ * a second line - and two near-identical row implementations is how the staff row
+ * ends up with a 68dp portrait and the character row with a 56dp one. The
+ * difference is carried by [PersonRowItem] below rather than by two call sites, so
+ * the caption each kind gets is defined once.
+ *
+ * The two lists are rendered into **one** row, characters first. AniList returns
+ * them as separate connections and the app keeps them as separate lists, which is
+ * right for the model; what the reader sees is one list of people, and an actor
+ * and an animator are both people the account chose.
+ *
+ * `key` is namespaced by kind because AniList numbers characters and staff
+ * independently - `character_21` and `staff_21` are different people, and a shared
+ * `id` in the key made one of the two rows silently drop its portrait.
  */
 @Composable
 fun FavouritePeopleRow(
@@ -253,6 +262,42 @@ fun FavouritePeopleRow(
         return
     }
 
+    val people = buildList {
+        characters.forEach { character ->
+            add(
+                PersonRowItem(
+                    key = "character_${character.id}",
+                    name = character.name?.displayName.orEmpty(),
+                    // "N favourites" rather than a bare number: the number is
+                    // AniList's count of *other* accounts that pinned this
+                    // character, which is only meaningful with the noun attached.
+                    subtitle = "${character.favourites ?: 0} favourites",
+                    imageUrl = character.image?.bestUrl,
+                    placeholder = AppVectorIcons.FavouriteCharacters,
+                    onClick = { onOpen(character.siteUrl) }
+                )
+            )
+        }
+        staff.forEach { member ->
+            add(
+                PersonRowItem(
+                    key = "staff_${member.id}",
+                    name = member.name?.displayName.orEmpty(),
+                    // AniList's `primaryOccupations` is the person's day job -
+                    // "Story & Art", "Director", "Voice Actor" - which is the one
+                    // line that tells a reader who this is. Fall back to the count,
+                    // which every row now shows either way, rather than to the
+                    // word "Staff", which told them nothing they could not see.
+                    subtitle = member.occupation
+                        ?: "${member.favourites ?: 0} favourites",
+                    imageUrl = member.image?.bestUrl,
+                    placeholder = AppVectorIcons.FavouriteStaff,
+                    onClick = { onOpen(member.siteUrl) }
+                )
+            )
+        }
+    }
+
     LazyRow(
         modifier = modifier
             .widthIn(max = maxWidth)
@@ -261,27 +306,40 @@ fun FavouritePeopleRow(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        items(items = characters, key = { "character_${it.id}" }) { character ->
+        items(items = people, key = { it.key }) { person ->
             FavouritePerson(
-                name = character.name?.displayName.orEmpty(),
-                subtitle = "${character.favourites ?: 0} favourites",
-                imageUrl = character.image?.bestUrl,
-                placeholder = AppVectorIcons.FavouriteCharacters,
-                onClick = { onOpen(character.siteUrl) }
-            )
-        }
-        items(items = staff, key = { "staff_${it.id}" }) { member ->
-            FavouritePerson(
-                name = member.name?.displayName.orEmpty(),
-                subtitle = member.occupation ?: "Staff",
-                imageUrl = member.image?.bestUrl,
-                placeholder = AppVectorIcons.FavouriteStaff,
-                onClick = { onOpen(member.siteUrl) }
+                name = person.name,
+                subtitle = person.subtitle,
+                imageUrl = person.imageUrl,
+                placeholder = person.placeholder,
+                onClick = person.onClick
             )
         }
     }
 }
 
+/**
+ * One person in [FavouritePeopleRow], flattened out of the two model types.
+ *
+ * [key] is carried rather than derived from the id at the call site, because the
+ * two namespaces number independently and only the caller knows which kind it is
+ * holding.
+ */
+private data class PersonRowItem(
+    val key: String,
+    val name: String,
+    val subtitle: String,
+    val imageUrl: String?,
+    val placeholder: ImageVector,
+    val onClick: () -> Unit
+)
+
+/**
+ * [testTag] is keyed on the name rather than a literal, because a row of twenty
+ * people all tagged `favourite_person` is one tag the tests cannot address: the
+ * merged semantics of a `LazyRow` collapse them and `onNodeWithTag` returns only
+ * the first. Keyed by name, one row element can be asserted on at all.
+ */
 @Composable
 private fun FavouritePerson(
     name: String,
@@ -297,7 +355,7 @@ private fun FavouritePerson(
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, onClick = onClick)
             .padding(bottom = 6.dp)
-            .testTag("favourite_person"),
+            .testTag("favourite_person_${name.hashCode()}"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AsyncImage(

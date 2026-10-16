@@ -151,9 +151,15 @@ class UserActivityViewModel(
     val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
     val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
 
-    /** Fetches the synopsis, banner and studio for one entry. */
-    fun loadDetail(mediaId: Int) {
-        detailStore.load(mediaId)
+    /**
+     * Fetches the heavy fields for one entry, namespaced by media type.
+     *
+     * Namespaced because the id is not enough to name a title: AniList numbers
+     * `anime/` and `manga/` independently, so an untyped fetch resolves against
+     * both and can answer with the wrong one. See [MediaDetailStore.load].
+     */
+    fun loadDetail(mediaId: Int, mediaType: String? = null) {
+        detailStore.load(mediaId, mediaType)
     }
 
     private var loadJob: Job? = null

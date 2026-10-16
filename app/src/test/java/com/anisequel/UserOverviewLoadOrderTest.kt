@@ -263,7 +263,7 @@ class UserOverviewLoadOrderTest {
             forceRefresh: Boolean
         ): Result<MediaListCollection> = getUserAnimeList(0, forceRefresh)
 
-        override suspend fun getMediaDetail(mediaId: Int): Result<MediaNode> = failure()
+        override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> = failure()
         override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> = failure()
 
         override suspend fun getUserOverview(

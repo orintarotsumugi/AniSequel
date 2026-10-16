@@ -32,23 +32,19 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
-import com.anisequel.data.model.displayName
-import com.anisequel.data.model.englishName
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
-import com.anisequel.data.model.nativeName
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.releaseLabel
-import com.anisequel.data.model.romajiName
 import com.anisequel.data.model.seasonLabel
 import com.anisequel.data.model.sourceLabel
 import com.anisequel.data.model.statusLabel
-import com.anisequel.data.model.synonymList
 import com.anisequel.data.model.synopsis
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
@@ -56,7 +52,9 @@ import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.theme.AniSequelTheme
+import java.util.Locale
 
 /**
  * The container every section of the Info page sits in.
@@ -116,6 +114,10 @@ fun InfoCard(
  * total AniList does not know - rather than a 0% bar. An empty bar is a claim that
  * the viewer is at zero, and for a title they are *not* tracking that is a claim
  * about a thing that does not exist.
+ *
+ * The page asks [MediaNode.hasProgressCard] before adding this as a list item,
+ * because an item that draws nothing still costs a gap - see the note on
+ * [com.anisequel.data.model.hasRankings].
  */
 @Composable
 fun InfoProgressCard(
@@ -211,16 +213,42 @@ fun InfoSynopsisCard(
                     maxLines = if (isExpanded) Int.MAX_VALUE else COLLAPSED_SYNOPSIS_LINES
                 )
 
-                if ((plain?.length ?: 0) > SYNOPSIS_EXPAND_THRESHOLD) {
-                    TextButton(onClick = { isExpanded = !isExpanded }) {
-                        Text(if (isExpanded) "Show less" else "Read more")
+                // The toggle is gated on the same thing the view clamps, and the view
+                // clamps two different ways: `AniListMarkdownView` drops whole blocks
+                // past MARKDOWN_COLLAPSED_BLOCK_LIMIT, *and* clamps each remaining
+                // paragraph to `maxLines`. Gating on character count alone - which is
+                // all this used to check - missed the block case: a description of six
+                // short paragraphs totalling 200 characters was cut to four blocks and
+                // offered no way to read the other two, because 200 is under the
+                // threshold. Text the reader cannot reach is worse than a card that
+                // grew a line.
+                val isClamped = nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT ||
+                    (plain?.length ?: 0) > SYNOPSIS_EXPAND_THRESHOLD
+
+                if (isClamped) {
+                    TextButton(
+                        onClick = { isExpanded = !isExpanded },
+                        modifier = Modifier.testTag("info_synopsis_toggle")
+                    ) {
+                        Text(
+                            text = if (isExpanded) "Show less" else "Read more",
+                            // Drawn in the accent, and at the same weight as the
+                            // card's own title rather than as a button label. This
+                            // is the one control on the card, so it reads as chrome
+                            // at rest: a full `TextButton` slot of tonal padding in
+                            // the middle of a paragraph looked like a button the
+                            // synopsis needed.
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
 
                 Text(
                     text = "Source: AniList",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.testTag("info_synopsis_source")
                 )
             }
         }
@@ -267,7 +295,21 @@ fun InfoSpecsCard(
         title = "Details",
         icon = AppVectorIcons.AnimeSparkle
     ) {
-        if (studioNames.isNotEmpty()) {
+        // The studio is the one fact the list query never carries, so it is the one
+        // that can be known-absent rather than not-yet-arrived - and showing
+        // "Loading production details…" *underneath* a grid of real facts read as
+        // though the whole card was still filling in.
+        if (studioNames.isEmpty() && isDetailLoading) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExpressiveLoadingIndicator(modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Loading production details…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else if (studioNames.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = "Studio",
@@ -280,26 +322,51 @@ fun InfoSpecsCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-        } else if (isDetailLoading) {
-            Text(
-                text = "Loading production details…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
-        facts.chunked(2).forEach { pair ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                pair.forEach { (label, value) ->
-                    InfoFact(label = label, value = value, modifier = Modifier.weight(1f))
+        // `Arrangement.spacedBy` on the grid, not a `Row` per pair: each pair was its
+        // own row with no space above it, so a two-column grid of facts rendered as
+        // four columns of text with the pairs visually indistinguishable from each
+        // other - and a single label ("Episodes") sitting above a single value
+        // ("24") looked like a broken label/value pair rather than one of four.
+        //
+        // The pairs are also `Arrangement.Top`, so a fact whose value wraps to two
+        // lines does not drag its neighbour's value up to meet it.
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            facts.chunked(2).forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    pair.forEach { (label, value) ->
+                        InfoFact(label = label, value = value, modifier = Modifier.weight(1f))
+                    }
+                    if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
-                if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
-/** A label with its value under it - the unit both detail grids are built from. */
+/**
+ * A label with its value under it - the unit both detail grids are built from.
+ *
+ * The label is **uppercased and tracked out**. This is the one place on the page
+ * where a reader is scanning for a specific number across a two-column grid, and
+ * every label was set in the same weight and size as the values above and below
+ * them - so a grid of "Episodes / 24 / Duration / 24m / Season / Winter 2012"
+ * read as one undifferentiated block. A label that is visibly a *label* is what
+ * makes a number findable: the eye goes to the small tracked-out word, and the
+ * answer is the line under it.
+ *
+ * `onSurfaceVariant` at a reduced alpha rather than at full strength: the values
+ * are the content and the labels are the scaffolding, and at equal weight the
+ * scaffolding was competing.
+ */
 @Composable
 private fun InfoFact(
     label: String,
@@ -308,13 +375,20 @@ private fun InfoFact(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            // Letter spacing is what makes a run of small capitals legible as a
+            // unit; at this size with the default spacing they run together.
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -322,7 +396,12 @@ private fun InfoFact(
     }
 }
 
-/** A label on the left, its value on the right - the alternative-titles rows. */
+/**
+ * A label on the left, its value on the right - the alternative-titles rows.
+ *
+ * Same treatment as [InfoFact] and for the same reason: these rows are read by
+ * looking for one name, and the label is what says which column it is in.
+ */
 @Composable
 private fun InfoFactRow(
     label: String,
@@ -331,9 +410,13 @@ private fun InfoFactRow(
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            letterSpacing = 0.6.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(96.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -353,6 +436,12 @@ private fun InfoFactRow(
  * of the audience - "Urban Fantasy 96%" - and tinting those with the accent colour
  * is what stops the block reading as one undifferentiated heap of chips.
  */
+/**
+ * A row of chips - genres, or AniList's weighted tags.
+ *
+ * [labels] empty renders nothing: the page asks for the list before it adds this as
+ * a list item, because an item that draws nothing still costs a gap.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InfoChipCard(
@@ -363,6 +452,12 @@ fun InfoChipCard(
     emphasis: Boolean = false
 ) {
     if (labels.isEmpty()) return
+
+    // Keyed by title as well as index: both this card's callers pass the same tag for
+    // index zero, so "the first genre chip" and "the first tag chip" were the same
+    // testTag on the same screen, and `onNodeWithTag` could only ever reach one of
+    // them - whichever happened to be laid out last.
+    val tagPrefix = "info_chip_${title.lowercase(Locale.ROOT)}"
 
     InfoCard(modifier = modifier, title = title, icon = icon) {
         FlowRow(
@@ -381,7 +476,7 @@ fun InfoChipCard(
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         }
                     ),
-                    modifier = Modifier.testTag("info_chip_$index")
+                    modifier = Modifier.testTag("${tagPrefix}_$index")
                 ) {
                     Text(
                         text = label,
@@ -399,21 +494,22 @@ fun InfoChipCard(
     }
 }
 
-/** Every name this title goes by, with AniList's synonyms last. */
+/**
+ * Every name this title goes by that the hero is not already showing, synonyms last.
+ *
+ * The rows come from [com.anisequel.data.model.alternativeTitleRows], which drops
+ * any name identical to the one the hero displays in full. This card used to open
+ * with a "Main title" row and then repeat that exact string under its own name -
+ * see the note on that derivation for why that was most titles rather than some.
+ *
+ * A title whose only name is the one the hero shows now renders nothing at all,
+ * which is why the page asks for the rows before it adds this as a list item.
+ */
 @Composable
 fun InfoAltTitlesCard(
-    media: MediaNode,
+    rows: List<Pair<String, String>>,
     modifier: Modifier = Modifier
 ) {
-    val synonyms = media.synonymList
-    val rows = buildList {
-        add("Main title" to media.displayName)
-        media.romajiName?.let { add("Romaji" to it) }
-        media.englishName?.let { add("English" to it) }
-        media.nativeName?.let { add("Native" to it) }
-        if (synonyms.isNotEmpty()) add("Synonyms" to synonyms.joinToString(", "))
-    }
-
     InfoCard(
         modifier = modifier.testTag("info_alt_titles_card"),
         title = "Alternative Titles",
@@ -497,3 +593,15 @@ private const val COLLAPSED_SYNOPSIS_LINES = 5
 
 /** Below this, the whole synopsis is already on screen and the toggle is noise. */
 private const val SYNOPSIS_EXPAND_THRESHOLD = 260
+
+/**
+ * The page's left and right inset, shared by the cards and by the three sections
+ * that bleed to the edge.
+ *
+ * It lives here, beside the card shell, rather than in the page: the three artwork
+ * rows draw their own heading inset and their own `LazyRow` padding because they
+ * are *not* cards, and that was a second literal in each file. The two drifted
+ * without anything noticing, because the only way to see the drift is to hold the
+ * two numbers side by side.
+ */
+internal val PAGE_INSET = 20.dp

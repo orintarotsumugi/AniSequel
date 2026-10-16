@@ -1,6 +1,67 @@
 {
   "versions": [
     {
+      "version": "1.3.0",
+      "entries": [
+        {
+          "title": "Opening a manga now loads that manga",
+          "detail": "The title page fetched its details by number alone, and AniList numbers are unique per category rather than across all of them - anime/1 and manga/1 are two different titles. So opening a manga could answer with the anime sharing that number, showing its story, cast and relations; where no anime had that number, the request failed and the page quietly kept the thin summary from the list, with no cast, no crew and no relations at all. Manga now load properly wherever you open them from, and the cache keeps the two apart so one cannot be served in place of the other."
+        },
+        {
+          "title": "You can walk a franchise from the title page",
+          "detail": "The row of related titles was decorative - the artwork could not be tapped, because a sheet opened from inside a sheet leaves you with no way back that you can see. Tapping a related title now replaces the page in place, so a prequel, a sequel or the rest of a series is one tap away, from any screen in the app, and the same page renders it in full. The page also starts at the top of the new title rather than inheriting where you were scrolled to on the last one."
+        },
+        {
+          "title": "Opening your own profile from the dashboard works again",
+          "detail": "Tapping your avatar, or the profile button on the demo dashboard, did nothing at all: the profile is registered as a route with an optional tab argument, and the avatar navigated to that route without the argument, which matches no screen. It now lands on your profile as intended."
+        },
+        {
+          "title": "Each profile remembers its own tab",
+          "detail": "Opening somebody elses profile from the Social tab landed you on whichever tab you had left your own profile on, because the tab was saved without knowing which profile it belonged to. Every profile now keeps its own tab, and a rotation still returns you to it."
+        },
+        {
+          "title": "Your profile groups the people you have pinned",
+          "detail": "Favourite Characters and Favourite Staff were two separate headings above two identical rows of portraits, which reads as two kinds of thing rather than as one list of people. They are one row under one heading now, a crew member without a listed job shows how many people pinned them instead of the word Staff, and an actor who appears both as a character voice and as staff appears once rather than twice."
+        },
+        {
+          "title": "The title page shows its artwork clearly",
+          "detail": "The artwork behind the title was blurred, which turned a poster into a smear of colour and made the page look worse the better the artwork was. It is now shown sharp, and the title carries its own shadow to stay readable over it rather than the whole hero being darkened."
+        },
+        {
+          "title": "The title page stopped printing API names",
+          "detail": "A TV special read TV_SHORT and a one-shot manga read ONE_SHOT - AniList internal names with underscores, shown in the chip under the title and in the details grid beside Episodes and Season. Status had already been cleaned up years ago and format never was, so the two disagreed in the same card. Both now read as words, and the format filter still matches what you pick."
+        },
+        {
+          "title": "Facts read as facts",
+          "detail": "Studio, Episodes, Duration, Season and the rest were set in almost the same size and weight as the numbers under them, so the details card read as one block of text rather than as a list of labelled answers. Each label is now a small capital above its value, which is what makes a number findable when you are looking for one, and the pairs are spaced apart so a two-column grid no longer runs together as four columns."
+        },
+        {
+          "title": "Fixed gaps and repeated text on the title page",
+          "detail": "Sections with nothing to show - no progress on a title you have not started, no crew, no relations, no alternative titles - left an empty 14dp hole in the page, because a list gives every section the same space whether or not it drew anything. They no longer take up room at all. Alternative Titles repeated the title the page already shows in full, which for most titles meant the same name printed twice; it now lists only the names the page is not already showing. Read more on the story now appears whenever the story is actually cut off."
+        },
+        {
+          "title": "Progress is honest about a rewatch",
+          "detail": "A show you were rewatching showed its finished total - Ep 24/24 - which said you had finished something you were three episodes into a second pass of, and a show that gained episodes after AniList recorded your entry could show more than 100%. A rewatch now shows a percentage, and the count never runs past the whole."
+        },
+        {
+          "title": "Bold text in a bio actually looks bold",
+          "detail": "Bold in an AniList bio rendered as body text very slightly heavier, which for most of a phone screen was impossible to tell apart from normal - and bios lean on bold hard, so whole lines meant to stand out were not. Bold is now a heavier weight, and underlined text is emphasised rather than underlined with a near-invisible hairline."
+        },
+        {
+          "title": "Library posters say a little more",
+          "detail": "A poster told you its title and its progress and nothing else, so a grid of thirty was a wall of art you had to read one caption at a time. Each poster now carries its score or format on a quieter line underneath, and a title that already contains that text does not repeat it."
+        },
+        {
+          "title": "Crew portraits stop pretending to be buttons",
+          "detail": "The crew portraits squashed when you touched them and then did nothing, which reads as a broken control rather than as a decoration. They are still a row of artwork - the positions each person held are printed under them - but they no longer invite a tap that goes nowhere."
+        },
+        {
+          "title": "The title stays readable over its own artwork",
+          "detail": "With the artwork no longer blurred, the title over it could fade into a pale poster. The title now carries its own shadow rather than the whole hero being darkened, so the words stay legible and the artwork stays as bright as it is drawn."
+        }
+      ]
+    },
+    {
       "version": "1.2.9",
       "entries": [
         {
