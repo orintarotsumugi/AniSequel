@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -137,6 +138,11 @@ object AppVectorIcons {
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group
+
+    // The Social tab's view switch, which shows the mode currently on screen: a
+    // grid of faces, or the same people as name rows. Paired with [List], which is
+    // already the app's list glyph, so the two states cannot drift apart.
+    val ViewGrid = Icons.Default.GridView
 
     // Section headers on the profile screen.
     val FavouriteAnime = Icons.Default.Movie

@@ -55,10 +55,11 @@ open is most of the work:
   artwork where a shape earns its keep, dynamic colour — drawn from the
   wallpaper, or from an anime's cover art when you view it — and six theme
   palettes.
-- **Edit your own entry.** The detail sheet's third tab moves a title between
-  Watching, Reading, Rewatching, Completed, Planning, Paused and Dropped, sets
-  progress, score and both dates, and marks the entry private — staged locally
-  and sent as one write, so nothing reaches AniList until "Save changes".
+- **Edit your own entry.** The second destination of the title page's capsule
+  moves a title between Watching, Reading, Rewatching, Completed, Planning,
+  Paused and Dropped, sets progress, score and both dates, and marks the entry
+  private — staged locally and sent as one write, so nothing reaches AniList
+  until "Save changes".
 - **Home-screen widgets.** Four tiles — your recent activity, missed sequels,
   arriving sequels, and one featured recommendation — drawn by the system
   launcher from the data the app already has.
@@ -66,6 +67,49 @@ open is most of the work:
   `assets/changelog.json`, the same file the release workflow writes the GitHub
   release body from.
 - **Self-contained updater.** No update library and no Play Services.
+
+### The title page
+
+What a tap on a title opens, and the answer to "what is this show" in one scroll:
+the key visual blurred behind its own title, the viewer's progress, the synopsis
+through the app's AniList-markdown renderer, the production facts, genres, the
+weighted thematic tags, the cast with their voice actors, the crew, the rest of the
+franchise, and the things the app can do with the title. Editing the viewer's entry
+is the page's second destination, on a floating capsule at the bottom, because
+editing is a mode rather than a section of the page.
+
+It replaces three tabs — Story, Specs, My Entry — which had split one title's
+information across two of them. Four decisions in it are worth knowing before
+changing it:
+
+- **It is a `LazyColumn`, and the scroll drives the motion.** The hero's parallax
+  and the floating bar read the list's scroll state: the parallax through a
+  function called inside a `graphicsLayer` lambda (draw phase, so a 120Hz scroll
+  touches no layout), and the bar through a `derivedStateOf` that produces a
+  `Boolean` (so it recomposes on the crossing rather than on every frame). As the
+  hero goes: the backdrop lags the page and dims, the title lockup lifts away
+  against it, and the two hand over to the docked bar, which slides in on the
+  spatial spring. That handover is timed by three constants that live together in
+  `InfoMotion.kt`, because it is a relationship between two files rather than a
+  rule either of them can break alone.
+- **The staggered entrance is capped, one-shot, and skipped on `INSTANT`.** Seven
+  sections at 55ms each is 385ms of stagger; the rest arrive together.
+  `sectionReveal` returns no modifier at all when the motion style is `INSTANT`,
+  because the delay *is* motion. Its "already played" flag is `rememberSaveable`,
+  not `remember`: the `LazyColumn` keeps an item's saved state under its key after
+  disposing the item, and the plain `remember` version replayed the whole stagger
+  on the way back up the page.
+- **The wavy progress bar is drawn, not a `LinearWavyProgressIndicator`.** The
+  height of that wave is the progress, which the M3 component's parameters cannot
+  express; its geometry lives in `domain/motion/WaveGeometry.kt` so the shape is
+  asserted by `WaveGeometryTest` rather than eyeballed. Its travelling phase is one
+  `rememberInfiniteTransition`, gated on there being progress to show, and its fill
+  springs from zero once per title.
+- **The data it needs was widened, not faked.** `GET_MEDIA_DETAIL` now also asks
+  for `characters` (with `voiceActors`), `staff` and `relations` — one request per
+  open, on a query that already fetched the synopsis, rankings and tags. The
+  relation row is filtered to anime, because AniList also returns the novel a show
+  was adapted from and its guidebook, which next to the sequels reads as a mistake.
 
 ### The profile screen
 
@@ -556,7 +600,8 @@ pure JUnit.
 | | `UserOverviewJsonTest`, `UserOverviewQueryTest` | Captured AniList responses, and the documents against what AniList actually serves |
 | | `ProfileViewModelTest`, `ProfileBioCollapseTest`, `ProfileTextFormattingTest` | Profile state; the bio card's collapse rule and its non-Markdown fallback text |
 | | `BuildActivityCalendarUseCaseTest`, `BuildListInsightsUseCaseTest` | The activity grid's layout; the Stats tab's reshaping of AniList's aggregates |
-| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library tab logic, status display, Info & Specs tab |
+| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library tab logic, status display, the title's spec derivations |
+| Title page | `WaveGeometryTest` | The wavy progress bar's amplitude, period and travelling phase |
 | | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
 | | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers; the demo-mode activity fixture |
 | Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
@@ -773,6 +818,7 @@ AniSequel/
 │       │   │   ├── data/         network, repository, update, changelog
 │       │   │   ├── domain/usecase/  pure sequel-detection logic
 │       │   │   ├── domain/tier/     tier-list rules, layout, SVG export
+│       │   │   ├── domain/motion/   the info page's wavy-progress geometry
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
 │       │   ├── assets/
 │       │   │   └── changelog.json   release notes, one source for two readers

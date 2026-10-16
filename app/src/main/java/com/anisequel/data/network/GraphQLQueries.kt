@@ -559,6 +559,70 @@ object GraphQLQueries {
               rank
               isMediaSpoiler
             }
+            relations {
+              edges {
+                relationType
+                node {
+                  id
+                  type
+                  title {
+                    romaji
+                    english
+                    userPreferred
+                  }
+                  format
+                  status
+                  episodes
+                  coverImage {
+                    large
+                    color
+                  }
+                }
+              }
+            }
+            characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {
+              edges {
+                role
+                node {
+                  id
+                  name {
+                    full
+                    native
+                  }
+                  image {
+                    large
+                    medium
+                  }
+                }
+                voiceActors(language: JAPANESE) {
+                  id
+                  name {
+                    full
+                    native
+                  }
+                  image {
+                    large
+                    medium
+                  }
+                }
+              }
+            }
+            staff(sort: [RELEVANCE, ID], perPage: 12) {
+              edges {
+                role
+                node {
+                  id
+                  name {
+                    full
+                    native
+                  }
+                  image {
+                    large
+                    medium
+                  }
+                }
+              }
+            }
           }
         }
     """.trimIndent()

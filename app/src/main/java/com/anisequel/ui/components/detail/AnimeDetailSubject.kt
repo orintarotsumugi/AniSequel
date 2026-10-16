@@ -12,8 +12,8 @@ import com.anisequel.data.model.SimpleMediaListEntry
  * What the detail sheet is showing: a sequel recommendation, or a plain list or
  * activity entry that has no parent.
  *
- * One type so the sheet, its header, its specs tabs and its action row take a
- * single parameter instead of two nullable ones every consumer has to unwrap.
+ * One type so the sheet, its page and its action row take a single parameter
+ * instead of two nullable ones every consumer has to unwrap.
  * This is the [ArrivingEntry] doc's warning seen from the UI side: rather than
  * a fake [MissedSequel] with a meaningless parent, a row with no parent is a
  * [Media].

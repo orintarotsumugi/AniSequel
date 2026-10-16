@@ -106,7 +106,7 @@ where the fallback is wrong rather than merely wasteful:
 | Site | Why it mattered |
 | --- | --- |
 | `SequelCard` | One of these is on every row of the dashboard's `LazyColumn`, and `bouncyPress`'s own KDoc names it as the case that matters most |
-| `AnimeTrailerBanner` | Inside the detail sheet's scroll, and directly implicated in a reported "bounces twice" |
+| `AnimeTrailerBanner` | Inside the detail sheet's scroll, and directly implicated in a reported "bounces twice". The file is gone now — the title page's Extras card replaced it — so this row is a record, not a site to check |
 | `AniTopAppBar` (filter, refresh, settings) | The three actions sit above a feed the user scrolls constantly; a press that turns into a scroll used to keep the icon squashed until the finger lifted |
 | `SettingsButton` (all four variants) | Inside the settings scroll, and the variant chosen at runtime shares one source because only one of them is ever drawn |
 | The sign-in flow — `LoginScreen`'s demo button, `UsernameScanCard`'s Scan button, `OAuthCard`'s Connect / Paste Token / Client ID | The whole login screen is one `verticalScroll`, so starting a scroll on any of these was reachable on every launch. It is also the first screen a new user touches |
@@ -280,10 +280,23 @@ code alone:
    height between tabs, which changes `maxValue` under the scroll state while a
    fling is still settling.
 
+**The tab that report names no longer exists.** "Anime Info & Specs" was the middle
+of three tabs and is now the whole page — one `LazyColumn` under the hero — so the
+report has to be taken again before either candidate is worth touching. Both of
+them move with that change rather than being invalidated by it:
+
+- candidate 1 loses its `verticalScroll` call site. A `LazyColumn` is not a scroll
+  container with an `overscrollEffect` to pass `null` to in the same way, so the
+  one-line experiment has to be re-derived rather than renamed;
+- candidate 2 is still live for the *destination* switch (the page and the entry
+  editor are still swapped by an `AnimatedContent`), but it is no longer what a
+  fling *inside* the page interacts with — the page's own height does not change
+  when its data arrives.
+
 This needs a device and a finger, not a JVM test — which is exactly the gap
 [§2.2](#22-no-animation-regression-tests) and [§3.4](#34-no-benchmark-or-screenshot-testing-module)
-describe. Do not "fix" it by guessing: try candidate 1 first, since it is one
-line and reversible, and record which one it actually was here.
+describe. Do not "fix" it by guessing, and record which candidate it actually was
+here.
 
 ---
 
@@ -300,6 +313,17 @@ not mistake each one for an oversight.
 activity feed is unbounded — it pages. On a low-end device, a screenful of
 blurred layers is the first thing likely to drop frames, and there is no
 benchmark module to say whether it does (see §2.3 / §3.4).
+
+**Partly addressed:** the backdrop is no longer decoded at the card's own size. It
+was asking Coil for a ~1,000px-wide bitmap per row and then blurring 84px of
+detail straight back out of it; it now asks for `BACKDROP_DECODE_PX = 220`, a tenth
+of the pixels and indistinguishable under the blur. That is a real cut to the
+decode work on every row that scrolls into view — and it is still, itself, a
+change with no measurement behind it.
+
+**Still open, and the smaller bitmap does not help:** the blurred *layer* is the
+cost, not the source image. `Modifier.blur` allocates a render texture the size of
+the card for every visible row, on the GPU, whatever the bitmap came from.
 
 First step: measure with `macrobenchmark` on one scrolling test, then either cap
 the blur to the visible cards or replace it with a pre-blurred server-side
@@ -345,6 +369,78 @@ against a reference image, not by a test.
 A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
 already builds, would turn §5.1 and §5.2 into measurements and catch the next
 regression in the header the way `ExpressiveShapesTest` catches capsule geometry.
+
+---
+
+## 6. Network and request budget
+
+AniList serves roughly 30 requests a minute, and this app spends that budget
+fairly carefully: duplicate reads coalesce, lists and profiles are cached for the
+user's own refresh window, covers are one batched request per profile, and manga
+is fetched on demand. The three places below still spend it in a way nobody has
+measured. Each is a deliberate *non*-change rather than an oversight, so each one
+records what it would take to do properly.
+
+### 6.1 Every profile open downloads the whole media list
+
+`UserOverviewViewModel.load` fetches `MediaListCollection` for every profile it
+opens, because four of the Stats tab's tallies (country, release year, watch year,
+episode bands) have no aggregate on AniList and are counted from the list itself.
+
+For the signed-in viewer that is usually free — the dashboard has already put the
+list under `user:<id>`, and this screen reads it by id precisely so it can reuse
+that entry. For a profile the reader has not visited before it is the app's most
+expensive query, one request per 500 entries, and it is paid even when all they
+did was look at a banner and a bio.
+
+The obvious fix — "fetch it when Stats or Library is actually opened" — was
+considered and not taken. `UserOverviewLoadOrderTest` pins the two-publish order
+*and* the `isLibraryLoading` contract that makes it safe, and four of its
+automated assertions are about the list arriving behind the overview; changing the
+design means rewriting requirement tests, not deleting a convenience. It also
+moves the download in front of the Stats tab, which is the screen somebody opened
+the profile *for*, rather than letting it run while they read the bio.
+
+What it would take: a `loadLibrary()` on the ViewModel, an `onLoadLibrary`
+threaded through `ProfileTabsContent` exactly like the existing `onLoadManga`, and
+those tests rewritten to the new contract.
+
+### 6.2 The list's chunk walk is sequential, and stops at ten
+
+`fetchFullMediaListCollection` asks for chunk 1, then walks `2..10` **one at a
+time** (`while (hasNext && currentChunk <= 10)`). Two things are wrong in
+principle and neither is reachable for a realistic account:
+
+- The ceiling silently truncates a list of more than 5,000 entries and returns it
+  as `Result.success`, which is a correctness bug rather than a performance one —
+  the caller caches a short list as if it were the whole account.
+- The sequential walk spends wall-clock seconds where two or three chunks in
+  flight would not.
+
+Both are left alone because the trivial case dominates: a 500-entry list is one
+chunk, and an 800-entry one is two. Against a limiter that punishes bursts, more
+concurrency buys less than it costs.
+
+What it would take: a test that a 5,001-entry list is *not* reported complete
+(that half is worth doing on its own), then a bounded `async` fan-out per batch of
+chunks with the merge below it unchanged.
+
+### 6.3 A bio's cover batch is one document with no upper bound
+
+A bio's AniList links are resolved in a single `Page`-aliased document
+(`GraphQLQueries.getMediaCoversQuery`) — the right shape, since the alternative
+was one request per card, and a "hall of fame" bio carries a dozen links.
+
+But the document grows with the bio and nothing caps it: one alias and one field
+set per link, all in one query. AniList rejects a query over its complexity limit
+with HTTP 400 for the *whole* document, and covers are the one request whose
+failure is deliberately invisible — a missing cover leaves the card as it was — so
+a link-heavy bio would sit on placeholder posters permanently with nothing on
+screen saying why.
+
+What it would take: a cap of N keys per request, with the remainder in further
+batches, and a log line (not an error banner) when a batch is refused, so the next
+occurrence is diagnosable instead of merely quiet.
 
 ---
 
@@ -441,6 +537,24 @@ clock at all, and the morph progress is read while drawing rather than in
 composition. What remains is the transition ticking behind an orb that has been
 scrolled out of view; it is still tracked as [§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
 
+### The detail sheet's three tabs became one page
+
+The sheet split a single title across "Story", "Specs" and "My Entry". The story
+and specs halves were two answers to one question — "what is this show" — and
+neither was complete without the other, so the reader had to hold both in their
+head and switch tabs to check either. It is now one `LazyColumn` under the hero:
+artwork, progress, synopsis, the production facts, genres, tags, alternative
+titles, rankings, cast, crew, relations, and the actions the app has for the title.
+The entry editor is the sheet's second destination, reached from the capsule at the
+bottom, because editing is a mode rather than a section of the page. The scroll is
+hoisted out of the `AnimatedContent` so coming back from the editor lands on the
+card the reader left — the same trap the profile tabs' scroll positions fall into,
+for the same reason: `AnimatedContent` disposes the destination it leaves.
+
+Opening the page also widened `GET_MEDIA_DETAIL`: it now asks for `characters`
+(with `voiceActors`), `staff` and `relations` in the request it was already making
+for the synopsis, rankings and tags, rather than a second round trip per section.
+
 ### The detail sheet could not be scrolled from its own hero
 
 `PannableBackdrop`'s `hasOverflow` asked "is there anywhere to drag to?" as
@@ -463,6 +577,22 @@ cropped left and right thirds; pinch still zooms, and panning returns once
 zoomed. `BackdropTransformTest` pins all three states, including that the
 geometry really does overflow horizontally — otherwise the test would just be
 asserting the new answer.
+
+### The backdrop's fit mode has no caller, and that is deliberate
+
+`BackdropFit.FIT` was written for the title page's hero, so a wide AniList banner
+would open whole instead of cropped to its middle third. The hero then stopped
+using `PannableBackdrop` in the same release: the title page redraws its own
+backdrop so the parallax can be driven by the page's scroll in the draw phase,
+and that drawing has to keep covering its box as it moves - a fitted hero would
+show its letterbox the moment the page scrolled.
+
+So nothing passes `fit = BackdropFit.FIT` today. It stays because it is the half
+of the component a caller who wants "show the whole image" rather than "fill the
+box" reaches for, and `BackdropTransformTest` holds the arithmetic until then.
+Removing the changelog entry that promised the behaviour was the other half of
+the same honesty: the app crops the way it always did, so the release cannot
+claim it stopped.
 
 ### The edit tab refetched the entry on every tab switch
 

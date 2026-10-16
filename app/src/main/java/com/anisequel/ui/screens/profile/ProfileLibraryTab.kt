@@ -470,42 +470,65 @@ fun ProfileLibraryTab(
 ) {
     val scope = rememberCoroutineScope()
     /**
- * The media type, remembered across visits.
+ * The media type, status filter and sort, remembered across visits.
+ *
+ * All three used to be plain state inside this composable, and that dies with
+ * it: the profile screen switches tabs through an `AnimatedContent`, which
+ * disposes the tab it animates away from. Only scroll position survived (it is
+ * hoisted), so every trip to Activity and back reset a narrowed "Completed,
+ * newest first" view to "All, list order" - the reader's decision silently
+ * unmade because the state lived somewhere a transition could reach. The type
+ * already lived in DataStore; the filter and sort now live beside it.
  *
  * [rememberedType] is null until DataStore answers, which is asynchronous, so for
  * one composition there is no stored answer to apply. `type` starts at
  * [LibraryType.ALL] - it has to, because `rememberSaveable` cannot hold a
  * nullable here without every read below unwrapping it - and so
  * [rememberedTypePending] is what keeps the grid from *drawing* that default.
- *
- * The comment here used to claim the type itself was "null rather than ALL until
- * the stored answer arrives", which was not what the code did: `type` was `ALL`
- * from the first frame and the first `LaunchedEffect` emission assigned `ALL` as
- * well. A manga-only reader therefore saw a flash of the interleaved anime+manga
- * grid every time they opened the tab, and every one of those posters started an
- * `AsyncImage` load that was thrown away a frame later.
+ * The same gate covers filter and sort: all the keys are read from one
+ * DataStore file, so they arrive in one emission and the grid never draws a
+ * half-restored selection.
  *
  * Once it resolves, the stored name wins. An unrecognised stored value falls
- * back to ALL rather than leaving the tab empty - a stored value the enum no
- * longer has means the preference was written by a build that knew a type this
- * one does not, and showing the combined list is the recoverable outcome.
+ * back to its default rather than leaving the tab empty - a stored value the
+ * enum no longer has means the preference was written by a build that knew an
+ * entry this one does not, and showing the default list is the recoverable
+ * outcome.
  */
-val rememberedType by libraryPreferences.lastType.collectAsStateWithLifecycle(initialValue = null)
-var typeChosen by rememberSaveable { mutableStateOf(false) }
-var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
-val rememberedTypePending = rememberedType == null
+    val rememberedType by libraryPreferences.lastType.collectAsStateWithLifecycle(initialValue = null)
+    val rememberedFilter by libraryPreferences.lastFilter.collectAsStateWithLifecycle(initialValue = null)
+    val rememberedSort by libraryPreferences.lastSort.collectAsStateWithLifecycle(initialValue = null)
+    val rememberedSortAscending by libraryPreferences.lastSortAscending.collectAsStateWithLifecycle(initialValue = null)
 
-LaunchedEffect(rememberedType) {
-    if (typeChosen) return@LaunchedEffect
-    type = rememberedType?.let { name ->
-        LibraryType.entries.firstOrNull { it.name == name }
-    } ?: LibraryType.ALL
-}
-
-var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
+    var choiceMade by rememberSaveable { mutableStateOf(false) }
+    var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
+    var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(LibrarySort.LIST_ORDER) }
     var sortAscending by rememberSaveable { mutableStateOf(true) }
+    val rememberedTypePending = rememberedType == null
+
+    LaunchedEffect(rememberedType, rememberedFilter, rememberedSort, rememberedSortAscending) {
+        // Once anything on screen has been chosen, later emissions are echoes of
+        // this screen's own writes and applying them would be at best a no-op and
+        // at worst a stale value overwriting a newer local one.
+        if (choiceMade) return@LaunchedEffect
+        rememberedType?.let { name ->
+            LibraryType.entries.firstOrNull { it.name == name }
+        }?.let { stored -> type = stored }
+        rememberedFilter?.let { name ->
+            LibraryFilter.entries.firstOrNull { it.name == name }
+        }?.let { stored -> filter = stored }
+        rememberedSort?.let { name ->
+            LibrarySort.entries.firstOrNull { it.name == name }
+        }?.let { stored ->
+            sort = stored
+            // The direction is written in the same edit as the sort, so a stored
+            // sort without one cannot come from this app; `?: true` is only a
+            // floor for that impossible pair.
+            sortAscending = rememberedSortAscending ?: true
+        }
+    }
 
     // The type scope decides what the counts describe, so it is applied first and
     // the counts are tallied over that - never over the already-narrowed set.
@@ -583,21 +606,29 @@ var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
                 sort = sort,
                 sortAscending = sortAscending,
                 onSortChange = { nextSort, nextAscending ->
+                    choiceMade = true
                     sort = nextSort
                     sortAscending = nextAscending
+                    scope.launch {
+                        libraryPreferences.setSort(nextSort.name, nextAscending)
+                    }
                 },
                 isLoadingManga = isLoadingManga,
                 query = query,
                 onType = { chosen ->
+                    choiceMade = true
                     type = chosen
                     // Recorded on the tap, not on a save button: the memory is
                     // there so they are not asked again, and asking them to
                     // confirm the choice would defeat it.
-                    typeChosen = true
                     query = ""
                     scope.launch { libraryPreferences.setType(chosen.name) }
                 },
-                onFilter = { filter = it },
+                onFilter = { chosen ->
+                    choiceMade = true
+                    filter = chosen
+                    scope.launch { libraryPreferences.setFilter(chosen.name) }
+                },
                 onQueryChange = { query = it }
             )
         }

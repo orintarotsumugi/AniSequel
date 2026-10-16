@@ -25,12 +25,16 @@ import com.anisequel.ui.components.cards.HoldAndSwipePlanningButton
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
- * Action bar at the bottom of the anime detail sheet.
+ * The action row on the title page, under the hero.
  *
  * The external AniList link is always offered. The interactive Hold-and-Swipe
  * quick add is only for a [AnimeDetailSubject.Sequel]: an arriving or activity
  * row is already on somebody's list, so there is nothing to add and the button
  * would be offering an action that cannot mean anything.
+ *
+ * It sits in the page's own scroll rather than pinned to the bottom of the sheet,
+ * because the sheet's bottom edge belongs to the capsule that switches between the
+ * page and the entry editor - two floating bars over one page is one too many.
  */
 @Composable
 fun DetailActionRow(

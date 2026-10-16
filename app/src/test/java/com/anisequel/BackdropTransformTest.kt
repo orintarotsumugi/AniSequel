@@ -1,7 +1,9 @@
 package com.anisequel
 
 import androidx.compose.ui.geometry.Size
+import com.anisequel.ui.components.BackdropFit
 import com.anisequel.ui.components.backdropCoverScale
+import com.anisequel.ui.components.backdropFitScale
 import com.anisequel.ui.components.backdropTransform
 import com.anisequel.ui.components.hasOverflow
 import org.junit.Assert.assertEquals
@@ -189,4 +191,49 @@ class BackdropTransformTest {
         assertFalse(hasOverflow(0f, 0f, Size(bannerWidth, bannerHeight), zoom = 2f))
         assertFalse(hasOverflow(boxWidth, boxHeight, Size(0f, 0f), zoom = 2f))
     }
+
+    // --- The fit mode --------------------------------------------------------
+    //
+    // `BackdropFit.FIT` is the fix for the complaint that started this file's
+    // second life: the info sheet's hero opened at the cover fit, which on a wide
+    // AniList banner is a *zoomed* view - sides cropped by definition - and the
+    // reader had to pinch out to see the artwork whole. FIT opens on the whole
+    // picture instead.
+
+    @Test
+    fun `the fit scale keeps the whole picture inside the box`() {
+        // min(360/1920, 280/1080): the width runs out first, so the banner is
+        // drawn 360 wide and ~202 tall - fully visible, letterboxed on the height.
+        val fit = backdropFitScale(boxWidth, boxHeight, bannerWidth, bannerHeight)
+        assertEquals(boxWidth / bannerWidth, fit, 0.0001f)
+        assertTrue("the whole width must fit", fit * bannerWidth <= boxWidth + 0.01f)
+        assertTrue("the whole height must fit", fit * bannerHeight <= boxHeight + 0.01f)
+    }
+
+    @Test
+    fun `at the fit the picture is centred and the sheet keeps every drag`() {
+        // No slack on either axis means no pan range and no overflow: the offset
+        // clamps to zero (centred) and `canPan` stays shut, so the sheet's own
+        // vertical scroll takes the gesture - the same gate the cover fit has.
+        val t = at(zoom = 1f, x = 9999f, y = 9999f, fit = BackdropFit.FIT)
+        assertEquals(0f, t.offsetX, 0.0001f)
+        assertEquals(0f, t.offsetY, 0.0001f)
+        assertFalse(
+            "at the fit nothing overflows, so the hero must decline the drag",
+            hasOverflow(boxWidth, boxHeight, Size(bannerWidth, bannerHeight), zoom = 1f, fit = BackdropFit.FIT)
+        )
+    }
+
+    @Test
+    fun `fit mode zoom still opens both axes for panning`() {
+        val base = backdropFitScale(boxWidth, boxHeight, bannerWidth, bannerHeight)
+        val doubled = at(zoom = 2f, fit = BackdropFit.FIT)
+        assertEquals(2f * base, doubled.scale, 0.0001f)
+        assertTrue(
+            hasOverflow(boxWidth, boxHeight, Size(bannerWidth, bannerHeight), zoom = 2f, fit = BackdropFit.FIT)
+        )
+    }
+
+    private fun at(zoom: Float, x: Float = 0f, y: Float = 0f, fit: BackdropFit) =
+        backdropTransform(boxWidth, boxHeight, bannerWidth, bannerHeight, zoom, x, y, fit)
 }

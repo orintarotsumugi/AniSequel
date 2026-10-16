@@ -446,6 +446,14 @@ private fun ProfileTabsContent(
     val libraryGridState = rememberLazyGridState()
     val socialGridState = rememberLazyGridState()
 
+    // Which group of Stats charts is open, held here for the same reason the scroll
+    // states are: the tab is disposed on every switch away, so a choice made inside
+    // it dies with the transition. It lives in this composable rather than in the
+    // screen's own state because nothing outside the Stats tab reads it, and
+    // `rememberSaveable` is what keeps it across a rotation - a reader who opened
+    // Tags on a tablet and turned it should not be handed Overview back.
+    var statsSection by rememberSaveable { mutableStateOf(StatsSection.OVERVIEW) }
+
     // Favourites are their own connection in AniList rather than a list status,
     // so the Library's Favourites filter tests membership of these ids instead of
     // matching a status string. Taken from the same state the Home tab renders,
@@ -503,7 +511,13 @@ private fun ProfileTabsContent(
                     onOpenDetail = onOpenDetail
                 )
 
-                2 -> ProfileStatsTab(state = state, contentPadding = padding, listState = statsListState)
+                2 -> ProfileStatsTab(
+                    state = state,
+                    contentPadding = padding,
+                    section = statsSection,
+                    onSelectSection = { statsSection = it },
+                    listState = statsListState
+                )
 
                 3 -> ProfileLibraryTab(
                     animeEntries = state.libraryAnime,

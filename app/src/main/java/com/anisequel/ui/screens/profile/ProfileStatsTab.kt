@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +60,16 @@ import kotlin.math.roundToInt
 fun ProfileStatsTab(
     state: UserOverviewUiState.Success,
     contentPadding: PaddingValues,
+    /**
+     * Which group of charts is on screen.
+     *
+     * Hoisted to the screen and passed down rather than held here - see
+     * [StatsSection] for why a `remember` inside this tab loses the choice on every
+     * tab switch. Defaulted so a caller that does not offer the switch still gets
+     * the whole picture.
+     */
+    section: StatsSection = StatsSection.OVERVIEW,
+    onSelectSection: (StatsSection) -> Unit = {},
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the screen so this tab's scroll position outlives a tab switch.
@@ -87,98 +98,134 @@ fun ProfileStatsTab(
             }
         }
 
-        item(key = "summary") {
-            SummaryCard(state = state)
-        }
-
-        item(key = "score") {
-            ScoreDistributionCard(insights = state.insights)
-        }
-
-        item(key = "episodes") {
-            BarChartCard(
-                title = "Episode Count",
-                icon = AppVectorIcons.StatEpisodeCount,
-                rows = state.entryInsights.episodeBuckets,
-                labelWidth = 48.dp,
-                subtitle = episodeBucketSubtitle(state.entryInsights)
+        item(key = "stats_sections") {
+            StatsSectionRow(
+                selected = section,
+                genreCount = state.insights.genres.size,
+                tagCount = state.insights.tags.size,
+                onSelect = onSelectSection
             )
         }
 
-        item(key = "status") {
-            StatusDistributionCard(distribution = state.insights.status)
+        // Each branch contributes its own items to the same `LazyColumn`, so a
+        // section swap replaces the list rather than nesting a second scrollable
+        // viewport inside the first - which is what a `when` around a child
+        // `LazyColumn` would have done.
+        when (section) {
+            StatsSection.OVERVIEW -> overviewCharts(state)
+            StatsSection.GENRES -> genreChart(state.insights)
+            StatsSection.TAGS -> tagChart(state.insights)
         }
+    }
+}
 
-        item(key = "format") {
-            FormatDistributionCard(insights = state.insights)
-        }
+/**
+ * The Overview: every distribution that is read in one pass.
+ *
+ * Kept as one scope rather than inlined so the `when` above reads as three named
+ * destinations instead of seventy lines of cards between two of its braces.
+ */
+private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
+    item(key = "summary") {
+        SummaryCard(state = state)
+    }
 
-        if (state.entryInsights.countries.isNotEmpty()) {
-            item(key = "country") {
-                BarChartCard(
-                    title = "Country Distribution",
-                    icon = AppVectorIcons.StatCountry,
-                    rows = state.entryInsights.countries,
-                    labelWidth = 92.dp,
-                    subtitle = "Total entries: ${countryTotal(state.entryInsights)}"
-                )
-            }
-        }
+    item(key = "score") {
+        ScoreDistributionCard(insights = state.insights)
+    }
 
-        if (state.insights.releaseYears.isNotEmpty()) {
-            item(key = "release_year") {
-                BarChartCard(
-                    title = "Release Year",
-                    icon = AppVectorIcons.StatReleaseYear,
-                    rows = state.insights.releaseYears,
-                    labelWidth = 48.dp,
-                    subtitle = "Total entries: ${state.insights.releaseYears.sumOf { it.count }}",
-                    // One hue, not the six-slot ramp: a year chart has too many rows
-                    // for a rotating palette to mean anything, and rotating it makes
-                    // neighbouring bars look like different categories.
-                    barColor = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+    item(key = "episodes") {
+        BarChartCard(
+            title = "Episode Count",
+            icon = AppVectorIcons.StatEpisodeCount,
+            rows = state.entryInsights.episodeBuckets,
+            labelWidth = 48.dp,
+            subtitle = episodeBucketSubtitle(state.entryInsights)
+        )
+    }
 
-        if (state.entryInsights.watchYears.isNotEmpty()) {
-            item(key = "watch_year") {
-                BarChartCard(
-                    title = "Watch Year",
-                    icon = AppVectorIcons.StatWatchYear,
-                    rows = state.entryInsights.watchYears,
-                    labelWidth = 48.dp,
-                    subtitle = "Finished ${state.entryInsights.watchYears.sumOf { it.count }} entries",
-                    barColor = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+    item(key = "status") {
+        StatusDistributionCard(distribution = state.insights.status)
+    }
 
-        if (state.insights.genres.isNotEmpty()) {
-            item(key = "genres") {
-                BarChartCard(
-                    title = "Genres",
-                    icon = AppVectorIcons.StatGenre,
-                    rows = state.insights.genres,
-                    labelWidth = 92.dp,
-                    trailing = "${state.insights.genres.size}",
-                    subtitle = "By entries on your list"
-                )
-            }
-        }
+    item(key = "format") {
+        FormatDistributionCard(insights = state.insights)
+    }
 
-        if (state.insights.tags.isNotEmpty()) {
-            item(key = "tags") {
-                BarChartCard(
-                    title = "Tags",
-                    icon = AppVectorIcons.Tag,
-                    rows = state.insights.tags,
-                    labelWidth = 116.dp,
-                    trailing = "${state.insights.tags.size}",
-                    subtitle = "Your most frequent tags"
-                )
-            }
+    if (state.entryInsights.countries.isNotEmpty()) {
+        item(key = "country") {
+            BarChartCard(
+                title = "Country Distribution",
+                icon = AppVectorIcons.StatCountry,
+                rows = state.entryInsights.countries,
+                labelWidth = 92.dp,
+                subtitle = "Total entries: ${countryTotal(state.entryInsights)}"
+            )
         }
+    }
+
+    if (state.insights.releaseYears.isNotEmpty()) {
+        item(key = "release_year") {
+            BarChartCard(
+                title = "Release Year",
+                icon = AppVectorIcons.StatReleaseYear,
+                rows = state.insights.releaseYears,
+                labelWidth = 48.dp,
+                subtitle = "Total entries: ${state.insights.releaseYears.sumOf { it.count }}",
+                // One hue, not the six-slot ramp: a year chart has too many rows
+                // for a rotating palette to mean anything, and rotating it makes
+                // neighbouring bars look like different categories.
+                barColor = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    if (state.entryInsights.watchYears.isNotEmpty()) {
+        item(key = "watch_year") {
+            BarChartCard(
+                title = "Watch Year",
+                icon = AppVectorIcons.StatWatchYear,
+                rows = state.entryInsights.watchYears,
+                labelWidth = 48.dp,
+                subtitle = "Finished ${state.entryInsights.watchYears.sumOf { it.count }} entries",
+                barColor = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/**
+ * The genre table on its own.
+ *
+ * Rendered even when the list has no genres, because "Nothing recorded yet" is a
+ * true answer to the question the chip asked. The card used to be added
+ * conditionally, so an empty chart was simply absent and the section could not
+ * exist at all.
+ */
+private fun LazyListScope.genreChart(insights: ListInsights) {
+    item(key = "genres") {
+        BarChartCard(
+            title = "Genres",
+            icon = AppVectorIcons.StatGenre,
+            rows = insights.genres,
+            labelWidth = 92.dp,
+            trailing = "${insights.genres.size}",
+            subtitle = "By entries on your list"
+        )
+    }
+}
+
+/** The tag table on its own. See [genreChart] for why it is unconditional. */
+private fun LazyListScope.tagChart(insights: ListInsights) {
+    item(key = "tags") {
+        BarChartCard(
+            title = "Tags",
+            icon = AppVectorIcons.Tag,
+            rows = insights.tags,
+            labelWidth = 116.dp,
+            trailing = "${insights.tags.size}",
+            subtitle = "Your most frequent tags"
+        )
     }
 }
 

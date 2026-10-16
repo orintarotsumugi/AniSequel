@@ -228,7 +228,17 @@ data class MediaNode(
     val synonyms: List<String>? = null,
     val meanScore: Int? = null,
     val rankings: List<MediaRanking>? = null,
-    val tags: List<MediaTag>? = null
+    val tags: List<MediaTag>? = null,
+    /**
+     * The cast, each edge carrying the Japanese voice actor for that character.
+     *
+     * Only the detail query asks for it. It is deliberately not on the list
+     * query: a cast is up to twelve more people with two portraits each, and the
+     * list query runs for every entry on the dashboard.
+     */
+    val characters: MediaCharacterConnection? = null,
+    /** The crew, headlined by the director and the original creator. Detail query only. */
+    val staff: MediaStaffConnection? = null
 ) {
     /**
      * Overlay of the lazily-fetched detail onto this node.
@@ -249,6 +259,9 @@ data class MediaNode(
         meanScore = detail.meanScore ?: meanScore,
         rankings = detail.rankings ?: rankings,
         tags = detail.tags ?: tags,
+        characters = detail.characters ?: characters,
+        staff = detail.staff ?: staff,
+        relations = detail.relations ?: relations,
         coverImage = when {
             detail.coverImage?.large != null -> coverImage?.copy(large = detail.coverImage.large) ?: detail.coverImage
             else -> coverImage
@@ -377,6 +390,78 @@ data class MediaRelationEdge(
     val relationType: String? = null,
     val node: MediaNode
 )
+
+/**
+ * The `characters` connection of a media.
+ *
+ * `edges` rather than `nodes` because the voice actor hangs off the *pairing*:
+ * AniList returns the same character with a different actor per language, so
+ * only the edge can say "this actor plays this character".
+ */
+@JsonClass(generateAdapter = true)
+data class MediaCharacterConnection(
+    val edges: List<MediaCharacterEdge>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaCharacterEdge(
+    /** `MAIN`, `SUPPORTING` or `BACKGROUND`. */
+    val role: String? = null,
+    val node: MediaCharacter? = null,
+    /**
+     * The Japanese cast for this character, in AniList's own order.
+     *
+     * Modelled on the edge, where the API puts it, rather than on
+     * [MediaCharacter] - a character does not have one actor, it has one per
+     * language, and the row the Info page draws is a character *played by* an
+     * actor, which is exactly one edge.
+     */
+    val voiceActors: List<MediaStaff>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaCharacter(
+    val id: Int? = null,
+    val name: MediaName? = null,
+    val image: MediaImage? = null
+)
+
+/** The `staff` connection of a media. */
+@JsonClass(generateAdapter = true)
+data class MediaStaffConnection(
+    val edges: List<MediaStaffEdge>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaStaffEdge(
+    /** The position, as AniList spells it - "Chief Director", "Original Creator". */
+    val role: String? = null,
+    val node: MediaStaff? = null
+)
+
+/** A person. The same type serves a voice actor and a crew member. */
+@JsonClass(generateAdapter = true)
+data class MediaStaff(
+    val id: Int? = null,
+    val name: MediaName? = null,
+    val image: MediaImage? = null
+)
+
+/** AniList's `CharacterName`/`StaffName`: full, plus native script. */
+@JsonClass(generateAdapter = true)
+data class MediaName(
+    val full: String? = null,
+    val native: String? = null
+)
+
+/** AniList's `CharacterImage`/`StaffImage`. */
+@JsonClass(generateAdapter = true)
+data class MediaImage(
+    val large: String? = null,
+    val medium: String? = null
+) {
+    val bestUrl: String? get() = large?.takeIf { it.isNotBlank() } ?: medium?.takeIf { it.isNotBlank() }
+}
 
 @JsonClass(generateAdapter = true)
 data class SimpleMediaListEntry(

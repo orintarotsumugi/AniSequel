@@ -50,10 +50,17 @@ import com.anisequel.ui.viewmodel.UserOverviewUiState
  *
  * The banner was 180dp with a scrim that faded to the page colour across its
  * whole height, so the artwork it exists to show was mostly hidden behind the
- * gradient meant to keep text legible over it. It is now a 200dp hero with the
+ * gradient meant to keep text legible over it. It is now a **260dp** hero with the
  * scrim weighted to the bottom two-thirds: the top of the image reads as art, the
  * bottom reads as a surface for the identity line, and the two meet without the
  * hard band a single-stop gradient leaves.
+ *
+ * That 260 is the value, and this paragraph said 200dp for a long time after the
+ * constant was raised - which is worse than a stale number, because the file read
+ * as though it were describing itself accurately. A reader trusting it would have
+ * reasoned about the wrong amount of screen. The height is intentional and the
+ * thing that will change it is the collapsing header in [TO-DO.md](TO-DO.md) §5.2,
+ * not an edit to this line.
  *
  * The avatar sits on the banner's bottom edge as a rounded squircle with a
  * surface ring *and* a hairline outline - the ring alone is invisible on a dark
@@ -257,6 +264,14 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
     Box(
         modifier = modifier
             .fillMaxWidth()
+            // 260dp, and deliberately not the 200dp this file's own KDoc claimed
+            // until now. The extra height is a real cost - the bio and the pinned
+            // favourites sit below the fold on a phone - and it is left in place
+            // because the fix for it is a header that *collapses* as the page
+            // scrolls rather than a shorter static banner, which [TO-DO.md](TO-DO.md)
+            // §5.2 tracks and which needs a screenshot test to land safely. Making
+            // the block shorter here would have looked like that fix while still
+            // surrendering the artwork the height exists for.
             .height(260.dp)
             .clip(MaterialTheme.shapes.extraLarge)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)

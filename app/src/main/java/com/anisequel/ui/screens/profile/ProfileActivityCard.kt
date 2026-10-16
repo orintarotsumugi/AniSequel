@@ -34,12 +34,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.MediaNode
 import com.anisequel.ui.components.AppVectorIcons
@@ -71,6 +73,23 @@ private const val COVER_BACKGROUND_ALPHA = 0.50f
  */
 private val COVER_BLUR_RADIUS = 28.dp
 
+/**
+ * How large the blurred backdrop is decoded, on its longest side.
+ *
+ * A quarter of what the card actually draws on a 3x phone, and deliberately so: the
+ * bitmap is blurred by [COVER_BLUR_RADIUS] and then drawn at 50% alpha as a colour
+ * wash, so nothing finer than a colour survives it. Asking Coil for the card's own
+ * size made every row that scrolled into view pay for a full-resolution decode of
+ * art it was about to smear into background - which is the busiest thing the
+ * Activity feed does while scrolling, on the one tab that is read by scrolling for
+ * a long time.
+ *
+ * 220 rather than a dp value because this is a decode budget, not a layout: the
+ * blur radius is 84px at 3x, so anything above a couple of hundred pixels is
+ * thrown away by the effect regardless of the screen.
+ */
+private const val BACKDROP_DECODE_PX = 220
+
 @Composable
 fun ActivityCard(
     activity: ListActivity,
@@ -83,6 +102,10 @@ fun ActivityCard(
     onOpenDetail: (MediaNode) -> Unit = {},
     likePending: Boolean = false
 ) {
+    // Read before the early return below rather than after it: the card has nothing
+    // to draw without a media node, and a `Local` read that only happens on some
+    // paths is the kind of composition structure that is easy to get wrong later.
+    val context = LocalContext.current
     val media = activity.media ?: return
     val coverUrl = media.coverImage?.bestUrl ?: media.coverImage?.large
     // `MANGA` is the value AniList sends, but the model documents `type` as the
@@ -123,7 +146,16 @@ fun ActivityCard(
             // header's is: the top stays art, the bottom stays readable.
             if (coverUrl != null) {
                 AsyncImage(
-                    model = coverUrl,
+                    // Remembered rather than built inline: Coil compares requests by
+                    // value, so a fresh instance on every recomposition is a cache
+                    // lookup that can never hit - and this card recomposes when the
+                    // feed pages, when a like lands and when its press animates.
+                    model = remember(coverUrl, context) {
+                        ImageRequest.Builder(context)
+                            .data(coverUrl)
+                            .size(BACKDROP_DECODE_PX)
+                            .build()
+                    },
                     contentDescription = null,
                     modifier = Modifier
                         .matchParentSize()

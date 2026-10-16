@@ -116,6 +116,106 @@ val MediaNode.synopsis: String?
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
 
+/**
+ * Every non-spoiler tag AniList returned, highest ranked first, with the rank kept.
+ *
+ * [rankedTags] strips the rank and caps the list at eight because a list card has
+ * room for eight chips; the Info page wants the whole distribution and the
+ * percentage, so it reads this instead. The two exist side by side on purpose: a
+ * card that showed thirty tags would drown the artwork it sits under.
+ */
+val MediaNode.weightedTags: List<MediaTag>
+    get() = tags
+        ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
+        ?.sortedByDescending { it.rank ?: 0 }
+        ?: emptyList()
+
+/**
+ * AniList's tag `rank`, which is the share of viewers who applied the tag.
+ *
+ * "Urban Fantasy" at rank 96 is not a score - it means 96% of the people who
+ * tagged this title tagged it that - which is why it is rendered as a percentage.
+ */
+fun MediaTag.weightLabel(): String? = rank?.let { "$name $it%" }
+
+/** The cast, each entry with the actor who plays them. */
+val MediaNode.characterList: List<MediaCharacterEdge> get() = characters?.edges ?: emptyList()
+
+/** The crew, in AniList's relevance order. */
+val MediaNode.staffList: List<MediaStaffEdge> get() = staff?.edges ?: emptyList()
+
+/**
+ * The related titles the Info page draws as a row.
+ *
+ * Filtered to anime, and filtered to relations a reader can *watch*: AniList
+ * happily returns the light novel a show was adapted from, the guidebook and the
+ * character song as relations, and a row of those next to the sequels reads as a
+ * mistake rather than as information. Deduplicated by id, because the same title
+ * can be related twice through two different arcs.
+ */
+val MediaNode.relatedAnime: List<MediaRelationEdge>
+    get() = relations?.edges
+        ?.filter { edge ->
+            edge.node.type.equals("ANIME", ignoreCase = true) &&
+                edge.node.id != id &&
+                !edge.relationType.equals("CHARACTER", ignoreCase = true)
+        }
+        ?.distinctBy { it.node.id }
+        ?.take(MAX_RELATIONS)
+        ?: emptyList()
+
+/**
+ * AniList's `MediaRelation` enum, spelled the way a person writes it.
+ *
+ * Same rule as [statusLabel]: a relation the app has never seen reads as what it
+ * is, rather than being flattened into "Related".
+ */
+val MediaRelationEdge.typeLabel: String
+    get() {
+        val raw = relationType?.takeIf { it.isNotBlank() } ?: return "Related"
+        return when (raw.uppercase(Locale.ROOT)) {
+            "PREQUEL" -> "Prequel"
+            "SEQUEL" -> "Sequel"
+            "SIDE_STORY" -> "Side story"
+            "SPIN_OFF" -> "Spin-off"
+            "PARENT" -> "Parent"
+            "ALTERNATIVE" -> "Alternative"
+            "SUMMARY" -> "Summary"
+            "FULL_STORY" -> "Full story"
+            "ADAPTATION" -> "Adaptation"
+            "SOURCE" -> "Source"
+            "COMPILATION" -> "Compilation"
+            "OTHER" -> "Other"
+            else -> raw.lowercase(Locale.ROOT)
+                .replace('_', ' ')
+                .replaceFirstChar { it.uppercase(Locale.ROOT) }
+        }
+    }
+
+/** `MAIN`, `SUPPORTING` or `BACKGROUND`, worded for a credit line. */
+val MediaCharacterEdge.roleLabel: String
+    get() = when (role?.uppercase(Locale.ROOT)) {
+        "MAIN" -> "Main"
+        "SUPPORTING" -> "Supporting"
+        "BACKGROUND" -> "Background"
+        null -> "Cast"
+        else -> role.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) }
+    }
+
+/**
+ * The viewer's progress as bare numbers - "1 / 11".
+ *
+ * [watchFractionLabel] already says the same thing in a sentence ("6 / 12 eps"),
+ * which is right in a card body and too wordy for the corner of a progress card
+ * where the fact is already labelled "Watching Progress".
+ */
+val MediaNode.progressCountLabel: String?
+    get() {
+        val watched = watchedEpisodeCount ?: return null
+        val total = if (isManga) chapters else episodes
+        return total?.takeIf { it > 0 }?.let { "$watched / $it" }
+    }
+
 val MediaNode.isUpcoming: Boolean get() = status == "NOT_YET_RELEASED"
 val MediaNode.isAiringNow: Boolean get() = status == "RELEASING"
 val MediaNode.isOnHiatus: Boolean get() = status.equals("HIATUS", ignoreCase = true)
@@ -227,3 +327,6 @@ private val WHITESPACE_PATTERN = Regex("\\s+")
 
 /** How many thematic tags the detail sheet renders. */
 private const val MAX_TAGS = 8
+
+/** How many related titles the Info page's relation row draws before it stops. */
+private const val MAX_RELATIONS = 12

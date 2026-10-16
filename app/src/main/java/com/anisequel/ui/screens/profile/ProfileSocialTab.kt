@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -123,6 +124,22 @@ fun ProfileSocialTab(
     // AniList order back, with the grid silently reshuffled under them.
     var sortByName by rememberSaveable { mutableStateOf(false) }
 
+    /**
+     * Faces, or names.
+     *
+     * The grid is the default because recognising somebody is what this tab is
+     * for, and a portrait is faster to pick out of fifteen than a name is to read
+     * out of fifteen - and it is the one thing the search field cannot help with,
+     * since it needs the name to search by.
+     *
+     * The list is for the other half of the job: "who is this handle, and am I
+     * actually following them". A portrait beside a full name reads a long
+     * account at a glance, where the grid truncates every name to a single
+     * ellipsised line - `PotatoWithThoug...` is in the screenshots this was built
+     * from, and it tells you nothing.
+     */
+    var asGrid by rememberSaveable { mutableStateOf(true) }
+
     val successState = socialState as? UserSocialViewModel.SocialState.Success
     val currentSelected = successState?.selected ?: SocialList.FOLLOWERS
     val rawPeople = successState?.peopleFor(currentSelected).orEmpty()
@@ -200,6 +217,10 @@ fun ProfileSocialTab(
                         minTouchTargetHeight = 48.dp,
                         modifier = Modifier.testTag("social_sort_chip")
                     )
+                    SocialViewToggle(
+                        asGrid = asGrid,
+                        onToggle = { asGrid = !asGrid }
+                    )
                 }
             }
         }
@@ -253,7 +274,7 @@ fun ProfileSocialTab(
                                 .padding(vertical = 32.dp)
                         )
                     }
-                } else {
+                } else if (asGrid) {
                     items(
                         items = filteredPeople,
                         // Scoped by list, because the grid is showing one list at a
@@ -262,10 +283,32 @@ fun ProfileSocialTab(
                         // and a bare `id` key then matches the same slot twice on the
                         // switch - so the grid tries to animate one person into a
                         // different person instead of replacing the list.
-                        key = { "${currentSelected}_${it.id}" },
-                        contentType = { "follower" }
+                        //
+                        // The view mode is part of the key for the same reason: a
+                        // face card and a name row are not two states of one item,
+                        // they are different items, and sharing a key would make the
+                        // Lazy layout reuse one slot's state for the other.
+                        key = { "${currentSelected}_g_${it.id}" },
+                        contentType = { "follower_grid" }
                     ) { person ->
                         FollowerCard(
+                            person = person,
+                            onClick = { onOpenUser(person) }
+                        )
+                    }
+                } else {
+                    items(
+                        items = filteredPeople,
+                        key = { "${currentSelected}_l_${it.id}" },
+                        // One per line, which is what makes the name readable
+                        // rather than truncated: the row is the grid's own
+                        // full-span slot, so both modes stay in one `LazyVerticalGrid`
+                        // and the scroll position and the search field above them
+                        // are not rebuilt when the mode changes.
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = { "follower_row" }
+                    ) { person ->
+                        FollowerRow(
                             person = person,
                             onClick = { onOpenUser(person) }
                         )
@@ -273,6 +316,42 @@ fun ProfileSocialTab(
                 }
             }
         }
+    }
+}
+
+/**
+ * Grid or list, as one control.
+ *
+ * The glyph is the mode that is *on screen*, not the one the tap will switch to,
+ * because the control sits under the grid it describes and a button showing an
+ * incoming layout reads as a claim about the current one - the same mistake the
+ * Library's sort chips were fixed for, where the chip pressed and the order
+ * applied were different controls. The content description carries the action.
+ *
+ * 48dp rather than the chip row's 44: it is a square icon with no label beside
+ * it, so its hit area is the only thing telling the user it is a control at all.
+ */
+@Composable
+private fun SocialViewToggle(
+    asGrid: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onToggle,
+        modifier = modifier
+            .size(48.dp)
+            .clip(ExpressiveShapes.pill)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .bouncyPress(pressedScale = 0.92f)
+            .testTag("social_view_toggle")
+    ) {
+        Icon(
+            imageVector = if (asGrid) AppVectorIcons.ViewGrid else AppVectorIcons.List,
+            contentDescription = if (asGrid) "Show as list" else "Show as grid",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -407,6 +486,58 @@ private fun FollowerCard(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+/**
+ * One person as a full-width row: portrait, then the whole name.
+ *
+ * The name is `titleSmall` and unconstrained in width where the grid's card is a
+ * single ellipsised `labelLarge` line - which is the entire point of the mode.
+ * The portrait is 52dp because it has to survive being seen next to a line of text
+ * rather than on its own; below about 48 it stops reading as a face.
+ */
+@Composable
+private fun FollowerRow(
+    person: FollowUser,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        modifier = modifier
+            .widthIn(max = ProfileMaxContentWidth)
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag("follower_row"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = person.avatar?.medium ?: person.avatar?.large,
+            contentDescription = null,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentScale = ContentScale.Crop,
+            placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+            error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+            fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(
+            text = person.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
     }
 }
