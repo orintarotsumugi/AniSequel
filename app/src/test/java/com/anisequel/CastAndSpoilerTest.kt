@@ -242,11 +242,21 @@ class CastAndSpoilerTest {
             source.contains("clickable { revealed = !revealed }")
         )
 
-        // And the chip is where the click lands.
+        // And the chip is where the click lands. The clickable is now written across
+        // several lines because it has to hand its `interactionSource` to
+        // `bouncyPress` - a `bouncyPress` given none installs a second pointer-input
+        // loop, and two handlers on one element mean the tap never arrives. The
+        // assertion matches `onClick = onToggle` rather than the whole call, so this
+        // keeps meaning "the chip is the target" if the call is reformatted again.
         val chip = source.substringAfter("private fun SpoilerChip(")
         assertTrue(
             "the chip itself is the click target",
-            chip.contains(".clickable(onClick = onToggle)")
+            chip.contains("onClick = onToggle")
+        )
+        assertTrue(
+            "and the press signal is shared with it, or the tap never lands:\n$chip",
+            Regex("""clickable\([\s\S]{0,200}interactionSource = interactionSource""")
+                .containsMatchIn(chip)
         )
 
         // The revealed body is a plain `Text` inside a plain `Surface` - no clickable

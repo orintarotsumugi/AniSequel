@@ -130,14 +130,24 @@ class ExternalLinkTest {
             "app/src/main/java/com/anisequel/ui/components/detail/info/InfoTalent.kt"
         ).readText()
 
-        assertTrue(
-            "the character card opens AniList's own page, which always has a scheme " +
-                "an app handles",
+        // Was `infoTalent.contains("openExternalUrl(context, url)")`, asserting that
+        // a tap on a cast card hands off to the browser. That is the behaviour this
+        // branch removed: a character now opens a profile sheet inside the app, the
+        // same way a studio credit opens a studio page without leaving it. The
+        // boundary this test is about still holds, and it is what remains - a card
+        // that opens in-app is even further from the clipboard fallback.
+        assertFalse(
+            "the cast card opens a profile sheet inside the app, so it is no longer " +
+                "an outbound link at all:\n$infoTalent",
             infoTalent.contains("openExternalUrl(context, url)")
         )
         assertFalse(
-            "so it must not be the copy fallback",
+            "and it must not be the copy fallback either",
             infoTalent.contains("openExternalUrlOrCopy(")
+        )
+        assertTrue(
+            "instead the card is a plain in-app tap, gated on having something to open",
+            infoTalent.contains("onOpen(id)")
         )
     }
 
