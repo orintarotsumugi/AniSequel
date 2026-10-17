@@ -44,6 +44,31 @@ The cache half is pure file operations and is the easiest to test — a
 
 ### 1.2 Split `DashboardViewModel`'s recompute pipeline — medium effort, needs care
 
+> **Also exempt, and deliberately so: `GraphQLQueries.kt` (~1160) and
+> `AniListRepositoryImpl.kt` (~1175).** Decided in PR #71, not deferred. Both sit
+> far past the 700-line ceiling and are staying there; the reasoning is recorded
+> at the top of each file, and this entry exists so the exemption is visible from
+> the list of tracked exceptions rather than only from inside the file.
+>
+> `GraphQLQueries` is one responsibility — *what this app asks AniList for* — and
+> the reason a field is or is not in a document is its effect on the *other*
+> documents. `studios(isMain: true)` inside `relations` is what turns a
+> 476-entry list into an HTTP 500, and that is a fact about the boundary between
+> two documents, not about either one. Splitting puts the detail query and the
+> list query that must stay lean in different files, and the next person adding a
+> field to one cannot see what it costs the other. Most of the length is raw
+> GraphQL inside string literals, which is not code that factors.
+>
+> `AniListRepositoryImpl` is the same shape as `DashboardViewModel` below: the
+> caches, the coalescer and the namespace-keyed detail cache share about a dozen
+> private fields, and extraction means threading that state or making it
+> `internal`, which makes the invariants harder to hold.
+>
+> **What is worth doing instead of splitting, and is not done:** assert the
+> relationships the comments describe. The cache-cap eviction and the
+> coalescer's double-request collapse are both behaviour nothing currently pins,
+> and that is a real gap — a smaller one than the line count suggests.
+
 The file is ~1140 lines including comments, past the 700-line ceiling in
 [AGENTS.md §1](AGENTS.md) and the largest file in the repo by a wide margin. The
 public contract (`DashboardUiState`, `DashboardEvent`) is already extracted to

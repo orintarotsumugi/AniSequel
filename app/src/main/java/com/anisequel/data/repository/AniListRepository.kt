@@ -2,6 +2,7 @@ package com.anisequel.data.repository
 
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.MediaCover
@@ -10,6 +11,7 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
@@ -92,6 +94,24 @@ interface AniListRepository {
      * page came back, which is how the activity feed already decides it.
      */
     suspend fun getStudio(studioId: Int, page: Int): Result<StudioNode> = unsupported("getStudio")
+
+    /**
+     * One character, for the in-app profile sheet.
+     *
+     * The cast row used to hand its tap to the browser. That is the one thing the rest
+     * of the title page does not do - a studio credit opens a studio page - so a
+     * character credit now opens a character page, and a staff credit a staff page.
+     *
+     * Defaulted like every other read here so the demo and fake implementations keep
+     * compiling; a profile is a read, so it has no session requirement and the demo
+     * answers it rather than refusing.
+     */
+    suspend fun getCharacterProfile(characterId: Int): Result<CharacterProfile> =
+        unsupported("getCharacterProfile")
+
+    /** One staff member. Same shape and same reason as [getCharacterProfile]. */
+    suspend fun getStaffProfile(staffId: Int): Result<StaffProfile> =
+        unsupported("getStaffProfile")
 
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
     suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")

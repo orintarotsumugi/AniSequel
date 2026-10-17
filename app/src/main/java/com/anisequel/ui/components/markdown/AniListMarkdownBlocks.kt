@@ -2,8 +2,7 @@ package com.anisequel.ui.components.markdown
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -286,7 +287,6 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
  * those, and 16dp is too small to carry it alone. The previous header's only "you can
  * close this" cue was an unlabelled `Done` icon, which is a cue nobody guesses.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
     // `rememberSaveable`, not `remember`.
@@ -341,11 +341,7 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
  * Separate from [RenderSpoilerBlock] because it is the one part that is interactive,
  * and the chip is the whole gesture — the revealed text deliberately takes no clicks,
  * so a thumb resting on the card while reading cannot hide what is being read.
- *
- * `FlowRow` rather than a `Row` so a long localised label wraps instead of
- * ellipsizing.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpoilerChip(
     revealed: Boolean,
@@ -353,6 +349,17 @@ private fun SpoilerChip(
     modifier: Modifier = Modifier
 ) {
     val label = if (revealed) "Hide spoiler" else "Show spoiler"
+    // The clickable's own `InteractionSource`, handed to `bouncyPress` so the two
+    // share one press signal.
+    //
+    // Without it, `bouncyPress` takes its documented fallback path and installs a
+    // *second* pointer-input loop of its own - `awaitFirstDown`, then a loop over
+    // `PointerEventPass.Main`. Two handlers on one element compete for the gesture,
+    // and the chip stopped responding to the tap: the reveal simply did nothing.
+    // Passing the source means that loop is never installed and the `clickable`
+    // drives the press, which is the whole reason the parameter exists.
+    val interactionSource = remember { MutableInteractionSource() }
+
     Surface(
         shape = ExpressiveShapes.pill,
         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -368,14 +375,25 @@ private fun SpoilerChip(
             }
         ),
         modifier = modifier
-            .bouncyPress(pressedScale = 0.95f)
-            .clickable(onClick = onToggle)
+            .clickable(
+                interactionSource = interactionSource,
+                onClick = onToggle
+            )
+            .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
             .testTag("markdown_spoiler_chip")
     ) {
-        FlowRow(
+        // A `Row`, not a `FlowRow`. `FlowRow` measures its content against the widest
+        // constraint it is given, and a `Surface` inside a `fillMaxWidth` Column hands it
+        // the full width - so the chip stretched the length of the card and left the
+        // label stranded at one end. A Row wraps to its content, which is what a chip
+        // is. `wrapContentWidth` is stated rather than left implicit for the same
+        // reason.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+            modifier = Modifier
+                .wrapContentWidth()
+                .padding(horizontal = 12.dp, vertical = 7.dp)
         ) {
             Icon(
                 imageVector = AppVectorIcons.Visibility,
@@ -386,7 +404,9 @@ private fun SpoilerChip(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

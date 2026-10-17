@@ -1,8 +1,6 @@
 package com.anisequel.ui.theme
 
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
@@ -52,6 +50,32 @@ object DynamicThemeBuilder {
      * Only the dark scheme is tinted, because only the dark scheme is reachable here:
      * the anime theme forces `darkTheme = true` while it is active, so a tinted light
      * ramp would never be drawn.
+     *
+     * ## Why both schemes are `.copy()` off the app's own, not `lightColorScheme(…)`
+     *
+     * This used to call `lightColorScheme(...)` and `darkColorScheme(...)` with the
+     * roles it needed. Those builders start from **Material's baseline scheme**, which
+     * is derived from a purple seed — so every role not named in the call list stayed
+     * purple, and the anime theme produced a red accent on an app with purple borders,
+     * purple secondary text and purple-tinged menus. Eighteen roles on the light
+     * scheme and twelve on the dark one were never overridden, including
+     * `onSurfaceVariant` (every secondary label), `outline` and `outlineVariant`
+     * (every card border), `tertiary`, `error`, `surfaceDim`, `surfaceBright` and
+     * `scrim`. That is what "the anime colour does not override the M3 colours" looks
+     * like: it *is* the missing overrides.
+     *
+     * Copying off [LightColorScheme] and [DarkColorScheme] instead means the roles
+     * this does not name keep the app's own navy rather than Material's purple, so a
+     * partial override can never leave two palettes on screen at once. The roles left
+     * alone deliberately are the hand-picked status colours - `tertiary`, `error` and
+     * their containers - which were chosen in `Color.kt` for contrast in both themes
+     * and must not be re-derived from a title's colour.
+     *
+     * `onSurfaceVariant` is left at the app's neutral blue-grey for the same reason:
+     * it is *text*, on every secondary label in the app, and its contrast is what makes
+     * those labels readable. Tinting a text role toward the show's colour is how a
+     * palette acquires labels that fail 4.5:1 on the surfaces beside them. It stays
+     * neutral, as it is in a Material You scheme too.
      */
     fun createDynamicSchemes(seed: Color, tintSurfaces: Boolean = false): Pair<ColorScheme, ColorScheme> {
         val argb = seed.toArgb()
@@ -73,7 +97,7 @@ object DynamicThemeBuilder {
         val darkOnContainerArgb = ColorUtils.HSLToColor(floatArrayOf(h, (s * 0.4f).coerceAtMost(0.6f), 0.90f))
         val darkSecondaryArgb = ColorUtils.HSLToColor(floatArrayOf((h + 25f) % 360f, (s * 0.5f).coerceIn(0.2f, 0.7f), 0.68f))
 
-        val lightScheme = lightColorScheme(
+        val lightScheme = LightColorScheme.copy(
             primary = Color(lightPrimaryArgb),
             onPrimary = Color.White,
             primaryContainer = Color(lightContainerArgb),
@@ -84,14 +108,16 @@ object DynamicThemeBuilder {
             secondaryContainer = Color(lightContainerArgb),
             onSecondaryContainer = Color(lightOnContainerArgb),
             surfaceTint = Color(lightPrimaryArgb),
-            background = LightBgMain,
-            onBackground = LightTextPrimary,
-            surface = LightSurface,
-            onSurface = LightTextPrimary,
-            surfaceContainerLow = LightSurfaceLow,
-            surfaceContainer = LightSurfaceContainer,
-            surfaceContainerHigh = LightSurfaceContainerHigh,
-            surfaceContainerHighest = LightSurfaceContainerHighest
+            // `surfaceVariant` is not deprecated the way `backgroundVariant` is, and
+            // Material components still read it - a `ListItem` highlight and several
+            // chips draw it. Left alone it is the brand navy, which is coherent but
+            // visibly belongs to a different palette from the tinted containers
+            // beside it.
+            surfaceVariant = Color(
+                ColorUtils.HSLToColor(
+                    floatArrayOf(if (tintSurfaces) h else NEUTRAL_HUE, if (tintSurfaces) 0.313f * SURFACE_TINT_SCALE else 0.313f, 0.188f)
+                )
+            )
         )
 
         // The neutral ramp the anime theme replaces, as (saturation, lightness) pairs
@@ -104,7 +130,7 @@ object DynamicThemeBuilder {
         // of.
         val ramp = tintedDarkRamp(h, tintSurfaces)
 
-        val darkScheme = darkColorScheme(
+        val darkScheme = DarkColorScheme.copy(
             primary = Color(darkPrimaryArgb),
             onPrimary = Color(lightOnContainerArgb),
             primaryContainer = Color(darkContainerArgb),
@@ -115,10 +141,11 @@ object DynamicThemeBuilder {
             secondaryContainer = Color(darkContainerArgb),
             onSecondaryContainer = Color(darkOnContainerArgb),
             surfaceTint = Color(darkPrimaryArgb),
+            // As on the light scheme: routed into the ramp so the components that
+            // still read `surfaceVariant` come from the same palette.
+            surfaceVariant = ramp.surfaceContainerHigh,
             background = ramp.background,
-            onBackground = DarkTextPrimary,
             surface = ramp.surface,
-            onSurface = DarkTextPrimary,
             surfaceContainerLowest = ramp.surfaceLowest,
             surfaceContainerLow = ramp.surfaceLow,
             surfaceContainer = ramp.surfaceContainer,

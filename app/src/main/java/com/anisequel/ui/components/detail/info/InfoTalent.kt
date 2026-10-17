@@ -46,9 +46,7 @@ import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.roleLabel
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabel
-import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
-import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -100,9 +98,20 @@ fun InfoSectionHeading(
  * asked for: it is the one AniList has for essentially every title, and a second
  * language would double the row for a fact most viewers are not reading it for.
  */
+/**
+ * The cast and crew sections: the rows behind every tap that opens a person.
+ *
+ * [onOpenCharacter] and [onOpenStaff] are **nullable** rather than defaulting to a
+ * no-op lambda, and the distinction matters. A `(Int) -> Unit = { _, _ -> }` default
+ * is a lie the card cannot detect: it would draw a tappable card on a screen whose
+ * host never wired a store, and the tap would do nothing — which is precisely the
+ * failure these rows had before, reintroduced. Null means "this host cannot open a
+ * profile", and the card draws a caption instead.
+ */
 @Composable
 fun InfoCharactersSection(
     media: MediaNode,
+    onOpenCharacter: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val cast = media.characterList
@@ -122,24 +131,25 @@ fun InfoCharactersSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = cast, key = { edge -> "cast_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
-                CharacterCard(edge)
+                CharacterCard(edge = edge, onOpen = onOpenCharacter)
             }
         }
     }
 }
 
 @Composable
-private fun CharacterCard(edge: MediaCharacterEdge) {
+private fun CharacterCard(
+    edge: MediaCharacterEdge,
+    /** Opens this character's profile sheet, by AniList id. Null draws a caption. */
+    onOpen: ((Int) -> Unit)?
+) {
     val character = edge.node
     val actor = edge.voiceActors?.firstOrNull()
     val placeholder = MaterialTheme.colorScheme.surfaceContainerHighest
-    val url = character?.siteUrl
-    // Read here rather than inside the `clickable` lambda. That lambda is a plain
-    // one, not a composable, so a `LocalContext.current` read in its body has no
-    // composition to read from and the compiler rejects it - "invocations can only
-    // happen from the context of a @Composable function". The value is hoisted,
-    // which is the only place it can legally be read.
-    val context = LocalContext.current
+    // Null id draws the card as a plain caption: every character AniList returns has
+    // one, and a card that looks live and does nothing is worse than one that plainly
+    // is not. This is the same rule the title page's studio credits follow.
+    val id = character?.id
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -147,16 +157,15 @@ private fun CharacterCard(edge: MediaCharacterEdge) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = Modifier
             .width(268.dp)
-            // Tappable for the same reason the studio credits are: a character the
-            // reader has just read about is the next thing they want to look at, and
-            // AniList carries the rest of it - the full description, the appearances,
-            // who else is in the show. Null url draws the card as a plain caption,
-            // because a control that leads nowhere is worse than no control.
+            // Opens the character's own page *inside the app*, the way a studio credit
+            // opens a studio page. It handed off to the browser before, which was the
+            // one thing on this page that did: the reader left the app to read three
+            // facts about a face they had just tapped.
             .then(
-                if (url != null) {
+                if (id != null && onOpen != null) {
                     Modifier
                         .bouncyPress(pressedScale = 0.98f)
-                        .clickable { openExternalUrl(context, url) }
+                        .clickable { onOpen(id) }
                 } else {
                     Modifier
                 }
@@ -311,6 +320,7 @@ private fun compactCount(value: Int): String = when {
 @Composable
 fun InfoStaffSection(
     media: MediaNode,
+    onOpenStaff: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val crew = media.staffList
@@ -330,15 +340,32 @@ fun InfoStaffSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = crew, key = { edge -> "staff_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
-                StaffCard(edge)
+                StaffCard(edge = edge, onOpen = onOpenStaff)
             }
         }
     }
 }
 
 @Composable
-private fun StaffCard(edge: MediaStaffEdge) {
-    Column(modifier = Modifier.width(112.dp)) {
+private fun StaffCard(edge: MediaStaffEdge, onOpen: ((Int) -> Unit)?) {
+    val id = edge.node?.id
+
+    Column(
+        modifier = Modifier
+            .width(112.dp)
+            // The crew member's own page, in the app. The whole row - portrait, name
+            // and the position they held - is the target, so the thing a reader aims at
+            // is the thing that opens.
+            .then(
+                if (id != null && onOpen != null) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.97f)
+                        .clickable { onOpen(id) }
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         Box(
             modifier = Modifier
                 .width(112.dp)

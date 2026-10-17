@@ -99,6 +99,17 @@ fun SequelDetailSheet(
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     /**
+     * Opens a character's profile sheet from the cast row.
+     *
+     * A callback for the same reason [onOpenStudio] is: this sheet holds no
+     * `NavController` and no store of its own. Whoever drew the sheet owns the
+     * [com.anisequel.ui.viewmodel.PersonProfileStore], so the cast card's tap becomes
+     * a fetch there rather than a second sheet stacked on this one.
+     */
+    onOpenCharacter: ((Int) -> Unit)? = null,
+    /** The same, for the crew row. */
+    onOpenStaff: ((Int) -> Unit)? = null,
+    /**
      * Read/write access to the viewer's own entry, or null when the sheet is
      * read-only.
      *
@@ -247,6 +258,8 @@ fun SequelDetailSheet(
                         onClose = handleDismiss,
                         onOpenMedia = onOpenMedia,
                         onOpenStudio = onOpenStudio,
+                        onOpenCharacter = onOpenCharacter,
+                        onOpenStaff = onOpenStaff,
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
                         bottomContentPadding = navClearance

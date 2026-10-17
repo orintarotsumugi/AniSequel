@@ -1,6 +1,40 @@
 {
   "versions": [
     {
+      "version": "1.3.4",
+      "entries": [
+        {
+          "title": "Links with parentheses in them no longer break",
+          "detail": "A link to a Wikipedia article - the shape AniList bios use most - cut itself at the first bracket. `Spike_Spiegel_(Cowboy_Bebop)` linked to `Spike_Spiegel_(Cowboy_Bebop`, which is a page that does not exist, and the closing bracket was left sitting in the sentence as stray text. The same happened to a bare URL between two words. Both now keep the whole address, while a bracket that closes the link rather than the URL still stays out of it, so a sentence keeps its own punctuation."
+        },
+        {
+          "title": "A cover you can tap takes you to the title",
+          "detail": "A cover image wrapped in a link - the way a bio points at the show a character is from - took you to the artwork instead of the show. The pattern that reads that shape existed but was never given to the parser, so the ordinary link rule read the cover as the target and dropped the title entirely. Tapping the cover now opens the title, with the cover still drawn inside it."
+        }
+      ]
+    },
+    {
+      "version": "1.3.3",
+      "entries": [
+        {
+          "title": "Spoilers open again",
+          "detail": "The chip that reveals a spoiler stopped responding, so nothing behind it would ever show. The cause was subtle: the chip asked the app's press animation to work without telling it where the press was coming from, so the animation installed its own second gesture handler to guess - and two handlers competing for one tap meant the tap never arrived. Every other press control in the app already shares one signal between the two; this one now does too. The chip also wraps to its label instead of stretching the length of the card."
+        },
+        {
+          "title": "The anime theme now overrides the whole palette, not a quarter of it",
+          "detail": "The anime theme set the accent and left the rest of Material's palette exactly where it found it, so a Chainsaw Man page had a red button over purple borders and purple secondary text - the roles the theme never overrode were not unstyled, they were Material's default purple. The theme is now built on the app's own colour set rather than Material's baseline, so every surface, border and container in the app follows the title you opened. The status colours and the secondary text colour are deliberately left alone: they were hand-picked for contrast, and tinting text toward a show's colour is how labels stop being readable."
+        },
+        {
+          "title": "Characters and the people who made them open inside the app",
+          "detail": "Tapping a face in the cast handed you to your browser - the one thing on a title page that did, when a studio credit opens a studio page without leaving the app. A character now opens their own page here instead: their picture, the other names they are known by, their age and gender, their birth date and blood type where AniList has them, how many people have them in their favourites, their biography rendered the same way a bio is, and the titles they appear in as covers you can tap. The crew row does the same for whoever made it - a director gets their roles, the years they were active and where they are from, which is information a credit never carried. Both work from everywhere a title can be opened - a title on the dashboard, a title on someone's profile, a title on a studio's page - and tapping a title from a person's page takes you to that title in turn, so you can walk from an actor to their next credit without going back out. Both sheets read what AniList offers and stop short: the comment thread and the edit history are still one tap away on AniList itself."
+        },
+        {
+          "title": "A cast card you can read is a cast card you can open",
+          "detail": "Nothing to tap, and nothing to notice: on the dashboard and on a studio's page, a face in the cast and a name in the crew were captions, while the same rows on someone's profile opened a full page. Both now open, and both say so in the same way. The one place they deliberately still do not is the offline demo, which has no cast to look anyone up in - there they stay captions rather than becoming buttons that could only report a failure."
+        }
+      ]
+    },
+    {
       "version": "1.3.2",
       "entries": [
         {

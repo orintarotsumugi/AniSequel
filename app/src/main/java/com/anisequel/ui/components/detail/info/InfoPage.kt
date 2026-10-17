@@ -101,6 +101,20 @@ fun AnimeInfoPage(
      * id for is drawn as plain text rather than as a button that cannot work.
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /**
+     * Opens the profile sheet for a character, by AniList id.
+     *
+     * The cast used to hand its tap to the browser, which was the one thing on this
+     * page that did - a studio credit opens a studio page inside the app, so a
+     * character credit now opens a character page inside the app.
+     *
+     * Defaulted to a no-op so a host that has not wired the store still renders the
+     * page; the card gates its own `clickable` on this being meaningful, so a host that
+     * wires nothing draws captions rather than dead buttons.
+     */
+    onOpenCharacter: ((Int) -> Unit)? = null,
+    /** The same, for the crew row. See [onOpenCharacter]. */
+    onOpenStaff: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the sheet, because the capsule's other destination disposes this
@@ -304,7 +318,11 @@ fun AnimeInfoPage(
             // would double it. See `InfoTalent.kt`.
             if (media.characterList.isNotEmpty()) {
                 item(key = "cast") {
-                    InfoCharactersSection(media = media, modifier = Modifier.sectionReveal(10))
+                    InfoCharactersSection(
+                        media = media,
+                        onOpenCharacter = onOpenCharacter,
+                        modifier = Modifier.sectionReveal(10)
+                    )
                 }
             }
 
@@ -320,7 +338,11 @@ fun AnimeInfoPage(
 
             if (media.staffList.isNotEmpty()) {
                 item(key = "staff") {
-                    InfoStaffSection(media = media, modifier = Modifier.sectionReveal(12))
+                    InfoStaffSection(
+                        media = media,
+                        onOpenStaff = onOpenStaff,
+                        modifier = Modifier.sectionReveal(12)
+                    )
                 }
             }
 

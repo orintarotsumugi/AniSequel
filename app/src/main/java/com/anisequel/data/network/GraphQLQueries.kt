@@ -26,6 +26,29 @@ import com.anisequel.data.model.MediaCoverKey
  * `studios`, `trailer`, and `synonyms` are only ever rendered for the one entry
  * a user taps open, so they are fetched on demand rather than shipped for all
  * ~1,500 relation nodes on every load.
+ *
+ * ## This file is over the 700-line ceiling, on purpose
+ *
+ * `AGENTS.md` says to keep files under 700 lines and split by responsibility.
+ * This one is exempt, and the reason is the two rules above.
+ *
+ * The whole file is one responsibility: **what this app asks AniList for**. The
+ * reason a field is or is not in a document is its effect on the *other*
+ * documents - asking for `studios(isMain: true)` inside `relations` is what
+ * turns a 476-entry list into an HTTP 500. That is a fact about the boundary
+ * between documents, not about any one of them, so it lives in exactly one place
+ * where all of them can be read together.
+ *
+ * A split would put `getMediaDetailQuery` and the list query that has to stay
+ * lean beside it in different files, and the next person adding a field to one
+ * would have no way to see the other. The failure mode of this API is not a
+ * compile error - it is a document that answers 500 in production because
+ * nothing in review could see what it cost.
+ *
+ * The line count here is mostly raw GraphQL inside string literals, which is
+ * not code that can be factored. The alternative worth considering is not
+ * splitting, but **asserting** the relationships the comments describe - the
+ * same reason `StudioQueryTest` exists to pin a `perPage` cap.
  */
 object GraphQLQueries {
 
@@ -1010,6 +1033,102 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    /**
+     * One character, with the titles they appear in.
+     *
+     * The sheet this opens is the in-app equivalent of the studio page: a tap on a
+     * cast card used to hand off to a browser, which is the one thing the rest of the
+     * title page does not do - a studio credit opens a studio *page*, so a character
+     * credit opens a character *page*.
+     *
+     * `media` rather than a `characterMedia` on the character, because this is what a
+     * reader wants: the shows they are in, most popular first, as a row of posters.
+     * Sorted by `POPULARITY_DESC` because AniList's own ordering for this connection
+     * puts an obscure cameo above a lead role otherwise.
+     *
+     * `age` is free text and not a number - Faye Valentine's is
+     * "23 (Physical), 77 (Actual)". See `MediaCharacter.age`.
+     */
+    fun getCharacterProfileQuery(): String = """
+        query CharacterProfile(${'$'}id: Int!) {
+          Character(id: ${'$'}id) {
+            id
+            name { full native alternative }
+            image { large medium }
+            description(asHtml: false)
+            gender
+            age
+            bloodType
+            favourites
+            siteUrl
+            isFavourite
+            dateOfBirth { year month day }
+            media(perPage: 12, sort: [POPULARITY_DESC], type: ANIME) {
+              nodes { $PROFILE_MEDIA_FIELDS }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * One staff member, with the titles they worked on.
+     *
+     * Same shape as [getCharacterProfileQuery] and deliberately so: the sheet that
+     * renders a person is one composable, and a crew member who renders differently
+     * from an actor on the same page is the kind of asymmetry a reader notices.
+     *
+     * `staffMedia` rather than `characterMedia` - the latter is "media this *character*
+     * appears in", which is not what a director worked on. `primaryOccupations` is
+     * what distinguishes a voice actor from an animator, and `yearsActive` and
+     * `homeTown` are the two facts a credit otherwise never carries.
+     *
+     * Both dates are asked for because both are null for a living person and the card
+     * hides whichever is absent - see the sheet's own note on that.
+     */
+    fun getStaffProfileQuery(): String = """
+        query StaffProfile(${'$'}id: Int!) {
+          Staff(id: ${'$'}id) {
+            id
+            name { full native }
+            image { large medium }
+            description(asHtml: false)
+            primaryOccupations
+            gender
+            age
+            yearsActive
+            homeTown
+            bloodType
+            favourites
+            siteUrl
+            isFavourite
+            dateOfBirth { year month day }
+            dateOfDeath { year month day }
+            staffMedia(perPage: 12, sort: [POPULARITY_DESC]) {
+              nodes { $PROFILE_MEDIA_FIELDS }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The one card of a title in a person's profile row.
+     *
+     * Smaller than [STUDIO_MEDIA_FIELDS] on purpose - that one opens into a whole
+     * studio page's worth of shelves, and this is a horizontal row where a reader may
+     * never tap. The four facts are what a poster needs to be recognised by, plus `id`
+     * and `type` so the tap can be routed to the right detail sheet.
+     */
+    private const val PROFILE_MEDIA_FIELDS = """
+                id
+                type
+                title { english romaji native userPreferred }
+                format
+                status
+                averageScore
+                siteUrl
+                coverImage { large }
+    """
 
     /**
      * Posts a comment on an activity.

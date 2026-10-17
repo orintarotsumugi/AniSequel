@@ -414,6 +414,10 @@ fun AppNavigation(
                 DashboardScreen(
                     dashboardViewModel = dashboardViewModel,
                     quickAddPreferences = quickAddPreferences,
+                    // The cast and crew rows open a profile sheet in-app. Null on the
+                    // demo route below, which is why this is passed rather than read
+                    // off a ViewModel: the demo deliberately has none.
+                    repository = aniListRepository,
                     onSignInAgain = authViewModel::logout,
                     onOpenSettings = {
                         navController.navigateSingle(AppRoutes.SETTINGS)
@@ -492,6 +496,7 @@ fun AppNavigation(
             DashboardScreen(
                 dashboardViewModel = userViewModel,
                 quickAddPreferences = quickAddPreferences,
+                repository = aniListRepository,
                 onSignInAgain = {
                     navController.navigate(AppRoutes.LOGIN) {
                         popUpTo(navController.graph.id) { inclusive = true }
@@ -654,6 +659,7 @@ fun AppNavigation(
             StudioScreen(
                 viewModel = studioViewModel,
                 studioId = studioId,
+                repository = aniListRepository,
                 initialName = studioName,
                 onNavigateBack = { navController.popBackStack() },
                 // Single-top: a studio page credits studios, so a reader can go

@@ -70,24 +70,39 @@ val MediaNode.hasNotAired: Boolean
  * that it is unfamiliar, where a confident wrong label does not.
  */
 val MediaNode.formatLabel: String
-    get() {
-        val raw = format?.trim()?.takeIf { it.isNotBlank() } ?: return if (isManga) "Manga" else "TV"
-        return when (raw.uppercase(Locale.ROOT)) {
-            "TV" -> "TV"
-            "TV_SHORT" -> "TV Short"
-            "MOVIE" -> "Movie"
-            "SPECIAL" -> "Special"
-            "OVA" -> "OVA"
-            "ONA" -> "ONA"
-            "MANGA" -> "Manga"
-            "NOVEL" -> "Novel"
-            "ONE_SHOT" -> "One Shot"
-            "MUSIC_VIDEO" -> "Music Video"
-            else -> raw.lowercase(Locale.ROOT)
-                .replace('_', ' ')
-                .replaceFirstChar { it.uppercase(Locale.ROOT) }
-        }
+    get() = formatLabelOf(format, isManga)
+
+/**
+ * The format word for a raw enum string, shared by every carrier of a `format`.
+ *
+ * Extracted so [MediaNode.formatLabel] and [ProfileAppearance.formatLabel] cannot
+ * disagree. A person profile's appearances row and a title page's Details grid sit
+ * side by side in this app; a second copy of this `when` would drift the first time
+ * someone added a format, and one surface would print `TV_SHORT` while the other
+ * printed "TV Short" - the exact defect the KDoc on [formatLabel] describes.
+ *
+ * [rawFormat] is AniList's enum string or null. [isManga] only decides the fallback
+ * when it is absent, since a missing format still has a namespace to answer from.
+ */
+fun formatLabelOf(rawFormat: String?, isManga: Boolean): String {
+    val raw = rawFormat?.trim()?.takeIf { it.isNotBlank() }
+        ?: return if (isManga) "Manga" else "TV"
+    return when (raw.uppercase(Locale.ROOT)) {
+        "TV" -> "TV"
+        "TV_SHORT" -> "TV Short"
+        "MOVIE" -> "Movie"
+        "SPECIAL" -> "Special"
+        "OVA" -> "OVA"
+        "ONA" -> "ONA"
+        "MANGA" -> "Manga"
+        "NOVEL" -> "Novel"
+        "ONE_SHOT" -> "One Shot"
+        "MUSIC_VIDEO" -> "Music Video"
+        else -> raw.lowercase(Locale.ROOT)
+            .replace('_', ' ')
+            .replaceFirstChar { it.uppercase(Locale.ROOT) }
     }
+}
 
 /**
  * Airing status, worded the way a person writes it.
