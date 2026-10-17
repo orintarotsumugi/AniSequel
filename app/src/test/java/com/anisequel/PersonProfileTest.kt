@@ -330,5 +330,12 @@ class PersonProfileTest {
 
         override suspend fun getStaffProfile(staffId: Int): Result<StaffProfile> =
             runCatching { staffProfile(staffId) }
+
+        // The demo fixtures. Not `suspend` - they are fixtures rather than reads, so
+        // they carry no query and no network. The default answers them rather than
+        // refusing, because the demo *does* have a list to show; this fake simply
+        // is not the demo.
+        override fun getDemoProfile(): ViewerProfile = unused()
+        override fun getDemoAnimeList(): MediaListCollection = unused()
     }
 }
