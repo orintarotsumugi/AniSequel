@@ -38,11 +38,11 @@ private fun style(
 )
 
 val AniSequelTypography = Typography(
-    displayLarge = style(Default.displayLarge, FontWeight.Bold, 52, 60, (-0.5)),
-    displayMedium = style(Default.displayMedium, FontWeight.Bold, 42, 50, (-0.5)),
-    displaySmall = style(Default.displaySmall, FontWeight.Bold, 34, 42, (-0.5)),
-    headlineLarge = style(Default.headlineLarge, FontWeight.Bold, 30, 38, (-0.4)),
-    headlineMedium = style(Default.headlineMedium, FontWeight.Bold, 26, 34, (-0.3)),
+    displayLarge = style(Default.displayLarge, FontWeight.Bold, 52, 60, -0.5),
+    displayMedium = style(Default.displayMedium, FontWeight.Bold, 42, 50, -0.5),
+    displaySmall = style(Default.displaySmall, FontWeight.Bold, 34, 42, -0.5),
+    headlineLarge = style(Default.headlineLarge, FontWeight.Bold, 30, 38, -0.4),
+    headlineMedium = style(Default.headlineMedium, FontWeight.Bold, 26, 34, -0.3),
     headlineSmall = style(Default.headlineSmall, FontWeight.SemiBold, 22, 30),
     titleLarge = style(Default.titleLarge, FontWeight.SemiBold, 20, 28),
     titleMedium = style(Default.titleMedium, FontWeight.SemiBold, 16, 24, 0.1),
