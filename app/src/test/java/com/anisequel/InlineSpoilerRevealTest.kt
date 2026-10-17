@@ -81,11 +81,29 @@ class InlineSpoilerRevealTest {
                 "open independently:\n$branch",
             branch.contains("spoilers.revealed.contains(index)")
         )
+
+        // Whitespace is collapsed before the two assertions below, because they are
+        // about which call wraps which append and indentation is not part of that.
+        //
+        // This replaced a `withLink\([\s\S]{0,300}?SPOILER_PLACEHOLDER` window, which
+        // failed against the implementation it was written to describe: the
+        // annotation literal, its named arguments and the lambda header put ~330
+        // characters between the two markers at this nesting depth. A fixed window
+        // over formatted source measures the indent, not the code.
+        val collapsed = branch.replace(Regex("""\s+"""), " ")
+        val tapRegion = collapsed.substringAfter("withLink(").substringBefore("} else ")
+
         assertTrue(
-            "what is tappable is the placeholders: a revealed run must not reopen or " +
-                "re-close itself, which is the failure `RenderSpoilerBlock` was split " +
-                "to avoid:\n$branch",
-            Regex("""withLink\([\s\S]{0,300}?SPOILER_PLACEHOLDER\.repeat""").containsMatchIn(branch)
+            "what is tappable is the placeholders: the `withLink` has to wrap the " +
+                "`SPOILER_PLACEHOLDER` append, or the covered run is not the target " +
+                "of the tap:\n$branch",
+            tapRegion.contains("append(SPOILER_PLACEHOLDER.repeat(")
+        )
+        assertTrue(
+            "and the revealed text has to sit outside that `withLink`, or a revealed " +
+                "spoiler re-closes itself on the next tap - the failure " +
+                "`RenderSpoilerBlock` was split to avoid:\n$branch",
+            !tapRegion.contains("append(token.text)")
         )
     }
 
