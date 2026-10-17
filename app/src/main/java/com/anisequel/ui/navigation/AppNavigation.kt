@@ -40,11 +40,13 @@ import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.ui.screens.DashboardScreen
 import com.anisequel.ui.screens.LoginScreen
 import com.anisequel.ui.screens.SettingsScreen
+import com.anisequel.ui.screens.studio.StudioScreen
 import com.anisequel.ui.screens.tier.TierListScreen
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
+import com.anisequel.ui.viewmodel.StudioViewModel
 import com.anisequel.ui.viewmodel.TierListViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -306,7 +308,7 @@ fun AppNavigation(
     // being spent on a login screen.
     LaunchedEffect(openProfileActivityOnLaunch, authState) {
         if (openProfileActivityOnLaunch && authState is AuthUiState.Authenticated) {
-            navController.navigate(ProfileRoutes.OWN_ACTIVITY)
+            navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
             onProfileActivityOpened()
         }
     }
@@ -399,7 +401,7 @@ fun AppNavigation(
                     navController.navigate(AppRoutes.DASHBOARD_DEMO)
                 },
                 onScanUsername = { username ->
-                    navController.navigate(AppRoutes.userDashboard(username))
+                    navController.navigateSingle(AppRoutes.userDashboard(username))
                 }
             )
         }
@@ -414,7 +416,7 @@ fun AppNavigation(
                     quickAddPreferences = quickAddPreferences,
                     onSignInAgain = authViewModel::logout,
                     onOpenSettings = {
-                        navController.navigate(AppRoutes.SETTINGS)
+                        navController.navigateSingle(AppRoutes.SETTINGS)
                     },
                     // Guarded on the viewer existing rather than on the route:
                     // the button only appears on a loaded dashboard, and an
@@ -423,8 +425,16 @@ fun AppNavigation(
                     // request this wiring exists to avoid.
                     onOpenProfile = { viewer ->
                         if (viewer != null) {
-                            navController.navigate(ProfileRoutes.OWN_DEFAULT)
+                            // Single-top: this is the button a thumb finds twice.
+                            // Each repeated tap used to push another identical
+                            // profile, so Back had to be pressed as many times as
+                            // the button had been pressed before the dashboard
+                            // came back.
+                            navController.navigateSingle(ProfileRoutes.OWN_DEFAULT)
                         }
+                    },
+                    onOpenStudio = { studioId, studioName ->
+                        navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
                     }
                 )
             }
@@ -443,7 +453,10 @@ fun AppNavigation(
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
-                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) },
+                onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
+                onOpenStudio = { studioId, studioName ->
+                    navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
+                },
                 onOpenProfile = {
                     navController.navigate(ProfileRoutes.OWN_DEFAULT) {
                         // A demo profile is not on AniList, so the viewer can
@@ -484,15 +497,18 @@ fun AppNavigation(
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
-                onOpenSettings = { navController.navigate(AppRoutes.SETTINGS) },
+                onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
                 // The scanned person, not the viewer. Passing the viewer's name
                 // here would have opened the user's own profile from a dashboard
                 // that is showing somebody else's list - which looks exactly
                 // right on the top bar and is completely wrong.
                 onOpenProfile = {
                     if (username.isNotBlank()) {
-                        navController.navigate(ProfileRoutes.byUsername(username))
+                        navController.navigateSingle(ProfileRoutes.byUsername(username))
                     }
+                },
+                onOpenStudio = { studioId, studioName ->
+                    navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
                 }
             )
         }
@@ -611,6 +627,41 @@ fun AppNavigation(
             TierListScreen(
                 tierListViewModel = tierListViewModel,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // The studio page. Registered last because it is the youngest destination
+        // here, not because order means anything: `NavHost` matches on the route
+        // pattern.
+        composable(
+            route = StudioRoutes.ROUTE,
+            arguments = StudioArguments
+        ) { backStackEntry ->
+            val studioId = backStackEntry.arguments?.getInt(StudioRoutes.STUDIO_ID_ARG) ?: 0
+            val studioName = backStackEntry.arguments?.getString(StudioRoutes.NAME_ARG)
+
+            // Keyed on the studio so walking from one studio page to another cannot
+            // reuse the ViewModel still holding the first one's filmography - the
+            // same reason the scanned dashboards are keyed on their username.
+            val studioViewModel: StudioViewModel = viewModel(
+                key = "studio_$studioId",
+                factory = StudioViewModel.Factory(
+                    aniListRepository = aniListRepository,
+                    studioId = studioId
+                )
+            )
+
+            StudioScreen(
+                viewModel = studioViewModel,
+                studioId = studioId,
+                initialName = studioName,
+                onNavigateBack = { navController.popBackStack() },
+                // Single-top: a studio page credits studios, so a reader can go
+                // down a chain of them, and the page they are already on must not
+                // be pushed again behind their own tap.
+                onOpenStudio = { id, name ->
+                    navController.navigateSingle(StudioRoutes.studio(id, name))
+                }
             )
         }
 

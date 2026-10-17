@@ -123,6 +123,18 @@ data class MediaDetailData(
     @Json(name = "Media") val media: MediaNode? = null
 )
 
+/**
+ * Payload of the studio query: one studio, with one page of its work.
+ *
+ * `Studio` and not `Page`, because AniList's `Page.media` has no `studioId`
+ * argument at all - the studio's own `media` connection is the only documented way
+ * to ask "everything this studio made". See [GraphQLQueries.getStudioQuery].
+ */
+@JsonClass(generateAdapter = true)
+data class StudioData(
+    @Json(name = "Studio") val studio: StudioNode? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class MediaListCollection(
     val lists: List<MediaListGroup>? = null,
@@ -249,6 +261,12 @@ data class MediaNode(
      * that is what this merge is for.
      */
     fun withDetail(detail: MediaNode): MediaNode = copy(
+        // Carried, not ignored. The detail query did not select `title` at all until
+        // it had to, so this line is the other half of that fix: a summary node
+        // built from a source that carries no title (an activity row's media, a
+        // widget's fixture) used to stay "Unknown Title" through the merge even
+        // once the answer was in hand. `?:` keeps whatever this node already had.
+        title = detail.title ?: title,
         description = detail.description ?: description,
         bannerImage = detail.bannerImage ?: bannerImage,
         studios = detail.studios ?: studios,
@@ -300,9 +318,33 @@ data class MediaTrailer(
         } else null
 }
 
+/**
+ * The studios credited on a media.
+ *
+ * Carries **both** shapes, because AniList answers both and they are not
+ * interchangeable. `nodes` is the flat list several queries ask for and the shape
+ * every existing derivation reads; `edges` is the only one that says whether a
+ * studio was *main* or supporting, which is what lets the title page separate the
+ * animation studio from the publishers that share the field. A `Studio` can be
+ * either - AniList does not distinguish them in this connection - so the flag, not
+ * the name, is what the page sorts on.
+ *
+ * `nodes` stays **first**, and that is not cosmetic: several callers - both demo
+ * providers and two test fixtures - build this with a positional
+ * `StudioConnection(listOf(...))`, and putting the new field in front of the old one
+ * silently re-typed those arguments as edges. A field order is an API of its own.
+ */
 @JsonClass(generateAdapter = true)
 data class StudioConnection(
-    val nodes: List<StudioNode>? = null
+    val nodes: List<StudioNode>? = null,
+    val edges: List<StudioEdge>? = null
+)
+
+/** One credit: which studio, and whether the title was primarily theirs. */
+@JsonClass(generateAdapter = true)
+data class StudioEdge(
+    val isMain: Boolean? = null,
+    val node: StudioNode? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -311,10 +353,37 @@ data class StudioNode(
     val name: String? = null,
     /**
      * Whether this is an animation studio, as opposed to a publisher or a
-     * producer. Only the favourites query asks for it, to tell a manga house
-     * from an anime one in the same row; the media detail query never does.
+     * producer. The favourites query reads it to tell a manga house from an anime
+     * one in the same row, and the studio page reads it to say which of the two it
+     * is looking at.
      */
-    val isAnimationStudio: Boolean? = null
+    val isAnimationStudio: Boolean? = null,
+    /** How many AniList users have this studio in their favourites. Studio page only. */
+    val favourites: Int? = null,
+    val siteUrl: String? = null,
+    /**
+     * One page of this studio's work, newest first.
+     *
+     * On [StudioNode] rather than beside it because the studio query answers with
+     * the studio as its root field, so there is nowhere else for the page to live.
+     * Every other query that selects a studio leaves this null. See
+     * [com.anisequel.domain.studio.StudioYearShelf] for how a page of these becomes
+     * the year shelves the screen draws.
+     */
+    val media: StudioMediaConnection? = null
+)
+
+/**
+ * A page of a studio's titles.
+ *
+ * No `pageInfo`: pagination here is decided by whether a full page came back,
+ * which is how the activity feed already asks for its next one - see
+ * `UserActivityViewModel.loadNextPage`. A `pageInfo` nobody reads is a field
+ * AniList has to resolve on every request.
+ */
+@JsonClass(generateAdapter = true)
+data class StudioMediaConnection(
+    val nodes: List<MediaNode>? = null
 )
 
 @JsonClass(generateAdapter = true)

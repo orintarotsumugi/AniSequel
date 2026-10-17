@@ -11,6 +11,7 @@ import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.StudioData
 import com.anisequel.data.model.UserByNameData
 import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ActivityFeedData
@@ -123,6 +124,14 @@ class AniListErrorMappingTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        // The studio page's endpoint, added to `AniListApiService` with it. Every
+        // fake in this file has to implement it or the test *module* stops
+        // compiling - which is what happened: the app compiled, the tests did not.
+        // `notServed` rather than a blank response, for the reason above.
+        override suspend fun getStudio(
+            request: GraphQLRequest
+        ): GraphQLResponse<StudioData> = notServed("getStudio")
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
@@ -329,6 +338,12 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        // See the note on the same override in `FakeService`: a new endpoint on the
+        // interface breaks every fake in the test source set until it is answered.
+        override suspend fun getStudio(
+            request: GraphQLRequest
+        ): GraphQLResponse<StudioData> = notServed("getStudio")
     }
 
     @Test

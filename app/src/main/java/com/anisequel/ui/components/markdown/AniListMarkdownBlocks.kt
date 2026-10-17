@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -247,6 +249,25 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
     }
 }
 
+/**
+ * A `~!spoiler~!`, with a control that shows it and a control that hides it.
+ *
+ * ## Why the revealed state is not tappable any more
+ *
+ * The whole block used to be one toggle, so *any* tap on a revealed spoiler closed
+ * it again. That is the wrong gesture in the one state where reading happens: a
+ * spoiler is usually several lines, it is often scrolled through with a thumb
+ * resting on the card, and it can contain links - every one of which was swallowed
+ * by the toggle. Tapping a link inside a spoiler did nothing visible except hide
+ * the text that contained it.
+ *
+ * So the block now has two parts with different jobs: a header that is the control,
+ * and, once revealed, the text itself, which behaves like any other paragraph. The
+ * header carries an explicit **Hide** while it is open, which is also the only
+ * thing on screen that says the block *can* be closed - the previous version's
+ * `Done` icon was a cue with no label, and a cue that means "tap this text to put
+ * it away" is not one a reader guesses.
+ */
 @Composable
 fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
     // `rememberSaveable`, not `remember`.
@@ -268,53 +289,68 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
         },
         modifier = Modifier
             .fillMaxWidth()
-            .bouncyPress()
-            .clickable { revealed = !revealed }
             // Revealing swaps a one-line prompt for the hidden text, so the block
             // changes height. Animating that here means the surrounding list does
             // not jump; the token is the `IntSize` one for exactly this reason.
             .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
     ) {
-        if (!revealed) {
+        Column {
             Row(
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Only the collapsed *header* is the reveal target: it is a
+                    // one-line prompt with nothing else in it to touch. Once the
+                    // text is out, the tap target is the labelled Hide button
+                    // beside it and the body stops answering to a stray thumb.
+                    .then(
+                        if (revealed) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .bouncyPress()
+                                .clickable { revealed = true }
+                        }
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = AppVectorIcons.Visibility,
+                    imageVector = if (revealed) AppVectorIcons.Done else AppVectorIcons.Visibility,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Spoiler (tap to reveal)",
+                    text = if (revealed) "Spoiler" else "Spoiler (tap to reveal)",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
                 )
+                if (revealed) {
+                    TextButton(
+                        onClick = { revealed = false },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Hide",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
-        } else {
-            val annotated = buildInlineAnnotatedString(spoiler.inlines, onLinkClick = { openExternalUrl(context, it) })
-            // The icon stays, as a cue that the same tap hides it again. It used
-            // to vanish with the prompt, which left a revealed spoiler looking
-            // like plain text - nothing said it could be tapped back shut.
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Done,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+
+            if (revealed) {
                 Text(
-                    text = annotated,
+                    text = buildInlineAnnotatedString(
+                        spoiler.inlines,
+                        onLinkClick = { openExternalUrl(context, it) }
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
                 )
             }
         }

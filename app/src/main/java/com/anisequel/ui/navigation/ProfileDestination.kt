@@ -170,11 +170,21 @@ fun ProfileDestination(
         // state and never the signed-in viewer: that is how a grid of fifty faces
         // ends up opening one profile fifty times.
         onOpenUser = { person: FollowUser ->
-            navController.navigate(ProfileRoutes.byId(person.id))
+            // Single-top, because a grid of faces is exactly where a thumb lands
+            // twice: a repeated tap used to stack the same profile again, and since
+            // every copy looks identical, Back appeared to be broken until the
+            // duplicates were gone.
+            navController.navigateSingle(ProfileRoutes.byId(person.id))
         },
         onNavigateBack = { navController.popBackStack() },
         isOwnProfile = isOwnProfile,
-        onOpenTierList = { navController.navigate(AppRoutes.TIER_LIST) },
+        onOpenTierList = { navController.navigateSingle(AppRoutes.TIER_LIST) },
+        // The reader is on a title that credits a studio; the studio page is a place
+        // like any other, so it is pushed with the same single-top rule as every
+        // other hop in the app.
+        onOpenStudio = { studioId, name ->
+            navController.navigateSingle(StudioRoutes.studio(studioId, name))
+        },
         libraryPreferences = libraryPreferences,
         onSignInAgain = onSignInAgain,
         initialTab = initialTab,

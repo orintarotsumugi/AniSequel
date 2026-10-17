@@ -191,6 +191,106 @@ class MediaDetailQueryTest {
     }
 
     /**
+     * The detail document has to ask for `title`, because one of its callers uses the
+     * response as the whole display record.
+     *
+     * v1.3.0 shipped without it, on the assumption that the summary the sheet was
+     * opened from already carried a title. That holds on the dashboard, where
+     * `MediaNode.withDetail` folds the response into the list node - and does **not**
+     * hold on a profile, where `withSummaryProgress` hands the *detail* node to the
+     * screen and takes only the progress from the summary. Opening a title from an
+     * Activity row therefore rendered a page headed "Unknown Title" above a correct
+     * studio, status, synopsis and cast, which reads as a broken title page rather
+     * than as a missing field: `MediaNode.displayName` answers with exactly that
+     * string when `title` is null, so nothing anywhere looked like an error.
+     *
+     * Asserted against the media's own fields rather than the whole document, because
+     * the relation nodes carry a `title` of their own through `RELATED_NODE_FIELDS` -
+     * a `contains` over the full query would still pass with the media's gone, which is
+     * the bug this test exists for.
+     */
+    @Test
+    fun `the detail query asks for the title it draws`() {
+        val query = GraphQLQueries.getMediaDetailQuery("ANIME")
+        val mediaFields = query.substringAfter("Media(id: \$id, type: \$type) {")
+            .substringBefore("relations {")
+
+        assertTrue(
+            "a detail response is the whole display record on the profile path, so the " +
+                "document has to select `title` - without it the page renders as " +
+                "\"Unknown Title\":\n$mediaFields",
+            mediaFields.contains("title { romaji english native userPreferred }")
+        )
+    }
+
+    /**
+     * The credits have to be *every* studio, each with its id and its main flag.
+     *
+     * The document used to ask `studios(isMain: true) { nodes { ... } }`, which lost
+     * two things at once: the publishers and licensors AniList files in the same
+     * connection were never fetched, so the page could not name them; and the flat
+     * `nodes` list has no `isMain`, so nothing could tell the animation studio from
+     * the rest even when both were present. The title page now draws every credit as
+     * a chip that opens that studio's page - which needs the ids - and orders them by
+     * the flag rather than by whatever order AniList happened to answer in.
+     */
+    @Test
+    fun `the detail query asks for every studio, with its id and main flag`() {
+        val query = GraphQLQueries.getMediaDetailQuery("ANIME")
+        val credits = query.substringAfter("studios(").substringBefore("coverImage")
+
+        assertTrue(
+            "without the edges there is no main flag and no way to tell the " +
+                "animation studio from the publishers:\n$credits",
+            credits.contains("edges")
+        )
+        assertTrue("the main flag is what orders the credits:\n$credits", credits.contains("isMain"))
+        assertTrue("a credit without an id cannot be opened:\n$credits", credits.contains("node { id name isAnimationStudio }"))
+        assertFalse(
+            "`isMain: true` drops every publisher and licensor, which is what the " +
+                "page used to show one comma-joined line of:\n$credits",
+            credits.contains("isMain: true")
+        )
+    }
+
+    /**
+     * The relation nodes have to carry the facts the title page's relation cards draw.
+     *
+     * The detail query used to select a second, much thinner relation node - `id`,
+     * `title`, `format`, `status`, `episodes` and a small cover - while the list query's
+     * `RELATED_NODE_FIELDS` already carried the season, the score, the dates and the
+     * airing schedule. So the one screen whose job is to show you the rest of a
+     * franchise could say what a related title was *called* and nothing else: the
+     * relation row drew a poster, a relation label and a name, and `TV_SHORT`-style
+     * facts the page spells out for its own title were missing for every relation.
+     *
+     * The fields asserted here are exactly the ones `metaLabel` and the score badge
+     * read, so a future edit that trims the shared field list back down fails here
+     * rather than silently emptying the cards.
+     */
+    @Test
+    fun `relation nodes carry the facts the relation card draws`() {
+        val query = GraphQLQueries.getMediaDetailQuery("ANIME")
+        val relations = query.substringAfter("relations {").substringBefore("characters(")
+
+        listOf(
+            "seasonYear",
+            "averageScore",
+            "startDate",
+            "nextAiringEpisode",
+            "mediaListEntry",
+            "coverImage"
+        ).forEach { field ->
+            assertTrue(
+                "the relation node must carry `$field`. Without it the title page's " +
+                    "relation card can only print a poster and a name, which is what it " +
+                    "did before this was fixed:\n$relations",
+                relations.contains(field)
+            )
+        }
+    }
+
+    /**
      * `genres` is what the Genres chip card reads, and it was on the old field list.
      */
     @Test

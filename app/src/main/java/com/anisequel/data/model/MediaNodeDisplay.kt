@@ -127,7 +127,66 @@ val MediaNode.scoreLabel: String get() = averageScore?.let { "$it%" } ?: "N/A"
 val MediaNode.meanScoreLabel: String? get() = meanScore?.let { "$it%" }
 val MediaNode.releaseLabel: String get() = startDate?.formatted ?: "TBA"
 val MediaNode.genreList: List<String> get() = genres ?: emptyList()
-val MediaNode.studioName: String? get() = studios?.nodes?.firstOrNull()?.name
+
+/**
+ * One studio credited on a title.
+ *
+ * [id] is nullable because not every source carries it - the *list* query's
+ * `studios { nodes { id name } }` does, but a fixture or a hand-built node may
+ * not - and a credit with no id is a name that cannot be tapped rather than a
+ * name that opens the wrong studio.
+ */
+data class StudioCredit(
+    val id: Int?,
+    val name: String,
+    val isMain: Boolean
+)
+
+/**
+ * Every studio credited on this title, the animation studio first.
+ *
+ * The title page used to draw one comma-joined line of names and nothing was
+ * tappable, because the detail query asked AniList only for its **main** studios
+ * and had no id to route to for the rest. AniList answers `studios` with both:
+ * an `edges` connection flagged `isMain`, and a flat `nodes` list. Reading the
+ * edges is what makes the page able to say "Shaft made this, Kodansha published
+ * it" instead of printing six names as if they were six studios of equal weight.
+ *
+ * `nodes` is still read as the fallback, because the list query and the bio
+ * covers carry no edges at all and a title with no studios shown is worse than a
+ * title whose credits are unranked.
+ */
+val MediaNode.studioCredits: List<StudioCredit>
+    get() {
+        val fromEdges = studios?.edges.orEmpty().mapNotNull { edge ->
+            val name = edge.node?.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            StudioCredit(id = edge.node?.id, name = name, isMain = edge.isMain == true)
+        }
+        val credits = fromEdges.ifEmpty {
+            // No edges means the answer is *unranked*, not that every credit is a
+            // supporting one - so these are marked main, and the page draws them at
+            // full weight. The alternative dims the animation studio on every path
+            // that carries a flat list, which reads as AniList having told us it
+            // was secondary when it said nothing at all.
+            studios?.nodes.orEmpty().mapNotNull { node ->
+                node.name?.takeIf { it.isNotBlank() }
+                    ?.let { StudioCredit(id = node.id, name = it, isMain = true) }
+            }
+        }
+        // Main first, and stable within each half, so the first row of chips is
+        // the studio that actually made the thing even when the edges arrive in
+        // AniList's own order.
+        return credits.sortedByDescending { it.isMain }
+    }
+
+/**
+ * The name of the studio that made this, for a one-line chip.
+ *
+ * Prefers a main credit, so a title whose `studios` now arrives with the
+ * publisher first still headlines its animation studio - which is what it did
+ * when the query asked for main studios only.
+ */
+val MediaNode.studioName: String? get() = studioCredits.firstOrNull()?.name
 
 /** The entry's page on AniList, derived from the id when the query omitted it. */
 val MediaNode.pageUrl: String get() = siteUrl ?: if (isManga) "https://anilist.co/manga/$id" else "https://anilist.co/anime/$id"
@@ -223,6 +282,47 @@ val MediaRelationEdge.typeLabel: String
                 .replace('_', ' ')
                 .replaceFirstChar { it.uppercase(Locale.ROOT) }
         }
+    }
+
+/**
+ * The one-line summary under a related title's name.
+ *
+ * The title page's relation cards used to be a poster, a relation label and a name,
+ * which is what a poster *looks* like rather than what a reader needs in order to
+ * decide whether to tap it. Format, how long it is, when it came out and whether it
+ * is out yet are the four facts the hero chips already spell out for the title you
+ * are looking at, and the one thing the row exists to answer - "is this the season I
+ * have not watched, or the film I have not heard of" - is not answerable from any of
+ * the three it had.
+ *
+ * Built from [formatLabel] and [statusLabel], not the raw AniList enums, so the row
+ * cannot print `TV_SHORT` or `NOT_YET_RELEASED` next to a cleaned-up hero chip - the
+ * same class of drift those two derivations exist to stop.
+ *
+ * The year prefers `seasonYear` and falls back to the start date's year: AniList sets
+ * the season on anything it has scheduled, and a title old enough to have aired is
+ * often missing it while carrying a full start date. `episodes` is only added when
+ * it is a real count - a zero there is the API saying it does not know, and
+ * "0 eps" is a claim rather than a gap. "eps" rather than "episodes" because the
+ * whole line has to fit a 144dp card beside the format and the year.
+ *
+ * Status is shown only when it is *news* - airing, upcoming, on hiatus, cancelled.
+ * A finished relation's status is the least interesting thing about it and its year
+ * already says it, whereas a sequel that has not started is exactly the case where
+ * the row should say so.
+ */
+val MediaRelationEdge.metaLabel: String
+    get() {
+        val node = node
+        val parts = buildList {
+            add(node.formatLabel)
+            node.episodes?.takeIf { it > 0 }
+                ?.let { add(if (it == 1) "1 ep" else "$it eps") }
+            (node.seasonYear ?: node.startDate?.year)?.let { add(it.toString()) }
+            val status = node.statusLabel
+            if (status != "Finished" && status != "Unknown") add(status)
+        }
+        return parts.joinToString(" · ")
     }
 
 /** `MAIN`, `SUPPORTING` or `BACKGROUND`, worded for a credit line. */

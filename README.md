@@ -82,6 +82,12 @@ It replaces three tabs — Story, Specs, My Entry — which had split one title'
 information across two of them. Four decisions in it are worth knowing before
 changing it:
 
+- **The action row is one control or two, and the button knows which.** A title
+  opened from a recommendation has a sequel to offer; an arriving row or an Activity
+  entry is a show already on somebody's list, so there is nothing to add. That second
+  case drew its single AniList button with `weight(1f)` and so filled the width of the
+  screen — a secondary "open on AniList" link rendering as the page's primary call to
+  action. It is weighted only when it has something to share the row with.
 - **It is a `LazyColumn`, and the scroll drives the motion.** The hero's parallax
   and the floating bar read the list's scroll state: the parallax through a
   function called inside a `graphicsLayer` lambda (draw phase, so a 120Hz scroll
@@ -92,6 +98,16 @@ changing it:
   spatial spring. That handover is timed by three constants that live together in
   `InfoMotion.kt`, because it is a relationship between two files rather than a
   rule either of them can break alone.
+  The docked bar's title pill is also the page's orientation and its way out: its
+  label is a button that animates the list back to the hero, and the same pill
+  carries the reader's progress as a wash that fills from the left, scaled in the
+  draw phase from a `() -> Float` so neither costs a recomposition on a scrolled
+  frame. It is also a fix, and the reason it is worth reading before touching: the
+  title used to give up half the bar to a `Spacer` that held a `weight(1f)` beside
+  it, so a long name was measured against half the width and ellipsized there —
+  `MARRIAGETO...` with a third of the screen empty beside it. One weighted child
+  is what makes the pill wrap a short title and still use all the room a long one
+  needs.
 - **The staggered entrance is capped, one-shot, and skipped on `INSTANT`.** Seven
   sections at 55ms each is 385ms of stagger; the rest arrive together.
   `sectionReveal` returns no modifier at all when the motion style is `INSTANT`,
@@ -105,11 +121,73 @@ changing it:
   asserted by `WaveGeometryTest` rather than eyeballed. Its travelling phase is one
   `rememberInfiniteTransition`, gated on there being progress to show, and its fill
   springs from zero once per title.
+  **Track and fill are one path.** The fill used to be built as its own wave, with
+  its own amplitude and its own travelling phase, so the coloured stretch floated at
+  a different height from the track it was meant to be the first part of — a short
+  squiggle over a longer one, with the round cap landing off the curve. It is now the
+  same path drawn twice, the second time inside a `clipRect` of the watched width. A
+  clip cannot disagree with the shape it clips, which is the whole reason for the
+  change; a shared *amplitude variable* would have been one more thing to keep in
+  step, and it is what the two-path version was already passing to both halves.
 - **The data it needs was widened, not faked.** `GET_MEDIA_DETAIL` now also asks
   for `characters` (with `voiceActors`), `staff` and `relations` — one request per
   open, on a query that already fetched the synopsis, rankings and tags. The
   relation row is filtered to anime, because AniList also returns the novel a show
   was adapted from and its guidebook, which next to the sequels reads as a mistake.
+  It also asks for `title`, and **that field is not optional on a node this app uses
+  as a display record**: it was dropped on the assumption that the summary the sheet
+  opened from already carried one, which is true on the dashboard (the response is
+  folded into the list node with `withDetail`) and false on a profile, where the
+  fetched detail *replaces* the activity row's node. Opening a title from an Activity
+  row therefore rendered a page headed "Unknown Title" above a correct studio,
+  status, synopsis and cast. `MediaDetailQueryTest` pins the field.
+- **The relation nodes share `RELATED_NODE_FIELDS` with the list query.** They used
+  to carry a second, thinner field list of their own — a title, a format, an episode
+  count and a small cover — so the one screen whose job is to show the rest of a
+  franchise could name a related title and say nothing else about it. Each relation
+  now carries the season, the year, the score, the start date, the airing schedule
+  and the viewer's own entry, which is what `MediaRelationEdge.metaLabel` and the
+  card's score badge read. The cost is bounded the way it is there on purpose: this
+  runs once per *open* over at most twelve nodes, never per entry of a list.
+
+### Studio pages
+
+Every studio credited on a title is a chip on the title page — the hero lockup's
+studio chip and every credit in the Details card — and each one opens that studio's
+own destination (`studio/{studioId}?name=…`). It is the same page whether it was
+reached from a title's credits, from another studio's filmography, or from a
+profile; it needs no session, because a studio is public AniList data.
+
+Four decisions hold it together:
+
+- **It is a route, not a sheet.** The title page is a sheet because it is something
+you look at *from* a list. A studio is somewhere you go: its filmography is longer
+than the page that mentioned it, and a sheet would be dismissed by the first back
+gesture and could not be linked or restored. Nothing else changes, though — tapping
+a poster on a studio page opens the same read-only detail sheet the dashboard and
+the profile use, so a title is the same page everywhere it appears.
+- **`Studio.media`, because `Page.media` cannot answer this.** The one query in
+this app whose shape is a requirement rather than a preference: AniList's
+`Page.media` has **no `studioId` argument**, and a document written with one is a
+400, not an empty page. The studio's own `media` connection is the only documented
+way to ask, its `perPage` ceiling is **25** (not the root `Page` query's 50), and it
+is asked for `START_DATE_DESC`. `StudioQueryTest` pins all four facts, because none
+of them can fail at compile time and all of them fail at runtime.
+- **The shelves are years, and the grouping is pure.** `domain/studio/StudioYearShelf.kt`
+turns a page-merged title list into shelves — newest year first, and one `TBA`
+shelf at the *top*, because an announced title is the most interesting thing on the
+page and AniList publishes no null ordering to rely on. It also drops duplicate ids,
+which paging makes necessary rather than hypothetical: pages are fetched minutes
+apart while AniList re-orders its own results, so one title can straddle a page
+boundary and otherwise appear twice, in two different years. `StudioYearShelfTest`
+asserts every one of those rules.
+- **The title page now asks for every studio, not the main one.** The document used
+to select `studios(isMain: true) { nodes { … } }`, which lost the publishers,
+licensors and producers AniList files in the same connection *and* lost the `isMain`
+flag that says which credit made the thing. It asks for the edges now, so the card
+draws every credit — filled for the main studios, quieter for the rest — and each
+one carries the id a tap needs. A credit AniList gave no id for is still drawn,
+as text: it is part of the answer to "who made this", it just cannot be followed.
 
 ### The profile screen
 
@@ -131,7 +209,11 @@ what the screen reads.
 **Bios** are AniList-flavoured Markdown, rendered by
 `ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
 spoilers (`~!like this!~`), inline GIFs, `~~~a centred line~~~`, AniList links
-lifted into cover cards, and images. A bio's cover cards cost **one** request:
+lifted into cover cards, and images. A spoiler is two controls rather than one: the
+collapsed prompt reveals it, and a labelled **Hide** closes it. The whole block used
+to be a single toggle, so *any* tap on revealed text closed it again — a thumb
+resting on the card hid what was being read, and a link inside a spoiler could never
+be opened, because the tap that reached it was swallowed by the toggle. A bio's cover cards cost **one** request:
 see `MediaCoversQueryTest` for why that document asks through a `Page`, and what
 used to make AniList reject it. Two deliberate gaps: tables and
 `(video)`-style embeds are only partly AniList-documented, so they are parsed
@@ -518,6 +600,22 @@ re-fetch without the gesture. Both are decided entirely by the resume check.
 After a *failed* automatic fetch the loop waits a five-minute floor before asking
 again, so one dropped request cannot become a tight retry loop.
 
+### One destination, one copy
+
+Every screen-to-screen hop goes through `NavHostController.navigateSingle`
+(`ui/navigation/NavigationActions.kt`) rather than a raw `navigate`. It is one line
+— `launchSingleTop = true` — and it is there because a plain `navigate` pushes the
+same destination again for every tap. A thumb that landed three times on the
+dashboard's avatar left three profiles on the back stack; all three look identical,
+so **Back** appeared to do nothing until the duplicates ran out, with three
+ViewModels and three scroll positions held alive behind them. It is not a crash,
+which is why it survived review.
+
+Routes that need a different back stack (sign-in, the demo dashboard) keep their
+own `popUpTo` and are left alone; the helper is for the plain "open a screen"
+cases. Tabs are not navigation at all — the profile's five tabs and the Settings
+three are one route with an index, so they cannot stack in the first place.
+
 ---
 
 ## Building it
@@ -602,6 +700,9 @@ pure JUnit.
 | | `BuildActivityCalendarUseCaseTest`, `BuildListInsightsUseCaseTest` | The activity grid's layout; the Stats tab's reshaping of AniList's aggregates |
 | | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library tab logic, status display, the title's spec derivations |
 | Title page | `WaveGeometryTest` | The wavy progress bar's amplitude, period and travelling phase |
+| Studio pages | `StudioQueryTest` | The one document shape AniList requires: `Studio.media` rather than a filtered `Page`, the 25-title ceiling, and the fields a shelf card and a tap need |
+| | `StudioYearShelfTest` | The shelves: year from the start date with a `seasonYear` fallback, newest first, `TBA` on top, in-year order preserved, duplicates dropped |
+| | `MediaDetailQueryTest`, `MediaDetailNamespacingTest`, `MediaNodeDisplayTest` | The detail document itself — the `title` it has to ask for, the relation fields it shares with the list query — and what a node prints when the summary it was opened from is replaced |
 | | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
 | | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers; the demo-mode activity fixture |
 | Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
@@ -646,6 +747,14 @@ treats it as advisory rather than claiming otherwise).
   suite now also pins the reason each alias is resolved through a `Page`: the
   same request written against the `Media` root field answers **404** as soon as
   one linked id has no media, which blanked every other card in the bio.
+- **`MediaDetailQueryTest`** — v1.3.0 shipped a title page that could open headed
+  **Unknown Title**. `GET_MEDIA_DETAIL` did not ask for `title`, on the assumption
+  that the summary the sheet was opened from already had one. That holds on the
+  dashboard, which folds the response into the list node, and does not hold on a
+  profile, where the fetched detail *replaces* the activity row's node — so there
+  was nothing left to render. The suite pins the field in the document, the way
+  `MediaCoversQueryTest` pins its variable declarations, because a query is the one
+  kind of code here that no compiler checks.
 - **`VersionBaselineTest`** — the version lives in three places, and two of them
   used to drift apart silently.
 - **`KeystoreIntegrityTest`** — see below.

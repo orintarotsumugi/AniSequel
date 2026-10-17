@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -54,9 +55,10 @@ import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.statusLabel
-import com.anisequel.data.model.studioName
+import com.anisequel.data.model.studioCredits
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
@@ -121,6 +123,14 @@ fun InfoHero(
     collapse: () -> Float,
     onOpenCover: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * Opens the page for one of this title's studios.
+     *
+     * The chip on the lockup is tappable for the same reason the ones in the
+     * Details card are: the studio a show is by is the one credit people follow,
+     * and this is the first place it is drawn.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -323,8 +333,27 @@ fun InfoHero(
                             accent = true
                         )
                     }
-                    media.studioName?.let { studio ->
-                        HeroChip(icon = AppVectorIcons.Studio, label = studio)
+                    // The main studio, when AniList flagged one. `studioCredits`
+                    // sorts those first and falls back to the flat list for the
+                    // queries that carry no edges - so this still headlines the
+                    // animation studio on a node whose studios arrived unordered.
+                    media.studioCredits.firstOrNull()?.let { studio ->
+                        HeroChip(
+                            icon = AppVectorIcons.Studio,
+                            label = studio.name,
+                            // Null id, null tap: a credit AniList gave no id for
+                            // cannot be opened, and a chip that looks tappable and
+                            // is not is worse than a plain one.
+                            onClick = studio.id?.let { id -> { onOpenStudio(id, studio.name) } }
+                        )
+                    }
+                    // The score is the number most people open a title to check, and
+                    // it lived half a page down in the Details card between "Source"
+                    // and "Popularity". It belongs in the lockup with the rest of the
+                    // "what is this" answers. `averageScore` is AniList's 0-100 mean,
+                    // which is already a percentage, so it is not rescaled here.
+                    media.averageScore?.let { score ->
+                        HeroChip(icon = AppVectorIcons.Star, label = "$score%")
                     }
                     HeroChip(
                         icon = AppVectorIcons.Info,
@@ -360,17 +389,44 @@ fun InfoHero(
  * over: the two are timed against each other by [DOCKED_BAR_AT] and [LOCKUP_FADE_FROM]
  * in `InfoMotion.kt`. `visible` is computed from a `derivedStateOf` at the call site,
  * so the crossing recomposes this bar once rather than on every scrolled frame.
+ *
+ * ## The title pill is a control, and it carries the two things this page lacked
+ *
+ * A thirteen-section page has no orientation and no way back. The pill is both: the
+ * label is a *button* that returns to the hero, and the same pill carries [progress]
+ * as a wash that fills from the left as the reader descends. Both live inside the one
+ * control rather than being added as a fourth floating element, because everything
+ * floating over this page already competes with the content behind it.
+ *
+ * The wash is `scaleX` on a full-size box, read inside `graphicsLayer`, so it is a
+ * draw-phase transform: the bar does not recompose on the frames the reader is
+ * scrolling - the same reason the hero's parallax is written the way it is. [progress]
+ * is a function rather than a value for the same reason the hero's `collapse` is one.
+ *
+ * ## The bug this replaces
+ *
+ * The title `Surface` took `weight(1f, fill = false)` and a `Spacer` then took
+ * `weight(1f)` *after* it, so two weighted children split the free width in half:
+ * the title was measured against roughly half the bar and ellipsized there no matter
+ * how much room the bar really had. On screen that was a long title cut to
+ * `MARRIAGETO...` with a third of the screen sitting empty beside it. With one
+ * weighted child the title still hugs its content (`fill = false`, so a short title's
+ * pill stays short) but is measured against every dp the controls are not using.
  */
 @Composable
 fun InfoFloatingBar(
     visible: Boolean,
     title: String,
+    progress: () -> Float,
+    onScrollToTop: () -> Unit,
     onOpenAniList: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val container = MaterialTheme.colorScheme.surfaceContainerHigh
     val onContainer = MaterialTheme.colorScheme.onSurface
+    val wash = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val pill = ExpressiveShapes.pill
 
     AnimatedVisibility(
         visible = visible,
@@ -391,25 +447,55 @@ fun InfoFloatingBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = ExpressiveShapes.pill,
+                shape = pill,
                 color = container,
                 shadowElevation = 6.dp,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clip(pill)
+                    // `onClickLabel` rather than a `contentDescription` on the icon:
+                    // the pill's own text is what should be announced, and the action
+                    // is what a screen reader needs said after it. Overwriting the
+                    // description with "Scroll to top" would replace the title.
+                    .clickable(onClickLabel = "Scroll to top", onClick = onScrollToTop)
+                    .testTag("info_bar_title")
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                )
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .graphicsLayer {
+                                scaleX = progress()
+                                transformOrigin = TransformOrigin(0f, 0.5f)
+                            }
+                            .background(wash)
+                    )
+                    Row(
+                        modifier = Modifier.padding(start = 9.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.ExpandLess,
+                            contentDescription = null,
+                            tint = onContainer,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(8.dp))
 
             Surface(
-                shape = ExpressiveShapes.pill,
+                shape = pill,
                 color = container,
                 shadowElevation = 6.dp
             ) {
@@ -478,7 +564,9 @@ private fun HeroIconButton(
 private fun HeroChip(
     icon: ImageVector,
     label: String,
-    accent: Boolean = false
+    accent: Boolean = false,
+    /** Non-null makes the chip a button, with a press spring and a brighter rim. */
+    onClick: (() -> Unit)? = null
 ) {
     val container = if (accent) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
@@ -490,7 +578,24 @@ private fun HeroChip(
     Surface(
         shape = ExpressiveShapes.pill,
         color = container,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (onClick != null) {
+                Color.White.copy(alpha = 0.34f)
+            } else {
+                Color.White.copy(alpha = 0.14f)
+            }
+        ),
+        modifier = if (onClick != null) {
+            // The border is brighter and the whole chip springs: over artwork, a
+            // tappable capsule has nothing else to distinguish it from the four
+            // facts beside it.
+            Modifier
+                .bouncyPress(pressedScale = 0.94f)
+                .clickable(onClick = onClick)
+        } else {
+            Modifier
+        }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),

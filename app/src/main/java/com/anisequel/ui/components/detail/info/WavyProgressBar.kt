@@ -32,12 +32,23 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  *
  * Hand-drawn rather than `LinearWavyProgressIndicator` - which this app *can*
  * reach, being on a Material 3 Expressive alpha - because the control on that page
- * is a wave whose height is the progress: the reference draws the first few
- * episodes as a taller swell and the track as the same wave at rest, and the M3
- * component's indeterminate amplitude, gap and wavelength parameters cannot
- * express "the wave you are standing on is the amount you have watched". The
- * geometry it shares with that idea lives in
- * [com.anisequel.domain.motion.WaveGeometry] so it can be tested.
+ * is a wave whose *height* is the progress: it rises as the reader works through
+ * the show and the part they have watched is the coloured part of it. The M3
+ * component's amplitude, gap and wavelength parameters describe an indeterminate
+ * wave with a separate determinate track, and cannot express "the wave you are
+ * standing on is the amount you have watched". The geometry it shares with that
+ * idea lives in [com.anisequel.domain.motion.WaveGeometry] so it can be tested.
+ *
+ * ## One wave, drawn twice
+ *
+ * The track and the fill are the *same* path, with the coloured part produced by a
+ * clip rather than by a second path. That is not an optimisation - building the
+ * fill as its own wave was a visible bug. It was given its own amplitude and its
+ * own (travelling) phase, so the coloured stretch sat at a different height from
+ * the track it was supposed to be the first part of: on screen it read as a short
+ * squiggle floating over the beginning of a longer one, and the round head that
+ * caps the fill landed off the curve it was capping. Sharing one path makes them
+ * the same curve by construction, so they cannot drift apart again.
  *
  * ## Motion
  *
@@ -93,44 +104,40 @@ fun WavyProgressBar(
         val maxAmplitude = size.height * MAX_AMPLITUDE_RATIO
         val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
 
-        // The track is the same wave at rest, so an untouched title still reads as
-        // a wave rather than as a different control.
-        drawPath(
-            path = wavePath(
-                width = size.width,
-                wavelength = wavelength,
-                amplitude = WaveGeometry.amplitude(maxAmplitude, progress = 0f),
-                phase = 0f,
-                midY = midY
-            ),
-            color = trackColor,
-            style = stroke
-        )
-
         // `fill.value` is read here, in the draw lambda: the animation redraws this
         // Canvas and nothing else.
         val filled = size.width * fill.value
-        if (filled <= 0.5f) return@Canvas
-
+        // The height the wave stands at is the reader's progress - at rest when
+        // nothing is watched, full height at the end - and both halves are drawn
+        // from this one amplitude, so the wave is continuous across the seam.
         val amplitude = WaveGeometry.amplitude(maxAmplitude, progress = fill.value)
         val phase = WaveGeometry.phase(cycle)
 
+        val wave = wavePath(
+            width = size.width,
+            wavelength = wavelength,
+            amplitude = amplitude,
+            phase = phase,
+            midY = midY
+        )
+
+        // The whole wave, in the track colour. Drawn even at zero progress: this is
+        // the wave an untouched title shows, and it is the same shape the fill will
+        // start eating into.
+        drawPath(path = wave, color = trackColor, style = stroke)
+
+        if (filled <= 0.5f) return@Canvas
+
+        // The first `filled` of the same path again, in the fill colour. A clip and
+        // not a second path, so the fill cannot drift away from the track: it is
+        // that curve, drawn twice.
         clipRect(right = filled) {
-            drawPath(
-                path = wavePath(
-                    width = filled,
-                    wavelength = wavelength,
-                    amplitude = amplitude,
-                    phase = phase,
-                    midY = midY
-                ),
-                color = waveColor,
-                style = stroke
-            )
+            drawPath(path = wave, color = waveColor, style = stroke)
         }
 
         // A round head on the leading edge, so the fill ends at a point rather
-        // than at wherever the sine happened to be when the clip cut it.
+        // than at wherever the sine happened to be when the clip cut it. Sampled
+        // from the same amplitude and phase as the path, so it sits on it.
         drawCircle(
             color = waveColor,
             radius = stroke.width / 2f,

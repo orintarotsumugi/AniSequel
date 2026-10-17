@@ -275,7 +275,23 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
-     * Fields for a related node, rendered in the card list.
+     * Fields for a related node, rendered in the card list and on the title page.
+     *
+     * **Shared by both queries that carry relations**, deliberately. The detail
+     * query used to carry its own, much thinner, relation node - `id`, `title`,
+     * `format`, `status`, `episodes` and the cover - which was enough for the
+     * poster-and-title card the title page drew and nothing else. So the one place
+     * in the app whose job is to show you the rest of a franchise could say what a
+     * related title was *called* and not when it aired, what it scored, or whether
+     * it is out yet: the same household facts its own hero chip spells out above.
+     *
+     * It is the same `Media` type, so the fix is the same field list rather than a
+     * second one - and a field list that exists twice is one that eventually
+     * forgets half a relation. The cost is bounded the way it is here on purpose:
+     * this runs once per *open* and over at most twelve nodes, unlike the list
+     * query, which asks it once per page of a user's whole list. Widening the
+     * list query's copy of this would be the expensive change, and is not what
+     * happened.
      */
     private const val RELATED_NODE_FIELDS = """
                 id
@@ -540,6 +556,80 @@ object GraphQLQueries {
     }
 
     /**
+     * One studio, and one page of everything it has worked on.
+     *
+     * ## Why this is `Studio.media` and not `Page.media`
+     *
+     * AniList's `Page.media` has no `studioId` argument - its documented filter
+     * list runs from `id` to `sort` and never mentions a studio - so the studio's
+     * own `media` connection is the only documented way to ask the question at
+     * all. Getting that wrong looks like a working feature until it is called: a
+     * `Page` query written with a studio filter is a **400**, not an empty page.
+     *
+     * ## Why `perPage` is a variable with a hard ceiling of 25
+     *
+     * 25 is the documented maximum on this connection (the root `Page` allows 50,
+     * which is where a copy-pasted page size would come from). Asking for more is
+     * another 400, so the ViewModel clamps rather than trusting its caller; the
+     * cap is asserted in `StudioQueryTest` for exactly that reason.
+     *
+     * ## Why the sort is `START_DATE_DESC` and not left to the server
+     *
+     * `Studio.media` has no default ordering worth relying on, and the screen
+     * draws *year shelves*, so the order it wants is by date, newest first. Titles
+     * with no start date have no documented position in that sort - the screen
+     * separates them into its own "TBA" shelf client side, because only the screen
+     * knows that a title with no date is the most interesting thing on the page
+     * rather than a sorting accident.
+     */
+    fun getStudioQuery(): String = """
+        query StudioWork(${'$'}id: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
+          Studio(id: ${'$'}id) {
+            id
+            name
+            isAnimationStudio
+            favourites
+            siteUrl
+            media(page: ${'$'}page, perPage: ${'$'}perPage, sort: [START_DATE_DESC]) {
+              nodes {
+    $STUDIO_MEDIA_FIELDS
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The fields one studio-page card draws, and nothing else.
+     *
+     * A studio can have hundreds of titles, and this document is fetched again for
+     * every page of them - so it is the *list* shape rather than the detail shape:
+     * no cast, no staff, no relations, no description. `startDate` and `seasonYear`
+     * are both here because the year shelf groups on the first and falls back to
+     * the second; `type` travels with each node because tapping a card opens the
+     * detail sheet, and an id without its namespace resolves to whatever AniList
+     * prefers (see `MediaCoverKey`).
+     */
+    private const val STUDIO_MEDIA_FIELDS = """
+                id
+                type
+                idMal
+                title { romaji english native userPreferred }
+                format
+                status
+                episodes
+                chapters
+                volumes
+                season
+                seasonYear
+                averageScore
+                popularity
+                siteUrl
+                startDate { year month day }
+                coverImage { extraLarge large color }
+    """
+
+    /**
      * The `Media` selection both forms of the detail query share.
      *
      * One constant rather than a second copy in the typed branch: the untyped and
@@ -555,11 +645,27 @@ object GraphQLQueries {
      *
      * `idMal` is kept because it is the field that distinguishes an entry from its
      * adult variant, and the parser already knows to drop one.
+     *
+     * The relation nodes interpolate [RELATED_NODE_FIELDS] rather than listing a
+     * handful of fields of their own - see that constant for what the title page's
+     * relation cards were unable to say before.
+     *
+     * `title` is selected here for a reason that is easy to miss: for a while it
+     * was not, on the assumption that the summary the sheet was opened from already
+     * had one. That holds for the dashboard, which folds this response into the list
+     * node with `withDetail` - and it does **not** hold for the profile, where the
+     * fetched detail *replaces* the activity row's node (`withSummaryProgress`
+     * returns the detail when the detail has an entry). Opening a title from an
+     * Activity row therefore rendered it as "Unknown Title" while its own studio,
+     * status, synopsis and cast arrived correctly beneath that heading, which read
+     * as a broken title page rather than as a missing field. A title is not optional
+     * on a node this app uses as a display record.
      */
     private val MEDIA_DETAIL_FIELDS = """
         id
         type
         idMal
+        title { romaji english native userPreferred }
         format
         status
         episodes
@@ -578,7 +684,7 @@ object GraphQLQueries {
         synonyms
         source
         description(asHtml: false)
-        studios(isMain: true) { nodes { id name isAnimationStudio } }
+        studios(perPage: 25) { edges { isMain node { id name isAnimationStudio } } }
         coverImage { extraLarge large color }
         bannerImage
         nextAiringEpisode { episode airingAt timeUntilAiring }
@@ -603,15 +709,7 @@ object GraphQLQueries {
         relations {
           edges {
             relationType
-            node {
-              id
-              type
-              title { romaji english native userPreferred }
-              format
-              status
-              episodes
-              coverImage { large color }
-            }
+            node { $RELATED_NODE_FIELDS }
           }
         }
         characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {

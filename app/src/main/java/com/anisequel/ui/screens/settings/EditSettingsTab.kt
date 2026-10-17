@@ -1,5 +1,12 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,6 +48,7 @@ import com.anisequel.data.repository.RefreshInterval
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.RedirectUrlHint
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.viewmodel.AuthUiState
@@ -157,16 +165,32 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
             }
         }
 
-        if (interval != RefreshInterval.DEFAULT) {
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsButton(
-                text = "Use AniSequel's default",
-                onClick = { scope.launch { refreshIntervalPreferences.reset() } },
-                icon = AppVectorIcons.Restore,
-                variant = SettingsButtonVariant.Text,
-                fillWidth = true,
-                testTag = "reset_refresh_interval_button"
-            )
+        // Shown only once the interval is something other than the default, so the
+        // card grows a button the moment a chip is chosen. A bare `if` did that by
+        // appearing fully drawn on the next frame and shoving the card's bottom edge
+        // down instantly; the spring expansion makes the row the thing that moves.
+        // `FastSpatialSize` rather than the `Int` token: `expandVertically` is typed
+        // on `FiniteAnimationSpec<IntSize>`, because what it animates is the row's
+        // measured height rather than a count. The `Int` token looks like the closer
+        // match and does not compile.
+        AnimatedVisibility(
+            visible = interval != RefreshInterval.DEFAULT,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
+                SettingsButton(
+                    text = "Use AniSequel's default",
+                    onClick = { scope.launch { refreshIntervalPreferences.reset() } },
+                    icon = AppVectorIcons.Restore,
+                    variant = SettingsButtonVariant.Text,
+                    fillWidth = true,
+                    testTag = "reset_refresh_interval_button"
+                )
+            }
         }
     }
 }
@@ -221,30 +245,41 @@ private fun RefreshIntervalChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val container = if (selected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    val content = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // These were four `if (selected)` reads, which made this the one control in
+    // Settings that snapped while everything around it travelled: the container, the
+    // label and the border all swapped on the frame of the tap. The colours ride the
+    // colour-effects spring and the border width the spatial one, because a width is
+    // geometry and geometry gets the spatial curve.
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_content"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (selected) 2.dp else 1.dp,
+        animationSpec = ExpressiveMotion.FastSpatialDp,
+        label = "refresh_chip_border_width"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_border_colour"
+    )
 
     Row(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)
             .border(
-                BorderStroke(
-                    width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outlineVariant
-                    }
-                ),
+                BorderStroke(width = borderWidth, color = borderColor),
                 shape = ExpressiveShapes.pill
             )
             .bouncyPress(pressedScale = 0.94f)

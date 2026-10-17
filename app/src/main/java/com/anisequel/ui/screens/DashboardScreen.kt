@@ -65,6 +65,15 @@ fun DashboardScreen(
     onOpenSettings: (ViewerProfile?) -> Unit,
     onSignInAgain: () -> Unit = {},
     onOpenProfile: (ViewerProfile?) -> Unit = {},
+    /**
+     * Opens a studio's page from the credits on a title the sheet is showing.
+     *
+     * The host owns this rather than the sheet: a studio is a route, and the sheet
+     * is a window over the dashboard - so this *closes* the sheet and navigates. A
+     * `ModalBottomSheet` is its own window and would otherwise keep floating over
+     * the page it navigated to, with the title the reader came from underneath it.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
     modifier: Modifier = Modifier
 ) {
@@ -383,14 +392,19 @@ fun DashboardScreen(
         // be told writes are unavailable while still being handed the tab that
         // writes - or the reverse, a live editor hidden behind a false flag.
         val canWrite = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
+        // One definition of "the sheet is closed", used by the dismiss gesture and by
+        // a tap on a studio credit. Written twice, the studio hop would have to
+        // remember all three of the ids the sheet keys off - and forgetting one
+        // re-opens the title it was showing the next time the sheet is dismissed.
+        val closeSheet: () -> Unit = {
+            selectedSequelId = null
+            selectedArrivingId = null
+            navigatedRelation = null
+        }
         SequelDetailSheet(
             subject = selectedSubject,
             sheetState = detailSheetState,
-            onDismiss = {
-                selectedSequelId = null
-                selectedArrivingId = null
-                navigatedRelation = null
-            },
+            onDismiss = closeSheet,
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
@@ -399,7 +413,11 @@ fun DashboardScreen(
             onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,
-            entryEditor = if (canWrite) dashboardViewModel else null
+            entryEditor = if (canWrite) dashboardViewModel else null,
+            onOpenStudio = { id, name ->
+                closeSheet()
+                onOpenStudio(id, name)
+            }
         )
     }
 }

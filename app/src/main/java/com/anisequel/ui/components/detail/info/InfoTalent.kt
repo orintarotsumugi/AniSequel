@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -38,11 +39,15 @@ import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaStaffEdge
 import com.anisequel.data.model.characterList
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.metaLabel
+import com.anisequel.data.model.posterColor
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.relatedAnime
 import com.anisequel.data.model.roleLabel
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabel
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
@@ -332,20 +337,28 @@ private fun RelationCard(
     edge: MediaRelationEdge,
     onOpen: (MediaNode) -> Unit
 ) {
-    Column(modifier = Modifier.width(132.dp)) {
+    val node = edge.node
+
+    Column(modifier = Modifier.width(RELATION_CARD_WIDTH)) {
         Box(
             modifier = Modifier
-                .width(132.dp)
-                .height(186.dp)
+                .width(RELATION_CARD_WIDTH)
+                .height(RELATION_POSTER_HEIGHT)
                 .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .clickable(onClick = { onOpen(edge.node) })
+                // Tinted with the poster's own dominant colour until the art loads,
+                // the same way the hero does: a grey rectangle tells the reader
+                // nothing about which relation they are waiting on.
+                .background(
+                    node.posterColor.toCoverColorOrNull()
+                        ?: MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+                .clickable(onClick = { onOpen(node) })
                 .bouncyPress(pressedScale = 0.97f)
-                .testTag("info_relation_${edge.node.id}")
+                .testTag("info_relation_${node.id}")
         ) {
             AsyncImage(
-                model = edge.node.coverImage?.bestUrl,
-                contentDescription = edge.node.displayName,
+                model = node.posterUrl,
+                contentDescription = node.displayName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize()
             )
@@ -355,17 +368,78 @@ private fun RelationCard(
                     .align(Alignment.TopStart)
                     .padding(6.dp)
             )
+            // Drawn over the artwork rather than in the text stack below: the
+            // score is the fact that decides whether a reader taps a *related*
+            // title they have never heard of, and it belongs where the eye already
+            // is. It is also the one number AniList gives that the poster cannot.
+            node.averageScore?.let { score ->
+                ScoreBadge(
+                    score = score,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = edge.node.displayName,
+            text = node.displayName,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+        // `metaLabel` is the whole point of the widened relation query - see
+        // [com.anisequel.data.model.metaLabel]. Before it, this row was the poster
+        // and the name and nothing else.
+        Text(
+            text = edge.metaLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.testTag("info_relation_meta_${node.id}")
+        )
     }
 }
+
+/**
+ * A related title's community score, over its own artwork.
+ *
+ * Deliberately *not* the accent colour the relation pill uses: the pill labels the
+ * row and the badge is a number off AniList, and tinting both with the same colour
+ * would make the score read as another label rather than as a value.
+ */
+@Composable
+private fun ScoreBadge(
+    score: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = Color.Black.copy(alpha = 0.62f),
+        modifier = modifier
+    ) {
+        Text(
+            text = "$score%",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+        )
+    }
+}
+
+/**
+ * The relation card's width and poster height.
+ *
+ * Wider than the 132dp it used to be, because the card grew the metadata line under
+ * the name and a line that always ellipsizes is not data. The ratio is kept from the
+ * old card.
+ */
+private val RELATION_CARD_WIDTH = 144.dp
+
+private val RELATION_POSTER_HEIGHT = 202.dp
 
 /** A capsule label laid over artwork - a cast role, a crew position, a relation. */
 @Composable

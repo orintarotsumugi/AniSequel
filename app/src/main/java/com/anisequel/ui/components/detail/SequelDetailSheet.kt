@@ -88,6 +88,17 @@ fun SequelDetailSheet(
      */
     onOpenMedia: (MediaNode) -> Unit = {},
     /**
+     * Opens a studio's page from the credits on this title.
+     *
+     * Hosted by the caller rather than by this sheet, because a studio is a
+     * *destination* and the sheet is a window over whatever opened it: the host
+     * closes the sheet and navigates, so that returning lands on the title the
+     * reader came from rather than on a sheet floating over a screen it does not
+     * belong to. A `ModalBottomSheet` lives in its own window and would otherwise
+     * stay drawn on top of the studio page.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /**
      * Read/write access to the viewer's own entry, or null when the sheet is
      * read-only.
      *
@@ -235,6 +246,7 @@ fun SequelDetailSheet(
                         onAddToWatching = onAddToWatching,
                         onClose = handleDismiss,
                         onOpenMedia = onOpenMedia,
+                        onOpenStudio = onOpenStudio,
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
                         bottomContentPadding = navClearance

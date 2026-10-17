@@ -1,7 +1,9 @@
 package com.anisequel.ui.components.detail.info
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.StudioCredit
 import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.formatLabel
@@ -45,11 +49,15 @@ import com.anisequel.data.model.releaseLabel
 import com.anisequel.data.model.seasonLabel
 import com.anisequel.data.model.sourceLabel
 import com.anisequel.data.model.statusLabel
+import com.anisequel.data.model.studioCredits
 import com.anisequel.data.model.synopsis
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
 import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
@@ -183,10 +191,26 @@ fun InfoSynopsisCard(
         raw?.takeIf { it.isNotBlank() }?.let { AniListMarkdownParser.parse(it) } ?: emptyList()
     }
     val plain = media.synopsis
-    var isExpanded by remember(media.id) { mutableStateOf(false) }
+
+    // `rememberSaveable`, not `remember`, and that is the whole point: this card is a
+    // `LazyColumn` item, so scrolling past it disposes it. A plain `remember` meant
+    // that expanding a long synopsis, reading on and coming back up reopened it
+    // collapsed - the card silently undid the one control it has. The `LazyColumn`
+    // keeps a disposed item's saved state under its key, so the choice survives the
+    // round trip the same way the entrance animation's "already played" flag does.
+    var isExpanded by rememberSaveable(media.id) { mutableStateOf(false) }
 
     InfoCard(
-        modifier = modifier.testTag("info_synopsis_card"),
+        modifier = modifier
+            // The synopsis is the one card on this page whose *height* changes in
+            // front of the reader, and it used to change in one frame: the text
+            // jumped, the page jumped with it, and the button the reader just pressed
+            // moved out from under their finger. Springing the size instead keeps the
+            // control under the finger and reads as the card opening. A size-animating
+            // modifier takes an `IntSize` spec, so this is the `FastSpatialSize` token
+            // - the same physics `AnimatedVisibility`'s expand/shrink uses.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+            .testTag("info_synopsis_card"),
         title = "Synopsis",
         icon = AppVectorIcons.SourceBook
     ) {
@@ -262,15 +286,29 @@ fun InfoSynopsisCard(
  * columns on a 360dp phone - "WINTER 2012" and "187472" both need the full quarter
  * width and neither fits it - and the cramped grid was the reason the previous Specs
  * tab wrapped half its values onto a second line at random.
+ *
+ * The `FlowRow` for the studio credits needs the same opt-in as the chip cards
+ * above, and it is annotated here rather than file-wide so that a function which
+ * stops using an experimental layout API stops carrying the promise that it does.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InfoSpecsCard(
     media: MediaNode,
     isDetailLoading: Boolean,
+    /**
+     * Opens the page for one of the credited studios.
+     *
+     * Every credit is drawn, not just the animation studio: AniList answers
+     * `studios` with the publishers and licensors alongside the studio that made
+     * the thing, and the page used to ask for the main ones only and print them as
+     * a comma-joined string - which hid the rest of the credits *and* made the ones
+     * it did show un-openable.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    val studioNames = media.studios?.nodes?.mapNotNull { it.name?.takeIf { name -> name.isNotBlank() } }
-        ?: emptyList()
+    val studios = media.studioCredits
 
     val facts = buildList {
         if (media.isManga) {
@@ -299,7 +337,7 @@ fun InfoSpecsCard(
         // that can be known-absent rather than not-yet-arrived - and showing
         // "Loading production details…" *underneath* a grid of real facts read as
         // though the whole card was still filling in.
-        if (studioNames.isEmpty() && isDetailLoading) {
+        if (studios.isEmpty() && isDetailLoading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ExpressiveLoadingIndicator(modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(10.dp))
@@ -309,18 +347,22 @@ fun InfoSpecsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else if (studioNames.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        } else if (studios.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Studio",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = studioNames.joinToString(", "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.testTag("info_studio_row")
+                ) {
+                    studios.forEach { credit ->
+                        StudioCreditChip(credit = credit, onOpenStudio = onOpenStudio)
+                    }
+                }
             }
         }
 
@@ -584,6 +626,68 @@ fun InfoParentCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+/**
+ * One credited studio, as a capsule that opens its page.
+ *
+ * Two weights rather than two rows: the studios AniList flags `isMain` are the ones
+ * that made the title and are drawn filled, and the publishers, licensors and
+ * producers in the same connection are drawn quieter. Splitting them into sections
+ * would need names for the halves - AniList does not say which is which - and the
+ * page would be inventing a taxonomy to avoid a colour.
+ *
+ * A credit with no id is drawn as a plain capsule rather than removed: the name is
+ * still part of the answer to "who made this", it just cannot be followed.
+ */
+@Composable
+private fun StudioCreditChip(
+    credit: StudioCredit,
+    onOpenStudio: (Int, String?) -> Unit
+) {
+    val openable = credit.id != null
+    val container = if (credit.isMain) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val content = if (credit.isMain) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = container,
+        modifier = Modifier
+            .then(if (openable) Modifier.bouncyPress(pressedScale = 0.94f) else Modifier)
+            .clickable(enabled = openable) {
+                credit.id?.let { id -> onOpenStudio(id, credit.name) }
+            }
+            .testTag("info_studio_${credit.name}")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Studio,
+                contentDescription = null,
+                tint = content.copy(alpha = 0.8f),
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = credit.name,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (credit.isMain) FontWeight.Bold else FontWeight.Medium,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

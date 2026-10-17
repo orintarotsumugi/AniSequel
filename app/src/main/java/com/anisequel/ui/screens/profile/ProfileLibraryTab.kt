@@ -59,6 +59,7 @@ import com.anisequel.data.model.isManga
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -684,7 +685,19 @@ fun ProfileLibraryTab(
                     isFavourite = entry.media.id in favouriteIds,
                     modifier = Modifier
                         .widthIn(max = ProfileMaxContentWidth)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        // Filtering, sorting and searching all rewrite this grid in
+                        // place, so without this every poster jumped to its new cell
+                        // on the frame the choice was made. `animateItem` slides the
+                        // survivors on the spatial spring and fades the ones the new
+                        // filter removed, which is what makes a filter feel like a
+                        // rearrangement rather than a redraw. Spring tokens, not
+                        // durations, for the reason the rest of the app uses them.
+                        .animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        ),
                     onClick = { onOpenDetail(entry.media) }
                 )
             }

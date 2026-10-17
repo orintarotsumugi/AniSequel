@@ -10,6 +10,7 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 
@@ -75,6 +76,23 @@ interface AniListRepository {
      * opens, and asking for them up front makes AniList fail on large lists).
      */
     suspend fun getMediaDetail(mediaId: Int, mediaType: String? = null): Result<MediaNode>
+
+    /**
+     * One studio, with one page of everything it worked on.
+     *
+     * Reached by tapping a studio name anywhere it is drawn - the title page's
+     * credits, its hero chip, or another studio page - so it is deliberately not
+     * viewer-scoped: a studio is public data, and the page works signed out, in
+     * demo mode and on somebody else's profile.
+     *
+     * Returns the studio node itself rather than a wrapped page type, because the
+     * page of titles *is* a field of that node ([StudioNode.media]); a second type
+     * holding the same thing would be one more place for `hasNextPage` to be
+     * computed differently. "Is there another page" is answered by whether a full
+     * page came back, which is how the activity feed already decides it.
+     */
+    suspend fun getStudio(studioId: Int, page: Int): Result<StudioNode> = unsupported("getStudio")
+
     suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry>
     suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> = unsupported("addToWatching")
 
@@ -209,3 +227,14 @@ interface AniListRepository {
  */
 private fun unsupported(operation: String): Nothing =
     throw UnsupportedOperationException("AniListRepository does not serve $operation")
+
+/**
+ * How many titles one studio page asks for.
+ *
+ * **25 is AniList's documented maximum on `Studio.media`** - not a preference, and
+ * not the root `Page` query's 50, which is where a copy-pasted page size comes
+ * from. Asking for 50 there is a 400 on the whole document, so the size lives in
+ * one named place that both the request and the "is there another page" test
+ * read, rather than as a literal at each site.
+ */
+const val STUDIO_PAGE_SIZE = 25

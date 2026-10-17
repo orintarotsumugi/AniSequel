@@ -1,8 +1,11 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -189,6 +192,14 @@ fun UserProfileScreen(
      * what it wants to happen.
      */
     onOpenTierList: () -> Unit = {},
+    /**
+     * Opens a studio's page from the credits on a title the sheet is showing.
+     *
+     * A callback for the same reason [onOpenTierList] is: the screen holds no
+     * `NavController`. The sheet's own close comes first - see the call site - so
+     * the studio page is not covered by a window that belongs to this one.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     onSignInAgain: () -> Unit = {},
     /**
      * The tab the screen opens on.
@@ -410,7 +421,11 @@ fun UserProfileScreen(
             onAddToWatching = {},
             onLoadDetail = { id, type -> activityViewModel.loadDetail(id, type) },
             isDetailLoading = detailLoading,
-            canWriteToAniList = false
+            canWriteToAniList = false,
+            onOpenStudio = { id, name ->
+                selectedMedia = null
+                onOpenStudio(id, name)
+            }
         )
     }
 
@@ -486,7 +501,24 @@ private fun ProfileTabsContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (state.isRefreshing) {
+        // The refresh spinner is ~32dp of height that the tab below has to make room
+        // for, and it used to appear and vanish with a bare `if`: a silent background
+        // refresh therefore snapped every tab up and down by that height twice per
+        // round trip. `expandVertically`/`shrinkVertically` grow and give back the bar's
+        // own measured height on the spatial spring, so the content beneath it travels
+        // rather than jumping, and the spinner fades in alongside it rather than
+        // popping into existence.
+        // `FastSpatialSize`, not the `Int` token: `expandVertically` is typed on
+        // `FiniteAnimationSpec<IntSize>` (it animates a measured height, not a
+        // count), and the two are not interchangeable - the compiler rejects the
+        // `Int` one outright.
+        AnimatedVisibility(
+            visible = state.isRefreshing,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
             ProfileRefreshBar()
         }
 

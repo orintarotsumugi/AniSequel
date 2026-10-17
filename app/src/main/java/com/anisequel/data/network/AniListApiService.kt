@@ -15,6 +15,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
+import com.anisequel.data.model.StudioData
 import com.anisequel.data.model.ToggleLikeData
 import com.anisequel.data.model.UserByNameData
 import com.anisequel.data.model.UserOverviewData
@@ -69,6 +70,19 @@ interface AniListApiService {
     suspend fun getMediaDetail(
         @Body request: GraphQLRequest
     ): GraphQLResponse<MediaDetailData>
+
+    /**
+     * One studio and one page of its work.
+     *
+     * The same `POST /` as everything else, with a different document - AniList is
+     * a single GraphQL endpoint, so the queries are told apart by what they ask
+     * for rather than by their path.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getStudio(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<StudioData>
 
     /**
      * Cover art for many media in one round trip.

@@ -15,6 +15,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
+import kotlinx.coroutines.launch
 
 /**
  * The anime Info page: one scroll of cards under a hero that gets out of the way.
@@ -90,6 +92,15 @@ fun AnimeInfoPage(
      * own subject and the same page renders the new title.
      */
     onOpenMedia: (MediaNode) -> Unit = {},
+    /**
+     * Opens the page for one of the studios credited on this title.
+     *
+     * Takes the studio's AniList **id** as well as its name: the page it opens is
+     * fetched by id, and the name is only there so the destination's bar has a
+     * title on its first frame instead of an empty space. A credit AniList gave no
+     * id for is drawn as plain text rather than as a button that cannot work.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the sheet, because the capsule's other destination disposes this
@@ -116,6 +127,33 @@ fun AnimeInfoPage(
     val showFloatingBar by remember {
         derivedStateOf { collapse.value > DOCKED_BAR_AT }
     }
+
+    // How much of the page is behind the reader, as a 0..1 share, for the docked
+    // bar's title pill to fill with. Read only inside that pill's `graphicsLayer`, so
+    // this recomputes during a scroll without recomposing anything - the same bargain
+    // `collapse` above makes.
+    //
+    // Measured in *items scrolled*, plus how far into the first visible one the
+    // reader is, rather than in pixels: the page's items differ in height by an order
+    // of magnitude (a 340dp hero against a one-line alternative-title row), so a
+    // pixel fraction would sit still across the hero and then race through the cards.
+    // `visibleItemsInfo.first().size` is the height of the item being scrolled out,
+    // which is the divisor that makes the offset mean "how far into this item".
+    val readProgress = remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            if (total <= 1) {
+                1f
+            } else {
+                val itemHeight = (info.visibleItemsInfo.firstOrNull()?.size ?: 1).coerceAtLeast(1)
+                val scrolled = listState.firstVisibleItemIndex +
+                    (listState.firstVisibleItemScrollOffset.toFloat() / itemHeight)
+                (scrolled / (total - 1)).coerceIn(0f, 1f)
+            }
+        }
+    }
+    val scope = rememberCoroutineScope()
 
     // Read once, before the list, because a section that decides for itself that it
     // has nothing to show cannot also be the thing that decides not to take up a
@@ -152,7 +190,8 @@ fun AnimeInfoPage(
                     relationLabel = sequel?.relationLabel,
                     collapse = { collapse.value },
                     onOpenCover = { showCover = true },
-                    onClose = onClose
+                    onClose = onClose,
+                    onOpenStudio = onOpenStudio
                 )
             }
 
@@ -195,6 +234,7 @@ fun AnimeInfoPage(
                 InfoSpecsCard(
                     media = media,
                     isDetailLoading = isDetailLoading,
+                    onOpenStudio = onOpenStudio,
                     modifier = Modifier.infoSection(5)
                 )
             }
@@ -277,6 +317,12 @@ fun AnimeInfoPage(
         InfoFloatingBar(
             visible = showFloatingBar,
             title = media.displayName,
+            progress = { readProgress.value },
+            // `animateScrollToItem` rather than `scrollToItem`: the whole point of the
+            // control is that the reader is deep in the page and does not want to
+            // fling their way back, so the return should be one motion they can
+            // follow rather than a jump cut.
+            onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
             onOpenAniList = openOnAniList,
             onClose = onClose,
             modifier = Modifier.align(Alignment.TopCenter)

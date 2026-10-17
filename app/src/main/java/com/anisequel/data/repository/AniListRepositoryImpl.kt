@@ -13,6 +13,7 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListApiService
@@ -467,6 +468,35 @@ class AniListRepositoryImpl(
             node
         }
     }
+
+    /**
+     * One page of a studio's work.
+     *
+     * Deliberately **not** cached, unlike [getMediaDetail]. That cache exists
+     * because the same title is opened repeatedly and its cast is expensive; a
+     * studio page is paged through once in a sitting and then abandoned, and pages
+     * of it would accumulate in memory to answer a question nobody asks twice in a
+     * session. The coalescer still deduplicates a double tap on the same studio,
+     * which is the burst that actually happens.
+     *
+     * `perPage` is [STUDIO_PAGE_SIZE] and not a caller's choice: it is AniList's
+     * documented maximum on this connection, and a larger value fails the whole
+     * document with a 400 rather than trimming the page.
+     */
+    override suspend fun getStudio(studioId: Int, page: Int): Result<StudioNode> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.getStudioQuery(),
+                variables = mapOf(
+                    "id" to studioId,
+                    "page" to page.coerceAtLeast(1),
+                    "perPage" to STUDIO_PAGE_SIZE
+                )
+            ),
+            apiService::getStudio
+        ).map {
+            it.studio.require("That studio is no longer on AniList.")
+        }
 
     override suspend fun getMediaCovers(
         keys: List<MediaCoverKey>

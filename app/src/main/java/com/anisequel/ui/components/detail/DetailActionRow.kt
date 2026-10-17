@@ -35,6 +35,12 @@ import com.anisequel.ui.components.expressive.bouncyPress
  * It sits in the page's own scroll rather than pinned to the bottom of the sheet,
  * because the sheet's bottom edge belongs to the capsule that switches between the
  * page and the entry editor - two floating bars over one page is one too many.
+ *
+ * The row is one action or two, and which one it is depends on the **subject** rather
+ * than on the reader's session: a recommendation from the dashboard has a sequel to
+ * offer, while an arriving row or an activity entry is a show that is already on
+ * somebody's list, so there is nothing to add. When there is nothing to add the row
+ * does not stretch its one button to fill the space - see the note on the button.
  */
 @Composable
 fun DetailActionRow(
@@ -60,7 +66,15 @@ fun DetailActionRow(
                 }
             },
             modifier = Modifier
-                .weight(1f)
+                // **Weighted only when it shares the row.** It used to hold
+                // `weight(1f)` unconditionally, so a title with no quick-add drew a
+                // single bordered button across the full width of the page - which
+                // reads as a primary call to action for what is a link out to
+                // AniList, and as a row that failed to lay out rather than as a row
+                // with one control in it. The case is not rare: opening a title from
+                // an Activity row has no sequel to add, because the show is already
+                // on that person's list.
+                .then(if (sequel != null) Modifier.weight(1f) else Modifier)
                 .height(44.dp)
                 .bouncyPress(pressedScale = 0.96f),
             shape = MaterialTheme.shapes.small

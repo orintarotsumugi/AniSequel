@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -97,6 +98,11 @@ object AppVectorIcons {
     val List = Icons.AutoMirrored.Filled.List
     val OpenInBrowser = Icons.Default.OpenInBrowser
     val OpenInNew = Icons.AutoMirrored.Filled.OpenInNew
+
+    // The title page's one-tap "copy the AniList link" action. Named for the thing
+    // the control does rather than for the glyph, so it survives a redraw; a chain
+    // link is the one pictogram that means "this is a URL" without a word.
+    val CopyLink = Icons.Default.Link
     val Visibility = Icons.Default.Visibility
     val Play = Icons.Default.PlayArrow
     val Trailer = AppCustomVectors.TrailerPlay

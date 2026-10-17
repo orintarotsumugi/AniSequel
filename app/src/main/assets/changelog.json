@@ -1,6 +1,71 @@
 {
   "versions": [
     {
+      "version": "1.3.1",
+      "entries": [
+        {
+          "title": "Studios open: every credit is now a page you can follow",
+          "detail": "A studio name on a title page used to be text and nothing else. Every credit is now a chip, and tapping one opens that studio - its name, whether it animates or publishes, how many people have favourited it, and everything AniList credits it with, shelved by year so a filmography reads as a history instead of one endless column. Announced work gets its own shelf at the top, where a title with no date would otherwise be sorted to the bottom. Tap a poster to open that title, hold it to see the artwork on its own."
+        },
+        {
+          "title": "Every studio on a title, not only the main one",
+          "detail": "The title page asked AniList for its main studios only, so the publishers, licensors and producers filed in the same connection were never fetched - and the names it did show were printed as one comma-joined line. AniList answers studios with both a flat list and an edges list that says which credit is the title's own, so the page now asks for both, draws every credit as a chip, and fills the ones that actually made the show. A name with no id is still shown, because it is still part of the answer to who made this - it just cannot be followed."
+        },
+        {
+          "title": "Spoilers reveal and hide on a button instead of any tap",
+          "detail": "A revealed spoiler closed again on any tap at all, which made the block unusable while reading: a thumb resting on the card hid the text, and a link inside a spoiler could not be opened because the tap that reached it was swallowed by the toggle. The reveal is its own control now, the text underneath behaves like any other paragraph, and an explicit Hide closes it - which is also the only thing on screen that says a spoiler can be closed."
+        },
+        {
+          "title": "The progress wave is one wave again",
+          "detail": "The coloured part of Watching Progress was drawn as its own wave, with its own height and its own moving phase, so it floated above the track it was supposed to be the beginning of - a short squiggle over a longer one, with its round head off the curve entirely. The fill is now the same path as the track, clipped to the watched part, so the two cannot drift apart: one curve, the first stretch of it coloured in."
+        },
+        {
+          "title": "Titles opened from a profile no longer say Unknown Title",
+          "detail": "Opening a title from an Activity row showed a page titled Unknown Title with the right studio, status, synopsis and cast underneath it. The title page's request never asked AniList for a title, which went unnoticed on the dashboard because that path merges the response into the list entry it already had - the profile path replaces it, so there was nothing left to print. The request asks for the title now, and a test pins it."
+        },
+        {
+          "title": "The AniList button stops stretching across the page",
+          "detail": "When a title had nothing to add - a show you are already tracking, or one opened from your activity - the action row drew a single bordered button the full width of the screen, which reads as the page's main call to action rather than as one of two controls. It takes half the row when it shares it, and its natural width when it is alone."
+        },
+        {
+          "title": "Your score, in the artwork header",
+          "detail": "The score was half a page down in the Details card, between Source and Popularity, while the header already answered how long a title is, what it is and whether it is out. It now sits in the same chip row as a percentage."
+        },
+        {
+          "title": "Back works after tapping twice",
+          "detail": "Tapping the profile button, the gear, a face in a profile's Social tab or the tier list twice in a row pushed a second copy of the same screen onto the back stack. Every copy looks identical, so Back appeared to do nothing until the duplicates ran out, and each one held a ViewModel and its own scroll position alive behind it. Those hops are single-top now: a repeat tap is a no-op."
+        },
+        {
+          "title": "Settings tabs move",
+          "detail": "Switching between Info, Theme and Edit replaced the page in a single frame, so a tap on the tab bar looked like nothing had happened until the heading was read. The three cross over on the shared springs, and the refresh-interval chips and the reset button no longer snap: their colours and border spring, and the reset row grows into place."
+        },
+        {
+          "title": "A refresh no longer jerks the profile",
+          "detail": "The spinner that appears while a profile reloads popped into existence and shoved every tab down by its own height, then vanished and pulled them back. It now springs open and shut, and a library grid slides its posters to their new cells when you change the type, filter, sort or search instead of redrawing them in place."
+        },
+        {
+          "title": "Related titles now tell you what they are",
+          "detail": "The row of related titles drew a poster, a relation label and a name, because the title page asked AniList for a short list of fields for each one - while the rest of the app was already asking for the whole record. So a prequel, a sequel or a side story could be named and nothing else: not when it aired, not how long it is, not what it scored, and not whether it is out yet. Each card now shows the format, the episode count, the year and a score badge, and says when a title is still upcoming or airing now."
+        },
+        {
+          "title": "The docked title bar stopped cutting your title short",
+          "detail": "Once the artwork had scrolled away, the bar that takes over at the top of the title page cut long names down to a handful of characters - MARRIAGETO... - with a third of the screen sitting empty beside them, because the title was measured against half the bar instead of all of it. It now uses every dp the two controls are not using, so a long name reads in full."
+        },
+        {
+          "title": "Tap the title bar to jump back to the top",
+          "detail": "The title page is one long scroll of cards, and there was no way back to the top of it other than flinging. The title in the docked bar is now a button that returns you to the artwork, and the same pill fills from the left as you read, so a thirteen-card page tells you where you are and gets you out."
+        },
+        {
+          "title": "Copy a title's AniList link",
+          "detail": "Extras could share a title into another app but could not put its link on your clipboard, which is what you want for pasting into a note, a message you are already writing, or a browser. There is a Copy link row now, and it confirms the copy on the row itself - Android only draws its own Copied message from Android 13, and this app still runs on Android 12."
+        },
+        {
+          "title": "The synopsis opens instead of jumping",
+          "detail": "Read more and Show less resized the story card in a single frame, so the text, the card and the button you had just pressed all moved at once and the control slid out from under your finger. The card now springs open and shut, and a synopsis you expanded stays expanded when you scroll away and come back instead of quietly collapsing behind you."
+        }
+      ]
+    },
+    {
       "version": "1.3.0",
       "entries": [
         {

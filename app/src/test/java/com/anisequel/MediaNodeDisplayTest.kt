@@ -1,13 +1,16 @@
 package com.anisequel
 
+import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRanking
+import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.alternativeTitleRows
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
+import com.anisequel.data.model.metaLabel
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.watchFraction
 import org.junit.Assert.assertEquals
@@ -252,6 +255,98 @@ class MediaNodeDisplayTest {
         assertTrue(media.alternativeTitleRows.isEmpty())
     }
 
+    // ---- metaLabel -------------------------------------------------------------------
+
+    /**
+     * The relation row's second line.
+     *
+     * This is the only fact the title page's relation cards gained, and it is the end
+     * of a chain - the query asks for the fields, `MediaNode` holds them, and this line
+     * is what a reader actually sees. The mistake it exists to prevent is the one it
+     * was written for: a card that says a related title's *name* and nothing that would
+     * help anybody decide whether to open it.
+     */
+    @Test
+    fun `a relation's meta line carries its format, length and year`() {
+        assertEquals(
+            "TV · 12 eps · 2024",
+            edge(episodes = 12, seasonYear = 2024).metaLabel
+        )
+    }
+
+    /**
+     * "1 eps" is the kind of detail that makes a whole row look machine-generated, and
+     * a film is the common single-episode relation.
+     */
+    @Test
+    fun `a single episode is not pluralised`() {
+        assertEquals(
+            "Movie · 1 ep · 1995",
+            edge(format = "MOVIE", episodes = 1, seasonYear = 1995).metaLabel
+        )
+    }
+
+    /**
+     * A zero episode count is AniList saying it does not know, not that the title has no
+     * episodes - so it is dropped rather than printed. Same rule as the progress card.
+     */
+    @Test
+    fun `a zero episode count is dropped rather than printed`() {
+        assertEquals("TV · 2024", edge(episodes = 0, seasonYear = 2024).metaLabel)
+    }
+
+    /**
+     * An unannounced title has no season and often no count, and the line still has to
+     * say something useful rather than collapsing to an empty string - which is what an
+     * unguarded `joinToString` over three nullables produces.
+     */
+    @Test
+    fun `a relation with nothing but a format still has a line`() {
+        assertEquals("ONA", edge(format = "ONA", status = null).metaLabel)
+    }
+
+    /**
+     * The year prefers `seasonYear` and falls back to the start date.
+     *
+     * AniList sets the season on anything it has scheduled, and an older title often
+     * arrives with a full start date and no season - a card that showed no year for
+     * those would look broken next to one that did.
+     */
+    @Test
+    fun `the year falls back to the start date when the season is missing`() {
+        assertEquals("TV · 1998", edge(seasonYear = null, startYear = 1998).metaLabel)
+    }
+
+    /**
+     * Status is news or it is noise: a sequel that has not started is the exact case
+     * this row exists for, while a finished one is described by its year already.
+     */
+    @Test
+    fun `an upcoming relation says so and a finished one does not`() {
+        assertEquals(
+            "TV · 12 eps · 2025 · Upcoming",
+            edge(status = "NOT_YET_RELEASED", episodes = 12, seasonYear = 2025).metaLabel
+        )
+        assertEquals(
+            "TV · 12 eps · 2024",
+            edge(status = "FINISHED", episodes = 12, seasonYear = 2024).metaLabel
+        )
+    }
+
+    /**
+     * The format and the status are spelled by the shared derivations, so the row can
+     * never print the raw AniList enum next to a cleaned-up hero chip.
+     */
+    @Test
+    fun `the line is spelled for a reader and not in API vocabulary`() {
+        val label = edge(format = "TV_SHORT", status = "RELEASING", episodes = 12).metaLabel
+
+        assertTrue(label, label.startsWith("TV Short"))
+        assertTrue(label, label.contains("Airing"))
+        assertFalse(label, label.contains("TV_SHORT"))
+        assertFalse(label, label.contains("RELEASING"))
+    }
+
     // ---- helpers --------------------------------------------------------------------
 
     private fun node(
@@ -267,5 +362,28 @@ class MediaNodeDisplayTest {
         mediaListEntry = watched?.let { SimpleMediaListEntry(progress = it) },
         rankings = rankings,
         synonyms = synonyms
+    )
+
+    /**
+     * A relation edge carrying only the fields `metaLabel` reads, so a test that fails
+     * here fails on the derivation rather than on the fixture.
+     */
+    private fun edge(
+        format: String? = "TV",
+        status: String? = "FINISHED",
+        episodes: Int? = null,
+        seasonYear: Int? = null,
+        startYear: Int? = null
+    ): MediaRelationEdge = MediaRelationEdge(
+        relationType = "SEQUEL",
+        node = MediaNode(
+            id = 2,
+            type = "ANIME",
+            format = format,
+            status = status,
+            episodes = episodes,
+            seasonYear = seasonYear,
+            startDate = startYear?.let { FuzzyDate(year = it) }
+        )
     )
 }
