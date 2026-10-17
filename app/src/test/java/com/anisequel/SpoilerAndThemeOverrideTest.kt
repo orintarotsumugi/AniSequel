@@ -51,74 +51,58 @@ class SpoilerAndThemeOverrideTest {
     ).readText()
 
     /**
-     * The source of the one declaration that starts with [marker].
+     * The source of the one top-level declaration that starts with [marker].
      *
-     * Cut at the next **column-0** line, which is where the next top-level
-     * declaration begins. Cutting at a blank line instead does not work: a Kotlin
-     * body routinely contains one, and a chip whose signature is separated from its
-     * `Surface(` by a blank line would slice down to sixteen lines and miss every
-     * line the assertions are about - the test would then fail on correct code.
+     * Cut at the first `\n}`. The closing brace of a top-level declaration is the
+     * only one at column 0, because everything nested inside it is indented, and
+     * that single observation replaces every fancier rule tried before it.
      *
-     * Anything indented belongs to this declaration and stays in the slice, so a
-     * `wrapContentWidth()` inside some unrelated composable further down the file
-     * cannot satisfy an assertion about the chip.
+     * Rejected on the way here, each wrong in a way worth recording:
+     *
+     * - `substringAfter(marker)` alone runs to end-of-file, so a
+     *   `wrapContentWidth()` in some unrelated composable further down satisfies an
+     *   assertion about the chip. A test that passes while the bug is still present
+     *   is worse than no test at all.
+     * - Cutting at a blank line: a Kotlin body routinely contains one.
+     * - Cutting at the next line at column 0: the `) {` closing a multi-line
+     *   signature is also at column 0, and stopping there left sixteen lines - the
+     *   parameter list - so every assertion failed on correct code.
+     * - Cutting at the next line that opens a declaration, first with a large
+     *   `Regex` and then with a predicate function. The regex had to spell a
+     *   comment opener and a closer using backslashes inside a Kotlin string, in a
+     *   file that already holds raw strings containing comment delimiters further
+     *   down: two spellings of one hazardous construct in one file, and the
+     *   compiler disagreed about where the class ended.
      */
-    private fun declarationStartingAt(source: String, marker: String): String {
-        val lines = source.lines()
-        val start = lines.indexOfFirst { it.contains(marker) }
-        assertTrue("the test source is missing `$marker` entirely", start >= 0)
-
-        // The declaration runs until the next one begins. Not simply "the next line
-        // at column 0": the `) {` closing a multi-line signature is also at column 0,
-        // and stopping there would slice the chip down to its parameter list and
-        // fail every assertion on correct code.
-        val end = (start + 1 until lines.size)
-            .firstOrNull { startsNextDeclaration(lines[it]) }
-            ?: lines.size
-
-        return lines.subList(start, end).joinToString("\n")
-    }
+    private fun declarationStartingAt(source: String, marker: String): String =
+        source.substringAfter(marker).substringBefore("\n}")
 
     /**
-     * Whether [line] ends the current declaration and begins the next one.
+     * The source of the one top-level declaration that starts with [marker].
      *
-     * Three shapes count, all at column 0:
-     * - `/**` - the KDoc of the **next** declaration. It ends the slice because
-     *   that KDoc describes the *next* thing, and searching it as if it were this
-     *   declaration's body is how a comment that happens to mention `clickable`
-     *   ends up satisfying an assertion that the renderer has no tap target.
-     * - `@Composable` and friends - an annotation on the next declaration.
-     * - a keyword that opens a declaration.
+     * Cut at the first `\n}`. The closing brace of a top-level declaration is the
+     * only one at column 0, because everything nested inside it is indented, and
+     * that one observation replaces every fancier rule tried before it.
      *
-     * Written as plain string tests rather than one large `Regex` on purpose. A
-     * regex here has to spell `/*` and `*/` as `\\/\\*` and `\\*\\/`, which is both
-     * unreadable and a hazard: this file already contains raw strings holding
-     * comment delimiters further down, and the lexer confusion that causes is
-     * exactly the kind of thing that costs a CI cycle to find.
+     * Rejected on the way here, each wrong in a way worth recording:
+     *
+     * - `substringAfter(marker)` alone runs to end-of-file, so a
+     *   `wrapContentWidth()` in some unrelated composable further down satisfies an
+     *   assertion about the chip. A test that passes while the bug is still present
+     *   is worse than no test at all.
+     * - Cutting at a blank line: a Kotlin body routinely contains one.
+     * - Cutting at the next line at column 0: the `) {` closing a multi-line
+     *   signature is also at column 0, and stopping there left sixteen lines - the
+     *   parameter list - and failed every assertion on correct code.
+     * - Cutting at the next line that opens a declaration, first as a large
+     *   `Regex` and then as a predicate function. The regex had to spell a comment
+     *   opener and a closer with backslashes inside a Kotlin string, in a file that
+     *   already holds raw strings containing comment delimiters further down. Two
+     *   spellings of one hazardous construct in one file, and the compiler
+     *   disagreed about where the class ended.
      */
-    private fun startsNextDeclaration(line: String): Boolean {
-        if (line.isEmpty() || line.startsWith(" ") || line.startsWith("\t")) return false
-        if (line.startsWith("/**")) return true
-        if (line.startsWith("@")) return true
-
-        // Step past any modifiers, then the next word has to open a declaration.
-        // `private fun foo()` -> [private, fun, foo] -> "fun". The `) {` that ends a
-        // multi-line signature -> [")", "{"] -> ")" -> false, which is the case that
-        // a plain "starts with a keyword" test would get wrong.
-        val words = line.split(' ', '(', ':').filter { it.isNotEmpty() }
-        val afterModifiers = words.dropWhile { MODIFIERS.contains(it) }
-        return afterModifiers.isNotEmpty() && DECLARATION_KEYWORDS.contains(afterModifiers.first())
-    }
-
-    private val DECLARATION_KEYWORDS = setOf(
-        "fun", "val", "var", "class", "object", "interface",
-        "sealed", "data", "enum", "typealias", "companion"
-    )
-
-    /** A `private`/`internal`/... prefix in front of the keyword. */
-    private val MODIFIERS = setOf(
-        "private", "internal", "public", "protected", "override", "abstract", "open"
-    )
+    private fun declarationStartingAt(source: String, marker: String): String =
+        source.substringAfter(marker).substringBefore("\n}")
 
     // ---- the spoiler ------------------------------------------------------------
 
