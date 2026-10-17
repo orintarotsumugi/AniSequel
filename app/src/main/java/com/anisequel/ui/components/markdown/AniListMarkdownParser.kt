@@ -885,7 +885,7 @@ object AniListMarkdownParser {
                         InlineToken.Link(
                             label = "",
                             url = targetUrl,
-                            nested = listOf(InlineToken.Image(imgUrl, alt))
+                            children = listOf(InlineToken.Image(imgUrl, alt))
                         )
                     )
                 }
