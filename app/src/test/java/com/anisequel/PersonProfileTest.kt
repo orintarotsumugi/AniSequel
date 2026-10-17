@@ -251,6 +251,14 @@ class PersonProfileTest {
             "Staff One",
             loaded(store).name
         )
+
+        // Released rather than left hanging. `runTest` fails on a coroutine still
+        // suspended when the body returns, and the character request is parked on
+        // this gate for the whole test. Letting it land also shows the guard holding
+        // for the id-sharing case and not only the replace-with-a-different-id one.
+        characterGate.complete(CharacterProfile(id = 1, name = MediaName(full = "Character One")))
+        runCurrent()
+        assertEquals("Staff One", loaded(store).name)
     }
 
     /**
