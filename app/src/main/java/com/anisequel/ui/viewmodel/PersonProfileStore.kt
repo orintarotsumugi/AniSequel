@@ -91,7 +91,7 @@ class PersonProfileStore(
     fun openStaff(id: Int, name: String? = null) = open(PersonKind.STAFF, id, name)
 
     private fun open(kind: PersonKind, id: Int, name: String?) {
-        if (pending == (kind to id)) return
+        if (pending == kind to id) return
         pending = kind to id
         _state.value = PersonProfileState.Loading(kind, name)
 
@@ -121,7 +121,7 @@ class PersonProfileStore(
 
             // The guard. A response for a sheet the reader has already replaced is
             // dropped rather than painted over whatever they are looking at now.
-            if (pending != (kind to id)) return@launch
+            if (pending != kind to id) return@launch
             pending = null
 
             _state.value = result.fold(
