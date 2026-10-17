@@ -41,6 +41,8 @@ import com.anisequel.ui.components.FilterSortSheet
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.StatsBanner
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.toDetailMedia
@@ -75,9 +77,22 @@ fun DashboardScreen(
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
+    /**
+     * The connection the cast and crew rows open a profile with.
+     *
+     * Null on the demo route, and deliberately so: a host with no repository draws
+     * the cards as captions rather than as buttons that open a sheet which can only
+     * report a failure. The demo has no characters to look up, and a button that
+     * always fails is the dead control this feature replaced.
+     */
+    repository: com.anisequel.data.repository.AniListRepository? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
+
+    // The person whose profile is open, and the callbacks the cast and crew rows
+    // open it with. Null repository - the demo route - draws captions, not buttons.
+    val profiles = rememberPersonProfileHost(repository)
     val filterCriteria by dashboardViewModel.filterCriteria.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -417,7 +432,15 @@ fun DashboardScreen(
             onOpenStudio = { id, name ->
                 closeSheet()
                 onOpenStudio(id, name)
-            }
+            },
+            onOpenCharacter = profiles.onOpenCharacter,
+            onOpenStaff = profiles.onOpenStaff
         )
     }
+
+    // A sibling of the detail sheet, not a child: a `ModalBottomSheet` lives in its
+    // own window, so one drawn from inside another covers it. A tap on the titles
+    // row routes into the sheet's own relation navigation, which is how you walk
+    // from a cast member to the next title without stacking a third window.
+    profiles.Sheet { appearance -> navigatedRelation = appearance.toMediaNode() }
 }

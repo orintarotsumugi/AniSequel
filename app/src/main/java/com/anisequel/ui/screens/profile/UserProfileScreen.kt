@@ -65,10 +65,8 @@ import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.components.detail.AnimeDetailSubject
-import com.anisequel.ui.components.detail.PersonProfileSheet
-import com.anisequel.ui.viewmodel.currentState
-import com.anisequel.ui.viewmodel.rememberPersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -423,12 +421,12 @@ fun UserProfileScreen(
         }
     }
 
-    // The person whose profile is open. A sibling of the detail sheet rather than a
-    // child of it: a `ModalBottomSheet` lives in its own window, so one drawn from
-    // inside another covers it, and a reader who tapped a face in the cast would find
-    // themselves unable to get back.
-    val personProfiles = rememberPersonProfileStore(repository)
-    val personProfileState = personProfiles.currentState()
+    // The person whose profile sheet is opened from the cast and crew rows.
+    //
+    // Passed in rather than reached for on a ViewModel: `UserOverviewViewModel` holds
+    // its repository privately, and a cast tap is a *read* belonging to whoever drew
+    // the sheet rather than to the profile loader.
+    val profiles = rememberPersonProfileHost(repository)
 
     // The activity row's detail sheet. A plain media subject: an activity entry
     // is a show the person already tracks, so it has no parent and nothing to
@@ -451,28 +449,17 @@ fun UserProfileScreen(
                 selectedMedia = null
                 onOpenStudio(id, name)
             },
-            onOpenCharacter = personProfiles::openCharacter,
-            onOpenStaff = personProfiles::openStaff
+            onOpenCharacter = profiles.onOpenCharacter,
+            onOpenStaff = profiles.onOpenStaff
         )
     }
 
-    // The person whose profile is open. A sibling of the detail sheet rather than a
-    // child of it: a `ModalBottomSheet` lives in its own window, so one drawn from
-    // inside another covers it.
-    personProfileState?.let { profile ->
-        PersonProfileSheet(
-            state = profile,
-            onDismiss = { personProfiles.close() },
-            onRetry = { personProfiles.retry() },
-            onOpenAppearance = { appearance ->
-                // Back to the title sheet underneath rather than stacking a third one:
-                // a profile's appearances row is how you walk from a cast member to the
-                // next season, and closing this leaves that title ready to open.
-                personProfiles.close()
-                selectedMedia = appearance.toMediaNode()
-            }
-        )
-    }
+    // A sibling of the detail sheet, not a child: a `ModalBottomSheet` lives in its
+    // own window, so one drawn from inside another covers it, and a reader who
+    // tapped a face in the cast would find themselves unable to get back. A tap on
+    // the titles row replaces the title underneath rather than stacking a third
+    // window - that row is how you walk from a cast member to the next season.
+    profiles.Sheet { appearance -> selectedMedia = appearance.toMediaNode() }
 
     // Both sheets are siblings of the tab content rather than children of a tab, for
     // the same reason: `AnimatedContent` composes the incoming tab alongside the

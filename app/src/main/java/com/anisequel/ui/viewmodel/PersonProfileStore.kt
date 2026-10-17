@@ -51,10 +51,33 @@ import kotlinx.coroutines.launch
  * outlived the screen that opened it.
  */
 class PersonProfileStore(
-    private val repository: AniListRepository,
-    private val isDemo: Boolean = false
+    /**
+     * Nullable because not every host has one.
+     *
+     * The demo dashboard runs on a fake repository with no characters in it, and a
+     * host with no repository at all should draw captions rather than buttons that
+     * open a sheet which can only say "failed". Screens gate their *callbacks* on
+     * this being non-null, so a null here is unreachable in practice - but the store
+     * still answers rather than throwing, because the alternative is a crash on a
+     * path a reader can reach.
+     */
+    private val repository: AniListRepository?,
+    private val isDemo: Boolean = false,
+    /**
+     * Where the fetches run.
+     *
+     * Injectable so a test can drive them with a `TestScope` and step the scheduler
+     * by hand. Without it the store owns a `Dispatchers.Default` scope that no test
+     * can advance, and the two behaviours that matter here - discarding a late
+     * response, and re-running a failed one - are both timing, so they would be
+     * untestable rather than merely awkward.
+     */
+    injectedScope: CoroutineScope? = null
 ) {
-    private val scope = CoroutineScope(SupervisorJob())
+    /** Whether [dispose] may cancel [scope] - i.e. whether this store made it. */
+    private val ownsScope = injectedScope == null
+
+    private val scope: CoroutineScope = injectedScope ?: CoroutineScope(SupervisorJob())
 
     private val _state = MutableStateFlow<PersonProfileState>(PersonProfileState.Closed)
     val state: StateFlow<PersonProfileState> = _state.asStateFlow()
@@ -80,14 +103,15 @@ class PersonProfileStore(
         _state.value = PersonProfileState.Loading(kind, name)
 
         scope.launch {
-            val result = if (isDemo) {
-                Result.failure<Any>(
+            val result = when {
+                isDemo -> Result.failure<Any>(
                     IllegalStateException("There is no ${kind.label()} to look up in the demo.")
                 )
-            } else if (kind == PersonKind.CHARACTER) {
-                repository.getCharacterProfile(id)
-            } else {
-                repository.getStaffProfile(id)
+                repository == null -> Result.failure<Any>(
+                    IllegalStateException("This screen has no AniList connection to look one up with.")
+                )
+                kind == PersonKind.CHARACTER -> repository.getCharacterProfile(id)
+                else -> repository.getStaffProfile(id)
             }
 
             // The guard. A response for a sheet the reader has already replaced is
@@ -132,7 +156,10 @@ class PersonProfileStore(
     /** Cancels anything in flight. Called when the composition that owns this goes. */
     fun dispose() {
         close()
-        scope.cancel()
+        // Only cancels a scope this store created. One handed in belongs to whoever
+        // made it - a `TestScope`, or a screen that outlives this store - and
+        // cancelling it here would take down work that is not this store's.
+        if (ownsScope) scope.cancel()
     }
 
     /**
@@ -149,36 +176,9 @@ class PersonProfileStore(
         if (this == PersonKind.CHARACTER) "character" else "person"
 }
 
-/**
- * Remembers a [PersonProfileStore] for the life of this composition.
- *
- * Cancelled on dispose, so a sheet that goes away mid-fetch stops caring about the
- * answer - which is also the answer to the guard above, because the response has
- * nowhere to publish to by then.
- */
-@Composable
-fun rememberPersonProfileStore(
-    repository: AniListRepository,
-    isDemo: Boolean = false
-): PersonProfileStore {
-    val store = remember(repository, isDemo) { PersonProfileStore(repository, isDemo) }
-    DisposableEffect(store) {
-        onDispose { store.dispose() }
-    }
-    return store
-}
-
-/**
- * The store's state, as Compose reads it.
- *
- * A wrapper so the screens that own a sheet do not each repeat the same
- * `collectAsState` line and its import.
- */
-@Composable
-fun PersonProfileStore.currentState(): PersonProfileState {
-    val value by this.state.collectAsState()
-    return value
-}
+// `rememberPersonProfileStore` and a `currentState()` composable wrapper used to
+// live here, one caller each. `PersonProfileHost` needs both and three screens do
+// not, so they moved there rather than staying as a second way in.
 
 /**
  * A [ProfileAppearance] as the media node the title detail sheet opens on.

@@ -44,7 +44,9 @@ import com.anisequel.domain.studio.StudioYearShelf
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.viewmodel.StudioViewModel
@@ -90,9 +92,20 @@ fun StudioScreen(
     initialName: String?,
     onNavigateBack: () -> Unit,
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /**
+     * The connection the cast and crew rows open a profile with.
+     *
+     * Nullable for the same reason as on the dashboard: a host with no repository
+     * draws the cards as captions rather than as buttons that can only fail.
+     */
+    repository: com.anisequel.data.repository.AniListRepository? = null,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsState()
+
+    // The person whose profile is open, and the callbacks the cast and crew rows
+    // open it with. Null repository draws captions, not buttons.
+    val profiles = rememberPersonProfileHost(repository)
     val detailNodes by viewModel.detailNodes.collectAsState()
     val loadingDetailIds by viewModel.loadingDetailIds.collectAsState()
 
@@ -286,7 +299,14 @@ fun StudioScreen(
             onOpenStudio = { id, studioName ->
                 selectedMedia = null
                 onOpenStudio(id, studioName)
-            }
+            },
+            onOpenCharacter = profiles.onOpenCharacter,
+            onOpenStaff = profiles.onOpenStaff
         )
     }
+
+    // A sibling of the detail sheet, not a child. A studio page's filmography is
+    // where you walked in from, so a tap on the titles row leaves you one step
+    // further along it rather than stacking a third window on top.
+    profiles.Sheet { appearance -> selectedMedia = appearance.toMediaNode() }
 }
