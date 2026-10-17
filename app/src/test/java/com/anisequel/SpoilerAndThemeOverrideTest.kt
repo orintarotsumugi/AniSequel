@@ -68,36 +68,57 @@ class SpoilerAndThemeOverrideTest {
         val start = lines.indexOfFirst { it.contains(marker) }
         assertTrue("the test source is missing `$marker` entirely", start >= 0)
 
-        // The declaration runs until the next *top-level declaration*, which is a
-        // line at column 0 opening with a keyword. Not simply "the next column-0
-        // line": the `) {` closing a multi-line signature is also at column 0, and
-        // stopping there would slice the chip down to its parameter list and fail
-        // every assertion on correct code.
-        val end = (start + 1 until lines.size).firstOrNull { i ->
-            TOP_LEVEL_DECLARATION.matches(lines[i])
-        } ?: lines.size
+        // The declaration runs until the next one begins. Not simply "the next line
+        // at column 0": the `) {` closing a multi-line signature is also at column 0,
+        // and stopping there would slice the chip down to its parameter list and
+        // fail every assertion on correct code.
+        val end = (start + 1 until lines.size)
+            .firstOrNull { startsNextDeclaration(lines[it]) }
+            ?: lines.size
 
         return lines.subList(start, end).joinToString("\n")
     }
 
     /**
-     * A line that ends the declaration and begins whatever follows it.
+     * Whether [line] ends the current declaration and begins the next one.
      *
-     * Three shapes, all at column 0:
-     * - `/**` - the KDoc of the **next** declaration. Included because that KDoc
-     *   describes the next thing and would otherwise be searched as if it were this
-     *   declaration's body, which is how a comment mentioning `clickable` ends up
-     *   satisfying an assertion that the renderer has no tap target.
+     * Three shapes count, all at column 0:
+     * - `/**` - the KDoc of the **next** declaration. It ends the slice because
+     *   that KDoc describes the *next* thing, and searching it as if it were this
+     *   declaration's body is how a comment that happens to mention `clickable`
+     *   ends up satisfying an assertion that the renderer has no tap target.
      * - `@Composable` and friends - an annotation on the next declaration.
-     * - a declaration keyword.
+     * - a keyword that opens a declaration.
      *
-     * Anchored with **no** leading-whitespace allowance, which is the point: an
-     * indented `@Composable` or `fun` inside a body must not match, or the slice
-     * stops partway through the declaration it was supposed to capture.
+     * Written as plain string tests rather than one large `Regex` on purpose. A
+     * regex here has to spell `/*` and `*/` as `\\/\\*` and `\\*\\/`, which is both
+     * unreadable and a hazard: this file already contains raw strings holding
+     * comment delimiters further down, and the lexer confusion that causes is
+     * exactly the kind of thing that costs a CI cycle to find.
      */
-    private val TOP_LEVEL_DECLARATION =
-        Regex("^(/\\*\\*|@|(?:private |internal |public |protected |override |abstract |open )*" +
-            "(fun|val|var|class|object|interface|sealed|data|enum|typealias|companion)\\b).*")
+    private fun startsNextDeclaration(line: String): Boolean {
+        if (line.isEmpty() || line.startsWith(" ") || line.startsWith("\t")) return false
+        if (line.startsWith("/**")) return true
+        if (line.startsWith("@")) return true
+
+        // Step past any modifiers, then the next word has to open a declaration.
+        // `private fun foo()` -> [private, fun, foo] -> "fun". The `) {` that ends a
+        // multi-line signature -> [")", "{"] -> ")" -> false, which is the case that
+        // a plain "starts with a keyword" test would get wrong.
+        val words = line.split(' ', '(', ':').filter { it.isNotEmpty() }
+        val afterModifiers = words.dropWhile { MODIFIERS.contains(it) }
+        return afterModifiers.isNotEmpty() && DECLARATION_KEYWORDS.contains(afterModifiers.first())
+    }
+
+    private val DECLARATION_KEYWORDS = setOf(
+        "fun", "val", "var", "class", "object", "interface",
+        "sealed", "data", "enum", "typealias", "companion"
+    )
+
+    /** A `private`/`internal`/... prefix in front of the keyword. */
+    private val MODIFIERS = setOf(
+        "private", "internal", "public", "protected", "override", "abstract", "open"
+    )
 
     // ---- the spoiler ------------------------------------------------------------
 
