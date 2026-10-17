@@ -16,6 +16,7 @@ import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
+import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.StaffProfileData
@@ -69,7 +70,12 @@ class MediaListChunkWalkTest {
                             MediaListGroup(
                                 name = "Watching",
                                 status = "CURRENT",
-                                entries = listOf(MediaListEntryItem(id = chunk))
+                                entries = listOf(
+                                    // `media` is required on the entry, and the
+                                    // chunk id is the only identity these entries
+                                    // have in this fake, so it is both fields.
+                                    MediaListEntryItem(id = chunk, media = MediaNode(id = chunk))
+                                )
                             )
                         ),
                         hasNextChunk = chunk < 12
@@ -122,7 +128,12 @@ class MediaListChunkWalkTest {
                             MediaListGroup(
                                 name = "Watching",
                                 status = "CURRENT",
-                                entries = listOf(MediaListEntryItem(id = chunk))
+                                entries = listOf(
+                                    // `media` is required on the entry, and the
+                                    // chunk id is the only identity these entries
+                                    // have in this fake, so it is both fields.
+                                    MediaListEntryItem(id = chunk, media = MediaNode(id = chunk))
+                                )
                             )
                         ),
                         // Always another chunk: nothing short of the walk's own
