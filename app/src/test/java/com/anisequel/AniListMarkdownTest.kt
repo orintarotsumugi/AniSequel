@@ -736,7 +736,10 @@ class AniListMarkdownTest {
             .filterIsInstance<InlineToken.MediaLink>().single()
 
         assertEquals("https://anilist.co/anime/1", mediaLink.url)
-        assertEquals("anime", mediaLink.type)
+        // Uppercased by the parser, because `type` is what routes a tap to the
+        // right detail sheet and the GraphQL vocabulary is uppercase. Asserting
+        // the lowercase form here would pass against a value the app never uses.
+        assertEquals("ANIME", mediaLink.type)
         assertEquals("1", mediaLink.id)
     }
 
