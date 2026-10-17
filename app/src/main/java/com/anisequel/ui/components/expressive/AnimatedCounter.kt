@@ -69,7 +69,13 @@ fun AnimatedCounterText(
         // number and animate nothing but the slide.
         Text(
             text = "$animatedCount",
-            style = style,
+            // Tabular figures. The digits interpolate every frame of the spring,
+            // and with proportional figures the text's width changes with them -
+            // "111" measures narrower than "888" - so the counter's own box, and
+            // everything laid out beside it, was re-measured on every one of
+            // those frames. Equal-width digits make the roll cost what settled
+            // text costs.
+            style = style.copy(fontFeatureSettings = "tnum"),
             color = color,
             fontWeight = fontWeight
         )

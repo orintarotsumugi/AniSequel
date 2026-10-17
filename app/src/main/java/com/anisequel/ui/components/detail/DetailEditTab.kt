@@ -5,12 +5,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -164,7 +168,7 @@ internal fun DetailEditTab(
                 )
             ).fold(
                 onSuccess = { saved ->
-                    state.draft = saved.toDraft()
+                    state.markSaved(saved.toDraft())
                     state.statusMessage = "Saved to your AniList list"
                 },
                 onFailure = { state.statusMessage = it.message ?: "Couldn't save your changes." }
@@ -173,230 +177,270 @@ internal fun DetailEditTab(
         }
     }
 
+    // The fields scroll inside the tab, and the two actions are pinned below them.
+    //
+    // Both used to be one column inside the *sheet's* scroll, with the buttons as the
+    // form's last row - after Status, Progress, Score, both dates, Private and the
+    // status line. On a 640dp-tall screen that put "Save changes" roughly 170dp below
+    // the fold, so the first thing a reader who had just changed a score had to do was
+    // scroll to find the button that keeps it, and a form whose primary action is only
+    // reachable by scrolling reads as a form with no action at all. The pinned bar is
+    // drawn as the same outlined card as the rows above it (see [EditorCard]), because
+    // it is the last row of this form rather than a new kind of surface.
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Status.
-        Box {
-            EditorCard(
-                icon = AppVectorIcons.Info,
-                title = "Status",
-                subtitle = statusLabel(entryState.status, isManga),
-                onClick = { state.statusMenuOpen = true },
-                testTag = "edit_status_row"
-            )
-            DropdownMenu(
-                expanded = state.statusMenuOpen,
-                onDismissRequest = { state.statusMenuOpen = false }
-            ) {
-                ENTRY_STATUSES.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.labelFor(isManga)) },
-                        onClick = {
-                            state.statusMenuOpen = false
-                            state.draft = entryState.copy(status = option.apiValue)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Status.
+            Box {
+                EditorCard(
+                    icon = AppVectorIcons.Info,
+                    title = "Status",
+                    subtitle = statusLabel(entryState.status, isManga),
+                    onClick = { state.statusMenuOpen = true },
+                    testTag = "edit_status_row"
+                )
+                DropdownMenu(
+                    expanded = state.statusMenuOpen,
+                    onDismissRequest = { state.statusMenuOpen = false }
+                ) {
+                    ENTRY_STATUSES.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.labelFor(isManga)) },
+                            onClick = {
+                                state.statusMenuOpen = false
+                                state.draft = entryState.copy(status = option.apiValue)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Progress, hidden for a title that has not aired.
+            //
+            // Asking somebody how many episodes of something they have not seen,
+            // of something that does not exist yet, is not a useful question - and
+            // the slider is not a neutral one either: it opens on the episode
+            // count, invites a tap, and writes that number to AniList. A planner
+            // entry for a show two years out is the common case here, so this is
+            // the row most likely to be wrong rather than right.
+            //
+            // `hasAired` is deliberately about *AniList's* status and not the
+            // user's own `startedAt` date: someone who marks a show as started
+            // before it airs has an opinion about it, and hiding the row would then
+            // take away the one field they were reaching for.
+            if (!media.hasNotAired) {
+                EditorCard(
+                    icon = AppVectorIcons.BookmarkDone,
+                    title = "Progress",
+                    subtitle = if (totalUnits > 0) {
+                        "${entryState.progress} / $totalUnits"
+                    } else {
+                        "${entryState.progress}"
+                    },
+                    testTag = "edit_progress_row"
+                ) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                        if (totalUnits > 0) {
+                            Slider(
+                                value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
+                                onValueChange = {
+                                    state.draft = entryState.copy(progress = it.toInt())
+                                },
+                                valueRange = 0f..totalUnits.toFloat(),
+                                steps = (totalUnits - 1).coerceAtLeast(0),
+                                modifier = Modifier.testTag("edit_progress_slider")
+                            )
                         }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            StepButton(
+                                icon = AppVectorIcons.StepDown,
+                                contentDescription = "Decrease progress",
+                                testTag = "edit_progress_minus",
+                                onClick = {
+                                    state.draft = entryState.copy(
+                                        progress = (entryState.progress - 1).coerceAtLeast(0)
+                                    )
+                                }
+                            )
+                            Text(
+                                text = "${entryState.progress}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.testTag("edit_progress_value")
+                            )
+                            StepButton(
+                                icon = AppVectorIcons.StepUp,
+                                contentDescription = "Increase progress",
+                                testTag = "edit_progress_plus",
+                                onClick = {
+                                    val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
+                                    state.draft = entryState.copy(
+                                        progress = (entryState.progress + 1).coerceAtMost(ceiling)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Score, in the account's own scale and sent back unchanged. See
+            // `EntryDraft.score` for why it is not normalised to ten.
+            EditorCard(
+                icon = AppVectorIcons.Star,
+                title = "Score",
+                subtitle = "${formatScore(entryState.score)} / ${entryState.scoreMax}",
+                testTag = "edit_score_row"
+            ) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    Slider(
+                        value = entryState.score.coerceIn(0.0, entryState.scoreMax.toDouble()).toFloat(),
+                        onValueChange = { state.draft = entryState.copy(score = it.toDouble()) },
+                        valueRange = 0f..entryState.scoreMax.toFloat(),
+                        steps = (entryState.scoreMax - 1).coerceAtLeast(0),
+                        modifier = Modifier.testTag("edit_score_slider")
                     )
                 }
             }
-        }
 
-        // Progress, hidden for a title that has not aired.
-        //
-        // Asking somebody how many episodes of something they have not seen,
-        // of something that does not exist yet, is not a useful question - and
-        // the slider is not a neutral one either: it opens on the episode
-        // count, invites a tap, and writes that number to AniList. A planner
-        // entry for a show two years out is the common case here, so this is
-        // the row most likely to be wrong rather than right.
-        //
-        // `hasAired` is deliberately about *AniList's* status and not the
-        // user's own `startedAt` date: someone who marks a show as started
-        // before it airs has an opinion about it, and hiding the row would then
-        // take away the one field they were reaching for.
-        if (!media.hasNotAired) {
+            // The two dates. A date the viewer has not set reads as not set rather
+            // than as today, which is what makes clearing one meaningful.
+            DateRow(
+                label = "Start Date",
+                value = entryState.startedAt,
+                testTag = "edit_start_date_row",
+                onPick = { state.openDatePicker = DateField.START },
+                onClear = { state.draft = entryState.copy(startedAt = null) }
+            )
+            DateRow(
+                label = "Finish Date",
+                value = entryState.completedAt,
+                testTag = "edit_finish_date_row",
+                onPick = { state.openDatePicker = DateField.FINISH },
+                onClear = { state.draft = entryState.copy(completedAt = null) }
+            )
+
+            // Private entry.
             EditorCard(
-                icon = AppVectorIcons.BookmarkDone,
-                title = "Progress",
-                subtitle = if (totalUnits > 0) {
-                    "${entryState.progress} / $totalUnits"
-                } else {
-                    "${entryState.progress}"
-                },
-                testTag = "edit_progress_row"
+                icon = AppVectorIcons.Privacy,
+                title = "Private Entry",
+                subtitle = "Hidden from your public profile",
+                testTag = "edit_private_row"
             ) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
-                    if (totalUnits > 0) {
-                        Slider(
-                            value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
-                            onValueChange = {
-                                state.draft = entryState.copy(progress = it.toInt())
-                            },
-                            valueRange = 0f..totalUnits.toFloat(),
-                            steps = (totalUnits - 1).coerceAtLeast(0),
-                            modifier = Modifier.testTag("edit_progress_slider")
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        StepButton(
-                            icon = AppVectorIcons.StepDown,
-                            contentDescription = "Decrease progress",
-                            testTag = "edit_progress_minus",
-                            onClick = {
-                                state.draft = entryState.copy(
-                                    progress = (entryState.progress - 1).coerceAtLeast(0)
-                                )
-                            }
-                        )
-                        Text(
-                            text = "${entryState.progress}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.testTag("edit_progress_value")
-                        )
-                        StepButton(
-                            icon = AppVectorIcons.StepUp,
-                            contentDescription = "Increase progress",
-                            testTag = "edit_progress_plus",
-                            onClick = {
-                                val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
-                                state.draft = entryState.copy(
-                                    progress = (entryState.progress + 1).coerceAtMost(ceiling)
-                                )
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        // Score, in the account's own scale and sent back unchanged. See
-        // `EntryDraft.score` for why it is not normalised to ten.
-        EditorCard(
-            icon = AppVectorIcons.Star,
-            title = "Score",
-            subtitle = "${formatScore(entryState.score)} / ${entryState.scoreMax}",
-            testTag = "edit_score_row"
-        ) {
-            Column(modifier = Modifier.padding(top = 10.dp)) {
-                Slider(
-                    value = entryState.score.coerceIn(0.0, entryState.scoreMax.toDouble()).toFloat(),
-                    onValueChange = { state.draft = entryState.copy(score = it.toDouble()) },
-                    valueRange = 0f..entryState.scoreMax.toFloat(),
-                    steps = (entryState.scoreMax - 1).coerceAtLeast(0),
-                    modifier = Modifier.testTag("edit_score_slider")
+                Switch(
+                    checked = entryState.isPrivate,
+                    onCheckedChange = { checked ->
+                        state.draft = entryState.copy(isPrivate = checked)
+                    },
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .testTag("edit_private_switch")
                 )
             }
         }
 
-        // The two dates. A date the viewer has not set reads as not set rather
-        // than as today, which is what makes clearing one meaningful.
-        DateRow(
-            label = "Start Date",
-            value = entryState.startedAt,
-            testTag = "edit_start_date_row",
-            onPick = { state.openDatePicker = DateField.START },
-            onClear = { state.draft = entryState.copy(startedAt = null) }
-        )
-        DateRow(
-            label = "Finish Date",
-            value = entryState.completedAt,
-            testTag = "edit_finish_date_row",
-            onPick = { state.openDatePicker = DateField.FINISH },
-            onClear = { state.draft = entryState.copy(completedAt = null) }
-        )
-
-        // Private entry.
-        EditorCard(
-            icon = AppVectorIcons.Privacy,
-            title = "Private Entry",
-            subtitle = "Hidden from your public profile",
-            testTag = "edit_private_row"
+        // The action row, pinned below the fields.
+        //
+        // "Nothing to send" is a real state - it is the state the form is in from the
+        // moment it loads - so the Save button is disabled until the draft differs
+        // from the entry AniList confirmed, and the line above it says which state
+        // this is rather than leaving a dead button unexplained. Tapping Save on an
+        // untouched form used to send a whole entry snapshot back to AniList to
+        // change nothing.
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = CardDefaults.outlinedCardBorder(),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Switch(
-                checked = entryState.isPrivate,
-                onCheckedChange = { checked ->
-                    state.draft = entryState.copy(isPrivate = checked)
-                },
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .testTag("edit_private_switch")
-            )
-        }
-
-        state.statusMessage?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag("edit_status_message")
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedButton(
-                onClick = {
-                    val entryId = entryState.entryId ?: return@OutlinedButton
-                    state.isSaving = true
-                    state.statusMessage = null
-                    scope.launch {
-                        editor.delete(entryId).fold(
-                            onSuccess = {
-                                // Back to an entry that does not exist yet, so the
-                                // form is ready to create a fresh one rather than
-                                // showing the values that were just removed.
-                                state.cleared()
-                                state.statusMessage = "Removed from your list"
-                            },
-                            onFailure = {
-                                state.statusMessage =
-                                    it.message ?: "Couldn't remove this entry."
-                            }
-                        )
-                        state.isSaving = false
-                    }
-                },
-                enabled = !state.isSaving && entryState.entryId != null,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(46.dp)
-                    .testTag("edit_delete_button"),
-                shape = MaterialTheme.shapes.small
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Delete")
-            }
-
-            Button(
-                onClick = { persist(entryState) },
-                enabled = !state.isSaving,
-                modifier = Modifier
-                    .weight(1.3f)
-                    .height(46.dp)
-                    .testTag("edit_save_button"),
-                shape = MaterialTheme.shapes.small
-            ) {
-                if (state.isSaving) {
-                    // The contained loader, sized to the button, on the button's own
-                    // container colour - the same pairing `ExpressiveButtons` uses,
-                    // so a saving button looks like every other busy button in the
-                    // app rather than like a different control.
-                    ExpressiveContainedLoadingIndicator(
-                        modifier = Modifier.size(16.dp),
-                        containerColor = MaterialTheme.colorScheme.onPrimary,
-                        indicatorColor = MaterialTheme.colorScheme.primary
+                val actionHint = state.statusMessage
+                    ?: if (!state.hasUnsavedChanges) "No changes to save yet" else null
+                actionHint?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("edit_status_message")
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text("Save changes")
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val entryId = entryState.entryId ?: return@OutlinedButton
+                            state.isSaving = true
+                            state.statusMessage = null
+                            scope.launch {
+                                editor.delete(entryId).fold(
+                                    onSuccess = {
+                                        // Back to an entry that does not exist yet, so the
+                                        // form is ready to create a fresh one rather than
+                                        // showing the values that were just removed.
+                                        state.cleared()
+                                        state.statusMessage = "Removed from your list"
+                                    },
+                                    onFailure = {
+                                        state.statusMessage =
+                                            it.message ?: "Couldn't remove this entry."
+                                    }
+                                )
+                                state.isSaving = false
+                            }
+                        },
+                        enabled = !state.isSaving && entryState.entryId != null,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .testTag("edit_delete_button"),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text("Delete")
+                    }
+
+                    Button(
+                        onClick = { persist(entryState) },
+                        enabled = !state.isSaving && state.hasUnsavedChanges,
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(46.dp)
+                            .testTag("edit_save_button"),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        if (state.isSaving) {
+                            // The contained loader, sized to the button, on the button's own
+                            // container colour - the same pairing `ExpressiveButtons` uses,
+                            // so a saving button looks like every other busy button in the
+                            // app rather than like a different control.
+                            ExpressiveContainedLoadingIndicator(
+                                modifier = Modifier.size(16.dp),
+                                containerColor = MaterialTheme.colorScheme.onPrimary,
+                                indicatorColor = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Save changes")
+                    }
+                }
             }
         }
     }

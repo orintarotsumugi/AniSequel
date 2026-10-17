@@ -274,9 +274,11 @@ class UserOverviewJsonTest {
         // `Expected a string but was BEGIN_ARRAY`, and that exception leaves the
         // only call that loads a profile.
         val kurisu = parse<UserOverviewData>(capturedOverview).user!!.favourites!!.characters!!.nodes!![1]
+        val name = requireNotNull(kurisu.name)
+        val alternative = requireNotNull(name.alternative)
 
-        assertEquals(7, kurisu.name!!.alternative!!.size)
-        assertEquals("Christina", kurisu.name.alternative!![0])
+        assertEquals(7, alternative.size)
+        assertEquals("Christina", alternative[0])
     }
 
     @Test

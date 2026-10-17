@@ -2,6 +2,7 @@ package com.anisequel
 
 import com.anisequel.data.network.RequestCoalescer
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
@@ -18,6 +19,7 @@ import org.junit.Test
  * POSTs - and on AniList's degraded 30 req/min budget that is not a rounding
  * error, it is visible latency and 429s.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class RequestCoalescerTest {
 
     @Test

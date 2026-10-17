@@ -63,14 +63,17 @@ fun ThemePreviewCard(
     var isWatching by remember { mutableStateOf(false) }
 
     val statusColors = AniSequelTheme.statusColors
-    val activePaletteName = if (themeSettings.customColorHex != null) {
-        "Custom (${themeSettings.customColorHex})"
-    } else if (themeSettings.useDynamicColor) {
-        "Dynamic Wallpaper"
-    } else if (themeSettings.animeThemeActive && themeSettings.animeThemeColorHex != null) {
-        "Anime (${themeSettings.animeThemeColorHex})"
-    } else {
-        ThemePalette.fromStorage(themeSettings.paletteId).displayName
+    // Ordered the way `AniSequelTheme` resolves the scheme, so this names the colour
+    // source that is actually driving the app. It listed the custom hue above the
+    // wallpaper, and the two are independent preferences - a hue set before the switch
+    // was flipped stays set - so the pill used to label the card with a colour the app
+    // was not drawing.
+    val activePaletteName = when {
+        themeSettings.animeThemeActive && themeSettings.animeThemeColorHex != null ->
+            "Anime (${themeSettings.animeThemeColorHex})"
+        themeSettings.useDynamicColor -> "Dynamic Wallpaper"
+        themeSettings.customColorHex != null -> "Custom (${themeSettings.customColorHex})"
+        else -> ThemePalette.fromStorage(themeSettings.paletteId).displayName
     }
 
     val primary = MaterialTheme.colorScheme.primary

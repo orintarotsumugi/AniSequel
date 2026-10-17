@@ -3,8 +3,12 @@ package com.anisequel.ui.components.markdown
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -20,15 +24,18 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 
 /**
- * Stands in for an inline spoiler's characters where they cannot be revealed.
+ * Stands in for an inline spoiler's characters while it is hidden.
  *
  * One unit-width glyph, so the obscured run occupies roughly the width the real
- * text will when the paragraph is expanded and the sentence does not reflow. It
- * is *not* a box-drawing character: those are not guaranteed to render at a
- * consistent advance width across the app's font stack, and a spoiler block that
- * is subtly a different width after revealing is a visible jump.
+ * text will when it is revealed and the sentence does not reflow. It is *not* a
+ * box-drawing character: those are not guaranteed to render at a consistent
+ * advance width across the app's font stack, and a spoiler block that is subtly
+ * a different width after revealing is a visible jump.
  */
 private const val SPOILER_PLACEHOLDER = "▓"
+
+/** The click tag on an inline spoiler, so the reveal can name the run it opens. */
+private const val INLINE_SPOILER_TAG = "markdown_inline_spoiler_"
 
 /**
  * Builds an [AnnotatedString] from a list of [InlineToken]s with Material 3 styling
@@ -55,6 +62,23 @@ private const val SPOILER_PLACEHOLDER = "▓"
  * both instead of printing the inner source. A link nested inside another link is
  * not wrapped a second time - it is styled in place - so no two link annotations
  * ever overlap, which is the one shape that makes the framework pick arbitrarily.
+ *
+ * ## An inline spoiler reveals in place
+ *
+ * `~!...!~` in the middle of a sentence is the same token the block-level
+ * [RenderSpoilerBlock] handles, one paragraph down. The run is the tap target:
+ * an `AnnotatedString` cannot hold a chip, and a pill dropped mid-sentence would
+ * break the line it lives on, so the placeholder characters carry a
+ * [LinkAnnotation.Clickable] and open on the tap that lands on them.
+ *
+ * It used to be unrevealable, and the note here said why: "an `AnnotatedString`
+ * cannot be tapped, so it has nowhere to put a reveal". That stopped being true
+ * with `LinkAnnotation.Clickable`, and the cost of not noticing was that every
+ * plot point written inline in a review stayed covered for good - while a
+ * `~!...!~` block a line away, whose chip did reveal fine, sat right next to it.
+ * The reveal is per paragraph and saved, for the same reason the chip's is: a bio
+ * paragraph composed into a scrolling list is disposed when it leaves the
+ * viewport, and a reader who opened a spoiler has already chosen to read it.
  */
 @Composable
 fun buildInlineAnnotatedString(
@@ -63,8 +87,8 @@ fun buildInlineAnnotatedString(
 ): AnnotatedString {
     val primaryColor = MaterialTheme.colorScheme.primary
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest
-    val spoilerBackground = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
-    val spoilerColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val spoilerBackground = MaterialTheme.colorScheme.secondaryContainer
+    val spoilerColor = MaterialTheme.colorScheme.onSecondaryContainer
 
     val linkStyles = remember(primaryColor) {
         TextLinkStyles(
@@ -80,10 +104,29 @@ fun buildInlineAnnotatedString(
             style = SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)
         )
     }
+    // The obscured run wears the same pair of roles as `SpoilerChip`, so "this text
+    // is hidden by a spoiler" is one colour language in both places. It was drawn
+    // on `surfaceContainerHighest` before, which is also the code-run background:
+    // an inline spoiler and a `code` span looked like the same chip.
+    val spoilerStyles = remember(spoilerBackground, spoilerColor) {
+        TextLinkStyles(
+            style = SpanStyle(
+                background = spoilerBackground,
+                color = spoilerColor,
+                fontWeight = FontWeight.Medium
+            )
+        )
+    }
 
     val currentOnLinkClick = rememberUpdatedState(onLinkClick)
 
-    return remember(inlines, primaryColor, codeBackground, spoilerBackground, spoilerColor) {
+    // Which of this paragraph's inline spoilers the reader has opened, by index.
+    // `rememberSaveable`, for the reason `RenderSpoilerBlock` saves its one boolean:
+    // the paragraph is disposed with its LazyColumn item, and a reveal the reader
+    // chose must not be undone by scrolling past and back.
+    var revealedSpoilers by rememberSaveable { mutableStateOf(IntArray(0)) }
+
+    return remember(inlines, linkStyles, mentionStyles, codeBackground, spoilerStyles, revealedSpoilers) {
         buildAnnotatedString {
             appendTokens(
                 tokens = inlines,
@@ -91,12 +134,33 @@ fun buildInlineAnnotatedString(
                 linkStyles = linkStyles,
                 mentionStyles = mentionStyles,
                 codeBackground = codeBackground,
-                spoilerBackground = spoilerBackground,
-                spoilerColor = spoilerColor,
-                allowLinks = true
+                allowLinks = true,
+                spoilers = InlineSpoilers(
+                    styles = spoilerStyles,
+                    revealed = revealedSpoilers,
+                    onReveal = { index -> revealedSpoilers = revealedSpoilers + index }
+                )
             )
         }
     }
+}
+
+/**
+ * The state one [buildInlineAnnotatedString] call needs to hide and reveal its
+ * spoilers.
+ *
+ * [index] counts spoilers in reading order as [appendTokens] walks them, and the
+ * rebuilt string walks the same tokens in the same order, so "index 2" is the
+ * same plot twist in the reveal set and in the string that reads it. It is
+ * per-call rather than global because [AniListMarkdownParagraph] renders one
+ * paragraph's text runs as separate `Text`s, each with its own reveal set.
+ */
+private class InlineSpoilers(
+    val styles: TextLinkStyles,
+    val revealed: IntArray,
+    val onReveal: (Int) -> Unit
+) {
+    var index: Int = 0
 }
 
 /**
@@ -113,9 +177,8 @@ private fun AnnotatedString.Builder.appendTokens(
     linkStyles: TextLinkStyles,
     mentionStyles: TextLinkStyles,
     codeBackground: Color,
-    spoilerBackground: Color,
-    spoilerColor: Color,
-    allowLinks: Boolean
+    allowLinks: Boolean,
+    spoilers: InlineSpoilers
 ) {
     tokens.forEach { token ->
         when (token) {
@@ -131,17 +194,17 @@ private fun AnnotatedString.Builder.appendTokens(
             // as a deliberate emphasis against `Normal` while still staying a weight
             // the typeface can render rather than a synthetic embolden.
             is InlineToken.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
             }
 
             is InlineToken.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
             }
 
             is InlineToken.BoldItalic -> withStyle(
                 SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
             ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
             }
 
             // Underlined *and* coloured, for the same reason as bold above: an
@@ -152,11 +215,11 @@ private fun AnnotatedString.Builder.appendTokens(
             is InlineToken.Underline -> withStyle(
                 SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
             ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
             }
 
             is InlineToken.Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks)
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
             }
 
             is InlineToken.Code -> withStyle(
@@ -173,9 +236,8 @@ private fun AnnotatedString.Builder.appendTokens(
                 onLinkClick = onLinkClick,
                 mentionStyles = mentionStyles,
                 codeBackground = codeBackground,
-                spoilerBackground = spoilerBackground,
-                spoilerColor = spoilerColor,
-                allowLinks = allowLinks
+                allowLinks = allowLinks,
+                spoilers = spoilers
             )
 
             // The fallback for an AniList media link. `AniListMarkdownView`
@@ -191,9 +253,8 @@ private fun AnnotatedString.Builder.appendTokens(
                 onLinkClick = onLinkClick,
                 mentionStyles = mentionStyles,
                 codeBackground = codeBackground,
-                spoilerBackground = spoilerBackground,
-                spoilerColor = spoilerColor,
-                allowLinks = allowLinks
+                allowLinks = allowLinks,
+                spoilers = spoilers
             )
 
             is InlineToken.Mention -> {
@@ -220,23 +281,38 @@ private fun AnnotatedString.Builder.appendTokens(
                 }
             }
 
-            // An inline spoiler in a plain `AnnotatedString` cannot be tapped, so it has
-            // nowhere to put a reveal. It is drawn obscured rather than printed.
+            // The obscured run is the tap target, which is the whole reveal UX: a
+            // chip is not drawable in an `AnnotatedString`, and a pill dropped
+            // mid-sentence would break the line it lives on. The placeholders keep
+            // the run's shape while it is closed.
             //
-            // It used to append "[Spoiler: ${token.text}]", which is the exact
-            // opposite of hiding one: every spoiler written inline inside a
-            // paragraph - a plot point in a review, a twist in a recommendation -
-            // was rendered in full, in brackets, to anyone reading the bio. The
-            // placeholders are one per character so the surrounding sentence keeps
-            // its shape and does not reflow when the paragraph is expanded.
-            is InlineToken.Spoiler -> withStyle(
-                SpanStyle(
-                    background = spoilerBackground,
-                    color = spoilerColor,
-                    fontWeight = FontWeight.Medium
-                )
-            ) {
-                append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+            // It used to be unrevealable - drawn obscured, with no path to the text
+            // at all - so every spoiler written inline inside a paragraph was
+            // permanently hidden, while the block-level `~!...!~` chip a line away
+            // opened fine. (Before *that* it printed `[Spoiler: ...]` in full, which
+            // is the opposite failure.)
+            is InlineToken.Spoiler -> {
+                val index = spoilers.index++
+                if (spoilers.revealed.contains(index)) {
+                    append(token.text)
+                } else if (allowLinks) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "$INLINE_SPOILER_TAG$index",
+                            styles = spoilers.styles,
+                            linkInteractionListener = { spoilers.onReveal(index) }
+                        )
+                    ) {
+                        append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                    }
+                } else {
+                    // Inside a link label: two annotations over the same characters
+                    // is the one shape the framework resolves arbitrarily (see
+                    // `appendLink`), so it keeps the obscuring style and no tap.
+                    withStyle(spoilers.styles.style ?: SpanStyle()) {
+                        append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                    }
+                }
             }
         }
     }
@@ -250,21 +326,20 @@ private fun AnnotatedString.Builder.appendLink(
     onLinkClick: State<((String) -> Unit)?>,
     mentionStyles: TextLinkStyles,
     codeBackground: Color,
-    spoilerBackground: Color,
-    spoilerColor: Color,
-    allowLinks: Boolean
+    allowLinks: Boolean,
+    spoilers: InlineSpoilers
 ) {
     val labelTokens = children.ifEmpty { listOf(InlineToken.Plain(label)) }
     if (allowLinks) {
         withLink(link(url, styles, onLinkClick)) {
-            appendTokens(labelTokens, onLinkClick, styles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks = false)
+            appendTokens(labelTokens, onLinkClick, styles, mentionStyles, codeBackground, allowLinks = false, spoilers)
         }
     } else {
         // Already inside a link: keeping the styling but not a second annotation
         // means a nested label still reads as a link without two clickable ranges
         // overlapping over the same characters.
         withStyle(styles.style ?: SpanStyle()) {
-            appendTokens(labelTokens, onLinkClick, styles, mentionStyles, codeBackground, spoilerBackground, spoilerColor, allowLinks = false)
+            appendTokens(labelTokens, onLinkClick, styles, mentionStyles, codeBackground, allowLinks = false, spoilers)
         }
     }
 }

@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -156,15 +154,17 @@ fun SequelDetailSheet(
         onLoadDetail(subject.mediaId, subject.media.type)
         if (themeSettings.animeThemeActive) {
             val colorHex = media.posterColor ?: "#0057B7"
-            themePreferences.setAnimeThemeActive(true, colorHex)
-            if (themeSettings.animeThemeRetainColor) {
-                // "Retain" means the anime's colour becomes the app's accent, not
-                // just a glow around this sheet: persist it as a custom hue so the
-                // whole app - and the next launch - keeps it. There is an exit hatch:
-                // picking a palette or a hue in the Theme tab clears it, as does
-                // Reset appearance.
-                themePreferences.setCustomColorHex(colorHex)
-            }
+            // One call, one transaction, one recolour of the app.
+            //
+            // "Retain" means the anime's colour becomes the app's accent, not just a
+            // glow around this sheet: it is persisted as a custom hue so the whole
+            // app - and the next launch - keeps it. There is an exit hatch: picking a
+            // palette or a hue in the Theme tab clears it, as does Reset appearance.
+            themePreferences.setAnimeThemeActive(
+                active = true,
+                colorHex = colorHex,
+                retainColor = themeSettings.animeThemeRetainColor
+            )
         }
     }
 
@@ -237,10 +237,13 @@ fun SequelDetailSheet(
                 label = "detail_destination"
             ) { index ->
                 if (index == 1 && entryEditor != null) {
+                    // No `verticalScroll` here any more. The edit tab scrolls its own
+                    // fields so that its action row can stay pinned above the
+                    // navigation bar; scrolling at both levels would let the pinned row
+                    // scroll away, which is the thing the tab was restructured to stop.
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp)
                             .padding(top = 8.dp, bottom = navClearance)
                     ) {

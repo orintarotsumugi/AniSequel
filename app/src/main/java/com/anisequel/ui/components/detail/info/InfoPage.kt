@@ -195,7 +195,29 @@ fun AnimeInfoPage(
     // leaves a full 14dp hole in the page - and four of the sections here return
     // early for ordinary titles (no progress on an unstarted show, no staff, no
     // relations, no alternative titles). Hence the explicit `if` on each below.
-    val altTitles = media.alternativeTitleRows
+    //
+    // Every one of them in a single `remember(media)`, because every one is *derived*:
+    // these are extensions on `MediaNode` that walk, filter or sort a list, not fields.
+    // The page's body recomposes several times inside one open - the first frame, the
+    // `isDetailLoading` flip, the detail arriving, and the floating bar's visibility
+    // change - and each pass was rebuilding all of them, on frames the sheet was still
+    // animating. `weightedTags` sorts, `relatedMedia` filters, `characterList` maps
+    // edges; on a long-running show with a full cast that is the most expensive work
+    // the page did per pass, and none of it can change while `media` is the same
+    // object.
+    val sections = remember(media) {
+        InfoSections(
+            altTitles = media.alternativeTitleRows,
+            genres = media.genreList,
+            tags = media.weightedTags.mapNotNull { it.weightLabel() },
+            hasProgressCard = media.hasProgressCard,
+            hasRankings = media.hasRankings,
+            hasCast = media.characterList.isNotEmpty(),
+            hasRelations = media.relatedMedia.isNotEmpty(),
+            hasStaff = media.staffList.isNotEmpty()
+        )
+    }
+    val altTitles = sections.altTitles
 
     var showCover by remember(media.id) { mutableStateOf(false) }
     if (showCover) {
@@ -249,7 +271,7 @@ fun AnimeInfoPage(
                 )
             }
 
-            if (media.hasProgressCard) {
+            if (sections.hasProgressCard) {
                 item(key = "progress") {
                     InfoProgressCard(media = media, modifier = Modifier.infoSection(3))
                 }
@@ -272,7 +294,7 @@ fun AnimeInfoPage(
                 )
             }
 
-            val genres = media.genreList
+            val genres = sections.genres
             if (genres.isNotEmpty()) {
                 item(key = "genres") {
                     InfoChipCard(
@@ -284,7 +306,7 @@ fun AnimeInfoPage(
                 }
             }
 
-            val tags = media.weightedTags.mapNotNull { it.weightLabel() }
+            val tags = sections.tags
             if (tags.isNotEmpty()) {
                 item(key = "tags") {
                     InfoChipCard(
@@ -306,7 +328,7 @@ fun AnimeInfoPage(
             // The one section the reference has no equivalent for, and the reason it
             // is kept: an all-time AniList ranking is a fact about this title that
             // nothing else on the page can state.
-            if (media.hasRankings) {
+            if (sections.hasRankings) {
                 item(key = "rankings") {
                     AnimeRankingsSection(media = media, modifier = Modifier.infoSection(9))
                 }
@@ -316,7 +338,7 @@ fun AnimeInfoPage(
             // is deliberate: they are not cards, so they draw their own heading inset
             // and their own `LazyRow` content padding, and adding the page inset on top
             // would double it. See `InfoTalent.kt`.
-            if (media.characterList.isNotEmpty()) {
+            if (sections.hasCast) {
                 item(key = "cast") {
                     InfoCharactersSection(
                         media = media,
@@ -326,7 +348,7 @@ fun AnimeInfoPage(
                 }
             }
 
-            if (media.relatedMedia.isNotEmpty()) {
+            if (sections.hasRelations) {
                 item(key = "relations") {
                     InfoRelationsSection(
                         media = media,
@@ -336,7 +358,7 @@ fun AnimeInfoPage(
                 }
             }
 
-            if (media.staffList.isNotEmpty()) {
+            if (sections.hasStaff) {
                 item(key = "staff") {
                     InfoStaffSection(
                         media = media,
@@ -370,6 +392,31 @@ fun AnimeInfoPage(
         )
     }
 }
+
+/**
+ * The page's section decisions, taken once per [MediaNode].
+ *
+ * Every field is a derived read - the getters this replaces all walk something - and
+ * the page's body recomposes several times while the sheet opens. Nothing here can
+ * change while the node it was derived from is the same object, so the work belongs
+ * in one `remember(media)`, not in the item-listing lambda that runs again on each
+ * pass. The booleans are stored rather than the lists they were read from because
+ * that is all the page does with them.
+ *
+ * Types are all plain: `List<Pair<String, String>>` for the title rows, `List<String>`
+ * for the chips, and flags for the sections whose *contents* (not their presence) are
+ * the section's own business.
+ */
+private data class InfoSections(
+    val altTitles: List<Pair<String, String>>,
+    val genres: List<String>,
+    val tags: List<String>,
+    val hasProgressCard: Boolean,
+    val hasRankings: Boolean,
+    val hasCast: Boolean,
+    val hasRelations: Boolean,
+    val hasStaff: Boolean
+)
 
 /**
  * The page's inset and its place in the entrance stagger, in one call.

@@ -280,9 +280,24 @@ data class MediaNode(
         characters = detail.characters ?: characters,
         staff = detail.staff ?: staff,
         relations = detail.relations ?: relations,
+        // Field-wise, and `extraLarge` is the field this was missing.
+        //
+        // It used to copy `detail.coverImage.large` and nothing else, so a node whose
+        // own cover carried only the size its own row needed - a profile appearance
+        // built from `coverImage { large }`, an arriving summary - kept drawing that
+        // 230px-wide `large` in the detail hero even though the detail response had
+        // just handed over the 460px `extraLarge`. The covers that arrived by a
+        // thinner route were the only ones that showed it, which is why it survived:
+        // a list node already had `extraLarge`, and a node that has it keeps it.
         coverImage = when {
-            detail.coverImage?.large != null -> coverImage?.copy(large = detail.coverImage.large) ?: detail.coverImage
-            else -> coverImage
+            detail.coverImage == null -> coverImage
+            coverImage == null -> detail.coverImage
+            else -> coverImage.copy(
+                extraLarge = detail.coverImage.extraLarge ?: coverImage.extraLarge,
+                large = detail.coverImage.large ?: coverImage.large,
+                medium = detail.coverImage.medium ?: coverImage.medium,
+                color = detail.coverImage.color ?: coverImage.color
+            )
         }
     )
 }

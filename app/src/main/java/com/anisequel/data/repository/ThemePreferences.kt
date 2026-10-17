@@ -191,13 +191,32 @@ class ThemePreferences(private val context: Context) {
         }
     }
 
-    suspend fun setAnimeThemeActive(active: Boolean, colorHex: String? = null) {
+    /**
+     * The anime layer, and the accent it may retain, in **one** transaction.
+     *
+     * `retainColor` is a third key here rather than a second call to
+     * [setCustomColorHex] because every transaction emits a new [ThemeSettings], and
+     * a new [ThemeSettings] re-themes the whole app. Written as two calls, opening a
+     * title with Retain on recoloured the app twice in the frames after the tap -
+     * once when the anime colour reached the scheme, once when the retained accent
+     * reached `customDynamicSchemes` - both times inside the detail sheet's entrance
+     * animation. One write, one recolour. The layer's lifetime is unchanged; it is
+     * only the arrival that stopped being two waves.
+     */
+    suspend fun setAnimeThemeActive(
+        active: Boolean,
+        colorHex: String? = null,
+        retainColor: Boolean = false
+    ) {
         context.themeDataStore.edit { preferences ->
             preferences[Keys.ANIME_THEME_ACTIVE] = active
             if (colorHex != null) {
                 preferences[Keys.ANIME_THEME_COLOR_HEX] = colorHex
             } else if (!active) {
                 preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            }
+            if (active && retainColor && colorHex != null) {
+                preferences[Keys.CUSTOM_COLOR_HEX] = colorHex
             }
         }
     }

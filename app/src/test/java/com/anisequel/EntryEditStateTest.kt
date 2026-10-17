@@ -158,6 +158,41 @@ class EntryEditStateTest {
     }
 
     @Test
+    fun `save is only offered while the draft differs from what AniList confirmed`() = runTest {
+        // The pinned action row's whole reason for the `confirmed` baseline: a
+        // freshly loaded form must not offer to write a snapshot that changes
+        // nothing, and a save must leave nothing behind for the next one.
+        val state = EntryEditState()
+        state.load(FakeEditor(Result.success(entry)), mediaId = 42)
+
+        assertFalse("a freshly loaded entry has nothing to send", state.hasUnsavedChanges)
+
+        state.draft = state.draft!!.copy(score = 9.0)
+        assertTrue("a changed field is something to send", state.hasUnsavedChanges)
+
+        state.markSaved(state.draft!!)
+        assertFalse("the saved draft becomes the new baseline", state.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `the next edit clears the message the last save left`() = runTest {
+        // "Saved to your AniList list" used to survive the next edit, so the
+        // form's one line of feedback described an entry that was no longer on
+        // screen. `markSaved` must not clear it - the save path sets it after -
+        // but the edit that follows must.
+        val state = EntryEditState()
+        state.load(FakeEditor(Result.success(entry)), mediaId = 42)
+
+        val saved = state.draft!!.copy(score = 9.0)
+        state.markSaved(saved)
+        state.statusMessage = "Saved to your AniList list"
+
+        state.draft = saved.copy(score = 6.0)
+
+        assertNull("the message described the entry as it was", state.statusMessage)
+    }
+
+    @Test
     fun `a hundred-point account keeps its scale and its volume count`() = runTest {
         // Not about the holder, but this is the state it now carries, and the two
         // fields are the ones a refactor of this shape quietly drops: a manga's

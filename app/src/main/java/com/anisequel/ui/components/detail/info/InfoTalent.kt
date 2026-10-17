@@ -25,8 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -48,58 +46,20 @@ import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabel
 import java.util.Locale
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.detail.SectionHeading
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
- * A heading for the sections that are not cards.
+ * The cast and crew sections: the rows behind every tap that opens a person.
  *
- * The cast, the crew and the related titles are rows of artwork, and artwork inside
- * a card is artwork with a border drawn around the edge of the screen - which is
- * how the previous Specs tab framed every image it had. These three bleed to the
- * screen edge instead, so the row visibly continues past it and reads as scrollable.
- */
-@Composable
-fun InfoSectionHeading(
-    title: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    // The inset arrives on the modifier rather than being applied here, because this
-    // heading is used two ways: inside `InfoSection`, where the page has already
-    // padded it, and standalone above a `LazyRow` that bleeds to the screen edge. It
-    // used to hardcode 20.dp, which silently doubled the inset in the first case.
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(17.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-/**
- * The cast, each name next to the actor who plays them.
- *
- * Character and actor side by side is the whole point of this row - a cast list
+ * Character and actor side by side is the whole point of the cast row - a cast list
  * without the actor is a list of names the reader can get from the synopsis, and the
  * pairing is what AniList's own data is organised around. Only the Japanese cast is
  * asked for: it is the one AniList has for essentially every title, and a second
  * language would double the row for a fact most viewers are not reading it for.
- */
-/**
- * The cast and crew sections: the rows behind every tap that opens a person.
  *
  * [onOpenCharacter] and [onOpenStaff] are **nullable** rather than defaulting to a
  * no-op lambda, and the distinction matters. A `(Int) -> Unit = { _, _ -> }` default
@@ -121,7 +81,7 @@ fun InfoCharactersSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        InfoSectionHeading(
+        SectionHeading(
             title = "Characters & Voice Actors",
             icon = AppVectorIcons.FavouriteCharacters,
             modifier = Modifier.padding(horizontal = PAGE_INSET)
@@ -202,7 +162,7 @@ private fun CharacterCard(
                 // 268dp wide has room for one, and three would push the role and the
                 // actor off the card.
                 character?.name?.alternative
-                    ?.firstOrNull { it.isNotBlank() && it != character.name?.full }
+                    ?.firstOrNull { it.isNotBlank() && it != character.name.full }
                     ?.let { alias ->
                         Text(
                             text = "aka $alias",
@@ -330,7 +290,7 @@ fun InfoStaffSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        InfoSectionHeading(
+        SectionHeading(
             title = "Staff",
             icon = AppVectorIcons.FavouriteStaff,
             modifier = Modifier.padding(horizontal = PAGE_INSET)
@@ -442,7 +402,7 @@ fun InfoRelationsSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        InfoSectionHeading(
+        SectionHeading(
             title = "Seasons & Relations",
             icon = AppVectorIcons.FranchiseBranch,
             modifier = Modifier.padding(horizontal = PAGE_INSET)
@@ -525,33 +485,6 @@ private fun RelationCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.testTag("info_relation_meta_${node.id}")
-        )
-    }
-}
-
-/**
- * A related title's community score, over its own artwork.
- *
- * Deliberately *not* the accent colour the relation pill uses: the pill labels the
- * row and the badge is a number off AniList, and tinting both with the same colour
- * would make the score read as another label rather than as a value.
- */
-@Composable
-private fun ScoreBadge(
-    score: Int,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = ExpressiveShapes.pill,
-        color = Color.Black.copy(alpha = 0.62f),
-        modifier = modifier
-    ) {
-        Text(
-            text = "$score%",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
         )
     }
 }

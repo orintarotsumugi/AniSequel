@@ -477,14 +477,11 @@ private fun InfoFactRow(
 }
 
 /**
- * Genres, and AniList's thematic tags with their weights.
+ * A row of chips - genres, or AniList's thematic tags with their weights.
  *
  * [emphasis] is what tells the two apart: a genre is a fact, while a tag is a share
  * of the audience - "Urban Fantasy 96%" - and tinting those with the accent colour
  * is what stops the block reading as one undifferentiated heap of chips.
- */
-/**
- * A row of chips - genres, or AniList's weighted tags.
  *
  * [labels] empty renders nothing: the page asks for the list before it adds this as
  * a list item, because an item that draws nothing still costs a gap.

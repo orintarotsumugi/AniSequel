@@ -1,6 +1,67 @@
 {
   "versions": [
     {
+      "version": "1.3.5",
+      "entries": [
+        {
+          "title": "Very large lists no longer come back quietly short",
+          "detail": "An account whose list spans more than ten of AniList's chunks was cut off at the tenth, and the shortened list was cached as if it had arrived complete - so sequels near the end of the list never appeared and reloading never changed it. The list now follows AniList's own paging to the end, and in the one case it cannot - more chunks than a single load will chase - it says so instead of keeping a short list."
+        },
+        {
+          "title": "Opening hundreds of titles no longer keeps all of them in memory",
+          "detail": "The synopsis, cast and studios a card fetches when you open it were capped in one cache but kept alive by a second, unbounded one, so a long session held every title it had ever opened. Both caches now share the same bound, and the title on screen is the last one that bound would drop."
+        },
+        {
+          "title": "The rolling stat counters keep a steady width",
+          "detail": "The number that rolls when your stats change was drawn with proportional digits, so the text measured differently for every count it passed through - \"111\" is narrower than \"888\" - and the row it sits in was re-measured on every frame of the animation. The digits are fixed-width now, so the roll costs what settled text costs and nothing beside it jumps."
+        },
+        {
+          "title": "A character's page lists their manga, not only their anime",
+          "detail": "The titles under a character were filtered to anime, so a character's page omitted the source manga of the very show it was opened from - and the format line under every poster exists precisely because an appearance can be either medium. An actor's page never filtered, so a voice actor listed manga credits their character's page hid. Both kinds now draw the same list, with each poster saying which medium it is."
+        },
+        {
+          "title": "A long biography no longer buries the rest of a person's page",
+          "detail": "A person's sheet caps its height so the portrait and the name stay on screen when it opens, but the cap was a crop rather than a viewport: a long biography measured first and took all the remaining height, leaving the titles that person appears in - and the Open on AniList link - measured into zero and impossible to reach. The sheet scrolls now, so it still opens on the face and everything under it is one swipe away."
+        },
+        {
+          "title": "Years active read as one span, not two loose years",
+          "detail": "AniList records a staff member's active years as a start and end pair, with a single year meaning they are still working. The sheet joined the pair with a comma, so a career running 1963 to 2013 printed as Active 1963, 2013 - two years with a fifty-year hole between them. The span now prints as the one it is, and a working career as since 1998."
+        },
+        {
+          "title": "A studio's header facts wrap instead of running off the screen",
+          "detail": "A studio header draws up to three capsules - what kind of company it is, how many favourites it has, and how many titles it worked on - in a row that could not wrap. Together they are wider than a small phone's margin, so on the studios popular enough to have all three, the title count was clipped off the right edge where it could not be read. The header wraps the capsules now: nothing changes on a wide screen, and a narrow one stops hiding a fact."
+        },
+        {
+          "title": "Inline spoilers open where they sit",
+          "detail": "`~!...!~` inside a sentence was drawn as a covered run with no way to reach the text: tapping it did nothing, while the same token on a line of its own had a chip that revealed fine - so a plot point written mid-paragraph stayed covered for good. The covered run is the tap target now, two spoilers in one paragraph open independently of each other, and a reveal survives scrolling away from the paragraph and back."
+        },
+        {
+          "title": "Picking a palette or a hue changes the app again",
+          "detail": "With Dynamic colour on, tapping a palette or a hue lit the card and moved the check mark while the wallpaper scheme kept drawing: the wallpaper outranks both in the theme, and nothing stepped it off. A palette or hue pick now switches the wallpaper off, turning Dynamic colour on steps the anime colour layer off, and the card's caption names the source actually driving the app instead of naming a colour that is being overruled."
+        },
+        {
+          "title": "The artwork no longer changes under your eyes as a title opens",
+          "detail": "A sheet opened from the dashboard drew the poster first and swapped to the banner the moment the detail response landed - a second full-size image fetched, decoded and drawn in the middle of the entrance animation. The hero is the key visual again, the way it was designed to be, so the artwork on the first frame is the artwork you keep."
+        },
+        {
+          "title": "Covers draw at the size they are shown at",
+          "detail": "A person's appearance row asked AniList for the 230px cover and drew it at 112dp - about 336px on a 3x screen - so every poster under a character or a staff member was upscaled, and titles opened from those rows kept the smaller cover even after the detail response had handed over the larger one. Both now use the bigger size."
+        },
+        {
+          "title": "Opening a title does less work on the frame you tap",
+          "detail": "The page rebuilt its tag list, cast, relations and alternative titles on every recomposition while the sheet animated in, and the anime colour layer re-themed the whole app in two separate waves - one for the anime colour, one for the retained accent. The derived lists are computed once per title and the colour layer lands in a single write, so the entrance has the frames to itself."
+        },
+        {
+          "title": "Save and Delete are always within reach on the Edit tab",
+          "detail": "They were the last row of a form taller than the sheet on a small screen, so the button that keeps an edit sat below the fold. The two actions are pinned under the fields now, and they say what state they are in: the bar reads \"No changes to save yet\" until the draft differs from what AniList holds, Save sends nothing until then, and a save's confirmation no longer stays up after the next change."
+        },
+        {
+          "title": "Motion style reaches the app the moment you choose it",
+          "detail": "The Motion style setting was written to a value that composition could not observe, so most of the app kept the springs it had been composed with - the dashboard went on overshooting on Smooth, and Instant only sped up whatever happened to rebuild next. The tokens are observable state now, and the navigation bar's selected item springs open to its width instead of jumping to it."
+        }
+      ]
+    },
+    {
       "version": "1.3.4",
       "entries": [
         {

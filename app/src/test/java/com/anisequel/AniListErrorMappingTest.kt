@@ -33,6 +33,7 @@ import com.anisequel.data.network.parseAniListErrorBody
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -53,6 +54,7 @@ import java.io.IOException
  * session and offered a re-login button. These lock the classification at the
  * boundary where it belongs.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AniListErrorMappingTest {
 
     private class FakeService(

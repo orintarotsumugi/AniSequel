@@ -11,10 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +36,7 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
@@ -111,21 +110,12 @@ fun StudioTitleCard(
             // decides which of a studio's titles to open, and on a shelf of fifteen
             // posters it cannot be found anywhere else without tapping each one.
             media.averageScore?.let { score ->
-                Surface(
-                    shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 10.dp),
-                    color = Color.Black.copy(alpha = 0.62f),
+                ScoreBadge(
+                    score = score,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(4.dp)
-                ) {
-                    Text(
-                        text = "$score%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
-                }
+                )
             }
         }
 

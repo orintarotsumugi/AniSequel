@@ -196,6 +196,66 @@ class RelationGapTest {
         assertEquals("https://cdn/cover.jpg", merged.coverImage?.large)
     }
 
+    /**
+     * The detail cover's `extraLarge` is the reason the lookup exists, and the merge
+     * used to throw it away.
+     *
+     * It copied `detail.coverImage.large` and nothing else, so a node whose cover had
+     * arrived by a thinner route - a profile appearance, built from `coverImage {
+     * large }` and promoted to `extraLarge` at that size - kept drawing its 230px
+     * `large` in the detail hero even though the response had just handed over the
+     * 460px `extraLarge`. A list node already had `extraLarge` and kept it, which is
+     * why only the covers that arrived the other way round looked soft.
+     */
+    @Test
+    fun `merging detail keeps the larger of the two covers`() {
+        val fromProfile = MediaNode(
+            id = 142329,
+            coverImage = MediaCoverImage(
+                extraLarge = "https://cdn/large.jpg",
+                large = "https://cdn/large.jpg"
+            )
+        )
+        val fromDetail = MediaNode(
+            id = 142329,
+            coverImage = MediaCoverImage(
+                extraLarge = "https://cdn/xl.jpg",
+                large = "https://cdn/large.jpg",
+                color = "#f1a143"
+            )
+        )
+
+        val merged = fromProfile.withDetail(fromDetail)
+
+        assertEquals(
+            "the detail response's extraLarge has to win over a smaller cover the " +
+                "row happened to be built with",
+            "https://cdn/xl.jpg",
+            merged.coverImage?.bestUrl
+        )
+        assertEquals(
+            "and a tint only the detail response knew about must come through too - " +
+                "it is the colour the hero falls back to before the image decodes",
+            "#f1a143",
+            merged.coverImage?.color
+        )
+
+        val listNode = MediaNode(
+            id = 142329,
+            coverImage = MediaCoverImage(extraLarge = "https://cdn/xl.jpg", large = "https://cdn/large.jpg")
+        )
+        val thinDetail = MediaNode(
+            id = 142329,
+            coverImage = MediaCoverImage(large = "https://cdn/other-large.jpg")
+        )
+
+        assertEquals(
+            "and the merge must not downgrade a cover the node already had",
+            "https://cdn/xl.jpg",
+            listNode.withDetail(thinDetail).coverImage?.bestUrl
+        )
+    }
+
     @Test
     fun `a sequel keeps its list data when the detail query returns nothing new`() {
         val fromList = MediaNode(id = 1, description = "Already known")

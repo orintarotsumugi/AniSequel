@@ -184,7 +184,7 @@ fun ProfileSocialTab(
             )
         }
 
-        if (rawPeople.size > 1) {
+        if (rawPeople.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier

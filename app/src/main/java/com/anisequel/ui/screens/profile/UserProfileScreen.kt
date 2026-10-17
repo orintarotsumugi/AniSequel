@@ -146,15 +146,6 @@ private val ProfileTabs = listOf(
 @Composable
 fun UserProfileScreen(
     /**
-     * Identifies *which* profile this is, for state that must not be shared between
-     * two of them.
-     *
-     * `ProfileDestination` already builds one for its ViewModels; this is that same
-     * key, passed through so the profile's saved tab can be scoped by it. Without
-     * it, opening a second profile from the Social grid hands that profile whichever
-     * tab the first was left on.
-     */
-    /**
      * The person whose profile sheet is opened from the cast and crew rows.
      *
      * Passed rather than reached for on a ViewModel: `UserOverviewViewModel` holds its
@@ -163,6 +154,15 @@ fun UserProfileScreen(
      * parameter and not a field on that ViewModel.
      */
     repository: com.anisequel.data.repository.AniListRepository,
+    /**
+     * Identifies *which* profile this is, for state that must not be shared between
+     * two of them.
+     *
+     * `ProfileDestination` already builds one for its ViewModels; this is that same
+     * key, passed through so the profile's saved tab can be scoped by it. Without
+     * it, opening a second profile from the Social grid hands that profile whichever
+     * tab the first was left on.
+     */
     viewModelKey: String = "",
     overviewViewModel: UserOverviewViewModel,
     activityViewModel: UserActivityViewModel,

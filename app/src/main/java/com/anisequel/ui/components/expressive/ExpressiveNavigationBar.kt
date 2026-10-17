@@ -164,11 +164,39 @@ fun ExpressiveNavigationBar(
                     // the bar's overall width stable - the Row fills its parent, so
                     // this redistributes within a fixed bar rather than resizing it
                     // - while leaving the four icon-only items their tap target.
-                    modifier = Modifier.weight(if (selected) SELECTED_WEIGHT else 1f)
+                    //
+                    // [animatedItemWeight], not the constant: the redistribution
+                    // itself was one frame, so the four unselected items jumped to
+                    // their new places in the same frame the tap landed and the label
+                    // then unfurled into a slot that had already finished growing.
+                    // The width is the pill's only morph, so it moves.
+                    modifier = Modifier.weight(animatedItemWeight(selected))
                 )
             }
         }
     }
+}
+
+/**
+ * The selected item's share of the bar, sprung rather than stepped.
+ *
+ * This is the pill's half of the selection morph - `Modifier.weight` is the only
+ * width the item has, so the container does not resize, it redistributes - and it
+ * uses the same physics as the label's own unfurl: [ExpressiveMotion.FastSpatialSize]
+ * is this spring against an `IntSize`, this is it against the `Float` a weight
+ * takes. Both follow the Motion style setting, so `INSTANT` still snaps.
+ *
+ * The layout cost is per-frame while it runs, which is inherent to animating a
+ * weight, and it is the one part of the bar that has nothing else to draw.
+ */
+@Composable
+private fun animatedItemWeight(selected: Boolean): Float {
+    val weight by animateFloatAsState(
+        targetValue = if (selected) SELECTED_WEIGHT else 1f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "nav_item_weight"
+    )
+    return weight
 }
 
 @Composable

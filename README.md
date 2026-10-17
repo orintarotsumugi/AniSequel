@@ -920,22 +920,25 @@ export KEY_PASSWORD='<key password>'
 ## Continuous integration
 
 One workflow, `.github/workflows/android-release.yml`, on push to `main`, on
-tags, on pull requests, and on manual dispatch.
+tags, on pull requests, and on manual dispatch. Two jobs, started together: an
+advisory lint job, and the release job that runs the gate and publishes.
 
 ```
-checkout → JDK 21 → Gradle 9.6.1 → actionlint (validates this file itself)
-   ↓
-ephemeral key (PR)  |  restore key from secrets (non-PR)
-   ↓
-validate the key with keytool → resolve version → lint (advisory)
-   ↓
-cache Robolectric's framework jars → test  ← THE GATE
-   ↓
-assembleRelease → collect artifact
-   ↓
-verify apksigner digest (non-PR only)
-   ↓
-create/update release (non-PR) → publish update.json (non-PR, branch pushes only)
+lint (advisory, own runner)           build-and-release
+checkout → JDK 21 → Gradle 9.6.1      checkout → JDK 21 → Gradle 9.6.1 → actionlint
+   ↓                                     ↓
+lintRelease → annotations              ephemeral key (PR) | restore key from secrets (non-PR)
+                                         ↓
+                                       validate the key with keytool → resolve version
+                                         ↓
+                                       cache Robolectric's framework jars → test  ← THE GATE
+                                         ↓
+                                       assembleRelease → collect artifact
+                                         ↓
+                                       verify apksigner digest (non-PR only)
+                                         ↓
+                                       create/update release (non-PR)
+                                       → publish update.json (non-PR, branch pushes only)
 ```
 
 Notable properties, each of which was a bug once:
@@ -954,10 +957,20 @@ Notable properties, each of which was a bug once:
 - **Robolectric's framework jars are cached.** They are fetched by Robolectric's
   own Maven resolver *during the test task*, not through Gradle, so they are in
   no Gradle cache and a cold runner downloads ~100 MB of them before the first
-  test starts. That download — not the suite — is what makes the test step the
-  slowest in the workflow. The cache is keyed on `gradle/libs.versions.toml`,
+  test starts. That download — not the suite, which is about twenty seconds — is
+  what makes a cold test run slow. The cache is keyed on `gradle/libs.versions.toml`,
   which is where the Robolectric version lives, so a bump cannot silently keep
   testing against the previous release's jars.
+- **Lint is its own job, not a step in front of the tests.** `lintRelease`
+  compiles the release variant to build its model — about three minutes. In the
+  release job those three minutes were serialised ahead of the gate, so a broken
+  test waited for lint before the test step even started, and the APK step then
+  compiled the release variant again: only that step is given the resolved
+  version, and those `-P` flags change `BuildConfig`, an input to both KSP and
+  the Kotlin compile. Split onto its own runner, lint runs while the tests do,
+  and the gate is reached in about a minute instead of four. Neither job needs
+  the other: lint cannot hold up a release, and a failed release does not cancel
+  the annotations.
 - **A superseded pull-request run is cancelled.** Pushing a fix three times left
   two full builds — R8 over the whole app, plus the tests — finishing behind the
   one that mattered. `cancel-in-progress` is an expression rather than `true`:
