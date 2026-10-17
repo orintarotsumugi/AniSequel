@@ -362,28 +362,34 @@ class SpoilerAndThemeOverrideTest {
         )
     }
 
-    /**
- * How far a tinted surface may move in WCAG relative luminance.
-     *
-     * Was 0.004, which is **below the worst case the implementation actually
-     * produces** - measured across five hues and all eleven ramp roles, the largest
-     * drift is 0.0162, at `surfaceBright` under a hue-120 seed. So the assertion
-     * could never have passed, whatever the code did. It was not a test that caught
-     * a regression; it was a test that could not run.
-     *
-     * The confusion underneath it: [DynamicThemeBuilder.tintedDarkRamp] pins HSL
-     * *lightness* exactly - `role(saturation, lightness)` takes the same lightness
-     * whether or not it tints - and HSL lightness is not WCAG relative luminance. The
-     * two agree at the neutral hue and drift apart as hue moves, because the WCAG
-     * coefficients weight the channels the hue lands on. So "lightness is preserved"
-     * is the invariant the code guarantees; "luminance barely moves" is a weaker
-     * consequence of it, and the bound has to sit above the consequence, not below.
-     *
-     * 0.02 is about 1.2x the worst measured drift, so it still fails for a palette
-     * that genuinely shifted its lightness - which is the regression it exists to
-     * catch - while passing for the tinting the app actually does.
-     */
-    private const val LUMINANCE_TOLERANCE = 0.02
+    private companion object {
+        /**
+         * How far a tinted surface may move in WCAG relative luminance.
+         *
+         * In a companion object because `const val` is only allowed at top level,
+         * in a named object, or in a companion - not in a class body.
+         *
+         * Was 0.004, which is **below the worst case the implementation actually
+         * produces** - measured across five hues and all eleven ramp roles, the
+         * largest drift is 0.0162, at `surfaceBright` under a hue-120 seed. So the
+         * assertion could never have passed, whatever the code did. It was not a
+         * test that caught a regression; it was a test that could not run.
+         *
+         * The confusion underneath it: `tintedDarkRamp` pins HSL *lightness*
+         * exactly - `role(saturation, lightness)` takes the same lightness whether
+         * or not it tints - and HSL lightness is not WCAG relative luminance. The
+         * two agree at the neutral hue and drift apart as hue moves, because the
+         * WCAG coefficients weight the channels the hue lands on. So "lightness is
+         * preserved" is the invariant the code guarantees; "luminance barely moves"
+         * is a weaker consequence of it, and the bound has to sit above the
+         * consequence, not below.
+         *
+         * 0.02 is about 1.2x the worst measured drift, so it still fails for a
+         * palette that genuinely shifted its lightness - which is the regression it
+         * exists to catch - while passing for the tinting the app actually does.
+         */
+        const val LUMINANCE_TOLERANCE = 0.02
+    }
 
     /**
      * The relative luminance of a colour, per WCAG.
