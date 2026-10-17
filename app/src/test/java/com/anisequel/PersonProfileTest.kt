@@ -8,6 +8,10 @@ import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.toLoadedState
+import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.MediaListCollection
+import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
@@ -294,6 +298,33 @@ class PersonProfileTest {
             StaffProfile(id = it, name = MediaName(full = "Staff $it"))
         }
     ) : AniListRepository {
+
+        /**
+         * The reads this test does not exercise.
+         *
+         * These six are the interface's abstract members - the ones the app actually
+         * depends on, which is why they have no default and everything else does.
+         * A fake that left them abstract would not compile, and one that invented
+         * plausible answers for them would be a second thing under test.
+         */
+        private fun unused(): Nothing =
+            throw UnsupportedOperationException("not exercised by PersonProfileTest")
+
+        override suspend fun getViewer(): Result<ViewerProfile> = unused()
+        override suspend fun getUserByName(userName: String): Result<ViewerProfile> = unused()
+        override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> = unused()
+        override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> = unused()
+
+        override suspend fun getUserAnimeList(
+            userId: Int,
+            forceRefresh: Boolean
+        ): Result<MediaListCollection> = unused()
+
+        override suspend fun getUserAnimeListByUsername(
+            userName: String,
+            forceRefresh: Boolean
+        ): Result<MediaListCollection> = unused()
+
         override suspend fun getCharacterProfile(characterId: Int): Result<CharacterProfile> =
             runCatching { characterProfile(characterId) }
 
