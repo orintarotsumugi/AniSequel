@@ -47,6 +47,66 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Advisory, and on its own runner rather than inside the release job.
+  #
+  # `lintRelease` needs the release classes to build its model, so it compiles
+  # them: a measured 30s of KSP, ~25s of Kotlin, ~30s of model and ~60s of
+  # analysis, about three minutes. Inside the release job those three minutes sat
+  # in front of the unit tests, so a push with a broken test waited for lint to
+  # finish before the test step had even started - and the APK step then compiled
+  # the release variant a second time regardless, because only that step is given
+  # the resolved version, those `-P` flags change `BuildConfig`, and `BuildConfig`
+  # is an input to KSP and to the Kotlin compile.
+  #
+  # Started alongside the release job, lint delays nothing: the same two
+  # compilations happen on two runners instead of one, and the gate - the tests -
+  # is reached in about a minute instead of four.
+  #
+  # There is no `needs:` in either direction, on purpose. Lint is not a gate
+  # (`lint { abortOnError = false }` in app/build.gradle.kts), so a lint problem
+  # must not hold up a release; and the release job must not cancel lint, because
+  # the annotations are the reason the step exists at all.
+  #
+  # No keystore here, and that is a rule rather than an omission: this job
+  # compiles the release variant but never packages or signs it, and a pull
+  # request must not need the release key for a lint report.
+  lint:
+    name: Android Lint (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21 (JDK 21)
+        uses: actions/setup-java@v5
+        with:
+          # The same JDK as the release job, for the same reason it is pinned
+          # there: AGP 9.4.1, Gradle 9.6.1 and the Robolectric runner in this
+          # repository are the set CI has actually run, and a second job is not a
+          # reason for a second opinion about what can compile this project.
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          # Matched to gradle/wrapper/gradle-wrapper.properties, like the release
+          # job: a job that resolved a different Gradle than the one this project
+          # pins is a job whose result would not describe this project.
+          gradle-version: '9.6.1'
+          cache-disabled: false
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Android Lint
+        run: |
+          # Advisory only: `lint { abortOnError = false }` in app/build.gradle.kts
+          # means findings are reported, never fatal, so the fallback below is
+          # unreachable by a finding - only by a lint task that could not run at
+          # all, which is worth a warning rather than a silently skipped report.
+          ./gradlew lintRelease || echo "::warning::lint reported issues (see annotations)"
+
   build-and-release:
     name: Build APKs, Bug Check & Release
     runs-on: ubuntu-latest
@@ -352,30 +412,6 @@ jobs:
           else
             echo "Baseline ${BASELINE} is in step with the newest release (${LATEST})."
           fi
-
-      - name: Android Lint
-        run: |
-          echo "::group::Running Android Lint"
-          # Advisory only, and the comment above used to claim the opposite.
-          #
-          # `lint { abortOnError = false }` in app/build.gradle.kts means lint
-          # reports findings without failing the build, so this step would never
-          # stop a release either way. It is kept because the annotations are
-          # useful in the run summary, but it must not be read as a gate.
-          #
-          # The version flags are the same ones the APK step is given, and that is
-          # the point of them here. Lint needs the release classes for its model, so
-          # without them this step compiled the release variant, and then
-          # `assembleRelease` compiled it again: the flags change `BuildConfig`, and
-          # `BuildConfig` is an input to KSP and to the Kotlin compile, so the
-          # second compile could never be up to date. A run's log showed both - 30s
-          # of KSP plus a 23s Kotlin compile here, then a 33s recompile before R8.
-          # With the same values on both steps the second one is up to date.
-          ./gradlew lintRelease \
-            -PanisequelVersionCode="${{ github.run_number }}" \
-            -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
-            --continue || echo "::warning::lint reported issues (see annotations)"
-          echo "::endgroup::"
 
       # Robolectric does not fetch its framework jars through Gradle. It runs its
       # own Maven resolver during the *test* task, which is why the jars are in no
