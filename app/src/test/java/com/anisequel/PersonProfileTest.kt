@@ -12,6 +12,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -72,12 +72,12 @@ class PersonProfileStore(
      * response, and re-running a failed one - are both timing, so they would be
      * untestable rather than merely awkward.
      */
-    injectedScope: CoroutineScope? = null
+    scope: CoroutineScope? = null
 ) {
-    /** Whether [dispose] may cancel [scope] - i.e. whether this store made it. */
-    private val ownsScope = injectedScope == null
+    /** Whether [dispose] may cancel [fetchScope] - i.e. whether this store made it. */
+    private val ownsScope = scope == null
 
-    private val scope: CoroutineScope = injectedScope ?: CoroutineScope(SupervisorJob())
+    private val fetchScope: CoroutineScope = scope ?: CoroutineScope(SupervisorJob())
 
     private val _state = MutableStateFlow<PersonProfileState>(PersonProfileState.Closed)
     val state: StateFlow<PersonProfileState> = _state.asStateFlow()
@@ -102,7 +102,7 @@ class PersonProfileStore(
         pending = kind to id
         _state.value = PersonProfileState.Loading(kind, name)
 
-        scope.launch {
+        fetchScope.launch {
             val result = when {
                 isDemo -> Result.failure<Any>(
                     IllegalStateException("There is no ${kind.label()} to look up in the demo.")
@@ -159,7 +159,7 @@ class PersonProfileStore(
         // Only cancels a scope this store created. One handed in belongs to whoever
         // made it - a `TestScope`, or a screen that outlives this store - and
         // cancelling it here would take down work that is not this store's.
-        if (ownsScope) scope.cancel()
+        if (ownsScope) fetchScope.cancel()
     }
 
     /**
