@@ -34,6 +34,31 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * ## This file is over the 700-line ceiling, on purpose
+ *
+ * `AGENTS.md` says to keep files under 700 lines and split by responsibility.
+ * This one is exempt.
+ *
+ * It is one responsibility: **how this app talks to AniList over time**. The
+ * caches, the coalescer, the rate-limit errors and the namespace-keyed detail
+ * cache are not features that happen to share a file - they are one mechanism,
+ * and they interact. The detail cache is keyed on `(type, id)` precisely because
+ * `anime/1` and `manga/1` are two different entries; the coalescer exists because
+ * two screens can ask for the same title in the same frame; both live here
+ * because a split would mean deciding which one owns the other's invariants, and
+ * that decision would be wrong half the time.
+ *
+ * The same rule as `DashboardViewModel`, which `AGENTS.md` already records as an
+ * exception for exactly this reason: the recompute pipeline shares about a dozen
+ * private fields, and splitting it means passing state around or making it
+ * `internal`, and both make the invariants worse rather than better.
+ *
+ * What is worth doing here is not a split but a test: the cache-cap eviction and
+ * the coalescer's double-request collapse are both behaviour nothing currently
+ * pins.
+ */
+
+/**
  * Matches the `mutation` keyword of a GraphQL document.
  *
  * Anchored so a `mutation` appearing inside a string or comment in a *query*

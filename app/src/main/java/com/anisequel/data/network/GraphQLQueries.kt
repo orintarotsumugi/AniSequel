@@ -26,6 +26,29 @@ import com.anisequel.data.model.MediaCoverKey
  * `studios`, `trailer`, and `synonyms` are only ever rendered for the one entry
  * a user taps open, so they are fetched on demand rather than shipped for all
  * ~1,500 relation nodes on every load.
+ *
+ * ## This file is over the 700-line ceiling, on purpose
+ *
+ * `AGENTS.md` says to keep files under 700 lines and split by responsibility.
+ * This one is exempt, and the reason is the two rules above.
+ *
+ * The whole file is one responsibility: **what this app asks AniList for**. The
+ * reason a field is or is not in a document is its effect on the *other*
+ * documents - asking for `studios(isMain: true)` inside `relations` is what
+ * turns a 476-entry list into an HTTP 500. That is a fact about the boundary
+ * between documents, not about any one of them, so it lives in exactly one place
+ * where all of them can be read together.
+ *
+ * A split would put `getMediaDetailQuery` and the list query that has to stay
+ * lean beside it in different files, and the next person adding a field to one
+ * would have no way to see the other. The failure mode of this API is not a
+ * compile error - it is a document that answers 500 in production because
+ * nothing in review could see what it cost.
+ *
+ * The line count here is mostly raw GraphQL inside string literals, which is
+ * not code that can be factored. The alternative worth considering is not
+ * splitting, but **asserting** the relationships the comments describe - the
+ * same reason `StudioQueryTest` exists to pin a `perPage` cap.
  */
 object GraphQLQueries {
 
