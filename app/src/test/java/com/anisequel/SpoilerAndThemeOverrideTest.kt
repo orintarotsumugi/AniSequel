@@ -50,6 +50,55 @@ class SpoilerAndThemeOverrideTest {
         "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownBlocks.kt"
     ).readText()
 
+    /**
+     * The source of the one declaration that starts with [marker].
+     *
+     * Cut at the next **column-0** line, which is where the next top-level
+     * declaration begins. Cutting at a blank line instead does not work: a Kotlin
+     * body routinely contains one, and a chip whose signature is separated from its
+     * `Surface(` by a blank line would slice down to sixteen lines and miss every
+     * line the assertions are about - the test would then fail on correct code.
+     *
+     * Anything indented belongs to this declaration and stays in the slice, so a
+     * `wrapContentWidth()` inside some unrelated composable further down the file
+     * cannot satisfy an assertion about the chip.
+     */
+    private fun declarationStartingAt(source: String, marker: String): String {
+        val lines = source.lines()
+        val start = lines.indexOfFirst { it.contains(marker) }
+        assertTrue("the test source is missing `$marker` entirely", start >= 0)
+
+        // The declaration runs until the next *top-level declaration*, which is a
+        // line at column 0 opening with a keyword. Not simply "the next column-0
+        // line": the `) {` closing a multi-line signature is also at column 0, and
+        // stopping there would slice the chip down to its parameter list and fail
+        // every assertion on correct code.
+        val end = (start + 1 until lines.size).firstOrNull { i ->
+            TOP_LEVEL_DECLARATION.matches(lines[i])
+        } ?: lines.size
+
+        return lines.subList(start, end).joinToString("\n")
+    }
+
+    /**
+     * A line that ends the declaration and begins whatever follows it.
+     *
+     * Three shapes, all at column 0:
+     * - `/**` - the KDoc of the **next** declaration. Included because that KDoc
+     *   describes the next thing and would otherwise be searched as if it were this
+     *   declaration's body, which is how a comment mentioning `clickable` ends up
+     *   satisfying an assertion that the renderer has no tap target.
+     * - `@Composable` and friends - an annotation on the next declaration.
+     * - a declaration keyword.
+     *
+     * Anchored with **no** leading-whitespace allowance, which is the point: an
+     * indented `@Composable` or `fun` inside a body must not match, or the slice
+     * stops partway through the declaration it was supposed to capture.
+     */
+    private val TOP_LEVEL_DECLARATION =
+        Regex("^(/\\*\\*|@|(?:private |internal |public |protected |override |abstract |open )*" +
+            "(fun|val|var|class|object|interface|sealed|data|enum|typealias|companion)\\b).*")
+
     // ---- the spoiler ------------------------------------------------------------
 
     /**
@@ -62,8 +111,7 @@ class SpoilerAndThemeOverrideTest {
     @Test
     fun `the spoiler chip shares one interaction source with its press modifier`() {
         val source = markdownSource()
-        val chip = source.substringAfter("private fun SpoilerChip(")
-            .substringBefore("private fun", source.indexOf("private fun SpoilerChip(") + 10)
+        val chip = declarationStartingAt(source, "private fun SpoilerChip(")
 
         assertTrue(
             "the chip must build one MutableInteractionSource: a `bouncyPress` given " +
@@ -90,13 +138,21 @@ class SpoilerAndThemeOverrideTest {
     @Test
     fun `the spoiler chip wraps to its label instead of filling the card`() {
         val source = markdownSource()
-        val chip = source.substringAfter("private fun SpoilerChip(")
+        // Bounded to the declaration, not `substringAfter` alone. An unbounded slice
+        // is the whole rest of the file, so `wrapContentWidth()` appearing in some
+        // unrelated composable further down would satisfy an assertion about the chip
+        // - a test that passes when the bug is still there is worse than no test.
+        val chip = declarationStartingAt(source, "private fun SpoilerChip(")
 
         assertFalse(
             "a `FlowRow` inside a `Surface` inside a `fillMaxWidth` Column is handed " +
                 "the full width and stretches the chip across the card, leaving the " +
                 "label stranded at one end:\n$chip",
-            Regex("""FlowRow\(["'\n]?\)""").containsMatchIn(chip.replace("//", "\u0000"))
+            // Was `Regex("""FlowRow\(["'\n]?\)""")`, which matches only an *empty*
+            // `FlowRow()`. The bug was a `FlowRow` carrying three arguments, so the
+            // regex never matched it: the assertion passed on exactly the code it
+            // was written to catch. Match the name, not a shape.
+            Regex("""\bFlowRow\b""").containsMatchIn(chip.replace("//", "\u0000"))
         )
         assertTrue(
             "the row states its width instead of leaving it implicit",
@@ -106,6 +162,11 @@ class SpoilerAndThemeOverrideTest {
 
     /**
      * The revealed text still takes no taps - the original reason the block was split.
+     *
+     * An invariant, not a regression test: this held before the fix and has to keep
+     * holding after it. A thumb resting on the card should not dismiss what is being
+     * read, and the reason it does not is that the renderer was split out from the
+     * chip - so the split is what this pins.
      */
     @Test
     fun `only the chip is interactive`() {
@@ -303,7 +364,7 @@ class SpoilerAndThemeOverrideTest {
         assertTrue(
             "the background has to stay dark whatever the seed, or a pale title would " +
                 "make the app unreadable",
-            luminanceOf(grey.background) < 0.2f
+            luminanceOf(grey.background) < 0.2
         )
         assertNotEquals(
             "and it has to have picked up the seed's chroma rather than staying the " +
@@ -314,10 +375,22 @@ class SpoilerAndThemeOverrideTest {
         )
     }
 
-    private fun luminanceOf(color: androidx.compose.ui.graphics.Color): Float {
-        fun channel(c: Float): Float =
-            if (c <= 0.03928f) c / 12.92f else Math.pow((c + 0.055f) / 1.055f, 2.4).toFloat()
-        return 0.2126f * channel(color.red) + 0.7152f * channel(color.green) + 0.0722f * channel(color.blue)
+    /**
+     * The relative luminance of a colour, per WCAG.
+     *
+     * Returns [Double] rather than `Float` because the comparison is made with
+     * JUnit's `assertEquals(message, expected, actual, delta)` and only that
+     * overload exists - there is no `Float` one. A `Float` here is not implicitly
+     * widened in that position, and the test file does not compile.
+     */
+    private fun luminanceOf(color: androidx.compose.ui.graphics.Color): Double {
+        fun channel(c: Float): Double {
+            val v = c.toDouble()
+            return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(color.red) +
+            0.7152 * channel(color.green) +
+            0.0722 * channel(color.blue)
     }
 
     private fun findProjectRoot(): File {
