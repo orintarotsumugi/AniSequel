@@ -729,7 +729,7 @@ class AniListMarkdownTest {
         assertNotNull("the linked image must still produce a link token", link)
         assertEquals("the target is the title, not the cover", "https://anilist.co/anime/1", link!!.url)
 
-        val image = link.nested.filterIsInstance<InlineToken.Image>().singleOrNull()
+        val image = link.children.filterIsInstance<InlineToken.Image>().singleOrNull()
         assertNotNull("and the cover is the thing drawn inside it", image)
         assertEquals("https://s4.anilist.co/file/anilistcdn/x/bx1.png", image!!.url)
     }
