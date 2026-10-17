@@ -126,7 +126,24 @@ object AniListMarkdownParser {
     )
 
     // Inline regex patterns
-    private val INLINE_LINKED_IMG = Regex("""\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)""")
+    /**
+     * An image that is itself a link: `[![Alt](coverUrl)](targetUrl)`.
+     *
+     * ## Why this has to win over [INLINE_LINK]
+     *
+     * Both patterns match this text at the same offset, and the winner is whichever
+     * the match list puts first. `INLINE_LINK` alone would take the *image* URL as
+     * its target and leave `![cover` as the label - so a reader tapping the cover
+     * was taken to the artwork instead of the title, and the title the author linked
+     * to was dropped entirely. Both patterns still exist because the bracket nesting
+     * is a different shape, and because the outer URL is what the reader follows.
+     *
+     * Listed before `linkMatch` in `parseInlines` so the sort, which is stable, keeps
+     * it ahead on a tied offset.
+     */
+    private val INLINE_LINKED_IMG = Regex(
+        """\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)"""
+    )
     /**
      * `![alt](url)` in the middle of a paragraph.
      *
@@ -135,8 +152,36 @@ object AniListMarkdownParser {
      * is exactly what the bio used to print for an inline image.
      */
     private val INLINE_MD_IMG = Regex("""!\[([^\]]*)]\((https?://[^)\s]+)\)""")
-    private val INLINE_LINK = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
-    private val INLINE_AUTO_URL = Regex("""https?://[^\s<>"'()\[\]{}]+""")
+    /**
+     * A labelled link, `[label](url)`.
+     *
+     * ## Why the URL is allowed one level of balanced parentheses
+     *
+     * It used to stop at `[^\s)]+`, which cut a URL at its first `)`. That is
+     * wrong for the link shape AniList bios reach for most, because Wikipedia
+     * titles carry parentheses: `https://en.wikipedia.org/wiki/Spike_Spiegel_(Cowboy_Bebop)`.
+     * The reader got `.../Spike_Spiegel_(Cowboy_Bebop` - a 404 - and the closing
+     * paren survived as stray plain text after the link.
+     *
+     * `(?:[^\s()]|\([^\s()]*\))+` accepts any run of non-space non-paren characters
+     * with balanced single-level paren groups inside. One level is what real URLs
+     * need; deeper nesting is not a shape AniList writes, and allowing it would make
+     * the pattern able to swallow a following `)` that closes the *link* rather than
+     * the URL.
+     *
+     * A trailing `)` that is not balanced is still excluded, so
+     * `[Title](https://anilist.co/anime/1).` keeps the sentence's full stop as plain
+     * text - the same rule the `AUTO_URL` branch documents.
+     */
+    private val INLINE_LINK = Regex("""\[([^\]]+)]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)""")
+    /**
+     * A bare URL with no label.
+     *
+     * The same balanced-paren allowance as [INLINE_LINK], for the same reason: a
+     * bare `https://en.wikipedia.org/wiki/Foo_(bar)` between two words used to link
+     * to `https://en.wikipedia.org/wiki/Foo_` and leave `(bar)` as prose.
+     */
+    private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
     /** Whether an auto-linked URL points at an image, so it can be embedded. */
     private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
@@ -763,6 +808,7 @@ object AniListMarkdownParser {
 
         while (remaining.isNotEmpty()) {
             val mdImgMatch = INLINE_MD_IMG.find(remaining)
+            val linkedImgMatch = INLINE_LINKED_IMG.find(remaining)
             val linkMatch = INLINE_LINK.find(remaining)
             val spoilerMatch = INLINE_SPOILER.find(remaining)
             val codeMatch = INLINE_CODE.find(remaining)
@@ -790,6 +836,7 @@ object AniListMarkdownParser {
 
             val matches = listOfNotNull(
                 mdImgMatch?.let { it to "IMAGE" },
+                linkedImgMatch?.let { it to "LINKED_IMG" },
                 linkMatch?.let { it to "LINK" },
                 spoilerMatch?.let { it to "SPOILER" },
                 codeMatch?.let { it to "CODE" },
@@ -819,6 +866,28 @@ object AniListMarkdownParser {
                 "IMAGE" -> {
                     val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
                     tokens.add(InlineToken.Image(firstMatch.groupValues[2], alt))
+                }
+                "LINKED_IMG" -> {
+                    val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
+                    val imgUrl = firstMatch.groupValues[2]
+                    val targetUrl = firstMatch.groupValues[3]
+                    // The cover is the label, the title is the target. `INLINE_LINK`
+                    // alone would have taken the cover as the target and dropped the
+                    // title, so this branch exists to keep both.
+                    //
+                    // A plain `Link` with the image nested, rather than a `MediaLink`:
+                    // the outer URL is what the reader follows, and a `MediaLink` would
+                    // replace the whole thing with a cover card and lose the artwork the
+                    // author chose. If the target is an AniList entity the card is drawn
+                    // for it by the view, which is the same thing the block-level
+                    // `[![Alt](img)](target)` does.
+                    tokens.add(
+                        InlineToken.Link(
+                            label = "",
+                            url = targetUrl,
+                            nested = listOf(InlineToken.Image(imgUrl, alt))
+                        )
+                    )
                 }
                 "LINK" -> {
                     val label = firstMatch.groupValues[1]

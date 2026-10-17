@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.3.4",
+      "entries": [
+        {
+          "title": "Links with parentheses in them no longer break",
+          "detail": "A link to a Wikipedia article - the shape AniList bios use most - cut itself at the first bracket. `Spike_Spiegel_(Cowboy_Bebop)` linked to `Spike_Spiegel_(Cowboy_Bebop`, which is a page that does not exist, and the closing bracket was left sitting in the sentence as stray text. The same happened to a bare URL between two words. Both now keep the whole address, while a bracket that closes the link rather than the URL still stays out of it, so a sentence keeps its own punctuation."
+        },
+        {
+          "title": "A cover you can tap takes you to the title",
+          "detail": "A cover image wrapped in a link - the way a bio points at the show a character is from - took you to the artwork instead of the show. The pattern that reads that shape existed but was never given to the parser, so the ordinary link rule read the cover as the target and dropped the title entirely. Tapping the cover now opens the title, with the cover still drawn inside it."
+        }
+      ]
+    },
+    {
       "version": "1.3.3",
       "entries": [
         {

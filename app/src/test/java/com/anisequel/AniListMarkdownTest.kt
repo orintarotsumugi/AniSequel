@@ -653,4 +653,101 @@ class AniListMarkdownTest {
         assertNotNull("`__...__` must stay a single bold run", bold)
         assertEquals("loud", bold!!.text)
     }
+
+    // ---- embedded links ---------------------------------------------------------
+
+    /**
+     * A URL with a balanced pair of parentheses inside it.
+     *
+     * The label pattern stopped its URL at `[^\s)]+`, so a Wikipedia title -
+     * `https://en.wikipedia.org/wiki/Spike_Spiegel_(Cowboy_Bebop)` - linked to
+     * `.../Spike_Spiegel_(Cowboy_Bebop`, which is a 404, and the closing paren
+     * survived as stray prose after the link. AniList bios are full of these.
+     */
+    @Test
+    fun `a URL with balanced parentheses inside it is kept whole`() {
+        val text = "Named after [Spike Spiegel](https://en.wikipedia.org/wiki/Spike_Spiegel_(Cowboy_Bebop)) the show."
+        val link = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Link>().single()
+
+        assertEquals("Spike Spiegel", link.label)
+        assertEquals("https://en.wikipedia.org/wiki/Spike_Spiegel_(Cowboy_Bebop)", link.url)
+        // And nothing is left over as prose after the link.
+        val after = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Plain>()
+            .map { it.text }.joinToString("")
+        assertEquals("the show.", after)
+    }
+
+    /** The same allowance for a bare URL between words. */
+    @Test
+    fun `a bare URL with balanced parentheses is kept whole`() {
+        val text = "See https://en.wikipedia.org/wiki/Foo_(bar) for it."
+
+        val link = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Link>().single()
+
+        assertEquals("https://en.wikipedia.org/wiki/Foo_(bar)", link.url)
+    }
+
+    /**
+     * The sentence's full stop still stays out of the URL.
+     *
+     * Allowing balanced parens must not cost the older rule: `[Title](https://anilist.co/anime/1).`
+     * stops at the `)` that closes the link, because that one is not balanced, and
+     * the stop belongs to the sentence.
+     */
+    @Test
+    fun `a parenthesis closing the link is still not taken for the URL`() {
+        val text = "See [x](https://anilist.co/anime/1) (and more)."
+
+        val link = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Link>().single()
+
+        assertEquals("https://anilist.co/anime/1", link.url)
+        val plain = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Plain>()
+            .map { it.text }.joinToString("")
+        assertTrue("the sentence keeps its own parenthetical", plain.contains("(and more)"))
+    }
+
+    /**
+     * An image that is itself a link: `[![cover](coverUrl)](targetUrl)`.
+     *
+     * `INLINE_LINKED_IMG` was declared and never wired into the match list, so
+     * `INLINE_LINK` took the *cover* as its target and left `![cover` as the label.
+     * A reader tapping the cover was taken to the artwork instead of the title, and
+     * the title the author linked to was dropped entirely.
+     */
+    @Test
+    fun `a linked image follows the title rather than the cover`() {
+        val text = "See [![cover](https://s4.anilist.co/file/anilistcdn/x/bx1.png)](https://anilist.co/anime/1)."
+
+        val link = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.Link>().singleOrNull()
+
+        assertNotNull("the linked image must still produce a link token", link)
+        assertEquals("the target is the title, not the cover", "https://anilist.co/anime/1", link!!.url)
+
+        val image = link.nested.filterIsInstance<InlineToken.Image>().singleOrNull()
+        assertNotNull("and the cover is the thing drawn inside it", image)
+        assertEquals("https://s4.anilist.co/file/anilistcdn/x/bx1.png", image!!.url)
+    }
+
+    /**
+     * The block-level spelling of the same shape, which the inline fix must not
+     * disturb - a linked image on a line of its own is an `ImageBlock`, not an
+     * inline link.
+     */
+    @Test
+    fun `a linked image on its own line is still a block`() {
+        val nodes = AniListMarkdownParser.parse(
+            "[![cover](https://s4.anilist.co/file/anilistcdn/x/bx1.png)](https://anilist.co/anime/1)"
+        )
+
+        val block = nodes.filterIsInstance<MarkdownNode.ImageBlock>().singleOrNull()
+        assertNotNull("a linked image alone on a line is a block, not inline text", block)
+        assertEquals("https://anilist.co/anime/1", block!!.targetUrl)
+        assertEquals("https://s4.anilist.co/file/anilistcdn/x/bx1.png", block.url)
+    }
 }
