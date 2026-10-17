@@ -672,11 +672,15 @@ class AniListMarkdownTest {
 
         assertEquals("Spike Spiegel", link.label)
         assertEquals("https://en.wikipedia.org/wiki/Spike_Spiegel_(Cowboy_Bebop)", link.url)
-        // And nothing is left over as prose after the link.
+        // And the sentence is still one sentence afterwards: the closing paren that
+        // belongs to the URL is inside the link, and nothing is orphaned outside it.
+        // Asserted as "contains" rather than "equals" because the plain text also
+        // carries the words *before* the link - "Named after " is prose too.
         val after = AniListMarkdownParser.parseInlines(text)
             .filterIsInstance<InlineToken.Plain>()
             .map { it.text }.joinToString("")
-        assertEquals("the show.", after)
+        assertTrue("the sentence keeps its ending: <$after>", after.endsWith("the show."))
+        assertTrue("no stray bracket is left outside the link", !after.contains(")"))
     }
 
     /** The same allowance for a bare URL between words. */
@@ -699,16 +703,41 @@ class AniListMarkdownTest {
      */
     @Test
     fun `a parenthesis closing the link is still not taken for the URL`() {
-        val text = "See [x](https://anilist.co/anime/1) (and more)."
+        // A non-AniList URL, deliberately: `[x](https://anilist.co/anime/1)` does not
+        // reach this branch at all - an AniList entity address becomes a
+        // `MediaLink` (a cover card) before the plain-link rule runs, so filtering
+        // for `Link` finds nothing and the test fails for the wrong reason. The
+        // paren rule being tested is the same one either way.
+        val text = "See [x](https://example.com/anime/1) (and more)."
 
         val link = AniListMarkdownParser.parseInlines(text)
             .filterIsInstance<InlineToken.Link>().single()
 
-        assertEquals("https://anilist.co/anime/1", link.url)
+        assertEquals("https://example.com/anime/1", link.url)
         val plain = AniListMarkdownParser.parseInlines(text)
             .filterIsInstance<InlineToken.Plain>()
             .map { it.text }.joinToString("")
         assertTrue("the sentence keeps its own parenthetical", plain.contains("(and more)"))
+    }
+
+    /**
+     * The other half of the same rule: an AniList address still becomes a card.
+     *
+     * Balanced parens must not cost the entity detection. Without it the URL would
+     * be cut short and `ANILIST_PREVIEW_PATTERN`, which matches the whole address
+     * or nothing, would find nothing - so a link to a title would silently stop
+     * being a card.
+     */
+    @Test
+    fun `an AniList address is still a media card`() {
+        val text = "See [Cowboy Bebop](https://anilist.co/anime/1)."
+
+        val mediaLink = AniListMarkdownParser.parseInlines(text)
+            .filterIsInstance<InlineToken.MediaLink>().single()
+
+        assertEquals("https://anilist.co/anime/1", mediaLink.url)
+        assertEquals("anime", mediaLink.type)
+        assertEquals("1", mediaLink.id)
     }
 
     /**
