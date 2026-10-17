@@ -53,7 +53,8 @@ class MediaDetailStore(
     }
 
     /**
-     * Every node fetched this session, keyed by media id.
+     * Every node fetched this session, keyed by media id, under the same bound as
+     * [cache].
      *
      * A map rather than a single slot: the user can open one entry, close it and
      * open another before the first response lands, and a single slot would let
@@ -63,9 +64,45 @@ class MediaDetailStore(
      * and a screen only ever holds one title, so namespacing it would buy nothing
      * and would cost every lookup a second argument. The namespacing that matters
      * is on the fetch, where a wrong hit would persist for the whole session.
+     *
+     * Bounded the same way [cache] is, and for a while it was not: publishing used
+     * to be `_details.value + (id to node)`, so the 251st title evicted an entry
+     * from the fetch cache and left the node itself reachable from here - the LRU
+     * cap was nominal, and a long session held every synopsis, cast and studio
+     * tree it had ever opened. Nothing visibly breaks when this map drops an
+     * entry, which is exactly why the leak went unnoticed.
      */
+    private val published = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, MediaNode>?): Boolean =
+            size > MAX_ENTRIES
+    }
+
     private val _details = MutableStateFlow<Map<Int, MediaNode>>(emptyMap())
+
+    /**
+     * The nodes the screens read: a snapshot of [published].
+     *
+     * A snapshot rather than the map itself because `MutableStateFlow` compares
+     * values by equality, and an access-ordered `LinkedHashMap` mutating in place
+     * would hand every collector the same instance without an emission to say it
+     * changed.
+     */
     val details: StateFlow<Map<Int, MediaNode>> = _details.asStateFlow()
+
+    /**
+     * Publishes [detail] for [mediaId], refreshing its recency in [published].
+     *
+     * A write counts as an access on an access-ordered map, so re-opening an
+     * entry refreshes it even when the snapshot already carries the node - which
+     * is what keeps the title on screen the last thing the bound would drop. The
+     * snapshot is only rebuilt when the screens are actually missing the node.
+     */
+    private fun publish(mediaId: Int, detail: MediaNode) {
+        published[mediaId] = detail
+        if (_details.value[mediaId] !== detail) {
+            _details.value = LinkedHashMap(published)
+        }
+    }
 
     /**
      * Namespaces currently being fetched, so the guard above is per-title rather
@@ -109,9 +146,7 @@ class MediaDetailStore(
         cache[key]?.let { known ->
             // Re-published on open so a re-opened entry has its detail again
             // without another request.
-            if (_details.value[mediaId] !== known) {
-                _details.value = _details.value + (mediaId to known)
-            }
+            publish(mediaId, known)
             return
         }
         // Demo data is already complete, and there is no session to fetch with.
@@ -130,7 +165,7 @@ class MediaDetailStore(
             try {
                 repository.getMediaDetail(mediaId, mediaType).onSuccess { detail ->
                     cache[key] = detail
-                    _details.value = _details.value + (mediaId to detail)
+                    publish(mediaId, detail)
                     onLoaded?.invoke(mediaId, detail)
                 }
                 // A failed detail load is not worth interrupting the user over:
@@ -169,11 +204,21 @@ class MediaDetailStore(
         // leaving it would keep a spinner turning over a list the reader has left.
         // The launched coroutines still clear their own key on the way out.
         inFlight.clear()
+        published.clear()
         _details.value = emptyMap()
         _loading.value = emptySet()
     }
 
-    private companion object {
+    /**
+     * Internal rather than private so `MediaDetailNamespacingTest` can name the
+     * bound it asserts instead of repeating the literal - raising the cap should
+     * change the test's arithmetic, not its meaning.
+     */
+    internal companion object {
+        /**
+         * The bound on both detail caches: the namespaced fetch cache and the
+         * published map the screens read.
+         */
         const val MAX_ENTRIES = 250
 
         /**

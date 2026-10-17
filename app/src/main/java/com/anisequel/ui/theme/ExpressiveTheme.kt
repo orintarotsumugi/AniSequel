@@ -14,6 +14,13 @@ import androidx.compose.ui.unit.dp
  * 10dp, 14dp, 16dp and 24dp), so this scale runs 10 / 14 / 20 / 28 / 36 -
  * large enough that cards read as curved panels rather than hard rectangles,
  * but still inside the scale where adjacent slots stay visually related.
+ *
+ * This is the app's *only* shape scale. A second `Shapes` used to be declared
+ * alongside the typography in `Type.kt` with different values - medium at 16dp
+ * there against 18dp here, extraLarge 28dp against 34dp - which made "the app's
+ * roundness" whichever one a file happened to import, so tuning the theme
+ * changed some surfaces and not others. That declaration is gone: add a slot
+ * here rather than a second scale.
  */
 // Aliased rather than imported: this file's own `ExpressiveShapes` shadows the
 // token object of the same name, and a bare `import ...ExpressiveShapes` would

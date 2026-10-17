@@ -1,4 +1,5 @@
 package com.anisequel.ui.components.detail
+
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
@@ -159,8 +160,37 @@ internal fun formatScore(score: Double): String =
  */
 @Stable
 internal class EntryEditState {
-    /** Null until the entry has loaded, and again if the load failed. */
-    var draft by mutableStateOf<EntryDraft?>(null)
+    private var draftState by mutableStateOf<EntryDraft?>(null)
+
+    /**
+     * The entry AniList last confirmed: what [load] fetched, or the last save.
+     *
+     * This is what makes "nothing to send" distinguishable from "changes waiting",
+     * which is what the Save button reads. It also has to be moved by [markSaved]:
+     * a save that left the baseline behind would leave the button enabled forever.
+     */
+    private var confirmed by mutableStateOf<EntryDraft?>(null)
+
+    /**
+     * The editable copy of the entry, and the two things that hang off it changing.
+     *
+     * The setter clears [statusMessage] because a message describes the *entry* as it
+     * was when the message was written. It used to survive the next edit, so a form
+     * whose score had already been dragged to a new value still read "Saved to your
+     * AniList list" until the next save - the one line of feedback on the form was
+     * describing a state that was no longer on it. The save and delete paths set
+     * their message *after* the draft, so their own line still lands.
+     */
+    var draft: EntryDraft?
+        get() = draftState
+        set(value) {
+            draftState = value
+            if (value != confirmed) statusMessage = null
+        }
+
+    /** Whether the form holds anything AniList has not been told about yet. */
+    val hasUnsavedChanges: Boolean
+        get() = draft != null && draft != confirmed
 
     var loadError by mutableStateOf<String?>(null)
     var statusMessage by mutableStateOf<String?>(null)
@@ -181,11 +211,26 @@ internal class EntryEditState {
         if (draft != null) return
         editor.load(mediaId).fold(
             onSuccess = {
-                draft = it.toDraft()
+                val loaded = it.toDraft()
+                draft = loaded
+                confirmed = loaded
                 loadError = null
             },
             onFailure = { loadError = it.message ?: "Couldn't load your entry." }
         )
+    }
+
+    /**
+     * Records a save: AniList's answer is both what the form shows and the new
+     * baseline, so the Save button goes quiet until the next edit.
+     *
+     * Baseline first, deliberately: the `draft` setter treats an unequal value as an
+     * edit and clears the message, and this call is not an edit - the "Saved"
+     * message the caller sets afterwards is the whole point of the pair.
+     */
+    fun markSaved(saved: EntryDraft) {
+        confirmed = saved
+        draft = saved
     }
 
     /** Back to an entry that does not exist, so the form is ready to create one. */
@@ -201,6 +246,10 @@ internal class EntryEditState {
             completedAt = null,
             isPrivate = false
         )
+        // The deleted entry is not "unsaved changes"; it is gone. The blank form is
+        // the baseline, so the pin stays disabled until the reader actually asks for
+        // something to be written.
+        confirmed = draft
     }
 }
 

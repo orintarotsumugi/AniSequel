@@ -174,8 +174,14 @@ data class StudioCredit(
 val MediaNode.studioCredits: List<StudioCredit>
     get() {
         val fromEdges = studios?.edges.orEmpty().mapNotNull { edge ->
-            val name = edge.node?.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            StudioCredit(id = edge.node?.id, name = name, isMain = edge.isMain == true)
+            // Bound once instead of read twice off the edge. `edge.node?.name ...
+            // ?: return` proves the node non-null for the next line, and the price
+            // of that proof was a compiler warning: `edge.node?.id` is a safe call
+            // on a receiver the data flow has already established as non-null. The
+            // local makes the code say what the compiler knows.
+            val node = edge.node ?: return@mapNotNull null
+            val name = node.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            StudioCredit(id = node.id, name = name, isMain = edge.isMain == true)
         }
         val credits = fromEdges.ifEmpty {
             // No edges means the answer is *unranked*, not that every credit is a

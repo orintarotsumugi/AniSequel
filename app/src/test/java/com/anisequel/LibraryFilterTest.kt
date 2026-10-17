@@ -450,7 +450,7 @@ class LibraryFilterTest {
      * after AniList recorded the entry, and the badge must not read past 100%.
      */
     @Test
-    fun `a rewatch past the announced total does not exceed 100%`() {
+    fun `a rewatch past the announced total does not exceed one hundred percent`() {
         assertEquals(
             "Ep 100%",
             libraryProgressLabel(

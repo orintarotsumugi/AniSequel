@@ -3,6 +3,8 @@ package com.anisequel.ui.screens.studio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +52,7 @@ import java.util.Locale
  */
 
 /** The name, what kind of company it is, and how much AniList has it doing. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun StudioIdentity(
     studio: StudioNode?,
@@ -75,9 +78,14 @@ internal fun StudioIdentity(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Row(
+        // FlowRow rather than Row: the three chips together are wider than a 360dp
+        // phone's margins - "Animation studio" and the favourites chip alone nearly
+        // fill them - and a Row does not wrap, so the title count was clipped off the
+        // right edge with no way to reach it. The header reads the same at every
+        // width; it only ever *fitted* on the wide ones.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             studio.isAnimationStudio?.let { animationStudio ->
                 StudioMetaChip(

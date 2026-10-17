@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -225,7 +226,16 @@ fun AniSequelTheme(
     // They are the same property by different key: theme tokens animate M3
     // components, the ExpressiveMotion tokens animate everything we write, and
     // both have to agree on what happens after the curve (and on what that is).
-    com.anisequel.ui.components.expressive.ExpressiveMotion.speed = motionStyle
+    //
+    // Written from a `SideEffect` because the tokens are snapshot state: this write
+    // is what invalidates every composable that read one, which is what makes the
+    // Motion style switch reach the app that is already on screen. A commit-phase
+    // write rather than an assignment in the body, and not out of tidiness - a
+    // composition that is discarded would leave the assignment behind, describing a
+    // theme that never reached the screen.
+    SideEffect {
+        com.anisequel.ui.components.expressive.ExpressiveMotion.speed = motionStyle
+    }
 
     // Dynamic colour used to be `dynamicColor && supportsDynamicColor`. The
     // second half was a runtime SDK_INT check against `S`, and the floor is now

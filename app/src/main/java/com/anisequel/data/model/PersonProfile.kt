@@ -74,9 +74,9 @@ data class CharacterProfileData(
  * they are rendered by the same composable and a crew member that laid out differently
  * from an actor on the same page reads as two different screens.
  *
- * [yearsActive] is a list on AniList's side - a person can have a non-contiguous
- * career - so it is modelled as a list and joined for display rather than collapsed
- * into a single string here.
+ * [yearsActive] is AniList's `[startYear, endYear]` pair - a lone `[startYear]` means
+ * the person is still working - so [facts] renders it as a range rather than joining a
+ * list of years that would read as a career with gaps in it.
  */
 @JsonClass(generateAdapter = true)
 data class StaffProfile(
@@ -113,8 +113,14 @@ data class StaffProfile(
                 ?.let { add("Role" to it.joinToString(", ")) }
             gender?.takeIf { it.isNotBlank() }?.let { add("Gender" to it) }
             age?.takeIf { it.isNotBlank() }?.let { add("Age" to it) }
-            yearsActive?.takeIf { it.isNotEmpty() }
-                ?.let { add("Active" to it.joinToString(", ")) }
+            yearsActive?.takeIf { it.isNotEmpty() }?.let { years ->
+                // AniList's `[startYear, endYear]`, or `[startYear]` while the person
+                // still works. This used to be `joinToString(", ")`, which printed
+                // "Active 1998, 2022" - a pair of years that reads as a career with a
+                // gap in it rather than as the one span AniList recorded.
+                val active = if (years.size >= 2) "${years[0]} - ${years[1]}" else "since ${years[0]}"
+                add("Active" to active)
+            }
             homeTown?.takeIf { it.isNotBlank() }?.let { add("From" to it) }
             dateOfBirth?.formatted?.takeIf { it != "TBA" }?.let { add("Born" to it) }
             dateOfDeath?.formatted?.takeIf { it != "TBA" }?.let { add("Died" to it) }
@@ -175,12 +181,23 @@ data class ProfileAppearance(
     val isManga: Boolean get() = type?.uppercase() == "MANGA"
 }
 
-/** A cover at the one size this row draws at. */
+/**
+ * A cover at the sizes the appearance row can ask for.
+ *
+ * The row draws `APPEARANCE_CARD_WIDTH = 112.dp`, about 336px on a 3x screen, so
+ * `large` (230px) is upscaled before it is drawn and `extraLarge` (460px) is the
+ * size that actually arrives sharp. Both are carried because a response from
+ * before the query asked for `extraLarge` - or a cache entry keyed to one - still
+ * has the smaller field, and this row is the only consumer.
+ */
 @JsonClass(generateAdapter = true)
 data class ProfileCover(
+    val extraLarge: String? = null,
     val large: String? = null
 ) {
-    val bestUrl: String? get() = large?.takeIf { it.isNotBlank() }
+    /** The biggest size AniList sent, preferring the one this row draws at. */
+    val bestUrl: String?
+        get() = extraLarge?.takeIf { it.isNotBlank() } ?: large?.takeIf { it.isNotBlank() }
 }
 
 /**

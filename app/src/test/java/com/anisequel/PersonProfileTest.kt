@@ -16,6 +16,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -36,6 +37,7 @@ import org.junit.Test
  * behaviours that matter are both timing, and a store on `Dispatchers.Default` is
  * timing a test cannot step.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PersonProfileTest {
 
     // ---- the model's own arithmetic -------------------------------------------
@@ -89,7 +91,7 @@ class PersonProfileTest {
             id = 97197,
             name = MediaName(full = "Hajime Yatate"),
             primaryOccupations = listOf("Director", "Original Creator"),
-            yearsActive = listOf("1998-2022"),
+            yearsActive = listOf("1998", "2022"),
             homeTown = "Tokyo"
         )
 
@@ -98,6 +100,24 @@ class PersonProfileTest {
         assertTrue("the role is the point of a crew card", facts.any { it.first == "Role" })
         assertTrue("years active", facts.any { it.first == "Active" })
         assertTrue("hometown", facts.any { it.first == "From" })
+    }
+
+    /**
+     * `yearsActive` is AniList's `[startYear, endYear]`, not a list of every year the
+     * person worked and not one already-formatted range string.
+     *
+     * Joined as a list it printed "Active 1998, 2022" - two years that read as a career
+     * with a twenty-four year hole in it - and the lone-year form ("still active")
+     * printed as a bare year. The schema spells both out: `[startYear, endYear] (If the
+     * 2nd value is not present staff is still active)`.
+     */
+    @Test
+    fun `active years render as the span AniList recorded`() {
+        val finished = StaffProfile(id = 1, yearsActive = listOf("1998", "2022"))
+        val working = StaffProfile(id = 2, yearsActive = listOf("1998"))
+
+        assertEquals("1998 - 2022", finished.facts.first { it.first == "Active" }.second)
+        assertEquals("since 1998", working.facts.first { it.first == "Active" }.second)
     }
 
     /**

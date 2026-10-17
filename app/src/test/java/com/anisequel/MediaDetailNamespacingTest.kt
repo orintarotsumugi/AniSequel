@@ -55,8 +55,9 @@ class MediaDetailNamespacingTest {
      * entries, not one entry served twice.
      *
      * Asserted through [MediaDetailStore] rather than the repository, because the
-     * store is where a collision would survive a session - the repository's own
-     * cache is cleared at a soft cap, the store's is not.
+     * store is where a collision would survive a session - the repository's cache
+     * is cleared wholesale at a soft cap, while the store keeps answering from
+     * what it holds.
      */
     @Test
     fun `an anime and a manga sharing an id are two different details`() = runTest {
@@ -113,6 +114,47 @@ class MediaDetailNamespacingTest {
         advanceUntilIdle()
 
         assertEquals("a re-open must not refetch", 1, repository.requests.size)
+    }
+
+    /**
+     * Whatever the store keeps has to be bounded, and the bound must not drop the
+     * title that was just opened.
+     *
+     * ## The bug
+     *
+     * The fetch cache was LRU-bounded at [MediaDetailStore.MAX_ENTRIES], but the
+     * published map the screens read was `_details.value + (id to node)` for the
+     * life of the store. So the 251st title evicted an entry from one map and
+     * left the node itself reachable from the other: the cap was nominal, and a
+     * long session held every synopsis, cast and studio tree it had ever opened.
+     * Nothing visibly breaks when this map drops an entry, which is why the leak
+     * went unnoticed.
+     *
+     * The second assertion is the one that matters at the call site. A sheet reads
+     * this map for the node it is showing, and it was published by opening - so
+     * the entry just opened must survive its own publication even when that
+     * publication is what pushes the map past the bound.
+     */
+    @Test
+    fun `the published details map is bounded without dropping the newest entry`() = runTest {
+        val repository = RecordingRepository()
+        val store = storeFor(repository, testScheduler)
+        val total = MediaDetailStore.MAX_ENTRIES + 1
+
+        repeat(total) { index -> store.load(mediaId = index + 1, mediaType = "ANIME") }
+        advanceUntilIdle()
+
+        assertTrue(
+            "the published map held ${store.details.value.size} nodes after $total " +
+                "fetches; the fetch cache's bound has to bound what the screens keep " +
+                "reachable too",
+            store.details.value.size <= MediaDetailStore.MAX_ENTRIES
+        )
+        assertNotNull(
+            "the entry just opened has to survive its own publication - the sheet " +
+                "on screen reads it back by id",
+            store.details.value[total]
+        )
     }
 
     /**

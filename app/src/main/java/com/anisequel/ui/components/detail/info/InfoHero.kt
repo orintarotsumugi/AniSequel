@@ -137,7 +137,17 @@ fun InfoHero(
     val coverColor = media.posterColor.toCoverColorOrNull()
         ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val surface = MaterialTheme.colorScheme.surface
-    val backdrop = media.bannerImage ?: media.posterUrl
+    // The key visual, always - the KDoc above is the long version of why.
+    //
+    // This was `bannerImage ?: posterUrl`, and the `?:` looks harmless: a banner is
+    // fetched for the sheet, so draw it when it is there. What it did on the
+    // ordinary path was swap the artwork mid-open. A sheet opened from the
+    // dashboard starts on the list node, which has no banner, so the hero drew the
+    // poster; the detail then landed, and the backdrop became the banner - a second
+    // full-size download, decode and GPU upload during the entrance animation, in
+    // exchange for the competing 16:9 composition this hero deliberately does not
+    // use.
+    val backdrop = media.posterUrl
 
     Box(
         modifier = modifier

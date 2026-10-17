@@ -46,10 +46,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * The whole accent story in one card: the wallpaper toggle (which wins), the
- * brand palettes, then a custom hue. Picking a palette or a hue steps the anime
- * colour adaptation off, because the anime colour outranks everything in
- * `Theme.kt` and an active one would silently ignore the new choice.
+ * The whole accent story in one card: the wallpaper toggle, the brand palettes,
+ * then a custom hue.
+ *
+ * Picking a palette or a hue steps off everything that outranks it in `Theme.kt`,
+ * because an active override silently ignores the new choice. That used to mean
+ * only the anime colour adaptation, and the wallpaper switch was missed: with
+ * dynamic colour on, the palette cards and hue chips did nothing at all - the
+ * wallpaper scheme kept drawing - yet the card the reader had just tapped moved its
+ * check mark and lit its border, so the pick looked applied and was not. The same
+ * rule now covers both, and turning the switch itself *on* steps the anime layer off
+ * for the same reason.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -61,7 +68,7 @@ internal fun AccentColourSection(
     SectionCard(
         title = "Accent colour",
         icon = AppVectorIcons.SectionAppearance,
-        subtitle = "Wallpaper colour wins, then a custom hue, then the palette.",
+        subtitle = "Wallpaper, a palette, or a custom hue - the last one you pick wins.",
         iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
         iconContent = MaterialTheme.colorScheme.onTertiaryContainer
     ) {
@@ -70,7 +77,14 @@ internal fun AccentColourSection(
             subtitle = "Take the accent from your wallpaper.",
             checked = settings.useDynamicColor,
             onCheckedChange = { enabled ->
-                scope.launch { themePreferences.setUseDynamicColor(enabled) }
+                scope.launch {
+                    // Turning it on has to clear the anime layer for exactly the
+                    // reason a palette pick does: the anime colour outranks the
+                    // wallpaper scheme in `Theme.kt`, so a live adaptation would make
+                    // this switch look broken until it timed out on its own.
+                    if (enabled) themePreferences.setAnimeThemeActive(false, null)
+                    themePreferences.setUseDynamicColor(enabled)
+                }
             },
             modifier = Modifier.testTag("dynamic_color_switch")
         )
@@ -121,19 +135,26 @@ internal fun AccentColourSection(
             ThemePalette.entries.forEach { palette ->
                 PaletteCard(
                     palette = palette,
-                    // A palette is "selected" only when nothing outranks it: a
-                    // custom hue or an active anime colour means no palette read
-                    // is actually driving the scheme.
+                    // A palette is "selected" only when nothing outranks it: the
+                    // wallpaper scheme, a custom hue, or an active anime colour means
+                    // no palette read is actually driving the scheme. Without the
+                    // dynamic-colour term the check mark moved to a card that had
+                    // changed nothing.
                     selected = settings.paletteId == palette.id &&
                         settings.customColorHex == null &&
-                        !settings.animeThemeActive,
+                        !settings.animeThemeActive &&
+                        !settings.useDynamicColor,
                     onClick = {
                         scope.launch {
                             // The palette picker used to clear only the custom
                             // hue, leaving an active anime colour to silently
-                            // overrule whatever the user had just chosen.
+                            // overrule whatever the user had just chosen. The
+                            // wallpaper does the same, so it is stepped off here
+                            // too, and `setCustomColorHex(null)` is what makes the
+                            // chosen palette the basis again.
                             themePreferences.setCustomColorHex(null)
                             themePreferences.setAnimeThemeActive(false, null)
+                            themePreferences.setUseDynamicColor(false)
                             themePreferences.setPalette(palette.id)
                         }
                     }
@@ -158,15 +179,19 @@ internal fun AccentColourSection(
                 HueChip(
                     hex = hex,
                     name = name,
-                    isSelected = settings.customColorHex?.equals(hex, ignoreCase = true) == true,
+                    isSelected = settings.customColorHex?.equals(hex, ignoreCase = true) == true &&
+                        !settings.useDynamicColor,
                     onClick = {
                         scope.launch {
                             // Picking a hue used to leave an active anime colour
                             // in place, and because the anime colour outranks
                             // everything in `Theme.kt`, the new hue appeared to
                             // do nothing. It now steps the anime adaptation off,
-                            // like the palette picker does.
+                            // like the palette picker does - and the wallpaper
+                            // with it, which is the other override that made this
+                            // chip a control that could not change anything.
                             themePreferences.setAnimeThemeActive(false, null)
+                            themePreferences.setUseDynamicColor(false)
                             themePreferences.setCustomColorHex(
                                 if (settings.customColorHex?.equals(hex, ignoreCase = true) == true) null else hex
                             )
@@ -177,10 +202,14 @@ internal fun AccentColourSection(
         }
 
         Text(
-            text = if (settings.customColorHex != null) {
-                "Selected: ${settings.customColorHex}"
-            } else {
-                "A custom hue refines the accent above any palette."
+            text = when {
+                // The wallpaper outranks a stored hue, and the two are separate
+                // preferences, so naming the hue here would name a colour the app
+                // is not drawing.
+                settings.useDynamicColor ->
+                    "Your wallpaper is providing the accent. Pick a palette or a hue to switch to it."
+                settings.customColorHex != null -> "Selected: ${settings.customColorHex}"
+                else -> "A custom hue refines the accent above any palette."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -1047,6 +1047,13 @@ object GraphQLQueries {
      * Sorted by `POPULARITY_DESC` because AniList's own ordering for this connection
      * puts an obscure cameo above a lead role otherwise.
      *
+     * Both namespaces are asked for, like [getStaffProfileQuery]. This used to pass
+     * `type: ANIME`, which silently dropped every `Manga` node - including the source
+     * manga of the title whose cast row opened the sheet - while the row still asked
+     * for `type` on every node and [ProfileAppearance] is documented around a character
+     * appearing in a manga. The staff query never filtered, so an actor's page listed
+     * manga credits their character's page hid: the asymmetry was the visible half.
+     *
      * `age` is free text and not a number - Faye Valentine's is
      * "23 (Physical), 77 (Actual)". See `MediaCharacter.age`.
      */
@@ -1064,7 +1071,7 @@ object GraphQLQueries {
             siteUrl
             isFavourite
             dateOfBirth { year month day }
-            media(perPage: 12, sort: [POPULARITY_DESC], type: ANIME) {
+            media(perPage: 12, sort: [POPULARITY_DESC]) {
               nodes { $PROFILE_MEDIA_FIELDS }
             }
           }
@@ -1127,7 +1134,7 @@ object GraphQLQueries {
                 status
                 averageScore
                 siteUrl
-                coverImage { large }
+                coverImage { extraLarge large }
     """
 
     /**

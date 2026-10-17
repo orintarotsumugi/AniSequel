@@ -104,6 +104,21 @@ class AniListRepositoryImpl(
         const val MAX_COVER_CACHE_ENTRIES = 512
 
         /**
+         * How many chunks of a large list the walk will chase before it gives up.
+         *
+         * A runaway guard, not a truncation point: the walk follows AniList's own
+         * `hasNextChunk` and stops when the server says there is nothing left.
+         * Reaching this ceiling means the account is bigger than one load can
+         * assemble, and [fetchFullMediaListCollection] reports that as a failure.
+         * It used to be a literal `currentChunk <= 10` in the loop condition,
+         * which cut every list past five thousand entries down to its first ten
+         * chunks and returned the remains as a success - both callers cache a
+         * success for the refresh interval, so the only symptom was sequels near
+         * the tail that never appeared and never went away.
+         */
+        const val MAX_LIST_CHUNKS = 40
+
+        /**
          * AniList's `MediaType` enum names, as the GraphQL variables carry them.
          *
          * Strings rather than an enum because these travel into a query variable
@@ -428,7 +443,7 @@ class AniListRepositoryImpl(
         var currentChunk = 2
         var hasNext = true
 
-        while (hasNext && currentChunk <= 10) {
+        while (hasNext && currentChunk <= MAX_LIST_CHUNKS) {
             val chunkVars = mutableMapOf<String, Any?>()
             if (userId != null) chunkVars["userId"] = userId
             if (userName != null) chunkVars["userName"] = userName
@@ -477,6 +492,21 @@ class AniListRepositoryImpl(
 
             hasNext = nextCollection.hasNextChunk == true
             currentChunk++
+        }
+
+        // A walk that stopped because it ran out of ceiling, while the server still
+        // had chunks to give, is an *incomplete* list. Returning it as a success is
+        // what used to happen at chunk ten: the callers cache a success for the
+        // refresh interval, so the missing tail looked identical to a complete
+        // account and stayed that way until the cache expired. A reader is better
+        // served by "it did not load" than by an account quietly missing its end.
+        if (hasNext) {
+            return Result.failure(
+                AniListException(
+                    kind = AniListErrorKind.UNKNOWN,
+                    message = "This AniList list is too large for AniSequel to load in one go."
+                )
+            )
         }
 
         return Result.success(MediaListCollection(lists = allLists, hasNextChunk = false))

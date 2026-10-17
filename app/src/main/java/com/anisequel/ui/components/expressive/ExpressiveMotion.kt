@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
@@ -50,9 +51,18 @@ object ExpressiveMotion {
      * `MotionScheme` covers M3 components' built-in motion; this value covers
      * the tokens the app itself drives (route transitions, list item fades,
      * press feedback, and the morph loops).
+     *
+     * Snapshot state rather than a plain `var`, because every token below reads it
+     * and the setting that writes it is live in Settings. As a `var` it was
+     * invisible to composition: a read subscribes to nothing, so the app kept the
+     * physics it was composed with and the Motion style switch only reached
+     * whatever recomposed next. `Modifier.sectionReveal` is where that showed -
+     * [MotionStyle.INSTANT] drops its entire entrance animation, and it can only
+     * drop it if the composable reading this is invalidated when it changes.
      */
-    var speed: com.anisequel.data.repository.MotionStyle =
+    var speed: com.anisequel.data.repository.MotionStyle by mutableStateOf(
         com.anisequel.data.repository.MotionStyle.DEFAULT
+    )
 
     /** Snappy spatial spring for quick taps and micro-interactions. */
     val FastSpatial: FiniteAnimationSpec<Float> get() =

@@ -323,6 +323,26 @@ This needs a device and a finger, not a JVM test — which is exactly the gap
 describe. Do not "fix" it by guessing, and record which candidate it actually was
 here.
 
+### 4.3 The score slider cannot write a half point
+
+An AniList score is a `Double` and the form already carries halves: a loaded
+`8.5` renders as "8.5 / 10" in the row's subtitle. The slider under it is built
+with `steps = scoreMax - 1` — one tick per whole point — so the thumb snaps to
+8 or 9 the moment it is touched and the value the row just printed is not
+reachable from the control meant to set it.
+
+This needs its own decision rather than a mechanical tick change, which is why
+it was left alone when the action row moved (see Closed). The format the
+account uses is not in the entry: `scoreMax` is derived from the loaded value
+with a single `if (score > 10)`, and POINT_10 stores integers, POINT_10_DECIMAL
+stores tenths and POINT_100 stores integers, so no tick spacing satisfies all
+three. Half-point ticks on the ten scale (`steps = 19`, quantised to
+`round(it * 2) / 2`) would make the common halves reachable but would round a
+POINT_10_DECIMAL `8.3` on to `8.5`; a continuous slider would preserve `8.3`
+until touched but would let a POINT_10 account drag out a value its format
+cannot hold. Pick one against the score formats AniList actually validates, and
+pin it with a test.
+
 ---
 
 ## 5. Profile UI follow-ups
@@ -430,25 +450,27 @@ What it would take: a `loadLibrary()` on the ViewModel, an `onLoadLibrary`
 threaded through `ProfileTabsContent` exactly like the existing `onLoadManga`, and
 those tests rewritten to the new contract.
 
-### 6.2 The list's chunk walk is sequential, and stops at ten
+### 6.2 The list's chunk walk is sequential
 
-`fetchFullMediaListCollection` asks for chunk 1, then walks `2..10` **one at a
-time** (`while (hasNext && currentChunk <= 10)`). Two things are wrong in
-principle and neither is reachable for a realistic account:
+`fetchFullMediaListCollection` asks for chunk 1, then walks
+`2..MAX_LIST_CHUNKS` **one at a time** (`while (hasNext && currentChunk <=
+MAX_LIST_CHUNKS)`). The sequential walk spends wall-clock seconds where two or
+three chunks in flight would not.
 
-- The ceiling silently truncates a list of more than 5,000 entries and returns it
-  as `Result.success`, which is a correctness bug rather than a performance one —
-  the caller caches a short list as if it were the whole account.
-- The sequential walk spends wall-clock seconds where two or three chunks in
-  flight would not.
-
-Both are left alone because the trivial case dominates: a 500-entry list is one
+That is left alone because the trivial case dominates: a 500-entry list is one
 chunk, and an 800-entry one is two. Against a limiter that punishes bursts, more
 concurrency buys less than it costs.
 
-What it would take: a test that a 5,001-entry list is *not* reported complete
-(that half is worth doing on its own), then a bounded `async` fan-out per batch of
-chunks with the merge below it unchanged.
+The ceiling used to be a literal ten, and it used to **truncate silently**: a list
+of more than 5,000 entries was cut to its first ten chunks and returned as
+`Result.success`, so the caller cached a short list as if it were the whole
+account. That half is fixed. The walk now follows AniList's own `hasNextChunk` up
+to a runaway guard of forty chunks, and a walk the guard stops while the server
+still has chunks is reported as a failure rather than a short success —
+`MediaListChunkWalkTest` pins both halves.
+
+What it would take (for the remaining half): a bounded `async` fan-out per batch
+of chunks with the merge below it unchanged.
 
 ### 6.3 A bio's cover batch is one document with no upper bound
 
@@ -534,6 +556,20 @@ now carries a soft cap: `MAX_DETAIL_CACHE_NODES = 128`, cleared wholesale rather
 than evicted one at a time. Clearing is the deliberate choice — holding every
 full cast/studio tree the user has ever tapped costs more than the occasional
 refetch does. The entry named the wrong file the whole time it was open.
+
+### The detail store's published map defeated its own bound
+
+`MediaDetailStore` bounds its namespaced fetch cache at 250 entries, while the
+map the screens read was `_details.value + (id to node)` for the life of the
+store. Past 250 opened titles the fetch cache evicted an entry and the node
+itself stayed reachable from the published map, so the cap bounded nothing: a
+long session held every synopsis, cast and studio tree it had ever opened.
+Nothing visibly breaks when that map drops an entry, which is why it went
+unnoticed.
+
+Both maps now share the bound, and opening a title refreshes its recency in the
+published one — so the sheet on screen is the last entry the bound would drop.
+`MediaDetailNamespacingTest` pins both halves.
 
 ### There was no in-app way to see what changed between versions
 
@@ -632,3 +668,159 @@ the tab renders an in-progress edit. `load()` also refuses to fetch an entry it
 already holds, which is the part that cannot be seen from the UI;
 `EntryEditStateTest` pins it as "three visits to the tab must still cost exactly
 one request".
+
+### A character's page hid half the appearances AniList sent
+
+`getCharacterProfileQuery` passed `type: ANIME` to `Character.media`, so a character's
+appearances row listed only anime. The same query asked every node for its `type`, and
+`ProfileAppearance` is documented around a character appearing in a manga — the field
+the tap routes on exists precisely because both namespaces occur — so the filter was
+contradicting the query's own payload. The staff query never filtered, which made it
+visible: an actor's page listed manga credits their character's page hid. The filter is
+gone; both person kinds draw the same list.
+
+### `yearsActive` was a range printed as a list
+
+AniList's Staff schema says `yearsActive: [Int]` — `[startYear, endYear]`, with a lone
+`[startYear]` meaning the person is still working. The model's KDoc said "a person can
+have a non-contiguous career" and `facts` joined the values with a comma, so a career
+running 1963 to 2013 printed as "Active 1963, 2013": two years with a fifty-year hole
+between them. The still-working form printed as a bare year. `facts` renders the span
+now, and `PersonProfileTest` pins both forms.
+
+### The person sheet's height cap was a crop
+
+`PROFILE_SHEET_MAX_HEIGHT` caps the sheet so it opens on the portrait and the name.
+The cap was `heightIn` alone, and `Column` measures children in order - so a biography
+long enough to fill it left the appearances row and the "Open on AniList" button
+measured into a zero-height remainder. They were unreachable, not merely below the
+fold. The column is a scrolling viewport now, which keeps what the cap was for (the
+face stays on screen when the sheet opens) and removes what it did wrong.
+
+### An inline spoiler could never be opened
+
+`~!...!~` on a line of its own becomes `MarkdownNode.SpoilerBlock`, which has a
+chip: "Show spoiler". The same token *inside* a sentence becomes
+`InlineToken.Spoiler`, and that branch drew the obscured run and stopped —
+`append(SPOILER_PLACEHOLDER.repeat(...))`, with no annotation and no state. So it
+was not merely hard to open, it could not be opened: the plot point written
+mid-paragraph was covered for good, one line away from a block spoiler whose chip
+revealed fine.
+
+The comment on the branch recorded why, and the reasoning had expired: "an
+`AnnotatedString` cannot be tapped, so it has nowhere to put a reveal".
+`LinkAnnotation.Clickable` is exactly a tap on a span, and the same file was
+already routing `LinkAnnotation.Url` taps through the app's own link handler two
+functions below. The obscured run is the tap target now — a chip is not drawable
+in an `AnnotatedString`, and a pill dropped mid-sentence would break the line it
+lives on — numbered per paragraph by a shared counter so two spoilers in one
+sentence open independently, with the reveal in `rememberSaveable` because a bio
+paragraph is disposed with its `LazyColumn` item (the same trap
+`RenderSpoilerBlock` documents). The run also wears the chip's own
+`secondaryContainer` pair; it had been sharing `code`'s background, which made an
+inline spoiler and a code span look like the same thing.
+
+`InlineSpoilerRevealTest` pins the annotation, the listener, the placeholder being
+what opens, and the saved state.
+
+### Picking a palette under Dynamic colour changed nothing
+
+`AniSequelTheme` resolves its scheme in the order anime colour → wallpaper
+(Dynamic colour) → custom hue → palette, and the accent section's controls only
+knew about the first of those. A palette or hue click cleared the anime layer and
+left the wallpaper switch alone, and the palette card's `selected` state ignored
+`useDynamicColor` outright — so under Dynamic colour a pick moved the check mark,
+lit the border and changed nothing at all, and the reader had no way to tell that
+apart from the theme applying.
+
+Both controls now step the wallpaper off with the anime layer; turning Dynamic
+colour *on* steps the anime layer off for the same reason (it outranks the
+wallpaper, so the switch looked broken until the layer timed out); the hue caption
+no longer names a colour the wallpaper is overriding; and `ThemePreviewCard`'s pill
+lists the sources in the order the theme resolves them, rather than listing a
+stored custom hue ahead of the wallpaper that is actually drawing.
+
+### The hero swapped its artwork mid-open
+
+`InfoHero`'s backdrop was `media.bannerImage ?: media.posterUrl`, while the same
+file's KDoc argues at length that the hero leads with the key visual and *not* a
+banner ("cropped into a hero it competes with the title sitting on top of it").
+The `?:` made that true only until the detail response landed: a sheet opened from
+the dashboard starts on the list node, which has no banner, so the first frames
+drew the poster — and then the banner arrived and replaced the artwork under the
+title mid-entrance, at the cost of a second full-size download, decode and GPU
+upload during the animation. The hero draws the key visual again, and the banner
+is simply not read here. It is still selected by the detail query and merged onto
+the node, which is why `MediaNode.bannerImage` survives the change.
+
+### A person's appearance rows asked for the small cover, and the merge kept it
+
+Two halves of the same soft poster. `PROFILE_MEDIA_FIELDS` requested
+`coverImage { large }` — 230px — and the appearance row draws at
+`APPEARANCE_CARD_WIDTH = 112.dp`, about 336px on a 3x screen, so every poster under
+a character or staff member was upscaled before it was drawn. The query asks for
+`extraLarge` too, and the row prefers it.
+
+The other half was `MediaNode.withDetail`, which copied `detail.coverImage.large`
+and nothing else: a node whose cover had arrived by a thinner route kept its
+smaller `large` in the detail hero even after the response had handed over the
+460px `extraLarge`, and a tint only the detail response knew about was dropped, so
+a node could end up with neither the bigger cover nor a colour. The merge is
+field-wise now, detail winning only where it has a value; `RelationGapTest` pins
+both directions — the upgrade, and the refusal to downgrade a cover the node
+already had.
+
+### The Edit form's Save button sat below the fold
+
+"Save changes" and "Delete" were the last row of a form — Status, Progress, Score,
+both dates, Private, then the message and the buttons — inside the *sheet's*
+scroll. The form is around 640dp tall, so on a 640dp-tall screen the primary
+action was roughly 170dp below the fold: a reader who had just changed a score had
+to scroll to find the button that keeps it, and a form whose primary action is
+only reachable by scrolling reads as a form with no action at all.
+
+The fields scroll inside the tab now and the action row is pinned below them,
+drawn as the same outlined card as the rows above it. The row also says which
+state it is in: the entry AniList confirmed is held alongside the draft
+(`EntryEditState.markSaved`), so "No changes to save yet" shows instead of a
+button that would send a whole-entry snapshot to change nothing, and a save's
+message is cleared by the next edit rather than surviving it — "Saved to your
+AniList list" used to stay up while the score underneath it had already changed.
+
+### Motion style was invisible to composition
+
+`ExpressiveMotion.speed` was a plain `var`, written from `AniSequelTheme`'s
+composition body and read by every token (`FastSpatial`, `FastColorEffects`,
+`sectionReveal`, `bouncyPress`). A read of a plain variable subscribes to nothing,
+so changing Motion style reached only whatever recomposed afterwards: the app kept
+the springs it had been composed with, `SMOOTH` went on overshooting, and `INSTANT`
+sped up the next rebuild rather than the app on screen.
+
+It is snapshot state now, written from a `SideEffect` so the write is a
+commit-phase fact rather than something a discarded composition can leave behind.
+The navigation bar's selected item also springs to its width (`animatedItemWeight`,
+`FastSpatial` — the same physics as the label's `FastSpatialSize` unfurl) instead of
+taking it in one frame while its label grew into a slot that had already finished
+growing.
+
+### The Info page rebuilt its derived lists on every pass
+
+`genreList`, `weightedTags.mapNotNull { … }`, `relatedMedia`, `characterList`,
+`alternativeTitleRows`, `hasProgressCard` and `hasRankings` are all *getters* that
+walk, filter or sort, and the page read them in its body — so every pass over the
+body rebuilt all of them. The body recomposes several times inside one open: the
+first frame, the `isDetailLoading` flip, the detail arriving, and the floating
+bar's appearance as the hero collapses past its threshold. One `remember(media)`
+holds the lot (`InfoSections`), which also collapses four `isNotEmpty()` questions
+into flags.
+
+### The anime colour layer re-themed the app twice per open
+
+Opening a title with the anime colour layer on wrote the layer in two DataStore
+transactions — `setAnimeThemeActive(true, hex)`, then `setCustomColorHex(hex)` for
+Retain. Each transaction emits a new `ThemeSettings`, and a new `ThemeSettings`
+rebuilds the scheme behind the whole app, so the open recoloured everything twice:
+once when the anime colour reached the scheme and once when the retained accent
+arrived a frame later, both inside the sheet's entrance. `setAnimeThemeActive`
+takes the retained accent as a third key and writes one transaction, so the
+recolour is one wave. The layer's lifetime is unchanged.

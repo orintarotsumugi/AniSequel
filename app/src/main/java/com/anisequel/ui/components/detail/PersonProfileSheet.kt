@@ -2,6 +2,8 @@ package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -33,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -46,6 +46,7 @@ import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.model.formatLabel
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -164,6 +165,13 @@ fun PersonProfileSheet(
  * a biography plus twelve covers is taller than a phone, and without a cap the portrait
  * and the name - the two things that identify whose face this is - are pushed off the
  * screen the sheet opened on.
+ *
+ * The cap is a **scrolling viewport**, not a clip. It used to be `heightIn` alone, on
+ * the assumption that a biography would never be long enough to matter; a long one is
+ * measured first and takes the height it wants, so the appearances row and the AniList
+ * link were measured into whatever remained - zero - and could not be reached at all.
+ * With the scroll, the sheet still opens on the portrait, and everything below it is
+ * one swipe away.
  */
 @Composable
 private fun LoadedPersonProfile(
@@ -182,6 +190,7 @@ private fun LoadedPersonProfile(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = PROFILE_SHEET_MAX_HEIGHT)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -325,20 +334,7 @@ private fun ProfileBiography(description: String?) {
             .testTag("profile_biography"),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = AppVectorIcons.ProfileAbout,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(15.dp)
-            )
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        SectionHeading(title = "About", icon = AppVectorIcons.ProfileAbout)
         AniListMarkdownView(nodes = nodes)
     }
 }
@@ -357,11 +353,7 @@ private fun ProfileAppearancesRow(
     onOpen: (ProfileAppearance) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Appears in",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
+        SectionHeading(title = "Appears in", icon = AppVectorIcons.List)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(
             state = listState,
@@ -402,21 +394,12 @@ private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppear
                     .height(APPEARANCE_POSTER_HEIGHT)
             )
             appearance.averageScore?.let { score ->
-                Surface(
-                    shape = ExpressiveShapes.pill,
-                    color = Color.Black.copy(alpha = 0.62f),
+                ScoreBadge(
+                    score = score,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(5.dp)
-                ) {
-                    Text(
-                        text = "$score%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+                )
             }
         }
         Spacer(modifier = Modifier.height(5.dp))

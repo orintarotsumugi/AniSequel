@@ -362,7 +362,19 @@ jobs:
           # reports findings without failing the build, so this step would never
           # stop a release either way. It is kept because the annotations are
           # useful in the run summary, but it must not be read as a gate.
-          ./gradlew lintRelease --continue || echo "::warning::lint reported issues (see annotations)"
+          #
+          # The version flags are the same ones the APK step is given, and that is
+          # the point of them here. Lint needs the release classes for its model, so
+          # without them this step compiled the release variant, and then
+          # `assembleRelease` compiled it again: the flags change `BuildConfig`, and
+          # `BuildConfig` is an input to KSP and to the Kotlin compile, so the
+          # second compile could never be up to date. A run's log showed both - 30s
+          # of KSP plus a 23s Kotlin compile here, then a 33s recompile before R8.
+          # With the same values on both steps the second one is up to date.
+          ./gradlew lintRelease \
+            -PanisequelVersionCode="${{ github.run_number }}" \
+            -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
+            --continue || echo "::warning::lint reported issues (see annotations)"
           echo "::endgroup::"
 
       # Robolectric does not fetch its framework jars through Gradle. It runs its

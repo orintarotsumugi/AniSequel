@@ -192,5 +192,5 @@ fun ProfileAppearance.toMediaNode(): MediaNode = MediaNode(
     status = status,
     averageScore = averageScore,
     siteUrl = siteUrl,
-    coverImage = coverImage?.let { MediaCoverImage(extraLarge = it.large, large = it.large) }
+    coverImage = coverImage?.let { MediaCoverImage(extraLarge = it.extraLarge, large = it.large) }
 )

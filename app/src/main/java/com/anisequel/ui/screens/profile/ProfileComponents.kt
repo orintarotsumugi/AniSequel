@@ -44,6 +44,7 @@ import com.anisequel.data.model.FavouriteCharacter
 import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.formatLabel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -212,23 +213,18 @@ private fun FavouriteMediaCard(
     }
 }
 
-/** "TV • 84%", or the format alone when AniList has no score for it. */
+/**
+ * "TV • 84%", or the format alone when AniList has no score for it.
+ *
+ * The format word comes from [formatLabel], not from a local `when`: this function
+ * used to carry a copy of the mapping, and a copy is exactly what the KDoc on
+ * `ProfileAppearance.formatLabel` warns about - it printed "Music_video" where the
+ * person sheet printed "Music Video", and disagreed with the shared mapper on every
+ * format added after it was written.
+ */
 private fun favouriteCaption(media: MediaNode): String {
-    val rawFormat = media.format?.trim()
-    val format = when (rawFormat?.uppercase()) {
-        "TV" -> "TV"
-        "TV_SHORT" -> "TV Short"
-        "MOVIE" -> "Movie"
-        "SPECIAL" -> "Special"
-        "OVA" -> "OVA"
-        "ONA" -> "ONA"
-        "MANGA" -> "Manga"
-        "ONE_SHOT" -> "One Shot"
-        "NOVEL" -> "Novel"
-        else -> rawFormat?.lowercase()?.replaceFirstChar { it.uppercase() }.orEmpty()
-    }
     val score = media.averageScore?.takeIf { it > 0 }?.let { "$it%" }
-    return listOfNotNull(format.takeIf { it.isNotBlank() }, score).joinToString(" • ")
+    return listOfNotNull(media.formatLabel, score).joinToString(" • ")
 }
 
 /**
