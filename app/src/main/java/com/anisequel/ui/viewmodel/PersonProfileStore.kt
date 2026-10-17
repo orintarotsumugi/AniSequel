@@ -1,17 +1,10 @@
 package com.anisequel.ui.viewmodel
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
-import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.toLoadedState
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.CoroutineScope
@@ -103,15 +96,27 @@ class PersonProfileStore(
         _state.value = PersonProfileState.Loading(kind, name)
 
         fetchScope.launch {
-            val result = when {
-                isDemo -> Result.failure<Any>(
+            /**
+             * Mapped to the sheet's state at the call site, while the payload type is
+             * still statically known.
+             *
+             * This used to go through one `Any.toLoadedState()` that `when`-cast and
+             * called the matching conversion. It recursed to a stack overflow: with an
+             * `Any` receiver in scope and two imported conversions of the same name,
+             * `toLoadedState()` inside the branch resolved to the `Any` one - the call
+             * it was meant to be dispatching away from. Branches that map on a value of
+             * known type cannot hit that, so there is no dispatcher here to get wrong.
+             */
+            val result: Result<PersonProfileState.Loaded> = when {
+                isDemo -> Result.failure(
                     IllegalStateException("There is no ${kind.label()} to look up in the demo.")
                 )
-                repository == null -> Result.failure<Any>(
+                repository == null -> Result.failure(
                     IllegalStateException("This screen has no AniList connection to look one up with.")
                 )
-                kind == PersonKind.CHARACTER -> repository.getCharacterProfile(id)
-                else -> repository.getStaffProfile(id)
+                kind == PersonKind.CHARACTER ->
+                    repository.getCharacterProfile(id).map { it.toLoadedState() }
+                else -> repository.getStaffProfile(id).map { it.toLoadedState() }
             }
 
             // The guard. A response for a sheet the reader has already replaced is
@@ -120,7 +125,7 @@ class PersonProfileStore(
             pending = null
 
             _state.value = result.fold(
-                onSuccess = { it.toLoadedState() },
+                onSuccess = { it },
                 onFailure = { error ->
                     PersonProfileState.Failed(
                         kind = kind,
@@ -160,16 +165,6 @@ class PersonProfileStore(
         // made it - a `TestScope`, or a screen that outlives this store - and
         // cancelling it here would take down work that is not this store's.
         if (ownsScope) fetchScope.cancel()
-    }
-
-    /**
-     * One reader for the two payloads, so the sheet does not branch on which one
-     * arrived. `CharacterProfile` and `StaffProfile` both define `toLoadedState()`.
-     */
-    private fun Any.toLoadedState(): PersonProfileState.Loaded = when (this) {
-        is CharacterProfile -> toLoadedState()
-        is StaffProfile -> toLoadedState()
-        else -> error("PersonProfileStore got ${this::class.simpleName}, which is neither payload")
     }
 
     private fun PersonKind.label(): String =
