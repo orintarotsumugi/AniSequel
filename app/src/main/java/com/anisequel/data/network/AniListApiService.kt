@@ -12,9 +12,11 @@ import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
+import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.StudioData
+import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.ToggleLikeData
 import com.anisequel.data.model.UserByNameData
 import com.anisequel.data.model.UserOverviewData
@@ -168,4 +170,18 @@ interface AniListApiService {
     suspend fun saveActivityReply(
         @Body request: GraphQLRequest
     ): GraphQLResponse<SaveActivityReplyData>
+
+    /** One character and the titles they appear in. Opened by the cast row. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getCharacterProfile(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<CharacterProfileData>
+
+    /** One staff member and the titles they worked on. Opened by the crew row. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getStaffProfile(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<StaffProfileData>
 }

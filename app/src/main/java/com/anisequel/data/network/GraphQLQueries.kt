@@ -1012,6 +1012,102 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * One character, with the titles they appear in.
+     *
+     * The sheet this opens is the in-app equivalent of the studio page: a tap on a
+     * cast card used to hand off to a browser, which is the one thing the rest of the
+     * title page does not do - a studio credit opens a studio *page*, so a character
+     * credit opens a character *page*.
+     *
+     * `media` rather than a `characterMedia` on the character, because this is what a
+     * reader wants: the shows they are in, most popular first, as a row of posters.
+     * Sorted by `POPULARITY_DESC` because AniList's own ordering for this connection
+     * puts an obscure cameo above a lead role otherwise.
+     *
+     * `age` is free text and not a number - Faye Valentine's is
+     * "23 (Physical), 77 (Actual)". See `MediaCharacter.age`.
+     */
+    fun getCharacterProfileQuery(): String = """
+        query CharacterProfile(${'$'}id: Int!) {
+          Character(id: ${'$'}id) {
+            id
+            name { full native alternative }
+            image { large medium }
+            description(asHtml: false)
+            gender
+            age
+            bloodType
+            favourites
+            siteUrl
+            isFavourite
+            dateOfBirth { year month day }
+            media(perPage: 12, sort: [POPULARITY_DESC], type: ANIME) {
+              nodes { $PROFILE_MEDIA_FIELDS }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * One staff member, with the titles they worked on.
+     *
+     * Same shape as [getCharacterProfileQuery] and deliberately so: the sheet that
+     * renders a person is one composable, and a crew member who renders differently
+     * from an actor on the same page is the kind of asymmetry a reader notices.
+     *
+     * `staffMedia` rather than `characterMedia` - the latter is "media this *character*
+     * appears in", which is not what a director worked on. `primaryOccupations` is
+     * what distinguishes a voice actor from an animator, and `yearsActive` and
+     * `homeTown` are the two facts a credit otherwise never carries.
+     *
+     * Both dates are asked for because both are null for a living person and the card
+     * hides whichever is absent - see the sheet's own note on that.
+     */
+    fun getStaffProfileQuery(): String = """
+        query StaffProfile(${'$'}id: Int!) {
+          Staff(id: ${'$'}id) {
+            id
+            name { full native }
+            image { large medium }
+            description(asHtml: false)
+            primaryOccupations
+            gender
+            age
+            yearsActive
+            homeTown
+            bloodType
+            favourites
+            siteUrl
+            isFavourite
+            dateOfBirth { year month day }
+            dateOfDeath { year month day }
+            staffMedia(perPage: 12, sort: [POPULARITY_DESC]) {
+              nodes { $PROFILE_MEDIA_FIELDS }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The one card of a title in a person's profile row.
+     *
+     * Smaller than [STUDIO_MEDIA_FIELDS] on purpose - that one opens into a whole
+     * studio page's worth of shelves, and this is a horizontal row where a reader may
+     * never tap. The four facts are what a poster needs to be recognised by, plus `id`
+     * and `type` so the tap can be routed to the right detail sheet.
+     */
+    private const val PROFILE_MEDIA_FIELDS = """
+                id
+                type
+                title { english romaji native userPreferred }
+                format
+                status
+                averageScore
+                siteUrl
+                coverImage { large }
+    """
+
+    /**
      * Posts a comment on an activity.
      *
      * `SaveActivityReply`, **not** `SaveActivityMessage`. The latter is for

@@ -19,6 +19,8 @@ import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.StaffProfileData
+import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ToggleLikeData
 import com.anisequel.data.model.UserOverviewData
 import com.anisequel.data.model.ViewerData
@@ -124,6 +126,17 @@ class AniListErrorMappingTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        // The two person-profile endpoints. Same reason as `getStudio` below: a
+        // new endpoint on the interface breaks every fake in the test source set
+        // until it is answered.
+        override suspend fun getCharacterProfile(
+            request: GraphQLRequest
+        ): GraphQLResponse<CharacterProfileData> = notServed("getCharacterProfile")
+
+        override suspend fun getStaffProfile(
+            request: GraphQLRequest
+        ): GraphQLResponse<StaffProfileData> = notServed("getStaffProfile")
 
         // The reply like, added with the comments feature. Same reason as `getStudio`
         // below: a new endpoint on the interface stops the test *module* compiling
@@ -345,6 +358,17 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        // The two person-profile endpoints. Same reason as `getStudio` below: a
+        // new endpoint on the interface breaks every fake in the test source set
+        // until it is answered.
+        override suspend fun getCharacterProfile(
+            request: GraphQLRequest
+        ): GraphQLResponse<CharacterProfileData> = notServed("getCharacterProfile")
+
+        override suspend fun getStaffProfile(
+            request: GraphQLRequest
+        ): GraphQLResponse<StaffProfileData> = notServed("getStaffProfile")
 
         // See the note on the same override in `FakeService`.
         override suspend fun toggleActivityReplyLike(

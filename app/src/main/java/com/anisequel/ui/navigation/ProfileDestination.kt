@@ -163,6 +163,10 @@ fun ProfileDestination(
     )
 
     UserProfileScreen(
+        // The screen owns the person-profile store, so it needs the repository to
+        // fetch with. Passed rather than reached for on a ViewModel, which holds its
+        // own privately.
+        repository = repository,
         overviewViewModel = overviewViewModel,
         activityViewModel = activityViewModel,
         socialViewModel = socialViewModel,
