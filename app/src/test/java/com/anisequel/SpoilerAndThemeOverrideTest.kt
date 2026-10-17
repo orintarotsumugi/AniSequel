@@ -77,33 +77,6 @@ class SpoilerAndThemeOverrideTest {
     private fun declarationStartingAt(source: String, marker: String): String =
         source.substringAfter(marker).substringBefore("\n}")
 
-    /**
-     * The source of the one top-level declaration that starts with [marker].
-     *
-     * Cut at the first `\n}`. The closing brace of a top-level declaration is the
-     * only one at column 0, because everything nested inside it is indented, and
-     * that one observation replaces every fancier rule tried before it.
-     *
-     * Rejected on the way here, each wrong in a way worth recording:
-     *
-     * - `substringAfter(marker)` alone runs to end-of-file, so a
-     *   `wrapContentWidth()` in some unrelated composable further down satisfies an
-     *   assertion about the chip. A test that passes while the bug is still present
-     *   is worse than no test at all.
-     * - Cutting at a blank line: a Kotlin body routinely contains one.
-     * - Cutting at the next line at column 0: the `) {` closing a multi-line
-     *   signature is also at column 0, and stopping there left sixteen lines - the
-     *   parameter list - and failed every assertion on correct code.
-     * - Cutting at the next line that opens a declaration, first as a large
-     *   `Regex` and then as a predicate function. The regex had to spell a comment
-     *   opener and a closer with backslashes inside a Kotlin string, in a file that
-     *   already holds raw strings containing comment delimiters further down. Two
-     *   spellings of one hazardous construct in one file, and the compiler
-     *   disagreed about where the class ended.
-     */
-    private fun declarationStartingAt(source: String, marker: String): String =
-        source.substringAfter(marker).substringBefore("\n}")
-
     // ---- the spoiler ------------------------------------------------------------
 
     /**
