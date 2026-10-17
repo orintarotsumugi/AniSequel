@@ -44,7 +44,7 @@ The cache half is pure file operations and is the easiest to test — a
 
 ### 1.2 Split `DashboardViewModel`'s recompute pipeline — medium effort, needs care
 
-The file is ~1120 lines including comments, well past the 250–400 in
+The file is ~1140 lines including comments, past the 700-line ceiling in
 [AGENTS.md §1](AGENTS.md) and the largest file in the repo by a wide margin. The
 public contract (`DashboardUiState`, `DashboardEvent`) is already extracted to
 `DashboardUiState.kt`, and the triplicated cache-invalidation is now one

@@ -3,7 +3,6 @@ package com.anisequel.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,12 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +39,7 @@ import coil.request.ImageRequest
 import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.MediaNode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -282,7 +277,7 @@ fun ActivityCard(
                                 icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
                                 label = if (isManga) "Manga" else "Anime"
                             )
-                            ActivityAction(
+                            EngagementAction(
                                 icon = if (activity.isLiked == true) {
                                     AppVectorIcons.ActivityLiked
                                 } else {
@@ -296,7 +291,7 @@ fun ActivityCard(
                                 onLongClick = onOpenLikers,
                                 modifier = Modifier.testTag("activity_like_button")
                             )
-                            ActivityAction(
+                            EngagementAction(
                                 icon = AppVectorIcons.ActivityReplies,
                                 count = activity.replyCount ?: 0,
                                 active = false,
@@ -402,78 +397,3 @@ private fun ActivityStatusPill(text: String, accent: Boolean) {
     )
 }
 
-/**
- * A like or comment control: an icon, a count, and whether it is active.
- *
- * The tap target is the whole row rather than the 16dp icon, because a 16dp
- * target is below the 48dp minimum and the count is part of what the user is
- * aiming at. The comment above used to claim that and not do it: the row was
- * only 16dp of icon plus 5dp of spacer plus 4dp of padding each way - about
- * 24dp tall, so a third under the minimum the comment claimed to be meeting.
- * [defaultMinSize] is applied *before* the gesture so the minimum is inside the
- * clickable's hit area, which is what actually makes the target 48dp.
- *
- * [enabled] is false for the heart when AniList has not said whether this
- * activity is liked - see the call site. The press animation used to be omitted
- * in that case, guarded by `.then(if (enabled) ...)`, because the fallback
- * pointer loop squashed anything a finger went down on regardless of whether the
- * control would do anything. Sharing the `combinedClickable`'s own
- * `InteractionSource` removes the need for the guard: a disabled control emits no
- * press, so there is nothing to suppress.
- *
- * [onLongClick] is optional; only the heart currently passes it. The long press
- * runs through `combinedClickable` so the tap path itself is unchanged.
- * `hapticFeedbackEnabled` is set false and the haptic is played by hand instead:
- * the modifier performs its own long-press haptic by default, and leaving both on
- * would buzz twice. The hand-played one is the same single
- * [HapticFeedbackType.LongPress] every other hold gesture in the app uses.
- */
-@Composable
-private fun ActivityAction(
-    icon: ImageVector,
-    count: Int,
-    active: Boolean,
-    enabled: Boolean,
-    contentDescription: String,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val appearance = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(MaterialTheme.shapes.small)
-            .combinedClickable(
-                enabled = enabled,
-                interactionSource = interactionSource,
-                onLongClick = onLongClick?.let { open ->
-                    {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        open()
-                    }
-                },
-                hapticFeedbackEnabled = false,
-                onClick = onClick
-            )
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = appearance,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            color = appearance
-        )
-    }
-}

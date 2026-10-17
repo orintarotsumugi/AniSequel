@@ -193,11 +193,15 @@ fun UserProfileScreen(
      */
     onOpenTierList: () -> Unit = {},
     /**
-     * Opens a studio's page from the credits on a title the sheet is showing.
+     * Opens a studio's page, from a pinned studio chip on the Home tab as well as from
+     * the credits on a title the sheet is showing.
      *
-     * A callback for the same reason [onOpenTierList] is: the screen holds no
-     * `NavController`. The sheet's own close comes first - see the call site - so
-     * the studio page is not covered by a window that belongs to this one.
+     * One parameter for both, deliberately: they want the same thing, and two
+     * parameters would be two definitions of "open this studio" on one screen that
+     * could drift into opening different things. A callback for the same reason
+     * [onOpenTierList] is - the screen holds no `NavController`. Where the sheet's own
+     * close has to happen first, so the studio page is not covered by a window that
+     * belongs to this one, that is done at the call site rather than here.
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     onSignInAgain: () -> Unit = {},
@@ -390,7 +394,8 @@ fun UserProfileScreen(
                         mediaCovers = mediaCovers,
                         onLoadManga = { overviewViewModel.loadMangaLibrary() },
                         onOpenUser = onOpenUser,
-                        onOpenDetail = { selectedMedia = it }
+                        onOpenDetail = { selectedMedia = it },
+                        onOpenStudio = onOpenStudio
                     )
                     ExpressiveNavigationBar(
                         destinations = ProfileTabs,
@@ -429,10 +434,29 @@ fun UserProfileScreen(
         )
     }
 
-    // The heart's long-press sheet, a sibling of the detail sheet rather than a
-    // child of the activity list: a `ModalBottomSheet` lives in its own window,
-    // and nesting it inside the tab's `AnimatedContent` would take it down with
-    // the tab's outgoing transition on any tab switch.
+    // Both sheets are siblings of the tab content rather than children of a tab, for
+    // the same reason: `AnimatedContent` composes the incoming tab alongside the
+    // outgoing one and then *disposes* the outgoing one, and a `ModalBottomSheet` is a
+    // window of its own - so one drawn from inside a tab is torn down with it. Open a
+    // thread, tap another tab, and the sheet went with it - draft included.
+    //
+    // The likers sheet had been hoisted here for exactly that reason and carried a
+    // note saying so; the comments sheet was left behind, which left the two sheets on
+    // this screen with opposite lifetimes and nothing to explain why.
+    commentsState?.let { comments ->
+        ActivityCommentsSheet(
+            state = comments,
+            // A comment is a write, and a demo profile has no session to write with.
+            // Same gate as the like: see [UserActivityViewModel.postComment].
+            canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true,
+            onDismiss = { activityViewModel.closeComments() },
+            onRetry = { activityViewModel.openComments(comments.activityId) },
+            onPost = { activityViewModel.postComment(it) },
+            onLikeReply = { activityViewModel.toggleReplyLike(it) }
+        )
+    }
+
+    // The heart's long-press sheet, same reasoning and same place.
     likersState?.let { likers ->
         ActivityLikersSheet(
             state = likers,
@@ -467,7 +491,9 @@ private fun ProfileTabsContent(
      */
     onLoadManga: () -> Unit,
     onOpenUser: (FollowUser) -> Unit,
-    onOpenDetail: (MediaNode) -> Unit
+    onOpenDetail: (MediaNode) -> Unit,
+    /** Forwarded to the Home tab's pinned-studio chips. */
+    onOpenStudio: (Int, String?) -> Unit
 ) {
     // Hoisted above [AnimatedContent] so each tab keeps its own scroll position.
     //
@@ -551,17 +577,10 @@ private fun ProfileTabsContent(
                     contentPadding = padding,
                     listState = activityListState,
                     calendar = state.activity,
-                    commentsState = commentsState,
-                    // A comment is a write, and the demo feed has no session to
-                    // write with - the same gate every other mutation uses.
-                    canPostComment = !state.isDemoMode,
                     userName = state.username,
                     userAvatar = state.avatarUrl,
                     onLike = { activityViewModel.toggleLike(it) },
                     onOpenComments = { activityViewModel.openComments(it) },
-                    onCloseComments = { activityViewModel.closeComments() },
-                    onRetryComments = { activityViewModel.openComments(it) },
-                    onPostComment = { activityViewModel.postComment(it) },
                     onOpenLikers = { activityViewModel.openLikers(it) },
                     onOpenDetail = onOpenDetail
                 )
@@ -610,6 +629,7 @@ private fun ProfileTabsContent(
                     state = state,
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,
+                    onOpenStudio = onOpenStudio,
                     listState = homeListState,
                     mediaCovers = mediaCovers
                 )

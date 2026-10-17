@@ -20,7 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.components.openExternalUrlOrCopy
 
 /**
  * Pure Compose renderer for Markdown tables in AniList reviews, forum posts, and user bios.
@@ -51,7 +51,7 @@ fun RenderTable(table: MarkdownNode.TableBlock) {
                         .padding(vertical = 4.dp)
                 ) {
                     table.headers.forEach { headerTokens ->
-                        val annotated = buildInlineAnnotatedString(headerTokens, onLinkClick = { openExternalUrl(context, it) })
+                        val annotated = buildInlineAnnotatedString(headerTokens, onLinkClick = { openExternalUrlOrCopy(context, it) })
                         Box(
                             modifier = Modifier
                                 .widthIn(min = 96.dp)
@@ -86,7 +86,7 @@ fun RenderTable(table: MarkdownNode.TableBlock) {
                         .padding(vertical = 2.dp)
                 ) {
                     rowCells.forEach { cellTokens ->
-                        val annotated = buildInlineAnnotatedString(cellTokens, onLinkClick = { openExternalUrl(context, it) })
+                        val annotated = buildInlineAnnotatedString(cellTokens, onLinkClick = { openExternalUrlOrCopy(context, it) })
                         Box(
                             modifier = Modifier
                                 .widthIn(min = 96.dp)

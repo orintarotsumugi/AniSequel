@@ -33,7 +33,7 @@ import com.anisequel.data.model.genreList
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.pageUrl
-import com.anisequel.data.model.relatedAnime
+import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.weightLabel
 import com.anisequel.data.model.weightedTags
@@ -124,7 +124,26 @@ fun AnimeInfoPage(
             }
         }
     }
-    val showFloatingBar by remember {
+    // Keyed on [collapse], and that key is the whole fix - it used to be a bare
+    // `remember { }`.
+    //
+    // `SequelDetailSheet` hands this page a *different* `LazyListState` for every
+    // title: it keys the state on `subject.mediaId` so following a relation starts
+    // the new title at the top rather than inheriting the old one's offset. So when
+    // a relation is opened, [collapse] above is rebuilt against the new list state -
+    // and an unkeyed `remember` here would keep the *first* `derivedStateOf` it was
+    // ever given, whose lambda closes over the **old** list state. That state is
+    // detached from the list by then and keeps its last value, so the threshold was
+    // being compared against wherever the reader was on the title they just left.
+    //
+    // The reader is always *past* the hero when they open a relation - the relation
+    // row is a dozen sections down - so `collapse` read 1f, and the new title opened
+    // with its hero at the top **and** the docked bar already on screen over it. The
+    // hero and the bar each draw their own "Open on AniList" and "Close" controls, so
+    // that is two of each stacked in the same corner of a page that is supposed to
+    // have exactly one way out. Keying on [collapse] rebuilds the threshold with the
+    // scroll state it belongs to.
+    val showFloatingBar by remember(collapse) {
         derivedStateOf { collapse.value > DOCKED_BAR_AT }
     }
 
@@ -289,7 +308,7 @@ fun AnimeInfoPage(
                 }
             }
 
-            if (media.relatedAnime.isNotEmpty()) {
+            if (media.relatedMedia.isNotEmpty()) {
                 item(key = "relations") {
                     InfoRelationsSection(
                         media = media,

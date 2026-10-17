@@ -12,11 +12,12 @@ about the constraints.
 
 ## 1. Size and structure
 
-- **Keep files focused, ideally 250–400 lines.** Over that, the file is doing
-  more than one job.
-- **Split by responsibility, not by line count.** Splitting a 700-line class into
-  two arbitrary halves is churn. The split is worth making when the two halves
-  have genuinely different reasons to change, or different owners.
+- **Keep files focused, and under 700 lines.** The number is a ceiling, not a
+  target — a file under it that is doing two jobs still needs splitting. Past 700
+  the file is genuinely doing more than one thing.
+- **Split by responsibility, not by line count.** Splitting a large file into two
+  arbitrary halves is churn. The split is worth making when the two halves have
+  genuinely different reasons to change, or different owners.
 - **Keep layers separate**: `ui/` (presentation), `domain/usecase/` (pure logic,
   no Android imports), `data/` (network, repository, update).
 - **Comments explain why, not what.** A comment restating the line below it is

@@ -125,6 +125,13 @@ class AniListErrorMappingTest {
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
 
+        // The reply like, added with the comments feature. Same reason as `getStudio`
+        // below: a new endpoint on the interface stops the test *module* compiling
+        // until every fake answers it.
+        override suspend fun toggleActivityReplyLike(
+            request: GraphQLRequest
+        ): GraphQLResponse<ToggleLikeData> = notServed("toggleActivityReplyLike")
+
         // The studio page's endpoint, added to `AniListApiService` with it. Every
         // fake in this file has to implement it or the test *module* stops
         // compiling - which is what happened: the app compiled, the tests did not.
@@ -338,6 +345,11 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        // See the note on the same override in `FakeService`.
+        override suspend fun toggleActivityReplyLike(
+            request: GraphQLRequest
+        ): GraphQLResponse<ToggleLikeData> = notServed("toggleActivityReplyLike")
 
         // See the note on the same override in `FakeService`: a new endpoint on the
         // interface breaks every fake in the test source set until it is answered.

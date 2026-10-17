@@ -492,7 +492,45 @@ data class MediaCharacterEdge(
 data class MediaCharacter(
     val id: Int? = null,
     val name: MediaName? = null,
-    val image: MediaImage? = null
+    val image: MediaImage? = null,
+    /**
+     * How many AniList users have this character in their favourites.
+     *
+     * The one number that says whether a character is well known, and the reason the
+     * character card can be a control rather than a caption - it is the same field the
+     * studio page leads with. Null on a source that never asked for it.
+     */
+    val favourites: Int? = null,
+    /** The character's own page on AniList, where the rest of its details live. */
+    val siteUrl: String? = null,
+    /**
+     * AniList's own gender string: `Male`, `Female`, `Non-binary`, or null.
+     *
+     * A string and not an enum because AniList reports a *description* rather than a
+     * closed set — it has values like `Non-Binary` and `N/A`, and a new one would
+     * make the whole document fail rather than render one unfamiliar word. See the note
+     * on `MediaNode.statusLabel` for the same reasoning applied to an enum.
+     */
+    val gender: String? = null,
+    /**
+     * Free text, not a number.
+     *
+     * "27" on most characters and not an int; Faye Valentine's is
+     * "23 (Physical), 77 (Actual)" and Edward's changes across the series, so this is
+     * printed as written rather than parsed. Parsing it into an `Int?` is exactly the
+     * mistake `MediaNode.season` documents, where Moshi refused to read an enum string
+     * as an int and threw out of the *only* call that fetches the list.
+     */
+    val age: String? = null,
+    /**
+     * The character's own AniList description, as markdown-with-HTML-glue.
+     *
+     * Fetched so a character is not a dead end, and deliberately **not** rendered on
+     * the card: the detail query asks for the whole cast and twenty-five descriptions
+     * is a wall of text in a horizontal row. It is here for the same reason a studio's
+     * filmography is fetched but not drawn on its credit chip.
+     */
+    val description: String? = null
 )
 
 /** The `staff` connection of a media. */
@@ -520,7 +558,17 @@ data class MediaStaff(
 @JsonClass(generateAdapter = true)
 data class MediaName(
     val full: String? = null,
-    val native: String? = null
+    val native: String? = null,
+    /**
+     * Other names the character is known by, for a character only.
+     *
+     * Spike Spiegel carries "Spike Spike" and "Swimming Bird"; the staff and the
+     * character both use this type, and a staff member has no alternatives, so the
+     * default is null rather than an empty list — Moshi leaves an unasked-for field
+     * null, and a staff row must not gain an empty "Alternative names" section for a
+     * field that was never asked for.
+     */
+    val alternative: List<String>? = null
 )
 
 /** AniList's `CharacterImage`/`StaffImage`. */

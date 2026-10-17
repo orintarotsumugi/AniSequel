@@ -394,17 +394,42 @@ private fun FavouritePerson(
 }
 
 /**
- * Favourite studios as capsules.
+ * Favourite studios as capsules that open the studio's page.
  *
  * Studios have no cover and no portrait, so a row of them would be a row of
  * identical circles with different initials - which reads as a loading failure
  * rather than as a studio name. Capsules carry the name properly, and with four
  * to six of them they wrap rather than scroll off the end of the page.
+ *
+ * ## Why each one is a button now
+ *
+ * These were plain `Text` in a tinted capsule - a chip that looks exactly like a
+ * control and does nothing. Every other favourites row on this page opens
+ * something: anime and manga open the detail sheet, characters and staff hand off to
+ * the browser, and the studios were the only row that went nowhere. A studio a
+ * person chose to pin is the strongest statement on the profile about the kind of
+ * thing they watch, and the studio page - a whole filmography, shelved by year - is
+ * already the destination the Info page's own credits use.
+ *
+ * The row takes `(Int, String?)` rather than a [StudioNode] so this file does not
+ * have to decide what a studio *is*: the sheet's credits hand the same pair to the
+ * same route, and one definition of "open this studio" stays in one place.
+ *
+ * A credit with no id is drawn as text rather than as a button that cannot work, the
+ * same rule the title page follows. AniList's favourites always carry one; a fixture
+ * need not.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FavouriteStudioRow(
     studios: List<StudioNode>,
+    /**
+     * Opens the studio's page, by AniList id.
+     *
+     * The name rides along so the destination's bar has a title on its first frame
+     * instead of an empty space while the fetch lands.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth
 ) {
@@ -423,16 +448,44 @@ fun FavouriteStudioRow(
     ) {
         studios.forEach { studio ->
             val label = studio.name ?: return@forEach
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            val id = studio.id
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .clip(ExpressiveShapes.pill)
                     .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
+                    .then(
+                        if (id != null) {
+                            Modifier
+                                .bouncyPress(pressedScale = 0.94f)
+                                .clickable { onOpenStudio(id, label) }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(start = 12.dp, end = 16.dp, top = 9.dp, bottom = 9.dp)
                     .testTag("favourite_studio_chip")
-            )
+            ) {
+                // Animates or publishes. A name on its own does not say which, and the
+                // studio page leads with the distinction - so the chip carries it
+                // rather than making the reader open the studio to find out.
+                if (studio.isAnimationStudio == true) {
+                    Icon(
+                        imageVector = AppVectorIcons.Studio,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

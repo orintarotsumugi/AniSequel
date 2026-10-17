@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "1.3.2",
+      "entries": [
+        {
+          "title": "The synopsis and the studios are back",
+          "detail": "Opening a title could show no synopsis, no studio and sometimes no cast or crew at all. The page's request to AniList had picked up one stray argument - it asked the studios list for a page size, which is not something that list has - and AniList checks a whole request before answering any of it, so the mistake cost the entire response rather than the studios alone. Everything the title page cannot show without came back empty together: the synopsis, every studio credit and the studio in the artwork header, the characters and voice actors, the staff, the tags, the rankings and the trailer. The dashboard hid most of it because it merges the answer into the list entry it already had, which is why this looked like two separate faults instead of one."
+        },
+        {
+          "title": "One way out of a title page, not two",
+          "detail": "Tapping a related title used to open it with a second copy of the close button and a second Open on AniList button sitting on top of its own. The page keeps its scroll position per title so a new one starts at the top, but the bar that appears once you scroll past the artwork was holding on to the title you had just left, and it never stood down. The bar is now built from the title actually on screen, so it arrives when you scroll and gets out of the way when you do not."
+        },
+        {
+          "title": "A manga's page lists manga",
+          "detail": "The related titles on a title page were filtered to anime no matter what you had open. On an anime that is right - it is what keeps a show's light novel and guidebook out of the row next to its sequels - but on a manga it was exactly backwards: One Piece's fifty-one relations are almost all manga, a spin-off per volume, a side story, a prequel, and the anime ones are all adaptations. So opening a manga showed you a shelf of TV episodes and none of the manga's own franchise. The row now lists the same medium as the title you are reading, which fixes the manga side and leaves the anime side exactly as it was, because AniList files an adaptation in both directions."
+        },
+        {
+          "title": "The synopsis stops printing its own credit line",
+          "detail": "AniList ends a description with a provenance line - One Piece's with (Source: VIZ Media), most with (Source: AniList) or (Source: Wikipedia). The title page renders descriptions through AniList's own markdown, so that line was being read as a paragraph and printed in body type under the last line of the story, where it reads as part of the synopsis. It also counted toward the length test that decides whether to offer Read more, so a description that comfortably fitted on screen grew a button anyway. The credit is removed, along with every one of them on a long description rather than only the last."
+        },
+        {
+          "title": "Pinned studios open",
+          "detail": "Every other favourites row on a profile went somewhere - anime and manga open the title page, characters and staff hand off to the browser - and the studios were the only row that did nothing at all. They looked like controls, which is worse than looking like text. A studio somebody has pinned is the strongest thing on the profile about the kind of thing they watch, and the studio's own page was already built and already used by the credits on a title page, so this was a dead end pointed at a door that already existed. Each chip now opens that studio, and says whether it animates or publishes - a distinction the studio page leads with and a name alone does not carry."
+        },
+        {
+          "title": "The anime theme reaches the background",
+          "detail": "The anime theme changed the accent and left everything else exactly where it was, so a Chainsaw Man page and a Frieren page had the same navy backdrop with a differently-coloured button on it. The setting is for feeling like the show you opened, and the background and the surfaces the cards sit on are the part a reader actually looks at - so the surface ladder now takes the show's colour, at a saturation low enough that it tints rather than repaints. Lightness is untouched, which is what keeps the text exactly as legible as it was. A custom accent chosen in Settings still moves the accent only: that is a standing preference, and the background there moves on purpose or not at all."
+        },
+        {
+          "title": "Comments can be liked",
+          "detail": "A comment could be read and never liked. AniList lists comments as likeable in its own right - a different kind from an activity, and a separate set of ids - and the app was already fetching each comment's liked state and throwing it away: the data was there, paid for on every thread, and nothing ever drew a heart. Each comment now has one, in the same place and the same style as the one under the activity it belongs to, and a signed-out reader gets a disabled heart rather than one that looks live and does nothing."
+        },
+        {
+          "title": "The comment sheet survives a tab switch",
+          "detail": "Opening a thread and then tapping another tab took the whole sheet down with it - mid-sentence, half-typed comment and all. The sheet was drawn by the tab, and the tab is thrown away when the switch finishes; the sheet lives in its own window, so it went with the tab. The list of people who liked an activity had already been moved out for this exact reason and carried a note saying why, and the comment sheet had been left behind, which left the two on the same screen behaving differently for no reason either could explain. Both are now drawn by the profile itself."
+        },
+        {
+          "title": "Everything in its own folder, and each folder says what belongs in it",
+          "detail": "Three screens had their main file sitting loose while their own parts lived in a subdirectory, unlike every other screen in the app. Each of those four layers now carries a short README saying what belongs there, what the rule for placing a file is, and which mistake has already been made in it - so the next person knows where a file goes without reading the whole tree first. The rule of thumb is one question: would this file move if the screen it belongs to moved?"
+        },
+        {
+          "title": "The whole cast, and everything AniList knows about them",
+          "detail": "The cast row stopped at twelve and asked AniList for three things: a name, a portrait and who plays them - which is what a poster already tells you. It now asks for the full twenty-five and for what the API actually knows: the character's other names, their age and gender, and how many people have them in their favourites. So Spike Spiegel is no longer just Spike Spiegel - he is also Spike Spike and Swimming Bird, twenty-seven, fourteen thousand people' favourite - and a supporting character with four thousand likes is visibly a different proposition from one with nine. Each character opens their AniList page, where the rest of it lives, the same way a studio credit opens that studio's filmography rather than drawing it."
+        },
+        {
+          "title": "Spoilers hide behind a chip you can see",
+          "detail": "The control that reveals a spoiler was a line of text inside the block, set close enough to the body text beneath it that scanning a bio could not tell where the hidden part began - which is the one thing a spoiler has to say before it is opened. It is now a pill sitting on the block's top edge, the only thing visible while the spoiler is closed, with an eye and a label that says whether tapping will show or hide. Reading a revealed spoiler no longer risks closing it: the text takes no taps, so a thumb resting on the card cannot hide what you were reading and a link inside the spoiler can be opened."
+        },
+        {
+          "title": "A link that cannot open now hands you the link",
+          "detail": "Tapping a link in somebody's bio could do nothing at all - no browser, no error, no hint. The app opened links inside a guard that threw failures away, so a phone without the app for a steam or Spotify link, or a bare anilist.co slug, just sat there. Those are ordinary links in an ordinary bio rather than an edge case. A link that cannot be opened is now put on your clipboard with a line saying so, so you can paste it into a browser or send it to yourself. Links the app vouched for - the ones on a title page - still just open, and a failure there stays quiet."
+        }
+      ]
+    },
+    {
       "version": "1.3.1",
       "entries": [
         {

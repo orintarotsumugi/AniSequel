@@ -132,8 +132,14 @@ changing it:
 - **The data it needs was widened, not faked.** `GET_MEDIA_DETAIL` now also asks
   for `characters` (with `voiceActors`), `staff` and `relations` — one request per
   open, on a query that already fetched the synopsis, rankings and tags. The
-  relation row is filtered to anime, because AniList also returns the novel a show
-  was adapted from and its guidebook, which next to the sequels reads as a mistake.
+  relation row is filtered to **this title's own medium**, because AniList also returns
+  the novel a show was adapted from and its guidebook, which next to the sequels reads
+  as a mistake. It used to filter to `ANIME` unconditionally, which is right for an
+  anime and exactly backwards for a manga: One Piece's 51 relations are almost all
+  `MANGA` — a `SPIN_OFF` per volume, a `SIDE_STORY`, a `PREQUEL` — and the `ANIME` ones
+  are all `ADAPTATION` entries, so a manga page listed the TV series and none of its
+  own franchise. Matching the subject's type fixes both halves at once, because AniList
+  files an adaptation in both directions. `MediaRelationAndSynopsisTest` pins it.
   It also asks for `title`, and **that field is not optional on a node this app uses
   as a display record**: it was dropped on the assumption that the summary the sheet
   opened from already carried one, which is true on the dashboard (the response is
@@ -188,6 +194,33 @@ flag that says which credit made the thing. It asks for the edges now, so the ca
 draws every credit — filled for the main studios, quieter for the rest — and each
 one carries the id a tap needs. A credit AniList gave no id for is still drawn,
 as text: it is part of the answer to "who made this", it just cannot be followed.
+- **`Media.studios` is not paginated, and asking it to be takes down the whole page.**
+The edges selection is written `studios { edges { … } }` with **no arguments**. It was
+`studios(perPage: 25)`, on the assumption that a studio connection pages the way
+`characters` and `staff` on the same node do; it does not, and the field takes a `sort`
+and nothing else. This is the same class of fact as the `studioId` one above, with a
+far worse blast radius: GraphQL validates the whole document before resolving any of
+it, so AniList answered **400 with `data: null`** and the detail response lost
+*everything* it carries — the synopsis, the studio credits and the hero's studio chip,
+the cast, the crew, the tags, the rankings, the trailer — not just the studios. The
+dashboard hid most of it because `withDetail` merges onto a list node that already had
+`relations`; a title opened from a profile activity row has no such fallback and
+rendered with nothing but its summary. There is nothing to page anyway: a title has a
+handful of credits and AniList returns all of them under `edges`.
+`MediaDetailQueryArgumentTest` pins it, and pins at the same time that the two
+connections which *are* paginated keep their page sizes.
+- **The description is read as prose, not as a document.** AniList's `description` is
+markdown-with-HTML-glue and it ends with a provenance line — One Piece's with
+`\n<br><br>\n(Source: VIZ Media)`, most with `(Source: AniList)`. The card renders it
+through the app's AniList markdown pipeline, which reads that line as what it
+syntactically is — a paragraph — so every synopsis ended with its credit printed in body
+type under the last line of the story. It also counted toward the length test that
+offers "Read more", so a description that fitted on screen grew a button anyway.
+`MediaNode.descriptionBody` strips it, anchored per line and case-insensitively so a
+source merely *mentioned* mid-sentence is left alone. `RegexOption.MULTILINE` on that
+pattern is load-bearing: without it Kotlin anchors `^`/`$` to the whole description,
+the pattern then matches nothing but a description that is *entirely* a credit, and
+the strip is a silent no-op.
 
 ### The profile screen
 
@@ -205,6 +238,34 @@ publishes `UserOverviewUiState.Success.isLibraryLoading` is true, and Stats and
 Library render "still counting" rather than a tally of zero — an empty list is a
 real answer for an account that tracks nothing, so the flag, not the emptiness, is
 what the screen reads.
+
+**Every favourites row on Home opens something.** Anime and manga open the title page,
+characters and staff hand off to the browser, and the studios were the only row that
+went nowhere — drawn as a `Text` inside a tinted capsule, so a chip indistinguishable
+from a control that did nothing on tap. Each studio chip now opens that studio's page,
+the same `(Int, String?)` pair the title page's own credits hand to the same route, and
+says whether it animates or publishes (a distinction the studio page leads with and a
+name alone does not carry). A chip with no id is drawn as text rather than as a button
+that cannot work — AniList's favourites always carry one, a fixture need not. The
+overview now fetches `favourites` and `siteUrl` on the studios as well, because the
+studio page leads with both and re-fetching them on arrival would break the one-request
+bargain above. `FavouriteStudioChipTest` pins the query *and* the three-hop wiring, since
+the likely way this breaks later is a new caller omitting the callback and inheriting
+the no-op default.
+
+**The anime theme reaches the background.** `DynamicThemeBuilder` derived the whole
+accent family from the title's colour and then handed back the brand's fixed navy
+surfaces, so a Chainsaw Man page and a Frieren page shared a `#0A1017` backdrop with a
+differently-coloured button on it. The surface ladder now takes the show's hue, via an
+opt-in `tintSurfaces` flag — opt-in because the *custom accent* in Settings shares this
+builder and is a standing preference, and surfaces the user did not ask to change must
+not change because they picked a hue (`appBackgroundColor` exists to move the background
+on purpose). Saturation is scaled to 62% of the brand ladder's, so a red seed tints
+rather than repaints (`#392827` at full strength is a brown card, not a red one), and
+lightness is untouched — that is the safety argument, since `onSurface` and
+`onSurfaceVariant` are fixed greys and only lightness is what legibility is made of.
+Measured across blue, red, violet and green seeds, every role lands within 0.2 of
+today's contrast ratio and several above it. `AnimeThemeSurfaceTest` pins it.
 
 **Bios** are AniList-flavoured Markdown, rendered by
 `ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
@@ -925,9 +986,7 @@ AniSequel/
 │       ├── main/
 │       │   ├── java/com/anisequel/
 │       │   │   ├── data/         network, repository, update, changelog
-│       │   │   ├── domain/usecase/  pure sequel-detection logic
-│       │   │   ├── domain/tier/     tier-list rules, layout, SVG export
-│       │   │   ├── domain/motion/   the info page's wavy-progress geometry
+│       │   │   ├── domain/       pure logic: usecase, tier, motion, studio
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
 │       │   ├── assets/
 │       │   │   └── changelog.json   release notes, one source for two readers
@@ -937,7 +996,7 @@ AniSequel/
 │       │       ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
 │       │       ├── values/        strings, colours, the system splash theme
 │       │       └── xml/           backup rules, FileProvider paths, widget configs
-│       └── test/                 60 JVM unit suites (there is no androidTest/)
+│       └── test/                 66 JVM unit suites (there is no androidTest/)
 ├── gradle/libs.versions.toml     every version, with the reasoning kept inline
 ├── AGENTS.md                     the rules for working in this repo
 ├── ARCHITECTURE.md               the exhaustive system specification
@@ -946,6 +1005,16 @@ AniSequel/
 ├── update.json                   what the updater reads from the release asset
 └── .github/workflows/
 ```
+
+**Each layer directory carries its own `README.md`** — `data/`, `domain/`, `ui/`,
+`ui/screens/` and `ui/components/` — saying what belongs there, what the placement rule
+is, and which mistakes have already been made in it. They are short on purpose: a
+second document to keep in step with the code is a document that goes stale, so each
+one records a *rule* and the failure that produced it rather than describing the files
+as they currently are. `ui/screens/` in particular spells out the one arrangement to
+avoid (a screen file at the `screens/` root with its components in a subdirectory), and
+`ui/components/` records the "one control, one declaration" rule that `EngagementAction`
+exists to satisfy.
 
 `applicationId` is `com.aistudio.anisequel.app`, not `com.anisequel`. The Kotlin
 package was renamed away from the Android Studio default, but the application ID
@@ -1036,7 +1105,7 @@ once.
 
 The short version:
 
-- Keep files focused, ideally **250–400 lines**.
+- Keep files focused, and **under 700 lines**.
 - No emoji as UI icons. Vectors only.
 - Look up docs before adding a dependency, plugin or experimental API.
 - Never commit key material, and never rewrite history to hide it.

@@ -42,10 +42,13 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.metaLabel
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
-import com.anisequel.data.model.relatedAnime
+import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.roleLabel
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabel
+import androidx.compose.ui.platform.LocalContext
+import java.util.Locale
+import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -130,12 +133,34 @@ private fun CharacterCard(edge: MediaCharacterEdge) {
     val character = edge.node
     val actor = edge.voiceActors?.firstOrNull()
     val placeholder = MaterialTheme.colorScheme.surfaceContainerHighest
+    val url = character?.siteUrl
+    // Read here rather than inside the `clickable` lambda. That lambda is a plain
+    // one, not a composable, so a `LocalContext.current` read in its body has no
+    // composition to read from and the compiler rejects it - "invocations can only
+    // happen from the context of a @Composable function". The value is hoisted,
+    // which is the only place it can legally be read.
+    val context = LocalContext.current
 
     Surface(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        modifier = Modifier.width(268.dp)
+        modifier = Modifier
+            .width(268.dp)
+            // Tappable for the same reason the studio credits are: a character the
+            // reader has just read about is the next thing they want to look at, and
+            // AniList carries the rest of it - the full description, the appearances,
+            // who else is in the show. Null url draws the card as a plain caption,
+            // because a control that leads nowhere is worse than no control.
+            .then(
+                if (url != null) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.98f)
+                        .clickable { openExternalUrl(context, url) }
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Row(
             modifier = Modifier.padding(10.dp),
@@ -161,6 +186,23 @@ private fun CharacterCard(edge: MediaCharacterEdge) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                // The aliases, when AniList has any. Spike Spiegel carries "Spike
+                // Spike" and "Swimming Bird" there and the card printed one line, so
+                // a reader who knows the character by a nickname had no way to match
+                // the two. Deliberately the *second* name and never a list: a card
+                // 268dp wide has room for one, and three would push the role and the
+                // actor off the card.
+                character?.name?.alternative
+                    ?.firstOrNull { it.isNotBlank() && it != character.name?.full }
+                    ?.let { alias ->
+                        Text(
+                            text = "aka $alias",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = edge.roleLabel.uppercase(),
@@ -168,6 +210,24 @@ private fun CharacterCard(edge: MediaCharacterEdge) {
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
                 )
+                // Age and gender, from the same pair of fields the character page
+                // leads with. Free text on AniList's side - "23 (Physical), 77
+                // (Actual)" is a real value - so both are printed as written and
+                // joined only when both are present.
+                val facts = listOfNotNull(
+                    character?.age?.takeIf { it.isNotBlank() },
+                    character?.gender?.takeIf { it.isNotBlank() }
+                )
+                if (facts.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = facts.joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (actor?.name?.full != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -189,20 +249,56 @@ private fun CharacterCard(edge: MediaCharacterEdge) {
                 }
             }
 
-            if (actor?.image?.bestUrl != null) {
-                Spacer(modifier = Modifier.width(8.dp))
-                AsyncImage(
-                    model = actor.image.bestUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(placeholder)
-                )
+            Column(horizontalAlignment = Alignment.End) {
+                if (actor?.image?.bestUrl != null) {
+                    AsyncImage(
+                        model = actor.image.bestUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(placeholder)
+                    )
+                }
+                // How many AniList users have this character in their favourites.
+                // The same number the studio page leads with, and the reason a
+                // supporting character with four thousand favourites is visibly a
+                // different proposition from one with nine.
+                character?.favourites?.takeIf { it > 0 }?.let { favourites ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = AppVectorIcons.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = compactCount(favourites),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+/**
+ * "14.4K", so a five-digit favourites count fits the corner beside a portrait.
+ *
+ * One decimal under 100K because 14370 reads as "14.4K" and 99999 as "100K", and
+ * both still say what the number is; above that the decimals are noise on a count
+ * nobody is comparing precisely.
+ */
+private fun compactCount(value: Int): String = when {
+    value < 1_000 -> value.toString()
+    value < 100_000 -> String.format(Locale.ROOT, "%.1fK", value / 1000.0)
+    else -> String.format(Locale.ROOT, "%.1fM", value / 1_000_000.0)
 }
 
 /**
@@ -283,9 +379,12 @@ private fun StaffCard(edge: MediaStaffEdge) {
 /**
  * The other titles in this franchise, labelled with how they relate.
  *
- * AniList's relation list is mostly *not* other seasons - it is the light novel the
- * show was adapted from, the guidebook, the character song - so the list is filtered
- * to anime before it gets here. See [com.anisequel.data.model.relatedAnime].
+ * AniList's relation list is mostly *not* other seasons - it is the guidebook, the
+ * character song, the light novel the show was adapted from - so the list is filtered
+ * to this title's **own medium** before it gets here. See
+ * [com.anisequel.data.model.relatedMedia] for why that is the subject's own type and
+ * not `ANIME`: filtering to anime unconditionally meant a manga page listed its TV
+ * adaptations and none of its own volumes.
  *
  * The cards are clickable, and tapping one *replaces* this page's subject rather
  * than opening a second sheet. That was the whole of the "universal info page"
@@ -309,7 +408,7 @@ fun InfoRelationsSection(
     onOpen: (MediaNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val related = media.relatedAnime
+    val related = media.relatedMedia
     if (related.isEmpty()) return
 
     Column(

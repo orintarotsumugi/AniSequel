@@ -238,7 +238,11 @@ fun AniSequelTheme(
     // transforms even when nothing about the colour had changed. The heavy
     // half now runs once per colour, keyed on the parsed value.
     val animeDarkScheme = androidx.compose.runtime.remember(animeColor) {
-        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it).second }
+        // `tintSurfaces = true`: the anime theme is an immersive layer the reader
+        // opened a specific show for, and the seed only reached `primary` before -
+        // so the background stayed navy on a Chainsaw Man page exactly as it did on
+        // a Frieren one, which is the one thing the setting is asking to change.
+        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true).second }
     }
     val customDynamicSchemes = androidx.compose.runtime.remember(customColor) {
         customColor?.let { DynamicThemeBuilder.createDynamicSchemes(it) }

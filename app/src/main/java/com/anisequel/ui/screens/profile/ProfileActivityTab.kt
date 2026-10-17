@@ -75,15 +75,10 @@ fun ProfileActivityTab(
      */
     listState: LazyListState = rememberLazyListState(),
     calendar: ActivityCalendar? = null,
-    commentsState: UserActivityViewModel.CommentsState? = null,
-    canPostComment: Boolean = false,
     userName: String? = null,
     userAvatar: String? = null,
     onLike: (Int) -> Unit = {},
     onOpenComments: (Int) -> Unit = {},
-    onCloseComments: () -> Unit = {},
-    onRetryComments: (Int) -> Unit = {},
-    onPostComment: (String) -> Unit = {},
     onOpenLikers: (Int) -> Unit = {},
     onOpenDetail: (MediaNode) -> Unit = {}
 ) {
@@ -225,17 +220,18 @@ fun ProfileActivityTab(
         }
     }
 
-    // The sheet is a sibling of the list, not an item in it: it renders in its
-    // own window, and an item in a `LazyListScope` cannot be a composable call.
-    if (commentsState != null) {
-        ActivityCommentsSheet(
-            state = commentsState,
-            canPost = canPostComment,
-            onDismiss = onCloseComments,
-            onRetry = { onRetryComments(commentsState.activityId) },
-            onPost = onPostComment
-        )
-    }
+    // The comment sheet is NOT rendered here, and that is deliberate.
+    //
+    // This composable is called from inside `UserProfileScreen`'s `AnimatedContent`,
+    // which composes the incoming tab alongside the outgoing one and then *disposes*
+    // the outgoing one when the transition finishes. A `ModalBottomSheet` is a window
+    // of its own, so anything drawing one from inside a tab is torn down with the tab:
+    // open the thread, tap another tab, and the sheet goes with it - mid-sentence,
+    // draft included. The likers sheet was hoisted out of this file for exactly that
+    // reason and carries the note; the comments sheet was left behind, so the two
+    // sheets on this screen had opposite lifetimes for no reason either could state.
+    //
+    // `UserProfileScreen` draws both, as siblings of the tab content.
 }
 
 private const val PAGE_TRIGGER_ROWS = 6

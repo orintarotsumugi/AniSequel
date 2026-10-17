@@ -200,11 +200,42 @@ val MediaNode.durationLabel: String? get() = duration?.let { "$it mins / ep" }
 val MediaNode.trailerYoutubeUrl: String? get() = trailer?.youtubeUrl
 val MediaNode.synonymList: List<String> get() = synonyms?.filter { it.isNotBlank() } ?: emptyList()
 
-/** The synopsis, with AniList's HTML stripped. */
+/**
+ * The synopsis as prose: AniList's HTML stripped, and its `(Source: …)` line gone.
+ *
+ * Delegates to [descriptionBody] rather than reading [description] itself, because the
+ * attribution is not part of the synopsis and counting it made the "Read more"
+ * threshold fire on a description that fits on screen once the credit line is removed.
+ */
 val MediaNode.synopsis: String?
-    get() = description
+    get() = descriptionBody
         ?.replace(TAG_PATTERN, "")
         ?.replace(WHITESPACE_PATTERN, " ")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+/**
+ * The description with the `(Source: …)` attribution AniList appends removed.
+ *
+ * ## Why this exists rather than being left for the markdown renderer to drop
+ *
+ * AniList's `description` is prose followed by a credit in parentheses - One Piece's
+ * ends `\n<br><br>\n(Source: VIZ Media)`, Cowboy Bebop's ends `\n(Source: AniList)`.
+ * The Info card renders the description through the app's AniList markdown pipeline,
+ * which treats that line as what it syntactically is: a paragraph. So every title's
+ * synopsis ended with `(Source: Wikipedia)` printed in body type under the last line
+ * of the story, which reads as part of the synopsis rather than as provenance - and
+ * it counted toward the "Read more" threshold, so a description that comfortably fit
+ * on screen still grew a button.
+ *
+ * Stripped only when the line is *nothing but* the attribution. AniList writes it as
+ * its own line and may write several - one per section of a long description - so the
+ * pattern is anchored per line; a synopsis that merely mentions a source mid-sentence
+ * is left alone rather than losing text.
+ */
+val MediaNode.descriptionBody: String?
+    get() = description
+        ?.replace(SOURCE_ATTRIBUTION, "")
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
 
@@ -237,24 +268,48 @@ val MediaNode.characterList: List<MediaCharacterEdge> get() = characters?.edges 
 val MediaNode.staffList: List<MediaStaffEdge> get() = staff?.edges ?: emptyList()
 
 /**
- * The related titles the Info page draws as a row.
+ * The related titles the Info page draws as a row: **the same medium as this one**.
  *
- * Filtered to anime, and filtered to relations a reader can *watch*: AniList
- * happily returns the light novel a show was adapted from, the guidebook and the
- * character song as relations, and a row of those next to the sequels reads as a
- * mistake rather than as information. Deduplicated by id, because the same title
- * can be related twice through two different arcs.
+ * ## Why this matches this node's own type rather than filtering to anime
+ *
+ * It used to keep only `ANIME` nodes unconditionally, which is right for an anime page
+ * and exactly wrong for a manga one. Verified against the live API on One Piece
+ * (`manga/30013`), whose 51 relations are almost entirely `MANGA` - a `SPIN_OFF` per
+ * volume, a `SIDE_STORY`, a `PREQUEL` (`Monsters`), an `ALTERNATIVE` - with the
+ * `ANIME` ones all being `ADAPTATION` entries. Filtering to anime there produced a row
+ * of adaptations ("One Piece: Episode of Merry", "Defeat the Pirate Ganzack!") and
+ * dropped the manga's own franchise entirely: the reader opened a manga from the
+ * Library and was shown nothing but the TV series it was adapted into.
+ *
+ * Matching on the subject's own namespace fixes both halves at once, because AniList
+ * files an adaptation the other way too: Cowboy Bebop's manga is an `ADAPTATION` *from*
+ * the anime's point of view, and it disappears under the same rule that keeps One
+ * Piece's light novels out of the anime page. Neither page now lists a different medium
+ * from itself, which is what "related" has to mean before the row can be walked as a
+ * franchise.
+ *
+ * Still filtered to relations a reader can *read*: AniList returns the guidebook and the
+ * character song alongside the sequels, and a `CHARACTER` edge is a connection between
+ * two titles rather than a title. Deduplicated by id, because the same title can be
+ * related twice through two different arcs.
+ *
+ * A node whose own `type` is null is treated as anime - [isManga] is false for it, and
+ * the activity feed and the widget fixtures are the two sources that can build a node
+ * without one, so keeping their old behaviour is the safe reading of an unknown.
  */
-val MediaNode.relatedAnime: List<MediaRelationEdge>
-    get() = relations?.edges
-        ?.filter { edge ->
-            edge.node.type.equals("ANIME", ignoreCase = true) &&
-                edge.node.id != id &&
-                !edge.relationType.equals("CHARACTER", ignoreCase = true)
-        }
-        ?.distinctBy { it.node.id }
-        ?.take(MAX_RELATIONS)
-        ?: emptyList()
+val MediaNode.relatedMedia: List<MediaRelationEdge>
+    get() {
+        val ownType = if (isManga) "MANGA" else "ANIME"
+        return relations?.edges
+            ?.filter { edge ->
+                edge.node.type.equals(ownType, ignoreCase = true) &&
+                    edge.node.id != id &&
+                    !edge.relationType.equals("CHARACTER", ignoreCase = true)
+            }
+            ?.distinctBy { it.node.id }
+            ?.take(MAX_RELATIONS)
+            ?: emptyList()
+    }
 
 /**
  * AniList's `MediaRelation` enum, spelled the way a person writes it.
@@ -515,6 +570,26 @@ fun MediaNode.withSummaryProgress(summary: MediaNode): MediaNode =
 
 /** HTML tags AniList interleaves into `description`. */
 private val TAG_PATTERN = Regex("<[^>]*>")
+
+/**
+ * AniList's provenance credit: a line that is nothing but `(Source: …)`.
+ *
+ * [RegexOption.MULTILINE] is load-bearing. Without it Kotlin anchors `^` and `$` to
+ * the whole description rather than to each line, so the pattern only matched a
+ * description that was *entirely* a credit - which no real entry is - and every
+ * synopsis kept printing its `(Source: Wikipedia)` as the last paragraph of the card.
+ *
+ * Case-insensitive because AniList writes `Source`, `source` and occasionally
+ * `Sources` depending on the entry. Deliberately narrow otherwise: it will not match a
+ * source mentioned inside a sentence, which is prose rather than provenance.
+ */
+private val SOURCE_ATTRIBUTION = Regex(
+    """^[ \t]*\((?:Source|Sources):[^)]*\)[ \t]*$""",
+    // `setOf`, not `a or b`: `RegexOption` is a plain enum and has no `or` operator.
+    // The set overload is the one that takes more than one flag, and it is easy to
+    // reach for the bitwise spelling out of habit -- CI rejected it.
+    setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE)
+)
 
 /** Runs of whitespace left behind once the tags are gone. */
 private val WHITESPACE_PATTERN = Regex("\\s+")

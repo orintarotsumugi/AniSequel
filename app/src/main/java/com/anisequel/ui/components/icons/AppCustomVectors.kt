@@ -71,54 +71,65 @@ object AppCustomVectors {
                 lineTo(4f, 21f)
                 close()
 
-                // Windows in main tower
-                moveTo(6f, 5f)
-                lineTo(8f, 5f)
-                lineTo(8f, 7f)
-                lineTo(6f, 7f)
+                // Windows are cut *out* of the tower, so each one is traced
+                // anticlockwise (down, right, up, back) and its winding
+                // cancels the body's. They used to be wound the same way round
+                // as the building, which under PathFillType.NonZero added to it
+                // instead of subtracting from it: every window was white on
+                // white and the whole icon rendered as one solid blob. The
+                // winding fix is the one to keep rather than an EvenOdd fill
+                // type, because it survives someone changing that flag.
+                //
+                // Floors sit at y = 6, 11 and 16 so the tower and the annex
+                // share them; before, the top two thirds of both were windows
+                // and the bottom third was a blank wall.
+                moveTo(6f, 6f)
+                lineTo(6f, 8f)
+                lineTo(8f, 8f)
+                lineTo(8f, 6f)
                 close()
 
-                moveTo(10f, 5f)
-                lineTo(12f, 5f)
-                lineTo(12f, 7f)
-                lineTo(10f, 7f)
+                moveTo(10f, 6f)
+                lineTo(10f, 8f)
+                lineTo(12f, 8f)
+                lineTo(12f, 6f)
                 close()
 
-                moveTo(6f, 9f)
-                lineTo(8f, 9f)
-                lineTo(8f, 11f)
-                lineTo(6f, 11f)
-                close()
-
-                moveTo(10f, 9f)
-                lineTo(12f, 9f)
-                lineTo(12f, 11f)
-                lineTo(10f, 11f)
-                close()
-
-                moveTo(6f, 13f)
+                moveTo(6f, 11f)
+                lineTo(6f, 13f)
                 lineTo(8f, 13f)
-                lineTo(8f, 15f)
-                lineTo(6f, 15f)
+                lineTo(8f, 11f)
                 close()
 
-                moveTo(10f, 13f)
+                moveTo(10f, 11f)
+                lineTo(10f, 13f)
                 lineTo(12f, 13f)
-                lineTo(12f, 15f)
-                lineTo(10f, 15f)
+                lineTo(12f, 11f)
                 close()
 
-                // Side annex windows
-                moveTo(16f, 10f)
-                lineTo(18f, 10f)
-                lineTo(18f, 12f)
-                lineTo(16f, 12f)
+                moveTo(6f, 16f)
+                lineTo(6f, 18f)
+                lineTo(8f, 18f)
+                lineTo(8f, 16f)
                 close()
 
-                moveTo(16f, 14f)
-                lineTo(18f, 14f)
+                moveTo(10f, 16f)
+                lineTo(10f, 18f)
+                lineTo(12f, 18f)
+                lineTo(12f, 16f)
+                close()
+
+                // Side annex windows, on the tower's two lower floors.
+                moveTo(16f, 11f)
+                lineTo(16f, 13f)
+                lineTo(18f, 13f)
+                lineTo(18f, 11f)
+                close()
+
+                moveTo(16f, 16f)
+                lineTo(16f, 18f)
+                lineTo(18f, 18f)
                 lineTo(18f, 16f)
-                lineTo(16f, 16f)
                 close()
             }
         }.build()

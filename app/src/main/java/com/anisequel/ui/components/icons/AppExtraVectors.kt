@@ -86,6 +86,12 @@ object AppExtraVectors {
      * a second stroke buried inside it, which merged into a single blob at the
      * 16-20dp the badges render at. Keeping the ticks parallel and offset leaves a
      * visible notch between them at any size.
+     *
+     * Both ticks moved right 1 unit and up 1.5. The pair had been drawn around
+     * x = 1.5..20.5, y = 9.5..17, which put the ink's centre of mass at
+     * (11.1, 13.7) - the badge hung low and left in its 24-unit frame, and its
+     * round caps came within 0.6 units of the left edge while 2.4 sat empty on
+     * the right. It now sits at (12.1, 12.2), with an even 1.5 either side.
      */
     val CheckDouble: ImageVector by lazy {
         ImageVector.Builder(
@@ -102,14 +108,14 @@ object AppExtraVectors {
                 strokeLineJoin = StrokeJoin.Round
             ) {
                 // Leading tick.
-                moveTo(1.5f, 12.5f)
-                lineTo(6f, 17f)
-                lineTo(13.5f, 9.5f)
+                moveTo(2.5f, 11f)
+                lineTo(7f, 15.5f)
+                lineTo(14.5f, 8f)
 
                 // Trailing tick, offset right so the two read as a pair.
-                moveTo(8.5f, 12.5f)
-                lineTo(13f, 17f)
-                lineTo(20.5f, 9.5f)
+                moveTo(9.5f, 11f)
+                lineTo(14f, 15.5f)
+                lineTo(21.5f, 8f)
             }
         }.build()
     }
@@ -117,10 +123,18 @@ object AppExtraVectors {
     /**
      * Calendar clock for next airing episode countdown.
      *
-     * Calendar body with two binding rings, a header rule, and a clock face inset
-     * below it. The old glyph drew an open-bottomed calendar with only a dangling
-     * minute hand and no face at all, so it read as a broken square. The face and
-     * both hands are what make it a countdown rather than a shape.
+     * Calendar body with two binding rings and a clock face set into it. The
+     * face and both hands are what make it a countdown rather than a shape.
+     *
+     * There is deliberately no header rule. The old glyph drew one *and* a
+     * clock below it, and the two could not both fit inside a 24-unit frame:
+     * the ring's stroke overlapped the rule by 0.1 units and the frame's bottom
+     * edge by 0.5, and the hands were 3.4 and 3.3 units long inside a 3.6-unit
+     * bore. At the 13dp this icon renders at, the lower half was three touching
+     * strokes and one blob. Dropping the rule leaves the interior to the clock
+     * alone: the face is now 11.4 units across with 1.4 units of clear air above
+     * and below it, and the hands stop half a unit short of the ring instead of
+     * merging into it. The two binding rings still carry the calendar.
      */
     val CalendarClock: ImageVector by lazy {
         ImageVector.Builder(
@@ -148,26 +162,26 @@ object AppExtraVectors {
                 curveTo(3f, 4.9f, 3.9f, 4f, 5f, 4f)
                 close()
 
-                // Binding rings above the header.
+                // Binding rings above the top edge.
                 moveTo(7.5f, 1.5f)
                 verticalLineTo(5.5f)
                 moveTo(16.5f, 1.5f)
                 verticalLineTo(5.5f)
 
-                // Header rule.
-                moveTo(3f, 8f)
-                horizontalLineTo(21f)
+                // Clock face centred in what is left of the body: two half-arcs
+                // make a circle. 4.8 is the largest radius that still leaves an
+                // even gap between the ring's outer edge and both the top and
+                // the bottom of the frame.
+                moveTo(7.2f, 12f)
+                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 12f)
+                arcTo(4.8f, 4.8f, 0f, false, true, 7.2f, 12f)
 
-                // Clock face inset below the header: two half-arcs make a circle.
-                moveTo(7.5f, 14.2f)
-                arcTo(4.5f, 4.5f, 0f, false, true, 16.5f, 14.2f)
-                arcTo(4.5f, 4.5f, 0f, false, true, 7.5f, 14.2f)
-
-                // Minute hand up to twelve, hour hand out to four.
-                moveTo(12f, 14.2f)
-                lineTo(12f, 10.8f)
-                moveTo(12f, 14.2f)
-                lineTo(15f, 15.6f)
+                // Minute hand up to twelve, hour hand out to four. Both stay
+                // inside the ring's 3.9-unit bore with half a unit to spare.
+                moveTo(12f, 12f)
+                lineTo(12f, 8.6f)
+                moveTo(12f, 12f)
+                lineTo(14.8f, 13.7f)
             }
         }.build()
     }

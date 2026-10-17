@@ -194,6 +194,16 @@ interface AniListRepository {
     suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =
         unsupported("toggleActivityLike")
 
+    /**
+     * Likes or un-likes a comment, by the reply's own id.
+     *
+     * A reply id is a different namespace from an activity id, which is why this is
+     * not `toggleActivityLike` with a different argument - see
+     * [com.anisequel.data.network.GraphQLQueries.TOGGLE_REPLY_LIKE].
+     */
+    suspend fun toggleActivityReplyLike(replyId: Int): Result<ActivityLikeState> =
+        unsupported("toggleActivityReplyLike")
+
     /** Posts [text] as a comment on an activity, returning the created reply. */
     suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> =
         unsupported("postActivityReply")

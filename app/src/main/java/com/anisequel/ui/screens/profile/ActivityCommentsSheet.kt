@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
@@ -68,7 +69,21 @@ fun ActivityCommentsSheet(
     canPost: Boolean,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
-    onPost: (String) -> Unit
+    onPost: (String) -> Unit,
+    /**
+     * Likes or un-likes one comment.
+     *
+     * A reply is an `ActivityReply`, which AniList lists in `LikeableUnion` and types
+     * as `ACTIVITY_REPLY`, so it is likeable on its own terms - and the reply model has
+     * carried `isLiked` and `likeCount` since this sheet was written, with the query
+     * selecting both and nothing reading either. The heart a reader expects under
+     * every other comment on the site was simply never drawn.
+     *
+     * Defaults to a no-op so the sheet still renders in a caller that has not wired it,
+     * which would be a heart that does nothing - see [EngagementAction]'s note on the
+     * disabled state, and why the callers pass `isLiked != null` rather than `true`.
+     */
+    onLikeReply: (Int) -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -133,7 +148,11 @@ fun ActivityCommentsSheet(
                     key = { it.id },
                     contentType = { "reply" }
                 ) { reply ->
-                    CommentRow(reply = reply)
+                    CommentRow(
+                        reply = reply,
+                        likePending = reply.id in state.pendingReplyLikes,
+                        onLike = { onLikeReply(reply.id) }
+                    )
                 }
             }
 
@@ -184,7 +203,11 @@ private fun CommentsHeader(count: Int) {
 }
 
 @Composable
-private fun CommentRow(reply: ActivityReply) {
+private fun CommentRow(
+    reply: ActivityReply,
+    likePending: Boolean,
+    onLike: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -218,6 +241,27 @@ private fun CommentRow(reply: ActivityReply) {
             }
             Spacer(modifier = Modifier.height(2.dp))
             ReplyBody(text = reply.text)
+            Spacer(modifier = Modifier.height(2.dp))
+            // The same control the activity card draws, shared rather than re-declared
+            // here - `EngagementAction`. Left-aligned and below the body rather than
+            // beside the name so a reply's own markdown (which can be a multi-line
+            // quote or an image) is not squeezed to make room for it.
+            EngagementAction(
+                icon = if (reply.isLiked == true) {
+                    AppVectorIcons.ActivityLiked
+                } else {
+                    AppVectorIcons.ActivityNotLiked
+                },
+                count = reply.likeCount ?: 0,
+                active = reply.isLiked == true,
+                // Null `isLiked` means AniList did not answer, which is what a
+                // signed-out reader gets. Disabled rather than drawn-as-unliked, so the
+                // control is never something that looks live and does nothing.
+                enabled = reply.isLiked != null && !likePending,
+                contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
+                onClick = onLike,
+                modifier = Modifier.testTag("activity_reply_like_button")
+            )
         }
     }
 }

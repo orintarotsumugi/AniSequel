@@ -38,6 +38,13 @@ fun ProfileHomeTab(
     state: UserOverviewUiState.Success,
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
+    /**
+     * Opens a studio's page from a pinned studio chip.
+     *
+     * The same `(Int, String?)` pair the Info page's own studio credits hand to the
+     * same route, so "open this studio" has one definition on this screen.
+     */
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     /** Media key to cover, for the AniList cards inside the bio. */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
@@ -160,7 +167,10 @@ fun ProfileHomeTab(
                 )
             }
             item(key = "favourite_studio_row") {
-                FavouriteStudioRow(studios = state.favouriteStudios)
+                FavouriteStudioRow(
+                    studios = state.favouriteStudios,
+                    onOpenStudio = onOpenStudio
+                )
             }
         }
 

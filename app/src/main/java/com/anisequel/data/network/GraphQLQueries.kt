@@ -183,7 +183,7 @@ object GraphQLQueries {
                   siteUrl
                 }
               }
-              studios(perPage: 12) { nodes { id name isAnimationStudio } }
+              studios(perPage: 12) { nodes { id name isAnimationStudio favourites siteUrl } }
             }
           }
         }
@@ -660,6 +660,34 @@ object GraphQLQueries {
      * status, synopsis and cast arrived correctly beneath that heading, which read
      * as a broken title page rather than as a missing field. A title is not optional
      * on a node this app uses as a display record.
+     *
+     * ## Why `studios` is asked for with **no arguments**
+     *
+     * It was `studios(perPage: 25) { edges { ... } }`, on the assumption that a
+     * studio connection is paginated the way `characters` and `staff` below it
+     * are. It is not: AniList's `Media.studios` takes a single optional `sort`
+     * argument and nothing else, so `perPage` is not an argument the field has.
+     *
+     * GraphQL validates the whole document before resolving any of it, and AniList
+     * answers an unknown argument with **HTTP 400 and `data: null`**:
+     *
+     *     {"errors":[{"message":"Unknown argument \"perPage\" on field \"studios\"
+     *                 of type \"Media\".","status":400}],"data":null}
+     *
+     * One unrecognised argument therefore cost the *entire* detail response - not
+     * just the studios. Every section that only the detail query carries went empty
+     * at once: the synopsis, the studio credits and the hero's studio chip, the cast,
+     * the crew, the thematic tags, the rankings, and the trailer row. The dashboard
+     * hid most of it, because there it is merged onto a list node that already had
+     * relations (`withDetail` keeps `detail.relations ?: relations`), but a title
+     * opened from a profile activity row has no such fallback and rendered with
+     * nothing but its summary.
+     *
+     * There is nothing to paginate here in any case: AniList files a handful of
+     * credits per title and returns all of them - Cowboy Bebop's three, a long
+     * series' five or six - under `edges`. Verified against the live API: the same
+     * document answers 400 with `perPage` and 200 with every section populated
+     * without it.
      */
     private val MEDIA_DETAIL_FIELDS = """
         id
@@ -684,7 +712,7 @@ object GraphQLQueries {
         synonyms
         source
         description(asHtml: false)
-        studios(perPage: 25) { edges { isMain node { id name isAnimationStudio } } }
+        studios { edges { isMain node { id name isAnimationStudio } } }
         coverImage { extraLarge large color }
         bannerImage
         nextAiringEpisode { episode airingAt timeUntilAiring }
@@ -712,13 +740,36 @@ object GraphQLQueries {
             node { $RELATED_NODE_FIELDS }
           }
         }
-        characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {
+        characters(sort: [ROLE, RELEVANCE, ID], perPage: 25) {
           edges {
             role
             node {
               id
-              name { full native }
               image { large medium }
+              # What the API knows about a character beyond their name. Ask it for the
+              # whole cast's worth: one open, one request, and a cast is what a reader
+              # opens a title page for.
+              #
+              # `alternative` is the same field the alternative-titles card reads on
+              # the *title*, so a character is described as richly as the show is -
+              # Spike Spiegel carries "Spike Spike" and "Swimming Bird" on AniList and
+              # the page printed one line.
+              #
+              # `favourites` and `siteUrl` are what make a character card a control
+              # rather than a caption: one says how many people the character matters
+              # to, the other is where the rest of that information lives. Same pair
+              # the studio credits use.
+              #
+              # `description` is fetched but *not* rendered on the card - twenty-five
+              # descriptions is a wall of text in a horizontal row. It is here so a
+              # character is not a dead end, exactly as the studio's filmography is not
+              # drawn on the credit chip either.
+              name { full native alternative }
+              favourites
+              siteUrl
+              gender
+              age
+              description(asHtml: false)
             }
             voiceActors(language: JAPANESE) {
               id
@@ -922,6 +973,36 @@ object GraphQLQueries {
         mutation ToggleActivityLike(${'$'}activityId: Int) {
           ToggleLikeV2(id: ${'$'}activityId, type: ACTIVITY) {
             ... on ListActivity {
+              id
+              isLiked
+              likeCount
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Likes or un-likes a single comment.
+     *
+     * The same mutation as [TOGGLE_ACTIVITY_LIKE] against a different member of
+     * `LikeableUnion`, which is what the comment sheet's heart needs.
+     *
+     * Verified against the live schema rather than assumed: `LikeableUnion`'s members
+     * are `ListActivity`, `TextActivity`, `MessageActivity`, `ActivityReply`, `Thread`
+     * and `ThreadComment`, and `LikeableType` is `THREAD`, `THREAD_COMMENT`,
+     * `ACTIVITY`, `ACTIVITY_REPLY`. A comment is therefore likeable, and it was not
+     * being liked - the reply model has carried `isLiked` and `likeCount` since the
+     * sheet was written and the replies query has selected them, and nothing ever
+     * read either. This turns data that was already being paid for into a control.
+     *
+     * `ACTIVITY_REPLY` is not interchangeable with `ACTIVITY`: the id namespaces are
+     * independent, so the type argument is what stops one member's id resolving
+     * against the other's.
+     */
+    val TOGGLE_REPLY_LIKE = """
+        mutation ToggleReplyLike(${'$'}replyId: Int) {
+          ToggleLikeV2(id: ${'$'}replyId, type: ACTIVITY_REPLY) {
+            ... on ActivityReply {
               id
               isLiked
               likeCount

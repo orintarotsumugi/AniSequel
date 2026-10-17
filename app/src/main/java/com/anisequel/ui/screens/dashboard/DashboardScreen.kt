@@ -1,4 +1,4 @@
-package com.anisequel.ui.screens
+package com.anisequel.ui.screens.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

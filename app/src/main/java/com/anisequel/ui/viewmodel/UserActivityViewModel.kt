@@ -104,7 +104,15 @@ class UserActivityViewModel(
         val replies: List<ActivityReply> = emptyList(),
         val loadError: String? = null,
         val isPosting: Boolean = false,
-        val postError: String? = null
+        val postError: String? = null,
+        /**
+         * Replies with a like request in flight.
+         *
+         * The same job as `ActivityState.Success.pendingLikes`, for the same reason:
+         * a double tap on a heart has to not toggle twice, and the optimistic count
+         * already on screen is what the second tap would be applied to.
+         */
+        val pendingReplyLikes: Set<Int> = emptySet()
     )
 
     /**
@@ -368,6 +376,57 @@ class UserActivityViewModel(
                         isLoading = false,
                         loadError = error.message ?: "Couldn't load comments."
                     )
+                }
+            )
+        }
+    }
+
+    /**
+     * Likes or un-likes one comment.
+     *
+     * The same shape as [toggleLike] - optimistic, one request in flight per reply,
+     * rolled back on failure - against the reply's own id and namespace.
+     *
+     * `isLiked == null` refuses, exactly as it does for an activity: that is AniList
+     * answering without a session, and guessing there would put the heart in a state
+     * the server never agreed to.
+     */
+    fun toggleReplyLike(replyId: Int) {
+        if (isDemo) return
+        val current = _comments.value ?: return
+        if (replyId in current.pendingReplyLikes) return
+        val index = current.replies.indexOfFirst { it.id == replyId }
+        if (index < 0) return
+        val reply = current.replies[index]
+        val wasLiked = reply.isLiked ?: return
+
+        val optimistic = reply.copy(
+            isLiked = !wasLiked,
+            likeCount = ((reply.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+        )
+
+        fun write(replacement: ActivityReply, pending: Set<Int>) {
+            val live = _comments.value ?: return
+            val at = live.replies.indexOfFirst { it.id == replyId }
+            if (at < 0) return
+            _comments.value = live.copy(
+                replies = live.replies.toMutableList().also { it[at] = replacement },
+                pendingReplyLikes = pending
+            )
+        }
+
+        write(optimistic, current.pendingReplyLikes + replyId)
+
+        viewModelScope.launch {
+            aniListRepository.toggleActivityReplyLike(replyId).fold(
+                onSuccess = { result ->
+                    write(
+                        optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
+                        current.pendingReplyLikes
+                    )
+                },
+                onFailure = {
+                    write(reply, current.pendingReplyLikes)
                 }
             )
         }

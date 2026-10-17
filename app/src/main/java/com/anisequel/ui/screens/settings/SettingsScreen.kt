@@ -1,4 +1,4 @@
-package com.anisequel.ui.screens
+package com.anisequel.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent

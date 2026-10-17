@@ -1,4 +1,4 @@
-package com.anisequel.ui.screens
+package com.anisequel.ui.screens.login
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn

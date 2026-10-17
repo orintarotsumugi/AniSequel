@@ -14,7 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.components.openExternalUrlOrCopy
 
 /**
  * One paragraph of inline tokens, with any inline image or GIF embedded in the
@@ -45,7 +45,7 @@ fun RenderParagraph(paragraph: MarkdownNode.Paragraph, maxLines: Int) {
     if (!hasImage || maxLines < Int.MAX_VALUE) {
         val annotated = buildInlineAnnotatedString(
             paragraph.inlines,
-            onLinkClick = { openExternalUrl(context, it) }
+            onLinkClick = { openExternalUrlOrCopy(context, it) }
         )
         Text(
             text = annotated,
@@ -71,7 +71,7 @@ fun RenderParagraph(paragraph: MarkdownNode.Paragraph, maxLines: Int) {
                     Text(
                         text = buildInlineAnnotatedString(
                             segment.tokens,
-                            onLinkClick = { openExternalUrl(context, it) }
+                            onLinkClick = { openExternalUrlOrCopy(context, it) }
                         ),
                         style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

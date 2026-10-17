@@ -810,6 +810,28 @@ class AniListRepositoryImpl(
             activityCache.clear()
         }
 
+    override suspend fun toggleActivityReplyLike(replyId: Int): Result<ActivityLikeState> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.TOGGLE_REPLY_LIKE,
+                variables = mapOf("replyId" to replyId)
+            ),
+            apiService::toggleActivityReplyLike
+        ).map { data ->
+            // The same reduction as the activity toggle: `ToggleLikeV2` answers with a
+            // union and nothing else if the member did not match, and a null count is
+            // "zero", not a question.
+            val likeable = data.likeable.require("No response from the reply like mutation")
+            ActivityLikeState(
+                isLiked = likeable.isLiked == true,
+                likeCount = likeable.likeCount ?: 0
+            )
+        }
+        // No cache to drop, deliberately. The activity toggle clears `activityCache`
+        // because the feed rows carry the pre-toggle state. A reply lives only inside
+        // the open comment sheet, and that sheet is rebuilt from its own state -
+        // clearing the feed here would cost a re-download to fix nothing.
+
     override suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> =
         execute(
             GraphQLRequest(

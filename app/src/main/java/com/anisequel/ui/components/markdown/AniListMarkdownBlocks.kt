@@ -2,6 +2,9 @@ package com.anisequel.ui.components.markdown
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +15,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +49,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.components.openExternalUrlOrCopy
 
 @Composable
 fun RenderHeader(header: MarkdownNode.Header) {
@@ -58,7 +60,7 @@ fun RenderHeader(header: MarkdownNode.Header) {
         else -> MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
     }
     val context = LocalContext.current
-    val annotated = buildInlineAnnotatedString(header.inlines, onLinkClick = { openExternalUrl(context, it) })
+    val annotated = buildInlineAnnotatedString(header.inlines, onLinkClick = { openExternalUrlOrCopy(context, it) })
     Text(
         text = annotated,
         style = style,
@@ -69,7 +71,7 @@ fun RenderHeader(header: MarkdownNode.Header) {
 @Composable
 fun RenderBlockquote(quote: MarkdownNode.Blockquote) {
     val context = LocalContext.current
-    val annotated = buildInlineAnnotatedString(quote.inlines, onLinkClick = { openExternalUrl(context, it) })
+    val annotated = buildInlineAnnotatedString(quote.inlines, onLinkClick = { openExternalUrlOrCopy(context, it) })
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -128,7 +130,7 @@ fun RenderList(list: MarkdownNode.ListBlock) {
                     maxLines = 1,
                     modifier = Modifier.width(26.dp)
                 )
-                val annotated = buildInlineAnnotatedString(itemInlines, onLinkClick = { openExternalUrl(context, it) })
+                val annotated = buildInlineAnnotatedString(itemInlines, onLinkClick = { openExternalUrlOrCopy(context, it) })
                 Text(
                     text = annotated,
                     style = MaterialTheme.typography.bodyMedium,
@@ -156,7 +158,7 @@ fun RenderCheckList(checklist: MarkdownNode.CheckListBlock) {
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                val annotated = buildInlineAnnotatedString(item.inlines, onLinkClick = { openExternalUrl(context, it) })
+                val annotated = buildInlineAnnotatedString(item.inlines, onLinkClick = { openExternalUrlOrCopy(context, it) })
                 Text(
                     text = annotated,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -176,7 +178,7 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
     val clickableModifier = if (image.targetUrl != null) {
         Modifier
             .bouncyPress()
-            .clickable { openExternalUrl(context, image.targetUrl) }
+            .clickable { openExternalUrlOrCopy(context, image.targetUrl) }
     } else {
         Modifier
     }
@@ -211,7 +213,7 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
         modifier = Modifier
             .fillMaxWidth()
             .bouncyPress()
-            .clickable { openExternalUrl(context, video.url) }
+            .clickable { openExternalUrlOrCopy(context, video.url) }
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -250,109 +252,142 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
 }
 
 /**
- * A `~!spoiler~!`, with a control that shows it and a control that hides it.
+ * A `~!spoiler~!`, as a labelled chip that opens into the text and closes again.
+ *
+ * ## The shape
+ *
+ * A **chip sitting on the top edge** of the block, not a row of text inside a
+ * container. The block is a surface with a control on it, and putting the control
+ * *on* the surface made the two indistinguishable from the body text underneath — a
+ * reader scanning a bio could not tell where the hidden part began, which is the only
+ * thing a spoiler needs to say before it is opened. The chip is drawn above the
+ * surface's top edge so it reads as the lid of a box rather than as the first line of
+ * one, and it is the only thing on screen while the spoiler is closed.
  *
  * ## Why the revealed state is not tappable any more
  *
- * The whole block used to be one toggle, so *any* tap on a revealed spoiler closed
- * it again. That is the wrong gesture in the one state where reading happens: a
- * spoiler is usually several lines, it is often scrolled through with a thumb
- * resting on the card, and it can contain links - every one of which was swallowed
- * by the toggle. Tapping a link inside a spoiler did nothing visible except hide
- * the text that contained it.
+ * The whole block used to be one toggle, so *any* tap on a revealed spoiler closed it
+ * again. That is the wrong gesture in the one state where reading happens: a spoiler is
+ * usually several lines, it is often scrolled through with a thumb resting on the card,
+ * and it can contain links — every one of which was swallowed by the toggle. Tapping a
+ * link inside a spoiler did nothing visible except hide the text that contained it.
  *
- * So the block now has two parts with different jobs: a header that is the control,
- * and, once revealed, the text itself, which behaves like any other paragraph. The
- * header carries an explicit **Hide** while it is open, which is also the only
- * thing on screen that says the block *can* be closed - the previous version's
- * `Done` icon was a cue with no label, and a cue that means "tap this text to put
- * it away" is not one a reader guesses.
+ * So the block now has two parts with different jobs: the chip, which is the control
+ * and always says what it will do, and, once revealed, the text itself, which behaves
+ * like any other paragraph.
+ *
+ * ## Why the chip's label changes
+ *
+ * It reads "Show spoiler" while the text is hidden and "Hide spoiler" while it is
+ * visible, so the state is in **words** and not only in a glyph: it survives a screen
+ * reader, it reads correctly in greyscale, and it says what the tap will do rather
+ * than what the block currently is. The eye stays the same glyph in both states —
+ * an eye that changed shape would be the only signal that did not survive either of
+ * those, and 16dp is too small to carry it alone. The previous header's only "you can
+ * close this" cue was an unlabelled `Done` icon, which is a cue nobody guesses.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
     // `rememberSaveable`, not `remember`.
     //
-    // This renders inside the profile's `LazyColumn`, and a plain `remember` is
-    // discarded as soon as the card leaves the viewport - so a revealed spoiler
-    // re-hid itself the moment the reader scrolled past it and back. The state is
-    // small enough to save (one boolean), and `rememberSaveable` also survives a
-    // configuration change, so the reveal is not undone by a rotation either.
+    // This renders inside a profile's `LazyColumn`, and a plain `remember` is discarded
+    // as soon as the card leaves the viewport — so a revealed spoiler re-hid itself the
+    // moment the reader scrolled past it and back. The state is small enough to save
+    // (one boolean), and `rememberSaveable` also survives a configuration change, so
+    // the reveal is not undone by a rotation either.
     var revealed by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
 
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (revealed) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
-        },
+    Column(
+        // `animateContentSize` on the *outer* column: revealing swaps a one-line chip
+        // for the hidden text, so the block changes height. Animating that here means
+        // the surrounding list does not jump, and the token is the `IntSize` one for
+        // exactly this reason.
         modifier = Modifier
             .fillMaxWidth()
-            // Revealing swaps a one-line prompt for the hidden text, so the block
-            // changes height. Animating that here means the surrounding list does
-            // not jump; the token is the `IntSize` one for exactly this reason.
             .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Only the collapsed *header* is the reveal target: it is a
-                    // one-line prompt with nothing else in it to touch. Once the
-                    // text is out, the tap target is the labelled Hide button
-                    // beside it and the body stops answering to a stray thumb.
-                    .then(
-                        if (revealed) {
-                            Modifier
-                        } else {
-                            Modifier
-                                .bouncyPress()
-                                .clickable { revealed = true }
-                        }
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (revealed) AppVectorIcons.Done else AppVectorIcons.Visibility,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (revealed) "Spoiler" else "Spoiler (tap to reveal)",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                if (revealed) {
-                    TextButton(
-                        onClick = { revealed = false },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text(
-                            text = "Hide",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
+        SpoilerChip(
+            revealed = revealed,
+            onToggle = { revealed = !revealed },
+            modifier = Modifier.padding(bottom = if (revealed) 8.dp else 0.dp)
+        )
 
-            if (revealed) {
+        if (revealed) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
                     text = buildInlineAnnotatedString(
                         spoiler.inlines,
-                        onLinkClick = { openExternalUrl(context, it) }
+                        onLinkClick = { openExternalUrlOrCopy(context, it) }
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
+                    modifier = Modifier.padding(12.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * The control for one spoiler: the lid on the block, and the only thing visible while
+ * it is closed.
+ *
+ * Separate from [RenderSpoilerBlock] because it is the one part that is interactive,
+ * and the chip is the whole gesture — the revealed text deliberately takes no clicks,
+ * so a thumb resting on the card while reading cannot hide what is being read.
+ *
+ * `FlowRow` rather than a `Row` so a long localised label wraps instead of
+ * ellipsizing.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SpoilerChip(
+    revealed: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val label = if (revealed) "Hide spoiler" else "Show spoiler"
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        border = BorderStroke(
+            width = 1.dp,
+            // Brighter while it is open: over a dark container the two states are
+            // otherwise told apart only by the glyph, and the eye icon is 16dp.
+            color = if (revealed) {
+                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.32f)
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.16f)
+            }
+        ),
+        modifier = modifier
+            .bouncyPress(pressedScale = 0.95f)
+            .clickable(onClick = onToggle)
+            .testTag("markdown_spoiler_chip")
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Visibility,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -403,7 +438,7 @@ fun RenderAniListPreview(
         modifier = Modifier
             .fillMaxWidth()
             .bouncyPress()
-            .clickable { openExternalUrl(context, preview.url) }
+            .clickable { openExternalUrlOrCopy(context, preview.url) }
     ) {
         Row(
             modifier = Modifier.padding(10.dp),

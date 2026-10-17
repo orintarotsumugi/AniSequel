@@ -42,6 +42,7 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StudioCredit
 import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
+import com.anisequel.data.model.descriptionBody
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
@@ -186,7 +187,11 @@ fun InfoSynopsisCard(
     isDetailLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val raw = media.description
+    // `descriptionBody`, not `description`: the markdown renderer reads a bare
+    // `(Source: Wikipedia)` line as a paragraph and prints it as part of the story.
+    // Stripping it here is what stops the credit line being the last thing on the
+    // card - see `MediaNode.descriptionBody`.
+    val raw = media.descriptionBody
     val nodes = remember(raw) {
         raw?.takeIf { it.isNotBlank() }?.let { AniListMarkdownParser.parse(it) } ?: emptyList()
     }

@@ -37,9 +37,9 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
-import com.anisequel.ui.screens.DashboardScreen
-import com.anisequel.ui.screens.LoginScreen
-import com.anisequel.ui.screens.SettingsScreen
+import com.anisequel.ui.screens.dashboard.DashboardScreen
+import com.anisequel.ui.screens.login.LoginScreen
+import com.anisequel.ui.screens.settings.SettingsScreen
 import com.anisequel.ui.screens.studio.StudioScreen
 import com.anisequel.ui.screens.tier.TierListScreen
 import com.anisequel.ui.viewmodel.AuthUiState
