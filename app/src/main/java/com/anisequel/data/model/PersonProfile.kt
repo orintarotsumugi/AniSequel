@@ -158,7 +158,22 @@ data class ProfileAppearance(
     val averageScore: Int? = null,
     val siteUrl: String? = null,
     val coverImage: ProfileCover? = null
-)
+) {
+    /**
+     * The format word, worded the way a person writes it.
+     *
+     * Delegates to the same [formatLabelOf] the title page uses rather than carrying
+     * its own mapping: this row sits under a cover on a person profile, and a
+     * separate `when` would eventually print `TV_SHORT` here and "TV Short" there.
+     *
+     * `type` decides the fallback, since a title with no format is still a manga or
+     * an anime as far as the label is concerned.
+     */
+    val formatLabel: String get() = formatLabelOf(format, isManga)
+
+    /** Whether this appearance is a manga, from the `type` AniList sent. */
+    val isManga: Boolean get() = type?.uppercase() == "MANGA"
+}
 
 /** A cover at the one size this row draws at. */
 @JsonClass(generateAdapter = true)

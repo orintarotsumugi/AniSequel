@@ -171,6 +171,13 @@ private fun LoadedPersonProfile(
     appearancesState: LazyListState,
     onOpenAppearance: (ProfileAppearance) -> Unit
 ) {
+    // Hoisted, not read inside `onClick`. That lambda is a plain one, not a
+    // composable, so a `LocalContext.current` read in its body has no composition
+    // to read from and the compiler rejects it - "invocations can only happen from
+    // the context of a @Composable function". This is the same trap the cast row
+    // documents; the fix is the same, and it is the only place the read is legal.
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,7 +205,7 @@ private fun LoadedPersonProfile(
         // knows; AniList's own page still has the comment thread and the edit history
         // this does not.
         TextButton(
-            onClick = { state.siteUrl?.let { openExternalUrl(LocalContext.current, it) } },
+            onClick = { state.siteUrl?.let { openExternalUrl(context, it) } },
             enabled = state.siteUrl != null,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
@@ -371,7 +378,7 @@ private fun ProfileAppearancesRow(
 
 @Composable
 private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppearance) -> Unit) {
-    val title = appearance.title.displayTitle
+    val title = appearance.title?.displayTitle ?: "Unknown"
     Column(
         modifier = Modifier
             .width(APPEARANCE_CARD_WIDTH)
