@@ -18,6 +18,7 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -406,6 +407,10 @@ private class SnapshotTestService : AniListApiService {
     override suspend fun saveActivityReply(
         request: GraphQLRequest
     ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+    override suspend fun deleteActivityReply(
+        request: GraphQLRequest
+    ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
 
     override suspend fun getCharacterProfile(
         request: GraphQLRequest

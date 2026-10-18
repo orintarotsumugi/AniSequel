@@ -18,6 +18,7 @@ import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
+import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.CharacterProfileData
@@ -128,6 +129,10 @@ class AniListErrorMappingTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun deleteActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
 
         // The two person-profile endpoints. Same reason as `getStudio` below: a
         // new endpoint on the interface breaks every fake in the test source set
@@ -360,6 +365,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun deleteActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
 
         // The two person-profile endpoints. Same reason as `getStudio` below: a
         // new endpoint on the interface breaks every fake in the test source set
