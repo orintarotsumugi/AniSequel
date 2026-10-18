@@ -228,6 +228,30 @@ interface AniListRepository {
     suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> =
         unsupported("postActivityReply")
 
+    /**
+     * Rewrites one of the viewer's own comments, returning the stored reply.
+     *
+     * [activityId] travels with the edit even though the reply id identifies the
+     * row: `SaveActivityReply` declares it, and a resolver that re-checks the
+     * thread is the one this cannot afford to starve. See
+     * [com.anisequel.data.network.GraphQLQueries.EDIT_ACTIVITY_REPLY].
+     *
+     * Requires a session. The server enforces ownership, so a reply by somebody
+     * else fails rather than being rewritten.
+     */
+    suspend fun editActivityReply(replyId: Int, activityId: Int, text: String): Result<ActivityReply> =
+        unsupported("editActivityReply")
+
+    /**
+     * Deletes one of the viewer's own comments.
+     *
+     * [Unit] rather than the deleted reply: `DeleteActivityReply` answers with a
+     * `deleted` boolean and nothing else, and the sheet already holds the row by
+     * the id it sent. Requires a session, and the reply must be the viewer's own.
+     */
+    suspend fun deleteActivityReply(replyId: Int): Result<Unit> =
+        unsupported("deleteActivityReply")
+
     fun getDemoProfile(): ViewerProfile
     fun getDemoAnimeList(): MediaListCollection
 
@@ -239,7 +263,16 @@ interface AniListRepository {
     fun getDemoUserActivity(): List<ListActivity> = unsupported("getDemoUserActivity")
     fun getDemoFollowers(): List<FollowUser> = unsupported("getDemoFollowers")
     fun getDemoFollowing(): List<FollowUser> = unsupported("getDemoFollowing")
-    fun clearDetailCache() {}
+
+    /**
+     * Drops everything the repository holds about the signed-in person.
+     *
+     * Suspending because it reaches the disk snapshots as well as the memory
+     * caches: the list, the bio and the viewer's own record are the most
+     * identifying things the app holds, and a sign-out that left them on disk
+     * would hand them to the next account signed in on this device.
+     */
+    suspend fun clearDetailCache() {}
 }
 
 /**

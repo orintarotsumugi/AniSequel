@@ -18,6 +18,7 @@ import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
+import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.CharacterProfileData
@@ -128,6 +129,10 @@ class AniListErrorMappingTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun deleteActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
 
         // The two person-profile endpoints. Same reason as `getStudio` below: a
         // new endpoint on the interface breaks every fake in the test source set
@@ -280,6 +285,7 @@ class RequestCoalescingPolicyTest {
     private class CountingService : AniListApiService {
         val viewerCalls = mutableListOf<GraphQLRequest>()
         val saveCalls = mutableListOf<GraphQLRequest>()
+        val userByNameCalls = mutableListOf<GraphQLRequest>()
         val release = kotlinx.coroutines.CompletableDeferred<Unit>()
 
         override suspend fun getViewer(request: GraphQLRequest): GraphQLResponse<ViewerData> {
@@ -297,9 +303,9 @@ class RequestCoalescingPolicyTest {
         }
 
         // The My Entry editor's endpoints. Coalescing is asserted against
-        // getViewer and saveMediaListEntry only, and the editor has its own
-        // coverage in MediaEntryEditorTest, so these answer with no data rather
-        // than growing a fake that can drift.
+        // getViewer, saveMediaListEntry and getUserByName, and the editor has its
+        // own coverage in MediaEntryEditorTest, so these answer with no data
+        // rather than growing a fake that can drift.
         override suspend fun getMediaListEntry(
             request: GraphQLRequest
         ): GraphQLResponse<MediaListEntryData> = GraphQLResponse(null)
@@ -308,8 +314,14 @@ class RequestCoalescingPolicyTest {
             request: GraphQLRequest
         ): GraphQLResponse<DeleteMediaListEntryData> = GraphQLResponse(null)
 
-        override suspend fun getUserByName(request: GraphQLRequest): GraphQLResponse<UserByNameData> =
-            GraphQLResponse(null)
+        // Counted rather than silent because the sequential-repeat test below
+        // needs a read with no snapshot cache behind it: `getViewer` carries a
+        // deliberate thirty-minute one now, so counting *its* calls would assert
+        // the cache instead of the coalescer.
+        override suspend fun getUserByName(request: GraphQLRequest): GraphQLResponse<UserByNameData> {
+            userByNameCalls += request
+            return GraphQLResponse(null)
+        }
 
         override suspend fun getMediaListCollection(
             request: GraphQLRequest
@@ -360,6 +372,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun deleteActivityReply(
+            request: GraphQLRequest
+        ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
 
         // The two person-profile endpoints. Same reason as `getStudio` below: a
         // new endpoint on the interface breaks every fake in the test source set
@@ -439,13 +455,19 @@ class RequestCoalescingPolicyTest {
             // about two *sequential* requests, not about overlapping ones.
             service.release.complete(Unit)
 
-            repository.getViewer()
-            repository.getViewer()
+            // `getViewer` cannot carry this assertion any more: the viewer's own
+            // profile is deliberately served from a thirty-minute snapshot
+            // (`RepositorySnapshotsTest` pins the window), so a second sequential
+            // read never reaches the service. The policy is the same question
+            // asked of a read with no cache behind it: a *finished* call must
+            // leave the in-flight map.
+            repository.getUserByName("Tester")
+            repository.getUserByName("Tester")
 
             assertEquals(
-                "an explicit refresh must reach the server",
+                "a completed read must not be served from the previous one",
                 2,
-                service.viewerCalls.size
+                service.userByNameCalls.size
             )
         }
 }

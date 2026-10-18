@@ -40,9 +40,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.SocialList
 import com.anisequel.ui.viewmodel.UserSocialViewModel
 
@@ -544,18 +544,20 @@ private fun FollowerRow(
 
 @Composable
 private fun SocialLoading() {
-    Column(
+    val phase = rememberShimmerPhase()
+    PersonRowsSkeleton(
+        phase = phase,
+        avatarSize = 52.dp,
+        // The rows it stands in for clip their avatars to a rounded square, not a
+        // circle - see `FollowerRow` - and a skeleton of the wrong shape is a
+        // layout the reader will watch change.
+        avatarShape = MaterialTheme.shapes.medium,
+        horizontalPadding = 12.dp,
         modifier = Modifier
+            .widthIn(max = ProfileMaxContentWidth)
             .fillMaxWidth()
-            .padding(vertical = 48.dp)
-            .testTag("social_loading"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(36.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
+            .testTag("social_loading")
+    )
 }
 
 @Composable

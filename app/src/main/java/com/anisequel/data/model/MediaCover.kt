@@ -78,7 +78,13 @@ data class MediaCoverPage(
  *
  * [title] is null when the media has none of the three spellings, and the card
  * falls back to whatever the URL gave it.
+ *
+ * Annotated for a generated adapter because these are snapshotted to disk: a bio
+ * reopened the next day should not re-spend a batched request for covers the app
+ * already knows. The adapter is the only thing the annotation adds - the query
+ * answer is unchanged.
  */
+@JsonClass(generateAdapter = true)
 data class MediaCover(
     val url: String,
     val title: String? = null

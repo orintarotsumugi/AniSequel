@@ -635,9 +635,27 @@ data class MediaListEntryData(
     @Json(name = "MediaList") val entry: SimpleMediaListEntry?
 )
 
+/**
+ * The object both delete mutations answer with.
+ *
+ * `DeleteMediaListEntry` and `DeleteActivityReply` return AniList's shared
+ * `Deleted` type, and it is an OBJECT with one `Boolean` field - confirmed with
+ * `__type(name: "Deleted")` against the live schema rather than inferred from
+ * the name. The two delete payloads used to flatten it into a bare
+ * `deleted: Boolean?`, which decodes to nothing: Moshi refuses the object with
+ * `Expected a boolean but was BEGIN_OBJECT`, `execute` classifies that as a
+ * parse failure, and a delete the server has already performed is reported to
+ * the caller as a failed call.
+ *
+ * Neither caller reads the value - they drop the row they asked to remove - but
+ * the shape has to be right because the decode happens before anything else.
+ */
+@JsonClass(generateAdapter = true)
+data class Deleted(val deleted: Boolean? = null)
+
 @JsonClass(generateAdapter = true)
 data class DeleteMediaListEntryData(
-    @Json(name = "DeleteMediaListEntry") val deleted: Boolean? = null
+    @Json(name = "DeleteMediaListEntry") val deleted: Deleted? = null
 )
 
 /**

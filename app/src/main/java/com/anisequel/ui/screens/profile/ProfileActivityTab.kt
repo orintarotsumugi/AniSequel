@@ -38,6 +38,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 
@@ -236,20 +237,23 @@ fun ProfileActivityTab(
 
 private const val PAGE_TRIGGER_ROWS = 6
 
+/**
+ * The feed's first page, sketched as the cards that are coming.
+ *
+ * This used to be one spinner. A spinner says "wait"; a skeleton says "wait, and
+ * here is what is on its way", and the activity card is the most predictable
+ * shape in the app to sketch. The shimmer clock is hoisted here and passed down
+ * to every block so the whole stack sweeps together on one transition.
+ */
 @Composable
 private fun ActivityLoading() {
-    Column(
+    val phase = rememberShimmerPhase()
+    ActivityFeedSkeleton(
+        phase = phase,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 40.dp)
-            .testTag("activity_loading"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(36.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
+            .testTag("activity_loading")
+    )
 }
 
 @Composable

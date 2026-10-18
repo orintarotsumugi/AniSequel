@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
 /**
@@ -106,6 +107,27 @@ private fun Modifier.shimmerBackground(phase: State<Float>): Modifier {
             )
         )
     }
+}
+
+/**
+ * One skeleton block: a clipped box painted with the shared shimmer.
+ *
+ * The building block the list-shaped waiting states are made of - the profile's
+ * activity feed, a comment thread, a row of people - each of which is a handful
+ * of these at the sizes of the rows that are coming. Kept beside
+ * [shimmerBackground] so there is still one definition of what a skeleton looks
+ * like, rather than one per screen.
+ *
+ * [phase] defaults to its own driver for a lone block and is meant to be hoisted
+ * per list; see [rememberShimmerPhase].
+ */
+@Composable
+fun ShimmerBox(
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.extraSmall,
+    phase: State<Float> = rememberShimmerPhase()
+) {
+    Box(modifier = modifier.clip(shape).shimmerBackground(phase))
 }
 
 @Composable
