@@ -1,5 +1,6 @@
 package com.anisequel
 
+import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaEntryEdit
@@ -72,6 +73,25 @@ class MediaEntryEditorTest {
         assertEquals(true, entry.isPrivate)
         assertEquals(FuzzyDate(2026, 10, 6), entry.startedAt)
         assertEquals(null, entry.completedAt)
+    }
+
+    @Test
+    fun `a delete payload decodes as the Deleted object AniList sends`() {
+        // Both delete mutations answer with the shared `Deleted` type - an object
+        // with one boolean field, not a boolean. The payload used to declare that
+        // field as its own top-level field, so this decode threw and a delete the
+        // server had already performed reached the caller as a failed call. The
+        // dashboard's remove-from-list goes through this payload, which is why it
+        // is pinned here.
+        val responseType = Types.newParameterizedType(
+            GraphQLResponse::class.java,
+            DeleteMediaListEntryData::class.java
+        )
+        val decoded = moshi
+            .adapter<GraphQLResponse<DeleteMediaListEntryData>>(responseType)
+            .fromJson("""{"data":{"DeleteMediaListEntry":{"deleted":true}}}""")!!
+
+        assertEquals(true, decoded.data!!.deleted!!.deleted)
     }
 
     @Test

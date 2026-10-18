@@ -100,18 +100,21 @@ class ActivityEngagementJsonTest {
 
     @Test
     fun `reads the delete confirmation`() {
-        // `DeleteActivityReply` returns the shared `Deleted` object: the reply is
-        // not echoed back, so the sheet removes it by the id it sent. `false` is a
-        // refusal and must stay distinguishable from a parse that never happened.
+        // `DeleteActivityReply` answers with the shared `Deleted` object - the
+        // object, not a bare boolean - and the reply is not echoed back, so the
+        // sheet removes it by the id it sent. `false` is a refusal and must stay
+        // distinguishable from a parse that never happened. Declaring the
+        // object's field as this payload's own field made Moshi throw on every
+        // real response, and the decode happens before anything else.
         val deleted = parse<DeleteActivityReplyData>(
             """{"data":{"DeleteActivityReply":{"deleted":true}}}"""
         )
-        assertEquals(true, deleted.deleted)
+        assertEquals(true, deleted.deleted?.deleted)
 
         val refused = parse<DeleteActivityReplyData>(
             """{"data":{"DeleteActivityReply":{"deleted":false}}}"""
         )
-        assertEquals(false, refused.deleted)
+        assertEquals(false, refused.deleted?.deleted)
     }
 
     @Test
