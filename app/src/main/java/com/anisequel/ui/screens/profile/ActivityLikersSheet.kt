@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,11 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 
 /**
@@ -52,8 +55,18 @@ import com.anisequel.ui.viewmodel.UserActivityViewModel
 @Composable
 fun ActivityLikersSheet(
     state: UserActivityViewModel.LikersState,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /**
+     * Retries the list after a failed load.
+     *
+     * The error used to be a bare sentence with no way forward, unlike its
+     * sibling sheet, whose failure offers the same request one tap away. Who
+     * liked something is a read that fails for the ordinary reasons - a dropped
+     * connection, a rate limit - and the retry that would succeed is one tap.
+     */
+    onRetry: () -> Unit = {}
 ) {
+    val phase = rememberShimmerPhase()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -71,26 +84,38 @@ fun ActivityLikersSheet(
 
             when {
                 state.isLoading -> item(key = "loading") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 28.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ExpressiveLoadingIndicator(
-                            modifier = Modifier.size(28.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    // The rows that are coming: a face and a name, five times. A
+                    // spinner in their place was the one screen in the app whose
+                    // shape was already known and thrown away.
+                    PersonRowsSkeleton(
+                        phase = phase,
+                        avatarSize = 34.dp,
+                        avatarShape = CircleShape,
+                        horizontalPadding = 20.dp
+                    )
                 }
 
                 state.loadError != null -> item(key = "load_error") {
-                    Text(
-                        text = state.loadError,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = state.loadError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(
+                            onClick = onRetry,
+                            modifier = Modifier.testTag("activity_likers_retry_button")
+                        ) {
+                            Text("Try again")
+                        }
+                    }
                 }
 
                 state.likers.isEmpty() -> item(key = "empty") {

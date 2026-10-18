@@ -45,7 +45,7 @@ The cache half is pure file operations and is the easiest to test — a
 ### 1.2 Split `DashboardViewModel`'s recompute pipeline — medium effort, needs care
 
 > **Also exempt, and deliberately so: `GraphQLQueries.kt` (~1160) and
-> `AniListRepositoryImpl.kt` (~1175).** Decided in PR #71, not deferred. Both sit
+> `AniListRepositoryImpl.kt` (~1610).** Decided in PR #71, not deferred. Both sit
 > far past the 700-line ceiling and are staying there; the reasoning is recorded
 > at the top of each file, and this entry exists so the exemption is visible from
 > the list of tracked exceptions rather than only from inside the file.
@@ -67,7 +67,10 @@ The cache half is pure file operations and is the easiest to test — a
 > **What is worth doing instead of splitting, and is not done:** assert the
 > relationships the comments describe. The cache-cap eviction and the
 > coalescer's double-request collapse are both behaviour nothing currently pins,
-> and that is a real gap — a smaller one than the line count suggests.
+> and that is a real gap — a smaller one than the line count suggests. The disk
+> tier that arrived with the snapshots is the exception: `SnapshotStoreTest` and
+> `RepositorySnapshotsTest` pin its windows, its invalidation and its sign-out,
+> which is most of what those new lines were for.
 
 The file is ~1140 lines including comments, past the 700-line ceiling in
 [AGENTS.md §1](AGENTS.md) and the largest file in the repo by a wide margin. The
@@ -110,7 +113,7 @@ should measure the frame time before and after with a macrobenchmark; there is n
 benchmark module in the repo yet.
 
 **The bigger half of this is the `interactionSource` argument, not `composed`.**
-Of 57 call sites, 24 now pass a source and **33** do not. The other 33 get the
+Of 69 call sites, 26 now pass a source and **43** do not. The other 43 get the
 fallback path, which installs a second `pointerInput` node that sets "pressed" on
 every pointer-down — so a finger dragged across one of those elements springs it
 down and back up again: two springs per gesture.

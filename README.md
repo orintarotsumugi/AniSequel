@@ -281,6 +281,23 @@ used to make AniList reject it. Two deliberate gaps: tables and
 conservatively, and underline has no working AniList syntax (`<u>` is accepted
 anyway rather than dropped, since dropping it would print the tag).
 
+**The comment thread is a place you can manage, not just read.** Replies hang off
+an activity and are fetched when the sheet is opened, with the composer in the same
+list. A comment can be liked, and the viewer's *own* comments can be rewritten or
+deleted: `SaveActivityReply` with an `id` is the schema's update and
+`DeleteActivityReply` is its own mutation. Both are gated on the signed-in viewer's
+id — the sheet checks it to decide whether to draw the menu, and the thread's store
+checks it again, because the server refuses a comment that is not yours and the UI
+should not invite the tap. The thread's state lives in
+`ui/viewmodel/CommentThreadStore.kt` rather than on `UserActivityViewModel`: the
+feed and the thread are two state machines that happen to share a profile, and the
+one thing they exchange is the card's reply count, which the store reports through
+a callback. A posted comment scrolls itself into view, keyed on the id the store
+recorded rather than on the list growing — a thread that merely *loaded* must not
+jump to its last comment. The two engagement sheets, the activity feed and the
+Social tab draw a shimmering sketch of the rows that are coming instead of a
+spinner in an empty page (`ShimmerBox`, `ui/components/ShimmerLoading.kt`).
+
 **Library** browses every anime and manga on the account as a poster grid with
 per-status counts and search. It costs no extra requests: the Stats tab already
 forces the whole anime list to be fetched and chunk-merged, because AniList
@@ -661,6 +678,59 @@ re-fetch without the gesture. Both are decided entirely by the resume check.
 After a *failed* automatic fetch the loop waits a five-minute floor before asking
 again, so one dropped request cannot become a tight retry loop.
 
+### What survives closing the app
+
+Everything above decides *when* the app asks again. This decides what it has to
+ask for at all, and until recently the answer was "all of it": the repository's
+caches lived for exactly one process, so closing AniSequel — or letting Android
+reclaim it while the reader was in the browser — threw away the list, the viewer's
+own profile, and the synopsis, cast and studios of every title they had opened.
+The next launch bought the whole list back (one request per chunk of it, against
+an API that allows about thirty a minute), fetched the profile before it could
+even name the account, and re-read every title page whose data had not changed in
+the ten seconds the app was gone.
+
+`SnapshotStore` (`data/repository/SnapshotStore.kt`) is the tier underneath those
+caches: one JSON file per kind under `cacheDir/anilist_snapshots/`, written
+atomically (temp file, then rename) and read back with the timestamp it was
+written with, so reading a snapshot never renews it.
+
+| Snapshot | Reused for | Why that window |
+| --- | --- | --- |
+| `viewer` — the signed-in profile | **30 minutes**, fixed | The request every launch made before it could draw anything. Username, avatar and score totals do not change between two launches a minute apart, and a pasted token is verified after the caches are dropped, so this can never vouch for a refused session. |
+| `list` — the viewer's own anime and manga lists, and scanned profiles' | the refresh interval from Settings | It is the same answer the in-memory cache holds, so it keeps the same window — including `Manual`, where the disk copy is served until the reader refreshes by hand. |
+| `overview` — a profile page's bio, favourites and stats | the same setting | Same reason: it is the profile screen's copy of a thing the list window already governs. |
+| `detail` — a title's full record | **24 hours** | A synopsis, a cast, a studio and a release year arrive once and stay; what does move (a score, the next airing episode) is worth re-asking for the next day. |
+| `cover` — a bio's batched poster URLs | the list's window | Decoration for the profile that follows that window, and the images behind the URLs are already in Coil's disk cache. |
+
+Deliberately **not** on disk: the activity feed, the follower and following lists,
+and character/staff profiles. Each is paged, each is read while it is being
+browsed, and a feed served from yesterday would be a conversation the reader has
+already seen. They stay in memory for the session, exactly as before.
+
+Five rules keep the disk tier from becoming a bug, and each has a test:
+
+- **A snapshot is served with its own timestamp**, never with "now" — otherwise
+  the first lookup of every launch would renew it forever.
+- **A file is never trusted.** A corrupt file, a payload today's models cannot
+  parse, or one written by a previous release (whose queries may have asked for
+  fewer fields) is a miss, and the file is deleted rather than re-tried on every
+  open. The release that wrote it is part of the file's identity.
+- **A mutation clears the disk copy of the list too.** The list's `listEpoch`
+  invalidation was the memory half of "the entry you just saved is not in this
+  list any more"; leaving the file behind would have resurrected exactly the list
+  the mutation replaced.
+- **Signing out deletes all of it.** The list, the bio and the progress inside a
+  title record are per-person data, and unlike the in-memory maps nothing about
+  the process ending would ever take them off the disk.
+- **A title page from disk does not carry stale progress.** The snapshot is the
+  title's facts; the viewer's entry inside it is corrected against the list the
+  app is holding, or dropped when the list no longer has the title — so the sheet
+  and the row behind it cannot disagree about how far in you are.
+
+The store also bounds itself: past a per-kind byte budget the oldest entries go
+first, and the entry just written is never the one dropped.
+
 ### One destination, one copy
 
 Every screen-to-screen hop goes through `NavHostController.navigateSingle`
@@ -765,7 +835,7 @@ pure JUnit.
 | | `StudioYearShelfTest` | The shelves: year from the start date with a `seasonYear` fallback, newest first, `TBA` on top, in-year order preserved, duplicates dropped |
 | | `MediaDetailQueryTest`, `MediaDetailNamespacingTest`, `MediaNodeDisplayTest` | The detail document itself — the `title` it has to ask for, the relation fields it shares with the list query — and what a node prints when the summary it was opened from is replaced |
 | | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
-| | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers; the demo-mode activity fixture |
+| | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `ReplyManagementQueryTest`, `CommentManagementTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers, and editing or deleting your own comment; the demo-mode activity fixture |
 | Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
 | | `MarkdownMediaPreviewTest` | How long one bio parse may take before the watchdog calls it looping |
 | | `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variables it needs, and why every alias goes through a `Page` |
@@ -841,6 +911,24 @@ treats it as advisory rather than claiming otherwise).
   silently becomes the oldest. Malformed JSON is worse still, because
   `ChangelogRepository` deliberately swallows parse errors so Settings cannot
   crash — the safety net is exactly what would hide a broken file from a release.
+- **`RelationDetailResolutionTest`** — a relation followed from a title page opened
+  a visibly emptier page than the same title opened from the list: "no synopsis
+  available", no credits, and the relations row gone after a single hop. The sheet
+  did fetch the full record; the subject it drew was the thin relation node the
+  card carried, so the answer was thrown away. The guard pins the resolution (at
+  the source, because the regression is *which node is handed to the page* — there
+  is no Compose harness in the unit-test source set) and pins the merge the
+  resolution depends on.
+- **`SnapshotStoreTest` / `RepositorySnapshotsTest`** — every cache the app kept
+  lived for exactly one process, so each launch re-bought the whole list (one
+  request per chunk of it), the viewer's own profile before it could name the
+  account, and every title page whose synopsis, cast and studios had already been
+  read. The first suite pins the disk tier's contract — a value is served with the
+  moment it was *written*, a window is closed at both ends, anything unreadable is
+  a miss and never an exception, the cache is bounded — and the second pins the
+  policy: a launch inside the windows spends nothing, a mutation clears the disk
+  copy of the list too, signing out deletes all of it, and a title page served
+  from disk carries the list's progress rather than yesterday's.
 
 ---
 

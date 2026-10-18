@@ -118,6 +118,17 @@ fun ProfileDestination(
      */
     isOwnProfile: Boolean = false,
     /**
+     * The signed-in viewer's id, for gating comment management.
+     *
+     * Distinct from [userId], which is the profile being *read*: a reader manages
+     * their own comments on a stranger's profile, and the two ids are different
+     * people there. Null - signed out - removes the manage control from every
+     * comment and leaves the thread itself untouched. Defaulted to null for the
+     * same reason [isOwnProfile] defaults false: a route that forgets to say lands
+     * on the side that cannot offer a write that would fail.
+     */
+    viewerId: Int? = null,
+    /**
      * The Library tab's remembered media type.
      *
      * Passed in rather than built here so there is exactly one DataStore reader
@@ -149,6 +160,8 @@ fun ProfileDestination(
         factory = UserActivityViewModel.Factory(
             aniListRepository = repository,
             userId = userId,
+            // The account reading, not the profile being read. See [viewerId].
+            viewerId = viewerId,
             isDemo = isDemo
         )
     )
@@ -182,6 +195,7 @@ fun ProfileDestination(
         },
         onNavigateBack = { navController.popBackStack() },
         isOwnProfile = isOwnProfile,
+        viewerId = viewerId,
         onOpenTierList = { navController.navigateSingle(AppRoutes.TIER_LIST) },
         // The reader is on a title that credits a studio; the studio page is a place
         // like any other, so it is pushed with the same single-top rule as every
