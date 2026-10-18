@@ -171,13 +171,23 @@ fun DashboardScreen(
     // such as the snackbar or the detail spinner. `detailNodes` is a key as well
     // so an arriving row swaps to its fetched detail the moment it lands.
     //
-    // A sequel keeps its parent narrative; an arriving row is a summary the
-    // detail query fills in, so its subject prefers the fetched node and keeps
-    // the summary's progress either way.
+    // A sequel keeps its parent narrative; an arriving row or a relation is a
+    // summary the detail query fills in, so its subject prefers the fetched node
+    // and keeps the summary's progress either way.
+    //
     // A title reached by tapping a relation card, which replaces the subject rather
     // than stacking a sheet on one. Cleared when a list row is tapped instead, so
     // dismissing and re-opening from the list does not land the reader back in
     // whatever franchise they had wandered into.
+    //
+    // What is held here is the *relation* node the card carried, and that node is a
+    // summary rather than a record: the relations row is fetched with a narrow
+    // field set (`RELATED_NODE_FIELDS` - no synopsis, cast, staff or relations of
+    // its own). Painting it directly is what made a followed relation open a
+    // visibly emptier page than the same title opened from the list - no synopsis,
+    // no credits, and the relations row gone after a single hop - because the
+    // detail the sheet fetched was never read by the subject it drew from. The
+    // resolution below is what turns the summary into the same full page.
     var navigatedRelation by remember { mutableStateOf<MediaNode?>(null) }
 
     val selectedSubject = remember(
@@ -188,7 +198,16 @@ fun DashboardScreen(
         detailNodes
     ) {
         when {
-            navigatedRelation != null -> navigatedRelation?.let { AnimeDetailSubject.Media(it) }
+            // The same resolution an arriving row gets: the tapped node is the
+            // summary the sheet can draw on the first frame, and the fetched
+            // detail supersedes it the moment it lands. Without this, a relation
+            // was the one place a subject was built straight from its summary -
+            // the detail request went out and its answer was thrown away.
+            navigatedRelation != null -> navigatedRelation?.let { summary ->
+                AnimeDetailSubject.Media(
+                    detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary
+                )
+            }
             selectedSequelId != null -> successState?.missedSequels
                 ?.firstOrNull { it.sequelId == selectedSequelId }
                 ?.let { AnimeDetailSubject.Sequel(it) }

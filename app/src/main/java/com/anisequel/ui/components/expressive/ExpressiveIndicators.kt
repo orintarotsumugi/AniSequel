@@ -1,22 +1,15 @@
 package com.anisequel.ui.components.expressive
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 private const val EXPRESSIVE_TAG = "expressive_"
@@ -54,7 +47,15 @@ fun ExpressiveContainedLoadingIndicator(
 }
 
 /**
- * Sinusoidal wavy determinate progress indicator for anime watch progress.
+ * The card-sized wave: a thin determinate track drawn by the Material 3
+ * component, for a sequel row's episode progress.
+ *
+ * Not the title page's wave. `ui/components/detail/info/WavyProgressBar` has the
+ * same name and is hand-drawn, because on that page the wave's *height* is the
+ * progress; this one is the ordinary thin track and lets `LinearWavyProgressIndicator`
+ * draw it. Two spellings of one name is a trap for the reader who finds the wrong
+ * file first, so: if the caller is a card and the progress is 0..1 of a bar, it is
+ * this one.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -72,38 +73,4 @@ fun WavyProgressBar(
         color = color,
         trackColor = trackColor
     )
-}
-
-/**
- * A labelled wave bar pairing descriptive text with the sinusoidal meter.
- */
-@Composable
-fun ExpressiveProgressRow(
-    label: String,
-    detail: String,
-    progress: Float,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        WavyProgressBar(
-            progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
 }

@@ -155,6 +155,17 @@ class AuthViewModel(
             try {
                 _uiState.value = AuthUiState.Loading
 
+                // Nothing from the previous session may answer for this one.
+                // The check below is `getViewer()`, and that now reads the
+                // viewer snapshot when it is fresh - so without this, the
+                // profile of the account that was signed in two minutes ago
+                // would vouch for a token AniList is about to refuse, and the
+                // rejection would land as Authenticated. Clearing first also
+                // means the snapshots cannot outlive the session they were
+                // written for on this path, which reaches a new session without
+                // passing through `logout()`.
+                aniListRepository?.clearDetailCache()
+
                 // Store first, because the check itself has to authenticate.
                 // Anything that does not already hold the new token - the auth
                 // interceptor's in-memory copy - would call AniList without it

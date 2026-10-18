@@ -3,6 +3,7 @@ package com.anisequel.data.network
 import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
+import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
@@ -170,6 +171,18 @@ interface AniListApiService {
     suspend fun saveActivityReply(
         @Body request: GraphQLRequest
     ): GraphQLResponse<SaveActivityReplyData>
+
+    /**
+     * Deletes one of the viewer's own comments. Requires a session.
+     *
+     * Editing goes through [saveActivityReply] - one mutation type on the
+     * server, a create and an update - so only the delete has a method to itself.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun deleteActivityReply(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<DeleteActivityReplyData>
 
     /** One character and the titles they appear in. Opened by the cast row. */
     @POST("/")

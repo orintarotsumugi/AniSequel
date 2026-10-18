@@ -2,6 +2,7 @@ package com.anisequel
 
 import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ActivityFeedData
+import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.ToggleLikeData
@@ -15,10 +16,10 @@ import org.junit.Test
 
 /**
  * Parses the engagement responses: a comment thread, a like toggle, a posted
- * reply, and the feed's own like state.
+ * reply, a deleted one, and the feed's own like state.
  *
- * The fixture shapes are taken from what AniList actually serves for the three
- * new documents, because the mistakes here are silent - a field named slightly
+ * The fixture shapes are taken from what AniList actually serves for the new
+ * documents, because the mistakes here are silent - a field named slightly
  * differently decodes to null, and the heart renders empty or the thread renders
  * blank without any error reaching the screen.
  */
@@ -95,6 +96,22 @@ class ActivityEngagementJsonTest {
         assertEquals(100, reply.id)
         assertEquals("Well said", reply.text)
         assertEquals("Josh", reply.user!!.name)
+    }
+
+    @Test
+    fun `reads the delete confirmation`() {
+        // `DeleteActivityReply` returns the shared `Deleted` object: the reply is
+        // not echoed back, so the sheet removes it by the id it sent. `false` is a
+        // refusal and must stay distinguishable from a parse that never happened.
+        val deleted = parse<DeleteActivityReplyData>(
+            """{"data":{"DeleteActivityReply":{"deleted":true}}}"""
+        )
+        assertEquals(true, deleted.deleted)
+
+        val refused = parse<DeleteActivityReplyData>(
+            """{"data":{"DeleteActivityReply":{"deleted":false}}}"""
+        )
+        assertEquals(false, refused.deleted)
     }
 
     @Test

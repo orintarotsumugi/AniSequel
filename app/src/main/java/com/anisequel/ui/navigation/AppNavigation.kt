@@ -31,6 +31,7 @@ import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
+import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.HiddenSequelsPreferences
@@ -169,6 +170,15 @@ fun AppNavigation(
         TierListPreferences(context.applicationContext)
     }
 
+    // The disk tier under the repository's caches. Process-wide rather than
+    // per-screen because the auth ViewModel's repository writes and clears the
+    // same files - see [AniListSnapshots] - and it lives in the cache directory
+    // because everything in it can be re-fetched: Android emptying it under
+    // storage pressure, or the user clearing the app's cache, costs a request
+    // and never a screen. Sign-out deletes it explicitly rather than trusting
+    // the OS to ever do so.
+    val aniListSnapshots = remember(context) { AniListSnapshots.of(context) }
+
     // The cache window is a supplier rather than a value because the user can
     // change it from Settings while the app is open: reading it per lookup is
     // what makes "15 min" mean fifteen minutes from the moment it is picked,
@@ -176,7 +186,8 @@ fun AppNavigation(
     val aniListRepository = remember(authRepository) {
         AniListRepositoryImpl(
             apiService = NetworkClient.createApiService(authRepository),
-            listCacheTtlMillis = refreshIntervalPreferences::currentStalenessMillis
+            listCacheTtlMillis = refreshIntervalPreferences::currentStalenessMillis,
+            snapshots = aniListSnapshots
         )
     }
 
@@ -550,6 +561,10 @@ fun AppNavigation(
                 repository = aniListRepository,
                 username = username,
                 userId = signedInViewer?.id,
+                // The viewer reading, which on this route is also the profile in
+                // view - keyed off the same source as `userId` so the two can
+                // never describe different people.
+                viewerId = signedInViewer?.id,
                 isDemo = signedInViewer == null,
                 navController = navController,
                 onSignInAgain = authViewModel::logout,
@@ -580,6 +595,11 @@ fun AppNavigation(
                 // cache key, which is the same key that dashboard used - so it is
                 // still a cache hit rather than a second download.
                 userId = null,
+                // The reader's own id, which is a different person from the
+                // profile in view on this route: it is what the comment thread
+                // compares each author against to decide whose comments carry
+                // their manage control.
+                viewerId = signedInViewer?.id,
                 isDemo = false,
                 navController = navController,
                 onSignInAgain = authViewModel::logout,
@@ -599,6 +619,9 @@ fun AppNavigation(
                 // the caller rather than a real case, and it still fetches.
                 username = "",
                 userId = userId,
+                // See the by-name route: the reader and the profile being read
+                // are two different accounts here.
+                viewerId = signedInViewer?.id,
                 isDemo = false,
                 navController = navController,
                 onSignInAgain = authViewModel::logout,

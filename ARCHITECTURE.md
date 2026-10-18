@@ -11,7 +11,7 @@ This specification provides an exhaustive, production-grade technical breakdown 
 ### Core Philosophy & Operational Invariants
 
 1. **Zero Proprietary Backend**: AniSequel directly interfaces with AniList's public GraphQL API via OAuth2 PKCE or public user queries. There is no middleman backend or database server.
-2. **Freshness Over Offline Caching**: Anime lists change constantly as users complete shows or new seasons air. An offline-first database with stale entries produces confident, wrong answers. Consequently, AniSequel uses an in-memory dynamic-TTL cache for fast UI restores paired with foreground staleness detection (`ListFreshnessWatch`).
+2. **Freshness Over Offline Caching**: Anime lists change constantly as users complete shows or new seasons air. An offline-first database with stale entries produces confident, wrong answers. Consequently, AniSequel uses a dynamic-TTL cache - in memory, and on disk for what a process death would otherwise throw away (`SnapshotStore`) - for fast UI restores, paired with foreground staleness detection (`ListFreshnessWatch`). Nothing is served past its window, even from disk, and the windows are short where the data moves: the list follows the reader's chosen refresh interval and a title's record is reused for a day.
 3. **Pure Clean Architecture & Layer Isolation**:
    - `ui/` — Jetpack Compose presentation, Material 3 Expressive UI, and ViewModels.
    - `domain/usecase/` — Pure Kotlin business logic. Zero Android dependencies (`android.*`).
@@ -197,11 +197,12 @@ AniList exclusively uses GraphQL over HTTP POST. `AniListApiService` defines the
 #### Caching & Repository Protocol (`data/repository/AniListRepositoryImpl.kt`)
  AniList limits requests to ~30 per minute. `AniListRepositoryImpl` uses a multi-tier caching strategy:
 
-1. **Chunked List Merging (`fetchFullMediaListCollection`)**: AniList paginates large media collections. The repository automatically retrieves chunks (`chunk = 1..10`), merging entries across lists while deduplicating entries.
+1. **Chunked List Merging (`fetchFullMediaListCollection`)**: AniList paginates large media collections. The repository walks the chunks the server says exist (`hasNextChunk`, up to a `MAX_LIST_CHUNKS = 40` runaway ceiling), merging entries across lists while deduplicating entries.
 2. **Dynamic-TTL List Cache (`listCache`)**: Caches `MediaListCollection` per user (`user:<id>` or `userName:<name>`). The staleness window (`listCacheTtlMillis`) is evaluated per lookup from `RefreshIntervalPreferences`.
-3. **Bounded Detail Cache (`detailCache`)**: Holds full `MediaNode` structures (synopses, studio information, trailers). Capped at `MAX_DETAIL_CACHE_NODES = 128` to prevent unbounded memory growth during continuous browsing.
-4. **Social & Overview Caches**: Dedicated `ConcurrentHashMap` instances for `UserOverview`, `ListActivity`, `Followers`, and `Following` isolate feed items from media list invalidations.
-5. **Session Isolation**: Calling `clearDetailCache()` purges all in-memory maps upon sign-out.
+3. **Bounded Detail Cache (`detailCache`)**: Holds full `MediaNode` structures (synopses, studio information, trailers). Capped at `MAX_DETAIL_CACHE_NODES = 128` to prevent unbounded memory growth during continuous browsing. Entries carry a timestamp and are refused past 24 hours.
+4. **Social & Overview Caches**: Dedicated `ConcurrentHashMap` instances for `UserOverview`, `ListActivity`, `Followers`, and `Following` isolate feed items from media list invalidations. The feed caches are session-only; an overview follows the list's window.
+5. **Disk Snapshots (`SnapshotStore`)**: What used to die with the process - the viewer's own profile (30 minutes), lists and profile overviews (the user's refresh interval), and title records and cover batches (24 hours, and the list's window for covers) - is written one JSON file per kind under `cacheDir/anilist_snapshots/`. A read is served with the timestamp it was *written* with, so reading never renews it; an unparseable file, or one written by another release, is a miss rather than an answer.
+6. **Session Isolation**: Calling `clearDetailCache()` purges the in-memory maps *and* deletes the disk snapshots upon sign-out. `AuthViewModel.saveToken` calls it before verifying a pasted token, because `getViewer()` can now answer without a request and must not vouch for a session AniList has already refused.
 
 #### DataStore Preferences (`data/repository/`)
 - `AuthRepositoryImpl`: Stores OAuth tokens (`access_token`, `refresh_token`) securely in Jetpack DataStore.

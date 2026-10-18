@@ -13,8 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -52,13 +56,20 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  *
  * ## Motion
  *
- * The fill springs up from zero once per media, with [ExpressiveMotion.FastSpatial]
+ * The fill springs up from zero once per bar, with [ExpressiveMotion.FastSpatial]
  * - a bar that fills on arrival says "this is how far in you are" without the
  * viewer having to read the number beside it. The travelling phase is one
  * `rememberInfiniteTransition`, and it only runs when there is progress to show:
  * an idle bar has nothing to travel, and a looping animation on a screenful of
- * cards is exactly what the motion rules cap. Both reads happen inside the draw
- * lambda, so the animation never recomposes this card or its neighbours.
+ * cards is exactly what the motion rules cap.
+ *
+ * Both halves of that description were wrong in the code that this KDoc was
+ * written for: the travelling phase was read in composition, so the card did
+ * recompose on every frame of a loop that never ends, and the entrance was held
+ * in a plain `remember`, which a `LazyColumn` discards with the item - so
+ * scrolling past the card and back replayed the whole fill from zero. The reads
+ * now happen where this says they do, and the entrance is saved; the comments at
+ * each site carry the details.
  */
 @Composable
 fun WavyProgressBar(
@@ -70,17 +81,49 @@ fun WavyProgressBar(
 ) {
     val target = progress.coerceIn(0f, 1f)
 
+    // The entrance happens once per bar, and the flag that says so is
+    // `rememberSaveable` for the same reason `sectionReveal`'s is: a `LazyColumn`
+    // disposes the items it has scrolled past and keeps their saved state under the
+    // item's key, so this flag outlives the bar leaving the screen. A plain
+    // `remember` lost it with the item, and the bar replayed the entire fill from
+    // zero on the way back up the page - a second counting of a progress the reader
+    // had already watched arrive.
+    var played by rememberSaveable { mutableStateOf(false) }
     // A `Float` rather than `animateFloatAsState`: that initialises *at* its
-    // target, so the bar would simply appear full. This starts at nothing and
-    // travels, which is the whole entrance.
-    val fill = remember(target) { Animatable(0f) }
+    // target, so the bar would simply appear full rather than filling. Where this
+    // one starts is the flag's decision - at nothing for a bar that has never
+    // played, at the progress it is about to show for one that has, which is how a
+    // bar restored from a scroll keeps the height it already had instead of rising
+    // a second time.
+    val fill = remember { Animatable(if (played) target else 0f) }
+    // Unconditional, and it checks the flag's meaning rather than being wrapped in
+    // `if (!played)`: a `LaunchedEffect` skipped on the played path would also never
+    // see a *later* progress - the entry editor's own writes - and the bar would sit
+    // on a number that is no longer true. Entering from zero and re-targeting from
+    // the current value are the same call; the flag only decides where the fill
+    // starts.
     LaunchedEffect(target) {
+        played = true
         fill.animateTo(target, ExpressiveMotion.FastSpatial)
     }
 
-    val cycle = if (target > 0f) {
+    // The travelling phase, held as a `State` and read only in the draw lambda
+    // below.
+    //
+    // It used to be read here, in composition - `val value by
+    // transition.animateFloat(...)` - which subscribed this card to its own
+    // animation and made every frame of a loop that never ends a recomposition of
+    // the card and its neighbours, on a page that already asked too much of the
+    // frame. The KDoc above claimed the draw-phase read the whole time; the code
+    // did not do it. As a `State`, only the `.value` in the draw lambda touches
+    // the animation, so a frame invalidates this Canvas and nothing else.
+    //
+    // Null while there is nothing to travel: an idle bar draws a still wave, and a
+    // looping animation on a screenful of cards is exactly what the motion rules
+    // cap.
+    val cycle: State<Float>? = if (target > 0f) {
         val transition = rememberInfiniteTransition(label = "wavy_progress_bar")
-        val value by transition.animateFloat(
+        transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
@@ -89,9 +132,8 @@ fun WavyProgressBar(
             ),
             label = "wave_phase"
         )
-        value
     } else {
-        0f
+        null
     }
 
     Canvas(
@@ -104,14 +146,16 @@ fun WavyProgressBar(
         val maxAmplitude = size.height * MAX_AMPLITUDE_RATIO
         val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
 
-        // `fill.value` is read here, in the draw lambda: the animation redraws this
-        // Canvas and nothing else.
+        // `fill.value` and `cycle?.value` are read here, in the draw lambda: the
+        // animations redraw this Canvas and nothing else.
         val filled = size.width * fill.value
         // The height the wave stands at is the reader's progress - at rest when
         // nothing is watched, full height at the end - and both halves are drawn
         // from this one amplitude, so the wave is continuous across the seam.
         val amplitude = WaveGeometry.amplitude(maxAmplitude, progress = fill.value)
-        val phase = WaveGeometry.phase(cycle)
+        // Null when the bar was idle at composition time, which is a still wave -
+        // zero phase, the shape the track has always had.
+        val phase = WaveGeometry.phase(cycle?.value ?: 0f)
 
         val wave = wavePath(
             width = size.width,
