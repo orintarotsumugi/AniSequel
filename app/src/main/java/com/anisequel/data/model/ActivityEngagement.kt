@@ -109,6 +109,19 @@ data class SaveActivityReplyData(
 )
 
 /**
+ * Payload of the reply deletion.
+ *
+ * `DeleteActivityReply` answers with the shared [Deleted] object - the same
+ * shape [DeleteMediaListEntryData] reads - and the reply that was removed is
+ * *not* echoed back, so the sheet removes it from its own list by the id it
+ * sent.
+ */
+@JsonClass(generateAdapter = true)
+data class DeleteActivityReplyData(
+    @Json(name = "DeleteActivityReply") val deleted: Deleted? = null
+)
+
+/**
  * The answer to a like toggle, with the union wrapper and the nullability
  * stripped off.
  *

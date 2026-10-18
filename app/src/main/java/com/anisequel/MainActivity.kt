@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
+import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.data.repository.ThemeMode
@@ -80,7 +81,13 @@ class MainActivity : ComponentActivity() {
                     // navigates to a dashboard that will only report "Session
                     // expired" if it is wrong.
                     aniListRepository = AniListRepositoryImpl(
-                        NetworkClient.createApiService(authRepository)
+                        apiService = NetworkClient.createApiService(authRepository),
+                        // The same store the dashboards' repository writes. What
+                        // this instance does on sign-in and sign-out is *clear*
+                        // it, and clearing a different instance would leave the
+                        // signed-out person's list and bio on disk for the next
+                        // account. See [AniListSnapshots].
+                        snapshots = AniListSnapshots.of(applicationContext)
                     )
                 ) as T
             }

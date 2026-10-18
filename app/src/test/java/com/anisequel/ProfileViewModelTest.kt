@@ -464,6 +464,9 @@ class ProfileViewModelTest {
         assertFalse(comments.isPosting)
         assertEquals(1, comments.replies.size)
         assertEquals(9, comments.replies.single().id)
+        // Recorded so the sheet can bring the new comment into view - and only
+        // this, rather than "the list grew", so a loaded thread does not scroll.
+        assertEquals(9, comments.postedReplyId)
         // The feed's reply count is kept honest without a refetch.
         val feed = viewModel.state.value as UserActivityViewModel.ActivityState.Success
         assertEquals(3, feed.activities.single().replyCount)

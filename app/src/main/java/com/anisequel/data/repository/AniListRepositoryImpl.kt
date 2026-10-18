@@ -53,6 +53,13 @@ import java.util.concurrent.ConcurrentHashMap
  * private fields, and splitting it means passing state around or making it
  * `internal`, and both make the invariants worse rather than better.
  *
+ * The caches now have a second tier. [SnapshotStore], in its own file, writes
+ * what would otherwise be forgotten the moment the process dies - which is a
+ * different mechanism with different failure modes (a half-written file, a file
+ * from another release, a device whose clock jumped), so it lives where its
+ * rules can be read on their own. What stays here is the policy: which answers
+ * are worth keeping, for how long, and what a mutation invalidates.
+ *
  * What is worth doing here is not a split but a test: the cache-cap eviction and
  * the coalescer's double-request collapse are both behaviour nothing currently
  * pins.
@@ -82,7 +89,27 @@ class AniListRepositoryImpl(
      * applies to the very next load. The default keeps the previous behaviour
      * for the call sites that have no store to read (the demo dashboard).
      */
-    private val listCacheTtlMillis: () -> Long = { RefreshInterval.DEFAULT.staleAfterMillis }
+    private val listCacheTtlMillis: () -> Long = { RefreshInterval.DEFAULT.staleAfterMillis },
+
+    /**
+     * The disk half of these caches, or null for an in-memory-only repository.
+     *
+     * Null by default so a test that only cares about the network paths - and
+     * the call sites that never had a store to read - keep exactly the
+     * behaviour they had before there was a disk tier.
+     */
+    private val snapshots: SnapshotStore? = null,
+
+    /**
+     * The clock every cache reads, injectable so the windows can be tested at
+     * their edges without sleeping.
+     *
+     * One clock for the whole class, deliberately: the memory caches and the
+     * snapshots are stamped from the same reading, so "how old is this answer",
+     * "has it expired", and "which snapshot is newest when the store has to
+     * evict" are all answered from one timeline.
+     */
+    private val nowMillis: () -> Long = System::currentTimeMillis
 ) : AniListRepository {
 
     private companion object {
@@ -137,6 +164,61 @@ class AniListRepositoryImpl(
          * rather than a magic string that exists only in this cache.
          */
         const val UNSPECIFIED_MEDIA_TYPE = "UNSPECIFIED"
+
+        /**
+         * Snapshot kinds: one file per kind, under the store's directory.
+         *
+         * Named on this side because they are this class's judgement about what is
+         * worth keeping, not the store's: the store knows how to write a bounded,
+         * versioned, atomic file, and nothing about AniList.
+         */
+        const val SNAPSHOT_LIST = "list"
+        const val SNAPSHOT_OVERVIEW = "overview"
+        const val SNAPSHOT_VIEWER = "viewer"
+        const val SNAPSHOT_DETAIL = "detail"
+        const val SNAPSHOT_COVER = "cover"
+
+        /** The only key under [SNAPSHOT_VIEWER]: the signed-in viewer's own profile. */
+        const val SNAPSHOT_VIEWER_KEY = "viewer"
+
+        /**
+         * How long the signed-in viewer's own profile may be reused.
+         *
+         * Thirty minutes, fixed, and deliberately **not** [listCacheTtlMillis].
+         * The list's window is a user setting because the list is about noticing
+         * what they finished watching; this is the request the app made *before*
+         * it could even name the account, on every launch, including the ones
+         * where it was killed in the browser during sign-in and immediately
+         * reopened. Nobody's username, avatar or score totals change between two
+         * launches a minute apart, and half an hour is a window in which a real
+         * change still arrives while the user is holding the phone.
+         */
+        const val VIEWER_PROFILE_WINDOW_MILLIS = 30 * 60 * 1000L
+
+        /**
+         * How long a title's fetched facts may be reused.
+         *
+         * A day, because what the detail query buys - the synopsis, the cast, the
+         * studios, the release year, the relations - changes on the scale of
+         * announcements rather than minutes, and re-buying it on every launch
+         * spends the rate limit on an answer that has not moved. A day is also
+         * short enough that the parts that *do* move (the next airing episode,
+         * a score) correct themselves the next day, and short enough that a
+         * synopsis correction or a newly announced sequel is seen while anyone
+         * still remembers the title.
+         */
+        const val DETAIL_SNAPSHOT_WINDOW_MILLIS = 24 * 60 * 60 * 1000L
+
+        /**
+         * A [MediaCoverKey] as the store's flat string.
+         *
+         * `graphqlType` rather than `type` so the namespace is spelled the one way
+         * everywhere: two spellings of `anime` would be two snapshot entries, and
+         * the memory cache keyed on `(type, id)` would then answer from one while
+         * the disk held the other. The separator cannot collide because the type
+         * is a fixed enum name.
+         */
+        fun snapshotKey(key: MediaCoverKey): String = "${key.graphqlType}:${key.id}"
     }
 
     /**
@@ -166,8 +248,16 @@ class AniListRepositoryImpl(
      *
      * An entry fetched with no type at all lands under [UNSPECIFIED_MEDIA_TYPE], so
      * it cannot be served to a caller that asked for a specific namespace.
+     *
+     * The timestamp is what lets a day-old entry be refused. Before there was a
+     * disk tier this map lasted exactly as long as the process, so an entry could
+     * not outlive the launch that fetched it; now that the same answer can be
+     * read back tomorrow, the memory and the file have to agree on the window -
+     * see [DETAIL_SNAPSHOT_WINDOW_MILLIS].
      */
-    private val detailCache = ConcurrentHashMap<MediaCoverKey, MediaNode>()
+    private val detailCache = ConcurrentHashMap<MediaCoverKey, CachedDetail>()
+
+    private class CachedDetail(val node: MediaNode, val storedAtMillis: Long)
 
     /**
      * Character and staff profiles, keyed on the **kind** as well as the id.
@@ -206,8 +296,14 @@ class AniListRepositoryImpl(
      * which are different shows - do not overwrite each other in here. Keyed on an
      * id, this cache would serve one of the two posters for both cards
      * indefinitely, not just for the length of one request.
+     *
+     * Stamped because the disk tier can answer for a bio reopened tomorrow; see
+     * [DETAIL_SNAPSHOT_WINDOW_MILLIS] for the shared window and the same
+     * refuse-it-when-old rule.
      */
-    private val coverCache = ConcurrentHashMap<MediaCoverKey, MediaCover>()
+    private val coverCache = ConcurrentHashMap<MediaCoverKey, CachedCover>()
+
+    private class CachedCover(val cover: MediaCover, val storedAtMillis: Long)
 
     /**
      * Completed list responses, kept briefly so re-entering the app does not
@@ -255,6 +351,29 @@ class AniListRepositoryImpl(
     private var listEpoch = 0
 
     /**
+     * The signed-in viewer's own profile, on a fixed window.
+     *
+     * The one answer every launch used to buy before it could draw anything:
+     * `DashboardViewModel` cannot ask for a list without the viewer's id, and the
+     * widget and the Settings header cannot name the account without the name -
+     * so a cold start spent a request on data that had not changed since the last
+     * one, before it could show a single row.
+     *
+     * Kept apart from [overviewCache] because the two are different answers and
+     * different windows: `getUserOverview` is the profile screen's bio and
+     * favourites for anyone, scanned or signed in, and follows the list's
+     * user-chosen window; this one is fixed at
+     * [VIEWER_PROFILE_WINDOW_MILLIS].
+     *
+     * `@Volatile` for the same reason as [listEpoch]: a fetch completes on
+     * whichever dispatcher Retrofit used, and the next read is on main.
+     */
+    @Volatile
+    private var viewerCache: CachedViewer? = null
+
+    private class CachedViewer(val profile: ViewerProfile, val storedAtMillis: Long)
+
+    /**
      * Profile responses, on the same window and the same reasoning as
      * [listCache]: coming back to the profile within the user's chosen refresh
      * interval should not spend another of AniList's ~30 requests a minute.
@@ -292,7 +411,7 @@ class AniListRepositoryImpl(
      */
     private fun <T> cachedItems(cache: ConcurrentHashMap<String, CachedItems<T>>, key: String): List<T>? {
         val entry = cache[key] ?: return null
-        if (System.currentTimeMillis() - entry.storedAtMillis > listCacheTtlMillis()) {
+        if (nowMillis() - entry.storedAtMillis > listCacheTtlMillis()) {
             cache.remove(key)
             return null
         }
@@ -304,36 +423,149 @@ class AniListRepositoryImpl(
         key: String,
         items: List<T>
     ) {
-        cache[key] = CachedItems(items, System.currentTimeMillis())
+        cache[key] = CachedItems(items, nowMillis())
     }
 
     private fun cachedOverview(key: String): UserOverview? {
         val entry = overviewCache[key] ?: return null
         val ttl = listCacheTtlMillis()
-        if (System.currentTimeMillis() - entry.storedAtMillis > ttl) {
+        if (nowMillis() - entry.storedAtMillis > ttl) {
             overviewCache.remove(key)
             return null
         }
         return entry.overview
     }
 
+    /**
+     * The profile held for [key]: memory first, then [snapshots].
+     *
+     * A snapshot goes into memory stamped with its **own** time, never with now.
+     * Stamping a read as a write is how a cache stops expiring - the entry would
+     * be renewed by every lookup, so a profile fetched last week would keep
+     * answering as long as somebody opened the screen now and then.
+     *
+     * The disk read happens once per key per process in practice: a hit lands in
+     * [overviewCache] above, so the second caller of the same profile is a map
+     * lookup again.
+     */
+    private suspend fun knownOverview(key: String): UserOverview? {
+        cachedOverview(key)?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_OVERVIEW,
+            key = key,
+            type = UserOverview::class.java,
+            ttlMillis = listCacheTtlMillis()
+        ) ?: return null
+        overviewCache[key] = CachedOverview(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
     private fun cachedList(key: String): MediaListCollection? {
         val entry = listCache[key] ?: return null
         val ttl = listCacheTtlMillis()
-        if (System.currentTimeMillis() - entry.storedAtMillis > ttl) {
+        if (nowMillis() - entry.storedAtMillis > ttl) {
             listCache.remove(key)
             return null
         }
         return entry.collection
     }
 
-    private fun storeList(key: String, collection: MediaListCollection) {
-        listCache[key] = CachedList(collection, System.currentTimeMillis())
+    /**
+     * The list held for [key], on the same terms as [knownOverview].
+     *
+     * This is the call that makes "close the app and open it again" cost nothing:
+     * a list snapshotted twenty minutes ago is served from disk, keeps its
+     * original timestamp, and the freshness watch upstream decides from *that*
+     * whether another fetch is due.
+     */
+    private suspend fun knownList(key: String): MediaListCollection? {
+        cachedList(key)?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_LIST,
+            key = key,
+            type = MediaListCollection::class.java,
+            ttlMillis = listCacheTtlMillis()
+        ) ?: return null
+        listCache[key] = CachedList(stored.value, stored.storedAtMillis)
+        return stored.value
     }
 
-    override suspend fun getViewer(): Result<ViewerProfile> =
-        execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
-            .map { it.viewer.require("Viewer data not found") }
+    /**
+     * Stores [collection] for [key] in both tiers, from one clock reading.
+     *
+     * One reading on purpose: a launch that follows must not be able to decide
+     * the answer is older - or younger - than the launch that fetched it did.
+     */
+    private suspend fun storeList(key: String, collection: MediaListCollection) {
+        val storedAt = nowMillis()
+        listCache[key] = CachedList(collection, storedAt)
+        snapshots?.write(SNAPSHOT_LIST, key, MediaListCollection::class.java, collection, storedAt)
+    }
+
+    /**
+     * Drops every list the repository is holding, in both tiers.
+     *
+     * Called by every mutation. The epoch bump plus [listCache].clear() is what it
+     * always did; the snapshot has to go with them, or the next lookup would read
+     * the pre-mutation list straight back off disk and the very thing the
+     * invalidation exists to prevent would be served to the dashboard.
+     */
+    private suspend fun invalidateLists() {
+        listEpoch++
+        listCache.clear()
+        snapshots?.removeKind(SNAPSHOT_LIST)
+    }
+
+    /**
+     * The signed-in viewer, answered from [viewerCache] or disk when it is fresh.
+     *
+     * Everything that has to know *who* is signed in goes through here - the
+     * dashboard needs the id before it can ask for a list, the widget and the
+     * Settings header need the name - so this is the one call whose caching shows
+     * on every cold start rather than only on a screen the user reopens.
+     *
+     * A note for callers using it as a *token check*: it can answer without a
+     * request, so it can vouch for a session AniList has since refused.
+     * `AuthViewModel.saveToken` clears the caches before it leans on this;
+     * nothing else should treat it as proof that a token works.
+     */
+    override suspend fun getViewer(): Result<ViewerProfile> {
+        knownViewer()?.let { return Result.success(it) }
+        return execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
+            .map { response ->
+                val profile = response.viewer.require("Viewer data not found")
+                storeViewer(profile)
+                profile
+            }
+    }
+
+    /** Memory half of [knownViewer]; see [VIEWER_PROFILE_WINDOW_MILLIS]. */
+    private fun cachedViewer(): ViewerProfile? {
+        val entry = viewerCache ?: return null
+        if (nowMillis() - entry.storedAtMillis > VIEWER_PROFILE_WINDOW_MILLIS) {
+            viewerCache = null
+            return null
+        }
+        return entry.profile
+    }
+
+    private suspend fun knownViewer(): ViewerProfile? {
+        cachedViewer()?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_VIEWER,
+            key = SNAPSHOT_VIEWER_KEY,
+            type = ViewerProfile::class.java,
+            ttlMillis = VIEWER_PROFILE_WINDOW_MILLIS
+        ) ?: return null
+        viewerCache = CachedViewer(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
+    private suspend fun storeViewer(profile: ViewerProfile) {
+        val storedAt = nowMillis()
+        viewerCache = CachedViewer(profile, storedAt)
+        snapshots?.write(SNAPSHOT_VIEWER, SNAPSHOT_VIEWER_KEY, ViewerProfile::class.java, profile, storedAt)
+    }
 
     override suspend fun getUserByName(userName: String): Result<ViewerProfile> {
         val name = userName.trim()
@@ -351,7 +583,7 @@ class AniListRepositoryImpl(
         forceRefresh: Boolean
     ): Result<MediaListCollection> {
         val key = "user:$userId"
-        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+        if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null)
@@ -376,7 +608,7 @@ class AniListRepositoryImpl(
         forceRefresh: Boolean
     ): Result<MediaListCollection> {
         val key = "user:$userId:manga"
-        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+        if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
@@ -392,7 +624,7 @@ class AniListRepositoryImpl(
         // `"I".lowercase()` is `"ı"`, so a username containing an I would miss
         // the cache written on another device and fetch the whole list again.
         val key = "userName:${userName.trim().lowercase(java.util.Locale.ROOT)}"
-        if (!forceRefresh) cachedList(key)?.let { return Result.success(it) }
+        if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = null, userName = userName.trim())
@@ -529,7 +761,7 @@ class AniListRepositoryImpl(
         // bucket for callers that genuinely have no type, so an untyped fetch and a
         // typed one cannot collide either.
         val cacheKey = MediaCoverKey(mediaType ?: UNSPECIFIED_MEDIA_TYPE, mediaId)
-        detailCache[cacheKey]?.let { return Result.success(it) }
+        knownDetail(cacheKey)?.let { return Result.success(it) }
         return execute(
             GraphQLRequest(
                 query = GraphQLQueries.getMediaDetailQuery(mediaType),
@@ -547,9 +779,120 @@ class AniListRepositoryImpl(
                 // user has ever tapped.
                 detailCache.clear()
             }
-            detailCache[cacheKey] = node
+            storeDetail(cacheKey, node)
             node
         }
+    }
+
+    /** Memory half of [knownDetail], on the shared [DETAIL_SNAPSHOT_WINDOW_MILLIS] window. */
+    private fun cachedDetail(key: MediaCoverKey): MediaNode? {
+        val entry = detailCache[key] ?: return null
+        if (nowMillis() - entry.storedAtMillis > DETAIL_SNAPSHOT_WINDOW_MILLIS) {
+            detailCache.remove(key)
+            return null
+        }
+        return entry.node
+    }
+
+    /**
+     * The detail held for [key]: memory first, then [snapshots].
+     *
+     * This is what makes reopening the app and tapping a title cost nothing. The
+     * synopsis, cast, studios, release year and relations the sheet draws are
+     * already on disk, written by a launch that had them on screen. Past
+     * [DETAIL_SNAPSHOT_WINDOW_MILLIS] the fetch happens again, so the fields that
+     * do move - the airing countdown, a score, a relation announced this week -
+     * are refreshed, while the ones that do not are not re-bought on every launch
+     * in between. What comes off disk is passed through [repairedViewerEntry]
+     * first, because its viewer-scoped entry may be a day old.
+     */
+    private suspend fun knownDetail(key: MediaCoverKey): MediaNode? {
+        cachedDetail(key)?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_DETAIL,
+            key = snapshotKey(key),
+            type = MediaNode::class.java,
+            ttlMillis = DETAIL_SNAPSHOT_WINDOW_MILLIS
+        ) ?: return null
+        val node = repairedViewerEntry(stored.value, key)
+        detailCache[key] = CachedDetail(node, stored.storedAtMillis)
+        return node
+    }
+
+    /**
+     * A snapshot's viewer-scoped field, corrected against the list in hand.
+     *
+     * The entry is the one part of a detail node that belongs to the viewer
+     * rather than to the title, and the one part that keeps moving while the
+     * title sits still - so a snapshot written yesterday carries yesterday's
+     * progress, and serving it raw would put a stale number in the sheet while
+     * the row behind it draws today's. Everything else in the node - synopsis,
+     * cast, studios, release year, relations - is the same answer it was, which
+     * is why the node is worth keeping at all.
+     *
+     * The viewer's own list is the authority whenever it is in hand: present in
+     * it, the entry is replaced with the list's copy; absent from it, the title
+     * is not on their list any more (it was deleted) and the snapshot's old
+     * entry is dropped rather than drawn as tracked. When no list is in hand
+     * there is nothing better to say, so the snapshot's own entry is left
+     * alone - it is still the progress the user last set, one launch behind
+     * rather than missing.
+     *
+     * Only the viewer's **own** list is consulted, and by id: a scanned
+     * profile's list holds *that person's* progress on the same title, and "you
+     * are six episodes in" versus "they are six episodes in" is the entire
+     * reason this reads the signed-in id off [viewerCache] rather than taking
+     * the first list it can find.
+     */
+    private suspend fun repairedViewerEntry(node: MediaNode, key: MediaCoverKey): MediaNode {
+        // The memory cache, never a fetch: a title being opened is not a reason
+        // to spend a request on the viewer's profile, and the dashboard has
+        // already put it there on every launch that reaches a sheet.
+        val viewerId = cachedViewer()?.id ?: return node
+        val lists = viewerListsInHand(viewerId, key.graphqlType)
+        if (lists.isEmpty()) return node
+
+        val entry = lists.firstNotNullOfOrNull { collection ->
+            collection.lists.orEmpty()
+                .flatMap { it.entries.orEmpty() }
+                .firstNotNullOfOrNull { item ->
+                    if (item.media.id != key.id) {
+                        null
+                    } else {
+                        SimpleMediaListEntry(
+                            id = item.id,
+                            status = item.status,
+                            mediaId = item.media.id,
+                            progress = item.progress,
+                            score = item.score
+                        )
+                    }
+                }
+        }
+        // An untyped open can be a title whose list this app has not fetched, so
+        // "not in the list I hold" is not "not on their list" there.
+        if (entry == null && key.type == UNSPECIFIED_MEDIA_TYPE) return node
+        return node.copy(mediaListEntry = entry)
+    }
+
+    /** The viewer's own lists for [type] that are already in hand, anime first. */
+    private suspend fun viewerListsInHand(viewerId: Int, type: String): List<MediaListCollection> {
+        val keys = when (type) {
+            LIST_TYPE_MANGA -> listOf("user:$viewerId:manga")
+            LIST_TYPE_ANIME -> listOf("user:$viewerId")
+            else -> listOf("user:$viewerId", "user:$viewerId:manga")
+        }
+        return keys.mapNotNull { key -> cachedList(key) ?: knownList(key) }
+    }
+
+    private suspend fun storeDetail(key: MediaCoverKey, node: MediaNode) {
+        val storedAt = nowMillis()
+        detailCache[key] = CachedDetail(node, storedAt)
+        // The viewer's entry goes into the snapshot too, rather than being
+        // stripped: it is the fallback for a launch that has no list in hand to
+        // correct it from. Reading it back goes through [repairedViewerEntry],
+        // which prefers the live list whenever there is one.
+        snapshots?.write(SNAPSHOT_DETAIL, snapshotKey(key), MediaNode::class.java, node, storedAt)
     }
 
     /**
@@ -595,8 +938,8 @@ class AniListRepositoryImpl(
         // `anilist.co/manga/1` are two different shows that happen to share an id,
         // and deduplicating on the id would fetch one and show it on both cards.
         keys.distinct().forEach { key ->
-            val cached = coverCache[key]
-            if (cached != null) resolved[key] = cached else missing += key
+            val known = knownCover(key)
+            if (known != null) resolved[key] = known else missing += key
         }
         if (missing.isEmpty()) return Result.success(resolved)
 
@@ -608,6 +951,7 @@ class AniListRepositoryImpl(
                 put("type$index", key.graphqlType)
             }
         }
+        val fresh = LinkedHashMap<MediaCoverKey, MediaCover>()
         return execute(
             GraphQLRequest(
                 query = GraphQLQueries.getMediaCoversQuery(missing),
@@ -639,15 +983,62 @@ class AniListRepositoryImpl(
                         title = node.title?.bestTitleOrNull
                     )
                     if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
-                    coverCache[key] = cover
+                    fresh[key] = cover
                     resolved[key] = cover
                 }
             }
+            // One store call for the whole batch: covers are the one cache the
+            // app fills a dozen entries at a time, and a rewrite per entry would
+            // serialize this kind a dozen times for one bio.
+            storeCovers(fresh)
             // A media with no cover is absent from the answer rather than an error:
             // the caller draws a placeholder, and one missing poster must not
             // blank the other eleven cards beside it.
             resolved
         }
+    }
+
+    /** Memory half of [knownCover], on the list's window. */
+    private fun cachedCover(key: MediaCoverKey): MediaCover? {
+        val entry = coverCache[key] ?: return null
+        if (nowMillis() - entry.storedAtMillis > listCacheTtlMillis()) {
+            coverCache.remove(key)
+            return null
+        }
+        return entry.cover
+    }
+
+    /**
+     * The cover held for [key]: memory first, then [snapshots].
+     *
+     * A URL and a title are a few hundred bytes, and the *image* behind them is
+     * already on disk in Coil's cache - so a bio reopened the next day draws its
+     * posters from two files that are both still there, with no request for
+     * either. The window follows the list's, since this is fetched as decoration
+     * for a profile that itself follows that window.
+     */
+    private suspend fun knownCover(key: MediaCoverKey): MediaCover? {
+        cachedCover(key)?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_COVER,
+            key = snapshotKey(key),
+            type = MediaCover::class.java,
+            ttlMillis = listCacheTtlMillis()
+        ) ?: return null
+        coverCache[key] = CachedCover(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
+    private suspend fun storeCovers(covers: Map<MediaCoverKey, MediaCover>) {
+        if (covers.isEmpty()) return
+        val storedAt = nowMillis()
+        covers.forEach { (key, cover) -> coverCache[key] = CachedCover(cover, storedAt) }
+        snapshots?.writeAll(
+            kind = SNAPSHOT_COVER,
+            values = covers.entries.associate { snapshotKey(it.key) to it.value },
+            type = MediaCover::class.java,
+            storedAtMillis = storedAt
+        )
     }
 
     override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> =
@@ -667,8 +1058,7 @@ class AniListRepositoryImpl(
             // Bumping the epoch first also invalidates any fetch already in
             // flight, so it cannot repopulate the cache with the pre-add list.
             .onSuccess {
-                listEpoch++
-                listCache.clear()
+                invalidateLists()
             }
 
     override suspend fun addToWatching(mediaId: Int): Result<SimpleMediaListEntry> =
@@ -680,8 +1070,7 @@ class AniListRepositoryImpl(
             apiService::saveMediaListEntry
         ).map { it.entry.require("No response from watching mutation") }
             .onSuccess {
-                listEpoch++
-                listCache.clear()
+                invalidateLists()
             }
 
     override suspend fun getMediaListEntry(
@@ -716,8 +1105,7 @@ class AniListRepositoryImpl(
                 // The cached list now holds the pre-edit entry. Dropping it is what
                 // makes the dashboard's own counts and the Library row agree with
                 // the form the user just saved, rather than the copy from before.
-                listEpoch++
-                listCache.clear()
+                invalidateLists()
             }
     }
 
@@ -730,8 +1118,7 @@ class AniListRepositoryImpl(
             apiService::deleteMediaListEntry
         ).map { }
             .onSuccess {
-                listEpoch++
-                listCache.clear()
+                invalidateLists()
             }
 
     /**
@@ -750,7 +1137,7 @@ class AniListRepositoryImpl(
         forceRefresh: Boolean
     ): Result<UserOverview> {
         val key = overviewCacheKey(userId, userName)
-        if (!forceRefresh) cachedOverview(key)?.let { return Result.success(it) }
+        if (!forceRefresh) knownOverview(key)?.let { return Result.success(it) }
 
         return execute(
             GraphQLRequest(
@@ -766,9 +1153,15 @@ class AniListRepositoryImpl(
                 userName?.let { "No AniList user called \"$it\"." }
                     ?: "AniList returned no profile for this account."
             )
-            overviewCache[key] = CachedOverview(overview, System.currentTimeMillis())
+            storeOverview(key, overview)
             overview
         }
+    }
+
+    private suspend fun storeOverview(key: String, overview: UserOverview) {
+        val storedAt = nowMillis()
+        overviewCache[key] = CachedOverview(overview, storedAt)
+        snapshots?.write(SNAPSHOT_OVERVIEW, key, UserOverview::class.java, overview, storedAt)
     }
 
     override fun getDemoProfile(): ViewerProfile = DemoDataProvider.getDemoViewer()
@@ -929,6 +1322,38 @@ class AniListRepositoryImpl(
                 activityCache.clear()
             }
 
+    override suspend fun editActivityReply(
+        replyId: Int,
+        activityId: Int,
+        text: String
+    ): Result<ActivityReply> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.EDIT_ACTIVITY_REPLY,
+                variables = mapOf("id" to replyId, "activityId" to activityId, "text" to text)
+            ),
+            apiService::saveActivityReply
+        ).map { it.reply.require("No response from the reply mutation") }
+        // No cache to drop. A feed page carries the reply's *count*, never its
+        // text, and an edit cannot change the count - the same argument
+        // `toggleActivityReplyLike` makes for leaving `activityCache` alone.
+
+    override suspend fun deleteActivityReply(replyId: Int): Result<Unit> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.DELETE_ACTIVITY_REPLY,
+                variables = mapOf("id" to replyId)
+            ),
+            apiService::deleteActivityReply
+        ).map { }
+            .onSuccess {
+                // The cached pages carry the pre-delete reply count, and unlike a
+                // like there is no toggle back: dropping them is cheaper than
+                // patching each page in place and is what stops a re-entry
+                // showing a count for a comment that no longer exists.
+                activityCache.clear()
+            }
+
     /**
      * One character, for their profile sheet.
      *
@@ -976,11 +1401,15 @@ class AniListRepositoryImpl(
         }
     }
 
-    override fun clearDetailCache() {
+    override suspend fun clearDetailCache() {
         detailCache.clear()
         // A profile is public data, but this cache is the size of a cast walk, and
         // the next account opened should not inherit the last one's.
         personProfileCache.clear()
+        // The viewer's own profile is the one answer the next launch would read
+        // before anything else, so it goes first here - a 30-minute window is a
+        // window for the *same* person, not a grace period for the next one.
+        viewerCache = null
         // The list is per-person data, so it has to go when the session does.
         // A TTL alone would leave another person's finished list sitting in
         // memory for up to an hour after sign-out.
@@ -1000,6 +1429,13 @@ class AniListRepositoryImpl(
         activityCache.clear()
         followersCache.clear()
         followingCache.clear()
+        // And the same again for the disk tier. This is the half that outlives
+        // the process: without this, signing out would clear what the app is
+        // holding and leave the list, the bio, the viewer's record and the
+        // progress inside every snapshotted detail node in the cache directory
+        // for the next account - and unlike the maps above, nothing about the
+        // process ending would ever take them away.
+        snapshots?.clear()
     }
 
     /**

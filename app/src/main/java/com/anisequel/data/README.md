@@ -32,6 +32,43 @@ status; `domain/` never sees either.
 - **Derivations live on the model, not in the UI.** `MediaNodeDisplay.kt` is one file of
   pure extensions; a screen reads `media.studioCredits` rather than re-deriving it.
 
+## What survives a restart
+
+`AniListRepositoryImpl`'s caches have two tiers: the in-memory maps, and
+`SnapshotStore`, which writes the same answers to one JSON file per kind under
+`cacheDir/anilist_snapshots/`. The store's own rules — atomic writes, a byte
+budget per kind, a file from another release treated as a miss — are on the class.
+What belongs here is the policy, because it is a judgement about *AniList's data*
+rather than about files:
+
+| Snapshot | Key | Window |
+|---|---|---|
+| `viewer` | one entry, the signed-in profile | 30 minutes, fixed — the request every launch used to make before it could draw |
+| `list` | `user:<id>`, `user:<id>:manga`, `userName:<name>` | `listCacheTtlMillis`: the reader's own refresh interval, so `Manual` never expires by itself |
+| `overview` | the same keys | the same window as `list` |
+| `detail` | `TYPE:id` (`MediaCoverKey`, so `anime/1` and `manga/1` cannot collide) | 24 hours |
+| `cover` | `TYPE:id` | the list's window |
+
+In-memory only, deliberately: `activityCache`, `followersCache`,
+`followingCache` and `personProfileCache`. All four are paged feeds read while
+they are being browsed; a feed served from yesterday is a conversation the reader
+has already had, and a page-2 request against a page-1 that has moved on is worse
+than a fetch.
+
+Invariants a change to this layer has to preserve:
+
+- A snapshot is inserted into memory stamped with **its own** `storedAtMillis`,
+  never with `now`, or every lookup renews it and it never expires.
+- `invalidateLists()` (every list mutation) drops `SNAPSHOT_LIST` as well as
+  `listCache`, or the next lookup serves the pre-mutation list off disk.
+- `clearDetailCache()` deletes the snapshots with the maps. It is `suspend` for
+  that reason, and `AuthViewModel.saveToken` calls it *before* verifying a pasted
+  token: `getViewer()` can now answer without a request, so a stale profile would
+  otherwise vouch for a session AniList has just refused.
+- A detail snapshot's viewer-scoped entry is corrected against the reader's own
+  list when the app holds one (`repairedViewerEntry`) — the title's facts are
+  worth a day, the reader's progress is not.
+
 ## Adding a field
 
 1. Find which queries actually need it — often not all of them.

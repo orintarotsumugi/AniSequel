@@ -195,6 +195,16 @@ fun UserProfileScreen(
      */
     isOwnProfile: Boolean = true,
     /**
+     * The signed-in viewer's id, for deciding which comments are the reader's own.
+     *
+     * A comment's author and the profile's owner are two different questions: the
+     * thread hangs off somebody else's profile, and a reader can comment in a
+     * stranger's. Null - signed out, or a caller that did not know it - leaves
+     * every comment without its manage control, which the thread still renders and
+     * reads from, so the safe half costs nothing but the menu.
+     */
+    viewerId: Int? = null,
+    /**
      * Opens the tier list for this library.
      *
      * A callback rather than a navigation call so the screen keeps no reference to
@@ -395,7 +405,6 @@ fun UserProfileScreen(
                         state = state,
                         selectedTab = selectedTab,
                         activityState = activityState,
-                        commentsState = commentsState,
                         activityViewModel = activityViewModel,
                         socialState = socialState,
                         socialViewModel = socialViewModel,
@@ -476,10 +485,17 @@ fun UserProfileScreen(
             // A comment is a write, and a demo profile has no session to write with.
             // Same gate as the like: see [UserActivityViewModel.postComment].
             canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true,
+            viewerId = viewerId,
             onDismiss = { activityViewModel.closeComments() },
             onRetry = { activityViewModel.openComments(comments.activityId) },
             onPost = { activityViewModel.postComment(it) },
-            onLikeReply = { activityViewModel.toggleReplyLike(it) }
+            onLikeReply = { activityViewModel.toggleReplyLike(it) },
+            onOpenReplyActions = { activityViewModel.openReplyActions(it) },
+            onReplyActionMode = { activityViewModel.setReplyActionMode(it) },
+            onReplyActionDraft = { activityViewModel.updateReplyActionDraft(it) },
+            onSubmitReplyEdit = { activityViewModel.submitReplyEdit() },
+            onSubmitReplyDelete = { activityViewModel.submitReplyDelete() },
+            onDismissReplyAction = { activityViewModel.dismissReplyAction() }
         )
     }
 
@@ -487,7 +503,8 @@ fun UserProfileScreen(
     likersState?.let { likers ->
         ActivityLikersSheet(
             state = likers,
-            onDismiss = { activityViewModel.dismissLikers() }
+            onDismiss = { activityViewModel.dismissLikers() },
+            onRetry = { activityViewModel.openLikers(likers.activityId) }
         )
     }
 }
@@ -497,7 +514,6 @@ private fun ProfileTabsContent(
     state: UserOverviewUiState.Success,
     selectedTab: Int,
     activityState: UserActivityViewModel.ActivityState,
-    commentsState: UserActivityViewModel.CommentsState?,
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,

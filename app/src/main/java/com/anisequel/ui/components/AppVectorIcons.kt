@@ -177,6 +177,10 @@ object AppVectorIcons {
     val ActivityLiked = Icons.Default.Favorite
     val ActivityNotLiked = Icons.Outlined.FavoriteBorder
     val ActivitySend = Icons.AutoMirrored.Filled.Send
+    // The overflow on the viewer's own comment. Horizontal dots rather than
+    // vertical: the control sits beside a name and a timestamp on one line, and
+    // the glyph reads as "more of this row" rather than as another line of it.
+    val ActivityManage = Icons.Default.MoreHoriz
 
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the

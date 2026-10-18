@@ -21,6 +21,26 @@ object NetworkClient {
     private const val BASE_URL = "https://graphql.anilist.co/"
 
     /**
+     * The one Moshi for this process.
+     *
+     * It has two readers now, which is why it is a property rather than a local
+     * built inside [buildApiService]: the Retrofit converter reads AniList's
+     * answers with it, and `SnapshotStore` writes those same answers to disk and
+     * reads them back with it. Two instances would work - Moshi is stateless -
+     * but an adapter that can parse a `MediaNode` off the wire and one that can
+     * parse it off disk should be the same adapter, or a model change has two
+     * places to be right in.
+     *
+     * No KotlinJsonAdapterFactory: every model in data/model is annotated
+     * @JsonClass(generateAdapter = true), so Moshi resolves a generated
+     * adapter for each one. The reflective factory was dead weight, and it
+     * drags kotlin-reflect into every build that enables R8.
+     */
+    val json: Moshi = Moshi.Builder()
+        .add(String::class.java, FlexibleStringAdapter)
+        .build()
+
+    /**
      * The one API service for this process.
      *
      * `createApiService` used to build a fresh `OkHttpClient`, `Retrofit` and
@@ -127,18 +147,10 @@ object NetworkClient {
 
         val okHttpClient = clientBuilder.build()
 
-        // No KotlinJsonAdapterFactory: every model in data/model is annotated
-        // @JsonClass(generateAdapter = true), so Moshi resolves a generated
-        // adapter for each one. The reflective factory was dead weight, and it
-        // drags kotlin-reflect into every build that enables R8.
-        val moshi = Moshi.Builder()
-            .add(String::class.java, FlexibleStringAdapter)
-            .build()
-
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .addConverterFactory(MoshiConverterFactory.create(json))
             .build()
 
         return retrofit.create(AniListApiService::class.java) to okHttpClient

@@ -3,7 +3,6 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.MediaNode
@@ -45,6 +44,19 @@ class UserActivityViewModel(
      * wrong person's.
      */
     private var userId: Int?,
+    /**
+     * The signed-in account's id, when there is one.
+     *
+     * Used for one thing: deciding whether a comment in a thread is the reader's
+     * own, and therefore whether the manage menu may be offered. It is *not*
+     * [userId]: a comment is written by the viewer, but the thread hangs off a
+     * profile that is usually somebody else's. Null means the question cannot be
+     * answered - signed out, or a route that did not know it - and every
+     * comment then simply has no menu, which is the safe half of the choice: the
+     * server enforces ownership anyway, so the wrong half would be a Delete that
+     * can only fail.
+     */
+    private val viewerId: Int? = null,
     private val isDemo: Boolean = false,
     private val pageSize: Int = 25
 ) : ViewModel() {
@@ -88,44 +100,16 @@ class UserActivityViewModel(
     }
 
     /**
-     * The comments sheet's state.
-     *
-     * Null when the sheet is closed, and non-null when it is open - the sheet's
-     * visibility is derived from this rather than held beside it, so there is no
-     * frame where a sheet is up with no thread under it.
-     *
-     * [activityId] is part of the state so a slow response for a thread the user
-     * already closed and replaced with another one is discarded rather than
-     * painted over the new thread.
-     */
-    data class CommentsState(
-        val activityId: Int,
-        val isLoading: Boolean = false,
-        val replies: List<ActivityReply> = emptyList(),
-        val loadError: String? = null,
-        val isPosting: Boolean = false,
-        val postError: String? = null,
-        /**
-         * Replies with a like request in flight.
-         *
-         * The same job as `ActivityState.Success.pendingLikes`, for the same reason:
-         * a double tap on a heart has to not toggle twice, and the optimistic count
-         * already on screen is what the second tap would be applied to.
-         */
-        val pendingReplyLikes: Set<Int> = emptySet()
-    )
-
-    /**
      * The likers sheet's state.
      *
-     * The same shape as [CommentsState] and nullable for the same reason: the
-     * sheet's visibility is derived from the state, so there is no frame where it
-     * is up with nothing under it. [activityId] is part of the state so a slow
-     * response for a sheet the user already closed and replaced with another
-     * activity's is discarded rather than painted over the new one.
+     * The same shape the comment thread's state has, and nullable for the same
+     * reason: the sheet's visibility is derived from the state, so there is no
+     * frame where it is up with nothing under it. [activityId] is part of the
+     * state so a slow response for a sheet the user already closed and replaced
+     * with another activity's is discarded rather than painted over the new one.
      *
      * There is no posting side here - a like is toggled from the card - so unlike
-     * [CommentsState] there is no in-flight or error-writing field.
+     * the comment thread there is no in-flight or error-writing field.
      */
     data class LikersState(
         val activityId: Int,
@@ -137,8 +121,25 @@ class UserActivityViewModel(
     private val _state = MutableStateFlow<ActivityState>(ActivityState.Idle)
     val state: StateFlow<ActivityState> = _state.asStateFlow()
 
-    private val _comments = MutableStateFlow<CommentsState?>(null)
-    val comments: StateFlow<CommentsState?> = _comments.asStateFlow()
+    /**
+     * The one comment thread that can be open at a time.
+     *
+     * Everything about it - the state, the load, and the four writes - lives in
+     * [CommentThreadStore] rather than in this class: see its KDoc for why the
+     * split is made. This ViewModel keeps the delegating calls because it stays
+     * the one state holder the profile screen talks to, and because the feed is
+     * the thread's one collaborator: a post or a delete moves the feed card's
+     * reply count, which the store reports back through its callback.
+     */
+    private val commentThread = CommentThreadStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        isDemo = isDemo,
+        viewerId = viewerId,
+        onReplyCountDelta = { activityId, delta -> adjustReplyCount(activityId, delta) }
+    )
+
+    val comments: StateFlow<CommentThreadStore.CommentsState?> get() = commentThread.state
 
     private val _likers = MutableStateFlow<LikersState?>(null)
     val likers: StateFlow<LikersState?> = _likers.asStateFlow()
@@ -356,85 +357,12 @@ class UserActivityViewModel(
     }
 
     /** Opens the comment thread for [activityId] and loads it. */
-    fun openComments(activityId: Int) {
-        _comments.value = CommentsState(activityId = activityId, isLoading = true)
-        viewModelScope.launch {
-            val result = if (isDemo) {
-                Result.success(emptyList())
-            } else {
-                aniListRepository.getActivityReplies(activityId)
-            }
-            // Discard a response for a thread the user has already closed or
-            // replaced: the state is only written if it is still this thread.
-            val current = _comments.value?.takeIf { it.activityId == activityId } ?: return@launch
-            result.fold(
-                onSuccess = { replies ->
-                    _comments.value = current.copy(isLoading = false, replies = replies, loadError = null)
-                },
-                onFailure = { error ->
-                    _comments.value = current.copy(
-                        isLoading = false,
-                        loadError = error.message ?: "Couldn't load comments."
-                    )
-                }
-            )
-        }
-    }
+    fun openComments(activityId: Int) = commentThread.open(activityId)
 
-    /**
-     * Likes or un-likes one comment.
-     *
-     * The same shape as [toggleLike] - optimistic, one request in flight per reply,
-     * rolled back on failure - against the reply's own id and namespace.
-     *
-     * `isLiked == null` refuses, exactly as it does for an activity: that is AniList
-     * answering without a session, and guessing there would put the heart in a state
-     * the server never agreed to.
-     */
-    fun toggleReplyLike(replyId: Int) {
-        if (isDemo) return
-        val current = _comments.value ?: return
-        if (replyId in current.pendingReplyLikes) return
-        val index = current.replies.indexOfFirst { it.id == replyId }
-        if (index < 0) return
-        val reply = current.replies[index]
-        val wasLiked = reply.isLiked ?: return
+    /** Likes or un-likes one comment. */
+    fun toggleReplyLike(replyId: Int) = commentThread.toggleReplyLike(replyId)
 
-        val optimistic = reply.copy(
-            isLiked = !wasLiked,
-            likeCount = ((reply.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
-        )
-
-        fun write(replacement: ActivityReply, pending: Set<Int>) {
-            val live = _comments.value ?: return
-            val at = live.replies.indexOfFirst { it.id == replyId }
-            if (at < 0) return
-            _comments.value = live.copy(
-                replies = live.replies.toMutableList().also { it[at] = replacement },
-                pendingReplyLikes = pending
-            )
-        }
-
-        write(optimistic, current.pendingReplyLikes + replyId)
-
-        viewModelScope.launch {
-            aniListRepository.toggleActivityReplyLike(replyId).fold(
-                onSuccess = { result ->
-                    write(
-                        optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
-                        current.pendingReplyLikes
-                    )
-                },
-                onFailure = {
-                    write(reply, current.pendingReplyLikes)
-                }
-            )
-        }
-    }
-
-    fun closeComments() {
-        _comments.value = null
-    }
+    fun closeComments() = commentThread.close()
 
     /**
      * Opens the likers sheet for [activityId] and loads who liked it.
@@ -475,34 +403,26 @@ class UserActivityViewModel(
     }
 
     /** Posts [text] as a comment on the open thread. */
-    fun postComment(text: String) {
-        if (isDemo) return
-        val current = _comments.value ?: return
-        val trimmed = text.trim()
-        if (trimmed.isEmpty() || current.isPosting) return
+    fun postComment(text: String) = commentThread.post(text)
 
-        val activityId = current.activityId
-        _comments.value = current.copy(isPosting = true, postError = null)
+    /** Opens the manage dialog for [replyId] - if it is yours to manage. */
+    fun openReplyActions(replyId: Int) = commentThread.openReplyActions(replyId)
 
-        viewModelScope.launch {
-            aniListRepository.postActivityReply(activityId, trimmed).fold(
-                onSuccess = { reply ->
-                    val latest = _comments.value?.takeIf { it.activityId == activityId } ?: return@fold
-                    _comments.value = latest.copy(
-                        isPosting = false,
-                        postError = null,
-                        replies = latest.replies + reply
-                    )
-                    bumpReplyCount(activityId)
-                },
-                onFailure = { error ->
-                    _comments.value = _comments.value
-                        ?.takeIf { it.activityId == activityId }
-                        ?.copy(isPosting = false, postError = error.message ?: "Couldn't post that comment.")
-                }
-            )
-        }
-    }
+    /** Moves the manage dialog to [mode]. */
+    fun setReplyActionMode(mode: CommentThreadStore.ReplyAction.Mode) =
+        commentThread.setReplyActionMode(mode)
+
+    /** Rewrites the edit draft as the reader types. */
+    fun updateReplyActionDraft(text: String) = commentThread.updateReplyActionDraft(text)
+
+    /** Saves the draft over the comment the dialog was opened for. */
+    fun submitReplyEdit() = commentThread.submitReplyEdit()
+
+    /** Deletes the comment the dialog was opened for. */
+    fun submitReplyDelete() = commentThread.submitReplyDelete()
+
+    /** Closes the manage dialog. */
+    fun dismissReplyAction() = commentThread.dismissReplyAction()
 
     /** Rewrites the one activity in the loaded page, and its in-flight marker. */
     private fun replaceActivity(
@@ -519,12 +439,25 @@ class UserActivityViewModel(
         )
     }
 
-    /** Keeps the feed's reply count honest after a comment is posted. */
-    private fun bumpReplyCount(activityId: Int) {
+    /**
+     * Keeps the feed's reply count honest after a comment is posted or deleted.
+     *
+     * A delta rather than the old post-only `+1`: the count is the only piece of
+     * the feed a comment touches, and a delete has to move it the other way or
+     * the card keeps claiming a comment that is no longer there. Floored at zero
+     * because the count AniList sent may already have been stale by the time the
+     * thread was opened - a card saying `-1` would be a worse lie than one that
+     * was already a little wrong.
+     */
+    private fun adjustReplyCount(activityId: Int, delta: Int) {
         val current = _state.value as? ActivityState.Success ?: return
         _state.value = current.copy(
             activities = current.activities.map {
-                if (it.id == activityId) it.copy(replyCount = (it.replyCount ?: 0) + 1) else it
+                if (it.id == activityId) {
+                    it.copy(replyCount = ((it.replyCount ?: 0) + delta).coerceAtLeast(0))
+                } else {
+                    it
+                }
             }
         )
     }
@@ -532,12 +465,14 @@ class UserActivityViewModel(
     class Factory(
         private val aniListRepository: AniListRepository,
         private val userId: Int? = null,
+        private val viewerId: Int? = null,
         private val isDemo: Boolean = false
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserActivityViewModel(
             aniListRepository = aniListRepository,
             userId = userId,
+            viewerId = viewerId,
             isDemo = isDemo
         ) as T
     }

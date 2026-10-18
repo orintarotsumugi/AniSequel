@@ -1164,4 +1164,64 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    /**
+     * Rewrites one of the viewer's own comments.
+     *
+     * `SaveActivityReply` again, not a second mutation: the field is documented
+     * as "create or update an activity reply", with `id` "required for updating"
+     * - so the same document with an `id` is the whole edit. Verified against the
+     * live schema before it was written: the document with an id is answered by
+     * the same authentication wall (401 unauthenticated) as the create, where a
+     * malformed document is a 400 naming the bad argument. See
+     * `ReplyManagementQueryTest`.
+     *
+     * `activityId` travels alongside the id even on an update. It cannot be a
+     * validation error - it is a declared argument of the field, accepted whether
+     * or not the resolver reads it - and sending the reply's actual parent is
+     * exactly what a resolver that re-checks the thread would want to see.
+     * Sending it only on create is the version that breaks against a stricter
+     * server, and nothing here can observe which behaviour the server chose.
+     *
+     * The selection is the created reply's own, field for field, because the
+     * response replaces the row exactly as a posted comment appends one.
+     */
+    val EDIT_ACTIVITY_REPLY = """
+        mutation EditActivityReply(${'$'}id: Int, ${'$'}activityId: Int, ${'$'}text: String) {
+          SaveActivityReply(id: ${'$'}id, activityId: ${'$'}activityId, text: ${'$'}text) {
+            id
+            text
+            likeCount
+            isLiked
+            createdAt
+            user {
+              id
+              name
+              avatar { large medium }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Deletes one of the viewer's own comments.
+     *
+     * `DeleteActivityReply` is its own mutation because a comment is its own
+     * thing: `DeleteActivity` deletes the post a thread hangs off, not a reply in
+     * it, and the two take ids from different namespaces. The server enforces
+     * ownership ("of the authenticated users"), so a reply this account did not
+     * write comes back as an error rather than a delete - which is why the sheet
+     * only offers the control on the viewer's own comments rather than letting
+     * the server reject a tap the reader was invited to make.
+     *
+     * The response is the shared `Deleted` object - a boolean, and no echo of the
+     * removed reply - so the sheet drops the row by the id it sent.
+     */
+    val DELETE_ACTIVITY_REPLY = """
+        mutation DeleteActivityReply(${'$'}id: Int) {
+          DeleteActivityReply(id: ${'$'}id) {
+            deleted
+          }
+        }
+    """.trimIndent()
 }
