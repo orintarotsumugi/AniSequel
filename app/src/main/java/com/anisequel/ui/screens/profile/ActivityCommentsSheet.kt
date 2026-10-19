@@ -162,57 +162,30 @@ fun ActivityCommentsSheet(
     // and restoring the "we are waiting" half without it would swallow the answer.
     var awaitingPost by remember { mutableStateOf(false) }
 
-    /**
-     * The field's next value, with the ceiling applied to the text *and* the
-     * selection.
-     *
-     * `TextFieldValue` requires its selection and composing region to fall inside
-     * its text, and a copy that truncates one and keeps the other throws from the
-     * constructor. A paste longer than 8,000 characters is the case: the field
-     * hands back a selection at the end of the pasted text, and the old composer's
-     * `.take(MAX)` on a `String` quietly hid the same mismatch behind a value type
-     * that recomputes the caret. Here the caret is clamped, and the IME's
-     * composing range is dropped rather than clamped - a zero-width composition
-     * pinned to the end of the text is not a composing range any more.
-     */
-    fun clipDraft(value: TextFieldValue): TextFieldValue {
-        if (value.text.length <= ContentLimits.REPLY_MAX) return value
-        val text = ContentLimits.clipReply(value.text)
-        return TextFieldValue(
-            text = text,
-            selection = TextRange(
-                value.selection.start.coerceIn(0, text.length),
-                value.selection.end.coerceIn(0, text.length)
-            )
-        )
-    }
-
     // A post is a round trip, and the editor has to stay open for it: on success
     // the draft is cleared and the thread comes back, on failure the text and the
     // reason stay exactly where the retry is.
-    LaunchedEffect(state.isPosting, state.postError) {
-        if (!awaitingPost || state.isPosting) return@LaunchedEffect
-        if (state.postError == null) {
+    PostRoundTrip(
+        isPosting = state.isPosting,
+        postError = state.postError,
+        awaitingPost = awaitingPost,
+        onDraftCleared = {
             draft = TextFieldValue("")
             replyToName = null
             composing = false
-        }
-        awaitingPost = false
-    }
+        },
+        onPostSettled = { awaitingPost = false }
+    )
 
     // Keyed on `composing` as well as the id: the effect runs while the editor is
     // still up in the same frame the post lands, and the list it wants to scroll
     // is composed one frame later, when the editor closes.
-    LaunchedEffect(state.postedReplyId, composing) {
-        if (composing) return@LaunchedEffect
-        val posted = state.postedReplyId ?: return@LaunchedEffect
-        val index = state.replies.indexOfFirst { it.id == posted }
-        if (index < 0) return@LaunchedEffect
-        // The reply's own position: the count lives above the list, not in it.
-        // An index past the end is clamped by `animateScrollToItem`, so a thread
-        // that changed under us cannot throw here.
-        listState.animateScrollToItem(index)
-    }
+    ScrollToPostedReply(
+        postedReplyId = state.postedReplyId,
+        composing = composing,
+        replies = state.replies,
+        listState = listState
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -275,15 +248,116 @@ fun ActivityCommentsSheet(
     // of its own, so the anchor script would not survive the list recycling the
     // row anyway, and the dialog has to outlive the row that opened it - an edit
     // in flight is anchored to an id, not to a position.
-    val action = state.action
+    ReplyActionPane(
+        action = state.action,
+        onMode = onReplyActionMode,
+        onDraftChange = onReplyActionDraft,
+        onSubmitEdit = onSubmitReplyEdit,
+        onSubmitDelete = onSubmitReplyDelete,
+        onDismiss = onDismissReplyAction
+    )
+}
+
+/**
+ * The field's next value, with the ceiling applied to the text *and* the
+ * selection.
+ *
+ * `TextFieldValue` requires its selection and composing region to fall inside
+ * its text, and a copy that truncates one and keeps the other throws from the
+ * constructor. A paste longer than 8,000 characters is the case: the field
+ * hands back a selection at the end of the pasted text, and the old composer's
+ * `.take(MAX)` on a `String` quietly hid the same mismatch behind a value type
+ * that recomputes the caret. Here the caret is clamped, and the IME's
+ * composing range is dropped rather than clamped - a zero-width composition
+ * pinned to the end of the text is not a composing range any more.
+ */
+private fun clipDraft(value: TextFieldValue): TextFieldValue {
+    if (value.text.length <= ContentLimits.REPLY_MAX) return value
+    val text = ContentLimits.clipReply(value.text)
+    return TextFieldValue(
+        text = text,
+        selection = TextRange(
+            value.selection.start.coerceIn(0, text.length),
+            value.selection.end.coerceIn(0, text.length)
+        )
+    )
+}
+
+/**
+ * The round trip of a post, kept open so a failure can be retried.
+ *
+ * The editor stays up while the request is in flight: on success the draft is
+ * cleared and the thread comes back, on failure the text and the reason stay
+ * exactly where the retry is. [awaitingPost] is the local "we are waiting"
+ * half, because the store owns the request and a rotation cannot restore it.
+ */
+@Composable
+private fun PostRoundTrip(
+    isPosting: Boolean,
+    postError: String?,
+    awaitingPost: Boolean,
+    onDraftCleared: () -> Unit,
+    onPostSettled: () -> Unit
+) {
+    LaunchedEffect(isPosting, postError) {
+        if (!awaitingPost || isPosting) return@LaunchedEffect
+        if (postError == null) onDraftCleared()
+        onPostSettled()
+    }
+}
+
+/**
+ * Scrolls to a comment this session posted, and to nothing else.
+ *
+ * Keyed on `composing` as well as the id: the effect runs while the editor is
+ * still up in the same frame the post lands, and the list it wants to scroll is
+ * composed one frame later, when the editor closes. The reply is looked up by id
+ * rather than by list position, because the list may have been rebuilt since the
+ * post was recorded.
+ */
+@Composable
+private fun ScrollToPostedReply(
+    postedReplyId: Int?,
+    composing: Boolean,
+    replies: List<ActivityReply>,
+    listState: LazyListState
+) {
+    LaunchedEffect(postedReplyId, composing) {
+        if (composing) return@LaunchedEffect
+        val posted = postedReplyId ?: return@LaunchedEffect
+        val index = replies.indexOfFirst { it.id == posted }
+        if (index < 0) return@LaunchedEffect
+        // The reply's own position: the count lives above the list, not in it.
+        // An index past the end is clamped by `animateScrollToItem`, so a thread
+        // that changed under us cannot throw here.
+        listState.animateScrollToItem(index)
+    }
+}
+
+/**
+ * The manage dialog, drawn as a sibling of the sheet.
+ *
+ * `AlertDialog` opens a window of its own, so the anchor script would not
+ * survive the list recycling the row anyway, and the dialog has to outlive the
+ * row that opened it - an edit in flight is anchored to an id, not to a position.
+ */
+@Composable
+private fun ReplyActionPane(
+    action: CommentThreadStore.ReplyAction?,
+    onMode: (CommentThreadStore.ReplyAction.Mode) -> Unit,
+    onDraftChange: (String) -> Unit,
+    onSubmitEdit: () -> Unit,
+    onSubmitDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
     if (action != null) {
         ReplyActionDialog(
             action = action,
-            onMode = onReplyActionMode,
-            onDraftChange = onReplyActionDraft,
-            onSubmitEdit = onSubmitReplyEdit,
-            onSubmitDelete = onSubmitReplyDelete,
-            onDismiss = onDismissReplyAction
+            onMode = onMode,
+            onDraftChange = onDraftChange,
+            onSubmitEdit = onSubmitEdit,
+            onSubmitDelete = onSubmitDelete,
+            onDismiss = onDismiss
         )
     }
 }
