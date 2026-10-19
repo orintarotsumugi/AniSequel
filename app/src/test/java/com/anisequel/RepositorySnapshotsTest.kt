@@ -18,6 +18,7 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.data.model.NextAiringEpisode
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
@@ -165,6 +166,79 @@ class RepositorySnapshotsTest {
     }
 
     @Test
+    fun `a finished title is reused for a week`() = runTest {
+        service.detailStatus = "FINISHED"
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(1, service.detailRequests)
+
+        now += 6 * DAY_MILLIS
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(
+            "a finished show's synopsis, cast and studios do not change in six days",
+            1,
+            service.detailRequests
+        )
+
+        now += DAY_MILLIS + 1
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals("past seven days it is worth asking again", 2, service.detailRequests)
+    }
+
+    @Test
+    fun `a releasing title is refreshed after three hours`() = runTest {
+        service.detailStatus = "RELEASING"
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(1, service.detailRequests)
+
+        now += 3 * 60 * 60 * 1000L + 1
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(
+            "an airing show's score and countdown move within a day",
+            2,
+            service.detailRequests
+        )
+    }
+
+    @Test
+    fun `an episode that has aired since the snapshot makes it stale immediately`() = runTest {
+        service.detailStatus = "RELEASING"
+        service.nextAiringAtSeconds = now / 1000 + 60
+
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(1, service.detailRequests)
+
+        // 61 seconds later: well inside the 3h window, but the cached
+        // "next episode" has already aired, so the record is provably wrong.
+        now += 61_000L
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(
+            "a passed airing time overrides the TTL, not the other way round",
+            2,
+            service.detailRequests
+        )
+    }
+
+    @Test
+    fun `an empty list response cannot replace a populated one`() = runTest {
+        val first = launch()
+        assertEquals(9, first.getUserAnimeList(VIEWER_ID).getOrThrow().progress())
+
+        service.returnEmptyList = true
+        val result = first.getUserAnimeList(VIEWER_ID, forceRefresh = true)
+
+        assertTrue(
+            "a throttled empty answer must be a failure, not a deletion",
+            result.isFailure
+        )
+
+        assertEquals(
+            "the list the reader was reading is still the list they get",
+            9,
+            first.getUserAnimeList(VIEWER_ID).getOrThrow().progress()
+        )
+    }
+
+    @Test
     fun `a mutation clears the disk copy of the list too`() = runTest {
         val first = launch()
         first.getUserAnimeList(VIEWER_ID).getOrThrow()
@@ -285,6 +359,15 @@ private class SnapshotTestService : AniListApiService {
     /** The progress the fetched detail node's own entry says - what a snapshot keeps. */
     var detailProgress: Int? = 3
 
+    /** The status the detail node reports; null keeps the old default window. */
+    var detailStatus: String? = null
+
+    /** The cached next episode's airing time, in Unix seconds. */
+    var nextAiringAtSeconds: Long? = null
+
+    /** When true, the next list response is well-formed but has no entries. */
+    var returnEmptyList = false
+
     override suspend fun getViewer(request: GraphQLRequest): GraphQLResponse<ViewerData> {
         viewerRequests++
         return GraphQLResponse(data = ViewerData(viewer = ViewerProfile(id = 7, name = "reader")))
@@ -300,7 +383,7 @@ private class SnapshotTestService : AniListApiService {
                     lists = listOf(
                         MediaListGroup(
                             name = "Watching",
-                            entries = if (listHasEntry) {
+                            entries = if (listHasEntry && !returnEmptyList) {
                                 listOf(
                                     MediaListEntryItem(
                                         id = 11,
@@ -333,8 +416,12 @@ private class SnapshotTestService : AniListApiService {
                 media = MediaNode(
                     id = 1,
                     type = "ANIME",
+                    status = detailStatus,
                     title = MediaTitle(romaji = "A Show"),
                     description = "A synopsis the list query does not carry",
+                    nextAiringEpisode = nextAiringAtSeconds?.let {
+                        NextAiringEpisode(episode = 2, airingAt = it)
+                    },
                     mediaListEntry = detailProgress?.let {
                         SimpleMediaListEntry(mediaId = 1, status = "CURRENT", progress = it)
                     }

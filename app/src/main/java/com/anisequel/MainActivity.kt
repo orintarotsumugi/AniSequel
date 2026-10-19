@@ -1,7 +1,12 @@
 package com.anisequel
 
+import android.app.KeyguardManager
 import android.content.Intent
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
 import android.os.Bundle
+import android.os.CancellationSignal
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,6 +26,7 @@ import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.RateLimitNotice
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
+import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.data.repository.ThemeMode
@@ -29,6 +35,7 @@ import com.anisequel.ui.components.update.UpdateController
 import com.anisequel.ui.components.update.UpdatePromptHost
 import com.anisequel.ui.components.update.rememberUpdateController
 import com.anisequel.ui.navigation.AppNavigation
+import com.anisequel.ui.security.AppLockGate
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.ThemePalette
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -43,6 +50,36 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
+    private lateinit var appLockPreferences: AppLockPreferences
+
+    /**
+     * The stored app-lock choice, mirrored out of the flow so `onStop` can read
+     * it. The flow is collected in the composition, which is not alive when the
+     * Activity is stopped.
+     */
+    private var appLockEnabled = false
+
+    /**
+     * False until the lock preference has actually been read.
+     *
+     * Without this the first frame would compose the unlocked navigation tree
+     * and only then learn it should have been covered - a one-frame view of the
+     * reader's list is still a view of it, and on a cold start it can be the
+     * frame the system snapshots for the recents switcher.
+     */
+    private var appLockReady by mutableStateOf(false)
+
+    /** True while the lock gate is drawn over the app. */
+    private var isLocked by mutableStateOf(false)
+
+    /**
+     * True while the system credential prompt is up.
+     *
+     * The prompt can stop the Activity on some OEMs. Re-arming the lock from
+     * that `onStop` would mark the app locked while the user is in the middle of
+     * authenticating, so the prompt's own lifecycle is excluded.
+     */
+    private var biometricPromptVisible = false
 
     /**
      * Set when the home-screen widget asked to open the profile's Activity tab.
@@ -100,6 +137,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         authRepository = AuthRepositoryImpl(applicationContext)
         themePreferences = ThemePreferences(applicationContext)
+        appLockPreferences = AppLockPreferences(applicationContext)
 
         enableEdgeToEdge()
 
@@ -162,6 +200,31 @@ class MainActivity : ComponentActivity() {
                 )
             )
 
+            // `null` until the stored choice has been read, which is why the
+            // initial value is not `false`: the two are different answers, and
+            // treating "not read yet" as "off" is the flash this guards.
+            val storedAppLock: Boolean? by appLockPreferences.enabled.collectAsState(initial = null)
+            LaunchedEffect(storedAppLock) {
+                val enabled = storedAppLock ?: return@LaunchedEffect
+                appLockEnabled = enabled
+                // The recents thumbnail is captured as the task leaves the
+                // foreground, which can be before `onStop` runs. The flag has to
+                // already be set while the lock is enabled, not added at the
+                // moment the gate appears.
+                applySecureFlag()
+
+                if (!appLockReady) {
+                    appLockReady = true
+                    if (enabled && isDeviceSecurelyLocked()) {
+                        setLocked(true)
+                    }
+                } else if (!enabled) {
+                    // Turning the lock off in Settings must release a gate that
+                    // is already up, not leave it waiting for the next resume.
+                    setLocked(false)
+                }
+            }
+
             AniSequelTheme(
                 themeMode = themeSettings.themeMode,
                 dynamicColor = themeSettings.useDynamicColor,
@@ -178,33 +241,45 @@ class MainActivity : ComponentActivity() {
                     // The Surface already paints colorScheme.background, so this
                     // shows the right colour from the first frame rather than a
                     // default-themed app that repaints a moment later.
-                    if (!themeSettings.isLoaded) {
+                    if (!themeSettings.isLoaded || !appLockReady) {
                         return@Surface
                     }
 
-                    val updateController = rememberUpdateController()
-                    updateControllerRef = WeakReference(updateController)
+                    AppLockGate(
+                        locked = isLocked,
+                        onUnlock = { requestUnlock() }
+                    ) {
+                        val updateController = rememberUpdateController()
+                        updateControllerRef = WeakReference(updateController)
 
-                    // One check per launch, after the first frame.
-                    //
-                    // Keyed on a constant so it runs exactly once rather than on
-                    // every recomposition, and deliberately *after* the app is
-                    // usable: a dialog that blocks the first screen while
-                    // GitHub is slow is a worse experience than one that
-                    // arrives a moment later.
-                    LaunchedEffect(Unit) {
-                        updateController.check()
+                        // One check per launch, after the first frame.
+                        //
+                        // Keyed on a constant so it runs exactly once rather than on
+                        // every recomposition, and deliberately *after* the app is
+                        // usable: a dialog that blocks the first screen while
+                        // GitHub is slow is a worse experience than one that
+                        // arrives a moment later.
+                        LaunchedEffect(Unit) {
+                            updateController.check()
+                        }
+
+                        AppNavigation(
+                            authRepository = authRepository,
+                            authViewModel = authViewModel,
+                            themePreferences = themePreferences,
+                            appLockPreferences = appLockPreferences,
+                            openProfileActivityOnLaunch = openProfileActivityRequest,
+                            onProfileActivityOpened = { openProfileActivityRequest = false }
+                        )
+
+                        // A dialog is its own window, so it would draw *over*
+                        // the lock overlay rather than under it. The check can
+                        // still run while locked; the prompt waits until the
+                        // reader has unlocked.
+                        if (!isLocked) {
+                            UpdatePromptHost(controller = updateController)
+                        }
                     }
-
-                    AppNavigation(
-                        authRepository = authRepository,
-                        authViewModel = authViewModel,
-                        themePreferences = themePreferences,
-                        openProfileActivityOnLaunch = openProfileActivityRequest,
-                        onProfileActivityOpened = { openProfileActivityRequest = false }
-                    )
-
-                    UpdatePromptHost(controller = updateController)
                 }
             }
         }
@@ -228,6 +303,108 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateControllerRef?.get()?.onAppResumed()
+    }
+
+    /**
+     * Re-arms the lock as the app leaves the foreground.
+     *
+     * `onStop` rather than `onPause`: a permission dialog or the system
+     * credential prompt pauses the Activity without taking it off screen, and
+     * locking there would put the gate up over a screen the user is still
+     * looking at. `onStop` is the moment the app is no longer visible, which is
+     * exactly when the recents snapshot is taken.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (appLockEnabled && !biometricPromptVisible && isDeviceSecurelyLocked()) {
+            setLocked(true)
+        }
+    }
+
+    private fun isDeviceSecurelyLocked(): Boolean =
+        getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+
+    /** Shows or clears the lock gate. */
+    private fun setLocked(locked: Boolean) {
+        isLocked = locked
+        applySecureFlag()
+    }
+
+    /**
+     * Keeps this window out of the recents thumbnail while the lock is on.
+     *
+     * `FLAG_SECURE` is tied to the *preference*, not to the gate being visible:
+     * the system snapshots the task as it leaves the foreground, and a flag
+     * added in `onStop` can arrive after that snapshot. With the lock enabled
+     * the thumbnail is permanently blank, which also means the reader cannot
+     * screenshot their own list - an exchange a privacy lock is expected to
+     * make, and the flag is removed the moment the lock is turned off.
+     */
+    private fun applySecureFlag() {
+        if (isLocked || appLockEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    /**
+     * Asks the platform for a biometric or device-credential confirmation.
+     *
+     * The platform prompt is used rather than `androidx.biometric`: the app's
+     * floor is API 31, where `setAllowedAuthenticators` and
+     * `DEVICE_CREDENTIAL` are both available, so the support library would add
+     * a dependency to reproduce an API that is already present.
+     *
+     * `BIOMETRIC_WEAK` rather than `BIOMETRIC_STRONG`: a face unlock that the
+     * platform rates weak is still the lock the owner chose, and refusing it
+     * would make the feature unavailable on devices that only have one. A PIN or
+     * pattern is accepted too, through `DEVICE_CREDENTIAL`.
+     *
+     * No secure lock means no gate: [onStop] never locks in that case, and this
+     * method fails open if it is somehow reached anyway. Locking someone out of
+     * their own list because their phone has no PIN would be worse than the
+     * privacy the lock is for.
+     */
+    private fun requestUnlock() {
+        if (!isDeviceSecurelyLocked()) {
+            setLocked(false)
+            return
+        }
+        if (biometricPromptVisible) return
+        biometricPromptVisible = true
+
+        val prompt = BiometricPrompt.Builder(this)
+            .setTitle("Unlock AniSequel")
+            .setSubtitle("Confirm it's you to see your list")
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+
+        prompt.authenticate(
+            CancellationSignal(),
+            mainExecutor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(
+                    result: BiometricPrompt.AuthenticationResult
+                ) {
+                    biometricPromptVisible = false
+                    setLocked(false)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    // Cancelled, or the credential was wrong too many times. The
+                    // gate stays up; the reader can try again or leave.
+                    biometricPromptVisible = false
+                }
+
+                override fun onAuthenticationFailed() {
+                    // One bad fingerprint. The prompt stays up on purpose.
+                }
+            }
+        )
     }
 
     override fun onNewIntent(intent: Intent) {

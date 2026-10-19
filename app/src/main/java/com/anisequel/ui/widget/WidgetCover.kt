@@ -74,7 +74,7 @@ object WidgetCover {
      * still decode to a million pixels. This is the backstop that keeps every
      * cover inside the budget regardless of what the CDN returns.
      */
-    private const val MAX_DECODED_PIXELS = 200_000L
+    private const val MAX_DECODED_PIXELS = 200_000
 
     /**
      * Cached placeholder rectangles, bounded by decoded byte count.
@@ -88,6 +88,27 @@ object WidgetCover {
     private val placeholders = object : LruCache<String, Bitmap>(PLACEHOLDER_CACHE_BYTES) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+
+    /**
+     * Decoded covers, so a home-screen refresh of an unchanged tile costs no
+     * network call - and, just as importantly, no decode.
+     *
+     * This is the "fast-cover" window: a hit is answered from here immediately,
+     * before any download is queued, so text and art are painted together. A
+     * miss goes on to the full download budget. The earlier implementation
+     * always queued the fetch, which meant a refresh behind a slow in-flight
+     * download could leave the tile on its placeholder long after the data it
+     * already held was ready to draw.
+     *
+     * Bounded by decoded bytes. Four tiles' worth is the working set; a reader
+     * with more copies of a widget than that gets a cache miss, not an OOM.
+     */
+    private val covers = object : LruCache<String, Bitmap>(COVER_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
+    /** ~2 MB of decoded covers. */
+    private const val COVER_CACHE_BYTES = 2 * 1024 * 1024
 
     /** ~512 KB of cached placeholders: a few tiles' worth, never a memory story. */
     private const val PLACEHOLDER_CACHE_BYTES = 512 * 1024
@@ -104,14 +125,37 @@ object WidgetCover {
         url: String?,
         targetWidthPx: Int,
         targetHeightPx: Int,
+        /** The per-image decode ceiling, normally from [WidgetImageBudget]. */
+        maxPixels: Int = MAX_DECODED_PIXELS,
         onLoaded: (Bitmap?) -> Unit
     ) {
+        // Cache-hit path, deliberately before the executor: a tile whose art is
+        // already in hand should not queue behind someone else's download. This
+        // is the fast window; a miss falls through to the full budget.
+        // The key includes the decode size: the same poster at 48dp and at a
+        // resized 96dp tile are two different bitmaps, and serving the smaller
+        // one would upscale it into a blurry tile.
+        val cacheKey = url?.let { "$it|${targetWidthPx}x${targetHeightPx}" }
+        if (cacheKey != null) {
+            covers.get(cacheKey)?.let { cached ->
+                executor.execute {
+                    try {
+                        onLoaded(cached)
+                    } catch (t: Throwable) {
+                        // Never let a widget update take the process down.
+                    }
+                }
+                return
+            }
+        }
+
         executor.execute {
             val bitmap = if (url.isNullOrBlank()) {
                 null
             } else {
                 try {
-                    download(url, targetWidthPx, targetHeightPx)
+                    val decoded = download(url, targetWidthPx, targetHeightPx, maxPixels)
+                    decoded?.also { if (cacheKey != null) covers.put(cacheKey, it) }
                 } catch (t: Throwable) {
                     null
                 }
@@ -164,12 +208,17 @@ object WidgetCover {
     fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).roundToInt()
 
-    private fun download(url: String, targetWidthPx: Int, targetHeightPx: Int): Bitmap? {
+    private fun download(
+        url: String,
+        targetWidthPx: Int,
+        targetHeightPx: Int,
+        maxPixels: Int
+    ): Bitmap? {
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
             val bytes = response.body?.bytes() ?: return null
-            return decodeScaled(bytes, targetWidthPx, targetHeightPx)
+            return decodeScaled(bytes, targetWidthPx, targetHeightPx, maxPixels)
         }
     }
 
@@ -182,7 +231,12 @@ object WidgetCover {
      * first pass reads only the dimensions, so the second never allocates more
      * than roughly the requested size.
      */
-    private fun decodeScaled(bytes: ByteArray, targetWidthPx: Int, targetHeightPx: Int): Bitmap? {
+    private fun decodeScaled(
+        bytes: ByteArray,
+        targetWidthPx: Int,
+        targetHeightPx: Int,
+        maxPixels: Int
+    ): Bitmap? {
         if (targetWidthPx <= 0 || targetHeightPx <= 0) return null
 
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -190,26 +244,56 @@ object WidgetCover {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, targetWidthPx, targetHeightPx)
+            inSampleSize = sampleSize(
+                bounds.outWidth,
+                bounds.outHeight,
+                targetWidthPx,
+                targetHeightPx,
+                maxPixels
+            )
             // Covers are opaque JPEG/PNG, and a widget bitmap travels through a
             // Binder transaction with a hard 1 MB budget. Halving the bytes here
             // is what keeps a 4-cell poster comfortably inside it.
             inPreferredConfig = Bitmap.Config.RGB_565
         }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asSoftware()
     }
 
+    /**
+     * A bitmap that can cross the `RemoteViews` Binder boundary.
+     *
+     * A hardware bitmap is backed by the GPU and cannot be marshalled to the
+     * launcher's process, so `setImageViewBitmap` with one is a blank tile at
+     * best and a RemoteViews failure at worst - on exactly the devices whose
+     * allocator decided to return `HARDWARE` for an `ARGB_8888` decode. The
+     * decode asks for `RGB_565`, which is normally software already; this is the
+     * explicit guarantee for every path that returns a bitmap (cache included).
+     */
+    private fun Bitmap.asSoftware(): Bitmap =
+        if (config == Bitmap.Config.HARDWARE) {
+            copy(Bitmap.Config.ARGB_8888, false) ?: this
+        } else {
+            this
+        }
+
     /** The largest power of two that keeps both decoded edges at or above target. */
-    private fun sampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {
+    private fun sampleSize(
+        width: Int,
+        height: Int,
+        reqWidth: Int,
+        reqHeight: Int,
+        maxPixels: Int
+    ): Int {
         var sample = 1
         val halfWidth = width / 2
         val halfHeight = height / 2
         while (halfWidth / sample >= reqWidth && halfHeight / sample >= reqHeight) {
             sample *= 2
         }
-        // Then the Binder-budget backstop: down-sample further while the decoded
-        // bitmap would exceed the pixel ceiling.
-        while ((width / sample).toLong() * (height / sample).toLong() > MAX_DECODED_PIXELS) {
+        // Then the budget backstop: down-sample further while the decoded
+        // bitmap would exceed the per-image ceiling computed from the display.
+        val ceiling = maxPixels.coerceAtLeast(1).toLong()
+        while ((width / sample).toLong() * (height / sample).toLong() > ceiling) {
             sample *= 2
         }
         return sample

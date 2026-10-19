@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
@@ -48,6 +49,7 @@ import com.anisequel.ui.viewmodel.AuthViewModel
 fun SettingsScreen(
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
+    appLockPreferences: AppLockPreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
@@ -152,6 +154,7 @@ fun SettingsScreen(
             when (tab) {
                 2 -> EditSettingsTab(
                     authViewModel = authViewModel,
+                    appLockPreferences = appLockPreferences,
                     refreshIntervalPreferences = refreshIntervalPreferences,
                     arrivingPreferences = arrivingPreferences,
                     quickAddPreferences = quickAddPreferences,

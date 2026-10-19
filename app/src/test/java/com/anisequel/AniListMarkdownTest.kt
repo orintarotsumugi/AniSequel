@@ -2,12 +2,15 @@ package com.anisequel
 
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.InlineToken
+import com.anisequel.ui.components.markdown.MAX_RICH_IMAGE_WIDTH_DP
 import com.anisequel.ui.components.markdown.MarkdownNode
+import com.anisequel.ui.components.markdown.clampedImageWidthDp
 import com.anisequel.ui.components.markdown.tryParseTable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -1024,6 +1027,46 @@ class AniListMarkdownTest {
 
         assertTrue(nodes.none { it is MarkdownNode.ImageBlock })
         assertTrue("the tag must not disappear, was '${paragraphText(nodes)}'", paragraphText(nodes).contains("<img>"))
+    }
+
+    /**
+     * The layout crash this clamp exists for.
+     *
+     * `img2147483647(url)` is a well-formed size to the parser and an overflow
+     * to Compose's constraint system. A public bio is allowed to contain it, so
+     * the renderer has to cap it rather than trust the author.
+     */
+    @Test
+    fun `an absurd image width is clamped to the render ceiling`() {
+        assertEquals(
+            MAX_RICH_IMAGE_WIDTH_DP,
+            clampedImageWidthDp("2147483647")
+        )
+    }
+
+    @Test
+    fun `an ordinary image width is preserved`() {
+        assertEquals(220, clampedImageWidthDp("220"))
+        assertEquals(0, clampedImageWidthDp("0"))
+        assertNull("a size-less image fills the width", clampedImageWidthDp(null))
+        assertNull("a percentage is the renderer's job", clampedImageWidthDp("50%"))
+    }
+
+    /**
+     * The parse cache, proved by identity rather than by timing.
+     *
+     * Scrolling a bio out of a LazyColumn and back used to re-tokenize the
+     * document, which is work the reader feels. The second parse must return the
+     * exact list the first one produced.
+     */
+    @Test
+    fun `parsing the same document twice returns the cached result`() {
+        val source = "# A bio\n\nSome **bold** text and a [link](https://anilist.co)."
+
+        val first = AniListMarkdownParser.parse(source)
+        val second = AniListMarkdownParser.parse(source)
+
+        assertSame("the second parse must be the cached list", first, second)
     }
 
     /** The plain text of a parsed document's paragraphs, for assertions about decoded prose. */
