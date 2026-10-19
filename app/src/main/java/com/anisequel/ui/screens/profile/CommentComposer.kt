@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -94,205 +95,33 @@ internal fun CommentComposer(
     fun apply(edit: DraftEdit) = onDraftChange(draft.withDraftEdit(edit))
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onCancel, enabled = !isPosting) {
-                Text("Cancel")
-            }
-            Text(
-                text = if (replyToName != null) "Write a Reply" else "Write a Comment",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(
-                onClick = { previewing = !previewing },
-                enabled = !isPosting
-            ) {
-                Text(if (previewing) "Write" else "Preview")
-            }
-        }
+        ComposerHeader(
+            replyToName = replyToName,
+            previewing = previewing,
+            isPosting = isPosting,
+            onCancel = onCancel,
+            onTogglePreview = { previewing = !previewing }
+        )
 
-        if (replyToName != null) {
-            ReplyTargetChip(name = replyToName, onClear = onClearReplyTo)
-        }
+        ComposerBody(
+            previewing = previewing,
+            replyToName = replyToName,
+            draft = draft,
+            isPosting = isPosting,
+            onDraftChange = onDraftChange,
+            onClearReplyTo = onClearReplyTo
+        )
 
-        if (previewing) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-            ) {
-                if (draft.text.isBlank()) {
-                    Text(
-                        text = "Nothing to preview yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    // The same parser the posted comment goes through, so Preview
-                    // shows what readers will get rather than an approximation.
-                    val nodes = remember(draft.text) { AniListMarkdownParser.parse(draft.text) }
-                    AniListMarkdownView(nodes = nodes)
-                }
-            }
-        } else {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = onDraftChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .testTag("activity_comment_field"),
-                placeholder = {
-                    Text(if (replyToName != null) "Write a reply..." else "Add a comment")
-                },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                shape = MaterialTheme.shapes.large,
-                enabled = !isPosting
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-        ) {
-            // The reason, not just a greyed button. A disabled control with no
-            // sentence next to it is indistinguishable from one that is broken.
-            val reason = when {
-                verdict == ContentLimits.ReplyVerdict.TooShort && draft.text.isNotEmpty() ->
-                    "A comment needs at least ${ContentLimits.REPLY_MIN} characters."
-                verdict == ContentLimits.ReplyVerdict.TooLong ->
-                    "A comment can be at most ${ContentLimits.REPLY_MAX} characters."
-                else -> null
-            }
-            if (reason != null) {
-                Text(
-                    text = reason,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-                )
-            }
-            if (postError != null) {
-                Text(
-                    text = postError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Scrolls rather than wraps: four 40dp controls, a counter and a
-                // pill do not fit a 360dp phone, and squeezing the icons would make
-                // every one of them a 28dp target.
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    FormatAction(
-                        icon = AppVectorIcons.AttachImage,
-                        label = "Insert an image",
-                        tag = "comment_format_image",
-                        enabled = !isPosting,
-                        onClick = { attaching = true }
-                    )
-                    FormatAction(
-                        icon = AppVectorIcons.TextBold,
-                        label = "Bold",
-                        tag = "comment_format_bold",
-                        enabled = !isPosting,
-                        onClick = {
-                            apply(
-                                wrapSelection(
-                                    draft.text, draft.selection.start, draft.selection.end, "**"
-                                )
-                            )
-                        }
-                    )
-                    FormatAction(
-                        icon = AppVectorIcons.TextItalic,
-                        label = "Italic",
-                        tag = "comment_format_italic",
-                        enabled = !isPosting,
-                        onClick = {
-                            apply(
-                                wrapSelection(
-                                    draft.text, draft.selection.start, draft.selection.end, "*"
-                                )
-                            )
-                        }
-                    )
-                    FormatAction(
-                        icon = AppVectorIcons.TextSpoiler,
-                        label = "Spoiler",
-                        tag = "comment_format_spoiler",
-                        enabled = !isPosting,
-                        onClick = {
-                            apply(
-                                wrapSelection(
-                                    draft.text, draft.selection.start, draft.selection.end,
-                                    "~!", "!~"
-                                )
-                            )
-                        }
-                    )
-                }
-
-                Text(
-                    // The API's own ceiling, and the field's: they are the same
-                    // number because the field clips with `ContentLimits`.
-                    text = "${draft.text.length} / ${ContentLimits.REPLY_MAX}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .testTag("activity_comment_counter")
-                )
-
-                Button(
-                    onClick = onSubmit,
-                    enabled = canSend,
-                    shape = RoundedCornerShape(percent = 50),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    modifier = Modifier.testTag("activity_comment_send")
-                ) {
-                    if (isPosting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = AppVectorIcons.ActivitySend,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (isPosting) "Posting..." else "Post Reply")
-                }
-            }
-        }
+        ComposerBottomBar(
+            draft = draft,
+            verdict = verdict,
+            canSend = canSend,
+            isPosting = isPosting,
+            postError = postError,
+            onEdit = { apply(it) },
+            onAttach = { attaching = true },
+            onSubmit = onSubmit
+        )
     }
 
     if (attaching) {
@@ -310,6 +139,252 @@ internal fun CommentComposer(
                 attaching = false
             }
         )
+    }
+}
+
+/**
+ * The Cancel / title / Preview header.
+ *
+ * The title says Reply rather than Comment when the editor was opened against a
+ * comment, because the reader should not have to remember which one they tapped.
+ * Preview toggles rather than being a separate pane: the field is the same box,
+ * and a toggle keeps the draft in place.
+ */
+@Composable
+private fun ComposerHeader(
+    replyToName: String?,
+    previewing: Boolean,
+    isPosting: Boolean,
+    onCancel: () -> Unit,
+    onTogglePreview: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onCancel, enabled = !isPosting) {
+            Text("Cancel")
+        }
+        Text(
+            text = if (replyToName != null) "Write a Reply" else "Write a Comment",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onTogglePreview, enabled = !isPosting) {
+            Text(if (previewing) "Write" else "Preview")
+        }
+    }
+}
+
+/**
+ * The reply target chip and the editable pane: the rendered preview when the
+ * reader is checking, the field when they are writing.
+ */
+@Composable
+private fun ColumnScope.ComposerBody(
+    previewing: Boolean,
+    replyToName: String?,
+    draft: TextFieldValue,
+    isPosting: Boolean,
+    onDraftChange: (TextFieldValue) -> Unit,
+    onClearReplyTo: () -> Unit
+) {
+    if (replyToName != null) {
+        ReplyTargetChip(name = replyToName, onClear = onClearReplyTo)
+    }
+
+    if (previewing) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            if (draft.text.isBlank()) {
+                Text(
+                    text = "Nothing to preview yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                // The same parser the posted comment goes through, so Preview
+                // shows what readers will get rather than an approximation.
+                val nodes = remember(draft.text) { AniListMarkdownParser.parse(draft.text) }
+                AniListMarkdownView(nodes = nodes)
+            }
+        }
+    } else {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = onDraftChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .testTag("activity_comment_field"),
+            placeholder = {
+                Text(if (replyToName != null) "Write a reply..." else "Add a comment")
+            },
+            textStyle = MaterialTheme.typography.bodyLarge,
+            shape = MaterialTheme.shapes.large,
+            enabled = !isPosting
+        )
+    }
+}
+
+/**
+ * The reason the send button is off, the error from the last post, and the
+ * format controls, counter and Post button.
+ *
+ * The reason is shown beside the button rather than as a tooltip because a
+ * disabled control with no sentence next to it is indistinguishable from one
+ * that is broken. The controls scroll horizontally: four 40dp controls, a
+ * counter and a pill do not fit a 360dp phone.
+ */
+@Composable
+private fun ComposerBottomBar(
+    draft: TextFieldValue,
+    verdict: ContentLimits.ReplyVerdict,
+    canSend: Boolean,
+    isPosting: Boolean,
+    postError: String?,
+    onEdit: (DraftEdit) -> Unit,
+    onAttach: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+    ) {
+        // The reason, not just a greyed button. A disabled control with no
+        // sentence next to it is indistinguishable from one that is broken.
+        val reason = when {
+            verdict == ContentLimits.ReplyVerdict.TooShort && draft.text.isNotEmpty() ->
+                "A comment needs at least ${ContentLimits.REPLY_MIN} characters."
+            verdict == ContentLimits.ReplyVerdict.TooLong ->
+                "A comment can be at most ${ContentLimits.REPLY_MAX} characters."
+            else -> null
+        }
+        if (reason != null) {
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+            )
+        }
+        if (postError != null) {
+            Text(
+                text = postError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                FormatAction(
+                    icon = AppVectorIcons.AttachImage,
+                    label = "Insert an image",
+                    tag = "comment_format_image",
+                    enabled = !isPosting,
+                    onClick = onAttach
+                )
+                FormatAction(
+                    icon = AppVectorIcons.TextBold,
+                    label = "Bold",
+                    tag = "comment_format_bold",
+                    enabled = !isPosting,
+                    onClick = {
+                        onEdit(
+                            wrapSelection(
+                                draft.text, draft.selection.start, draft.selection.end, "**"
+                            )
+                        )
+                    }
+                )
+                FormatAction(
+                    icon = AppVectorIcons.TextItalic,
+                    label = "Italic",
+                    tag = "comment_format_italic",
+                    enabled = !isPosting,
+                    onClick = {
+                        onEdit(
+                            wrapSelection(
+                                draft.text, draft.selection.start, draft.selection.end, "*"
+                            )
+                        )
+                    }
+                )
+                FormatAction(
+                    icon = AppVectorIcons.TextSpoiler,
+                    label = "Spoiler",
+                    tag = "comment_format_spoiler",
+                    enabled = !isPosting,
+                    onClick = {
+                        onEdit(
+                            wrapSelection(
+                                draft.text, draft.selection.start, draft.selection.end,
+                                "~!", "!~"
+                            )
+                        )
+                    }
+                )
+            }
+
+            Text(
+                // The API's own ceiling, and the field's: they are the same
+                // number because the field clips with `ContentLimits`.
+                text = "${draft.text.length} / ${ContentLimits.REPLY_MAX}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .testTag("activity_comment_counter")
+            )
+
+            Button(
+                onClick = onSubmit,
+                enabled = canSend,
+                shape = RoundedCornerShape(percent = 50),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                modifier = Modifier.testTag("activity_comment_send")
+            ) {
+                if (isPosting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = AppVectorIcons.ActivitySend,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(if (isPosting) "Posting..." else "Post Reply")
+            }
+        }
     }
 }
 
