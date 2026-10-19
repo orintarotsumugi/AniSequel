@@ -6,10 +6,13 @@ import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.ui.screens.profile.LibraryFilter
 import com.anisequel.ui.screens.profile.LibrarySort
 import com.anisequel.ui.screens.profile.LibraryType
+import com.anisequel.ui.screens.profile.rememberedSelectionFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -137,5 +140,65 @@ class LibraryPreferencesTest {
         assertNull(preferences.lastFilter.first())
         assertNull(preferences.lastSort.first())
         assertNull(preferences.lastSortAscending.first())
+    }
+
+    /**
+     * The Library tab's remembered view, resolved once per visit.
+     *
+     * The resolver's whole job is the two-way distinction the tab draws on:
+     * `answered = true` with nulls is "never chosen" - draw the defaults - and
+     * `answered = false` is the one state that draws the resolving spinner. A
+     * resolver that emitted nothing until something was stored, or that reported
+     * `answered = false` on its first value, would put the spinner back on screen
+     * permanently for exactly the accounts that had never chosen a view.
+     */
+    @Test
+    fun `the first remembered view is answered even when nothing is stored`() = runTest {
+        val resolved = rememberedSelectionFlow(preferences()).first()
+
+        assertTrue("the first emission is the answer, not a pending state", resolved.answered)
+        assertNull(resolved.type)
+        assertNull(resolved.filter)
+        assertNull(resolved.sort)
+        assertNull(resolved.sortAscending)
+    }
+
+    @Test
+    fun `the remembered view resolves every stored choice at once`() = runTest {
+        val preferences = preferences()
+        preferences.setType(LibraryType.ANIME.name)
+        preferences.setFilter(LibraryFilter.COMPLETED.name)
+        preferences.setSort(LibrarySort.SCORE.name, ascending = true)
+
+        val resolved = rememberedSelectionFlow(preferences).first()
+
+        assertEquals(LibraryType.ANIME, resolved.type)
+        assertEquals(LibraryFilter.COMPLETED, resolved.filter)
+        assertEquals(LibrarySort.SCORE, resolved.sort)
+        assertEquals(true, resolved.sortAscending)
+        // The store travels with the values because the tab must be able to *write*
+        // a choice before the first answer arrives.
+        assertSame(preferences, resolved.preferences)
+    }
+
+    /**
+     * A stored name this build no longer knows resolves to the default view.
+     *
+     * This is what makes adding or renaming an enum entry a recoverable change
+     * rather than a crashed tab: the preference is a string in DataStore, and a
+     * build that reads a name it does not have must land on its own default rather
+     * than an empty list or a crash.
+     */
+    @Test
+    fun `a stored name this build does not know resolves to the default`() = runTest {
+        val preferences = preferences()
+        preferences.setType("WATCHING")
+        preferences.setFilter("NOT_A_FILTER")
+
+        val resolved = rememberedSelectionFlow(preferences).first()
+
+        assertTrue(resolved.answered)
+        assertNull("an unknown type falls back to the tab's default", resolved.type)
+        assertNull(resolved.filter)
     }
 }

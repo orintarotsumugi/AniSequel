@@ -1,6 +1,55 @@
 {
   "versions": [
     {
+      "version": "1.3.7",
+      "entries": [
+        {
+          "title": "Opening a tab and scrolling it in one motion no longer takes the app down",
+          "detail": "The container that switches between the detail sheet's page and its editor - and the one that switches the Settings tabs - animated its own height while the tab underneath it was still arriving, so the scrollable page was measured again on every frame of the switch, against a height that had not settled yet. The height now snaps to the tab being shown and only the fade and the slide play, so a reader who scrolls while a tab is arriving is measured once, against a height that is already final. The markdown table reader also refuses a start index before the start of its own document rather than reading off the front of the line list."
+        },
+        {
+          "title": "A character or staff page opens with a cover, the way a studio's does",
+          "detail": "Opening a character or a staff member gave a plain heading and a list, while a studio's page had the art behind it, the facts in one header, and a clear hierarchy. A person's page now opens the same way: the portrait on a cover-style header, with the name, the native name, the favourites count and the rest of the facts AniList sends - for a character and for a person who made the work alike."
+        },
+        {
+          "title": "A character's page says who voiced them",
+          "detail": "The thing a character's page is asked most often - who plays them - was the one thing missing, even though AniList sends it with the character's own record. The page now carries a Voiced by section: the languages the character was played in, the actors' faces and names beside them, and every row opens that actor's own page."
+        },
+        {
+          "title": "A person's page lists the titles they worked on, and the characters they played",
+          "detail": "A staff member's page ended at a name and a picture. It now lists the titles the record carries - AniList's own role label and the year beside each poster - and, below them, the characters that person voiced, so an actor's page can be walked back to the work. Every row opens the title or the character the same way any other card does."
+        },
+        {
+          "title": "Reopening a person no longer buys them a second time",
+          "detail": "Every look at a character or a staff member re-fetched the whole record, so closing the sheet and tapping the same face again was a fresh round trip for an answer already in hand. The fetched person is now remembered for the session: a re-open draws the page from memory, and only a person never fetched is asked for."
+        },
+        {
+          "title": "Favourites are split into characters and staff",
+          "detail": "AniList's favourites were fused into a single run of faces in which a voice actor and a character could sit side by side. The profile now lists Favourite Characters and Favourite Staff as their own sections, each in the API's order, so the two kinds of favourite can be read for what they are."
+        },
+        {
+          "title": "The Library comes back the way you left it",
+          "detail": "The Library always reopened at its defaults, whatever had been chosen before. The type, the filter, the sort and its direction are now remembered and restored together, so leaving the Library and coming back - or reopening the app - returns the list that was being read."
+        },
+        {
+          "title": "Images in a synopsis now draw",
+          "detail": "AniList's synopses are markdown, and their images - a GIF pasted as a URL, or an HTML img tag - were printed as text or dropped outright. Both now render as images, protocol-relative addresses resolve to HTTPS, and HTML entities in the text decode instead of arriving as ampersand codes."
+        },
+        {
+          "title": "The relations row reads as a franchise, in story order",
+          "detail": "The row of other entries was wrong in both directions before it was right: keeping only anime emptied a manga page of its own volumes, and keeping only the subject's own medium then hid the adaptation - AniList files an adaptation on both sides, so a Cowboy Bebop manga could no longer see the anime, and the anime could not see the manga. The row now carries the same-medium entries plus the cross-medium adaptation, and it is ordered rather than left in the order the API happened to insert it: the prequels, sequels and parent first, oldest first, the adaptation next, the side stories and spin-offs after them - so the entry a reader came for is inside the row's cap on a franchise with fifty relations."
+        },
+        {
+          "title": "An empty answer is shown as empty, not as a load that never ends",
+          "detail": "A response that came back with nothing - an empty list, a null block from the API - was read as still waiting on some pages: a spinner where an empty state belongs, or a count still pretending. Empty answers now reach the screen as they are - the empty state, a zero where a count lives, and no second request pretending the answer never arrived."
+        },
+        {
+          "title": "Being rate-limited now says so",
+          "detail": "AniList answers a burst of requests with a refusal, and the app turned that refusal into a generic failure or into nothing at all. A rate-limited answer now raises one notice at the top of the screen - AniList is busy, give it a minute and try again - instead of leaving a page quietly empty or an error that blames the request."
+        }
+      ]
+    },
+    {
       "version": "1.3.6",
       "entries": [
         {

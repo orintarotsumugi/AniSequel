@@ -228,77 +228,108 @@ private fun favouriteCaption(media: MediaNode): String {
 }
 
 /**
- * A horizontal row of the people an account has pinned: characters and staff both.
+ * A horizontal row of the characters an account has pinned.
  *
- * One function for both because they are the same shape - a portrait, a name, and
- * a second line - and two near-identical row implementations is how the staff row
- * ends up with a 68dp portrait and the character row with a 56dp one. The
- * difference is carried by [PersonRowItem] below rather than by two call sites, so
- * the caption each kind gets is defined once.
+ * ## Why this is a row of its own again
  *
- * The two lists are rendered into **one** row, characters first. AniList returns
- * them as separate connections and the app keeps them as separate lists, which is
- * right for the model; what the reader sees is one list of people, and an actor
- * and an animator are both people the account chose.
+ * Characters and staff shared one "Favourite People" heading and one row, merged to
+ * save a heading on profiles that pinned both. That read AniList's two connections as
+ * one list of people, and they are not one kind of thing: a character is a figure the
+ * account likes and a staff member is a professional whose work they follow, which is
+ * exactly what the two captions already distinguish. The two kinds are drawn through
+ * [FavouritePersonLane] below so they cannot drift apart in shape, but each gets its
+ * own heading and its own list back.
  *
  * `key` is namespaced by kind because AniList numbers characters and staff
  * independently - `character_21` and `staff_21` are different people, and a shared
  * `id` in the key made one of the two rows silently drop its portrait.
  */
 @Composable
-fun FavouritePeopleRow(
+fun FavouriteCharacterRow(
     characters: List<FavouriteCharacter>,
+    onOpen: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    maxWidth: Dp = ProfileMaxContentWidth
+) {
+    FavouritePersonLane(
+        people = characters.map { character ->
+            PersonRowItem(
+                key = "character_${character.id}",
+                name = character.name?.displayName.orEmpty(),
+                // "N favourites" rather than a bare number: the number is
+                // AniList's count of *other* accounts that pinned this
+                // character, which is only meaningful with the noun attached.
+                subtitle = "${character.favourites ?: 0} favourites",
+                imageUrl = character.image?.bestUrl,
+                placeholder = AppVectorIcons.FavouriteCharacters,
+                onClick = { onOpen(character.siteUrl) }
+            )
+        },
+        testTag = "favourite_characters_row",
+        modifier = modifier,
+        maxWidth = maxWidth
+    )
+}
+
+/**
+ * A horizontal row of the staff an account has pinned.
+ *
+ * The other half of the split [FavouriteCharacterRow] documents - kept as its own
+ * function so a staff row's caption and a character row's are defined next to the kind
+ * they describe rather than in one function that has to know both.
+ */
+@Composable
+fun FavouriteStaffRow(
     staff: List<FavouriteStaff>,
     onOpen: (String?) -> Unit,
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth
 ) {
-    if (characters.isEmpty() && staff.isEmpty()) {
-        EmptyFavourites("No favourites pinned")
-        return
-    }
-
-    val people = buildList {
-        characters.forEach { character ->
-            add(
-                PersonRowItem(
-                    key = "character_${character.id}",
-                    name = character.name?.displayName.orEmpty(),
-                    // "N favourites" rather than a bare number: the number is
-                    // AniList's count of *other* accounts that pinned this
-                    // character, which is only meaningful with the noun attached.
-                    subtitle = "${character.favourites ?: 0} favourites",
-                    imageUrl = character.image?.bestUrl,
-                    placeholder = AppVectorIcons.FavouriteCharacters,
-                    onClick = { onOpen(character.siteUrl) }
-                )
+    FavouritePersonLane(
+        people = staff.map { member ->
+            PersonRowItem(
+                key = "staff_${member.id}",
+                name = member.name?.displayName.orEmpty(),
+                // AniList's `primaryOccupations` is the person's day job -
+                // "Story & Art", "Director", "Voice Actor" - which is the one
+                // line that tells a reader who this is. Fall back to the count,
+                // which every row now shows either way, rather than to the
+                // word "Staff", which told them nothing they could not see.
+                subtitle = member.occupation
+                    ?: "${member.favourites ?: 0} favourites",
+                imageUrl = member.image?.bestUrl,
+                placeholder = AppVectorIcons.FavouriteStaff,
+                onClick = { onOpen(member.siteUrl) }
             )
-        }
-        staff.forEach { member ->
-            add(
-                PersonRowItem(
-                    key = "staff_${member.id}",
-                    name = member.name?.displayName.orEmpty(),
-                    // AniList's `primaryOccupations` is the person's day job -
-                    // "Story & Art", "Director", "Voice Actor" - which is the one
-                    // line that tells a reader who this is. Fall back to the count,
-                    // which every row now shows either way, rather than to the
-                    // word "Staff", which told them nothing they could not see.
-                    subtitle = member.occupation
-                        ?: "${member.favourites ?: 0} favourites",
-                    imageUrl = member.image?.bestUrl,
-                    placeholder = AppVectorIcons.FavouriteStaff,
-                    onClick = { onOpen(member.siteUrl) }
-                )
-            )
-        }
-    }
+        },
+        testTag = "favourite_staff_row",
+        modifier = modifier,
+        maxWidth = maxWidth
+    )
+}
 
+/**
+ * The row both favourite-people kinds are drawn in.
+ *
+ * One lane rather than two near-identical `LazyRow`s, because two implementations is
+ * how the staff row ends up with a 68dp portrait and the character row with a 56dp
+ * one; the difference between the kinds lives in the [PersonRowItem] captions above.
+ *
+ * [testTag] is a parameter because both rows exist on the same page and a test needs
+ * to address one of them.
+ */
+@Composable
+private fun FavouritePersonLane(
+    people: List<PersonRowItem>,
+    testTag: String,
+    modifier: Modifier,
+    maxWidth: Dp
+) {
     LazyRow(
         modifier = modifier
             .widthIn(max = maxWidth)
             .fillMaxWidth()
-            .testTag("favourite_people_row"),
+            .testTag(testTag),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
     ) {
@@ -315,7 +346,7 @@ fun FavouritePeopleRow(
 }
 
 /**
- * One person in [FavouritePeopleRow], flattened out of the two model types.
+ * One person in [FavouritePersonLane], flattened out of the two model types.
  *
  * [key] is carried rather than derived from the id at the call site, because the
  * two namespaces number independently and only the caller knows which kind it is

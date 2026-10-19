@@ -126,31 +126,43 @@ fun ProfileHomeTab(
             }
         }
 
-        // People, and studios, in that order, under one heading.
+        // Characters and staff are two different bonds, so they get two headings.
         //
-        // These were two separate sections with two separate headings and two
-        // identical rows - "Favourite Characters" and "Favourite Staff" - which read
-        // as two kinds of thing rather than as one list of people a person has
-        // pinned. AniList returns them as two connections and the app keeps them
-        // as two lists, which is right for the model and wrong for the reader: an
-        // actor and an animator are both people this account chose, and the only
-        // thing that tells them apart is the caption already under each portrait.
-        //
-        // One heading, one row, and the existing `hasAnyFavourites` check covering
-        // it - so a profile with twelve characters and no staff now spends one
-        // heading and one row instead of two of each.
-        if (state.favouriteCharacters.isNotEmpty() || state.favouriteStaff.isNotEmpty()) {
-            item(key = "favourite_people") {
+        // They were merged into one "Favourite People" section for density - a
+        // profile with twelve characters and no staff spent one heading and one row
+        // instead of two of each. That read AniList's two connections as one list of
+        // people, and they are not: a character is a figure the account likes, a
+        // staff member is a professional whose work they follow, and the caption
+        // under each portrait already tells the two apart. The app keeps them as two
+        // lists, so the split costs one heading on the profiles that pin both.
+        if (state.favouriteCharacters.isNotEmpty()) {
+            item(key = "favourite_characters") {
                 ProfileSectionHeader(
-                    title = "Favourite People",
+                    title = "Favourite Characters",
                     icon = AppVectorIcons.FavouriteCharacters,
-                    trailing = "${state.favouriteCharacters.size + state.favouriteStaff.size}",
+                    trailing = "${state.favouriteCharacters.size}",
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
-            item(key = "favourite_people_row") {
-                FavouritePeopleRow(
+            item(key = "favourite_characters_row") {
+                FavouriteCharacterRow(
                     characters = state.favouriteCharacters,
+                    onOpen = { url -> url?.let { openExternalUrl(context, it) } }
+                )
+            }
+        }
+
+        if (state.favouriteStaff.isNotEmpty()) {
+            item(key = "favourite_staff") {
+                ProfileSectionHeader(
+                    title = "Favourite Staff",
+                    icon = AppVectorIcons.FavouriteStaff,
+                    trailing = "${state.favouriteStaff.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item(key = "favourite_staff_row") {
+                FavouriteStaffRow(
                     staff = state.favouriteStaff,
                     onOpen = { url -> url?.let { openExternalUrl(context, it) } }
                 )
