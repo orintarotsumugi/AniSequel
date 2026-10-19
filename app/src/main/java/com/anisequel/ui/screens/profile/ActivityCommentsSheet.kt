@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -245,86 +248,24 @@ fun ActivityCommentsSheet(
                     }
                 )
             } else {
-                CommentsHeader(count = state.replies.size)
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    // The list is keyed by reply id, and a repeated key is a
-                    // hard `IllegalArgumentException` in Compose. The store
-                    // guarantees one entry per id; see `CommentsState.replies`.
-                    state = listState,
-                    contentPadding = PaddingValues(bottom = 8.dp)
-                ) {
-                    when {
-                        state.isLoading -> item(key = "loading") {
-                            // The rows that are coming, at the sizes they will
-                            // have. A spinner here was the one waiting state in
-                            // the app whose shape was already known and thrown away.
-                            CommentRowsSkeleton(phase = shimmerPhase)
-                        }
-
-                        state.loadError != null -> item(key = "load_error") {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = state.loadError,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(onClick = onRetry) {
-                                    Text("Try again")
-                                }
-                            }
-                        }
-
-                        state.replies.isEmpty() -> item(key = "empty") {
-                            Text(
-                                text = "No comments yet. Be the first.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                            )
-                        }
-
-                        else -> items(
-                            items = state.replies,
-                            key = { it.id },
-                            contentType = { "reply" }
-                        ) { reply ->
-                            CommentRow(
-                                reply = reply,
-                                likePending = reply.id in state.pendingReplyLikes,
-                                canManage = viewerId != null && reply.user?.id == viewerId,
-                                // A reply is addressed by a leading `@name`, so
-                                // without an author name there is nothing to
-                                // insert, even for a signed-in reader.
-                                canReply = canPost && !reply.user?.name.isNullOrBlank(),
-                                onLike = { onLikeReply(reply.id) },
-                                onReply = { name ->
-                                    // The mention is an edit like any toolbar's:
-                                    // it must not push the draft past the API's
-                                    // ceiling, and the caret lands after it so the
-                                    // reader keeps typing their comment.
-                                    draft = draft.withDraftEdit(startReplyTo(draft.text, name))
-                                    replyToName = name
-                                    composing = true
-                                },
-                                onManage = { onOpenReplyActions(reply.id) }
-                            )
-                        }
-                    }
-                }
-
-                CommentEntryBar(
+                CommentsThread(
+                    state = state,
+                    viewerId = viewerId,
                     canPost = canPost,
-                    onClick = { composing = true }
+                    listState = listState,
+                    shimmerPhase = shimmerPhase,
+                    onRetry = onRetry,
+                    onStartCompose = { composing = true },
+                    // The mention is an edit like any toolbar's: it must not push
+                    // the draft past the API's ceiling, and the caret lands after
+                    // it so the reader keeps typing their comment.
+                    onReply = { name ->
+                        draft = draft.withDraftEdit(startReplyTo(draft.text, name))
+                        replyToName = name
+                        composing = true
+                    },
+                    onLikeReply = onLikeReply,
+                    onManageReply = onOpenReplyActions
                 )
             }
         }
@@ -345,6 +286,104 @@ fun ActivityCommentsSheet(
             onDismiss = onDismissReplyAction
         )
     }
+}
+
+/**
+ * The thread side of [ActivityCommentsSheet]: the header, the list, and the bar
+ * that opens the editor.
+ *
+ * Its own composable because the sheet's two modes are genuinely different
+ * screens sharing one draft - the editor is not the last row of the list - and
+ * because the list's waiting, failed and empty branches each describe a whole
+ * screen rather than a row. Keeping them here leaves [ActivityCommentsSheet]
+ * with the draft, the two effects, and the mode switch, which is all it owns.
+ */
+@Composable
+private fun ColumnScope.CommentsThread(
+    state: CommentThreadStore.CommentsState,
+    viewerId: Int?,
+    canPost: Boolean,
+    listState: LazyListState,
+    shimmerPhase: State<Float>,
+    onRetry: () -> Unit,
+    onStartCompose: () -> Unit,
+    onReply: (String) -> Unit,
+    onLikeReply: (Int) -> Unit,
+    onManageReply: (Int) -> Unit
+) {
+    CommentsHeader(count = state.replies.size)
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        // The list is keyed by reply id, and a repeated key is a
+        // hard `IllegalArgumentException` in Compose. The store
+        // guarantees one entry per id; see `CommentsState.replies`.
+        state = listState,
+        contentPadding = PaddingValues(bottom = 8.dp)
+    ) {
+        when {
+            state.isLoading -> item(key = "loading") {
+                // The rows that are coming, at the sizes they will
+                // have. A spinner here was the one waiting state in
+                // the app whose shape was already known and thrown away.
+                CommentRowsSkeleton(phase = shimmerPhase)
+            }
+
+            state.loadError != null -> item(key = "load_error") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = state.loadError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = onRetry) {
+                        Text("Try again")
+                    }
+                }
+            }
+
+            state.replies.isEmpty() -> item(key = "empty") {
+                Text(
+                    text = "No comments yet. Be the first.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
+                )
+            }
+
+            else -> items(
+                items = state.replies,
+                key = { it.id },
+                contentType = { "reply" }
+            ) { reply ->
+                CommentRow(
+                    reply = reply,
+                    likePending = reply.id in state.pendingReplyLikes,
+                    canManage = viewerId != null && reply.user?.id == viewerId,
+                    // A reply is addressed by a leading `@name`, so
+                    // without an author name there is nothing to
+                    // insert, even for a signed-in reader.
+                    canReply = canPost && !reply.user?.name.isNullOrBlank(),
+                    onLike = { onLikeReply(reply.id) },
+                    onReply = onReply,
+                    onManage = { onManageReply(reply.id) }
+                )
+            }
+        }
+    }
+
+    CommentEntryBar(
+        canPost = canPost,
+        onClick = onStartCompose
+    )
 }
 
 @Composable

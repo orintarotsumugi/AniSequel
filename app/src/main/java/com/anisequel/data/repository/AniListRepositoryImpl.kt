@@ -609,7 +609,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null)
-            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -635,7 +635,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
-            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -652,7 +652,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = null, userName = userName.trim())
-            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -669,30 +669,20 @@ class AniListRepositoryImpl(
      * key - including an expired one, because expiry is a reason to re-fetch,
      * not evidence that the list is empty.
      *
-     * [explicitRefresh] is the one caller allowed through. The guard exists to
-     * stop a *background* answer - a launch, an automatic refresh - from being
-     * mistaken for "the list is empty" after a 429. A force refresh is the reader
-     * asking AniList directly, and an empty account after they removed their last
-     * title is a real answer they should see, not an error. That is the only call
-     * that was the reader's own decision rather than the app's, and the only one
-     * where a 429 can be checked again by hand.
+     * Only the list this process is *holding* counts. A disk snapshot is not
+     * proof: a fresh launch that is answered "empty" may be a reader who removed
+     * their last title, and that answer has to be allowed to land. What the
+     * guard is against is a throttled answer replacing a list the app is already
+     * reading in this session, and that is exactly the case a fresh launch is
+     * not in.
      */
     private suspend fun Result<MediaListCollection>.rejectUnexpectedEmpty(
-        key: String,
-        explicitRefresh: Boolean = false
+        key: String
     ): Result<MediaListCollection> {
-        if (explicitRefresh) return this
         val response = getOrElse { return this }
         if (!response.isEmptyCollection()) return this
 
-        val previous = listCache[key]?.collection
-            ?: snapshots?.read(
-                kind = SNAPSHOT_LIST,
-                key = key,
-                type = MediaListCollection::class.java,
-                ttlMillis = Long.MAX_VALUE
-            )?.value
-            ?: return this
+        val previous = listCache[key]?.collection ?: return this
 
         if (previous.isEmptyCollection()) return this
 
