@@ -181,9 +181,8 @@ fun ActivityCommentsSheet(
     // still up in the same frame the post lands, and the list it wants to scroll
     // is composed one frame later, when the editor closes.
     ScrollToPostedReply(
-        postedReplyId = state.postedReplyId,
+        state = state,
         composing = composing,
-        replies = state.replies,
         listState = listState
     )
 
@@ -317,15 +316,14 @@ private fun PostRoundTrip(
  */
 @Composable
 private fun ScrollToPostedReply(
-    postedReplyId: Int?,
+    state: CommentThreadStore.CommentsState,
     composing: Boolean,
-    replies: List<ActivityReply>,
     listState: LazyListState
 ) {
-    LaunchedEffect(postedReplyId, composing) {
+    LaunchedEffect(state.postedReplyId, composing) {
         if (composing) return@LaunchedEffect
-        val posted = postedReplyId ?: return@LaunchedEffect
-        val index = replies.indexOfFirst { it.id == posted }
+        val posted = state.postedReplyId ?: return@LaunchedEffect
+        val index = state.replies.indexOfFirst { it.id == posted }
         if (index < 0) return@LaunchedEffect
         // The reply's own position: the count lives above the list, not in it.
         // An index past the end is clamped by `animateScrollToItem`, so a thread
