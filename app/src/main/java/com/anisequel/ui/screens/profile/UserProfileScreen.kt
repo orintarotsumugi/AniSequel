@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -40,6 +39,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,22 +47,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
-import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.withSummaryProgress
-import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -74,67 +72,61 @@ import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.navigation.MainBarClearance
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.UserSocialViewModel
 
 /**
- * How much room a tab's list leaves for the floating navigation capsule,
- * *below the system navigation inset*.
+ * Whether the app's main bar floats over this profile's lists.
  *
- * This is the capsule's own height - 52dp of item, 5dp of padding either side,
- * 12dp of margin - and deliberately **not** the whole clearance. The system inset
- * that follows it is read from the device at draw time by
- * [navigationBarClearance], because it is not a constant: a gesture bar, a
- * three-button bar and a cutout are three different heights, and hardcoding the
- * largest of them either wastes space or leaves the last row of a list sitting
- * under the bar. That mismatch is also what produces the "bounce back" snap when
- * the list reaches its end and the padding disagrees with where the bar really
- * is.
+ * A `CompositionLocal` rather than a parameter: the flag is a property of this
+ * screen's bottom edge, and a parameter would have to travel through
+ * `ProfileTabsContent` and every tab's signature to reach the one place that uses
+ * it - `profileListPadding` - where the next tab somebody adds would have to
+ * re-pass it. Provided by [UserProfileScreen] from `isOwnProfile`, which is true
+ * only on the route the bar draws over.
  */
-internal val NavigationBarClearance = 96.dp
-
-/**
- * The capsule, plus the device's own navigation inset beneath it.
- *
- * Composable because it reads a `WindowInsets`, which is only available during
- * composition. Read rather than assumed - see [NavigationBarClearance] for why a
- * constant is the wrong answer here.
- */
-@Composable
-internal fun navigationBarClearance(): Dp {
-    val systemInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    return NavigationBarClearance + systemInset
-}
+private val LocalMainBarOverProfile = staticCompositionLocalOf { false }
 
 /**
  * The padding every tab's scrollable content uses.
  *
- * The bottom is *not* the Scaffold's. The navigation capsule is meant to float
- * over the content rather than push it, so the Scaffold's bottom inset is
- * replaced with [navigationBarClearance].
+ * The bottom is *not* the Scaffold's. The app's main bar is meant to float over
+ * the content rather than push it, so the Scaffold's bottom inset is replaced
+ * with the bar's clearance - but only on the profile the bar draws as a tab, the
+ * viewer's own. A followed or scanned profile is pushed from one of the bar's
+ * pages, and the bar is hidden there, so its lists would otherwise leave a strip
+ * of nothing under them for a bar that is not on screen.
  */
 @Composable
-internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues()): PaddingValues = PaddingValues(
-    top = contentPadding.calculateTopPadding() + 8.dp,
-    bottom = navigationBarClearance()
-)
+internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues()): PaddingValues {
+    val mainBar = if (LocalMainBarOverProfile.current) MainBarClearance else 0.dp
+    // Read from the device at draw time rather than assumed, for the reason
+    // [MainBarClearance] gives: a gesture bar, a three-button bar and a cutout
+    // are three different heights, and hardcoding the largest of them either
+    // wastes space or leaves the last row of a list sitting under the bar. That
+    // mismatch is also what produces the "bounce back" snap when the list reaches
+    // its end and the padding disagrees with where the bar really is.
+    val systemInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    return PaddingValues(
+        top = contentPadding.calculateTopPadding() + 8.dp,
+        bottom = mainBar + systemInset
+    )
+}
 
 /**
- * The five destinations, declared once so the bar and the `when` cannot disagree.
+ * The four destinations, declared once so the bar and the `when` cannot disagree.
  *
- * The Library destination is fourth because it is the one a person arrives at to
- * answer "what is this account actually tracking", which is a question about the
- * person rather than about their activity - so it sits beside the other
- * person-shaped tabs and before Social, which is the furthest from the profile's
- * subject.
+ * The Library used to sit fourth, between Stats and Social. It left for the app's
+ * main bar: a person's own list is a top-level page now, not a tab of a profile
+ * that could belong to anybody. The remaining four keep their order.
  */
 private val ProfileTabs = listOf(
     NavigationDestination("Home", AppVectorIcons.ProfileHome, "profile_tab_home"),
     NavigationDestination("Activity", AppVectorIcons.ProfileActivity, "profile_tab_activity"),
     NavigationDestination("Stats", AppVectorIcons.ProfileStats, "profile_tab_stats"),
-    NavigationDestination("Library", AppVectorIcons.StatEpisodeCount, "profile_tab_library"),
     NavigationDestination("Social", AppVectorIcons.ProfileSocial, "profile_tab_social")
 )
 
@@ -165,15 +157,6 @@ fun UserProfileScreen(
     socialViewModel: UserSocialViewModel,
     onOpenUser: (FollowUser) -> Unit,
     onNavigateBack: () -> Unit,
-    /**
-     * The Library tab's remembered media type.
-     *
-     * Threaded to the tab rather than built there so there is one DataStore
-     * reader per process. Defaulted because every other screen parameter here
-     * is, and the tab treats a missing store as "ask me again" rather than
-     * failing.
-     */
-    libraryPreferences: LibraryPreferences = LibraryPreferences(LocalContext.current),
     /**
      * Whether this profile is the signed-in viewer's own.
      *
@@ -239,11 +222,6 @@ fun UserProfileScreen(
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
-    // The manga half of the Library tab. Collected here rather than inside the tab
-    // because the tab is disposed on every switch away, and a collection that
-    // started and stopped with it would drop a fetch that was already in flight.
-    val mangaLibrary by overviewViewModel.mangaLibrary.collectAsStateWithLifecycle()
-    val isLoadingManga by overviewViewModel.isLoadingManga.collectAsStateWithLifecycle()
     // Covers for the bio's AniList links. Arrive after the profile does, so the
     // bio renders immediately and posters fill in underneath the reader.
     val mediaCovers by overviewViewModel.mediaCovers.collectAsStateWithLifecycle()
@@ -362,8 +340,8 @@ fun UserProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 // Start/end insets are applied; the bottom deliberately is not,
-                // because the navigation capsule floats over the content rather
-                // than pushing it, and its clearance is handled by
+                // because the app's main bar floats over the content rather than
+                // pushing it, and its clearance is handled by
                 // [profileListPadding] instead.
                 //
                 // Only the top was applied here, which is the safe-area bug this
@@ -397,30 +375,24 @@ fun UserProfileScreen(
                             socialViewModel.updateUserId(state.userId)
                         }
                     }
-                    ProfileTabsContent(
-                        state = state,
-                        selectedTab = selectedTab,
-                        activityState = activityState,
-                        activityViewModel = activityViewModel,
-                        socialState = socialState,
-                        socialViewModel = socialViewModel,
-                        mangaLibrary = mangaLibrary,
-                        isLoadingManga = isLoadingManga,
-                        libraryPreferences = libraryPreferences,
-                        mediaCovers = mediaCovers,
-                        onLoadManga = { overviewViewModel.loadMangaLibrary() },
-                        onOpenUser = onOpenUser,
-                        onOpenDetail = { selectedMedia = it },
-                        onOpenStudio = onOpenStudio
-                    )
-                    ExpressiveNavigationBar(
-                        destinations = ProfileTabs,
-                        selectedIndex = selectedTab,
-                        onSelect = { selectedTab = it },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .windowInsetsPadding(WindowInsets.navigationBars)
-                    )
+                    // The flag the tabs' list padding reads. Provided here rather
+                    // than threaded through, because only this route is drawn over
+                    // by the app's main bar; see [LocalMainBarOverProfile].
+                    CompositionLocalProvider(LocalMainBarOverProfile provides isOwnProfile) {
+                        ProfileTabsContent(
+                            state = state,
+                            selectedTab = selectedTab,
+                            onSelectTab = { selectedTab = it },
+                            activityState = activityState,
+                            activityViewModel = activityViewModel,
+                            socialState = socialState,
+                            socialViewModel = socialViewModel,
+                            mediaCovers = mediaCovers,
+                            onOpenUser = onOpenUser,
+                            onOpenDetail = { selectedMedia = it },
+                            onOpenStudio = onOpenStudio
+                        )
+                    }
                 }
             }
         }
@@ -509,32 +481,20 @@ fun UserProfileScreen(
 private fun ProfileTabsContent(
     state: UserOverviewUiState.Success,
     selectedTab: Int,
+    /**
+     * The capsule's tap, owned by the screen above.
+     *
+     * [ProfileTabsContent] draws the capsule but does not keep the selection: the
+     * saved tab belongs to the screen, which is also what the widget's requested
+     * tab is resolved against.
+     */
+    onSelectTab: (Int) -> Unit,
     activityState: UserActivityViewModel.ActivityState,
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
     socialViewModel: UserSocialViewModel,
-    mangaLibrary: List<MediaListEntryItem>?,
-    isLoadingManga: Boolean,
-    /**
-     * The Library tab's stored view, resolved once here rather than inside the tab.
-     *
-     * The tab is disposed by the transition below, so a collection living there
-     * re-asked DataStore - and redrew its spinner - on every visit. See
-     * [RememberedLibraryView].
-     */
-    libraryPreferences: LibraryPreferences,
     /** Media key to cover, for the AniList preview cards in the bio. */
     mediaCovers: Map<MediaCoverKey, MediaCover>,
-    /**
-     * Passed rather than the ViewModel itself.
-     *
-     * [ProfileTabsContent] is a private composable that exists to keep the tab
-     * switch in one place; handing it the overview ViewModel would widen its
-     * surface to the whole profile loader when all it needs is one action. It is
-     * a lambda rather than the ViewModel so the dependency stays visible at the
-     * call site.
-     */
-    onLoadManga: () -> Unit,
     onOpenUser: (FollowUser) -> Unit,
     onOpenDetail: (MediaNode) -> Unit,
     /** Forwarded to the Home tab's pinned-studio chips. */
@@ -552,14 +512,7 @@ private fun ProfileTabsContent(
     val homeListState = rememberLazyListState()
     val activityListState = rememberLazyListState()
     val statsListState = rememberLazyListState()
-    val libraryGridState = rememberLazyGridState()
     val socialGridState = rememberLazyGridState()
-
-    // The Library's remembered view, resolved above [AnimatedContent] for the same
-    // reason the scroll states are: the tab is disposed on every switch away, and a
-    // DataStore collection living inside it re-asked the question - and redrew the
-    // resolving spinner - on every visit. See [RememberedLibraryView].
-    val rememberedLibrary = rememberLibrarySelection(libraryPreferences)
 
     // Which group of Stats charts is open, held here for the same reason the scroll
     // states are: the tab is disposed on every switch away, so a choice made inside
@@ -569,15 +522,21 @@ private fun ProfileTabsContent(
     // Tags on a tablet and turned it should not be handed Overview back.
     var statsSection by rememberSaveable { mutableStateOf(StatsSection.OVERVIEW) }
 
-    // Favourites are their own connection in AniList rather than a list status,
-    // so the Library's Favourites filter tests membership of these ids instead of
-    // matching a status string. Taken from the same state the Home tab renders,
-    // so pinning and favouriting can never disagree.
-    val favouriteIds = remember(state.libraryAnime, state.favouriteAnime, state.favouriteManga) {
-        (state.favouriteAnime + state.favouriteManga).mapNotNullTo(mutableSetOf()) { it.id }
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
+        // The tab capsule, at the top of the page.
+        //
+        // It used to be pinned to the bottom edge, and that edge now belongs to the
+        // app's main bar, which is drawn by the host over this screen: a profile row
+        // on the same edge would be two bars stacked at one edge, and the selected
+        // tab of one would read as the selected page of the other. The profile's
+        // own pages are still a page-level switch, so they keep the capsule -
+        // directly under the top bar, above the content it switches.
+        ExpressiveNavigationBar(
+            destinations = ProfileTabs,
+            selectedIndex = selectedTab,
+            onSelect = onSelectTab
+        )
+
         // The refresh spinner is ~32dp of height that the tab below has to make room
         // for, and it used to appear and vanish with a bare `if`: a silent background
         // refresh therefore snapped every tab up and down by that height twice per
@@ -644,26 +603,7 @@ private fun ProfileTabsContent(
                     listState = statsListState
                 )
 
-                3 -> ProfileLibraryTab(
-                    animeEntries = state.libraryAnime,
-                    mangaEntries = mangaLibrary,
-                    favouriteIds = favouriteIds,
-                    isLoadingManga = isLoadingManga,
-                    // The list is only on the critical path of this tab and Stats,
-                    // so the flag is threaded here rather than baked into
-                    // `libraryAnime` being empty - an empty list is a real answer
-                    // for an account that tracks nothing.
-                    isAnimeLoading = state.isLibraryLoading,
-                    // A list that could not be read is not an empty one.
-                    libraryError = state.libraryError,
-                    onLoadManga = onLoadManga,
-                    contentPadding = padding,
-                    onOpenDetail = onOpenDetail,
-                    gridState = libraryGridState,
-                    remembered = rememberedLibrary
-                )
-
-                4 -> ProfileSocialTab(
+                3 -> ProfileSocialTab(
                     socialState = socialState,
                     onSelectList = { list ->
                         socialViewModel.select(list)

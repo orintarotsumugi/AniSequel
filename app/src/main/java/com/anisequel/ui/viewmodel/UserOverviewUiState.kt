@@ -51,7 +51,7 @@ sealed interface UserOverviewUiState {
          *
          * Free: the Stats tab already forces the whole anime list to be fetched
          * and chunk-merged, and this screen was throwing all of it away the
-         * moment [entryInsights] had been tallied. The Library tab is built on it,
+         * moment [entryInsights] had been tallied. The Library page is built on it,
          * which is why adding a tab that lists hundreds of entries cost no extra
          * request.
          *
@@ -83,7 +83,7 @@ sealed interface UserOverviewUiState {
          * Why the media list could not be fetched, or null when it was.
          *
          * A failed list fetch was flattened to "no list", so the flag above went
-         * back to false and the Library tab asserted the thing it had least
+         * back to false and the Library page asserted the thing it had least
          * evidence for: "Nothing in this list yet", over an account with nine
          * hundred entries, with every chip reading (0) and no retry anywhere.
          * Private lists, a 429 and a dropped connection all produced the same

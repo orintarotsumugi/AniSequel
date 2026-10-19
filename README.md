@@ -23,6 +23,7 @@ open is most of the work:
 ## Table of contents
 
 - [What it does](#what-it-does)
+  - [The main bar](#the-main-bar)
   - [The profile screen](#the-profile-screen)
   - [The tier list](#the-tier-list)
   - [Home-screen widgets](#home-screen-widgets)
@@ -47,6 +48,9 @@ open is most of the work:
   OVAs and spin-offs that a simple title match would miss.
 - **Your profile, or somebody else's.** Scan a public AniList username without
   signing in. Read-only, and the UI says so before the mutation fails.
+- **Home, Library, and your own profile.** The app's three pages, switched from a
+  floating capsule at the bottom of the screen — the Library is your own list,
+  drawn as a poster grid with per-status counts and search.
 - **One-tap Planning sync.** OAuth against your own AniList account. There is no
   AniSequel account and no password to manage.
 - **Filters and hiding.** Sort, filter by relation type and status, search, and
@@ -261,22 +265,74 @@ and one store serve both kinds; the two payloads stay apart in the state (see
   (bounded, cleared wholesale past the cap) and answers a re-open synchronously,
   before the sheet can draw a spinner.
 
+### The main bar
+
+Home, Library and the reader's own profile are the app's three pages, switched from a
+floating capsule at the bottom of the screen — the same `ExpressiveNavigationBar` the
+title page uses for its read/edit switch, springs and all. Home is the dashboard (the
+signed-in one, or the demo — to a reader without a session they are the same page),
+Library is the viewer's own list, and Profile is drawn as the viewer's own AniList
+avatar, falling back to a glyph while the avatar is still on its way. The viewer's
+face is also the way in from the top-left of the dashboard and of the Library page,
+and all three go through the same tap.
+
+The bar's whole visibility rule is one function, `mainTabForRoute` in
+`ui/navigation/MainTabs.kt`: a route that maps to a tab gets the bar, everything else
+gets the screen to itself. Settings, the tier list, a studio page, a scanned dashboard
+and somebody else's profile are pushed *from* a page, and a bar drawn over them would
+claim the reader is somewhere they are not — with a selected tab they never chose. The
+one that looks like a literal and is not is the profile: `NavDestination` reports the
+registered *pattern* (`profile?tab={tab}`), so the mapping matches the pattern.
+`MainTabsTest` pins the mapping, the order of the destinations (the bar turns its
+index back into a `MainTab` with `MainTab.entries[index]`) and that only the Profile
+tab carries the avatar.
+
+A tab tap replaces rather than pushes: `navigateToMainTab` pops back to Home with
+`saveState` and restores a tab's saved state on the way in, so Back from any of the
+three lands on Home instead of walking back through every tab visited, and returning
+to a page restores what it was showing. A repeat tap on the tab already on screen is
+a no-op (`launchSingleTop`, the same guard every other hop in the app uses). The demo
+profile keeps the rule its avatar always had: it replaces the demo dashboard rather
+than stacking on it.
+
+The rows the bar floats over leave it room with `mainBarClearance()` — the bar's 96dp
+plus the device's own navigation inset, read at draw time rather than assumed, so a
+gesture bar, a three-button bar and a cutout each get their own answer. The profile
+reserves it only where the bar is really drawn: on the viewer's own profile. A scanned
+or followed profile is a pushed screen with no bar and reserves the system inset
+alone, which is why the flag travels as a `CompositionLocal` rather than through
+four tab signatures.
+
+**The Library moved out of the profile for it.** The list was the fourth tab of every
+profile, including a stranger's, which made the thing a reader consults most often one
+tap deeper than the least — and spent a tab of every profile on the one list that
+profile was least likely to be opened for. The grid itself is unchanged
+(`ProfileLibraryTab`, still in `screens/profile/`), and so is its memory: the media
+type, filter, sort and its direction are resolved above the route and restored on
+return, along with the place in the grid. The anime half costs no new request — it is
+the same `user:<id>` list the dashboard already fetched, which is why the identity
+travels as the viewer's id rather than their name: the by-name key would miss that
+cache and re-download the app's most expensive query. Manga is still fetched the first
+time somebody filters to it, behind a spinner on that chip, and never again.
+
 ### The profile screen
 
-Five tabs: Home (identity, bio, pinned favourites), Activity (calendar and
-paginated list history), Stats, Library, and Social. Each keeps its own scroll
-position across a tab switch, because `AnimatedContent` disposes the tab it
-animates away from and anything remembered inside it dies with it.
+Four tabs — Home (identity, bio, pinned favourites), Activity (calendar and paginated
+list history), Stats, and Social — switched from directly under the profile's top bar.
+They used to be a capsule at the bottom edge of the screen, which the app's main bar
+owns now; two bars stacked at one edge would be two answers to one question. Each tab
+keeps its own scroll position across a tab switch, because `AnimatedContent` disposes
+the tab it animates away from and anything remembered inside it dies with it.
 
 **A profile paints after one request.** The overview — identity, bio,
 favourites, and AniList's own aggregates — is published the moment it arrives.
 The media list is merged in behind it, because it is one request per 500 entries
-and only two of the five tabs read it; the profile used to wait for the whole
+and, on a profile, only Stats reads it; the profile used to wait for the whole
 download before drawing a bio that had already come back. Between the two
-publishes `UserOverviewUiState.Success.isLibraryLoading` is true, and Stats and
-Library render "still counting" rather than a tally of zero — an empty list is a
-real answer for an account that tracks nothing, so the flag, not the emptiness, is
-what the screen reads.
+publishes `UserOverviewUiState.Success.isLibraryLoading` is true, and Stats renders
+"still counting" rather than a tally of zero — an empty list is a real answer for an
+account that tracks nothing, so the flag, not the emptiness, is what the screen
+reads.
 
 **Every favourites row on Home opens something.** Anime and manga open the title page,
 characters and staff hand off to the browser, and the studios were the only row that
@@ -337,13 +393,13 @@ jump to its last comment. The two engagement sheets, the activity feed and the
 Social tab draw a shimmering sketch of the rows that are coming instead of a
 spinner in an empty page (`ShimmerBox`, `ui/components/ShimmerLoading.kt`).
 
-**Library** browses every anime and manga on the account as a poster grid with
-per-status counts and search. It costs no extra requests: the Stats tab already
-forces the whole anime list to be fetched and chunk-merged, because AniList
-publishes no aggregate for country of origin, release year, watch year or episode
-counts, and the screen used to discard all of it once it had tallied what it
-needed. Manga is the one half nothing else needed, so it is fetched the first
-time somebody filters to it and then cached.
+**Stats is why a profile fetches the list at all.** AniList publishes no aggregate
+for country of origin, release year, watch year or episode counts, so the Stats tab
+forces the whole anime list to be fetched and chunk-merged — and the profile used to
+discard all of it once it had tallied what it needed. The same list is what the
+Library page reads (see [The main bar](#the-main-bar)), which is why it costs no
+request of its own; manga is the one half nothing else needed, so it is fetched the
+first time somebody filters to it and then cached.
 
 ### The tier list
 
@@ -783,7 +839,7 @@ which is why it survived review.
 
 Routes that need a different back stack (sign-in, the demo dashboard) keep their
 own `popUpTo` and are left alone; the helper is for the plain "open a screen"
-cases. Tabs are not navigation at all — the profile's five tabs and the Settings
+cases. Tabs are not navigation at all — the profile's four tabs and the Settings
 three are one route with an index, so they cannot stack in the first place.
 
 ---
@@ -868,7 +924,7 @@ pure JUnit.
 | | `UserOverviewJsonTest`, `UserOverviewQueryTest` | Captured AniList responses, and the documents against what AniList actually serves |
 | | `ProfileViewModelTest`, `ProfileBioCollapseTest`, `ProfileTextFormattingTest` | Profile state; the bio card's collapse rule and its non-Markdown fallback text |
 | | `BuildActivityCalendarUseCaseTest`, `BuildListInsightsUseCaseTest` | The activity grid's layout; the Stats tab's reshaping of AniList's aggregates |
-| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library tab logic, status display, the title's spec derivations |
+| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library filtering logic, status display, the title's spec derivations |
 | Title page | `WaveGeometryTest` | The wavy progress bar's amplitude, period and travelling phase |
 | Studio pages | `StudioQueryTest` | The one document shape AniList requires: `Studio.media` rather than a filtered `Page`, the 25-title ceiling, and the fields a shelf card and a tap need |
 | | `StudioYearShelfTest` | The shelves: year from the start date with a `seasonYear` fallback, newest first, `TBA` on top, in-year order preserved, duplicates dropped |

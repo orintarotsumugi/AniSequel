@@ -15,7 +15,7 @@ private val Context.libraryPrefsDataStore: DataStore<Preferences> by preferences
 )
 
 /**
- * The Library tab's own view preferences.
+ * The Library page's own view preferences.
  *
  * ## Why the choices are remembered
  *

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -45,12 +47,29 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 
 /** One destination of [ExpressiveNavigationBar]. */
 data class NavigationDestination(
     val label: String,
     val icon: ImageVector,
-    val testTag: String
+    val testTag: String,
+    /**
+     * The destination's picture, when its identity is an image rather than a
+     * glyph.
+     *
+     * Only the main bar's Profile tab sets this, to the signed-in viewer's own
+     * avatar: the tab is "you", and the picture is the recognisable half of
+     * that. Null everywhere else - while the avatar is still loading, and in the
+     * demo, which has no session - and [icon] carries the destination instead.
+     *
+     * The picture takes exactly the icon's slot rather than a larger one,
+     * because the bar's width arithmetic (`SELECTED_WEIGHT`) is computed against
+     * a 22dp icon, a 9dp gap and the label: a bigger image would come straight
+     * out of the selected label's fit, which is the width that arithmetic exists
+     * to protect.
+     */
+    val iconUrl: String? = null
 )
 
 /**
@@ -89,10 +108,14 @@ data class NavigationDestination(
  *
  * ## The arithmetic, because it is not a taste value
  *
- * Five destinations. On the narrowest phone worth supporting (360dp) the bar's
- * inner width is 360 - 32 (this Row's own padding) - 10 (the pill's inner
- * padding) - 8 (four 2dp gaps) = 310dp to share. At a weight of 2.3 against four
- * unselected items at 1.0:
+ * Tuned on the five-slot bar the arithmetic below is worked out for - the
+ * profile's tab row, before the Library left it for the main bar. Both bars this
+ * component now draws are narrower (the profile's four, the main bar's three),
+ * which only gives the selected label more room, so the weight stands.
+ *
+ * On the narrowest phone worth supporting (360dp) the bar's inner width is
+ * 360 - 32 (this Row's own padding) - 10 (the pill's inner padding) - 8 (four 2dp
+ * gaps) = 310dp to share. At a weight of 2.3 against four unselected items at 1.0:
  *
  * - selected slot = 310 x 2.3/6.3 = **113dp**, leaving 113 - 22 (item padding)
  *   - 22 (icon) - 9 (gap) = **60dp** of label, against the ~55dp "Activity"
@@ -106,9 +129,9 @@ data class NavigationDestination(
  *
  * Past ~2.4 the unselected items drop under the 48dp minimum, and `defaultMinSize`
  * starts fighting the weight rather than helping it, so this is the ceiling as
- * well as the floor. At extreme font scales no fixed five-slot bar can spell every
- * label; the `TextOverflow.Ellipsis` is the graceful degradation for that, and
- * the semantics still carry the full name to a screen reader.
+ * well as the floor. At extreme font scales no fixed bar of this width can spell
+ * every label; the `TextOverflow.Ellipsis` is the graceful degradation for that,
+ * and the semantics still carry the full name to a screen reader.
  */
 private const val SELECTED_WEIGHT = 2.3f
 
@@ -271,12 +294,29 @@ private fun NavigationItem(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = destination.icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier.size(22.dp)
-        )
+        // A destination whose identity is a picture - the viewer's own avatar on
+        // the main bar's Profile tab - draws it in the icon's slot. Not tinted by
+        // the item's content colour, because it is a photograph rather than a
+        // glyph; circle-clipped, because the bar's own shapes are pills and a
+        // square picture inside one reads as a rendering mistake.
+        if (destination.iconUrl != null) {
+            AsyncImage(
+                model = destination.iconUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+            )
+        } else {
+            Icon(
+                imageVector = destination.icon,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(22.dp)
+            )
+        }
 
         AnimatedVisibility(
             visible = selected,

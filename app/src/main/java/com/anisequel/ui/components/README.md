@@ -8,7 +8,7 @@ destination instead — see `ui/screens/*/`.
 
 | Path | What belongs there |
 |---|---|
-| `components/` (top level) | Controls with no single owner: `EngagementAction`, `EmptyStateView`, `ShimmerLoading`, `OpenExternalUrl`. |
+| `components/` (top level) | Controls with no single owner: `EngagementAction`, `EmptyStateView`, `ShimmerLoading`, `OpenExternalUrl`, `ProfileAvatarButton`. |
 | `components/detail/` | The one title page — the sheet, the entry editor, the subject type that lets a sequel and a bare media share it. |
 | `components/detail/info/` | The Info page's sections. One file per section, plus the page shell. |
 | `components/cards/` | Poster cards and the controls that live on them. |

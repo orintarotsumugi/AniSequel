@@ -596,7 +596,7 @@ class AniListRepositoryImpl(
      * Separate from [getUserAnimeList] because AniList's `MediaType` is a filter on
      * the same query rather than a different resource, so the two results never
      * overlap - sharing a cache key would let whichever list loaded last answer for
-     * the other, and the Library tab would silently show anime under a Manga filter.
+     * the other, and the Library page would silently show anime under a Manga filter.
      *
      * Not fetched when a profile opens. The anime list already is, because the Stats
      * tab tallies it, so manga is the one half the app did not already have on hand;
@@ -635,7 +635,7 @@ class AniListRepositoryImpl(
      * Fetches complete MediaListCollection, supporting AniList chunking for large lists.
      *
      * [listType] is the GraphQL `MediaType` enum name. It is a parameter rather
-     * than a hardcoded `ANIME` because the Library tab needs the manga half of the
+     * than a hardcoded `ANIME` because the Library page needs the manga half of the
      * same list, and a second copy of this method would be a second copy of the
      * chunk merge below - which is the part with real invariants in it.
      */

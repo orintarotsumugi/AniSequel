@@ -37,13 +37,13 @@ import org.junit.Test
  * The overview and the media list used to be awaited together before anything was
  * shown, on the argument that a page with a name and a "7 Watching" is worse than
  * a spinner. The list is the expensive half by an order of magnitude - one request
- * per 500 entries, chunk-merged - and only the Stats and Library tabs read it, so
- * the cost of that ordering was the whole download in front of a bio that had
- * already arrived.
+ * per 500 entries, chunk-merged - and only the Stats tab and the Library page read
+ * it, so the cost of that ordering was the whole download in front of a bio that
+ * had already arrived.
  *
  * The fix publishes the overview immediately and merges the list in afterwards,
  * which is only *correct* because of the flag: without `isLibraryLoading` the
- * Stats and Library tabs would read an empty list as "this account tracks
+ * Stats tab and the Library page would read an empty list as "this account tracks
  * nothing", and the summary card would print zeroes for somebody with 900
  * entries. Both halves are asserted here, because the second one is the reason the
  * first is safe - a future change that awaits both again fails the first test, and
@@ -193,7 +193,7 @@ class UserOverviewLoadOrderTest {
             // And it is the *wrong* answer if it reads as an empty list.
             //
             // `getOrNull()` flattened "the list is empty" and "AniList refused to
-            // send the list" into the same null, so the Library tab rendered
+            // send the list" into the same null, so the Library grid rendered
             // "Nothing in this list yet" with every chip at (0) - over a nine
             // hundred entry account behind a private list, or after one rate
             // limit. The app was asserting the one thing it had the least evidence

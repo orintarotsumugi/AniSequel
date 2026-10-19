@@ -128,14 +128,6 @@ fun ProfileDestination(
      * on the side that cannot offer a write that would fail.
      */
     viewerId: Int? = null,
-    /**
-     * The Library tab's remembered media type.
-     *
-     * Passed in rather than built here so there is exactly one DataStore reader
-     * per process. Two readers of the same file is how the tab ends up
-     * disagreeing with itself about what was last chosen.
-     */
-    libraryPreferences: com.anisequel.data.repository.LibraryPreferences,
     initialTab: Int = 0
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
@@ -203,7 +195,6 @@ fun ProfileDestination(
         onOpenStudio = { studioId, name ->
             navController.navigateSingle(StudioRoutes.studio(studioId, name))
         },
-        libraryPreferences = libraryPreferences,
         onSignInAgain = onSignInAgain,
         initialTab = initialTab,
         // The same key the ViewModels are built on, handed to the screen so its saved

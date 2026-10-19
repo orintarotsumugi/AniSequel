@@ -428,7 +428,7 @@ object GraphQLQueries {
 
     val GET_USER_ANIME_LIST: String = mediaListQuery("GetUserAnimeList")
 
-    /** The same list for manga, which the Library tab filters to on demand. */
+    /** The same list for manga, which the Library page filters to on demand. */
     val GET_USER_MANGA_LIST: String = mediaListQuery("GetUserMangaList")
 
     /**

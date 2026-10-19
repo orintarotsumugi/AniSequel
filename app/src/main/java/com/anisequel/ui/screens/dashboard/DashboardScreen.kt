@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -47,6 +50,8 @@ import com.anisequel.ui.components.StatsBanner
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.toDetailMedia
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.navigation.MainBarClearance
+import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection
 import com.anisequel.ui.screens.dashboard.DashboardDemoBanner
 import com.anisequel.ui.screens.dashboard.DashboardErrorView
@@ -237,7 +242,17 @@ fun DashboardScreen(
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .testTag("dashboard_screen"),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // Lifted clear of the main bar: the Scaffold sits a snackbar on the system
+        // inset, which is exactly where the floating bar begins, so an "Added to
+        // Planning" confirmation was drawn behind the bar that had just been tapped
+        // to come back from. `MainBarClearance` and not `mainBarClearance()`: the
+        // Scaffold has already paid the inset, and this is only the bar's own height.
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = MainBarClearance)
+            )
+        },
         topBar = {
             AniTopAppBar(
                 viewer = currentViewer,
@@ -252,10 +267,19 @@ fun DashboardScreen(
             )
         }
     ) { paddingValues ->
+        val layoutDirection = LocalLayoutDirection.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                // Start/end insets are applied; the bottom deliberately is not,
+                // because the main bar floats over the content rather than pushing
+                // it. Its clearance is what the list ends with instead - see the
+                // LazyColumn's `contentPadding` below.
+                .padding(
+                    start = paddingValues.calculateStartPadding(layoutDirection),
+                    end = paddingValues.calculateEndPadding(layoutDirection),
+                    top = paddingValues.calculateTopPadding()
+                )
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {
@@ -285,7 +309,11 @@ fun DashboardScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("sequels_list"),
-                            contentPadding = PaddingValues(bottom = 32.dp),
+                            // The bar floats over the list, so the Scaffold's bottom
+                            // inset is *replaced* by the bar's clearance rather than
+                            // added to it - the two describe the same strip of screen.
+                            // The 32dp of breathing room stays on top of it.
+                            contentPadding = PaddingValues(bottom = 32.dp + mainBarClearance()),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {

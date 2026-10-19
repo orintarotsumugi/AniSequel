@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Bookmark
@@ -145,6 +146,8 @@ object AppVectorIcons {
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group
+    // The main bar's Profile tab falls back to this while the viewer's avatar is unknown.
+    val ProfilePerson = Icons.Default.AccountCircle
 
     // The Social tab's view switch, which shows the mode currently on screen: a
     // grid of faces, or the same people as name rows. Paired with [List], which is
