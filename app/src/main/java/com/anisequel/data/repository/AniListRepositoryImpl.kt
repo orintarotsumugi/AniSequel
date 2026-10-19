@@ -609,7 +609,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null)
-            .rejectUnexpectedEmpty(key)
+            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -635,7 +635,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
-            .rejectUnexpectedEmpty(key)
+            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -652,7 +652,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = null, userName = userName.trim())
-            .rejectUnexpectedEmpty(key)
+            .rejectUnexpectedEmpty(key, explicitRefresh = forceRefresh)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -668,10 +668,20 @@ class AniListRepositoryImpl(
      * refused when this repository already holds a populated list under the same
      * key - including an expired one, because expiry is a reason to re-fetch,
      * not evidence that the list is empty.
+     *
+     * [explicitRefresh] is the one caller allowed through. The guard exists to
+     * stop a *background* answer - a launch, an automatic refresh - from being
+     * mistaken for "the list is empty" after a 429. A force refresh is the reader
+     * asking AniList directly, and an empty account after they removed their last
+     * title is a real answer they should see, not an error. That is the only call
+     * that was the reader's own decision rather than the app's, and the only one
+     * where a 429 can be checked again by hand.
      */
     private suspend fun Result<MediaListCollection>.rejectUnexpectedEmpty(
-        key: String
+        key: String,
+        explicitRefresh: Boolean = false
     ): Result<MediaListCollection> {
+        if (explicitRefresh) return this
         val response = getOrElse { return this }
         if (!response.isEmptyCollection()) return this
 
