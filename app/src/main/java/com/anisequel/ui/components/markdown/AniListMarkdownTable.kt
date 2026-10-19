@@ -114,7 +114,13 @@ fun tryParseTable(
     startIndex: Int,
     inlineParser: (String) -> List<InlineToken>
 ): Pair<MarkdownNode.TableBlock, Int>? {
-    if (startIndex + 1 >= lines.size) return null
+    // The lower bound as well as the upper one: the index is a parameter, and
+    // `lines[-1]` throws `IndexOutOfBoundsException: Index -1 out of bounds`
+    // while one past the end throws the same at the other end. The block
+    // parser only ever walks forward from zero today, so this is a floor
+    // rather than a fix; it keeps the function safe to call with an index
+    // from anywhere else.
+    if (startIndex < 0 || startIndex + 1 >= lines.size) return null
     val headerLine = lines[startIndex].trim()
     val separatorLine = lines[startIndex + 1].trim()
 

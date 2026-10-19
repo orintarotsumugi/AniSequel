@@ -532,7 +532,7 @@ class AniListRepositoryImpl(
     override suspend fun getViewer(): Result<ViewerProfile> {
         knownViewer()?.let { return Result.success(it) }
         return execute(GraphQLRequest(query = GraphQLQueries.GET_VIEWER), apiService::getViewer)
-            .map { response ->
+            .mapRequire { response ->
                 val profile = response.viewer.require("Viewer data not found")
                 storeViewer(profile)
                 profile
@@ -575,7 +575,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("userName" to name)
             ),
             apiService::getUserByName
-        ).map { it.user.require("No AniList user called \"$name\".") }
+        ).mapRequire { it.user.require("No AniList user called \"$name\".") }
     }
 
     override suspend fun getUserAnimeList(
@@ -662,7 +662,7 @@ class AniListRepositoryImpl(
                 variables = initialVars
             ),
             apiService::getMediaListCollection
-        ).map { it.collection.require("Media list collection is empty") }
+        ).mapRequire { it.collection.require("Media list collection is empty") }
 
         val firstCollection = firstResult.getOrElse { return Result.failure(it) }
         if (firstCollection.hasNextChunk != true) {
@@ -692,7 +692,7 @@ class AniListRepositoryImpl(
                     variables = chunkVars
                 ),
                 apiService::getMediaListCollection
-            ).map { it.collection.require("Media list collection chunk $currentChunk is empty") }
+            ).mapRequire { it.collection.require("Media list collection chunk $currentChunk is empty") }
 
             // A later chunk that fails must fail the whole walk. Swallowing it
             // (`?: break`) merged whatever arrived before the failure into a
@@ -771,7 +771,7 @@ class AniListRepositoryImpl(
                 }
             ),
             apiService::getMediaDetail
-        ).map {
+        ).mapRequire {
             val node = it.media.require("That entry is no longer available on AniList.")
             if (detailCache.size >= MAX_DETAIL_CACHE_NODES) {
                 // Soft cap: falling back to a fresh fetch on the next open
@@ -920,7 +920,7 @@ class AniListRepositoryImpl(
                 )
             ),
             apiService::getStudio
-        ).map {
+        ).mapRequire {
             it.studio.require("That studio is no longer on AniList.")
         }
 
@@ -1048,7 +1048,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("mediaId" to mediaId)
             ),
             apiService::saveMediaListEntry
-        ).map { it.entry.require("No response from planning mutation") }
+        ).mapRequire { it.entry.require("No response from planning mutation") }
             // The completed list has one more "planned" entry than the copy
             // this add just made. Both cache keys (`user:` for the signed-in
             // query, `userName:` for the public one) can be holding the
@@ -1068,7 +1068,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("mediaId" to mediaId)
             ),
             apiService::saveMediaListEntry
-        ).map { it.entry.require("No response from watching mutation") }
+        ).mapRequire { it.entry.require("No response from watching mutation") }
             .onSuccess {
                 invalidateLists()
             }
@@ -1100,7 +1100,7 @@ class AniListRepositoryImpl(
                 variables = edit.toSaveVariables()
             ),
             apiService::saveMediaListEntry
-        ).map { it.entry.require("No response from the entry mutation") }
+        ).mapRequire { it.entry.require("No response from the entry mutation") }
             .onSuccess {
                 // The cached list now holds the pre-edit entry. Dropping it is what
                 // makes the dashboard's own counts and the Library row agree with
@@ -1148,7 +1148,7 @@ class AniListRepositoryImpl(
                 )
             ),
             apiService::getUserOverview
-        ).map { data ->
+        ).mapRequire { data ->
             val overview = data.user.require(
                 userName?.let { "No AniList user called \"$it\"." }
                     ?: "AniList returned no profile for this account."
@@ -1273,7 +1273,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("activityId" to activityId)
             ),
             apiService::toggleActivityLike
-        ).map { data ->
+        ).mapRequire { data ->
             val likeable = data.likeable.require("No response from the like mutation")
             ActivityLikeState(
                 isLiked = likeable.isLiked == true,
@@ -1293,7 +1293,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("replyId" to replyId)
             ),
             apiService::toggleActivityReplyLike
-        ).map { data ->
+        ).mapRequire { data ->
             // The same reduction as the activity toggle: `ToggleLikeV2` answers with a
             // union and nothing else if the member did not match, and a null count is
             // "zero", not a question.
@@ -1315,7 +1315,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("activityId" to activityId, "text" to text)
             ),
             apiService::saveActivityReply
-        ).map { it.reply.require("No response from the reply mutation") }
+        ).mapRequire { it.reply.require("No response from the reply mutation") }
             .onSuccess {
                 // The feed's `replyCount` is now one short of the truth, so the
                 // same cache drop the like does applies here.
@@ -1333,7 +1333,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("id" to replyId, "activityId" to activityId, "text" to text)
             ),
             apiService::saveActivityReply
-        ).map { it.reply.require("No response from the reply mutation") }
+        ).mapRequire { it.reply.require("No response from the reply mutation") }
         // No cache to drop. A feed page carries the reply's *count*, never its
         // text, and an edit cannot change the count - the same argument
         // `toggleActivityReplyLike` makes for leaving `activityCache` alone.
@@ -1374,7 +1374,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("id" to characterId)
             ),
             apiService::getCharacterProfile
-        ).map { data ->
+        ).mapRequire { data ->
             data.character.require("That character is no longer available on AniList.")
                 .also {
                     if (personProfileCache.size >= MAX_DETAIL_CACHE_NODES) personProfileCache.clear()
@@ -1392,7 +1392,7 @@ class AniListRepositoryImpl(
                 variables = mapOf("id" to staffId)
             ),
             apiService::getStaffProfile
-        ).map { data ->
+        ).mapRequire { data ->
             data.staff.require("That person is no longer available on AniList.")
                 .also {
                     if (personProfileCache.size >= MAX_DETAIL_CACHE_NODES) personProfileCache.clear()
@@ -1457,10 +1457,19 @@ class AniListRepositoryImpl(
                 call(request)
             }
             response.errors?.firstOrNull()?.let { throw it.toAniListException() }
+            // A 200 whose payload is absent *and* whose errors array has nothing to
+            // read is AniList answering one of its own GraphQL failures without the
+            // reason in the body. Classified MALFORMED_RESPONSE rather than the
+            // NOT_FOUND this used to be - that claimed the user or media did not
+            // exist, which is a fact about AniList nobody ever stated - and rather
+            // than INVALID_REQUEST, which would blame a query AniList did not
+            // complain about. The throw is caught below, so callers still get a
+            // `Result.failure`; a null payload must never reach a screen as an
+            // empty success.
             Result.success(
                 response.data ?: throw AniListException(
-                    AniListErrorKind.NOT_FOUND,
-                    "AniList returned no data for this request."
+                    kind = AniListErrorKind.MALFORMED_RESPONSE,
+                    message = "AniList sent an empty answer to this request. Try again in a moment."
                 )
             )
         } catch (e: HttpException) {
@@ -1508,8 +1517,39 @@ class AniListRepositoryImpl(
         }
     }
 
+    /**
+     * A node AniList did not send, as the not-found failure the call site names.
+     *
+     * It throws, so it is only total under [mapRequire]; see that function for
+     * what happens - and what used to happen - under a bare `Result.map`.
+     */
     private fun <T : Any> T?.require(message: String): T =
         this ?: throw AniListException(AniListErrorKind.NOT_FOUND, message)
+
+    /**
+     * [Result.map] for every transform that rejects a null payload through [require].
+     *
+     * `Result.map` rethrows anything its transform throws - that is its documented
+     * contract, and `mapCatching` is the variant that catches - so
+     * `data.staff.require(...)` used to leave the repository as a thrown
+     * [AniListException] rather than the `Result.failure` it names. The callers
+     * fold the result inside a `launch` with no exception handler, so an absent
+     * node did not draw the call site's sentence ("That person is no longer
+     * available on AniList."); it killed the coroutine that was going to draw
+     * anything at all.
+     *
+     * Only [AniListException] is caught, deliberately: cancellation must still
+     * propagate - [execute] rethrows it for the same reason - and a bug in a
+     * transform is not an answer from AniList.
+     */
+    private inline fun <T : Any, R> Result<T>.mapRequire(transform: (T) -> R): Result<R> {
+        val value = getOrElse { return Result.failure(it) }
+        return try {
+            Result.success(transform(value))
+        } catch (e: AniListException) {
+            Result.failure(e)
+        }
+    }
 
     /**
      * Reads only. A mutation must never be shared: collapsing two

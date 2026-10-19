@@ -1056,6 +1056,13 @@ object GraphQLQueries {
      *
      * `age` is free text and not a number - Faye Valentine's is
      * "23 (Physical), 77 (Actual)". See `MediaCharacter.age`.
+     *
+     * `edges` rather than `nodes`, because the edge is the only half of a media
+     * connection that carries `characterRole` and `voiceActors` - the first is what
+     * the row of posters is *about*, and the second is the sheet's "Voiced by"
+     * section. The field takes a language argument and answers **null** without one,
+     * checked against the live API, so it is asked for twice under two names; see
+     * `ProfileAppearanceEdge` for that reasoning and what the two names mean.
      */
     fun getCharacterProfileQuery(): String = """
         query CharacterProfile(${'$'}id: Int!) {
@@ -1072,23 +1079,47 @@ object GraphQLQueries {
             isFavourite
             dateOfBirth { year month day }
             media(perPage: 12, sort: [POPULARITY_DESC]) {
-              nodes { $PROFILE_MEDIA_FIELDS }
+              edges {
+                characterRole
+                voiceActors(language: JAPANESE) {
+                  id
+                  name { full }
+                  image { large }
+                }
+                voiceActorsEnglish: voiceActors(language: ENGLISH) {
+                  id
+                  name { full }
+                  image { large }
+                }
+                node { $PROFILE_MEDIA_FIELDS }
+              }
             }
           }
         }
     """.trimIndent()
 
     /**
-     * One staff member, with the titles they worked on.
+     * One staff member, with the titles they worked on and the characters they voiced.
      *
      * Same shape as [getCharacterProfileQuery] and deliberately so: the sheet that
      * renders a person is one composable, and a crew member who renders differently
      * from an actor on the same page is the kind of asymmetry a reader notices.
      *
-     * `staffMedia` rather than `characterMedia` - the latter is "media this *character*
-     * appears in", which is not what a director worked on. `primaryOccupations` is
-     * what distinguishes a voice actor from an animator, and `yearsActive` and
-     * `homeTown` are the two facts a credit otherwise never carries.
+     * `staffMedia` is asked for as `edges` rather than `nodes` because the credit -
+     * AniList's `staffRole`, a `"Director"` or an `"ADR Script (English)"` - hangs on
+     * the edge, and a row of posters built from nodes cannot say what the person did
+     * on any of them. The `node` inside each edge is the same media selection the
+     * character's row draws, so both kinds of person page draw the same card.
+     *
+     * `characterMedia` is the other half of what AniList knows about a creator: many
+     * are voice actors as well, and `staffMedia` only says what was *produced* - never
+     * who they *performed*. Its `characters` live on the edge beside `characterRole`,
+     * which is why this is asked for as `edges` too. Both connections are capped at
+     * twelve because a horizontal row shows twelve; the character's own connection is
+     * twelve for the same reason.
+     *
+     * `primaryOccupations` is what distinguishes a voice actor from an animator, and
+     * `yearsActive` and `homeTown` are the two facts a credit otherwise never carries.
      *
      * Both dates are asked for because both are null for a living person and the card
      * hides whichever is absent - see the sheet's own note on that.
@@ -1112,7 +1143,20 @@ object GraphQLQueries {
             dateOfBirth { year month day }
             dateOfDeath { year month day }
             staffMedia(perPage: 12, sort: [POPULARITY_DESC]) {
-              nodes { $PROFILE_MEDIA_FIELDS }
+              edges {
+                staffRole
+                node { $PROFILE_MEDIA_FIELDS }
+              }
+            }
+            characterMedia(perPage: 12, sort: [POPULARITY_DESC]) {
+              edges {
+                characterRole
+                characters {
+                  id
+                  name { full }
+                  image { large medium }
+                }
+              }
             }
           }
         }

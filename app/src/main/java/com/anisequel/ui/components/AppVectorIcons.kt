@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
@@ -159,6 +160,11 @@ object AppVectorIcons {
     val ProfileAbout = Icons.Default.FormatQuote
     val ProfileJoined = Icons.Default.CalendarMonth
     val ProfileUpdated = Icons.Default.Schedule
+
+    // The person sheet's "Voiced by" heading. A microphone is the one glyph that
+    // means "a voice rather than a face", which is what the section lists: the people
+    // who perform the character the page is about.
+    val Mic = Icons.Default.Mic
 
     // One per Stats-tab chart, so the card and its meaning are never a guess.
     val StatSummary = Icons.Default.Insights

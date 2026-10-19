@@ -193,8 +193,7 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
         AsyncImage(
             model = image.url,
             contentDescription = image.alt ?: "Markdown image",
-            modifier = Modifier
-                .fillMaxWidth()
+            modifier = imageWidthModifier(image.width)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.FillWidth,
@@ -202,6 +201,29 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
             error = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
         )
     }
+}
+
+/**
+ * The width `img220(...)` / `img50%(...)` asked for.
+ *
+ * A percentage is that fraction of the width a size-less image would take, and a
+ * plain number is the dp the author wrote. Neither can overflow: `fillMaxWidth`
+ * is given a fraction, and `Modifier.width` reports its size through the
+ * incoming constraints' `constrain`, so an `img900(...)` in a phone-width bio
+ * comes out at the bio's width rather than running off the side - which is the
+ * cap, without measuring the parent first. (The alternative, `BoxWithConstraints`,
+ * is deliberately not used: its `maxWidth` accessor is on its way out, see
+ * `TierBoardHost`.)
+ *
+ * A size-less image - every markdown `![alt](url)` and every inline image -
+ * fills the width exactly as it always did, and a malformed size degrades to
+ * that same full width rather than to something zero-sized and invisible.
+ */
+private fun imageWidthModifier(width: String?): Modifier {
+    val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull()
+    if (percent != null) return Modifier.fillMaxWidth(percent.coerceIn(1, 100) / 100f)
+    val pixels = width?.toIntOrNull()
+    return if (pixels != null) Modifier.width(pixels.dp) else Modifier.fillMaxWidth()
 }
 
 @Composable

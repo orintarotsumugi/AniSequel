@@ -366,12 +366,11 @@ private fun StaffCard(edge: MediaStaffEdge, onOpen: ((Int) -> Unit)?) {
 /**
  * The other titles in this franchise, labelled with how they relate.
  *
- * AniList's relation list is mostly *not* other seasons - it is the guidebook, the
- * character song, the light novel the show was adapted from - so the list is filtered
- * to this title's **own medium** before it gets here. See
- * [com.anisequel.data.model.relatedMedia] for why that is the subject's own type and
- * not `ANIME`: filtering to anime unconditionally meant a manga page listed its TV
- * adaptations and none of its own volumes.
+ * AniList's relation list is also the guidebook, the character song and the light
+ * novel a show was adapted from, so [com.anisequel.data.model.relatedMedia] keeps the
+ * subject's own medium plus its cross-medium adaptation, and orders the result - the
+ * spine in story order, the adaptation next, the side material last. The row shows
+ * that order as it is given; the sorting is the model's, not this section's.
  *
  * The cards are clickable, and tapping one *replaces* this page's subject rather
  * than opening a second sheet. That was the whole of the "universal info page"

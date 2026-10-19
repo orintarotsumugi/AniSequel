@@ -466,70 +466,66 @@ fun ProfileLibraryTab(
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier,
-    /** Remembers the last chosen media type. Not defaulted: a caller that forgot
-     *  it would silently never remember, which looks identical to the bug. */
-    libraryPreferences: LibraryPreferences,
+    /**
+     * The remembered view, resolved one level up.
+     *
+     * Not defaulted: a caller that forgot it would silently never remember, which
+     * looks identical to the bug this whole path exists for. Resolved by the caller -
+     * `ProfileTabsContent` - rather than here because the profile screen's
+     * `AnimatedContent` disposes this composable on every switch away, so a collection
+     * living here re-asked DataStore on every visit. See [RememberedLibraryView].
+     */
+    remembered: RememberedLibraryView,
     gridState: LazyGridState = rememberLazyGridState()
 ) {
     val scope = rememberCoroutineScope()
     /**
- * The media type, status filter and sort, remembered across visits.
- *
- * All three used to be plain state inside this composable, and that dies with
- * it: the profile screen switches tabs through an `AnimatedContent`, which
- * disposes the tab it animates away from. Only scroll position survived (it is
- * hoisted), so every trip to Activity and back reset a narrowed "Completed,
- * newest first" view to "All, list order" - the reader's decision silently
- * unmade because the state lived somewhere a transition could reach. The type
- * already lived in DataStore; the filter and sort now live beside it.
- *
- * [rememberedType] is null until DataStore answers, which is asynchronous, so for
- * one composition there is no stored answer to apply. `type` starts at
- * [LibraryType.ALL] - it has to, because `rememberSaveable` cannot hold a
- * nullable here without every read below unwrapping it - and so
- * [rememberedTypePending] is what keeps the grid from *drawing* that default.
- * The same gate covers filter and sort: all the keys are read from one
- * DataStore file, so they arrive in one emission and the grid never draws a
- * half-restored selection.
- *
- * Once it resolves, the stored name wins. An unrecognised stored value falls
- * back to its default rather than leaving the tab empty - a stored value the
- * enum no longer has means the preference was written by a build that knew an
- * entry this one does not, and showing the default list is the recoverable
- * outcome.
- */
-    val rememberedType by libraryPreferences.lastType.collectAsStateWithLifecycle(initialValue = null)
-    val rememberedFilter by libraryPreferences.lastFilter.collectAsStateWithLifecycle(initialValue = null)
-    val rememberedSort by libraryPreferences.lastSort.collectAsStateWithLifecycle(initialValue = null)
-    val rememberedSortAscending by libraryPreferences.lastSortAscending.collectAsStateWithLifecycle(initialValue = null)
-
+     * The media type, status filter and sort, remembered across visits.
+     *
+     * All three used to be plain state inside this composable, and that dies with
+     * it: the profile screen switches tabs through an `AnimatedContent`, which
+     * disposes the tab it animates away from. Only scroll position survived (it is
+     * hoisted), so every trip to Activity and back reset a narrowed "Completed,
+     * newest first" view to "All, list order" - the reader's decision silently
+     * unmade because the state lived somewhere a transition could reach. The type
+     * already lived in DataStore; the filter and sort now live beside it.
+     *
+     * The initializers read the *resolved* remembered view rather than defaults,
+     * which is what makes a re-entry start on the reader's own view in the first
+     * frame. The four flows used to be collected here instead - one level lower than
+     * the disposal - so every visit to the tab re-asked DataStore and drew the
+     * resolving spinner until the answer came back: a preference that had not changed
+     * looked like a load, again and again. See [RememberedLibraryView] for the whole
+     * failure.
+     *
+     * [rememberedTypePending] is now "DataStore has not answered yet", not "the
+     * reader has never chosen": this app has no stored answer to distinguish the two,
+     * and the old spelling meant an account that never picked a type sat under the
+     * spinner forever.
+     */
     var choiceMade by rememberSaveable { mutableStateOf(false) }
-    var type by rememberSaveable { mutableStateOf(LibraryType.ALL) }
-    var filter by rememberSaveable { mutableStateOf(LibraryFilter.ALL) }
+    var type by rememberSaveable { mutableStateOf(remembered.type ?: LibraryType.ALL) }
+    var filter by rememberSaveable { mutableStateOf(remembered.filter ?: LibraryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(LibrarySort.LIST_ORDER) }
-    var sortAscending by rememberSaveable { mutableStateOf(true) }
-    val rememberedTypePending = rememberedType == null
+    var sort by rememberSaveable { mutableStateOf(remembered.sort ?: LibrarySort.LIST_ORDER) }
+    var sortAscending by rememberSaveable { mutableStateOf(remembered.sortAscending ?: true) }
+    val rememberedTypePending = !remembered.answered
 
-    LaunchedEffect(rememberedType, rememberedFilter, rememberedSort, rememberedSortAscending) {
+    LaunchedEffect(remembered.type, remembered.filter, remembered.sort, remembered.sortAscending) {
         // Once anything on screen has been chosen, later emissions are echoes of
         // this screen's own writes and applying them would be at best a no-op and
         // at worst a stale value overwriting a newer local one.
         if (choiceMade) return@LaunchedEffect
-        rememberedType?.let { name ->
-            LibraryType.entries.firstOrNull { it.name == name }
-        }?.let { stored -> type = stored }
-        rememberedFilter?.let { name ->
-            LibraryFilter.entries.firstOrNull { it.name == name }
-        }?.let { stored -> filter = stored }
-        rememberedSort?.let { name ->
-            LibrarySort.entries.firstOrNull { it.name == name }
-        }?.let { stored ->
+        // Stays for the one window where the tab is already on screen when DataStore
+        // answers; every later visit finds the answer in the initializers above.
+        remembered.type?.let { stored -> type = stored }
+        remembered.filter?.let { stored -> filter = stored }
+        remembered.sort?.let { stored ->
             sort = stored
             // The direction is written in the same edit as the sort, so a stored
             // sort without one cannot come from this app; `?: true` is only a
             // floor for that impossible pair.
-            sortAscending = rememberedSortAscending ?: true
+            sortAscending = remembered.sortAscending ?: true
         }
     }
 
@@ -563,6 +559,31 @@ fun ProfileLibraryTab(
         if (type == LibraryType.MANGA) onLoadManga()
     }
 
+    // Nothing at all until DataStore has answered, because `type` is `ALL` for exactly
+    // that window and `ALL` is the list the person chose to avoid remembering a
+    // narrower type for. Drawn **instead of** the grid, not beside it: the old spinner
+    // was one item on top of a grid already drawn in the default view, so a remembered
+    // "Manga" flashed every anime entry before the answer landed - and because "not
+    // answered" and "never chosen" looked identical, an account that had never picked
+    // a type sat under it forever. It is one brief window per profile visit now, and a
+    // spinner rather than an empty state because an empty grid would be
+    // indistinguishable from the account having no library.
+    if (rememberedTypePending) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(vertical = 48.dp)
+                .testTag("library_resolving_type"),
+            contentAlignment = Alignment.Center
+        ) {
+            ExpressiveLoadingIndicator(
+                modifier = Modifier.size(30.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        return
+    }
+
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
         // the grid must not reflow when the window changes, because the person's
@@ -576,29 +597,6 @@ fun ProfileLibraryTab(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Nothing at all until DataStore has answered, because `type` is `ALL`
-        // for exactly that window and `ALL` is the list the person chose to avoid
-        // remembering a narrower type for. A spinner rather than an empty state:
-        // an empty grid here would be indistinguishable from the account having
-        // no library, which is the same false answer the pending note below
-        // exists to avoid.
-        if (rememberedTypePending) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_resolving_type") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 48.dp)
-                        .testTag("library_resolving_type"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(30.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-
         item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls") {
             LibraryControls(
                 type = type,
@@ -613,7 +611,7 @@ fun ProfileLibraryTab(
                     sort = nextSort
                     sortAscending = nextAscending
                     scope.launch {
-                        libraryPreferences.setSort(nextSort.name, nextAscending)
+                        remembered.preferences.setSort(nextSort.name, nextAscending)
                     }
                 },
                 isLoadingManga = isLoadingManga,
@@ -625,12 +623,12 @@ fun ProfileLibraryTab(
                     // there so they are not asked again, and asking them to
                     // confirm the choice would defeat it.
                     query = ""
-                    scope.launch { libraryPreferences.setType(chosen.name) }
+                    scope.launch { remembered.preferences.setType(chosen.name) }
                 },
                 onFilter = { chosen ->
                     choiceMade = true
                     filter = chosen
-                    scope.launch { libraryPreferences.setFilter(chosen.name) }
+                    scope.launch { remembered.preferences.setFilter(chosen.name) }
                 },
                 onQueryChange = { query = it }
             )
