@@ -34,6 +34,7 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
+import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.HiddenSequelsPreferences
@@ -119,6 +120,12 @@ fun AppNavigation(
     authRepository: AuthRepository,
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
+    /**
+     * The app-lock choice. Settings writes it; `MainActivity` reads the same
+     * DataStore to decide whether to draw the gate, so the switch and the lock
+     * cannot disagree about whether the feature is on.
+     */
+    appLockPreferences: AppLockPreferences,
     /**
      * A tap on the home-screen widget asked for the profile's Activity tab.
      *
@@ -799,6 +806,7 @@ fun AppNavigation(
                 SettingsScreen(
                     authViewModel = authViewModel,
                     themePreferences = themePreferences,
+                    appLockPreferences = appLockPreferences,
                     refreshIntervalPreferences = refreshIntervalPreferences,
                     arrivingPreferences = arrivingPreferences,
                     quickAddPreferences = quickAddPreferences,

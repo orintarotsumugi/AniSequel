@@ -26,7 +26,14 @@ import java.util.concurrent.TimeUnit
  * that works after a token refresh and one that replays a stale `Authorization`
  * header - see `NetworkClient.createApiService`.
  */
-class RateLimitInterceptor : Interceptor {
+class RateLimitInterceptor(
+    /**
+     * Blocks the calling worker for [millis]. Injectable so the one retry path
+     * can be tested without a real one-second sleep - the production default is
+     * the thread sleep this always used.
+     */
+    private val sleepMillis: (Long) -> Unit = { millis -> Thread.sleep(millis) }
+) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -48,7 +55,7 @@ class RateLimitInterceptor : Interceptor {
         }
 
         response.close()
-        Thread.sleep(TimeUnit.SECONDS.toMillis(waitSeconds.toLong()))
+        sleepMillis(TimeUnit.SECONDS.toMillis(waitSeconds.toLong()))
 
         val retry = chain.proceed(chain.request())
         // If the retry is throttled again, the caller sees the 429 and the

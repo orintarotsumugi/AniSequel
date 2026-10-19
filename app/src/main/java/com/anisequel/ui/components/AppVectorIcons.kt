@@ -191,6 +191,14 @@ object AppVectorIcons {
     // the glyph reads as "more of this row" rather than as another line of it.
     val ActivityManage = Icons.Default.MoreHoriz
 
+    // The comment composer's format bar. All four are hand-authored vectors in
+    // `AppCustomVectors`, so one toolbar is not half a font glyph and half paths
+    // that scale with the icon font loading or not.
+    val TextBold = AppCustomVectors.TextBold
+    val TextItalic = AppCustomVectors.TextItalic
+    val TextSpoiler = AppCustomVectors.TextSpoiler
+    val AttachImage = AppCustomVectors.AttachImage
+
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the
     // release APK, and it keeps every Settings header in one reviewable list.

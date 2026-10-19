@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Normal permission, not a runtime one: it lets the optional app lock ask
+         the platform for a biometric confirmation. The credential prompt itself
+         is the platform's, so no biometric library is needed at this minSdk. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Requests the install permission only when the user asks to update. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

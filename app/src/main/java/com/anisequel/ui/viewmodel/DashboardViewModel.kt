@@ -156,9 +156,9 @@ class DashboardViewModel(
     private val freshnessWatch = ListFreshnessWatch(
         scope = viewModelScope,
         interval = { currentRefreshInterval },
-        // A lambda rather than `::refresh`, so the reference cannot depend on the
-        // declaration order of the members it closes over.
-        onRefresh = { refresh() }
+        // A lambda rather than a method reference, so the reference cannot depend
+        // on the declaration order of the members it closes over.
+        onRefresh = { performRefresh() }
     )
 
     init {
@@ -444,7 +444,24 @@ class DashboardViewModel(
     private fun Throwable.isAuthFailure(): Boolean =
         (this as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
 
+    /**
+     * A refresh the reader asked for - the button or the pull gesture.
+     *
+     * Goes through the freshness watch rather than straight to [performRefresh]
+     * so a double pull and an accidental second tap collapse into one request.
+     * The watch also owns the automatic path, which is why the two cannot drift
+     * into different cooldowns.
+     */
     fun refresh() {
+        freshnessWatch.requestManualRefresh()
+    }
+
+    /**
+     * The fetch itself, shared by the gesture, the interval and the post-save
+     * reload. Never called directly by a screen: a caller outside this class
+     * goes through [refresh] so the cooldown applies.
+     */
+    private fun performRefresh() {
         // The refresh button used to blank the list back to a full-screen loading
         // state, which for a large account meant losing the results the user was
         // reading to watch a spinner. Keep the list up and show progress in place.
@@ -1102,11 +1119,11 @@ class DashboardViewModel(
      * this is one request, on an explicit button press.
      */
     override suspend fun save(edit: MediaEntryEdit): Result<SimpleMediaListEntry> =
-        aniListRepository.saveMediaListEntry(edit).onSuccess { refresh() }
+        aniListRepository.saveMediaListEntry(edit).onSuccess { performRefresh() }
 
     /** Removes the entry and reloads, for the same reason [save] does. */
     override suspend fun delete(entryId: Int): Result<Unit> =
-        aniListRepository.deleteMediaListEntry(entryId).onSuccess { refresh() }
+        aniListRepository.deleteMediaListEntry(entryId).onSuccess { performRefresh() }
 
     /**
      * Factory for the manual construction in AppNavigation.
