@@ -73,7 +73,7 @@ class CommentDraftEditsTest {
             wrapSelection("", 0, 0, "**")
         )
         assertEquals(
-            DraftEdit("a**b", 2, 2),
+            DraftEdit("a****b", 3, 3),
             wrapSelection("ab", 1, 1, "**")
         )
     }
