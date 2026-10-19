@@ -237,6 +237,50 @@ class RequestCoalescerTest {
      * in the map, and every later caller would be handed that dead deferred
      * instead of a fresh request.
      */
+    /**
+     * Only the last waiter leaving may cancel the shared body.
+     *
+     * A follower is not the owner: one screen closing while another is still
+     * waiting for the same response must not cancel the request the second
+     * screen is relying on. This pins the last-waiter half of the contract - the
+     * leader's own cancellation is covered above.
+     */
+    @Test
+    fun `a follower leaving does not cancel the shared request`() = runTest {
+        val coalescer = RequestCoalescer<String>()
+        var calls = 0
+        val release = CompletableDeferred<Unit>()
+
+        val leader = async {
+            coalescer.coalesce("GetMediaDetail") {
+                calls++
+                release.await()
+                "response"
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        val follower = async {
+            coalescer.coalesce("GetMediaDetail") {
+                calls++
+                "follower request"
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        follower.cancel()
+        testScheduler.advanceUntilIdle()
+
+        release.complete(Unit)
+        assertEquals(
+            "the screen that is still waiting must still get the response",
+            "response",
+            leader.await()
+        )
+        assertEquals("a departing follower does not re-issue the request", 1, calls)
+        assertEquals(0, coalescer.inFlightCount())
+    }
+
     @Test
     fun `a cancelled leader does not wedge the key for later callers`() = runTest {
         val coalescer = RequestCoalescer<String>()

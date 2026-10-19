@@ -61,6 +61,45 @@ object AniListMarkdownParser {
         "nbsp" to "\u00A0"
     )
 
+    /**
+     * The parse cache, keyed on the raw source.
+     *
+     * ## Why a cache rather than `remember` at each call site
+     *
+     * The same bio is parsed by the profile card, the detail sheet and the
+     * comment thread, and each of those re-enters composition as its LazyColumn
+     * recycles rows. `remember(source)` is lost when the row leaves the viewport,
+     * so scrolling back up re-tokenized the whole document - and replayed the
+     * `animateContentSize` wiggle the first parse triggered. A process-wide cache
+     * keyed on the source makes the second parse free wherever it happens.
+     *
+     * Bounded at [PARSE_CACHE_ENTRIES] and access-ordered: the bios a reader
+     * actually revisits stay, and a scroll through a thousand one-line comments
+     * cannot grow the cache without limit. Synchronised because Coil and Compose
+     * can call in from different threads; the parser itself is pure.
+     */
+    private const val PARSE_CACHE_ENTRIES = 200
+    private val parseCacheLock = Any()
+    private val parseCache = LinkedHashMap<String, List<MarkdownNode>>(64, 0.75f, true)
+
+    private fun cachedParse(raw: String): List<MarkdownNode>? =
+        synchronized(parseCacheLock) { parseCache[raw] }
+
+    private fun cacheParse(raw: String, nodes: List<MarkdownNode>) {
+        synchronized(parseCacheLock) {
+            parseCache[raw] = nodes
+            while (parseCache.size > PARSE_CACHE_ENTRIES) {
+                val oldest = parseCache.entries.iterator()
+                if (oldest.hasNext()) {
+                    oldest.next()
+                    oldest.remove()
+                } else {
+                    break
+                }
+            }
+        }
+    }
+
     private val HEADER_PATTERN = Regex("""^(#{1,6})\s+(.+)$""")
     private val CHECKLIST_PATTERN = Regex("""^[-*+]\s+\[([ xX])]\s*(.+)$""")
     private val UNORDERED_LIST_PATTERN = Regex("""^[-*+]\s+(.+)$""")
@@ -430,6 +469,8 @@ object AniListMarkdownParser {
     }
 
     fun parse(raw: String): List<MarkdownNode> {
+        cachedParse(raw)?.let { return it }
+
         // `<br>` becomes a break *before* the escapes are decoded, so an author's
         // escaped literal `&lt;br&gt;` stays the visible text `<br>` instead of
         // becoming a line break. Entities are then decoded once, here, on the
@@ -442,7 +483,7 @@ object AniListMarkdownParser {
             .replace("<br />", "\n")
             .let(::decodeHtmlEntities)
             .trim()
-        return parseDecoded(clean)
+        return parseDecoded(clean).also { cacheParse(raw, it) }
     }
 
     /**

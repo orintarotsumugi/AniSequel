@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -194,9 +195,13 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
             model = image.url,
             contentDescription = image.alt ?: "Markdown image",
             modifier = imageWidthModifier(image.width)
+                .heightIn(max = MAX_RICH_IMAGE_HEIGHT_DP.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.FillWidth,
+            // `Fit`, not `FillWidth`: with the height cap in place, FillWidth
+            // would scale a very tall image to the width and then crop it to the
+            // cap. Fit keeps the whole image inside the same box.
+            contentScale = ContentScale.Fit,
             placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
             error = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
         )
@@ -222,7 +227,7 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
 private fun imageWidthModifier(width: String?): Modifier {
     val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull()
     if (percent != null) return Modifier.fillMaxWidth(percent.coerceIn(1, 100) / 100f)
-    val pixels = width?.toIntOrNull()
+    val pixels = clampedImageWidthDp(width)
     return if (pixels != null) Modifier.width(pixels.dp) else Modifier.fillMaxWidth()
 }
 

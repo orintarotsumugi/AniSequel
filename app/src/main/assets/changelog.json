@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "1.3.9",
+      "entries": [
+        {
+          "title": "Comments now have a real editor, with formatting and a preview",
+          "detail": "The comment box was a two-line strip at the bottom of a long thread. It is now a full editor opened from the bar under the thread: Cancel keeps your draft, Write/Preview renders the comment exactly as the markdown parser will draw it, and the format bar wraps the selected text in bold, italic or spoiler markers. Tapping Reply on a comment starts the draft with that person's @name already in it, the counter shows how much of AniList's 8,000 characters is used, and a disabled Post button now says why instead of refusing on send. Images can be attached by URL, because AniList has no upload endpoint."
+        },
+        {
+          "title": "A repeated comment id can no longer crash a thread",
+          "detail": "The comment list is keyed by comment id, and Compose treats two rows with the same key as a fatal error - the thread crashed while drawing instead of showing the comment. The list has two sources, the fetch and the comment a post returns, and they are now collapsed to one entry per id: the posted copy replaces the fetched one, and the scroll to a new comment looks the comment up by id rather than assuming its position."
+        },
+        {
+          "title": "Your AniList token is encrypted on the device now",
+          "detail": "The token that lets AniSequel read and write your AniList account used to sit in plain text inside the app's private storage. It is now encrypted with a key that never leaves the Android keystore, and an existing session is migrated the first time this version opens. If the device's screen lock is removed and the key is invalidated, AniSequel asks you to sign in again instead of failing on every launch. Nothing about signing in or staying signed in otherwise changes."
+        },
+        {
+          "title": "An optional app lock keeps your list private",
+          "detail": "Settings > Edit now has a Privacy card with a Lock AniSequel switch. When it is on, opening the app or coming back from the background asks for your fingerprint, face or screen lock before your list appears, and the recents preview is blanked while it is locked. It is off by default, and it is unavailable on a device with no screen lock because there would be nothing to ask for. Back from the lock screen sends the app to the background rather than dismissing the lock."
+        },
+        {
+          "title": "A throttled empty answer can no longer wipe your list",
+          "detail": "AniList sometimes answers a list request with a well-formed collection that has no entries - under load, or while rate limiting. AniSequel used to store that answer, so a temporary failure looked exactly like an account that had deleted everything. An empty response is now refused when the app already holds a populated list for the same account; the list you were reading stays, and the failed refresh says so."
+        },
+        {
+          "title": "Title pages cache by release status, and a passed episode overrides the cache",
+          "detail": "Every title's synopsis, cast and studios were kept for the same flat day. A finished show now stays cached for a week because its facts are settled; a currently airing show is refreshed after three hours, and an announced-but-unreleased one after six. Separately, if the cached next episode's airing time has already passed, the record is treated as out of date immediately rather than waiting for its window - the countdown on screen can no longer describe an episode that has already aired."
+        },
+        {
+          "title": "A pull-to-refresh is no longer treated like a background check",
+          "detail": "Two refreshes now have two cooldowns: a deliberate pull or button press may run again after five seconds, while an automatic check on returning to the app waits fifteen. The five-second floor still absorbs the accidental double pull, and the automatic one stops a resume moments after a failed refresh from spending another request to learn the same thing."
+        },
+        {
+          "title": "A malformed image size in a bio can no longer crash the page",
+          "detail": "AniList's image syntax carries a size, and a malformed or hostile one - an image billions of pixels wide - overflowed the layout and took the screen down with it. Width and height are now clamped to generous ceilings, so real artwork is untouched and an absurd number draws at the page's width instead. Parsed bios and comments are also cached for the process now, so scrolling one out of view and back no longer re-tokenizes the whole document or replays its height animation."
+        },
+        {
+          "title": "Widgets decode covers inside a memory budget",
+          "detail": "Each widget cover now gets a slice of a budget computed from the display and divided by the number of images the update decodes, instead of a fixed pixel ceiling that was the same on every device. A refresh whose cover is already in memory answers immediately rather than queueing behind another download, and every bitmap handed to the launcher is a software bitmap - a hardware bitmap cannot cross into the home screen's process, which is why a tile could come out blank on some devices with no other symptom."
+        },
+        {
+          "title": "A huge error response can no longer exhaust memory",
+          "detail": "When AniList refused a request, the app read the entire response body to find the reason - even when the body was not AniList's small error envelope but a proxy's page or a hostile response. That read is now capped at 64 KB. The HTTP status still classifies the failure exactly as before; the body was never trusted for anything else."
+        }
+      ]
+    },
+    {
       "version": "1.3.8",
       "entries": [
         {

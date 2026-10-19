@@ -65,10 +65,19 @@ internal object WidgetUpdater {
             return
         }
 
+        val display = context.resources.displayMetrics
         WidgetCover.loadAsync(
             url = coverUrl(),
             targetWidthPx = WidgetCover.dp(context, coverWidthDp),
-            targetHeightPx = WidgetCover.dp(context, coverHeightDp)
+            targetHeightPx = WidgetCover.dp(context, coverHeightDp),
+            // One image per tile today. Passed per call rather than hardcoded in
+            // the cover loader so a future collection widget can divide the same
+            // display budget across its posters instead of multiplying it.
+            maxPixels = WidgetImageBudget.maxPixels(
+                displayWidthPx = display.widthPixels,
+                displayHeightPx = display.heightPixels,
+                imageCount = 1
+            )
         ) { bitmap ->
             try {
                 manager.updateAppWidget(ids, render(context, bitmap))

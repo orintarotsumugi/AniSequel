@@ -48,7 +48,11 @@ class ListFreshnessWatch(
     private val scope: CoroutineScope,
     /** Read fresh each time, so a change in Settings applies without a restart. */
     private val interval: () -> RefreshInterval,
-    private val onRefresh: () -> Unit,
+    /**
+     * Runs a fetch. The Boolean is `true` for a gesture the reader made and
+     * `false` for an automatic one; see [requestManualRefresh].
+     */
+    private val onRefresh: (gesture: Boolean) -> Unit,
     /** Injectable so the interval boundary is testable rather than wall-clock bound. */
     private val nowMillis: () -> Long = System::currentTimeMillis
 ) {
@@ -68,10 +72,42 @@ class ListFreshnessWatch(
 
         /** How long to wait before re-checking when no list has arrived yet. */
         const val NOT_LOADED_POLL_MILLIS = MIN_RETRY_GAP_MILLIS
+
+        /**
+         * The shortest gap between two gesture-driven fetches.
+         *
+         * A pull-to-refresh is a deliberate act: the reader has decided the list
+         * they are looking at is old, and making them wait the full automatic
+         * cooldown for saying so is the wrong way round. Five seconds still
+         * absorbs the double-tap and the accidental second pull.
+         */
+        const val GESTURE_COOLDOWN_MILLIS = 5_000L
+
+        /**
+         * The shortest gap between an automatic fetch and the next attempt.
+         *
+         * Longer than the gesture floor because nobody asked for it. A resume
+         * moments after a refresh that failed, or after the reader already
+         * pulled, must not spend another request to learn the same thing. This
+         * is deliberately far below [MIN_RETRY_GAP_MILLIS] - it is a debounce on
+         * the *trigger*, not the retry backoff, and the loop still waits minutes
+         * between its own attempts.
+         */
+        const val AUTO_COOLDOWN_MILLIS = 15_000L
     }
 
     /** Zero until the first successful load. The epoch would otherwise read as 56 years old. */
     private var lastLoadedAtMillis = 0L
+
+    /**
+     * The last time a fetch was *started*, whether or not it succeeded.
+     *
+     * Separate from [lastLoadedAtMillis]: a failed fetch leaves the list just as
+     * stale as before, so the cooldown has to be measured from the attempt or a
+     * resumed app would immediately try again. It is advanced before [onRefresh]
+     * runs for the same reason.
+     */
+    private var lastAttemptAtMillis = 0L
 
     private var job: Job? = null
 
@@ -108,7 +144,7 @@ class ListFreshnessWatch(
             // including "Always" is overdue, which would fire a second fetch on
             // top of the one `init` already has in flight.
             if (loadedAt != 0L && isRefreshDue(nowMillis(), loadedAt, interval())) {
-                onRefresh()
+                fire(gesture = false)
             }
 
             while (isActive) {
@@ -138,10 +174,39 @@ class ListFreshnessWatch(
                 // delay with `advanceTimeBy` while `nowMillis` stays pinned, and
                 // the wait is the only value that carries the schedule).
                 if (lastLoadedAtMillis == loaded) {
-                    onRefresh()
+                    // The loop's own delay is already minutes long, so the short
+                    // trigger cooldown would only re-check a schedule that has
+                    // just proved itself. It applies to resumes and gestures.
+                    fire(gesture = false, enforceCooldown = false)
                 }
             }
         }
+    }
+
+    /**
+     * Runs a fetch the reader explicitly asked for, unless one just ran.
+     *
+     * Returns whether it fired, so a caller that also owns its own loading state
+     * can decide whether to set it. The automatic path is [start] and the loop;
+     * this is the only entry point for a gesture, which is what makes the two
+     * cooldowns distinguishable.
+     */
+    fun requestManualRefresh(): Boolean = fire(gesture = true)
+
+    /**
+     * Fires [onRefresh] if the cooldown for this kind of attempt has elapsed.
+     *
+     * The timestamp moves before the callback, not after: a fetch that throws
+     * still counts as an attempt, and the next trigger must not be admitted
+     * because the failure forgot to stamp the clock.
+     */
+    private fun fire(gesture: Boolean, enforceCooldown: Boolean = true): Boolean {
+        val cooldown = if (gesture) GESTURE_COOLDOWN_MILLIS else AUTO_COOLDOWN_MILLIS
+        val now = nowMillis()
+        if (enforceCooldown && now - lastAttemptAtMillis < cooldown) return false
+        lastAttemptAtMillis = now
+        onRefresh(gesture)
+        return true
     }
 
     /** Stops the timer. Safe to call when not started. */

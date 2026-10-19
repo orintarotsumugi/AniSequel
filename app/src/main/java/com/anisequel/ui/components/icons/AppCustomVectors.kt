@@ -496,4 +496,154 @@ object AppCustomVectors {
             }
         }.build()
     }
+
+    /**
+     * The comment composer's bold control.
+     *
+     * A drawn `B` rather than the Material `FormatBold` glyph, which lives in
+     * `material-icons-extended` and would put a font-scale-dependent icon font
+     * behind one button in a toolbar of hand-authored vectors.
+     */
+    val TextBold: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TextBold",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // Stem.
+                moveTo(8f, 5f)
+                lineTo(8f, 19f)
+
+                // Upper bowl, open at the stem.
+                moveTo(8f, 5f)
+                lineTo(12.5f, 5f)
+                curveTo(15.8f, 5f, 17.2f, 6.6f, 17.2f, 8.3f)
+                curveTo(17.2f, 10f, 15.8f, 11.7f, 12.5f, 11.7f)
+                lineTo(8f, 11.7f)
+
+                // Lower bowl, which is the wider half of the letter.
+                moveTo(8f, 11.7f)
+                lineTo(13.3f, 11.7f)
+                curveTo(17.2f, 11.7f, 18.4f, 13.7f, 18.4f, 15.3f)
+                curveTo(18.4f, 17.2f, 17.2f, 19f, 13.3f, 19f)
+                lineTo(8f, 19f)
+            }
+        }.build()
+    }
+
+    /**
+     * The composer's italic control: the slanted `I` the format bar expects,
+     * with its serifs drawn as two short bars rather than a font glyph.
+     */
+    val TextItalic: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TextItalic",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(10f, 5f)
+                lineTo(17.5f, 5f)
+                moveTo(6.5f, 19f)
+                lineTo(14f, 19f)
+                moveTo(14.5f, 5f)
+                lineTo(9.5f, 19f)
+            }
+        }.build()
+    }
+
+    /**
+     * The composer's spoiler control.
+     *
+     * A bordered block with a line struck through it, which is the shape
+     * AniList's own editor uses: the button writes `~!text!~`, and the glyph has
+     * to say "this text will be hidden" without being a padlock, which the app
+     * already uses for the app lock in Settings.
+     */
+    val TextSpoiler: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TextSpoiler",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(4.5f, 7f)
+                lineTo(19.5f, 7f)
+                lineTo(19.5f, 17f)
+                lineTo(4.5f, 17f)
+                close()
+
+                moveTo(5.5f, 18.5f)
+                lineTo(18.5f, 5.5f)
+            }
+        }.build()
+    }
+
+    /**
+     * The composer's attach-image control.
+     *
+     * A picture frame rather than a paperclip: AniList has no upload endpoint,
+     * so this button inserts an image URL, and a clip that cannot attach a file
+     * would be the wrong promise.
+     */
+    val AttachImage: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "AttachImage",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // Frame.
+                moveTo(4f, 5f)
+                lineTo(20f, 5f)
+                lineTo(20f, 19f)
+                lineTo(4f, 19f)
+                close()
+
+                // Sun, drawn as four arcs so it is stroke-only like the frame.
+                moveTo(8.4f, 8.8f)
+                curveTo(8.4f, 7.8f, 9.2f, 7f, 10.2f, 7f)
+                curveTo(11.2f, 7f, 12f, 7.8f, 12f, 8.8f)
+                curveTo(12f, 9.8f, 11.2f, 10.6f, 10.2f, 10.6f)
+                curveTo(9.2f, 10.6f, 8.4f, 9.8f, 8.4f, 8.8f)
+                close()
+
+                // Two peaks, clipped by the frame's lower edge.
+                moveTo(4.5f, 16.8f)
+                lineTo(9.6f, 11.7f)
+                lineTo(13.2f, 15.3f)
+                lineTo(15.8f, 12.7f)
+                lineTo(19.5f, 16.4f)
+            }
+        }.build()
+    }
 }

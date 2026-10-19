@@ -351,6 +351,78 @@ class ListFreshnessWatchTest {
         watch.stop()
     }
 
+    /**
+     * A gesture may run five seconds after the last one, and no sooner.
+     *
+     * The double pull and the accidental second tap are what this absorbs. It
+     * must not use the automatic fifteen-second floor: the reader has explicitly
+     * said the list is old, and making them wait three times as long is the
+     * wrong way round.
+     */
+    @Test
+    fun `a manual refresh has its own five-second cooldown`() = runTest {
+        var now = base
+        var refreshes = 0
+        lateinit var watch: ListFreshnessWatch
+        watch = ListFreshnessWatch(
+            scope = backgroundScope,
+            interval = { RefreshInterval.THIRTY_MINUTES },
+            onRefresh = { refreshes++ },
+            nowMillis = { now }
+        )
+
+        assertTrue(watch.requestManualRefresh())
+        assertEquals(1, refreshes)
+
+        now += 4_999L
+        assertFalse("inside the gesture window the second pull is ignored", watch.requestManualRefresh())
+        assertEquals(1, refreshes)
+
+        now += 1L
+        assertTrue("on the boundary it is allowed", watch.requestManualRefresh())
+        assertEquals(2, refreshes)
+    }
+
+    /**
+     * An automatic check after a failed manual one waits fifteen seconds.
+     *
+     * The list is still overdue, so without a cooldown the next resume would try
+     * immediately - spending a request to learn what the failed attempt just
+     * learned. Fifteen is deliberately longer than the gesture floor because
+     * nobody asked for this attempt.
+     */
+    @Test
+    fun `a resume right after a failed gesture waits for the automatic floor`() = runTest {
+        var now = base
+        var refreshes = 0
+        lateinit var watch: ListFreshnessWatch
+        watch = ListFreshnessWatch(
+            scope = backgroundScope,
+            interval = { RefreshInterval.THIRTY_MINUTES },
+            // Deliberately does not markLoaded: the gesture failed.
+            onRefresh = { refreshes++ },
+            nowMillis = { now }
+        )
+        watch.markLoaded(base - minutes(60))
+
+        now = base
+        assertTrue(watch.requestManualRefresh())
+        assertEquals(1, refreshes)
+        watch.stop()
+
+        now = base + 14_000L
+        watch.start()
+        runCurrent()
+        assertEquals("14 seconds after a failed attempt is still inside the auto floor", 1, refreshes)
+        watch.stop()
+
+        now = base + 16_000L
+        watch.start()
+        runCurrent()
+        assertEquals("past 15 seconds the overdue list is tried again", 2, refreshes)
+        watch.stop()
+    }
+
     @Test
     fun `stopping is safe when nothing was ever started`() = runTest {
         lateinit var watch: ListFreshnessWatch

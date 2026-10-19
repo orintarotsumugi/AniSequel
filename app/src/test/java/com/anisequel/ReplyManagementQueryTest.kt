@@ -242,11 +242,15 @@ class ReplyManagementQueryTest {
 
         assertTrue(
             "the scroll effect is keyed on the recorded id:\n$sheet",
-            sheet.contains("LaunchedEffect(state.postedReplyId)")
+            sheet.contains("LaunchedEffect(state.postedReplyId, composing)")
         )
         assertTrue(
-            "and refuses to move for a thread that merely loaded:\n$sheet",
-            sheet.contains("state.postedReplyId == null || state.replies.isEmpty()")
+            "and waits for the editor to close before it moves:\n$sheet",
+            sheet.contains("if (composing) return@LaunchedEffect")
+        )
+        assertTrue(
+            "it looks the posted comment up by id, never by list position:\n$sheet",
+            sheet.contains("state.replies.indexOfFirst { it.id == posted }")
         )
         assertTrue(
             "the store is what records it, on the post that succeeded:\n$store",

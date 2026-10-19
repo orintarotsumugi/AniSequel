@@ -4,6 +4,31 @@ import com.anisequel.data.model.MediaCoverKey
 import java.util.Locale
 
 /**
+ * The largest a markdown image may be drawn, in dp.
+ *
+ * AniList's own image syntax carries a pixel size (`img2147483647(url)`), and a
+ * malformed or hostile one overflows Compose's constraints during layout - a
+ * crash on any public bio or synopsis that contains it, not a rendering quirk.
+ * The caps are generous enough that no real artwork is clipped: 3000dp is wider
+ * than any phone, and 800dp is taller than a full-screen image on one. The
+ * height cap matters because the width alone does not bound a very tall image
+ * whose aspect ratio is unknown until it decodes.
+ */
+const val MAX_RICH_IMAGE_WIDTH_DP = 3000
+const val MAX_RICH_IMAGE_HEIGHT_DP = 800
+
+/**
+ * The dp width an `img220(...)` / `img50%(...)` size asks for, clamped.
+ *
+ * A percentage is handled by [MarkdownNode.ImageBlock]'s renderer, not here;
+ * this answers only the absolute form. A malformed or
+ * absurd number clamps to the ceiling instead of being passed into a layout
+ * constraint, and a size-less image answers null (the renderer fills width).
+ */
+internal fun clampedImageWidthDp(width: String?): Int? =
+    width?.toIntOrNull()?.coerceIn(0, MAX_RICH_IMAGE_WIDTH_DP)
+
+/**
  * Structural AST nodes produced by [AniListMarkdownParser].
  */
 sealed interface MarkdownNode {
