@@ -213,6 +213,48 @@ class CommentManagementTest {
         assertNull(viewModel.comments.value!!.action)
     }
 
+    @Test
+    fun `a thread that repeats a reply id keeps one row`() = runTest(testDispatcher) {
+        // The sheet keys its LazyColumn by reply id. Compose treats a repeated
+        // key as a fatal `IllegalArgumentException` rather than as a second row,
+        // so a response that repeats an id used to crash the thread instead of
+        // showing it twice. The first occurrence is the one the conversation
+        // order names, and it is the one kept.
+        val repository = FakeCommentRepository(
+            replies = listOf(
+                mineReply(id = 5, text = "first"),
+                mineReply(id = 5, text = "second")
+            )
+        )
+        val viewModel = buildViewModel(repository)
+        openThread(viewModel)
+
+        val replies = viewModel.comments.value!!.replies
+        assertEquals(1, replies.size)
+        assertEquals("first", replies.single().text)
+    }
+
+    @Test
+    fun `a posted reply echoing an existing id replaces it instead of duplicating`() =
+        runTest(testDispatcher) {
+            // The same crash from the other direction: the post response is the
+            // authoritative copy of a reply, so it replaces the entry rather than
+            // being appended beside it with the same key.
+            val repository = FakeCommentRepository(
+                replies = listOf(mineReply(id = 5, text = "existing")),
+                postResult = Result.success(ActivityReply(id = 5, text = "posted"))
+            )
+            val viewModel = buildViewModel(repository)
+            openThread(viewModel)
+
+            viewModel.postComment("posted")
+            advanceUntilIdle()
+
+            val replies = viewModel.comments.value!!.replies
+            assertEquals(1, replies.size)
+            assertEquals("posted", replies.single().text)
+        }
+
     /** The id the manage tests sign in as; [mineReply] authors their comments. */
     private val viewerId = 7
 

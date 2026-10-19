@@ -2,27 +2,12 @@ package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.domain.usecase.ContentLimits
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/**
- * The shortest comment AniList accepts.
- *
- * `SaveActivityReply`'s `text` is documented "Min: 2, Max: 8000", and the server
- * enforces both. The composer used to enable its button on `isNotBlank()`, so a
- * one-character comment - an emoji is often one code point - was accepted by the
- * field, sent, and refused by AniList with a validation error the sheet printed
- * as a post failure. The rule now lives here, one reading of the schema away
- * from the field that has to honour it, and both write paths through the store
- * check it.
- */
-internal const val MIN_ACTIVITY_REPLY_LENGTH = 2
-
-/** See [MIN_ACTIVITY_REPLY_LENGTH]. The field stops accepting text past this. */
-internal const val MAX_ACTIVITY_REPLY_LENGTH = 8000
 
 /**
  * One activity's comment thread, and the writes that act on it.
@@ -112,6 +97,16 @@ class CommentThreadStore(
     data class CommentsState(
         val activityId: Int,
         val isLoading: Boolean = false,
+        /**
+         * The thread, at most one entry per reply id.
+         *
+         * The sheet keys its `LazyColumn` by id, and Compose treats a repeated key
+         * as a hard `IllegalArgumentException` rather than as a duplicate row - the
+         * list crashes instead of drawing. So the list is assembled with uniqueness
+         * enforced here, where it has two sources: the fetch, and the reply a post
+         * appends. Those two are allowed to agree about an id, and `open` and
+         * `post` each make sure they cannot leave the state holding it twice.
+         */
         val replies: List<ActivityReply> = emptyList(),
         val loadError: String? = null,
         val isPosting: Boolean = false,
@@ -154,7 +149,14 @@ class CommentThreadStore(
             val current = _state.value?.takeIf { it.activityId == activityId } ?: return@launch
             result.fold(
                 onSuccess = { replies ->
-                    _state.value = current.copy(isLoading = false, replies = replies, loadError = null)
+                    _state.value = current.copy(
+                        isLoading = false,
+                        // First occurrence wins: the sheet draws one row per id, and
+                        // the server's order is the conversation's order - see the
+                        // unique-key note on [CommentsState.replies].
+                        replies = replies.distinctBy { it.id },
+                        loadError = null
+                    )
                 },
                 onFailure = { error ->
                     _state.value = current.copy(
@@ -175,8 +177,10 @@ class CommentThreadStore(
         if (isDemo) return
         val current = _state.value ?: return
         val trimmed = text.trim()
-        // The API's own floor, not a preference: see [MIN_ACTIVITY_REPLY_LENGTH].
-        if (trimmed.length < MIN_ACTIVITY_REPLY_LENGTH || current.isPosting) return
+        // The API's own window, not a preference: see [ContentLimits].
+        if (current.isPosting || ContentLimits.checkReply(trimmed) != ContentLimits.ReplyVerdict.Valid) {
+            return
+        }
 
         val activityId = current.activityId
         _state.value = current.copy(isPosting = true, postError = null)
@@ -188,7 +192,11 @@ class CommentThreadStore(
                     _state.value = latest.copy(
                         isPosting = false,
                         postError = null,
-                        replies = latest.replies + reply,
+                        // The posted reply moves to the end, and replaces an entry
+                        // with the same id rather than sitting beside it: the
+                        // server's copy is the authoritative one, and two rows keyed
+                        // by one id is the crash [CommentsState.replies] describes.
+                        replies = latest.replies.filterNot { it.id == reply.id } + reply,
                         // Recorded so the sheet can bring the new comment into
                         // view. See [CommentsState.postedReplyId].
                         postedReplyId = reply.id
@@ -301,7 +309,7 @@ class CommentThreadStore(
         val action = current.action ?: return
         _state.value = current.copy(
             action = action.copy(
-                draft = text.take(MAX_ACTIVITY_REPLY_LENGTH),
+                draft = ContentLimits.clipReply(text),
                 error = null
             )
         )
@@ -313,7 +321,7 @@ class CommentThreadStore(
         val action = current.action ?: return
         if (action.mode != ReplyAction.Mode.EDIT || action.isBusy) return
         val text = action.draft.trim()
-        if (text.length < MIN_ACTIVITY_REPLY_LENGTH) return
+        if (ContentLimits.checkReply(text) != ContentLimits.ReplyVerdict.Valid) return
         val reply = current.replies.firstOrNull { it.id == action.replyId } ?: return
 
         _state.value = current.copy(action = action.copy(isBusy = true, error = null))

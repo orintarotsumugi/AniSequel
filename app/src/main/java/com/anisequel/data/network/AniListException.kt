@@ -3,6 +3,8 @@ package com.anisequel.data.network
 import com.anisequel.data.model.AniListErrorEnvelope
 import com.anisequel.data.model.GraphQLError
 import com.squareup.moshi.Moshi
+import okhttp3.ResponseBody
+import okio.Buffer
 
 /**
  * Why a call to AniList failed, as something the UI can branch on.
@@ -54,6 +56,39 @@ class AniListException(
 ) : Exception(message, cause)
 
 private val errorEnvelopeMoshi: Moshi = Moshi.Builder().build()
+
+/**
+ * How much of an error body is ever read into memory.
+ *
+ * AniList's error envelope is a few hundred bytes. The cap is not about that
+ * answer - it is about every answer that is not one: a proxy's HTML error page,
+ * a misconfigured CDN, or a hostile response can be arbitrarily large, and
+ * `ResponseBody.string()` reads all of it before the classifier gets a chance to
+ * decide it is not JSON. On a device already low on memory during a failed
+ * request, that is how an error becomes a crash. Sixty-four kilobytes is far
+ * more than any real envelope and small enough to be free.
+ *
+ * A body larger than the cap is truncated, and the truncation makes it
+ * unparseable - which the classifier already treats as "no usable reason", the
+ * same as an absent body. That is the correct outcome: the HTTP status still
+ * classifies the failure, and the body was never trusted to begin with.
+ */
+internal const val MAX_ERROR_BODY_BYTES = 64 * 1024
+
+/**
+ * Reads at most [MAX_ERROR_BODY_BYTES] of this body as text.
+ *
+ * `source.read(buffer, limit)` reads up to the limit rather than "all but the
+ * last byte", so a 10 MB body costs 64 KB of heap and then stops. Every failure
+ * here is null: an error body that cannot be read is not a reason to replace
+ * the failure the caller already has.
+ */
+internal fun ResponseBody.readCapped(maxBytes: Int = MAX_ERROR_BODY_BYTES): String? =
+    runCatching {
+        val buffer = Buffer()
+        source().read(buffer, maxBytes.toLong())
+        buffer.readUtf8()
+    }.getOrNull()
 
 /**
  * Reads the `errors` array out of an AniList error response body.

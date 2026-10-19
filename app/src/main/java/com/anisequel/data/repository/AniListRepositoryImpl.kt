@@ -25,6 +25,7 @@ import com.anisequel.data.network.AniListException
 import com.anisequel.data.network.aniListHttpError
 import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.network.parseAniListErrorBody
+import com.anisequel.data.network.readCapped
 import com.anisequel.data.network.RequestCoalescer
 import com.anisequel.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
@@ -196,18 +197,40 @@ class AniListRepositoryImpl(
         const val VIEWER_PROFILE_WINDOW_MILLIS = 30 * 60 * 1000L
 
         /**
-         * How long a title's fetched facts may be reused.
+         * How long a title's fetched facts may be reused, by the title's own
+         * release status.
          *
-         * A day, because what the detail query buys - the synopsis, the cast, the
-         * studios, the release year, the relations - changes on the scale of
-         * announcements rather than minutes, and re-buying it on every launch
-         * spends the rate limit on an answer that has not moved. A day is also
-         * short enough that the parts that *do* move (the next airing episode,
-         * a score) correct themselves the next day, and short enough that a
-         * synopsis correction or a newly announced sequel is seen while anyone
-         * still remembers the title.
+         * A flat window was wrong in both directions. A finished show's synopsis,
+         * cast and studios do not change, yet it was re-bought every day; a
+         * currently-airing show's next-episode countdown and score move hourly,
+         * yet it was held for the same day. The status is already in the detail
+         * the app fetched, so it can choose:
+         *
+         *  - **RELEASING** (3h): the countdown and score are moving now.
+         *  - **NOT_YET_RELEASED** (6h): announcements and air dates change on
+         *    the scale of a day, not a week.
+         *  - **FINISHED / CANCELLED** (7d): the facts are settled.
+         *  - everything else, including an absent status: a day, as before.
+         *
+         * The airing countdown is a second, independent override: see
+         * [isDetailStale]. A cached `nextAiringEpisode` whose `airingAt` has
+         * passed is provably out of date regardless of how young the record is,
+         * because it describes an episode that has now aired.
          */
-        const val DETAIL_SNAPSHOT_WINDOW_MILLIS = 24 * 60 * 60 * 1000L
+        const val DETAIL_RELEASING_WINDOW_MILLIS = 3 * 60 * 60 * 1000L
+        const val DETAIL_NOT_YET_RELEASED_WINDOW_MILLIS = 6 * 60 * 60 * 1000L
+        const val DETAIL_FINISHED_WINDOW_MILLIS = 7 * 24 * 60 * 60 * 1000L
+        const val DETAIL_DEFAULT_WINDOW_MILLIS = 24 * 60 * 60 * 1000L
+
+        /**
+         * The longest window any status may have.
+         *
+         * The disk read uses this as its TTL because the status - and therefore
+         * the real window - is inside the payload. Reading with the longest
+         * window and then checking [isDetailStale] against the parsed node keeps
+         * the policy in one place instead of asking the store to parse first.
+         */
+        const val DETAIL_MAX_WINDOW_MILLIS = DETAIL_FINISHED_WINDOW_MILLIS
 
         /**
          * A [MediaCoverKey] as the store's flat string.
@@ -253,7 +276,7 @@ class AniListRepositoryImpl(
      * disk tier this map lasted exactly as long as the process, so an entry could
      * not outlive the launch that fetched it; now that the same answer can be
      * read back tomorrow, the memory and the file have to agree on the window -
-     * see [DETAIL_SNAPSHOT_WINDOW_MILLIS].
+     * see [detailWindowMillis].
      */
     private val detailCache = ConcurrentHashMap<MediaCoverKey, CachedDetail>()
 
@@ -298,8 +321,7 @@ class AniListRepositoryImpl(
      * indefinitely, not just for the length of one request.
      *
      * Stamped because the disk tier can answer for a bio reopened tomorrow; see
-     * [DETAIL_SNAPSHOT_WINDOW_MILLIS] for the shared window and the same
-     * refuse-it-when-old rule.
+     * [detailWindowMillis] for the same refuse-it-when-old rule.
      */
     private val coverCache = ConcurrentHashMap<MediaCoverKey, CachedCover>()
 
@@ -587,6 +609,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null)
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -612,6 +635,7 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
 
@@ -628,8 +652,51 @@ class AniListRepositoryImpl(
 
         val epoch = listEpoch
         return fetchFullMediaListCollection(userId = null, userName = userName.trim())
+            .rejectUnexpectedEmpty(key)
             .onSuccess { if (epoch == listEpoch) storeList(key, it) }
     }
+
+    /**
+     * Refuses an empty list that would replace a populated one.
+     *
+     * AniList's throttling and its edge failures both answer a list query with
+     * a well-formed collection containing no entries. Storing that is how a 429
+     * becomes "the user deleted everything": the dashboard's snapshot is
+     * replaced by an empty account, every sequel disappears, and the next launch
+     * serves the emptiness from disk too. An empty answer is still a valid
+     * answer for an account that has never tracked anything, so it is only
+     * refused when this repository already holds a populated list under the same
+     * key - including an expired one, because expiry is a reason to re-fetch,
+     * not evidence that the list is empty.
+     *
+     * Only the list this process is *holding* counts. A disk snapshot is not
+     * proof: a fresh launch that is answered "empty" may be a reader who removed
+     * their last title, and that answer has to be allowed to land. What the
+     * guard is against is a throttled answer replacing a list the app is already
+     * reading in this session, and that is exactly the case a fresh launch is
+     * not in.
+     */
+    private suspend fun Result<MediaListCollection>.rejectUnexpectedEmpty(
+        key: String
+    ): Result<MediaListCollection> {
+        val response = getOrElse { return this }
+        if (!response.isEmptyCollection()) return this
+
+        val previous = listCache[key]?.collection ?: return this
+
+        if (previous.isEmptyCollection()) return this
+
+        return Result.failure(
+            AniListException(
+                kind = AniListErrorKind.UNKNOWN,
+                message = "AniList returned an empty list even though yours has entries. " +
+                    "Nothing was replaced - try again in a moment."
+            )
+        )
+    }
+
+    private fun MediaListCollection.isEmptyCollection(): Boolean =
+        lists.orEmpty().all { it.entries.isNullOrEmpty() }
 
     /**
      * Fetches complete MediaListCollection, supporting AniList chunking for large lists.
@@ -784,10 +851,10 @@ class AniListRepositoryImpl(
         }
     }
 
-    /** Memory half of [knownDetail], on the shared [DETAIL_SNAPSHOT_WINDOW_MILLIS] window. */
+    /** Memory half of [knownDetail], on the status-keyed window below. */
     private fun cachedDetail(key: MediaCoverKey): MediaNode? {
         val entry = detailCache[key] ?: return null
-        if (nowMillis() - entry.storedAtMillis > DETAIL_SNAPSHOT_WINDOW_MILLIS) {
+        if (isDetailStale(entry.node, entry.storedAtMillis)) {
             detailCache.remove(key)
             return null
         }
@@ -795,16 +862,52 @@ class AniListRepositoryImpl(
     }
 
     /**
+     * The window [node]'s own status earns, in milliseconds.
+     *
+     * `uppercase(Locale.ROOT)` rather than the device locale for the same reason
+     * the list cache key uses it: status names are API tokens, not display text,
+     * and a Turkish locale would turn `RELEASING`'s `I` into a dotless one.
+     */
+    private fun detailWindowMillis(node: MediaNode): Long =
+        when (node.status?.uppercase(Locale.ROOT)) {
+            "RELEASING" -> DETAIL_RELEASING_WINDOW_MILLIS
+            "NOT_YET_RELEASED" -> DETAIL_NOT_YET_RELEASED_WINDOW_MILLIS
+            "FINISHED", "CANCELLED" -> DETAIL_FINISHED_WINDOW_MILLIS
+            else -> DETAIL_DEFAULT_WINDOW_MILLIS
+        }
+
+    /**
+     * Whether a cached detail is stale, by either clock that applies.
+     *
+     * The age check is the status-keyed window. The countdown check is the one
+     * that cannot be expressed as a TTL: an episode that was an hour away when
+     * the record was written has aired since, so the record's "next episode" is
+     * already wrong even though its window has barely started. `airingAt` is
+     * seconds, the app's clock is milliseconds.
+     */
+    private fun isDetailStale(node: MediaNode, storedAtMillis: Long): Boolean {
+        if (nowMillis() - storedAtMillis > detailWindowMillis(node)) return true
+        val airingAtSeconds = node.nextAiringEpisode?.airingAt ?: return false
+        return nowMillis() >= airingAtSeconds * 1000L
+    }
+
+    /**
      * The detail held for [key]: memory first, then [snapshots].
      *
      * This is what makes reopening the app and tapping a title cost nothing. The
      * synopsis, cast, studios, release year and relations the sheet draws are
-     * already on disk, written by a launch that had them on screen. Past
-     * [DETAIL_SNAPSHOT_WINDOW_MILLIS] the fetch happens again, so the fields that
-     * do move - the airing countdown, a score, a relation announced this week -
-     * are refreshed, while the ones that do not are not re-bought on every launch
-     * in between. What comes off disk is passed through [repairedViewerEntry]
-     * first, because its viewer-scoped entry may be a day old.
+     * already on disk, written by a launch that had them on screen. Past the
+     * status-keyed window, or past the cached episode's airing time, the fetch
+     * happens again - so the fields that do move are refreshed while settled ones
+     * are not re-bought on every launch in between. What comes off disk is passed
+     * through [repairedViewerEntry] first, because its viewer-scoped entry may be
+     * old.
+     *
+     * The store is read with [DETAIL_MAX_WINDOW_MILLIS] and the real window is
+     * checked after parsing, because the status that chooses it lives inside the
+     * payload. A node past its own window is refused here rather than deleted:
+     * the next successful fetch overwrites it, and deleting would cost a file
+     * rewrite on a read.
      */
     private suspend fun knownDetail(key: MediaCoverKey): MediaNode? {
         cachedDetail(key)?.let { return it }
@@ -812,8 +915,9 @@ class AniListRepositoryImpl(
             kind = SNAPSHOT_DETAIL,
             key = snapshotKey(key),
             type = MediaNode::class.java,
-            ttlMillis = DETAIL_SNAPSHOT_WINDOW_MILLIS
+            ttlMillis = DETAIL_MAX_WINDOW_MILLIS
         ) ?: return null
+        if (isDetailStale(stored.value, stored.storedAtMillis)) return null
         val node = repairedViewerEntry(stored.value, key)
         detailCache[key] = CachedDetail(node, stored.storedAtMillis)
         return node
@@ -1602,7 +1706,7 @@ class AniListRepositoryImpl(
             retryAfterSeconds = response()?.headers()?.get("Retry-After")?.toIntOrNull(),
             cause = this,
             reportedError = parseAniListErrorBody(
-                runCatching { response()?.errorBody()?.string() }.getOrNull()
+                response()?.errorBody()?.readCapped()
             )?.errors?.firstOrNull()
         )
 }

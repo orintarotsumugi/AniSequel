@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import android.app.KeyguardManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -29,12 +30,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -42,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.RefreshInterval
@@ -58,6 +62,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun EditSettingsTab(
     authViewModel: AuthViewModel,
+    appLockPreferences: AppLockPreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
@@ -86,6 +91,8 @@ fun EditSettingsTab(
         QuickAddSectionCard(quickAddPreferences)
 
         ArrivingSectionCard(arrivingPreferences)
+
+        AppLockCard(appLockPreferences)
 
         SettingsButton(
             text = if (authState is AuthUiState.Authenticated) "Sign out" else "Sign in",
@@ -234,6 +241,45 @@ private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
                 scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
             },
             modifier = Modifier.testTag("compact_arriving_switch")
+        )
+    }
+}
+
+/**
+ * The optional app lock.
+ *
+ * The switch is disabled, with the reason in its subtitle, when the device has
+ * no secure lock. That is not a limitation invented here - the platform's
+ * credential prompt has nothing to ask for without one - and offering a switch
+ * that would silently fail open is the worse version of the same truth.
+ */
+@Composable
+private fun AppLockCard(appLockPreferences: AppLockPreferences) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val enabled by appLockPreferences.enabled.collectAsState(initial = false)
+    val deviceHasSecureLock = remember {
+        context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+    }
+
+    SectionCard(
+        title = "Privacy",
+        icon = AppVectorIcons.Privacy,
+        subtitle = "Who can see your list."
+    ) {
+        SwitchRow(
+            title = "Lock AniSequel",
+            subtitle = if (deviceHasSecureLock) {
+                "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
+            } else {
+                "Set a screen lock on this device first - there is nothing to ask for yet."
+            },
+            checked = enabled,
+            enabled = deviceHasSecureLock,
+            onCheckedChange = { locked ->
+                scope.launch { appLockPreferences.setEnabled(locked) }
+            },
+            modifier = Modifier.testTag("app_lock_switch")
         )
     }
 }
