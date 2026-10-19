@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
     private var appLockReady by mutableStateOf(false)
 
     /** True while the lock gate is drawn over the app. */
-    private var isLocked by mutableStateOf(false)
+    private var _isLocked by mutableStateOf(false)
+    val isLocked: Boolean get() = _isLocked
 
     /**
      * True while the system credential prompt is up.
@@ -326,7 +327,7 @@ class MainActivity : ComponentActivity() {
 
     /** Shows or clears the lock gate. */
     private fun setLocked(locked: Boolean) {
-        isLocked = locked
+        _isLocked = locked
         applySecureFlag()
     }
 
