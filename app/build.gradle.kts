@@ -7,7 +7,7 @@
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
 val BASELINE_VERSION_NAME = "1.3.7"
-val BASELINE_VERSION_CODE = 227
+val BASELINE_VERSION_CODE = 286
 
 plugins {
   alias(libs.plugins.android.application)
