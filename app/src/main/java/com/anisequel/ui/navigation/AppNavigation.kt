@@ -10,6 +10,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +26,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
@@ -38,8 +40,12 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
+import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardScreen
+import com.anisequel.ui.screens.library.LibraryScreen
 import com.anisequel.ui.screens.login.LoginScreen
+import com.anisequel.ui.screens.profile.ProfileLoadingView
+import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.screens.settings.SettingsScreen
 import com.anisequel.ui.screens.studio.StudioScreen
 import com.anisequel.ui.screens.tier.TierListScreen
@@ -49,6 +55,8 @@ import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.StudioViewModel
 import com.anisequel.ui.viewmodel.TierListViewModel
+import com.anisequel.ui.viewmodel.UserOverviewViewModel
+import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 
 object AppRoutes {
@@ -56,6 +64,7 @@ object AppRoutes {
     const val DASHBOARD = "dashboard"
     const val DASHBOARD_DEMO = "dashboard_demo"
     const val DASHBOARD_USER = "dashboard_user/{username}"
+    const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val TIER_LIST = "tier_list"
 
@@ -154,7 +163,7 @@ fun AppNavigation(
         com.anisequel.data.repository.QuickAddPreferences(context.applicationContext)
     }
 
-    // The Library tab's remembered media type. Application-scoped and built here
+    // The Library page's remembered media type. Application-scoped and built here
     // for the same reason as the rest: one DataStore reader per process, so the
     // tab cannot disagree with itself about what was last chosen.
     val libraryPreferences = remember(context) {
@@ -275,12 +284,34 @@ fun AppNavigation(
     val dashboardState by dashboardFlow.collectAsState()
     val signedInViewer = (dashboardState as? DashboardUiState.Success)?.viewer
 
+    // The Library page's remembered filters and grid position, resolved beside the
+    // other app-scoped stores rather than inside the route: the route is disposed
+    // when the reader switches tabs, and re-asking DataStore - or re-remembering the
+    // grid - on every return is the failure this page was fixed for when it was the
+    // profile's fourth tab (see `RememberedLibraryView`). One DataStore reader per
+    // process, as everywhere.
+    val librarySelection = rememberLibrarySelection(libraryPreferences)
+    val libraryGridState = rememberLazyGridState()
+    // The Library sheet's on-demand detail fetches, held here for the same reason:
+    // opening a title, leaving and coming back must not re-fetch a synopsis the store
+    // already has.
+    val libraryDetailHost = rememberMediaDetailHost(aniListRepository, isDemo = authenticated == null)
+
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
         when (authState) {
             is AuthUiState.Authenticated -> {
                 val currentRoute = navController.currentDestination?.route
-                if (currentRoute != AppRoutes.DASHBOARD && currentRoute != AppRoutes.SETTINGS) {
+                // The Library and the viewer's own profile join Settings here:
+                // an auth emission that lands while the reader is reading either
+                // of them is not a reason to yank them off it. The bar already
+                // shows the page as current, and Home is one tap away - the
+                // emission is about the session, not about where they were.
+                if (currentRoute != AppRoutes.DASHBOARD &&
+                    currentRoute != AppRoutes.LIBRARY &&
+                    currentRoute != ProfileRoutes.OWN_ROUTE &&
+                    currentRoute != AppRoutes.SETTINGS
+                ) {
                     navController.navigate(AppRoutes.DASHBOARD) {
                         popUpTo(AppRoutes.LOGIN) { inclusive = true }
                     }
@@ -294,9 +325,18 @@ fun AppNavigation(
                 // precisely the failure: an AniList 401 that lands while the list
                 // is open would drop the session and leave the ranking on screen
                 // with no dashboard, no sign-in and no way forward but Back.
+                //
+                // The Library and the viewer's own profile are the same failure
+                // now that the bar made them pages: both fall back to the demo
+                // fixture when the session goes (`isDemo`), so nothing would move
+                // the reader off them either - and a dropped session would leave
+                // them looking at demo data with no dashboard, no sign-in and no
+                // way forward but Back.
                 if (currentRoute == AppRoutes.DASHBOARD ||
                     currentRoute == AppRoutes.SETTINGS ||
-                    currentRoute == AppRoutes.TIER_LIST
+                    currentRoute == AppRoutes.TIER_LIST ||
+                    currentRoute == AppRoutes.LIBRARY ||
+                    currentRoute == ProfileRoutes.OWN_ROUTE
                 ) {
                     // `popUpTo(0)` is not a destination - it popped nothing and
                     // left the dashboard underneath the login screen, so signing
@@ -375,77 +415,147 @@ fun AppNavigation(
         com.anisequel.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
-        modifier = modifier,
-        enterTransition = {
-            (slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = RouteSlideSpring
-            ) + fadeIn(RouteFadeEffect))
-        },
-        exitTransition = {
-            (slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = RouteSlideSpring
-            ) + fadeOut(RouteFadeEffect))
-        },
-        popEnterTransition = {
-            (slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = RouteSlideSpring
-            ) + fadeIn(RouteFadeEffect))
-        },
-        popExitTransition = {
-            (slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = RouteSlideSpring
-            ) + fadeOut(RouteFadeEffect))
-        }
-    ) {
-        composable(AppRoutes.LOGIN) {
-            LoginScreen(
-                authViewModel = authViewModel,
-                authState = authState,
-                onStartDemo = {
-                    navController.navigate(AppRoutes.DASHBOARD_DEMO)
-                },
-                onScanUsername = { username ->
-                    navController.navigateSingle(AppRoutes.userDashboard(username))
-                }
-            )
-        }
-
-        composable(AppRoutes.DASHBOARD) {
-            // Null until a session exists; the route is only reachable once one
-            // does, and a brief hold beats rendering a dashboard that cannot
-            // possibly have a token behind it.
-            mainDashboardViewModel?.let { dashboardViewModel ->
-                DashboardScreen(
-                    dashboardViewModel = dashboardViewModel,
-                    quickAddPreferences = quickAddPreferences,
-                    // The cast and crew rows open a profile sheet in-app. Null on the
-                    // demo route below, which is why this is passed rather than read
-                    // off a ViewModel: the demo deliberately has none.
-                    repository = aniListRepository,
-                    onSignInAgain = authViewModel::logout,
-                    onOpenSettings = {
-                        navController.navigateSingle(AppRoutes.SETTINGS)
+    Box(modifier = modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = {
+                (slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = RouteSlideSpring
+                ) + fadeIn(RouteFadeEffect))
+            },
+            exitTransition = {
+                (slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = RouteSlideSpring
+                ) + fadeOut(RouteFadeEffect))
+            },
+            popEnterTransition = {
+                (slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = RouteSlideSpring
+                ) + fadeIn(RouteFadeEffect))
+            },
+            popExitTransition = {
+                (slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = RouteSlideSpring
+                ) + fadeOut(RouteFadeEffect))
+            }
+        ) {
+            composable(AppRoutes.LOGIN) {
+                LoginScreen(
+                    authViewModel = authViewModel,
+                    authState = authState,
+                    onStartDemo = {
+                        navController.navigate(AppRoutes.DASHBOARD_DEMO)
                     },
-                    // Guarded on the viewer existing rather than on the route:
-                    // the button only appears on a loaded dashboard, and an
-                    // avatar that can be tapped before there is a name to open
-                    // is a route that would have to look one up - which is the
-                    // request this wiring exists to avoid.
-                    onOpenProfile = { viewer ->
-                        if (viewer != null) {
-                            // Single-top: this is the button a thumb finds twice.
-                            // Each repeated tap used to push another identical
-                            // profile, so Back had to be pressed as many times as
-                            // the button had been pressed before the dashboard
-                            // came back.
-                            navController.navigateSingle(ProfileRoutes.OWN_DEFAULT)
+                    onScanUsername = { username ->
+                        navController.navigateSingle(AppRoutes.userDashboard(username))
+                    }
+                )
+            }
+
+            composable(AppRoutes.DASHBOARD) {
+                // Null until a session exists; the route is only reachable once one
+                // does, and a brief hold beats rendering a dashboard that cannot
+                // possibly have a token behind it.
+                mainDashboardViewModel?.let { dashboardViewModel ->
+                    DashboardScreen(
+                        dashboardViewModel = dashboardViewModel,
+                        quickAddPreferences = quickAddPreferences,
+                        // The cast and crew rows open a profile sheet in-app. Null on the
+                        // demo route below, which is why this is passed rather than read
+                        // off a ViewModel: the demo deliberately has none.
+                        repository = aniListRepository,
+                        onSignInAgain = authViewModel::logout,
+                        onOpenSettings = {
+                            navController.navigateSingle(AppRoutes.SETTINGS)
+                        },
+                        // Guarded on the viewer existing rather than on the route:
+                        // the button only appears on a loaded dashboard, and an
+                        // avatar that can be tapped before there is a name to open
+                        // is a route that would have to look one up - which is the
+                        // request this wiring exists to avoid.
+                        //
+                        // The same hop the main bar's Profile tab makes: both ways
+                        // into the viewer's own profile go through
+                        // `navigateToMainTab`, so the two cannot disagree about
+                        // the route - or about what Back does from it.
+                        onOpenProfile = { viewer ->
+                            if (viewer != null) {
+                                navController.navigateToMainTab(MainTab.PROFILE, signedIn = true)
+                            }
+                        },
+                        onOpenStudio = { studioId, studioName ->
+                            navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
+                        }
+                    )
+                }
+            }
+
+            composable(AppRoutes.DASHBOARD_DEMO) {
+                val demoViewModel: DashboardViewModel = viewModel(
+                    factory = DashboardViewModel.Factory(aniListRepository, isDemo = true)
+                )
+
+                DashboardScreen(
+                    dashboardViewModel = demoViewModel,
+                    quickAddPreferences = quickAddPreferences,
+                    onSignInAgain = {
+                        navController.navigate(AppRoutes.LOGIN) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    },
+                    onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
+                    onOpenStudio = { studioId, studioName ->
+                        navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
+                    },
+                    // The demo profile replaces the demo dashboard; see `navigateToMainTab`.
+                    onOpenProfile = {
+                        navController.navigateToMainTab(MainTab.PROFILE, signedIn = false)
+                    }
+                )
+            }
+
+            composable(
+                route = AppRoutes.DASHBOARD_USER,
+                arguments = listOf(navArgument("username") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val username = backStackEntry.arguments?.getString("username").orEmpty()
+
+                // Keyed on the username so switching profiles cannot reuse the
+                // ViewModel that is still holding the previous user's list.
+                val userViewModel: DashboardViewModel = viewModel(
+                    key = "dashboard_user_$username",
+                    factory = DashboardViewModel.Factory(
+                        aniListRepository = aniListRepository,
+                        targetUsername = username,
+                        hiddenSequelsPreferences = hiddenSequelsPreferences,
+                        refreshIntervalPreferences = refreshIntervalPreferences,
+                        arrivingPreferences = arrivingPreferences
+                    )
+                )
+
+                DashboardScreen(
+                    dashboardViewModel = userViewModel,
+                    quickAddPreferences = quickAddPreferences,
+                    repository = aniListRepository,
+                    onSignInAgain = {
+                        navController.navigate(AppRoutes.LOGIN) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    },
+                    onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
+                    // The scanned person, not the viewer. Passing the viewer's name
+                    // here would have opened the user's own profile from a dashboard
+                    // that is showing somebody else's list - which looks exactly
+                    // right on the top bar and is completely wrong.
+                    onOpenProfile = {
+                        if (username.isNotBlank()) {
+                            navController.navigateSingle(ProfileRoutes.byUsername(username))
                         }
                     },
                     onOpenStudio = { studioId, studioName ->
@@ -453,266 +563,275 @@ fun AppNavigation(
                     }
                 )
             }
-        }
 
-        composable(AppRoutes.DASHBOARD_DEMO) {
-            val demoViewModel: DashboardViewModel = viewModel(
-                factory = DashboardViewModel.Factory(aniListRepository, isDemo = true)
-            )
-
-            DashboardScreen(
-                dashboardViewModel = demoViewModel,
-                quickAddPreferences = quickAddPreferences,
-                onSignInAgain = {
-                    navController.navigate(AppRoutes.LOGIN) {
-                        popUpTo(navController.graph.id) { inclusive = true }
+            // The base route and the widget's `profile?tab=activity` are one
+            // destination: the query argument is optional, so every way in lands here
+            // and only the widget names a tab.
+            //
+            // `OWN_DEFAULT` (`profile?tab=`) rather than `OWN` is what the callers use,
+            // because a `composable()` route is matched *exactly* - `navigate("profile")`
+            // matches no route at all and silently does nothing. See `ProfileRoutes.OWN_DEFAULT`.
+            composable(
+                route = ProfileRoutes.OWN_ROUTE,
+                arguments = listOf(
+                    navArgument(ProfileRoutes.OWN_TAB_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     }
-                },
-                onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
-                onOpenStudio = { studioId, studioName ->
-                    navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
-                },
-                onOpenProfile = {
-                    navController.navigate(ProfileRoutes.OWN_DEFAULT) {
-                        // A demo profile is not on AniList, so the viewer can
-                        // change what it says from there and come back to
-                        // something that no longer matches. Replacing it rather
-                        // than stacking means Back lands on the demo dashboard
-                        // every time instead of on a stack of stale demos.
-                        popUpTo(AppRoutes.DASHBOARD_DEMO) { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        composable(
-            route = AppRoutes.DASHBOARD_USER,
-            arguments = listOf(navArgument("username") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val username = backStackEntry.arguments?.getString("username").orEmpty()
-
-            // Keyed on the username so switching profiles cannot reuse the
-            // ViewModel that is still holding the previous user's list.
-            val userViewModel: DashboardViewModel = viewModel(
-                key = "dashboard_user_$username",
-                factory = DashboardViewModel.Factory(
-                    aniListRepository = aniListRepository,
-                    targetUsername = username,
-                    hiddenSequelsPreferences = hiddenSequelsPreferences,
-                    refreshIntervalPreferences = refreshIntervalPreferences,
-                    arrivingPreferences = arrivingPreferences
                 )
-            )
+            ) { backStackEntry ->
+                // Read off the route rather than from a shared flag, so the request
+                // travels with the destination. A flag would outlive the visit and
+                // re-open the Activity tab on the *next* profile the user opened,
+                // from wherever they opened it.
+                val requestedTab = backStackEntry.arguments?.getString(ProfileRoutes.OWN_TAB_ARG)
 
-            DashboardScreen(
-                dashboardViewModel = userViewModel,
-                quickAddPreferences = quickAddPreferences,
-                repository = aniListRepository,
-                onSignInAgain = {
-                    navController.navigate(AppRoutes.LOGIN) {
-                        popUpTo(navController.graph.id) { inclusive = true }
-                    }
-                },
-                onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) },
-                // The scanned person, not the viewer. Passing the viewer's name
-                // here would have opened the user's own profile from a dashboard
-                // that is showing somebody else's list - which looks exactly
-                // right on the top bar and is completely wrong.
-                onOpenProfile = {
-                    if (username.isNotBlank()) {
-                        navController.navigateSingle(ProfileRoutes.byUsername(username))
-                    }
-                },
-                onOpenStudio = { studioId, studioName ->
-                    navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
-                }
-            )
-        }
-
-        // The base route and the widget's `profile?tab=activity` are one
-        // destination: the query argument is optional, so every way in lands here
-        // and only the widget names a tab.
-        //
-        // `OWN_DEFAULT` (`profile?tab=`) rather than `OWN` is what the callers use,
-        // because a `composable()` route is matched *exactly* - `navigate("profile")`
-        // matches no route at all and silently does nothing. See `ProfileRoutes.OWN_DEFAULT`.
-        composable(
-            route = ProfileRoutes.OWN_ROUTE,
-            arguments = listOf(
-                navArgument(ProfileRoutes.OWN_TAB_ARG) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            )
-        ) { backStackEntry ->
-            // Read off the route rather than from a shared flag, so the request
-            // travels with the destination. A flag would outlive the visit and
-            // re-open the Activity tab on the *next* profile the user opened,
-            // from wherever they opened it.
-            val requestedTab = backStackEntry.arguments?.getString(ProfileRoutes.OWN_TAB_ARG)
-
-            // `signedInViewer` is null until the dashboard has loaded, and a demo
-            // dashboard has no session ViewModel at all - hence the two sources
-            // rather than one. The button that reaches this route is on a loaded
-            // dashboard, so in practice this is never an empty string.
-            val username = signedInViewer?.name ?: DEMO_USERNAME
-            ProfileDestination(
-                repository = aniListRepository,
-                username = username,
-                userId = signedInViewer?.id,
-                // The viewer reading, which on this route is also the profile in
-                // view - keyed off the same source as `userId` so the two can
-                // never describe different people.
-                viewerId = signedInViewer?.id,
-                isDemo = signedInViewer == null,
-                navController = navController,
-                onSignInAgain = authViewModel::logout,
-                // This is the viewer's own profile, so the tier list - a ranking
-                // of their own saved work - belongs on its bar. The scanned and
-                // followed routes leave this defaulted off.
-                isOwnProfile = true,
-                libraryPreferences = libraryPreferences,
-                initialTab = if (requestedTab == ProfileRoutes.TAB_ACTIVITY) {
-                    ProfileRoutes.ACTIVITY_TAB_INDEX
-                } else {
-                    0
-                }
-            )
-        }
-
-        composable(
-            route = ProfileRoutes.BY_USERNAME,
-            arguments = ProfileUsernameArguments
-        ) { backStackEntry ->
-            val username = backStackEntry.arguments?.getString("username").orEmpty()
-            ProfileDestination(
-                repository = aniListRepository,
-                username = username,
-                // No id for a scanned profile: `getUserByName` has already been
-                // asked for it by the dashboard that led here, but its id is not
-                // carried in the route. `null` puts the list fetch on the by-name
-                // cache key, which is the same key that dashboard used - so it is
-                // still a cache hit rather than a second download.
-                userId = null,
-                // The reader's own id, which is a different person from the
-                // profile in view on this route: it is what the comment thread
-                // compares each author against to decide whose comments carry
-                // their manage control.
-                viewerId = signedInViewer?.id,
-                isDemo = false,
-                navController = navController,
-                onSignInAgain = authViewModel::logout,
-                libraryPreferences = libraryPreferences
-            )
-        }
-
-        composable(
-            route = ProfileRoutes.BY_ID,
-            arguments = ProfileIdArguments
-        ) { backStackEntry ->
-            val userId = backStackEntry.arguments?.getInt("userId") ?: 0
-            ProfileDestination(
-                repository = aniListRepository,
-                // The name is only a label at this point; the query is by id. The
-                // follower row carries both, so an empty name would be a bug in
-                // the caller rather than a real case, and it still fetches.
-                username = "",
-                userId = userId,
-                // See the by-name route: the reader and the profile being read
-                // are two different accounts here.
-                viewerId = signedInViewer?.id,
-                isDemo = false,
-                navController = navController,
-                onSignInAgain = authViewModel::logout,
-                libraryPreferences = libraryPreferences
-            )
-        }
-
-        composable(AppRoutes.TIER_LIST) {
-            // Built at the destination rather than hoisted beside the dashboard's,
-            // because unlike the dashboard it is not shared between two routes and
-            // the whole cost of holding it is one person's list: scoping it here
-            // means leaving the screen discards nothing, because everything worth
-            // keeping was already written to DataStore by the ViewModel.
-            val tierListViewModel: TierListViewModel = viewModel(
-                factory = TierListViewModel.Factory(
-                    preferences = tierListPreferences,
-                    // The tier list is a ranking of the *signed-in viewer's* own
-                    // library, so it needs their id and their session. Opening
-                    // somebody else's profile must never rank their titles into
-                    // the viewer's list.
-                    aniListRepository = aniListRepository,
+                // `signedInViewer` is null until the dashboard has loaded, and a demo
+                // dashboard has no session ViewModel at all - hence the two sources
+                // rather than one. The button that reaches this route is on a loaded
+                // dashboard, so in practice this is never an empty string.
+                val username = signedInViewer?.name ?: DEMO_USERNAME
+                ProfileDestination(
+                    repository = aniListRepository,
+                    username = username,
                     userId = signedInViewer?.id,
-                    isDemo = signedInViewer == null
-                )
-            )
-
-            // No Scaffold or TopAppBar here. Every other destination hands its
-            // screen a back lambda and lets the screen own its bar - Settings does
-            // it this way too - and a bar added around the screen instead would be
-            // a second one stacked on top of the tier list's own header.
-            TierListScreen(
-                tierListViewModel = tierListViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        // The studio page. Registered last because it is the youngest destination
-        // here, not because order means anything: `NavHost` matches on the route
-        // pattern.
-        composable(
-            route = StudioRoutes.ROUTE,
-            arguments = StudioArguments
-        ) { backStackEntry ->
-            val studioId = backStackEntry.arguments?.getInt(StudioRoutes.STUDIO_ID_ARG) ?: 0
-            val studioName = backStackEntry.arguments?.getString(StudioRoutes.NAME_ARG)
-
-            // Keyed on the studio so walking from one studio page to another cannot
-            // reuse the ViewModel still holding the first one's filmography - the
-            // same reason the scanned dashboards are keyed on their username.
-            val studioViewModel: StudioViewModel = viewModel(
-                key = "studio_$studioId",
-                factory = StudioViewModel.Factory(
-                    aniListRepository = aniListRepository,
-                    studioId = studioId
-                )
-            )
-
-            StudioScreen(
-                viewModel = studioViewModel,
-                studioId = studioId,
-                repository = aniListRepository,
-                initialName = studioName,
-                onNavigateBack = { navController.popBackStack() },
-                // Single-top: a studio page credits studios, so a reader can go
-                // down a chain of them, and the page they are already on must not
-                // be pushed again behind their own tap.
-                onOpenStudio = { id, name ->
-                    navController.navigateSingle(StudioRoutes.studio(id, name))
-                }
-            )
-        }
-
-        composable(AppRoutes.SETTINGS) {
-            val successState = dashboardState as? DashboardUiState.Success
-
-            SettingsScreen(
-                authViewModel = authViewModel,
-                themePreferences = themePreferences,
-                refreshIntervalPreferences = refreshIntervalPreferences,
-                arrivingPreferences = arrivingPreferences,
-                quickAddPreferences = quickAddPreferences,
-                changelogRepository = changelogRepository,
-                viewer = signedInViewer,
-                totalWatchedCount = successState?.totalWatchedCount,
-                totalMissedCount = successState?.totalMissedCount,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToLogin = {
-                    navController.navigate(AppRoutes.LOGIN) {
-                        popUpTo(navController.graph.id) { inclusive = true }
+                    // The viewer reading, which on this route is also the profile in
+                    // view - keyed off the same source as `userId` so the two can
+                    // never describe different people.
+                    viewerId = signedInViewer?.id,
+                    isDemo = signedInViewer == null,
+                    navController = navController,
+                    onSignInAgain = authViewModel::logout,
+                    // This is the viewer's own profile, so the tier list - a ranking
+                    // of their own saved work - belongs on its bar. The scanned and
+                    // followed routes leave this defaulted off.
+                    isOwnProfile = true,
+                    initialTab = if (requestedTab == ProfileRoutes.TAB_ACTIVITY) {
+                        ProfileRoutes.ACTIVITY_TAB_INDEX
+                    } else {
+                        0
                     }
+                )
+            }
+
+            composable(
+                route = ProfileRoutes.BY_USERNAME,
+                arguments = ProfileUsernameArguments
+            ) { backStackEntry ->
+                val username = backStackEntry.arguments?.getString("username").orEmpty()
+                ProfileDestination(
+                    repository = aniListRepository,
+                    username = username,
+                    // No id for a scanned profile: `getUserByName` has already been
+                    // asked for it by the dashboard that led here, but its id is not
+                    // carried in the route. `null` puts the list fetch on the by-name
+                    // cache key, which is the same key that dashboard used - so it is
+                    // still a cache hit rather than a second download.
+                    userId = null,
+                    // The reader's own id, which is a different person from the
+                    // profile in view on this route: it is what the comment thread
+                    // compares each author against to decide whose comments carry
+                    // their manage control.
+                    viewerId = signedInViewer?.id,
+                    isDemo = false,
+                    navController = navController,
+                    onSignInAgain = authViewModel::logout
+                )
+            }
+
+            composable(
+                route = ProfileRoutes.BY_ID,
+                arguments = ProfileIdArguments
+            ) { backStackEntry ->
+                val userId = backStackEntry.arguments?.getInt("userId") ?: 0
+                ProfileDestination(
+                    repository = aniListRepository,
+                    // The name is only a label at this point; the query is by id. The
+                    // follower row carries both, so an empty name would be a bug in
+                    // the caller rather than a real case, and it still fetches.
+                    username = "",
+                    userId = userId,
+                    // See the by-name route: the reader and the profile being read
+                    // are two different accounts here.
+                    viewerId = signedInViewer?.id,
+                    isDemo = false,
+                    navController = navController,
+                    onSignInAgain = authViewModel::logout
+                )
+            }
+
+            composable(AppRoutes.TIER_LIST) {
+                // Built at the destination rather than hoisted beside the dashboard's,
+                // because unlike the dashboard it is not shared between two routes and
+                // the whole cost of holding it is one person's list: scoping it here
+                // means leaving the screen discards nothing, because everything worth
+                // keeping was already written to DataStore by the ViewModel.
+                val tierListViewModel: TierListViewModel = viewModel(
+                    factory = TierListViewModel.Factory(
+                        preferences = tierListPreferences,
+                        // The tier list is a ranking of the *signed-in viewer's* own
+                        // library, so it needs their id and their session. Opening
+                        // somebody else's profile must never rank their titles into
+                        // the viewer's list.
+                        aniListRepository = aniListRepository,
+                        userId = signedInViewer?.id,
+                        isDemo = signedInViewer == null
+                    )
+                )
+
+                // No Scaffold or TopAppBar here. Every other destination hands its
+                // screen a back lambda and lets the screen own its bar - Settings does
+                // it this way too - and a bar added around the screen instead would be
+                // a second one stacked on top of the tier list's own header.
+                TierListScreen(
+                    tierListViewModel = tierListViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(AppRoutes.LIBRARY) {
+                // Whose library this is, which the page cannot work out for itself: a list
+                // belongs to one account, and which account is the reader's is only known
+                // once the dashboard's viewer query has answered - the same query the bar
+                // is drawn over from the first frame of a cold start.
+                //
+                // So while a session exists and that answer has not arrived, the route
+                // draws the dashboard's own waiting and failure states and builds no
+                // ViewModel. The alternative is the demo fallback the profile route uses,
+                // and it is wrong here in a way it is not there: the profile route is only
+                // reachable once the dashboard has loaded enough to draw the avatar that
+                // opens it, while the bar is drawn over the dashboard's own loading state.
+                // A tap in that window would build the ViewModel below around the demo
+                // account and then - because its key is the page rather than the person,
+                // which is what lets it outlive a tab switch - keep serving that stranger's
+                // library on this page for the rest of the session.
+                val viewerState = dashboardState
+                if (signedInViewer == null && authenticated != null) {
+                    if (viewerState is DashboardUiState.Error) {
+                        // The account query is what failed, so its answer is this page's
+                        // answer: retrying it here is a real retry, and a dead session
+                        // offers the same way back rather than a button that cannot work.
+                        DashboardErrorView(
+                            state = viewerState,
+                            onRetry = { mainDashboardViewModel?.loadData() },
+                            onSignInAgain = authViewModel::logout
+                        )
+                    } else {
+                        ProfileLoadingView(message = "Connecting to AniList...")
+                    }
+                    return@composable
                 }
+
+                // Built at the destination: the first visit loads it, and switching away
+                // saves the state with the entry (`navigateToMainTab`) rather than throwing
+                // the list away.
+                val libraryViewModel: UserOverviewViewModel = viewModel(
+                    key = "library_overview",
+                    factory = UserOverviewViewModel.Factory(
+                        aniListRepository = aniListRepository,
+                        // The viewer's own list - the same id the dashboard already fetched
+                        // under, which is what makes this the cheapest query in the app
+                        // rather than a second download of its most expensive one.
+                        userId = signedInViewer?.id,
+                        username = signedInViewer?.name ?: DEMO_USERNAME,
+                        // The session, not the loaded viewer: the window where the two
+                        // disagree is the branch above, so by here this is the demo app or
+                        // a viewer who has arrived.
+                        isDemo = authenticated == null
+                    )
+                )
+
+                LibraryScreen(
+                    repository = aniListRepository,
+                    overviewViewModel = libraryViewModel,
+                    detailHost = libraryDetailHost,
+                    remembered = librarySelection,
+                    gridState = libraryGridState,
+                    onOpenProfile = { navController.navigateToMainTab(MainTab.PROFILE, signedIn = authenticated != null) },
+                    onOpenTierList = { navController.navigateSingle(AppRoutes.TIER_LIST) },
+                    onOpenStudio = { studioId, studioName ->
+                        navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
+                    },
+                    onSignInAgain = authViewModel::logout
+                )
+            }
+
+            // The studio page. Registered last because it is the youngest destination
+            // here, not because order means anything: `NavHost` matches on the route
+            // pattern.
+            composable(
+                route = StudioRoutes.ROUTE,
+                arguments = StudioArguments
+            ) { backStackEntry ->
+                val studioId = backStackEntry.arguments?.getInt(StudioRoutes.STUDIO_ID_ARG) ?: 0
+                val studioName = backStackEntry.arguments?.getString(StudioRoutes.NAME_ARG)
+
+                // Keyed on the studio so walking from one studio page to another cannot
+                // reuse the ViewModel still holding the first one's filmography - the
+                // same reason the scanned dashboards are keyed on their username.
+                val studioViewModel: StudioViewModel = viewModel(
+                    key = "studio_$studioId",
+                    factory = StudioViewModel.Factory(
+                        aniListRepository = aniListRepository,
+                        studioId = studioId
+                    )
+                )
+
+                StudioScreen(
+                    viewModel = studioViewModel,
+                    studioId = studioId,
+                    repository = aniListRepository,
+                    initialName = studioName,
+                    onNavigateBack = { navController.popBackStack() },
+                    // Single-top: a studio page credits studios, so a reader can go
+                    // down a chain of them, and the page they are already on must not
+                    // be pushed again behind their own tap.
+                    onOpenStudio = { id, name ->
+                        navController.navigateSingle(StudioRoutes.studio(id, name))
+                    }
+                )
+            }
+
+            composable(AppRoutes.SETTINGS) {
+                val successState = dashboardState as? DashboardUiState.Success
+
+                SettingsScreen(
+                    authViewModel = authViewModel,
+                    themePreferences = themePreferences,
+                    refreshIntervalPreferences = refreshIntervalPreferences,
+                    arrivingPreferences = arrivingPreferences,
+                    quickAddPreferences = quickAddPreferences,
+                    changelogRepository = changelogRepository,
+                    viewer = signedInViewer,
+                    totalWatchedCount = successState?.totalWatchedCount,
+                    totalMissedCount = successState?.totalMissedCount,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToLogin = {
+                        navController.navigate(AppRoutes.LOGIN) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    }
+                )
+            }
+        }
+
+        // The bar floats over whichever main page is on screen rather than living
+        // inside a route: a screen cannot draw chrome that outlives it, and the pages
+        // the bar switches between should not each have to remember to draw it.
+        // `mainTabForRoute` is the whole visibility rule - null means this is a screen
+        // pushed from a tab (Settings, the tier list, a studio, somebody else's
+        // profile) and the bar is not drawn.
+        val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+        val currentTab = mainTabForRoute(currentRoute)
+        if (currentTab != null) {
+            MainBar(
+                selected = currentTab,
+                // The largest the viewer's avatar has; the bar falls back to a glyph
+                // while it is still unknown.
+                profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
+                onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = authenticated != null) },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }

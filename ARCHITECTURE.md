@@ -264,7 +264,7 @@ private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> get() =
 #### Screen & Component Breakdown
 - **`DashboardScreen`**: Primary feed. Features header profile summary, search bar, quick filter chips, stats banner, arriving sequels section, missed sequels list/grid, and bottom sheets (`SequelDetailSheet`, `FilterSortSheet`).
 - **`LoginScreen`**: Multi-auth entry point supporting OAuth2 PKCE login, public username scanning, and instant Demo mode.
-- **`UserProfileScreen`**: Profile hub containing five tabs: **Home** (identity, bio & pinned favourites), **Activity** (timeline & heatmap), **Stats** (charts & genre breakdown), **Library** (poster grid with per-status counts, reusing the list Stats already forced) and **Social** (followers/following). The tab bar and the `when` that renders them read one `NavigationDestination` list, so they cannot disagree.
+- **`UserProfileScreen`**: Profile hub containing four tabs: **Home** (identity, bio & pinned favourites), **Activity** (timeline & heatmap), **Stats** (charts & genre breakdown) and **Social** (followers/following). The tab bar and the `when` that renders them read one `NavigationDestination` list, so they cannot disagree. The tab row sits under the top bar; the bottom edge belongs to the app's main bar, which is drawn over this screen by `AppNavigation` and carries the fifth destination the profile used to have - the Library.
 - **`SettingsScreen`**: Configuration hub for themes, palettes, refresh intervals, changelog view, and manual/auto app update management.
 - **`TierListScreen`**: The tier list destination, and the host that chooses between its two screens: `TierLibraryScreen` when no list is open (new list, carry on with the last one, rename, delete) and `TierBoardScreen` when one is. The board's arrangement, geometry and gestures live in `TierBoard.kt` and its pure helpers in `TierBoardLogic.kt`; the sheets are in `TierPlacementSheets.kt`. One route and one piece of state (`opened == null`) decide which screen is up, so the back gesture and the bar's arrow cannot disagree.
 
@@ -306,7 +306,7 @@ private fun recomputeDashboardState() {
 
 The profile screen is built from two requests: the overview (`GET_USER_OVERVIEW`) and the media
 list (`MediaListCollection`, one request per 500 entries, chunk-merged). Only three of the Stats
-tab's charts and the Library tab read the second, so the two are no longer awaited together:
+tab's charts and the Library page read the second, so the two are no longer awaited together:
 
 ```kotlin
 val overview = overviewDeferred.await().getOrElse { listDeferred.cancel(); … }

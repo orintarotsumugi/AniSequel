@@ -31,9 +31,9 @@ import kotlinx.coroutines.launch
  *
  * AniList returns a list per *status group*, and a custom list can overlap
  * the standard ones, so the same anime can arrive more than once - across
- * *different* groups too. The Library tab is a `LazyColumn` keyed on the media
- * id, and a repeated key throws `IllegalArgumentException` while it lays out,
- * so this is a crash guard rather than tidying.
+ * *different* groups too. The Library grid is keyed on the media id, and a
+ * repeated key throws `IllegalArgumentException` while it lays out, so this is a
+ * crash guard rather than tidying.
  */
 private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntryItem> =
     collection?.lists
@@ -42,7 +42,9 @@ private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntr
         .orEmpty()
 
 /**
- * State holder for the AniList profile screen's Home, Stats and Library tabs.
+ * State holder for the AniList profile screen's Home and Stats tabs - and for the
+ * Library page, which used to be the profile's fourth tab and now hangs off the
+ * app's main bar.
  *
  * ## Two requests, and why the second one is nearly free
  *
@@ -60,12 +62,12 @@ private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntr
  * query in the app - multi-megabyte, and one of AniList's ~30 requests a minute -
  * to recount what was already in memory.
  *
- * ## Why the manga half of the Library tab is not fetched here
+ * ## Why the manga half of the Library page is not fetched here
  *
  * The anime list is forced on every profile open for the Stats tallies above. The
  * manga list is needed by none of that, and AniList is currently degraded to 30
  * requests per minute, so it is fetched on demand - the first time somebody
- * filters the Library tab to manga - and then cached by the repository like every
+ * filters the Library page to manga - and then cached by the repository like every
  * other list.
  */
 class UserOverviewViewModel(
@@ -156,7 +158,7 @@ class UserOverviewViewModel(
     private var coverJob: Job? = null
 
     /**
-     * The manga half of the Library tab, loaded only on demand.
+     * The manga half of the Library page, loaded only on demand.
      *
      * Null until [loadMangaLibrary] has been called and it has not failed; an
      * empty list afterwards is a real answer ("this person tracks no manga") and
@@ -174,7 +176,7 @@ class UserOverviewViewModel(
     /**
      * Fetches the manga list, once.
      *
-     * Guarded rather than idempotent because the Library tab calls it from a
+     * Guarded rather than idempotent because the Library page calls it from a
      * filter chip that a tapper will hit repeatedly: a re-entry that refetched
      * would spend a request per tap, against an API AniList currently holds at
      * 30 requests a minute, and the repository's cache would have prevented the
@@ -215,12 +217,12 @@ class UserOverviewViewModel(
             // with a name and a "7 Watching" is worse than a spinner. That
             // reasoning cost the reader the whole chunk-merged list download
             // before seeing anything: the overview is one request, the list is one
-            // per 500 entries, and only two of the profile's five tabs read it.
-            // The overview is published on its own below and the list is merged in
-            // when it lands, so the bio and the favourites are on screen while the
-            // tallies are still being counted. `isLibraryLoading` is what keeps the
-            // two tabs that need the list from showing zeroes as if they were
-            // answers.
+            // per 500 entries, and only the Stats tab reads it for the profile - the
+            // Library page is the other reader of the same list. The overview is
+            // published on its own below and the list is merged in when it lands, so
+            // the bio and the favourites are on screen while the tallies are still
+            // being counted. `isLibraryLoading` is what keeps the two readers from
+            // showing zeroes as if they were answers.
             val overviewDeferred = async {
                 if (isDemo) {
                     Result.success(aniListRepository.getDemoUserOverview())
@@ -242,8 +244,8 @@ class UserOverviewViewModel(
             }
 
             // Published before the list is awaited, and deliberately so: see the
-            // note above. `isLibraryLoading` is the flag that stops the Stats and
-            // Library tabs from rendering "0 completed" for the length of the
+            // note above. `isLibraryLoading` is the flag that stops the Stats tab and
+            // the Library page from rendering "0 completed" for the length of the
             // download - an empty answer and an unasked question are different, and
             // the screen has to be able to tell them apart.
             //
@@ -276,7 +278,7 @@ class UserOverviewViewModel(
             //
             // The *reason* is carried through rather than discarded. `getOrNull()`
             // threw away the only evidence that "no list" and "could not read the
-            // list" were different answers, and the Library tab then rendered
+            // list" were different answers, and the Library page then rendered
             // "Nothing in this list yet" over an account with nine hundred entries,
             // with every chip reading (0) and no way to try again.
             val listResult = listDeferred.await()

@@ -150,11 +150,12 @@ fun ProfileErrorView(
 }
 
 /**
- * "Still counting", for the two tabs whose numbers come from the media list.
+ * "Still counting", for the surfaces whose numbers come from the media list.
  *
  * The profile is published as soon as AniList answers and the list - one request
- * per 500 entries - is merged in afterwards, so for a second or two the Stats and
- * Library tabs have a real, complete profile and an unfinished tally.
+ * per 500 entries - is merged in afterwards, so for a second or two the Stats tab,
+ * and the Library page beside it, have a real, complete profile and an unfinished
+ * tally.
  *
  * Rendering that as zeroes would be the worst of the options: the summary card
  * would read "0 / 0" for a person with 900 entries, and it would read as an

@@ -610,7 +610,7 @@ private fun TierDropCaret() {
  * series' own typography, frequently vertical and running to the edges, and a
  * caption over that is unreadable. The score badge stays on the cover because a
  * two-digit number in the top-start corner lands on padding that is empty on
- * almost every poster, which is the same reason the Library tab's progress badge
+ * almost every poster, which is the same reason the Library page's progress badge
  * survives in the same corner.
  *
  * `defaultMinSize` is deliberately absent here. Every tile is measured with

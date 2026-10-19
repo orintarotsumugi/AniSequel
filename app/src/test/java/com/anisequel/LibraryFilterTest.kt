@@ -21,7 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Guards the Library tab's logic.
+ * Guards the Library's filtering logic.
  *
  * These were wrong in ways that produced a plausible-looking screen rather than an
  * obvious failure, which is why they are pinned here rather than left to be

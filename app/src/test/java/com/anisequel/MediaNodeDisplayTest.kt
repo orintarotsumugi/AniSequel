@@ -94,7 +94,7 @@ class MediaNodeDisplayTest {
         // (a bar there would claim progress for a thing nobody is tracking), while a
         // title that is tracked at zero legitimately says "0 / 26".
         //
-        // It is also what the Library tab already does: `libraryProgressLabel`
+        // It is also what the Library grid already does: `libraryProgressLabel`
         // returns "Ep 0/26" for the same entry, so the two surfaces agree.
         val media = node(episodes = 26, watched = 0)
 
