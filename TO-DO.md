@@ -153,6 +153,22 @@ the development environment, so none of them can be checked from here, and a
 press-behaviour regression is invisible in review. Doing forty of them blind in
 small batches is how one of them ships broken.
 
+### 1.4 `AppNavigation.kt` keeps every destination in one function — low effort
+
+The file is ~870 lines and twelve `composable()` registrations, past the
+700-line ceiling. Unlike §1.1 and §1.2 this is not shared state: it is a list of
+independent registrations, which is why it has been allowed to grow. What it
+costs is the ceiling itself — the number stops meaning "this file is doing two
+things" and starts being a rule everyone bends.
+
+The first split has already happened: `MainTabs.kt` holds the tab enum, the bar
+and the tap navigation, so the file no longer owns the app's navigation model,
+only its destination table. The next step is a `NavGraphBuilder` extension per
+destination group — studio first, because it needs the repository and the
+`NavController` and nothing else — with the captured locals (preferences,
+`authState`, `signedInViewer`) passed as parameters rather than closed over.
+Do it a group at a time; the registrations do not call each other.
+
 ---
 
 ## 2. Animation and rendering
@@ -408,11 +424,13 @@ value* rather than by removing the guard. Nothing to do.
 
 ### 5.4 No screenshot tests for the profile tabs
 
-The five profile tabs — Home, Activity, Stats, Library, Social — are the most
+The four profile tabs — Home, Activity, Stats, Social — are the most
 shape-variable screens in the app (they change entirely between an account that
 pinned nothing and one that pinned fifty), and nothing asserts what they look
-like. Every visual claim in this pass was verified by reading code and comparing
-against a reference image, not by a test.
+like. The main bar's Library page has the same problem, and it is the one screen
+whose empty state and full state differ by hundreds of rows. Every visual claim in
+this pass was verified by reading code and comparing against a reference image,
+not by a test.
 
 A Compose screenshot test per tab, over the demo fixture `DemoProfileProvider`
 already builds, would turn §5.1 and §5.2 into measurements and catch the next
@@ -441,7 +459,7 @@ that entry. For a profile the reader has not visited before it is the app's most
 expensive query, one request per 500 entries, and it is paid even when all they
 did was look at a banner and a bio.
 
-The obvious fix — "fetch it when Stats or Library is actually opened" — was
+The obvious fix — "fetch it when Stats is actually opened" — was
 considered and not taken. `UserOverviewLoadOrderTest` pins the two-publish order
 *and* the `isLibraryLoading` contract that makes it safe, and four of its
 automated assertions are about the list arriving behind the overview; changing the

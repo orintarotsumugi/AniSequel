@@ -54,7 +54,6 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
-import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.model.isManga
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
@@ -402,7 +401,11 @@ internal fun libraryProgressLabel(entry: MediaListEntryItem): String? {
 }
 
 /**
- * The Library tab: every anime and manga on this person's AniList, as posters.
+ * The reader's library: every anime and manga on their AniList, as posters.
+ *
+ * It is the same composable the profile's fourth tab always was - only the page
+ * it hangs off moved, from a profile (which could be anybody's) to the app's main
+ * bar, where the reader's own things live.
  *
  * ## Posters, not rows
  *
@@ -463,6 +466,14 @@ fun ProfileLibraryTab(
      */
     libraryError: String? = null,
     onLoadManga: () -> Unit,
+    /**
+     * The grid's own padding, computed by the caller.
+     *
+     * Not defaulted and not built here: the bottom has to clear the app's main
+     * bar - `mainBarClearance` - and only the Library screen knows whether that
+     * bar is above it, in the same way the profile's tabs know through their own
+     * list padding.
+     */
     contentPadding: PaddingValues,
     onOpenDetail: (MediaNode) -> Unit,
     modifier: Modifier = Modifier,
@@ -471,9 +482,9 @@ fun ProfileLibraryTab(
      *
      * Not defaulted: a caller that forgot it would silently never remember, which
      * looks identical to the bug this whole path exists for. Resolved by the caller -
-     * `ProfileTabsContent` - rather than here because the profile screen's
-     * `AnimatedContent` disposes this composable on every switch away, so a collection
-     * living here re-asked DataStore on every visit. See [RememberedLibraryView].
+     * the Library screen's route - rather than here: leaving the route disposes this
+     * composable, so a collection living here would re-ask DataStore on every visit.
+     * See [RememberedLibraryView].
      */
     remembered: RememberedLibraryView,
     gridState: LazyGridState = rememberLazyGridState()
@@ -483,17 +494,18 @@ fun ProfileLibraryTab(
      * The media type, status filter and sort, remembered across visits.
      *
      * All three used to be plain state inside this composable, and that dies with
-     * it: the profile screen switches tabs through an `AnimatedContent`, which
-     * disposes the tab it animates away from. Only scroll position survived (it is
-     * hoisted), so every trip to Activity and back reset a narrowed "Completed,
-     * newest first" view to "All, list order" - the reader's decision silently
-     * unmade because the state lived somewhere a transition could reach. The type
-     * already lived in DataStore; the filter and sort now live beside it.
+     * it: a page left from the app's main bar is disposed, exactly as this one was
+     * when it was the profile's fourth tab and that screen's `AnimatedContent`
+     * animated it away. Only scroll position survived (it is hoisted), so every
+     * trip to the profile and back reset a narrowed "Completed, newest first" view
+     * to "All, list order" - the reader's decision silently unmade because the
+     * state lived somewhere a transition could reach. The type already lived in
+     * DataStore; the filter and sort now live beside it.
      *
      * The initializers read the *resolved* remembered view rather than defaults,
      * which is what makes a re-entry start on the reader's own view in the first
      * frame. The four flows used to be collected here instead - one level lower than
-     * the disposal - so every visit to the tab re-asked DataStore and drew the
+     * the disposal - so every visit to the page re-asked DataStore and drew the
      * resolving spinner until the answer came back: a preference that had not changed
      * looked like a load, again and again. See [RememberedLibraryView] for the whole
      * failure.
@@ -516,7 +528,7 @@ fun ProfileLibraryTab(
         // this screen's own writes and applying them would be at best a no-op and
         // at worst a stale value overwriting a newer local one.
         if (choiceMade) return@LaunchedEffect
-        // Stays for the one window where the tab is already on screen when DataStore
+        // Stays for the one window where the page is already on screen when DataStore
         // answers; every later visit finds the answer in the initializers above.
         remembered.type?.let { stored -> type = stored }
         remembered.filter?.let { stored -> filter = stored }
@@ -565,8 +577,8 @@ fun ProfileLibraryTab(
     // was one item on top of a grid already drawn in the default view, so a remembered
     // "Manga" flashed every anime entry before the answer landed - and because "not
     // answered" and "never chosen" looked identical, an account that had never picked
-    // a type sat under it forever. It is one brief window per profile visit now, and a
-    // spinner rather than an empty state because an empty grid would be
+    // a type sat under it forever. It is one brief window per visit to the page now,
+    // and a spinner rather than an empty state because an empty grid would be
     // indistinguishable from the account having no library.
     if (rememberedTypePending) {
         Box(
@@ -591,9 +603,9 @@ fun ProfileLibraryTab(
         columns = GridCells.Fixed(3),
         modifier = modifier
             .fillMaxSize()
-            .testTag("profile_library_tab"),
+            .testTag("library_grid"),
         state = gridState,
-        contentPadding = profileListPadding(contentPadding),
+        contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

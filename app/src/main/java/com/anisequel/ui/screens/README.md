@@ -13,7 +13,8 @@ where you go, it is shared and belongs in `ui/components/`.
 | Path | Holds |
 |---|---|
 | `screens/dashboard/` | `DashboardScreen.kt` and the four files only it draws. |
-| `screens/profile/` | `UserProfileScreen.kt`, its five tabs, the two activity sheets, the chart components. |
+| `screens/library/` | `LibraryScreen.kt`: the main bar's Library page, which draws the viewer's own list. |
+| `screens/profile/` | `UserProfileScreen.kt`, its four tabs, the two activity sheets, the chart components. |
 | `screens/studio/` | `StudioScreen.kt` and its header, shelves and title cards. |
 | `screens/tier/` | The tier list, the board, the library and the placement sheets. |
 | `screens/settings/` | `SettingsScreen.kt` and its four tabs and section cards. |

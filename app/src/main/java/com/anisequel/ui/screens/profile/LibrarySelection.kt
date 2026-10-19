@@ -29,11 +29,11 @@ import kotlinx.coroutines.flow.combine
  * that had never chosen a type it was worse than a flash - a flow that has an answer
  * and a flow that has none both emit `null` there, so the spinner never resolved at all.
  *
- * Resolved one level up, in `ProfileTabsContent`, which outlives the tab switch, so the
- * question is asked once per profile visit. The tab still *receives* the values as state
- * rather than reading flows, which is what lets its own state initializers - the
- * `rememberSaveable`s recreated on each re-entry - start on the remembered view instead
- * of on the defaults for one frame.
+ * Resolved one level up - in `AppNavigation`, which outlives the page - so the question
+ * is asked once per process rather than once per visit. The grid still *receives* the
+ * values as state rather than reading flows, which is what lets its own state
+ * initializers - the `rememberSaveable`s recreated on each re-entry - start on the
+ * remembered view instead of on the defaults for one frame.
  *
  * [preferences] travels with the values because the tab must be able to *write* a choice
  * before the first answer arrives; the controls are tappable in that window, and a write

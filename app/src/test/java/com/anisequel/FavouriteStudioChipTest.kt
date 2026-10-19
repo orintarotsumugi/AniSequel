@@ -153,7 +153,7 @@ class FavouriteStudioChipTest {
      * Braces and parens balanced.
      *
      * Widening a selection is how a document goes malformed, and the symptom would be
-     * an AniList 400 on the *overview* - five tabs and a header, not one row.
+     * an AniList 400 on the *overview* - a header and a tab row, not one row.
      */
     @Test
     fun `the overview query is still balanced`() {
