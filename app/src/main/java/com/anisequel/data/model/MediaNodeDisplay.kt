@@ -289,30 +289,49 @@ val MediaNode.characterList: List<MediaCharacterEdge> get() = characters?.edges 
 val MediaNode.staffList: List<MediaStaffEdge> get() = staff?.edges ?: emptyList()
 
 /**
- * The related titles the Info page draws as a row: **the same medium as this one**.
+ * The related titles the Info page draws as a row, in the order the row reads.
  *
- * ## Why this matches this node's own type rather than filtering to anime
+ * ## Which edges count
  *
- * It used to keep only `ANIME` nodes unconditionally, which is right for an anime page
- * and exactly wrong for a manga one. Verified against the live API on One Piece
- * (`manga/30013`), whose 51 relations are almost entirely `MANGA` - a `SPIN_OFF` per
- * volume, a `SIDE_STORY`, a `PREQUEL` (`Monsters`), an `ALTERNATIVE` - with the
- * `ANIME` ones all being `ADAPTATION` entries. Filtering to anime there produced a row
- * of adaptations ("One Piece: Episode of Merry", "Defeat the Pirate Ganzack!") and
- * dropped the manga's own franchise entirely: the reader opened a manga from the
- * Library and was shown nothing but the TV series it was adapted into.
+ * This went through two wrong answers before this one, and the two failures point in
+ * opposite directions - which is why both halves are pinned by the test.
  *
- * Matching on the subject's own namespace fixes both halves at once, because AniList
- * files an adaptation the other way too: Cowboy Bebop's manga is an `ADAPTATION` *from*
- * the anime's point of view, and it disappears under the same rule that keeps One
- * Piece's light novels out of the anime page. Neither page now lists a different medium
- * from itself, which is what "related" has to mean before the row can be walked as a
- * franchise.
+ * It used to keep only `ANIME` nodes unconditionally, and then - after that was fixed -
+ * only nodes **of the subject's own medium**. Each answer dropped a real relation. The
+ * anime-only rule emptied a manga page of its own franchise, verified against the live
+ * API on One Piece (`manga/30013`), whose 51 relations are a `SPIN_OFF` per volume, a
+ * `SIDE_STORY`, a `PREQUEL` (`Monsters`), an `ALTERNATIVE`, with every `ANIME` entry an
+ * `ADAPTATION`. The own-medium rule fixed that and then hid the adaptation instead:
+ * AniList files one in **both** directions (the manga is an `ADAPTATION` from the
+ * anime's point of view and the anime from the manga's - checked live on `anime/1` and
+ * `manga/30013`), so a reader on a Cowboy Bebop manga could no longer see the anime,
+ * and the manga page of One Piece never showed the TV series at all.
  *
- * Still filtered to relations a reader can *read*: AniList returns the guidebook and the
- * character song alongside the sequels, and a `CHARACTER` edge is a connection between
- * two titles rather than a title. Deduplicated by id, because the same title can be
- * related twice through two different arcs.
+ * The row therefore carries the same-medium edges **plus** the cross-medium
+ * `ADAPTATION`/`SOURCE` pair, and nothing else. A `CHARACTER` edge is a connection
+ * between two titles rather than a title, and the novel, the guidebook and the
+ * character song stay off the row because they are neither the same medium nor the
+ * adaptation of this one - which is what "related" has to mean before the row can be
+ * walked as a franchise.
+ *
+ * ## Why the order is imposed rather than taken from AniList
+ *
+ * AniList returns edges in insertion order, not sorted: checked live, One Piece's
+ * relations interleave a spin-off per volume with the adaptations, and Cowboy Bebop's
+ * anime lists both side stories *before* its two manga adaptations. The row caps at
+ * [MAX_RELATIONS], so on a long franchise the raw order decided whether a reader saw
+ * the sequels or an arbitrary twelve entries. The sort reads the way the row is walked:
+ *
+ *  1. the franchise spine - `PREQUEL`, `SEQUEL`, `PARENT` - with the adaptation next;
+ *  2. within each group, oldest first, so sequels read as story order and the manga a
+ *     show was made from (or the show a manga became) leads its group rather than
+ *     trailing it - which is also what keeps the adaptation inside the cap on a
+ *     franchise with a dozen spin-offs;
+ *  3. everything else (`SIDE_STORY`, `SPIN_OFF`, `ALTERNATIVE`, `SUMMARY`, and any type
+ *     AniList adds later) after it.
+ *
+ * Deduplicated by id, because the same title can be related twice through two different
+ * arcs.
  *
  * A node whose own `type` is null is treated as anime - [isManga] is false for it, and
  * the activity feed and the widget fixtures are the two sources that can build a node
@@ -323,14 +342,59 @@ val MediaNode.relatedMedia: List<MediaRelationEdge>
         val ownType = if (isManga) "MANGA" else "ANIME"
         return relations?.edges
             ?.filter { edge ->
-                edge.node.type.equals(ownType, ignoreCase = true) &&
-                    edge.node.id != id &&
-                    !edge.relationType.equals("CHARACTER", ignoreCase = true)
+                edge.node.id != id &&
+                    !edge.relationType.equals("CHARACTER", ignoreCase = true) &&
+                    (
+                        edge.node.type.equals(ownType, ignoreCase = true) ||
+                            edge.relationType.isAdaptationRelation
+                        )
             }
             ?.distinctBy { it.node.id }
+            ?.sortedWith(RELATION_ROW_ORDER)
             ?.take(MAX_RELATIONS)
             ?: emptyList()
     }
+
+/** Whether this relation is the same story in the other medium. */
+private val String?.isAdaptationRelation: Boolean
+    get() = equals("ADAPTATION", ignoreCase = true) || equals("SOURCE", ignoreCase = true)
+
+/**
+ * Where a relation sits in the row: the franchise spine first, then the adaptation,
+ * then the side material, then the types this app has never been taught.
+ */
+private val MediaRelationEdge.relationRank: Int
+    get() = when (relationType?.uppercase(Locale.ROOT)) {
+        "PREQUEL", "SEQUEL", "PARENT" -> 0
+        "ADAPTATION", "SOURCE" -> 1
+        "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY" -> 2
+        else -> 3
+    }
+
+/**
+ * A start date packed into one ascending number, or [Int.MAX_VALUE] when unknown.
+ *
+ * Null years sort last rather than first: a relation AniList has no date for is the one
+ * it knows least about, and opening a row with undated cards reads as a glitch. A known
+ * year with an unknown month counts as the start of that year.
+ */
+private val MediaNode.relationStartKey: Int
+    get() {
+        val year = startDate?.year ?: return Int.MAX_VALUE
+        return year * 10_000 + (startDate?.month ?: 0) * 100 + (startDate?.day ?: 0)
+    }
+
+/**
+ * [MediaRelationEdge.relationRank] first, then the start date.
+ *
+ * `sortedWith` is stable, so entries sharing a rank and a date - or sharing an unknown
+ * one - keep the order AniList returned them in, which is the best remaining evidence
+ * of their importance.
+ */
+private val RELATION_ROW_ORDER = compareBy<MediaRelationEdge>(
+    { it.relationRank },
+    { it.node.relationStartKey }
+)
 
 /**
  * AniList's `MediaRelation` enum, spelled the way a person writes it.

@@ -42,6 +42,14 @@ import kotlinx.coroutines.launch
  * this state would be three things to keep in step, and the bug that produces is always
  * the same: an id fetched for one screen surfacing on another, because the sheet
  * outlived the screen that opened it.
+ *
+ * ## A person is fetched once
+ *
+ * What the store has already loaded is remembered (see [remembered]), so tapping back
+ * to a face the reader has just read draws it in the same frame and sends nothing.
+ * AniList's own cache would make the second request cheap, but a *request* is not
+ * what the reader sees: without this the sheet re-entered Loading, and the page they
+ * were looking at was replaced by a spinner and then by the same page again.
  */
 class PersonProfileStore(
     /**
@@ -84,6 +92,27 @@ class PersonProfileStore(
      */
     private var pending: Pair<PersonKind, Int>? = null
 
+    /**
+     * Profiles already fetched, so looking at the same person twice costs one request.
+     *
+     * A cast row is twenty-five faces and a reader taps through several of them,
+     * often going back to one they have already read. Without this, every one of
+     * those re-opens re-entered [PersonProfileState.Loading] and asked again - the
+     * face the reader is looking at was replaced by a spinner, then by the same face,
+     * and the sheet spent a request on a question AniList had already answered. A
+     * character's data changes when AniList edits a wiki entry, which is not a thing
+     * that happens while someone is reading a cast row.
+     *
+     * Keyed exactly like [pending], and for the same reason: `Character(1)` and
+     * `Staff(1)` are different people.
+     *
+     * Bounded, and cleared wholesale past the cap: this holds a description and up to
+     * twelve covers per person, and past a couple of cast walks the cheapest correct
+     * thing is to forget rather than to keep reasoning about what is stale - the same
+     * call the repository's own profile cache makes.
+     */
+    private val remembered = mutableMapOf<Pair<PersonKind, Int>, PersonProfileState.Loaded>()
+
     /** Opens a character's profile. A no-op while that same character is loading. */
     fun openCharacter(id: Int, name: String? = null) = open(PersonKind.CHARACTER, id, name)
 
@@ -91,8 +120,18 @@ class PersonProfileStore(
     fun openStaff(id: Int, name: String? = null) = open(PersonKind.STAFF, id, name)
 
     private fun open(kind: PersonKind, id: Int, name: String?) {
-        if (pending == kind to id) return
-        pending = kind to id
+        val key = kind to id
+        if (pending == key) return
+        pending = key
+
+        // Answered synchronously, before the sheet can draw a spinner: the whole
+        // point of remembering is that the reader never sees the page reload.
+        remembered[key]?.let { profile ->
+            pending = null
+            _state.value = profile
+            return
+        }
+
         _state.value = PersonProfileState.Loading(kind, name)
 
         fetchScope.launch {
@@ -121,11 +160,15 @@ class PersonProfileStore(
 
             // The guard. A response for a sheet the reader has already replaced is
             // dropped rather than painted over whatever they are looking at now.
-            if (pending != kind to id) return@launch
+            if (pending != key) return@launch
             pending = null
 
             _state.value = result.fold(
-                onSuccess = { it },
+                onSuccess = { profile ->
+                    if (remembered.size >= REMEMBERED_PROFILE_LIMIT) remembered.clear()
+                    remembered[key] = profile
+                    profile
+                },
                 onFailure = { error ->
                     PersonProfileState.Failed(
                         kind = kind,
@@ -170,6 +213,17 @@ class PersonProfileStore(
     private fun PersonKind.label(): String =
         if (this == PersonKind.CHARACTER) "character" else "person"
 }
+
+/**
+ * How many profiles the store remembers before it forgets all of them.
+ *
+ * Smaller than the repository's own ceiling on purpose: an entry here is the *sheet's*
+ * shape of a person - formatted facts, a parsed biography and the twelve covers the row
+ * draws - and the store only lives as long as the screen that owns it. Two cast walks
+ * is more than a reader revisits in one sitting; past that, refetching is cheaper than
+ * holding a map nobody is reading.
+ */
+private const val REMEMBERED_PROFILE_LIMIT = 32
 
 // `rememberPersonProfileStore` and a `currentState()` composable wrapper used to
 // live here, one caller each. `PersonProfileHost` needs both and three screens do

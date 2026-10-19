@@ -96,8 +96,7 @@ import com.anisequel.ui.viewmodel.UserSocialViewModel
 internal val NavigationBarClearance = 96.dp
 
 /**
- * The full clearance a list needs: the capsule, plus the device's own navigation
- * inset beneath it.
+ * The capsule, plus the device's own navigation inset beneath it.
  *
  * Composable because it reads a `WindowInsets`, which is only available during
  * composition. Read rather than assumed - see [NavigationBarClearance] for why a
@@ -106,11 +105,8 @@ internal val NavigationBarClearance = 96.dp
 @Composable
 internal fun navigationBarClearance(): Dp {
     val systemInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    return CAPSULE_CLEARANCE + systemInset
+    return NavigationBarClearance + systemInset
 }
-
-/** The capsule's own height above the system inset. */
-private val CAPSULE_CLEARANCE = 96.dp
 
 /**
  * The padding every tab's scrollable content uses.
@@ -519,7 +515,13 @@ private fun ProfileTabsContent(
     socialViewModel: UserSocialViewModel,
     mangaLibrary: List<MediaListEntryItem>?,
     isLoadingManga: Boolean,
-    /** Forwarded to the Library tab, which owns the remembered media type. */
+    /**
+     * The Library tab's stored view, resolved once here rather than inside the tab.
+     *
+     * The tab is disposed by the transition below, so a collection living there
+     * re-asked DataStore - and redrew its spinner - on every visit. See
+     * [RememberedLibraryView].
+     */
     libraryPreferences: LibraryPreferences,
     /** Media key to cover, for the AniList preview cards in the bio. */
     mediaCovers: Map<MediaCoverKey, MediaCover>,
@@ -552,6 +554,12 @@ private fun ProfileTabsContent(
     val statsListState = rememberLazyListState()
     val libraryGridState = rememberLazyGridState()
     val socialGridState = rememberLazyGridState()
+
+    // The Library's remembered view, resolved above [AnimatedContent] for the same
+    // reason the scroll states are: the tab is disposed on every switch away, and a
+    // DataStore collection living inside it re-asked the question - and redrew the
+    // resolving spinner - on every visit. See [RememberedLibraryView].
+    val rememberedLibrary = rememberLibrarySelection(libraryPreferences)
 
     // Which group of Stats charts is open, held here for the same reason the scroll
     // states are: the tab is disposed on every switch away, so a choice made inside
@@ -652,7 +660,7 @@ private fun ProfileTabsContent(
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,
                     gridState = libraryGridState,
-                    libraryPreferences = libraryPreferences
+                    remembered = rememberedLibrary
                 )
 
                 4 -> ProfileSocialTab(

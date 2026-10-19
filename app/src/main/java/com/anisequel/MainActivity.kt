@@ -2,6 +2,7 @@ package com.anisequel
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
+import com.anisequel.data.network.RateLimitNotice
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AuthRepository
@@ -118,6 +120,33 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            // The app-wide rate-limit notice is collected at the composition
+            // root, not on a screen. The failure can come from anywhere:
+            // AniList is a shared bucket, so a request the dashboard started
+            // can be refused while a media sheet is on screen - a screen-owned
+            // error surface only covers its own requests, which is how the
+            // reader ends up looking at a dead spinner with no explanation.
+            //
+            // It is a Toast rather than a Scaffold snackbar on purpose. The
+            // places a 429 is most likely to land - the comment thread, a
+            // title page - are ModalBottomSheets, which are drawn over the
+            // host screen: a snackbar would be posted behind the sheet, where
+            // the reader is not looking, while a Toast draws over everything.
+            //
+            // Collecting in the composition is also the visibility guard: no
+            // composition means no collector, so a rate limit hit with no
+            // context to show a notice in stays silent.
+            LaunchedEffect(Unit) {
+                RateLimitNotice.events.collect { retryAfterSeconds ->
+                    val wait = retryAfterSeconds?.let { " (about ${it}s)" }.orEmpty()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "AniList is busy — you're rate limited. Give it a minute and try again.$wait",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
             // Collected here rather than inside the theme so the whole tree
             // recomposes when the preference changes. Reading it inside
             // AniSequelTheme would restart only the theme's own subtree, and the

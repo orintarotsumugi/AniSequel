@@ -132,14 +132,19 @@ changing it:
 - **The data it needs was widened, not faked.** `GET_MEDIA_DETAIL` now also asks
   for `characters` (with `voiceActors`), `staff` and `relations` — one request per
   open, on a query that already fetched the synopsis, rankings and tags. The
-  relation row is filtered to **this title's own medium**, because AniList also returns
-  the novel a show was adapted from and its guidebook, which next to the sequels reads
-  as a mistake. It used to filter to `ANIME` unconditionally, which is right for an
+  relation row keeps **this title's own medium plus its cross-medium
+  `ADAPTATION`/`SOURCE` edge**, and sorts what it keeps: the franchise spine
+  (`PREQUEL`/`SEQUEL`/`PARENT`) in story order, the adaptation next, the side
+  material last. It used to filter to `ANIME` unconditionally, which is right for an
   anime and exactly backwards for a manga: One Piece's 51 relations are almost all
   `MANGA` — a `SPIN_OFF` per volume, a `SIDE_STORY`, a `PREQUEL` — and the `ANIME` ones
   are all `ADAPTATION` entries, so a manga page listed the TV series and none of its
-  own franchise. Matching the subject's type fixes both halves at once, because AniList
-  files an adaptation in both directions. `MediaRelationAndSynopsisTest` pins it.
+  own franchise. Matching the subject's type fixed that and then hid the adaptation in
+  turn, because AniList files one in *both* directions — a manga page stopped showing
+  the anime it became. The sort exists because AniList returns edges in insertion order
+  (live check: One Piece interleaves a spin-off per volume with the adaptations) and the
+  row caps at 12, so the raw order decided what a long franchise showed.
+  `MediaRelationAndSynopsisTest` pins both halves.
   It also asks for `title`, and **that field is not optional on a node this app uses
   as a display record**: it was dropped on the assumption that the summary the sheet
   opened from already carried one, which is true on the dashboard (the response is
@@ -221,6 +226,40 @@ source merely *mentioned* mid-sentence is left alone. `RegexOption.MULTILINE` on
 pattern is load-bearing: without it Kotlin anchors `^`/`$` to the whole description,
 the pattern then matches nothing but a description that is *entirely* a credit, and
 the strip is a silent no-op.
+
+### Character and staff pages
+
+Every face on a title's cast and crew rows — and every voice actor on a person's
+own page — opens a character or staff sheet over whatever drew it. One composable
+and one store serve both kinds; the two payloads stay apart in the state (see
+`PersonProfileState`), the renderer does not.
+
+- **Both halves of a media connection.** A character asks for `edges`, because the
+  edge is the only half that carries `characterRole` and `voiceActors`; a staff
+  member has neither and still asks for `nodes`. `ProfileAppearances.titles` reads
+  whichever half the query asked for, so one row of covers serves both.
+- **The header is a cover.** The hero is the title page's treatment at the size a
+  person's artwork can carry it: the portrait full-bleed behind a scrim that ends
+  on the sheet's own container colour, the portrait again as a rounded cover, the
+  name on the artwork. It used to be an 84dp face clipped to a pill sitting on the
+  sheet's container colour, and the "Appears in" posters were 112×158 pills — a
+  stretched pill is an *ellipse*, and an ellipse is not a cover. A portrait is a
+  rectangle, and `MaterialTheme.shapes.medium` is what every other cover in the app
+  is drawn with.
+- **"Voiced by" needed a second look at the schema.** AniList hangs the performers
+  on each media edge, per language, and the field **answers `null` when it is asked
+  without one** — checked against the live API before the query was written, not
+  discovered in production. It is asked for twice under two names
+  (`voiceActors(language: JAPANESE)` and the `voiceActorsEnglish` alias), and the
+  model deduplicates per language, Japanese first, because one actor usually voices
+  a character in every title they appear in. A row opens that actor's own page in
+  the same sheet; the sheet is re-keyed on the person, or the new page would inherit
+  the last one's scroll position.
+- **A person is fetched once.** The repository caches profiles, but a *request* is
+  not what the reader sees: reopening a face re-entered `Loading` and painted the
+  same answer back a frame later. `PersonProfileStore` remembers what it has loaded
+  (bounded, cleared wholesale past the cap) and answers a re-open synchronously,
+  before the sheet can draw a spinner.
 
 ### The profile screen
 
