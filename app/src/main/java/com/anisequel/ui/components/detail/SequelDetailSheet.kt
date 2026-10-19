@@ -219,6 +219,14 @@ fun SequelDetailSheet(
                 targetState = selected,
                 transitionSpec = {
                     val forward = targetState > initialState
+                    // The trailing `using null` drops the default
+                    // `SizeTransform`, which springs the container's height
+                    // between the page and the editor - re-measuring the
+                    // `LazyColumn` underneath on every frame of the switch,
+                    // under a reader who may be scrolling it at the same time.
+                    // That is the motion the crash was reported from: opening
+                    // this sheet and scrolling it in one go. The slide and the
+                    // fade are draw-phase and stay; only the height snaps.
                     (
                         slideInHorizontally(
                             // `DefaultSpatialOffset` is the `IntOffset` token, which is
@@ -232,7 +240,7 @@ fun SequelDetailSheet(
                             animationSpec = ExpressiveMotion.DefaultSpatialOffset
                         ) { width -> if (forward) -width / 5 else width / 5 } +
                             fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                        )
+                        ) using null
                 },
                 label = "detail_destination"
             ) { index ->

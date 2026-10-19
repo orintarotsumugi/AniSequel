@@ -1,5 +1,6 @@
 package com.anisequel
 
+import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaRelations
@@ -14,24 +15,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Two things the title page got wrong about what AniList sends it: which medium a
- * relation belongs to, and what a description is actually made of.
+ * Three things the title page got wrong about what AniList sends it: which medium a
+ * relation belongs to, what order the row is walked in, and what a description is
+ * actually made of.
  *
- * Both were verified against the live API rather than inferred, and both produced a
- * page that was confidently wrong instead of empty - which is why neither showed up
- * as a failure.
+ * All were verified against the live API rather than inferred, and the relation
+ * failures each produced a page that was confidently wrong instead of empty - which is
+ * why none of them showed up as a failure.
  */
 class MediaRelationAndSynopsisTest {
 
-    // ---- relations: the subject's own medium ------------------------------------
+    // ---- relations: the subject's own medium, its adaptation, and the order -------
 
     /**
-     * A manga's relations are nearly all manga.
+     * A manga's relations are nearly all manga, and the adaptation is the exception.
      *
-     * One Piece's real relation set, abridged to one entry of each kind it returns:
-     * a `SPIN_OFF` manga, a `SIDE_STORY` manga, a `PREQUEL` manga, and the `ANIME`
-     * adaptations. The old filter kept only the last group, so a manga page listed
-     * the TV series and none of the manga's own franchise.
+     * One Piece's real relation set, abridged to one entry of each kind it returns: a
+     * `SPIN_OFF` manga, a `SIDE_STORY` manga, a `PREQUEL` manga, and the `ANIME`
+     * adaptations. The filter used to keep only the last group, which listed the TV
+     * series and none of the manga's own franchise; keeping only the same medium then
+     * fixed that and hid the TV series in turn. Both belong on the row.
      */
     private val onePieceRelations = MediaRelations(
         edges = listOf(
@@ -45,14 +48,24 @@ class MediaRelationAndSynopsisTest {
         )
     )
 
-    private fun relation(type: String, nodeType: String, id: Int, title: String) =
-        MediaRelationEdge(
-            relationType = type,
-            node = MediaNode(id = id, type = nodeType, title = MediaTitle(english = title))
+    private fun relation(
+        type: String,
+        nodeType: String,
+        id: Int,
+        title: String,
+        startYear: Int? = null
+    ) = MediaRelationEdge(
+        relationType = type,
+        node = MediaNode(
+            id = id,
+            type = nodeType,
+            title = MediaTitle(english = title),
+            startDate = startYear?.let { FuzzyDate(year = it) }
         )
+    )
 
     @Test
-    fun `a manga's relations are the manga's, not the adaptations`() {
+    fun `a manga page shows its own franchise and the anime adaptation`() {
         val manga = MediaNode(id = 30_013, type = "MANGA", relations = onePieceRelations)
 
         val titles = manga.relatedMedia.map { it.node.title?.english }
@@ -63,25 +76,38 @@ class MediaRelationAndSynopsisTest {
             titles.contains("One Piece: Shokugeki no Sanji") &&
                 titles.contains("Monsters")
         )
+        assertTrue(
+            "and the anime it became has to be on that page too - AniList files it " +
+                "as an ADAPTATION in both directions, so same-medium-only hid it:\n$titles",
+            titles.contains("One Piece: Defeat the Pirate Ganzack!") &&
+                titles.contains("One Piece: Episode of Merry")
+        )
         assertFalse(
-            "the anime adaptations are a different medium and belong on the anime " +
-                "page, not on the manga's:\n$titles",
-            titles.any { it != null && it.contains("Defeat the Pirate Ganzack") }
+            "a CHARACTER edge is a connection between two titles, not a title:\n$titles",
+            titles.contains("One Piece x Toriko")
+        )
+        assertEquals(
+            "the row is the franchise spine, then the adaptation, then the side " +
+                "material - AniList's raw order interleaves them:\n$titles",
+            listOf(
+                "Monsters",
+                "One Piece: Defeat the Pirate Ganzack!",
+                "One Piece: Episode of Merry",
+                "One Piece: Shokugeki no Sanji",
+                "One Piece: Ace's Story"
+            ),
+            titles
         )
     }
 
     /**
-     * The mirror of the above, and the reason the filter is keyed on the subject's
-     * type rather than special-cased per medium.
+     * The mirror of the above: an anime page shows its sequel and its source manga.
      *
-     * AniList files an adaptation in *both* directions: the manga is an `ADAPTATION`
-     * from the anime's point of view. So the same rule that keeps a manga's TV
-     * adaptations out of its page also keeps an anime's manga adaptations out of
-     * its own - and a rule written as "filter to manga for manga, and to anime for
-     * everything else" would have had to be stated twice.
+     * AniList files the manga as an `ADAPTATION` from the anime's point of view too,
+     * which the same-medium rule dropped - the exact failure this pins.
      */
     @Test
-    fun `an anime's relations are the anime's, not the manga adaptations`() {
+    fun `an anime page shows the manga it was adapted from`() {
         val anime = MediaNode(
             id = 1,
             type = "ANIME",
@@ -97,13 +123,84 @@ class MediaRelationAndSynopsisTest {
 
         val titles = anime.relatedMedia.map { it.node.title?.english }
 
-        assertTrue(
-            "the film and the special belong on the anime's own page:\n$titles",
-            titles.contains("Cowboy Bebop: The Movie") && titles.contains("Ein's Summer Vacation")
+        assertEquals(
+            "the adaptation leads the side material, and the film and the special " +
+                "still follow it:\n$titles",
+            listOf(
+                "Cowboy Bebop",
+                "Cowboy Bebop Shooting Star",
+                "Cowboy Bebop: The Movie",
+                "Ein's Summer Vacation"
+            ),
+            titles
         )
-        assertFalse(
-            "the manga adaptations are a different medium:\n$titles",
-            titles.contains("Cowboy Bebop Shooting Star")
+    }
+
+    @Test
+    fun `a source relation crosses the medium line like an adaptation`() {
+        val anime = MediaNode(
+            id = 1,
+            type = "ANIME",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("SOURCE", "MANGA", 2, "The original manga"),
+                    relation("SUMMARY", "ANIME", 3, "Recap movie")
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("The original manga", "Recap movie"),
+            anime.relatedMedia.map { it.node.title?.english }
+        )
+    }
+
+    @Test
+    fun `the row is the spine in story order, then the adaptation, then side material`() {
+        val anime = MediaNode(
+            id = 1,
+            type = "ANIME",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("SIDE_STORY", "ANIME", 10, "A 2020 special", startYear = 2020),
+                    relation("SEQUEL", "ANIME", 11, "A 2017 sequel", startYear = 2017),
+                    relation("PREQUEL", "ANIME", 12, "A 2012 prequel", startYear = 2012),
+                    relation("ADAPTATION", "MANGA", 13, "A 2010 manga", startYear = 2010),
+                    relation("SEQUEL", "ANIME", 14, "A 2023 sequel", startYear = 2023)
+                )
+            )
+        )
+
+        // The rank outranks the date across groups: the 2010 manga follows the 2012
+        // prequel because the adaptation is its own answer, not a season.
+        assertEquals(
+            listOf(
+                "A 2012 prequel",
+                "A 2017 sequel",
+                "A 2023 sequel",
+                "A 2010 manga",
+                "A 2020 special"
+            ),
+            anime.relatedMedia.map { it.node.title?.english }
+        )
+    }
+
+    @Test
+    fun `an undated relation sorts after the dated ones in its group`() {
+        val anime = MediaNode(
+            id = 1,
+            type = "ANIME",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("SEQUEL", "ANIME", 2, "No date yet"),
+                    relation("PREQUEL", "ANIME", 3, "A 2014 prequel", startYear = 2014)
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("A 2014 prequel", "No date yet"),
+            anime.relatedMedia.map { it.node.title?.english }
         )
     }
 
@@ -140,7 +237,10 @@ class MediaRelationAndSynopsisTest {
             )
         )
 
-        assertEquals(listOf("Next season"), typeless.relatedMedia.map { it.node.title?.english })
+        assertEquals(
+            listOf("Next season", "The manga"),
+            typeless.relatedMedia.map { it.node.title?.english }
+        )
     }
 
     @Test

@@ -93,8 +93,7 @@ internal fun GraphQLError.toAniListException(): AniListException {
         text.contains("access denied", ignoreCase = true)
 
     return when {
-        status == 429 -> AniListException(
-            kind = AniListErrorKind.RATE_LIMITED,
+        status == 429 -> rateLimitedException(
             message = "AniList is rate limiting this device. Try again in a moment."
         )
         status == 401 || status == 403 -> AniListException(
@@ -109,6 +108,38 @@ internal fun GraphQLError.toAniListException(): AniListException {
         )
         else -> AniListException(AniListErrorKind.INVALID_REQUEST, text)
     }
+}
+
+/**
+ * Builds a [AniListErrorKind.RATE_LIMITED] failure and raises the app-wide
+ * notice, so there is exactly one place a rate limit reports from.
+ *
+ * Both roads that classify a 429 funnel through here: the HTTP status in
+ * [aniListHttpError] below, and a GraphQL error entry carrying `status == 429`
+ * in [GraphQLError.toAniListException] above, which can arrive on a response
+ * whose HTTP status is not itself 429. Reporting from each construction site
+ * instead would put one behaviour in two places, free to drift into one road
+ * notifying and the other going quiet - and any response that touched both
+ * roads would produce two notices for one failed request. [RateLimitNotice]
+ * then collapses the reports that a *burst* of parallel requests produces into
+ * the single notice the reader needs.
+ *
+ * The message stays a parameter because the two roads know different amounts:
+ * the HTTP road has the `Retry-After` wait, the GraphQL road only knows the
+ * request was refused.
+ */
+private fun rateLimitedException(
+    message: String,
+    retryAfterSeconds: Int? = null,
+    cause: Throwable? = null
+): AniListException {
+    RateLimitNotice.report(retryAfterSeconds)
+    return AniListException(
+        kind = AniListErrorKind.RATE_LIMITED,
+        message = message,
+        retryAfterSeconds = retryAfterSeconds,
+        cause = cause
+    )
 }
 
 /**
@@ -143,10 +174,17 @@ fun aniListHttpError(
         )
     }
     if (code == 429) {
-        return AniListException(
-            kind = AniListErrorKind.RATE_LIMITED,
-            message = "AniList is rate limiting this device. Try again in ${retryAfterSeconds ?: 60}s.",
-            retryAfterSeconds = retryAfterSeconds,
+        // `Retry-After` is free text from the server, and the interceptor has
+        // already refused to sleep on a negative one. It must not reach the
+        // reader either: the old mapping printed "Try again in -1s.", which is
+        // not an instruction, and `RateLimitNotice` now repeats the number in
+        // the app-wide notice. Only negative is dropped - zero is a real "retry
+        // now" that the interceptor acts on too - and a missing wait falls back
+        // to the generic minute.
+        val waitSeconds = retryAfterSeconds?.takeIf { it >= 0 }
+        return rateLimitedException(
+            message = "AniList is rate limiting this device. Try again in ${waitSeconds ?: 60}s.",
+            retryAfterSeconds = waitSeconds,
             cause = cause
         )
     }

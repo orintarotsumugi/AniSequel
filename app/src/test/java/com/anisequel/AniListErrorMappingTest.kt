@@ -194,6 +194,19 @@ class AniListErrorMappingTest {
     }
 
     @Test
+    fun `a negative retry-after is not repeated to the reader`() {
+        // `Retry-After` is free text, and the interceptor already refuses to
+        // sleep on a negative one. It must not become copy either: the old
+        // mapping printed "Try again in -1s." and the app-wide notice repeated
+        // the number, which reads as a broken app rather than a wait.
+        val error = aniListHttpError(code = 429, retryAfterSeconds = -1)
+
+        assertEquals(AniListErrorKind.RATE_LIMITED, error.kind)
+        assertNull("a negative wait is not a wait", error.retryAfterSeconds)
+        assertTrue(error.message.orEmpty().contains("60s"))
+    }
+
+    @Test
     fun `an unauthorized response is a dead session, not a server fault`() = kotlinx.coroutines.test.runTest {
         val error = failureOf(
             FakeService { throw HttpException(retrofit2.Response.error<Any>(401, "".toResponseBody(null))) }

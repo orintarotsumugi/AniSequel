@@ -1,15 +1,16 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,8 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -30,10 +29,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -44,12 +48,11 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
-import com.anisequel.data.model.formatLabel
+import com.anisequel.data.model.VoiceActorCredit
+import com.anisequel.data.model.VoicedCharacter
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
 import com.anisequel.ui.components.openExternalUrl
@@ -83,6 +86,33 @@ import com.anisequel.ui.components.openExternalUrl
  * uses. An empty biography renders nothing rather than an empty card: plenty of
  * characters have no description, and a card with a heading over blank space is worse
  * than no card.
+ *
+ * ## The page opens on a cover, not on a capsule
+ *
+ * The header is the title page's own treatment at the size a person's artwork can
+ * carry it: the portrait full-bleed behind a scrim, with the portrait itself as a
+ * rounded cover and the name on the artwork. It used to be an 84dp face clipped to a
+ * pill, sitting on the sheet's container colour - which is the one shape a portrait
+ * cannot be: a face is a rectangle, and a pill drawn around one crops the corners
+ * off it. The "Appears in" row below had the same problem for the same reason, at
+ * 112x158: a stretched pill is an ellipse, and an ellipse is not a cover.
+ *
+ * ## "Voiced by" is the character's own answer
+ *
+ * A character is credited to the people who performed them - AniList hangs that on
+ * each media edge, per language (see `ProfileAppearanceEdge`) - and a cast list
+ * without it can only say who someone *is*, never who they *sound like*. The rows
+ * are people, so a tap opens their own page in this same sheet; a host with no
+ * repository passes no callback and the rows draw as captions, exactly like the
+ * cast cards on a title.
+ *
+ * ## A staff page is the same page, one row longer
+ *
+ * A creator's titles carry their own credit and a voice actor's performed characters
+ * get the "Voiced" row; both are drawn by `PersonStaffCredits`, which is card layout
+ * rather than sheet chrome. The two kinds still share this body - that is the whole
+ * point of the one composable - and a person who is both crew and cast simply shows
+ * both rows.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +127,27 @@ fun PersonProfileSheet(
      * instead of fetching a title the reader can already see.
      */
     onOpenAppearance: (ProfileAppearance) -> Unit = {},
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    /**
+     * Opens a voice actor's own page, from the "Voiced by" rows.
+     *
+     * The whole [VoiceActorCredit] rather than an id, because the name is already in
+     * hand and it is what the sheet says while the next person loads. Null - a host
+     * with no repository - draws those rows as captions rather than as controls that
+     * could only fail; the same contract as the cast cards, and the same reason
+     * `PersonProfileHost` makes its callbacks nullable.
+     */
+    onOpenStaff: ((VoiceActorCredit) -> Unit)? = null,
+    /**
+     * Opens one of the characters on the staff page's "Voiced" row.
+     *
+     * The whole [VoicedCharacter] rather than an id, for the same reason as
+     * [onOpenStaff]: the name is already in hand and it is what the sheet says while
+     * the next person loads. The character swaps in under the same open sheet - see
+     * the note on the keyed body below. Null - a host with no repository - draws the
+     * cards as captions rather than as controls that could only fail.
+     */
+    onOpenCharacter: ((VoicedCharacter) -> Unit)? = null
 ) {
     val appearancesState = rememberLazyListState()
 
@@ -148,11 +198,19 @@ fun PersonProfileSheet(
                     TextButton(onClick = onRetry) { Text("Try again") }
                 }
 
-                is PersonProfileState.Loaded -> LoadedPersonProfile(
-                    state = state,
-                    appearancesState = appearancesState,
-                    onOpenAppearance = onOpenAppearance
-                )
+                // Keyed on who the sheet is showing. Tapping a voice actor swaps the
+                // person under a sheet that stays open, and without the key the new
+                // page inherits the scroll position of the old one: the reader lands
+                // halfway down somebody else's biography.
+                is PersonProfileState.Loaded -> key(state.kind, state.id) {
+                    LoadedPersonProfile(
+                        state = state,
+                        appearancesState = appearancesState,
+                        onOpenAppearance = onOpenAppearance,
+                        onOpenStaff = onOpenStaff,
+                        onOpenCharacter = onOpenCharacter
+                    )
+                }
             }
         }
     }
@@ -177,7 +235,9 @@ fun PersonProfileSheet(
 private fun LoadedPersonProfile(
     state: PersonProfileState.Loaded,
     appearancesState: LazyListState,
-    onOpenAppearance: (ProfileAppearance) -> Unit
+    onOpenAppearance: (ProfileAppearance) -> Unit,
+    onOpenStaff: ((VoiceActorCredit) -> Unit)?,
+    onOpenCharacter: ((VoicedCharacter) -> Unit)?
 ) {
     // Hoisted, not read inside `onClick`. That lambda is a plain one, not a
     // composable, so a `LocalContext.current` read in its body has no composition
@@ -191,34 +251,56 @@ private fun LoadedPersonProfile(
             .fillMaxWidth()
             .heightIn(max = PROFILE_SHEET_MAX_HEIGHT)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ProfileIdentity(state)
+        // The cover bleeds to the sheet's own edges, so the inset everything under it
+        // needs is applied there rather than here - a full-bleed header inside a
+        // padded column is not full-bleed.
+        ProfileHero(state)
 
-        if (state.facts.isNotEmpty()) {
-            ProfileFacts(facts = state.facts)
-        }
-
-        ProfileBiography(description = state.description)
-
-        if (state.appearances.isNotEmpty()) {
-            ProfileAppearancesRow(
-                appearances = state.appearances,
-                listState = appearancesState,
-                onOpen = onOpenAppearance
-            )
-        }
-
-        // The escape hatch every in-app page carries. The sheet answers what AniList
-        // knows; AniList's own page still has the comment thread and the edit history
-        // this does not.
-        TextButton(
-            onClick = { state.siteUrl?.let { openExternalUrl(context, it) } },
-            enabled = state.siteUrl != null,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Open on AniList")
+            if (state.facts.isNotEmpty()) {
+                ProfileFacts(facts = state.facts)
+            }
+
+            ProfileBiography(description = state.description)
+
+            if (state.voiceActors.isNotEmpty()) {
+                ProfileVoiceActors(credits = state.voiceActors, onOpenStaff = onOpenStaff)
+            }
+
+            if (state.appearances.isNotEmpty()) {
+                ProfileAppearancesRow(
+                    appearances = state.appearances,
+                    listState = appearancesState,
+                    onOpen = onOpenAppearance
+                )
+            }
+
+            // The staff page's mirror of "Voiced by": the characters this person
+            // performed. A creator who is also a voice actor is common on AniList,
+            // and a filmography alone never says who they sounded like.
+            if (state.voicedCharacters.isNotEmpty()) {
+                ProfileVoicedCharactersRow(
+                    characters = state.voicedCharacters,
+                    onOpen = onOpenCharacter
+                )
+            }
+
+            // The escape hatch every in-app page carries. The sheet answers what AniList
+            // knows; AniList's own page still has the comment thread and the edit history
+            // this does not.
+            TextButton(
+                onClick = { state.siteUrl?.let { openExternalUrl(context, it) } },
+                enabled = state.siteUrl != null,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text("Open on AniList")
+            }
         }
     }
 }
@@ -230,47 +312,124 @@ private fun personWord(kind: PersonKind): String =
 /** The sheet's ceiling: tall enough for a biography, short enough to fit a phone. */
 private val PROFILE_SHEET_MAX_HEIGHT = 620.dp
 
+/**
+ * The cover: the portrait behind its own name, and the portrait again as the cover.
+ *
+ * The title page's hero, at the size a person's artwork can carry it. The artwork is
+ * the key visual (see `InfoHero` for why it is the poster and not the banner, and why
+ * it is sharp), the scrim does the legibility, and the cover itself is a rounded
+ * rectangle - the shape every other cover in the app is.
+ *
+ * This replaces a header that was one 84dp face clipped to a pill, on the sheet's
+ * container colour: a portrait is a rectangle, and a pill drawn around one takes the
+ * corners off the art and reads as a placeholder rather than as a cover.
+ */
 @Composable
-private fun ProfileIdentity(state: PersonProfileState.Loaded) {
-    Row(
+private fun ProfileHero(state: PersonProfileState.Loaded) {
+    // The scrim has to end on the colour the sheet itself is drawn on, or the cover
+    // hands over to the body with a visible seam. The sheet's container is
+    // `surfaceContainerLow` - see the `ModalBottomSheet` call above.
+    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .height(HERO_HEIGHT)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .testTag("profile_hero")
     ) {
-        AsyncImage(
-            model = state.portraitUrl,
-            contentDescription = state.name,
-            contentScale = ContentScale.Crop,
+        if (state.portraitUrl != null) {
+            AsyncImage(
+                model = state.portraitUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
+        // Weighted for sharp artwork: light at the top so the art still reads, strong
+        // at the bottom where the name and the cover are. The same stops as the title
+        // page's hero, for the same reason.
+        Box(
             modifier = Modifier
-                .size(84.dp)
-                .clip(ExpressiveShapes.pill)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .testTag("profile_portrait")
-        )
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = state.name ?: "Unknown",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = personWord(state.kind).replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (state.aliases.isNotEmpty()) {
-                Text(
-                    text = state.aliases.joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.10f),
+                        0.34f to Color.Black.copy(alpha = 0.24f),
+                        0.60f to Color.Black.copy(alpha = 0.54f),
+                        0.84f to Color.Black.copy(alpha = 0.74f),
+                        1f to surface
+                    )
                 )
+        )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(PORTRAIT_WIDTH)
+                    .height(PORTRAIT_HEIGHT)
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = MaterialTheme.shapes.medium,
+                        ambientColor = Color.Black,
+                        spotColor = Color.Black
+                    )
+                    .clip(MaterialTheme.shapes.medium)
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .testTag("profile_portrait")
+            ) {
+                AsyncImage(
+                    model = state.portraitUrl,
+                    contentDescription = state.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.name ?: "Unknown",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    // One shadow on one short block of text, exactly as the title
+                    // page's lockup does it: what keeps white type legible over a pale
+                    // portrait without darkening the whole cover.
+                    modifier = Modifier.shadow(
+                        elevation = 6.dp,
+                        shape = RectangleShape,
+                        ambientColor = Color.Black,
+                        spotColor = Color.Black
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = personWord(state.kind).replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (state.aliases.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = state.aliases.joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.78f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -340,85 +499,103 @@ private fun ProfileBiography(description: String?) {
 }
 
 /**
- * The titles, as a row of covers.
+ * The people who voiced this character, one row each.
  *
- * A row rather than a vertical list: a director has hundreds of credits, twelve of them
- * on this screen, and a reader recognises a poster rather than reading twelve lines. The
- * score rides on the artwork because it is the one number a poster cannot carry.
+ * Japanese before English, deduplicated per language by the model (see
+ * `ProfileAppearances.voiceActorCredits`), and capped because a recast-heavy character
+ * can be credited to more people than a sheet should list: past the fourth the rows
+ * stop being "who is this character's voice" and start being a wiki.
+ *
+ * A row opens that actor's own page in this same sheet - the tap a reader already
+ * expects from every other face in the app - unless the host has no repository, in
+ * which case the rows are captions. See the KDoc on the sheet's own parameters.
  */
 @Composable
-private fun ProfileAppearancesRow(
-    appearances: List<ProfileAppearance>,
-    listState: LazyListState,
-    onOpen: (ProfileAppearance) -> Unit
+private fun ProfileVoiceActors(
+    credits: List<VoiceActorCredit>,
+    onOpenStaff: ((VoiceActorCredit) -> Unit)?
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        SectionHeading(title = "Appears in", icon = AppVectorIcons.List)
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyRow(
-            state = listState,
-            contentPadding = PaddingValues(end = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.testTag("profile_appearances")
-        ) {
-            items(items = appearances, key = { "${it.type}_${it.id}" }) { appearance ->
-                AppearanceCard(appearance = appearance, onOpen = onOpen)
-            }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("profile_voice_actors")
+    ) {
+        SectionHeading(title = "Voiced by", icon = AppVectorIcons.Mic)
+        Spacer(modifier = Modifier.height(6.dp))
+        credits.take(VOICE_ACTOR_ROWS).forEach { credit ->
+            VoiceActorRow(credit = credit, onOpenStaff = onOpenStaff)
         }
     }
 }
 
 @Composable
-private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppearance) -> Unit) {
-    val title = appearance.title?.displayTitle ?: "Unknown"
-    Column(
+private fun VoiceActorRow(credit: VoiceActorCredit, onOpenStaff: ((VoiceActorCredit) -> Unit)?) {
+    // Named `tapTarget`, not `clickable`: a local called `clickable` shadows the very
+    // modifier function its own initializer is calling.
+    val tapTarget = if (onOpenStaff != null) {
+        Modifier
+            .clip(ExpressiveShapes.pill)
+            .clickable(onClickLabel = "Open voice actor") { onOpenStaff(credit) }
+    } else {
+        Modifier
+    }
+
+    Row(
         modifier = Modifier
-            .width(APPEARANCE_CARD_WIDTH)
-            .bouncyPress(pressedScale = 0.97f)
-            .clickable { onOpen(appearance) }
-            .testTag("profile_appearance_${appearance.id}")
+            .fillMaxWidth()
+            .then(tapTarget)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(APPEARANCE_CARD_WIDTH)
-                .height(APPEARANCE_POSTER_HEIGHT)
-                .clip(ExpressiveShapes.pill)
+                .size(34.dp)
+                .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
-                model = appearance.coverImage?.bestUrl,
-                contentDescription = title,
+                model = credit.imageUrl,
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(APPEARANCE_CARD_WIDTH)
-                    .height(APPEARANCE_POSTER_HEIGHT)
+                modifier = Modifier.matchParentSize()
             )
-            appearance.averageScore?.let { score ->
-                ScoreBadge(
-                    score = score,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(5.dp)
-                )
-            }
         }
-        Spacer(modifier = Modifier.height(5.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
+            text = credit.name,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = appearance.formatLabel,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+            shape = ExpressiveShapes.pill,
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Text(
+                text = credit.language,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+            )
+        }
     }
 }
 
-private val APPEARANCE_CARD_WIDTH = 112.dp
-private val APPEARANCE_POSTER_HEIGHT = 158.dp
+/** Tall enough for the artwork to be the header, short enough to leave the page below. */
+private val HERO_HEIGHT = 236.dp
+
+/** The cover on the hero: poster proportions, drawn over the artwork it repeats. */
+private val PORTRAIT_WIDTH = 92.dp
+private val PORTRAIT_HEIGHT = 128.dp
+
+/**
+ * How many voice actors the sheet lists.
+ *
+ * Two languages and one performer per language is the ordinary case; four leaves room
+ * for a recast or a second dub and still reads as an answer rather than a list.
+ */
+private const val VOICE_ACTOR_ROWS = 4

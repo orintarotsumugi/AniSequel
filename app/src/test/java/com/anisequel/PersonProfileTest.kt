@@ -1,17 +1,25 @@
 package com.anisequel
 
 import com.anisequel.data.model.CharacterProfile
+import com.anisequel.data.model.MediaImage
 import com.anisequel.data.model.MediaName
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
+import com.anisequel.data.model.ProfileAppearanceEdge
+import com.anisequel.data.model.ProfileAppearances
+import com.anisequel.data.model.StaffCharacterEdge
+import com.anisequel.data.model.StaffCharacterMedia
+import com.anisequel.data.model.StaffCharacterNode
 import com.anisequel.data.model.StaffProfile
+import com.anisequel.data.model.VoiceActor
 import com.anisequel.data.model.toLoadedState
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
@@ -312,6 +320,329 @@ class PersonProfileTest {
         assertEquals("MANGA", node.type)
         assertEquals(71, node.averageScore)
     }
+
+    // ---- the voice actors on a character's page --------------------------------
+
+    /**
+     * Japanese before English, and one row per actor however many edges name them.
+     *
+     * One performer usually voices a character across every title they appear in, so
+     * the raw connection answers the same name on every edge. Drawn as sent, "Voiced
+     * by" would be twelve identical rows; deduplicated, it is the two answers a
+     * reader is looking for.
+     */
+    @Test
+    fun `voice actors are deduplicated per language and ordered Japanese first`() {
+        val spike = CharacterProfile(
+            id = 1,
+            name = MediaName(full = "Spike Spiegel"),
+            media = ProfileAppearances(
+                edges = listOf(
+                    edge(
+                        node = ProfileAppearance(id = 1, type = "ANIME"),
+                        japanese = VoiceActor(95012, MediaName(full = "Koichi Yamadera")),
+                        english = VoiceActor(95013, MediaName(full = "Steven Blum"))
+                    ),
+                    edge(
+                        node = ProfileAppearance(id = 5, type = "ANIME"),
+                        japanese = VoiceActor(95012, MediaName(full = "Koichi Yamadera")),
+                        english = VoiceActor(95013, MediaName(full = "Steven Blum"))
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Koichi Yamadera" to "Japanese",
+                "Steven Blum" to "English"
+            ),
+            spike.toLoadedState().voiceActors.map { it.name to it.language }
+        )
+    }
+
+    /**
+     * An actor AniList did not name is not a row.
+     *
+     * The name is the whole row - there is no second field to fall back on - so one
+     * without it would be a face with a blank line beside it.
+     */
+    @Test
+    fun `a voice actor without a name is left out`() {
+        val character = CharacterProfile(
+            id = 1,
+            media = ProfileAppearances(
+                edges = listOf(
+                    edge(
+                        node = ProfileAppearance(id = 1),
+                        japanese = VoiceActor(1, name = null)
+                    ),
+                    edge(
+                        node = ProfileAppearance(id = 2),
+                        japanese = VoiceActor(2, MediaName(full = "  "))
+                    )
+                )
+            )
+        )
+
+        assertTrue(character.toLoadedState().voiceActors.isEmpty())
+    }
+
+    /**
+     * A character's titles now arrive as edges - the half that also carries the role
+     * and the voice actors - so the row must read the node out of each one.
+     */
+    @Test
+    fun `a character's titles are the nodes of its edges`() {
+        val character = CharacterProfile(
+            id = 1,
+            media = ProfileAppearances(
+                edges = listOf(
+                    edge(node = ProfileAppearance(id = 7, type = "MANGA")),
+                    // The schema lets an edge answer without a node; it is dropped
+                    // rather than drawn as "Unknown".
+                    ProfileAppearanceEdge(node = null)
+                )
+            )
+        )
+
+        assertEquals(listOf(7), character.toLoadedState().appearances.map { it.id })
+    }
+
+    /** A staff member still asks for nodes, and the row still reads them. */
+    @Test
+    fun `a staff member's titles are its nodes`() {
+        val staff = StaffProfile(
+            id = 1,
+            media = ProfileAppearances(nodes = listOf(ProfileAppearance(id = 9)))
+        )
+
+        assertEquals(listOf(9), staff.toLoadedState().appearances.map { it.id })
+        assertTrue("a person is not voiced", staff.toLoadedState().voiceActors.isEmpty())
+    }
+
+    /**
+     * The query is what populates "Voiced by", and each half of it is silent when it
+     * is missing.
+     *
+     * `voiceActors` answers **null** when it is asked without a language - checked
+     * against the live API - and a media connection asked for `nodes` carries no
+     * voice actors at all. A refactor that "tidies away" the alias or the edges
+     * therefore leaves the section empty rather than failing anywhere, which is
+     * exactly the kind of change this test is here to catch.
+     */
+    @Test
+    fun `the character query asks for the edge and both voice actor languages`() {
+        val query = GraphQLQueries.getCharacterProfileQuery()
+
+        assertTrue("the media connection must be asked for edges", query.contains("edges"))
+        assertTrue("the original performance", query.contains("voiceActors(language: JAPANESE)"))
+        assertTrue(
+            "the dub, under its own alias",
+            query.contains("voiceActorsEnglish: voiceActors(language: ENGLISH)")
+        )
+    }
+
+    // ---- what the store remembers ---------------------------------------------
+
+    /**
+     * Looking at the same face twice costs one request, and the second is instant.
+     *
+     * The reader taps through a cast and goes back to someone they have already read.
+     * Without the store's memory that re-open re-entered `Loading`, asked AniList the
+     * same question and painted the same answer back a frame later - a spinner where
+     * the page already was.
+     */
+    @Test
+    fun `reopening a profile is answered from memory and sends nothing`() = runTest {
+        var fetches = 0
+        val store = PersonProfileStore(
+            repository = FakeRepository(characterProfile = {
+                fetches++
+                CharacterProfile(id = it, name = MediaName(full = "Character $it"))
+            }),
+            scope = this
+        )
+
+        store.openCharacter(1, "Character 1")
+        runCurrent()
+        assertEquals(1, fetches)
+
+        store.close()
+        store.openCharacter(1, "Character 1")
+
+        // Synchronously, before the scheduler runs anything: a remembered profile
+        // never goes through `Loading` at all.
+        assertEquals("Character 1", loaded(store).name)
+        runCurrent()
+        assertEquals("a remembered profile costs no second request", 1, fetches)
+
+        // And the memory does not swallow a question it has no answer to.
+        store.close()
+        store.openCharacter(2, "Character 2")
+        runCurrent()
+        assertEquals(2, fetches)
+        assertEquals("Character 2", loaded(store).name)
+    }
+
+    // ---- the staff page's credits ----------------------------------------------
+
+    /**
+     * The credit lives on the edge and `characters` hangs beside it, so both
+     * connections arrive as edges - lost in a flattening to nodes, the rows go empty
+     * and nothing fails to say so.
+     */
+    @Test
+    fun `a staff page maps its credits and the characters they voiced`() {
+        val staff = StaffProfile(
+            id = 1,
+            media = ProfileAppearances(
+                edges = listOf(
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 20, type = "ANIME"),
+                        staffRole = "Director"
+                    ),
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 21, type = "ANIME"),
+                        staffRole = "ADR Script (English)"
+                    )
+                )
+            ),
+            characterMedia = StaffCharacterMedia(
+                edges = listOf(
+                    characterEdge("MAIN", voicedNode(3, "Orochimaru", "https://img/oro.jpg"))
+                )
+            )
+        )
+
+        val loaded = staff.toLoadedState()
+        assertEquals(
+            "every staffRole has to survive the edges-to-nodes flattening",
+            listOf("Director", "ADR Script (English)"),
+            loaded.appearances.map { it.staffRole }
+        )
+        val voiced = loaded.voicedCharacters.single()
+        assertEquals(3, voiced.id)
+        assertEquals("Orochimaru", voiced.name)
+        assertEquals("https://img/oro.jpg", voiced.imageUrl)
+        assertEquals("MAIN", voiced.characterRole)
+        assertTrue("a person is not voiced", loaded.voiceActors.isEmpty())
+    }
+
+    /**
+     * A character entry AniList did not name or identify is not drawn: the id is the
+     * tap into the character's page and the name is the whole caption under the
+     * portrait, so a card missing either has nothing to be. The raw node's id is
+     * nullable precisely so this filter can exist rather than a parse failure taking
+     * the whole staff page down with it.
+     */
+    @Test
+    fun `a voiced character without an id or a name is dropped`() {
+        val staff = StaffProfile(
+            id = 1,
+            characterMedia = StaffCharacterMedia(
+                edges = listOf(
+                    characterEdge(
+                        null,
+                        voicedNode(null, "No Id"),
+                        voicedNode(4, null),
+                        voicedNode(4, "  "),
+                        voicedNode(5, "Real")
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf(5), staff.toLoadedState().voicedCharacters.map { it.id })
+    }
+
+    /**
+     * The same character across a franchise's edges is one card. The first credit -
+     * the edges arrive most popular first - is the one a reader recognises.
+     */
+    @Test
+    fun `a character credited on two titles is one card`() {
+        val staff = StaffProfile(
+            id = 1,
+            characterMedia = StaffCharacterMedia(
+                edges = listOf(
+                    characterEdge("MAIN", voicedNode(3, "Orochimaru")),
+                    characterEdge("SUPPORTING", voicedNode(3, "Orochimaru"))
+                )
+            )
+        )
+
+        val voiced = staff.toLoadedState().voicedCharacters
+        assertEquals("one card however many titles name the character", 1, voiced.size)
+        assertEquals("the first credit wins", "MAIN", voiced.single().characterRole)
+    }
+
+    /**
+     * A `staffMedia` asked for as `nodes` carries no `staffRole`, and a
+     * `characterMedia` asked for as `nodes` carries no `characters` - either way the
+     * rows just go empty, so the document's shape is pinned here rather than left to
+     * the mapper, which can only see what arrived.
+     */
+    @Test
+    fun `the staff query asks for the credit and the voiced characters`() {
+        val query = GraphQLQueries.getStaffProfileQuery()
+        assertTrue(
+            "staffMedia must be edges: the credit hangs on them",
+            query.contains("staffMedia(perPage: 12, sort: [POPULARITY_DESC])") &&
+                query.contains("edges") && query.contains("staffRole")
+        )
+        assertTrue(
+            "the characters only exist under the characterMedia connection",
+            query.contains("characterMedia(perPage: 12, sort: [POPULARITY_DESC])") &&
+                query.contains("characters {")
+        )
+    }
+
+    /**
+     * The character side of the sheet is untouched by the staff additions: its titles
+     * still come out of the edges and its voice actors are still deduplicated, and a
+     * character gains no voiced-character row of its own.
+     */
+    @Test
+    fun `a character's titles and voice actors still hold`() {
+        val character = CharacterProfile(
+            id = 1,
+            media = ProfileAppearances(
+                edges = listOf(
+                    edge(
+                        node = ProfileAppearance(id = 7, type = "ANIME"),
+                        japanese = VoiceActor(11, MediaName(full = "Koichi Yamadera"))
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf(7), character.media?.titles?.map { it.id })
+        assertEquals(listOf("Koichi Yamadera"), character.media?.voiceActorCredits?.map { it.name })
+        assertTrue(character.toLoadedState().voicedCharacters.isEmpty())
+    }
+
+    private fun edge(
+        node: ProfileAppearance?,
+        japanese: VoiceActor? = null,
+        english: VoiceActor? = null
+    ) = ProfileAppearanceEdge(
+        node = node,
+        voiceActors = japanese?.let { listOf(it) },
+        voiceActorsEnglish = english?.let { listOf(it) }
+    )
+
+    /** One `characterMedia` edge, with the characters credited on it. */
+    private fun characterEdge(role: String?, vararg nodes: StaffCharacterNode) =
+        StaffCharacterEdge(characterRole = role, characters = nodes.toList())
+
+    /** A character on a `characterMedia` edge, as the query parses one. */
+    private fun voicedNode(id: Int?, name: String? = null, image: String? = null) =
+        StaffCharacterNode(
+            id = id,
+            name = name?.let { MediaName(full = it) },
+            image = image?.let { MediaImage(large = it) }
+        )
 
     private fun loaded(store: PersonProfileStore): PersonProfileState.Loaded =
         store.state.value as PersonProfileState.Loaded

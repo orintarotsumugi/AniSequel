@@ -3,9 +3,11 @@ package com.anisequel
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.InlineToken
 import com.anisequel.ui.components.markdown.MarkdownNode
+import com.anisequel.ui.components.markdown.tryParseTable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -200,6 +202,31 @@ class AniListMarkdownTest {
         assertEquals(3, table.headers.size)
         assertEquals(2, table.rows.size)
         assertEquals(3, table.rows[0].size)
+    }
+
+    /**
+     * The shipped crash's message was `Index -1 out of bounds for length 2` - a
+     * two-element line list indexed at -1. This function guarded its upper bound
+     * and not its lower one, so an index off the front of [lines] was thrown
+     * from `lines[startIndex]` instead of answering "not a table".
+     */
+    @Test
+    fun `a table before the start of the document is refused, not indexed into`() {
+        val lines = listOf("| A | B |", "| --- | --- |")
+
+        assertNull(tryParseTable(lines, -1) { emptyList() })
+    }
+
+    /** The line above the guard is still a table: the fix is a floor, not a brake. */
+    @Test
+    fun `a two-line table at the top of a document still parses`() {
+        val lines = listOf("| A | B |", "| --- | --- |")
+
+        val parsed = tryParseTable(lines, 0) { listOf(InlineToken.Plain(it)) }
+
+        assertNotNull(parsed)
+        assertEquals(2, parsed!!.first.headers.size)
+        assertEquals(0, parsed.first.rows.size)
     }
 
     @Test
@@ -782,4 +809,226 @@ class AniListMarkdownTest {
         assertEquals("https://anilist.co/anime/1", block!!.targetUrl)
         assertEquals("https://s4.anilist.co/file/anilistcdn/x/bx1.png", block.url)
     }
+
+    // ---- images: escapes, HTML tags, protocol-relative URLs, titles ------------
+
+    /**
+     * The escapes AniList's editor stores.
+     *
+     * Nothing decoded them, so an apostrophe printed as the five characters
+     * `&#39;` and, the failure that cost the most, an image whose URL carried
+     * `&amp;` was *requested* with the literal escape still in it and 404ed -
+     * blank artwork over markup that looked perfectly correct.
+     */
+    @Test
+    fun `html escapes are decoded once, including the numeric forms`() {
+        val nodes = AniListMarkdownParser.parse(
+            "Tom &amp; Jerry say &quot;hi&quot; &#39;now&#39; to &lt;you&gt; &#123;today&#125; &#x1F600;"
+        )
+
+        assertEquals(
+            "Tom & Jerry say \"hi\" 'now' to <you> {today} \uD83D\uDE00",
+            paragraphText(nodes)
+        )
+    }
+
+    /**
+     * The double escape, which a chain of `replace` calls gets wrong.
+     *
+     * An author whose literal text is `&lt;` has it stored as `&amp;lt;`, and
+     * the reader must see `&lt;` - not `<`. `replace("&amp;", "&")` followed by
+     * `replace("&lt;", "<")`, in either order, collapses both levels at once;
+     * one pass over the input is what keeps each escape decoded exactly once.
+     */
+    @Test
+    fun `a double escape decodes one level, not two`() {
+        val nodes = AniListMarkdownParser.parse("write &amp;lt;b&amp;gt; to open bold")
+
+        assertEquals("write &lt;b&gt; to open bold", paragraphText(nodes))
+    }
+
+    /** The query-string case that made whole images 404 rather than just look odd. */
+    @Test
+    fun `an escaped ampersand in an image URL is decoded before the request`() {
+        val nodes = AniListMarkdownParser.parse("![cover](https://x.test/a.png?w=1&amp;h=2)")
+
+        assertEquals(
+            "https://x.test/a.png?w=1&h=2",
+            (nodes.single() as MarkdownNode.ImageBlock).url
+        )
+    }
+
+    /** Raw `<img>` markup, which AniList descriptions carry and which printed literally. */
+    @Test
+    fun `a raw img tag alone on a line is an image block`() {
+        val nodes = AniListMarkdownParser.parse(
+            "<img src=\"https://s4.anilist.co/file/anilistcdn/x/bx1.png\" alt=\"cover\" />"
+        )
+
+        val block = nodes.filterIsInstance<MarkdownNode.ImageBlock>().singleOrNull()
+        assertNotNull("an <img> tag alone on a line must be an image", block)
+        assertEquals("https://s4.anilist.co/file/anilistcdn/x/bx1.png", block!!.url)
+        assertEquals("cover", block.alt)
+    }
+
+    /** The same tag between two words, with a single-quoted `src`, which the line-only path never sees. */
+    @Test
+    fun `a raw img tag inside a sentence is an inline image and the sentence survives`() {
+        val inlines = AniListMarkdownParser.parseInlines(
+            "Look <img src='https://x.test/cat.png'> here"
+        )
+
+        val image = inlines.filterIsInstance<InlineToken.Image>().singleOrNull()
+        assertNotNull("an <img> between two words must be an inline image", image)
+        assertEquals("https://x.test/cat.png", image!!.url)
+
+        val text = inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+        assertTrue("the words before the tag must survive: <$text>", text.contains("Look"))
+        assertTrue("the words after the tag must survive: <$text>", text.contains("here"))
+        assertFalse("the tag itself must not be printed: <$text>", text.contains("<img"))
+    }
+
+    /**
+     * AniList serves artwork from protocol-relative addresses, and no image
+     * pattern accepted one - every form required `https?://` - so the markup
+     * matched nothing and the image rendered as a link or as raw text.
+     */
+    @Test
+    fun `a protocol-relative image URL on its own line gets the https scheme`() {
+        val markdown = AniListMarkdownParser.parse("![alt](//s4.anilist.co/file/anilistcdn/x/bx1.png)")
+        assertEquals(
+            "https://s4.anilist.co/file/anilistcdn/x/bx1.png",
+            (markdown.single() as MarkdownNode.ImageBlock).url
+        )
+
+        val aniList = AniListMarkdownParser.parse("img220(//s4.anilist.co/file/anilistcdn/x/bx1.png)")
+        assertEquals(
+            "https://s4.anilist.co/file/anilistcdn/x/bx1.png",
+            (aniList.single() as MarkdownNode.ImageBlock).url
+        )
+
+        val bare = AniListMarkdownParser.parse("//s4.anilist.co/file/anilistcdn/x/bx1.png")
+        assertEquals(
+            "https://s4.anilist.co/file/anilistcdn/x/bx1.png",
+            (bare.single() as MarkdownNode.ImageBlock).url
+        )
+
+        val linked = AniListMarkdownParser.parse("[![alt](//s4.anilist.co/x.png)](https://anilist.co/anime/1)")
+        val linkedImage = linked.single() as MarkdownNode.ImageBlock
+        assertEquals("https://s4.anilist.co/x.png", linkedImage.url)
+        assertEquals("https://anilist.co/anime/1", linkedImage.targetUrl)
+
+        val html = AniListMarkdownParser.parse("<img src=\"//s4.anilist.co/x.png\">")
+        assertEquals("https://s4.anilist.co/x.png", (html.single() as MarkdownNode.ImageBlock).url)
+    }
+
+    @Test
+    fun `a protocol-relative image URL inside a sentence gets the https scheme`() {
+        val markdown = AniListMarkdownParser.parseInlines("see ![alt](//s4.anilist.co/x.gif) now")
+        assertEquals(
+            "https://s4.anilist.co/x.gif",
+            markdown.filterIsInstance<InlineToken.Image>().single().url
+        )
+
+        // A bare protocol-relative address is not an auto-URL - that rule needs a
+        // scheme so ordinary prose cannot link - but an image extension makes it
+        // an image, exactly as the `https://` spelling does.
+        val bare = AniListMarkdownParser.parseInlines("see //s4.anilist.co/x.gif now")
+        assertEquals(
+            "https://s4.anilist.co/x.gif",
+            bare.filterIsInstance<InlineToken.Image>().single().url
+        )
+    }
+
+    /**
+     * `![alt](url "a title")`, which every markdown-image pattern refused to
+     * match at all: the ` "a title"` suffix made the whole line fall through, so
+     * the author's image silently degraded to a link or to literal markup.
+     */
+    @Test
+    fun `a quoted image title is dropped from the URL`() {
+        val block = AniListMarkdownParser.parse("![cover](https://x.test/a.png \"the title\")")
+        val blockImage = block.single() as MarkdownNode.ImageBlock
+        assertEquals("https://x.test/a.png", blockImage.url)
+        assertEquals("cover", blockImage.alt)
+
+        val singleQuoted = AniListMarkdownParser.parse("![cover](https://x.test/a.png 'the title')")
+        assertEquals("https://x.test/a.png", (singleQuoted.single() as MarkdownNode.ImageBlock).url)
+
+        val inline = AniListMarkdownParser.parseInlines("see ![cover](https://x.test/a.png \"the title\") now")
+        assertEquals(
+            "https://x.test/a.png",
+            inline.filterIsInstance<InlineToken.Image>().single().url
+        )
+
+        val linked = AniListMarkdownParser.parse(
+            "[![cover](https://x.test/a.png \"the title\")](https://anilist.co/anime/1)"
+        )
+        val linkedImage = linked.single() as MarkdownNode.ImageBlock
+        assertEquals("https://x.test/a.png", linkedImage.url)
+        assertEquals("https://anilist.co/anime/1", linkedImage.targetUrl)
+
+        val linkedInline = AniListMarkdownParser.parseInlines(
+            "see [![cover](https://x.test/a.png \"the title\")](https://example.com/x) now"
+        )
+        val link = linkedInline.filterIsInstance<InlineToken.Link>().single()
+        assertEquals("https://example.com/x", link.url)
+        assertEquals(
+            "https://x.test/a.png",
+            link.children.filterIsInstance<InlineToken.Image>().single().url
+        )
+    }
+
+    /**
+     * The size `img220(...)` / `img50%(...)` carries.
+     *
+     * It was matched and then dropped, so `ImageBlock.width` was always null and
+     * `RenderImage` had nothing to honour - every sized AniList image drew at
+     * full width, which is the one thing the size syntax exists to change.
+     */
+    @Test
+    fun `an AniList image keeps the size it was written with`() {
+        val pixels = AniListMarkdownParser.parse("img220(https://x.test/a.png)")
+        assertEquals("220", (pixels.single() as MarkdownNode.ImageBlock).width)
+
+        val percent = AniListMarkdownParser.parse("img50%(https://x.test/a.png)")
+        assertEquals("50%", (percent.single() as MarkdownNode.ImageBlock).width)
+
+        val linked = AniListMarkdownParser.parse("[img50%(https://x.test/a.png)](https://anilist.co/anime/1)")
+        val linkedImage = linked.single() as MarkdownNode.ImageBlock
+        assertEquals("50%", linkedImage.width)
+        assertEquals("https://anilist.co/anime/1", linkedImage.targetUrl)
+
+        // `img(url)` and `image(url)` carry no size, and must not invent one.
+        assertEquals(
+            null,
+            (AniListMarkdownParser.parse("img(https://x.test/a.png)").single() as MarkdownNode.ImageBlock).width
+        )
+        assertEquals(
+            null,
+            (AniListMarkdownParser.parse("image(https://x.test/a.png)").single() as MarkdownNode.ImageBlock).width
+        )
+    }
+
+    /**
+     * A tag with no `src`, which is the shape that can stop [AniListMarkdownParser.parse]
+     * from advancing: the line is refused by the image-block handler (there is
+     * no image) but it is also the first line the paragraph loop refuses to
+     * consume, so it only terminates because the loop's leftover branch emits
+     * the line as its own paragraph. The author's text is kept, and the tag is
+     * not silently deleted.
+     */
+    @Test
+    fun `an img tag with no src is kept as text rather than dropped`() {
+        val nodes = AniListMarkdownParser.parse("Before\n<img>\nAfter")
+
+        assertTrue(nodes.none { it is MarkdownNode.ImageBlock })
+        assertTrue("the tag must not disappear, was '${paragraphText(nodes)}'", paragraphText(nodes).contains("<img>"))
+    }
+
+    /** The plain text of a parsed document's paragraphs, for assertions about decoded prose. */
+    private fun paragraphText(nodes: List<MarkdownNode>): String =
+        nodes.filterIsInstance<MarkdownNode.Paragraph>()
+            .flatMap { paragraph -> paragraph.inlines.filterIsInstance<InlineToken.Plain>() }
+            .joinToString("") { it.text }
 }

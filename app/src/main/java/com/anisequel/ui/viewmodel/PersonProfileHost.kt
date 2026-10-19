@@ -78,6 +78,24 @@ class PersonProfileHost internal constructor(
             state = state,
             onDismiss = { store.close() },
             onRetry = { store.retry() },
+            // Straight through, and null when this host has no repository - which is
+            // what draws the "Voiced by" rows as captions rather than as controls that
+            // could only fail. The name travels with the id: the sheet says it while
+            // the actor's own page loads.
+            onOpenStaff = if (enabled) {
+                { credit -> store.openStaff(credit.staffId, credit.name) }
+            } else {
+                null
+            },
+            // The staff page's "Voiced" row, on the same terms as the row above: null
+            // when this host has no repository, which draws the character cards as
+            // captions. The name travels with the id so the sheet can say who is
+            // loading before their own page lands.
+            onOpenCharacter = if (enabled) {
+                { voiced -> store.openCharacter(voiced.id, voiced.name) }
+            } else {
+                null
+            },
             onOpenAppearance = { appearance ->
                 // Close first, then hand the title over. The host opens it with its
                 // own state, and leaving this sheet drawn over it would cover the

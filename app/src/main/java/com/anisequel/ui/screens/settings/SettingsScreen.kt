@@ -116,20 +116,33 @@ fun SettingsScreen(
         AnimatedContent(
             targetState = selectedTab,
             transitionSpec = {
-                // No parentheses around the two halves: `+` binds tighter than the
-                // `togetherWith` infix function, so this parses as
-                // `(fadeIn + scaleIn) togetherWith (fadeOut + scaleOut)` and detekt
-                // flags the brackets as noise (which is what CodeFactor caught here).
-                fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                    scaleIn(
-                        animationSpec = ExpressiveMotion.FastSpatial,
-                        initialScale = 0.94f
-                    ) togetherWith
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                    scaleOut(
-                        animationSpec = ExpressiveMotion.FastSpatial,
-                        targetScale = 1.04f
-                    )
+                // The brackets, and the `using(null)` after them, are both
+                // load-bearing: an infix call binds *looser* than `+`, so
+                // without them `using` would attach to `scaleOut(...)` alone -
+                // an `ExitTransition`, which has no such extension - and the
+                // file would not compile. (Before `using` there was no reason
+                // for them; detekt flagged the bare brackets as noise when the
+                // halves were written out, which is what CodeFactor caught.)
+                //
+                // The `null` drops the default `SizeTransform`, which animates
+                // the container's height between tabs while the tab being left
+                // may still be settling its own scroll - these tabs are
+                // scrollable columns, and this container's height decides their
+                // viewport. That is the shape the crash was reported with.
+                // The height snaps between tabs now; the fades and the scales
+                // are draw-phase and stay.
+                (
+                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                        scaleIn(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            initialScale = 0.94f
+                        ) togetherWith
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                        scaleOut(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            targetScale = 1.04f
+                        )
+                    ) using null
             },
             label = "settings_tab_transition",
             modifier = Modifier

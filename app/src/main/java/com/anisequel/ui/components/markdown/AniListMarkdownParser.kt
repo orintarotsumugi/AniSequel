@@ -23,15 +23,89 @@ import java.util.Locale
  */
 object AniListMarkdownParser {
 
+    /**
+     * The HTML escapes AniList's editor leaves in a bio, and their numeric forms.
+     *
+     * A bio is authored in a rich-text editor and stored with its escapes intact:
+     * `&amp;` for an ampersand, `&quot;` for a double quote, `&#39;` for an
+     * apostrophe, `&#123;` / `&#x1F600;` for anything else. Nothing decoded them,
+     * so the characters reached the reader as the escape sequences - an
+     * apostrophe printed as the five characters `&#39;` - and, the one that cost
+     * the most, an image URL whose query string carried `&amp;` was *requested*
+     * with the literal escape still in it and 404ed, so the artwork stayed blank
+     * over markup that looked perfectly correct.
+     *
+     * ## Why one pattern and not a chain of `replace` calls
+     *
+     * A chain decodes twice. `&amp;lt;` is how an author's literal `&lt;` text is
+     * stored, and it has to come out as those four characters - but
+     * `replace("&amp;", "&")` and `replace("&lt;", "<")`, in either order, turn
+     * it into `<`. One pass over the input, whose replacement text is never
+     * re-scanned, is what keeps every escape decoded exactly once.
+     */
+    private val HTML_ENTITY_PATTERN = Regex("""&(amp|lt|gt|quot|apos|nbsp|#[0-9]+|#[xX][0-9a-fA-F]+);""")
+
+    /**
+     * The named half of [HTML_ENTITY_PATTERN].
+     *
+     * `&nbsp;` decodes to U+00A0 rather than to a plain space: the two look
+     * identical in a text run and break differently, and the author who asked
+     * for a non-breaking space asked for that difference.
+     */
+    private val NAMED_HTML_ENTITIES = mapOf(
+        "amp" to "&",
+        "lt" to "<",
+        "gt" to ">",
+        "quot" to "\"",
+        "apos" to "'",
+        "nbsp" to "\u00A0"
+    )
+
     private val HEADER_PATTERN = Regex("""^(#{1,6})\s+(.+)$""")
     private val CHECKLIST_PATTERN = Regex("""^[-*+]\s+\[([ xX])]\s*(.+)$""")
     private val UNORDERED_LIST_PATTERN = Regex("""^[-*+]\s+(.+)$""")
     private val ORDERED_LIST_PATTERN = Regex("""^\d+\.\s+(.+)$""")
     private val HORIZONTAL_RULE_PATTERN = Regex("""^(\*{3,}|-{3,}|_{3,})$""")
-    private val LINKED_MD_IMG_PATTERN = Regex("""^\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://[^\s)]+)\)$""")
-    private val LINKED_ANILIST_IMG_PATTERN = Regex("""^\[img(?:\d+%|\d+)?\((https?://[^)]+)\)]\((https?://[^\s)]+)\)$""", RegexOption.IGNORE_CASE)
-    private val ANILIST_IMG_PATTERN = Regex("""^img(?:\d+%|\d+)?\((https?://[^)]+)\)$|^image\((https?://[^)]+)\)$""", RegexOption.IGNORE_CASE)
-    private val MD_IMG_PATTERN = Regex("""^!\[([^\]]*)]\((https?://[^)]+)\)$""")
+    /**
+     * The four whole-line image forms, and the rules they now share.
+     *
+     * ## The scheme is optional
+     *
+     * AniList serves artwork from protocol-relative addresses
+     * (`//s4.anilist.co/...`) in some documents, and every one of these patterns
+     * required `https?://`, so those images matched nothing: the line fell
+     * through to the paragraph path and printed as a link or as raw text.
+     * `(?:https?:)?//` matches both spellings, and [absoluteImageUrl] puts the
+     * scheme back on whatever was captured, because Coil cannot resolve `//`
+     * against anything and would request a host of its own.
+     *
+     * ## The title is optional, and dropped
+     *
+     * `![alt](https://x/y.png "a title")` is valid Markdown. The ` "a title"`
+     * suffix used to stop every markdown-image pattern from matching at all -
+     * the image silently degraded to a link or to the literal markup - so the
+     * title is now consumed and discarded: nothing in this renderer can show a
+     * title, and splitting it off the URL is the whole point.
+     *
+     * ## The size is captured where AniList has one
+     *
+     * `img220(url)` / `img50%(url)` and their linked spelling carry a size that
+     * was matched and then dropped, so `ImageBlock.width` was always null and
+     * `RenderImage` had nothing to honour. It is the only thing this syntax adds
+     * over `img(url)`, so it is now captured - see `imageWidthModifier`.
+     */
+    private val LINKED_MD_IMG_PATTERN = Regex(
+        """^\[!\[([^\]]*)]\(((?:https?:)?//[^\s)]+)(?:\s+["'][^"']*["'])?\s*\)]\((https?://[^\s)]+)\)$"""
+    )
+    private val LINKED_ANILIST_IMG_PATTERN = Regex(
+        """^\[img(\d+%|\d+)?\(((?:https?:)?//[^)]+)\)]\((https?://[^\s)]+)\)$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val ANILIST_IMG_PATTERN = Regex(
+        """^img(\d+%|\d+)?\(((?:https?:)?//[^)]+)\)$|^image\(((?:https?:)?//[^)]+)\)$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val MD_IMG_PATTERN = Regex("""^!\[([^\]]*)]\(((?:https?:)?//[^\s)]+)(?:\s+["'][^"']*["'])?\s*\)$""")
     /**
      * A bare image/GIF URL alone on its line.
      *
@@ -40,10 +114,11 @@ object AniListMarkdownParser {
      * posted on its own line was a blue underline rather than the GIF. The
      * extension list is the whole test - there is no content-type to consult
      * before the request is made - and it is matched case-insensitively because
-     * hosts are not consistent about the casing.
+     * hosts are not consistent about the casing. The scheme is optional, for the
+     * protocol-relative addresses described above.
      */
     private val BARE_IMAGE_URL_PATTERN = Regex(
-        """^https?://\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
+        """^(?:https?:)?//\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
         RegexOption.IGNORE_CASE
     )
 
@@ -142,7 +217,7 @@ object AniListMarkdownParser {
      * it ahead on a tied offset.
      */
     private val INLINE_LINKED_IMG = Regex(
-        """\[!\[([^\]]*)]\((https?://[^)]+)\)]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)"""
+        """\[!\[([^\]]*)]\(((?:https?:)?//[^\s)]+)(?:\s+["'][^"']*["'])?\s*\)]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)"""
     )
     /**
      * `![alt](url)` in the middle of a paragraph.
@@ -150,8 +225,67 @@ object AniListMarkdownParser {
      * Checked ahead of [INLINE_LINK] because that pattern matches the `[alt](url)`
      * half of it and leaves the leading `!` as a stray `Plain("!")` token, which
      * is exactly what the bio used to print for an inline image.
+     *
+     * The scheme may be missing (protocol-relative artwork) and a ` "title"`
+     * suffix may follow the URL; both are consumed, and the title is discarded
+     * because nothing here can show one. The title has to come *after* a URL
+     * that cannot contain a space, or the URL group would swallow it whole and
+     * the image would be requested under a name that includes its own title.
      */
-    private val INLINE_MD_IMG = Regex("""!\[([^\]]*)]\((https?://[^)\s]+)\)""")
+    private val INLINE_MD_IMG = Regex(
+        """!\[([^\]]*)]\(((?:https?:)?//[^)\s]+)(?:\s+["'][^"']*["'])?\s*\)"""
+    )
+    /**
+     * A raw `<img ...>` tag anywhere in a paragraph.
+     *
+     * AniList descriptions can carry these. Nothing recognised one, so the
+     * literal markup printed in the bio. The tag stops at its first `>`, which
+     * keeps it from swallowing the text around it: a tag that matches is exactly
+     * one tag, whether it is alone on its line or between two words. Attribute
+     * values may be single- or double-quoted, and a trailing `/` before the `>`
+     * of a self-closing tag is simply part of the match.
+     */
+    private val HTML_IMG_TAG_PATTERN = Regex("""<img\b[^>]*>""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The `src` of an [HTML_IMG_TAG_PATTERN] match.
+     *
+     * `(?<![\w-])` is load-bearing: a bare `\b` before `src` also matches the
+     * `src` inside `data-src`, and a lazily-loaded bio would then request the
+     * placeholder instead of the artwork. The three alternatives are the three
+     * ways HTML writes an attribute value; `groupValues` reads the first that
+     * matched, and an unmatched group is the empty string.
+     */
+    private val HTML_IMG_SRC_PATTERN = Regex(
+        """(?<![\w-])src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** The `alt` of an [HTML_IMG_TAG_PATTERN] match, under the same rules as `src`. */
+    private val HTML_IMG_ALT_PATTERN = Regex(
+        """(?<![\w-])alt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * A protocol-relative image URL between two words.
+     *
+     * [INLINE_AUTO_URL] requires a scheme, so the `https://` spelling of an
+     * address embedded while the `//` spelling of the same address stayed
+     * literal text. Widening the auto-URL rule would have been the wrong fix:
+     * it would turn any `//word` in prose into a link. This pattern is confined
+     * to images by its extension list, and the URL is matched lazily so that a
+     * sentence's punctuation after the extension is left outside the match -
+     * the same failure [INLINE_AUTO_URL] documents one step removed.
+     *
+     * The lookbehind keeps it from claiming the `//` of an `https://` URL that
+     * `INLINE_AUTO_URL` is already going to match, or the second slash of a path
+     * that happens to contain a doubled one.
+     */
+    private val INLINE_PROTOCOL_RELATIVE_IMAGE = Regex(
+        """(?<![\w:])//\S+?\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?""",
+        RegexOption.IGNORE_CASE
+    )
     /**
      * A labelled link, `[label](url)`.
      *
@@ -257,8 +391,71 @@ object AniListMarkdownParser {
      */
     private val INLINE_MENTION = Regex("""(?<![\w.+\-])@([a-zA-Z0-9_-]+)""")
 
+    /**
+     * [text] with every escape in [HTML_ENTITY_PATTERN] replaced by the character it names.
+     *
+     * ## Why the escapes are decoded here and nowhere else
+     *
+     * Once per document, on the whole string, before it is split into lines: the
+     * block patterns and the inline tokeniser then see the characters the author
+     * typed rather than their storage form. Decoding at the point of use would
+     * have to be repeated in every branch that can carry text, and one branch
+     * forgotten is one class of bio that still prints `&amp;`. Decoding later
+     * would run once per line with no memory of having already run, which is the
+     * double-decode [HTML_ENTITY_PATTERN] exists to prevent.
+     *
+     * The `&` guard is not a micro-optimisation: a bio that contains no `&` at
+     * all skips the scan, and most bios contain none.
+     */
+    private fun decodeHtmlEntities(text: String): String {
+        if (!text.contains('&')) return text
+        return HTML_ENTITY_PATTERN.replace(text) { match ->
+            val body = match.groupValues[1]
+            if (!body.startsWith("#")) {
+                NAMED_HTML_ENTITIES[body] ?: match.value
+            } else {
+                val hex = body.startsWith("#x", ignoreCase = true)
+                val code = body.substring(if (hex) 2 else 1).toIntOrNull(if (hex) 16 else 10)
+                // A zero, a surrogate, or anything past Unicode's ceiling is not
+                // a character a bio can mean. The escape is left as the author
+                // wrote it, which reads as markup rather than as an empty gap or
+                // a lone surrogate the text run cannot hold.
+                if (code == null || code < 1 || code > 0x10FFFF || code in 0xD800..0xDFFF) {
+                    match.value
+                } else {
+                    String(Character.toChars(code))
+                }
+            }
+        }
+    }
+
     fun parse(raw: String): List<MarkdownNode> {
-        val clean = raw.replace("\r\n", "\n").replace("\r", "\n").replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n").trim()
+        // `<br>` becomes a break *before* the escapes are decoded, so an author's
+        // escaped literal `&lt;br&gt;` stays the visible text `<br>` instead of
+        // becoming a line break. Entities are then decoded once, here, on the
+        // whole document - see [decodeHtmlEntities] for why here and why once.
+        val clean = raw
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("<br>", "\n")
+            .replace("<br/>", "\n")
+            .replace("<br />", "\n")
+            .let(::decodeHtmlEntities)
+            .trim()
+        return parseDecoded(clean)
+    }
+
+    /**
+     * The block loop, over text whose line endings and `<br>`s are already
+     * normalised and whose escapes are already decoded.
+     *
+     * Split out of [parse] because a centered block re-parses the slice of lines
+     * it collected, and that slice has been through [decodeHtmlEntities] once
+     * already. Calling [parse] from there decoded it a second time, so
+     * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
+     * happened to sit inside `~~~center`.
+     */
+    private fun parseDecoded(clean: String): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 
         val nodes = mutableListOf<MarkdownNode>()
@@ -306,7 +503,10 @@ object AniListMarkdownParser {
                     i++
                 }
                 if (i < lines.size) i++ // skip closing delimiter
-                val centerContent = parse(centerLines.joinToString("\n"))
+                // `parseDecoded`, not `parse`: these lines came out of the
+                // already-decoded document, and decoding them again would make
+                // an escaped `&lt;` inside a centred block print as `<`.
+                val centerContent = parseDecoded(centerLines.joinToString("\n"))
                 nodes.add(MarkdownNode.CenteredBlock(centerContent))
                 continue
             }
@@ -365,16 +565,24 @@ object AniListMarkdownParser {
                 val alt = linkedMdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
                 val imgUrl = linkedMdImgMatch.groupValues[2]
                 val targetUrl = linkedMdImgMatch.groupValues[3]
-                nodes.add(MarkdownNode.ImageBlock(url = imgUrl, alt = alt, targetUrl = targetUrl))
+                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(imgUrl), alt = alt, targetUrl = targetUrl))
                 i++
                 continue
             }
 
             val linkedAnilistImgMatch = LINKED_ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
             if (linkedAnilistImgMatch != null) {
-                val imgUrl = linkedAnilistImgMatch.groupValues[1]
-                val targetUrl = linkedAnilistImgMatch.groupValues[2]
-                nodes.add(MarkdownNode.ImageBlock(url = imgUrl, targetUrl = targetUrl))
+                // Group 1 is the size (`220` or `50%`), which used to be matched
+                // and dropped; 2 is the image and 3 the target the cover opens.
+                val imgUrl = linkedAnilistImgMatch.groupValues[2]
+                val targetUrl = linkedAnilistImgMatch.groupValues[3]
+                nodes.add(
+                    MarkdownNode.ImageBlock(
+                        url = absoluteImageUrl(imgUrl),
+                        targetUrl = targetUrl,
+                        width = linkedAnilistImgMatch.groupValues[1].takeIf { it.isNotEmpty() }
+                    )
+                )
                 i++
                 continue
             }
@@ -382,8 +590,14 @@ object AniListMarkdownParser {
             // AniList / Markdown standalone images
             val anilistImgMatch = ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
             if (anilistImgMatch != null) {
-                val url = anilistImgMatch.groupValues[1].ifEmpty { anilistImgMatch.groupValues[2] }
-                nodes.add(MarkdownNode.ImageBlock(url = url, alt = null))
+                val url = anilistImgMatch.groupValues[2].ifEmpty { anilistImgMatch.groupValues[3] }
+                nodes.add(
+                    MarkdownNode.ImageBlock(
+                        url = absoluteImageUrl(url),
+                        alt = null,
+                        width = anilistImgMatch.groupValues[1].takeIf { it.isNotEmpty() }
+                    )
+                )
                 i++
                 continue
             }
@@ -391,16 +605,33 @@ object AniListMarkdownParser {
             val mdImgMatch = MD_IMG_PATTERN.matchEntire(trimmedLine)
             if (mdImgMatch != null) {
                 val alt = mdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
-                nodes.add(MarkdownNode.ImageBlock(url = mdImgMatch.groupValues[2], alt = alt))
+                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(mdImgMatch.groupValues[2]), alt = alt))
                 i++
                 continue
+            }
+
+            // A raw `<img src="...">` tag on a line of its own, which AniList
+            // descriptions can carry and which used to print as literal markup.
+            // The line has to be *nothing but* the tag - `matchEntire` - so a tag
+            // inside a sentence is left to the inline path below rather than
+            // having the sentence pulled into the image. A tag with no usable
+            // `src` falls through to the paragraph, where the inline handler
+            // keeps it as the text the author wrote.
+            val htmlImgTag = HTML_IMG_TAG_PATTERN.matchEntire(trimmedLine)
+            if (htmlImgTag != null) {
+                val htmlImage = htmlTagImage(htmlImgTag.value)
+                if (htmlImage != null) {
+                    nodes.add(MarkdownNode.ImageBlock(url = htmlImage.first, alt = htmlImage.second))
+                    i++
+                    continue
+                }
             }
 
             // A bare image/GIF URL on its own line, which AniList shows as the
             // image itself. Without this it fell through to the paragraph path and
             // rendered as a link.
             if (BARE_IMAGE_URL_PATTERN.matches(trimmedLine)) {
-                nodes.add(MarkdownNode.ImageBlock(url = trimmedLine))
+                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(trimmedLine)))
                 i++
                 continue
             }
@@ -587,6 +818,11 @@ object AniListMarkdownParser {
                 !lines[i].trim().equals("~~~") &&
                 !ANILIST_IMG_PATTERN.matches(lines[i].trim()) &&
                 !MD_IMG_PATTERN.matches(lines[i].trim()) &&
+                // A line that is nothing but an `<img>` tag stops the paragraph
+                // for the same reason `![...](...)` does: it is an image block
+                // of its own, and absorbing it would draw it inline at the end
+                // of the sentence above instead.
+                !HTML_IMG_TAG_PATTERN.matches(lines[i].trim()) &&
                 !BARE_IMAGE_URL_PATTERN.matches(lines[i].trim()) &&
                 !(BARE_URL_PATTERN.matches(lines[i].trim()) && videoEmbedFor(lines[i].trim()) != null) &&
                 !LINKED_MD_IMG_PATTERN.matches(lines[i].trim()) &&
@@ -696,6 +932,39 @@ object AniListMarkdownParser {
             else -> null
         }
     }
+
+    /**
+     * [url] with a scheme, because a captured image URL may be protocol-relative.
+     *
+     * AniList serves artwork from `//s4.anilist.co/...`, and Coil resolves a
+     * scheme-less address against nothing: the request went out with no host and
+     * every one of those images stayed a blank placeholder. `https:` is the
+     * scheme the site itself serves them over, so that is the one put back.
+     * Applied to every captured image URL, in one place, so a future image path
+     * cannot forget it and quietly request nothing.
+     */
+    private fun absoluteImageUrl(url: String): String =
+        if (url.startsWith("//")) "https:$url" else url
+
+    /**
+     * The image an `<img ...>` tag names, as `src` to `alt`, or null when it
+     * names no `src`.
+     *
+     * A tag without a usable `src` is not an image at all; the callers keep it
+     * as text rather than dropping the author's line. [alt] is null when the tag
+     * has none or when it is blank, because a blank `contentDescription` is not
+     * the same thing as none at all to a screen reader.
+     */
+    private fun htmlTagImage(tag: String): Pair<String, String?>? {
+        val src = HTML_IMG_SRC_PATTERN.find(tag)?.htmlAttributeValue()?.takeIf { it.isNotBlank() }
+            ?: return null
+        val alt = HTML_IMG_ALT_PATTERN.find(tag)?.htmlAttributeValue()?.takeIf { it.isNotBlank() }
+        return absoluteImageUrl(src) to alt
+    }
+
+    /** The first of an attribute's quoted or unquoted spellings that matched. */
+    private fun MatchResult.htmlAttributeValue(): String =
+        groupValues[1].ifEmpty { groupValues[2].ifEmpty { groupValues[3] } }
 
     /**
      * An AniList entity link written *inside* a line, as a [InlineToken.MediaLink].
@@ -808,6 +1077,8 @@ object AniListMarkdownParser {
 
         while (remaining.isNotEmpty()) {
             val mdImgMatch = INLINE_MD_IMG.find(remaining)
+            val htmlImgMatch = HTML_IMG_TAG_PATTERN.find(remaining)
+            val protocolImageMatch = INLINE_PROTOCOL_RELATIVE_IMAGE.find(remaining)
             val linkedImgMatch = INLINE_LINKED_IMG.find(remaining)
             val linkMatch = INLINE_LINK.find(remaining)
             val spoilerMatch = INLINE_SPOILER.find(remaining)
@@ -836,6 +1107,8 @@ object AniListMarkdownParser {
 
             val matches = listOfNotNull(
                 mdImgMatch?.let { it to "IMAGE" },
+                htmlImgMatch?.let { it to "HTML_IMG" },
+                protocolImageMatch?.let { it to "PROTOCOL_IMG" },
                 linkedImgMatch?.let { it to "LINKED_IMG" },
                 linkMatch?.let { it to "LINK" },
                 spoilerMatch?.let { it to "SPOILER" },
@@ -865,11 +1138,24 @@ object AniListMarkdownParser {
             when (type) {
                 "IMAGE" -> {
                     val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
-                    tokens.add(InlineToken.Image(firstMatch.groupValues[2], alt))
+                    tokens.add(InlineToken.Image(absoluteImageUrl(firstMatch.groupValues[2]), alt))
+                }
+                "HTML_IMG" -> {
+                    val image = htmlTagImage(firstMatch.value)
+                    if (image != null) {
+                        tokens.add(InlineToken.Image(image.first, image.second))
+                    } else {
+                        // A tag with no `src` has nothing to draw, so it stays as
+                        // the text the author wrote rather than vanishing.
+                        tokens.add(InlineToken.Plain(firstMatch.value))
+                    }
+                }
+                "PROTOCOL_IMG" -> {
+                    tokens.add(InlineToken.Image(absoluteImageUrl(firstMatch.value)))
                 }
                 "LINKED_IMG" -> {
                     val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
-                    val imgUrl = firstMatch.groupValues[2]
+                    val imgUrl = absoluteImageUrl(firstMatch.groupValues[2])
                     val targetUrl = firstMatch.groupValues[3]
                     // The cover is the label, the title is the target. `INLINE_LINK`
                     // alone would have taken the cover as the target and dropped the
@@ -918,8 +1204,11 @@ object AniListMarkdownParser {
                             mediaLink != null -> mediaLink
                             // A bare URL that points at an image gets embedded rather
                             // than linked, so `https://.../cat.gif` between two words
-                            // animates.
-                            IMAGE_EXTENSION.containsMatchIn(url) -> InlineToken.Image(url)
+                            // animates. This pattern requires a scheme, so the
+                            // normalisation is a no-op here - it is applied anyway so
+                            // that every `InlineToken.Image` in the file comes out of
+                            // the same one place.
+                            IMAGE_EXTENSION.containsMatchIn(url) -> InlineToken.Image(absoluteImageUrl(url))
                             else -> InlineToken.Link(url, url)
                         }
                     )
