@@ -34,7 +34,7 @@ import com.anisequel.ui.components.expressive.ExpressiveStateChip
  * The selection is held by the screen rather than by [ProfileStatsTab], because
  * the profile disposes the tab it switches away from: a section remembered here
  * would reset to Overview every time somebody looked at their Activity and came
- * back, which is exactly the bug the Library tab's remembered filter was fixed for.
+ * back, which is exactly the bug the Library page's remembered filter was fixed for.
  */
 enum class StatsSection(val label: String) {
     OVERVIEW("Overview"),

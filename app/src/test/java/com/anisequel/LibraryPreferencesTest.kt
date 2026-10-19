@@ -20,7 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * What the Library tab remembers between visits.
+ * What the Library page remembers between visits.
  *
  * ## The failure this exists for
  *
@@ -143,9 +143,9 @@ class LibraryPreferencesTest {
     }
 
     /**
-     * The Library tab's remembered view, resolved once per visit.
+     * The Library page's remembered view, resolved once, above the page.
      *
-     * The resolver's whole job is the two-way distinction the tab draws on:
+     * The resolver's whole job is the two-way distinction the grid draws on:
      * `answered = true` with nulls is "never chosen" - draw the defaults - and
      * `answered = false` is the one state that draws the resolving spinner. A
      * resolver that emitted nothing until something was stored, or that reported

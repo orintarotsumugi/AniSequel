@@ -62,7 +62,7 @@ interface AniListRepository {
     ): Result<MediaListCollection>
 
     /**
-     * The user's manga list, for the profile's Library tab.
+     * The user's manga list, for the Library page.
      *
      * Fetched only when somebody actually filters the Library to manga, unlike
      * the anime list which a profile opens with because the Stats tab needs it.
