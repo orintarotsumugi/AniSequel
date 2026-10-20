@@ -103,7 +103,13 @@ class EntryScoreScaleTest {
         // value the server refuses.
         val scale = ScoreScale(10, ScoreFormat.POINT_10.step)
 
-        assertEquals(0, scale.steps)
+        // Nine gaps, so ten whole-point ticks - not the continuous slider this
+        // line used to assert. It read `0` as though a ten-point scale were over
+        // the tick budget, but [MAX_DRAWN_TICKS] is 20 and the three-point case
+        // below asserts its two gaps for exactly the same reason this one has
+        // nine: a scale small enough to draw is drawn, and `quantise` is what
+        // keeps the value on a whole point either way.
+        assertEquals(9, scale.steps)
         assertEquals(9.0, scale.quantise(8.5), 0.0)
     }
 
