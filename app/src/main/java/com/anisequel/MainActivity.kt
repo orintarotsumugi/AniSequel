@@ -28,7 +28,6 @@ import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepository
-import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.update.UpdateController
@@ -47,6 +46,18 @@ class MainActivity : ComponentActivity() {
         /** Extra used by the profile-activity widget to request opening the activity screen. */
         const val EXTRA_WIDGET_OPEN_ACTIVITY = "anisequel.widget.open_activity"
     }
+
+    /**
+     * Survives a configuration change but not process death.
+     *
+     * The lock is a field on the Activity, so a rotation built a fresh Activity
+     * whose first composition armed the gate again - the reader unlocked,
+     * rotated the phone, and was asked to unlock it again. This holds the
+     * unlocked state across that recreation. A process death while in the
+     * background creates a new ViewModel, so the gate is still armed when the
+     * app comes back from the launcher.
+     */
+    private val appLockState: AppLockStateViewModel by viewModels()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
@@ -136,14 +147,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        authRepository = AuthRepositoryImpl(applicationContext)
+        authRepository = (application as AniSequelApplication).authRepository
         themePreferences = ThemePreferences(applicationContext)
         appLockPreferences = AppLockPreferences(applicationContext)
 
         enableEdgeToEdge()
 
-        // Handle OAuth deep link if launched via custom scheme
-        handleDeepLinkIntent(intent)
+        // Handle OAuth deep link if launched via custom scheme. Only on the
+        // first creation: the Intent stays attached to the Activity, so a
+        // rotation used to replay the same callback and re-save the same token
+        // (and, for an error redirect, re-show the error). `onNewIntent` handles
+        // callbacks that arrive while the Activity already exists.
+        if (savedInstanceState == null) {
+            handleDeepLinkIntent(intent)
+        }
 
         // The widget's tap, on a fresh launch only.
         //
@@ -216,7 +233,7 @@ class MainActivity : ComponentActivity() {
 
                 if (!appLockReady) {
                     appLockReady = true
-                    if (enabled && isDeviceSecurelyLocked()) {
+                    if (enabled && isDeviceSecurelyLocked() && !appLockState.unlockedSinceLaunch) {
                         setLocked(true)
                     }
                 } else if (!enabled) {
@@ -317,7 +334,14 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
-        if (appLockEnabled && !biometricPromptVisible && isDeviceSecurelyLocked()) {
+        // A configuration change stops the Activity without the app actually
+        // leaving the foreground. Re-arming there put the lock over a rotation
+        // (and over the new Activity's restored screen) for no privacy gain.
+        if (!isChangingConfigurations &&
+            appLockEnabled &&
+            !biometricPromptVisible &&
+            isDeviceSecurelyLocked()
+        ) {
             setLocked(true)
         }
     }
@@ -328,6 +352,11 @@ class MainActivity : ComponentActivity() {
     /** Shows or clears the lock gate. */
     private fun setLocked(locked: Boolean) {
         _isLocked = locked
+        // `unlockedSinceLaunch` is what the recreation path reads. Clearing it
+        // when locking also covers the case where the old Activity is stopped
+        // for a real background trip and a new one is built before the process
+        // dies.
+        appLockState.unlockedSinceLaunch = !locked
         applySecureFlag()
     }
 
@@ -384,28 +413,36 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
-        prompt.authenticate(
-            CancellationSignal(),
-            mainExecutor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(
-                    result: BiometricPrompt.AuthenticationResult
-                ) {
-                    biometricPromptVisible = false
-                    setLocked(false)
-                }
+        try {
+            prompt.authenticate(
+                CancellationSignal(),
+                mainExecutor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(
+                        result: BiometricPrompt.AuthenticationResult
+                    ) {
+                        biometricPromptVisible = false
+                        setLocked(false)
+                    }
 
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    // Cancelled, or the credential was wrong too many times. The
-                    // gate stays up; the reader can try again or leave.
-                    biometricPromptVisible = false
-                }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        // Cancelled, or the credential was wrong too many times. The
+                        // gate stays up; the reader can try again or leave.
+                        biometricPromptVisible = false
+                    }
 
-                override fun onAuthenticationFailed() {
-                    // One bad fingerprint. The prompt stays up on purpose.
+                    override fun onAuthenticationFailed() {
+                        // One bad fingerprint. The prompt stays up on purpose.
+                    }
                 }
-            }
-        )
+            )
+        } catch (e: Exception) {
+            // A prompt that cannot be shown (no enrolled credential, an OEM that
+            // rejects the authenticator combination, a window that is already
+            // gone) must not latch `biometricPromptVisible`: that made the Unlock
+            // button silently do nothing until the Activity was recreated.
+            biometricPromptVisible = false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -427,4 +464,12 @@ class MainActivity : ComponentActivity() {
             authViewModel.handleAuthRedirect(uri)
         }
     }
+}
+
+/**
+ * Only the fact that this Activity has already been unlocked, and only across a
+ * configuration change; see [MainActivity.appLockState].
+ */
+internal class AppLockStateViewModel : ViewModel() {
+    var unlockedSinceLaunch: Boolean = false
 }

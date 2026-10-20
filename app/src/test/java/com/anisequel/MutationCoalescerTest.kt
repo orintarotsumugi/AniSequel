@@ -1,9 +1,11 @@
 package com.anisequel
 
 import com.anisequel.domain.usecase.MutationCoalescer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -88,6 +90,73 @@ class MutationCoalescerTest {
             setOf(1 to 5, 2 to 7),
             writes.toSet()
         )
+    }
+
+    @Test
+    fun `reverting to the committed value while a write is in flight sends the revert afterwards`() =
+        runTest {
+            // The server holds 5. The reader taps to 7 and that request is
+            // suspended on the wire. Tapping back to 5 inside the same session
+            // used to be dropped because the coalescer still believed the server
+            // held 5 - so 7 landed and the reader's revert was lost.
+            val writes = mutableListOf<Int>()
+            val releaseFirstWrite = CompletableDeferred<Unit>()
+            val coalescer = MutationCoalescer<Int, Int>(
+                scope = backgroundScope,
+                windowMillis = 600,
+                commit = { _, value ->
+                    writes += value
+                    if (value == 7) releaseFirstWrite.await()
+                }
+            )
+            coalescer.seed(1, 5)
+
+            assertTrue(coalescer.submit(1, 7))
+            advanceTimeBy(600)
+            runCurrent()
+            assertEquals("the first write is on the wire", listOf(7), writes)
+
+            assertTrue(
+                "a revert while 7 is in flight must still reach the server",
+                coalescer.submit(1, 5)
+            )
+            advanceTimeBy(600)
+            runCurrent()
+            assertEquals("the compensating write follows the in-flight one", listOf(7, 5), writes)
+
+            releaseFirstWrite.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(
+                "the older request finishing last must not resurrect its value",
+                coalescer.submit(1, 5)
+            )
+        }
+
+    @Test
+    fun `flush waits for a write that is already in flight`() = runTest {
+        val release = CompletableDeferred<Unit>()
+        val coalescer = MutationCoalescer<Int, Int>(
+            scope = backgroundScope,
+            windowMillis = 600,
+            commit = { _, _ -> release.await() }
+        )
+
+        coalescer.submit(1, 4)
+        advanceTimeBy(600)
+        runCurrent()
+
+        var flushed = false
+        val flush = async {
+            coalescer.flush(1)
+            flushed = true
+        }
+        runCurrent()
+        assertFalse("flush returned while the request was still on the wire", flushed)
+
+        release.complete(Unit)
+        flush.await()
+        assertTrue(flushed)
     }
 
     @Test

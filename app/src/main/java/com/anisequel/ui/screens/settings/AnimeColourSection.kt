@@ -157,12 +157,22 @@ internal fun AnimeColourSection(
                         // that is already live; the detail sheet does the same
                         // on every new anime while this stays on.
                         themePreferences.setCustomColorHex(settings.animeThemeColorHex)
-                    } else if (!retain &&
-                        settings.customColorHex?.equals(settings.animeThemeColorHex, ignoreCase = true) == true
-                    ) {
-                        // Switching it off undoes the accent the anime wrote,
-                        // so the toggle has a visible effect in both directions.
-                        themePreferences.setCustomColorHex(null)
+                    } else if (!retain) {
+                        // Turning Retain off has to actually end the retained
+                        // state. The layer outranks every other colour source in
+                        // `Theme.kt`, so clearing only the custom hue left the
+                        // anime scheme drawing and the switch looked like it did
+                        // nothing at all. The sheet is not open on this screen,
+                        // so the layer can be stepped off now; it returns the
+                        // reader to the theme they had before.
+                        if (settings.animeThemeActive) {
+                            themePreferences.setAnimeThemeActive(false, null)
+                        }
+                        if (settings.customColorHex?.equals(settings.animeThemeColorHex, ignoreCase = true) == true) {
+                            // Drop the accent the anime wrote, so the toggle has
+                            // a visible effect in both directions.
+                            themePreferences.setCustomColorHex(null)
+                        }
                     }
                 }
             },

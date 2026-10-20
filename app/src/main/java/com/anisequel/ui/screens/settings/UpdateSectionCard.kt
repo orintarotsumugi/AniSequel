@@ -222,7 +222,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "AniSequel checks github.com/LOST-4EVER/AniSequel for new releases without sending personal data.",
+            text = "AniSequel checks github.com/orintarotsumugi/AniSequel for new releases without sending personal data.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

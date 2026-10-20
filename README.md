@@ -5,7 +5,7 @@ franchise's relation graph, and tells you what came next that you never got
 around to — then adds it to your Planning list in one tap.
 
 Not on the Play Store. Distributed as a signed universal APK from
-[GitHub Releases](https://github.com/LOST-4EVER/AniSequel/releases), with an
+[GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with an
 in-app updater.
 
 This file is about **how the app works and why it is built that way**. Three

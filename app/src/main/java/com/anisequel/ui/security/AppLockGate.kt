@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -84,7 +85,18 @@ fun AppLockGate(
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .testTag("app_lock_screen"),
+                    .testTag("app_lock_screen")
+                    // Swallow every pointer event that is not handled by the
+                    // Unlock button. The opaque surface hid the navigation tree
+                    // but did not consume touches, so a tap or drag on the lock
+                    // screen still reached the live controls underneath it.
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent().changes.forEach { it.consume() }
+                            }
+                        }
+                    },
                 color = MaterialTheme.colorScheme.background
             ) {
                 Column(

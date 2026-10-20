@@ -337,6 +337,10 @@ fun ExpressiveSegmentedBar(
                     .clip(shape)
                     .background(containerColor)
                     .clickable { onSelect(index) }
+                    .semantics {
+                        this.selected = selected
+                        role = Role.Tab
+                    }
                     .testTag("${EXPRESSIVE_TAG}segment_$label"),
                 contentAlignment = Alignment.Center
             ) {
@@ -408,6 +412,13 @@ fun ExpressiveStateChip(
             .clip(RoundedCornerShape(cornerRadius))
             .background(background)
             .clickable(onClick = onClick)
+            .semantics {
+                // Without this a screen reader heard the filter's name but not
+                // whether it was on, so the only way to tell the active filters
+                // was the colour that changed.
+                this.selected = selected
+                role = Role.Checkbox
+            }
             .padding(horizontal = 14.dp, vertical = 7.dp)
             .testTag("${EXPRESSIVE_TAG}chip_$label"),
         contentAlignment = Alignment.Center
