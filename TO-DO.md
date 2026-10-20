@@ -342,26 +342,6 @@ This needs a device and a finger, not a JVM test — which is exactly the gap
 describe. Do not "fix" it by guessing, and record which candidate it actually was
 here.
 
-### 4.3 The score slider cannot write a half point
-
-An AniList score is a `Double` and the form already carries halves: a loaded
-`8.5` renders as "8.5 / 10" in the row's subtitle. The slider under it is built
-with `steps = scoreMax - 1` — one tick per whole point — so the thumb snaps to
-8 or 9 the moment it is touched and the value the row just printed is not
-reachable from the control meant to set it.
-
-This needs its own decision rather than a mechanical tick change, which is why
-it was left alone when the action row moved (see Closed). The format the
-account uses is not in the entry: `scoreMax` is derived from the loaded value
-with a single `if (score > 10)`, and POINT_10 stores integers, POINT_10_DECIMAL
-stores tenths and POINT_100 stores integers, so no tick spacing satisfies all
-three. Half-point ticks on the ten scale (`steps = 19`, quantised to
-`round(it * 2) / 2`) would make the common halves reachable but would round a
-POINT_10_DECIMAL `8.3` on to `8.5`; a continuous slider would preserve `8.3`
-until touched but would let a POINT_10 account drag out a value its format
-cannot hold. Pick one against the score formats AniList actually validates, and
-pin it with a test.
-
 ---
 
 ## 5. Profile UI follow-ups
@@ -517,6 +497,31 @@ occurrence is diagnosable instead of merely quiet.
 Entries that used to live above and are no longer true. Kept rather than
 deleted, because in each case the *reason* is the part worth not re-deriving —
 see [AGENTS.md §1](AGENTS.md).
+
+### The score control could not write the scores its own row printed
+
+It was two defects in the same control, both from not knowing the account's score
+format.
+
+The scale was guessed: `scoreMax` came from `if (score > 10)`, so a
+hundred-point entry scored 8 or 10 opened on a 0-10 slider whose ceiling could
+not be passed, and a five- or three-point account got the same 0-10 range, which
+offers values AniList rejects. The ticks were guessed too: `steps = scoreMax - 1`
+is one per whole point, so a `POINT_10_DECIMAL` entry showing "8.5 / 10" could
+only be dragged to 8 or 9, and the score the row printed was unreachable from
+the control meant to set it.
+
+The open entry asked for a decision on "which tick spacing satisfies every
+format". None does, and that was the wrong question: `MediaList` has no score
+format, but `Viewer.mediaListOptions.scoreFormat` is one field on the request the
+editor already makes. Both halves are now derived from it — the ceiling from the
+format's own maximum, the tick from its own step, with a tenth on
+`POINT_10_DECIMAL` and a whole point on the integer formats. The old inference
+survives only as the fallback for a payload with no `Viewer` (the save response),
+where the step is halved so a printed `8.5` stays reachable. A loaded score is
+never snapped until the slider is touched, so opening the form and saving
+unchanged cannot rewrite an `8.3` to `8.5`. `EntryScoreScaleTest` pins all of
+it, including the query asking for the enum.
 
 ### The tier list's `seeded_for_v1` was written and never read
 

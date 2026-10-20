@@ -691,13 +691,18 @@ private fun ReplyActionButton(name: String, onClick: () -> Unit) {
  * the reader can see. It sits at the end of the comment's action row, the same
  * place AniList's own app puts it, rather than on the name line where it read as
  * part of the byline.
+ *
+ * 48dp, the platform's minimum touch target, rather than the 36dp box that was
+ * sized to its glyph. Manage is the one control in the row that changes somebody's
+ * comment, and it was also the hardest to hit - the 18dp icon is unchanged, only
+ * the area around it grew.
  */
 @Composable
 private fun CommentManageButton(onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, onClick = onClick)

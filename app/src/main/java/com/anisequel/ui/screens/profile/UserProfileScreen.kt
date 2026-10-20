@@ -63,6 +63,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -184,6 +185,17 @@ fun UserProfileScreen(
      * reads from, so the safe half costs nothing but the menu.
      */
     viewerId: Int? = null,
+    /**
+     * Read/write access to the *viewer's* entry for the opened title, or null
+     * when there is no session to write with.
+     *
+     * Note whose entry it is: the tab holds the reader's own list entry for the
+     * media, not the profile owner's, so opening a stranger's favourites tab
+     * offers the same "My Entry" the dashboard would for that title. That is what
+     * makes the sheet identical everywhere it opens; a profile route with no
+     * viewer id (signed out, demo) passes null and the tab is not drawn.
+     */
+    entryEditor: EntryEditor? = null,
     /**
      * Opens the tier list for this library.
      *
@@ -422,7 +434,10 @@ fun UserProfileScreen(
             onAddToWatching = {},
             onLoadDetail = { id, type -> activityViewModel.loadDetail(id, type) },
             isDetailLoading = detailLoading,
-            canWriteToAniList = false,
+            // Same sheet, same access as every other host: the tab follows the
+            // editor, and with no session the page is exactly what it was.
+            canWriteToAniList = entryEditor != null,
+            entryEditor = entryEditor,
             onOpenStudio = { id, name ->
                 selectedMedia = null
                 onOpenStudio(id, name)

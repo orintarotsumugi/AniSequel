@@ -64,7 +64,6 @@ import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
 import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.theme.AniSequelTheme
-import java.util.Locale
 
 /**
  * The container every section of the Info page sits in.
@@ -293,9 +292,21 @@ fun InfoSynopsisCard(
  * width and neither fits it - and the cramped grid was the reason the previous Specs
  * tab wrapped half its values onto a second line at random.
  *
- * The `FlowRow` for the studio credits needs the same opt-in as the chip cards
- * above, and it is annotated here rather than file-wide so that a function which
- * stops using an experimental layout API stops carrying the promise that it does.
+ * The `FlowRow` for the studio credits needs the same layout opt-in, and it is
+ * annotated here rather than file-wide so that a function which stops using an
+ * experimental layout API stops carrying the promise that it does.
+ *
+ * ## Why this card draws the main credits and nothing else
+ *
+ * AniList answers `studios` with the publishers, licensors and music labels
+ * alongside the studio that made the thing, and the card used to draw every one of
+ * them - which was correct until the page grew a Producers row
+ * (`InfoMetaRowsSection`), whose whole content *is* that second half. Drawing both
+ * printed "Aniplex" twice on one scroll, a dozen lines apart, under two headings
+ * that looked like two different facts. The split is now by `isMain`: the studio
+ * here, the rest there, and a payload with no `isMain` information at all is
+ * marked main by `studioCredits` so this card still shows what it always did while
+ * the Producers row stays absent.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -305,16 +316,19 @@ fun InfoSpecsCard(
     /**
      * Opens the page for one of the credited studios.
      *
-     * Every credit is drawn, not just the animation studio: AniList answers
-     * `studios` with the publishers and licensors alongside the studio that made
-     * the thing, and the page used to ask for the main ones only and print them as
-     * a comma-joined string - which hid the rest of the credits *and* made the ones
-     * it did show un-openable.
+     * Every credit this card draws is openable - AniList gave the card a comma-
+     * joined string once, which hid the credits it did not name and made the ones
+     * it did name un-tappable. Only the main credits are drawn here now; the
+     * publishers and licensors live on the Producers row, which is openable the
+     * same way (see the note on this card).
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val studios = media.studioCredits
+    // The split described above: main credits here, the rest have their own row.
+    // `filter`, not `firstOrNull()`: several studios routinely share the main flag.
+    val mainStudios = studios.filter { it.isMain }
 
     val facts = buildList {
         if (media.isManga) {
@@ -353,7 +367,7 @@ fun InfoSpecsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else if (studios.isNotEmpty()) {
+        } else if (mainStudios.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Studio",
@@ -365,7 +379,7 @@ fun InfoSpecsCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.testTag("info_studio_row")
                 ) {
-                    studios.forEach { credit ->
+                    mainStudios.forEach { credit ->
                         StudioCreditChip(credit = credit, onOpenStudio = onOpenStudio)
                     }
                 }
@@ -441,128 +455,6 @@ private fun InfoFact(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-/**
- * A label on the left, its value on the right - the alternative-titles rows.
- *
- * Same treatment as [InfoFact] and for the same reason: these rows are read by
- * looking for one name, and the label is what says which column it is in.
- */
-@Composable
-private fun InfoFactRow(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-            letterSpacing = 0.6.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(96.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-/**
- * A row of chips - genres, or AniList's thematic tags with their weights.
- *
- * [emphasis] is what tells the two apart: a genre is a fact, while a tag is a share
- * of the audience - "Urban Fantasy 96%" - and tinting those with the accent colour
- * is what stops the block reading as one undifferentiated heap of chips.
- *
- * [labels] empty renders nothing: the page asks for the list before it adds this as
- * a list item, because an item that draws nothing still costs a gap.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun InfoChipCard(
-    title: String,
-    icon: ImageVector,
-    labels: List<String>,
-    modifier: Modifier = Modifier,
-    emphasis: Boolean = false
-) {
-    if (labels.isEmpty()) return
-
-    // Keyed by title as well as index: both this card's callers pass the same tag for
-    // index zero, so "the first genre chip" and "the first tag chip" were the same
-    // testTag on the same screen, and `onNodeWithTag` could only ever reach one of
-    // them - whichever happened to be laid out last.
-    val tagPrefix = "info_chip_${title.lowercase(Locale.ROOT)}"
-
-    InfoCard(modifier = modifier, title = title, icon = icon) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            labels.forEachIndexed { index, label ->
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (emphasis) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                        }
-                    ),
-                    modifier = Modifier.testTag("${tagPrefix}_$index")
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (emphasis) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Every name this title goes by that the hero is not already showing, synonyms last.
- *
- * The rows come from [com.anisequel.data.model.alternativeTitleRows], which drops
- * any name identical to the one the hero displays in full. This card used to open
- * with a "Main title" row and then repeat that exact string under its own name -
- * see the note on that derivation for why that was most titles rather than some.
- *
- * A title whose only name is the one the hero shows now renders nothing at all,
- * which is why the page asks for the rows before it adds this as a list item.
- */
-@Composable
-fun InfoAltTitlesCard(
-    rows: List<Pair<String, String>>,
-    modifier: Modifier = Modifier
-) {
-    InfoCard(
-        modifier = modifier.testTag("info_alt_titles_card"),
-        title = "Alternative Titles",
-        icon = AppVectorIcons.List
-    ) {
-        rows.forEach { (label, value) ->
-            InfoFactRow(label = label, value = value)
-        }
     }
 }
 

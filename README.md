@@ -76,8 +76,11 @@ open is most of the work:
 
 What a tap on a title opens, and the answer to "what is this show" in one scroll:
 the key visual blurred behind its own title, the viewer's progress, the synopsis
-through the app's AniList-markdown renderer, the production facts, genres, the
-weighted thematic tags, the cast with their voice actors, the crew, the rest of the
+through the app's AniList-markdown renderer, the production facts, one Categories
+block (genres, the weighted thematic tags, and AniList's spoiler tags behind their
+own strip), the openings and endings (from AnimeThemes — the one section on the page
+that comes from a second service), the external links, the Titles/Synonyms/Producers
+disclosure rows, the cast with their voice actors, the crew, the rest of the
 franchise, and the things the app can do with the title. Editing the viewer's entry
 is the page's second destination, on a floating capsule at the bottom, because
 editing is a mode rather than a section of the page.
@@ -168,10 +171,11 @@ changing it:
 ### Studio pages
 
 Every studio credited on a title is a chip on the title page — the hero lockup's
-studio chip and every credit in the Details card — and each one opens that studio's
-own destination (`studio/{studioId}?name=…`). It is the same page whether it was
-reached from a title's credits, from another studio's filmography, or from a
-profile; it needs no session, because a studio is public AniList data.
+studio chip and the credits in the Details card (the main ones; publishers and
+licensors have the Producers row, so no name is printed twice) — and each one opens
+that studio's own destination (`studio/{studioId}?name=…`). It is the same page
+whether it was reached from a title's credits, from another studio's filmography, or
+from a profile; it needs no session, because a studio is public AniList data.
 
 Four decisions hold it together:
 
@@ -179,8 +183,9 @@ Four decisions hold it together:
 you look at *from* a list. A studio is somewhere you go: its filmography is longer
 than the page that mentioned it, and a sheet would be dismissed by the first back
 gesture and could not be linked or restored. Nothing else changes, though — tapping
-a poster on a studio page opens the same read-only detail sheet the dashboard and
-the profile use, so a title is the same page everywhere it appears.
+a poster on a studio page opens the same detail sheet the dashboard and
+the profile use — editor included, because the entry on that tab is always the
+reader's own for the title — so a title is the same page everywhere it appears.
 - **`Studio.media`, because `Page.media` cannot answer this.** The one query in
 this app whose shape is a requirement rather than a preference: AniList's
 `Page.media` has **no `studioId` argument**, and a document written with one is a

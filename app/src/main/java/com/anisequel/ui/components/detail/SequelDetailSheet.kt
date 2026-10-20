@@ -113,9 +113,17 @@ fun SequelDetailSheet(
      *
      * Null removes the editing destination entirely rather than drawing it disabled:
      * an editor that cannot save looks identical to one that can until the moment it
-     * silently does nothing. The dashboard passes a real editor for the signed-in
-     * viewer; a scanned profile passes nothing, because the entry on screen is
-     * somebody else's.
+     * silently does nothing.
+     *
+     * Every host with a session passes one, and they are all the same one
+     * ([com.anisequel.ui.components.detail.RepositoryEntryEditor] for the Library,
+     * the studio page and the profile; `DashboardViewModel` for the dashboard,
+     * which reloads its own counts after a write). That sameness is the point: the
+     * tab holds the *viewer's* entry for this media on every screen, so opening a
+     * title from your library, from a studio's filmography or from a stranger's
+     * favourites grid is the same sheet with the same capabilities, and only a
+     * demo or signed-out session gets it read-only. It used to be dashboard-only,
+     * which made the same title editable from one list and not from another.
      */
     entryEditor: EntryEditor? = null
 ) {

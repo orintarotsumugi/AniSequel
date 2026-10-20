@@ -648,7 +648,23 @@ data class SimpleMediaListEntry(
     @Json(name = "private") val isPrivate: Boolean? = null,
     val notes: String? = null,
     val startedAt: FuzzyDate? = null,
-    val completedAt: FuzzyDate? = null
+    val completedAt: FuzzyDate? = null,
+    /**
+     * The account's score format, as `POINT_10`, `POINT_100`, and so on.
+     *
+     * The only field here that is not a property of the *entry*: `MediaList` has
+     * no score format, it belongs to `Viewer.mediaListOptions`. It is carried on
+     * this type because the entry query asks for both in one request and the
+     * editor needs one object to build its form from - without it the score
+     * slider has to guess its scale from the value, which is how a hundred-point
+     * entry scored 8 was given a ten-point slider.
+     *
+     * Null wherever the value was not asked for: every `mediaListEntry` nested in
+     * a media node, and the save mutation's response, which has no `Viewer`.
+     * [com.anisequel.ui.components.detail.scoreScaleFor] is the fallback for
+     * those, not a failure.
+     */
+    val scoreFormat: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -658,7 +674,27 @@ data class SaveMediaListEntryData(
 
 @JsonClass(generateAdapter = true)
 data class MediaListEntryData(
-    @Json(name = "MediaList") val entry: SimpleMediaListEntry?
+    @Json(name = "MediaList") val entry: SimpleMediaListEntry?,
+    /**
+     * The account's list options, asked for beside the entry.
+     *
+     * Not a convenience: the score control cannot be drawn correctly without the
+     * format (see [SimpleMediaListEntry.scoreFormat]), and a second query for one
+     * enum would spend one of AniList's ~30 requests a minute to learn something
+     * the entry request can carry for free.
+     */
+    @Json(name = "Viewer") val viewer: ViewerListOptions? = null
+)
+
+/** The slice of `Viewer` the entry query needs: how this account scores titles. */
+@JsonClass(generateAdapter = true)
+data class ViewerListOptions(
+    val mediaListOptions: MediaListOptions? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaListOptions(
+    val scoreFormat: String? = null
 )
 
 /**

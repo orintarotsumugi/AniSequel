@@ -45,6 +45,7 @@ import com.anisequel.domain.studio.StudioYearShelf
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -76,9 +77,11 @@ import com.anisequel.ui.viewmodel.StudioViewModel
  *
  * The same detail sheet the dashboard and the profile open, so a title on a studio
  * page is the same page as a title anywhere else - which is the whole point of the
- * destination. It is read-only ([StudioViewModel.detailNodes] is fetched but the
- * sheet gets no [com.anisequel.ui.components.detail.EntryEditor]): a studio page
- * carries no session context, and an editor that cannot save is worse than none.
+ * destination, and the reason it is one [com.anisequel.ui.components.detail.EntryEditor]
+ * short of being *identical* to the one the dashboard opens. The host supplies that
+ * editor when a session exists; without one there is no session to write with, so
+ * the sheet draws the Info page and leaves the "My Entry" tab out rather than
+ * drawing a tab whose Save could not do anything.
  *
  * The parts this page is made of - the header, the shelf headings and the three
  * states it can end in - live in `StudioSections.kt`; this file is about *what the
@@ -100,6 +103,16 @@ fun StudioScreen(
      * draws the cards as captions rather than as buttons that can only fail.
      */
     repository: com.anisequel.data.repository.AniListRepository? = null,
+    /**
+     * Read/write access to the viewer's own entry for the opened title, or null
+     * when there is no session to write with.
+     *
+     * A studio page carries no session of its own - the navigation passes this
+     * for the same reason it passes everything else that knows which account is
+     * signed in. Null draws the Info page without the "My Entry" tab rather than
+     * with a disabled one.
+     */
+    entryEditor: EntryEditor? = null,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsState()
@@ -292,7 +305,10 @@ fun StudioScreen(
             onAddToWatching = {},
             onLoadDetail = { id, type -> viewModel.loadDetail(id, type) },
             isDetailLoading = summary.id in loadingDetailIds,
-            canWriteToAniList = false,
+            // Same sheet, same access: the tab follows the editor, and an
+            // unauthenticated reader gets exactly the page they always got.
+            canWriteToAniList = entryEditor != null,
+            entryEditor = entryEditor,
             // A studio name on a title's own page - reached from the credits of a
             // title opened here - goes to *that* studio. The sheet is closed first:
             // a `ModalBottomSheet` lives in its own window and would otherwise stay

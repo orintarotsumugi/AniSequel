@@ -30,6 +30,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
@@ -303,6 +304,23 @@ fun AppNavigation(
     // opening a title, leaving and coming back must not re-fetch a synopsis the store
     // already has.
     val libraryDetailHost = rememberMediaDetailHost(aniListRepository, isDemo = authenticated == null)
+
+    // The one entry editor the non-dashboard hosts share: the Library and the
+    // studio page open the same `SequelDetailSheet` the dashboard does, and a
+    // sheet that has the "My Entry" tab in one place but not in another is two
+    // different sheets over the same title. `authenticated` is the gate rather
+    // than `signedInViewer`, which stays null until the dashboard answers: the
+    // editor's load omits the user id when it has none and AniList resolves the
+    // entry under the session, so a known id is a refinement, not a requirement.
+    // A demo session has no session to write with, so it gets null and the tab is
+    // left out entirely.
+    val sharedEntryEditor = remember(authenticated != null, signedInViewer?.id) {
+        if (authenticated == null) {
+            null
+        } else {
+            RepositoryEntryEditor(aniListRepository, signedInViewer?.id)
+        }
+    }
 
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
@@ -760,7 +778,8 @@ fun AppNavigation(
                     onOpenStudio = { studioId, studioName ->
                         navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
                     },
-                    onSignInAgain = authViewModel::logout
+                    onSignInAgain = authViewModel::logout,
+                    entryEditor = sharedEntryEditor
                 )
             }
 
@@ -796,7 +815,8 @@ fun AppNavigation(
                     // be pushed again behind their own tap.
                     onOpenStudio = { id, name ->
                         navController.navigateSingle(StudioRoutes.studio(id, name))
-                    }
+                    },
+                    entryEditor = sharedEntryEditor
                 )
             }
 
