@@ -38,6 +38,10 @@
         {
           "title": "Retained anime colours stay retained",
           "detail": "Retain Anime Color could still lose the colour. Closing a sheet with the revert timer on Immediately switched the anime layer off even though Retain was on, and turning Retain off again did not return you to your previous theme because the layer outranks every other colour source. The layer now outlives the sheet whenever the colour is being retained, switching Retain off actually ends it, and disabling the anime layer always clears the cover colour instead of leaving a stale one to reappear. The temporary 5- and 10-minute choices also work now: their timer used to be cancelled the moment the sheet closed, so a temporary colour behaved exactly like a retained one."
+        },
+        {
+          "title": "Update checks use the repository's current address",
+          "detail": "The in-app updater, the Settings privacy note and the README still named the account the project used before it was renamed. GitHub redirects the old address today, but a redirect is not a contract; every link now uses the current repository name so update checks keep reaching the release assets directly."
         }
       ]
     },

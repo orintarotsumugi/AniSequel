@@ -102,7 +102,7 @@ sealed interface UpdateDownloadResult {
  * stable while its contents move forward with every release.
  */
 const val UPDATE_MANIFEST_URL: String =
-    "https://github.com/LOST-4EVER/AniSequel/releases/latest/download/update.json"
+    "https://github.com/orintarotsumugi/AniSequel/releases/latest/download/update.json"
 
 // `formatBytes` and `formatRate` used to live here. They are display helpers for
 // the settings and update dialogs, not part of the wire model, and keeping them
