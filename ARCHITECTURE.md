@@ -338,10 +338,15 @@ place in the app that writes to the list outside the two quick-add buttons. Thre
 decisions hold it together:
 
 - **`EntryEditor` is a parameter, and `null` means the tab does not exist.**
-  `DashboardViewModel` implements the interface for the signed-in viewer; a
-  scanned profile passes nothing, because the entry on screen is somebody else's.
-  Drawing an editor that cannot save was the alternative, and it is
-  indistinguishable from a working one until it silently does nothing.
+  Every host with a session passes one: `DashboardViewModel` for the dashboard
+  (it reloads the dashboard's counts inside `save`/`delete`), and the shared
+  `RepositoryEntryEditor` for the Library, the studio page and the profile. Null
+  is left to a demo or signed-out session, where there is no session to write
+  with. Drawing an editor that cannot save was the alternative, and it is
+  indistinguishable from a working one until it silently does nothing. The tab
+  always holds the *viewer's* entry for the media, never the profile owner's, so
+  opening a stranger's favourites tab offers the reader's own entry for that
+  title - which is what makes the sheet identical everywhere it opens.
 - **The draft lives in the tab, not the ViewModel.** Nothing outside the tab
   renders an in-progress edit, so hoisting it would make every owner of the sheet
   carry a saving flag and an error string it never reads.

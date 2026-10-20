@@ -292,9 +292,21 @@ fun InfoSynopsisCard(
  * width and neither fits it - and the cramped grid was the reason the previous Specs
  * tab wrapped half its values onto a second line at random.
  *
- * The `FlowRow` for the studio credits needs the same opt-in as the chip cards
- * above, and it is annotated here rather than file-wide so that a function which
- * stops using an experimental layout API stops carrying the promise that it does.
+ * The `FlowRow` for the studio credits needs the same layout opt-in, and it is
+ * annotated here rather than file-wide so that a function which stops using an
+ * experimental layout API stops carrying the promise that it does.
+ *
+ * ## Why this card draws the main credits and nothing else
+ *
+ * AniList answers `studios` with the publishers, licensors and music labels
+ * alongside the studio that made the thing, and the card used to draw every one of
+ * them - which was correct until the page grew a Producers row
+ * (`InfoMetaRowsSection`), whose whole content *is* that second half. Drawing both
+ * printed "Aniplex" twice on one scroll, a dozen lines apart, under two headings
+ * that looked like two different facts. The split is now by `isMain`: the studio
+ * here, the rest there, and a payload with no `isMain` information at all is
+ * marked main by `studioCredits` so this card still shows what it always did while
+ * the Producers row stays absent.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -304,16 +316,19 @@ fun InfoSpecsCard(
     /**
      * Opens the page for one of the credited studios.
      *
-     * Every credit is drawn, not just the animation studio: AniList answers
-     * `studios` with the publishers and licensors alongside the studio that made
-     * the thing, and the page used to ask for the main ones only and print them as
-     * a comma-joined string - which hid the rest of the credits *and* made the ones
-     * it did show un-openable.
+     * Every credit this card draws is openable - AniList gave the card a comma-
+     * joined string once, which hid the credits it did not name and made the ones
+     * it did name un-tappable. Only the main credits are drawn here now; the
+     * publishers and licensors live on the Producers row, which is openable the
+     * same way (see the note on this card).
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val studios = media.studioCredits
+    // The split described above: main credits here, the rest have their own row.
+    // `filter`, not `firstOrNull()`: several studios routinely share the main flag.
+    val mainStudios = studios.filter { it.isMain }
 
     val facts = buildList {
         if (media.isManga) {
@@ -352,7 +367,7 @@ fun InfoSpecsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else if (studios.isNotEmpty()) {
+        } else if (mainStudios.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Studio",
@@ -364,7 +379,7 @@ fun InfoSpecsCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.testTag("info_studio_row")
                 ) {
-                    studios.forEach { credit ->
+                    mainStudios.forEach { credit ->
                         StudioCreditChip(credit = credit, onOpenStudio = onOpenStudio)
                     }
                 }

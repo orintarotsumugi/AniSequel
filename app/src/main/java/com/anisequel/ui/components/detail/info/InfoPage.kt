@@ -211,9 +211,9 @@ fun AnimeInfoPage(
     // has nothing to show cannot also be the thing that decides not to take up a
     // slot. `Arrangement.spacedBy` gives every item its trailing gap whether or not
     // that item drew anything, so a `LazyColumn` item whose content returned early
-    // leaves a full 14dp hole in the page - and four of the sections here return
-    // early for ordinary titles (no progress on an unstarted show, no staff, no
-    // relations, no alternative titles). Hence the explicit `if` on each below.
+    // leaves a full 14dp hole in the page - and ordinary titles hit that for at
+    // least four sections (no progress on an unstarted show, no staff, no relations,
+    // no alternative titles). Hence the explicit `if` on each below.
     //
     // Every one of them in a single `remember(media)`, because every one is *derived*:
     // these are extensions on `MediaNode` that walk, filter or sort a list, not fields.
@@ -451,11 +451,13 @@ fun AnimeInfoPage(
  * change while the node it was derived from is the same object, so the work belongs
  * in one `remember(media)`, not in the item-listing lambda that runs again on each
  * pass. The booleans are stored rather than the lists they were read from because
- * that is all the page does with them.
+ * that is all the page does with them - the one exception is `streamingLinks`, which
+ * is kept as the list because the page hands it straight to the card.
  *
- * Types are all plain: `List<Pair<String, String>>` for the title rows, `List<String>`
- * for the chips, and flags for the sections whose *contents* (not their presence) are
- * the section's own business.
+ * Every field is a flag or that one list: which sections draw is decided here, what
+ * they draw is each section's own business. The gates have to be able to answer
+ * *before* the list is built, because `Arrangement.spacedBy` charges every item its
+ * gap whether or not the item's content went on to draw anything.
  */
 private data class InfoSections(
     val hasMetaRows: Boolean,
