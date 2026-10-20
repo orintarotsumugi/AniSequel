@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.alternativeTitleRows
@@ -35,6 +36,7 @@ import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.staffList
+import com.anisequel.data.model.streamingLinks
 import com.anisequel.data.model.weightLabel
 import com.anisequel.data.model.weightedTags
 import com.anisequel.ui.components.AppVectorIcons
@@ -210,6 +212,7 @@ fun AnimeInfoPage(
             altTitles = media.alternativeTitleRows,
             genres = media.genreList,
             tags = media.weightedTags.mapNotNull { it.weightLabel() },
+            streamingLinks = media.streamingLinks,
             hasProgressCard = media.hasProgressCard,
             hasRankings = media.hasRankings,
             hasCast = media.characterList.isNotEmpty(),
@@ -277,11 +280,20 @@ fun AnimeInfoPage(
                 }
             }
 
+            if (sections.streamingLinks.isNotEmpty()) {
+                item(key = "streaming") {
+                    InfoWhereToWatchCard(
+                        links = sections.streamingLinks,
+                        modifier = Modifier.infoSection(4)
+                    )
+                }
+            }
+
             item(key = "synopsis") {
                 InfoSynopsisCard(
                     media = media,
                     isDetailLoading = isDetailLoading,
-                    modifier = Modifier.infoSection(4)
+                    modifier = Modifier.infoSection(5)
                 )
             }
 
@@ -290,7 +302,7 @@ fun AnimeInfoPage(
                     media = media,
                     isDetailLoading = isDetailLoading,
                     onOpenStudio = onOpenStudio,
-                    modifier = Modifier.infoSection(5)
+                    modifier = Modifier.infoSection(6)
                 )
             }
 
@@ -301,7 +313,7 @@ fun AnimeInfoPage(
                         title = "Genres",
                         icon = AppVectorIcons.Tag,
                         labels = genres,
-                        modifier = Modifier.infoSection(6)
+                        modifier = Modifier.infoSection(7)
                     )
                 }
             }
@@ -314,14 +326,14 @@ fun AnimeInfoPage(
                         icon = AppVectorIcons.Trending,
                         labels = tags,
                         emphasis = true,
-                        modifier = Modifier.infoSection(7)
+                        modifier = Modifier.infoSection(8)
                     )
                 }
             }
 
             if (altTitles.isNotEmpty()) {
                 item(key = "alt_titles") {
-                    InfoAltTitlesCard(rows = altTitles, modifier = Modifier.infoSection(8))
+                    InfoAltTitlesCard(rows = altTitles, modifier = Modifier.infoSection(9))
                 }
             }
 
@@ -330,7 +342,7 @@ fun AnimeInfoPage(
             // nothing else on the page can state.
             if (sections.hasRankings) {
                 item(key = "rankings") {
-                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(9))
+                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(10))
                 }
             }
 
@@ -343,7 +355,7 @@ fun AnimeInfoPage(
                     InfoCharactersSection(
                         media = media,
                         onOpenCharacter = onOpenCharacter,
-                        modifier = Modifier.sectionReveal(10)
+                        modifier = Modifier.sectionReveal(11)
                     )
                 }
             }
@@ -353,7 +365,7 @@ fun AnimeInfoPage(
                     InfoRelationsSection(
                         media = media,
                         onOpen = onOpenMedia,
-                        modifier = Modifier.sectionReveal(11)
+                        modifier = Modifier.sectionReveal(12)
                     )
                 }
             }
@@ -363,7 +375,7 @@ fun AnimeInfoPage(
                     InfoStaffSection(
                         media = media,
                         onOpenStaff = onOpenStaff,
-                        modifier = Modifier.sectionReveal(12)
+                        modifier = Modifier.sectionReveal(13)
                     )
                 }
             }
@@ -372,7 +384,7 @@ fun AnimeInfoPage(
                 InfoExtrasCard(
                     media = media,
                     onOpenCover = { showCover = true },
-                    modifier = Modifier.infoSection(13)
+                    modifier = Modifier.infoSection(14)
                 )
             }
         }
@@ -411,6 +423,7 @@ private data class InfoSections(
     val altTitles: List<Pair<String, String>>,
     val genres: List<String>,
     val tags: List<String>,
+    val streamingLinks: List<MediaExternalLink>,
     val hasProgressCard: Boolean,
     val hasRankings: Boolean,
     val hasCast: Boolean,
@@ -422,7 +435,7 @@ private data class InfoSections(
  * The page's inset and its place in the entrance stagger, in one call.
  *
  * Every card but the hero and the three artwork rows takes exactly this, and writing
- * it out thirteen times is how they drift apart.
+ * it out fourteen times is how they drift apart.
  *
  * [PAGE_INSET] is the one in `InfoCards.kt`, not a second literal: the artwork rows
  * draw their own inset from that same value, and it used to exist twice in two files.

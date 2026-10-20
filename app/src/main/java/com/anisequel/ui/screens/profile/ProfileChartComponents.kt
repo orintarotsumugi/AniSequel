@@ -34,6 +34,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -222,12 +225,18 @@ internal fun SegmentStrip(
     modifier: Modifier = Modifier
 ) {
     val segmentColors = segments.map { chartSlotColor(it.slot) }
+    // One description for the whole strip, the way the activity heatmap does it:
+    // the colours are a picture of the shares, and a screen reader cannot see a
+    // picture. The chips above already read individually; this is the summary the
+    // strip itself is.
+    val summary = segments.joinToString(", ") { "${it.count} ${it.label}" }
     Canvas(
         modifier = modifier
             .fillMaxWidth()
             .height(14.dp)
             .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
             .testTag("status_segment_strip")
+            .semantics { contentDescription = "Distribution: $summary" }
     ) {
         val total = segments.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(0.0001f)
         var currentX = 0f
@@ -321,7 +330,13 @@ internal fun BarRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp)
-            .testTag("bar_row"),
+            .testTag("bar_row")
+            // One stop and one sentence. The label and the count are two `Text`s
+            // with a picture between them, so a screen reader used to announce
+            // "2024" and "40" as unrelated numbers; the bar itself has no text at
+            // all. Clearing and setting the row is the same rule the heatmap and
+            // the status strip follow.
+            .clearAndSetSemantics { contentDescription = "${row.label}: ${row.count}" },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

@@ -112,7 +112,15 @@ internal data class EntryDraft(
     val scoreMax: Int,
     val startedAt: FuzzyDate?,
     val completedAt: FuzzyDate?,
-    val isPrivate: Boolean
+    val isPrivate: Boolean,
+    /**
+     * The entry's private note, empty when there is none.
+     *
+     * Not nullable: the form draws a text field, and "no note" and "a note the
+     * reader just emptied" are the same thing to this form. AniList clears a note
+     * when it receives `""`, which is what an empty field sends.
+     */
+    val notes: String = ""
 )
 
 internal fun SimpleMediaListEntry.toDraft(): EntryDraft {
@@ -126,7 +134,8 @@ internal fun SimpleMediaListEntry.toDraft(): EntryDraft {
         scoreMax = if (rawScore > 10.0) 100 else 10,
         startedAt = startedAt,
         completedAt = completedAt,
-        isPrivate = isPrivate ?: false
+        isPrivate = isPrivate ?: false,
+        notes = notes.orEmpty()
     )
 }
 
@@ -244,7 +253,8 @@ internal class EntryEditState {
             scoreMax = 10,
             startedAt = null,
             completedAt = null,
-            isPrivate = false
+            isPrivate = false,
+            notes = ""
         )
         // The deleted entry is not "unsaved changes"; it is gone. The blank form is
         // the baseline, so the pin stays disabled until the reader actually asks for
@@ -385,14 +395,24 @@ internal fun DateRow(
                 )
             }
             if (value != null) {
-                Icon(
-                    imageVector = AppVectorIcons.Close,
-                    contentDescription = "Clear $label",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                // A 48dp hit area around a 20dp glyph. The X used to be a 20dp
+                // clickable icon inside a row that is itself clickable to pick a
+                // date, so clearing a date was both the smallest target on the form
+                // and the one easiest to miss into the picker instead.
+                Box(
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(48.dp)
                         .clickable(onClick = onClear)
-                )
+                        .testTag("${testTag}_clear"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Close,
+                        contentDescription = "Clear $label",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             } else {
                 Icon(
                     imageVector = AppVectorIcons.ExpandMore,
