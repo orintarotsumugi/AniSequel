@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.domain.studio.StudioYearShelf
 import com.anisequel.ui.components.AppVectorIcons
@@ -276,7 +277,7 @@ fun StudioScreen(
         // the progress it carried - none, on a studio page - is preserved by the
         // same merge the profile uses.
         val subject = AnimeDetailSubject.Media(
-            detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary
+            detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
         )
         SequelDetailSheet(
             subject = subject,

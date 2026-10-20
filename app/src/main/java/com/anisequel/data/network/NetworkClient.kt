@@ -191,6 +191,34 @@ object NetworkClient {
                     .build()
             }
             .crossfade(false)
+            // The image client is deliberately separate from the API's, and its
+            // dispatcher is tuned rather than left at OkHttp's defaults.
+            //
+            // `maxRequestsPerHost` defaults to **5**. A grid or a relation row asks
+            // for twelve or more covers from the same AniList CDN host at once, so
+            // five of them downloaded while the rest waited - which is exactly the
+            // "covers take ages to appear" case, and it gets worse the more the
+            // reader scrolls. The API client's own dispatcher does not apply here:
+            // Coil builds its client before the first image request.
+            //
+            // Sixteen per host matches the connection pool rather than opening a
+            // new socket for every card, and the 60-second keep-alive keeps those
+            // TLS connections warm across a scroll. This is a cover CDN, not the
+            // rate-limited GraphQL endpoint - raising it does not spend the API's
+            // request budget.
+            .okHttpClient {
+                OkHttpClient.Builder()
+                    .connectionPool(
+                        ConnectionPool(IMAGE_MAX_REQUESTS_PER_HOST, 60, TimeUnit.SECONDS)
+                    )
+                    .dispatcher(
+                        Dispatcher().apply {
+                            maxRequests = IMAGE_MAX_REQUESTS
+                            maxRequestsPerHost = IMAGE_MAX_REQUESTS_PER_HOST
+                        }
+                    )
+                    .build()
+            }
             // No OkHttp response cache here on purpose. Coil's disk cache is
             // keyed on the image URL and already serves repeat loads without a
             // network call, and `respectCacheHeaders(false)` forces every miss
@@ -225,4 +253,15 @@ object NetworkClient {
 
     private const val MEMORY_CACHE_PERCENT = 0.25
     private const val DISK_CACHE_BYTES = 128L * 1024 * 1024
+
+    /**
+     * How many covers may decode/fetch at once.
+     *
+     * OkHttp defaults `maxRequestsPerHost` to 5, which is lower than a single
+     * relation row's card count - see the image loader's own note. The connection
+     * pool is the same size so every slot has a warm connection to reuse instead of
+     * tearing one down between scrolls.
+     */
+    private const val IMAGE_MAX_REQUESTS = 24
+    private const val IMAGE_MAX_REQUESTS_PER_HOST = 16
 }

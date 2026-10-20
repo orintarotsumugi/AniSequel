@@ -38,6 +38,19 @@ val MediaNode.posterColor: String? get() = coverImage?.color
 val MediaNode.isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
 
 /**
+ * An AniList music video.
+ *
+ * `MUSIC` is a `MediaFormat`, not a `MediaType` - the entry still lives in the
+ * anime namespace, which is why `relatedMedia` cannot find it by medium alone.
+ * AniList connects a music video to the show whose characters it features with
+ * a `CHARACTER` relation, the same relation type it uses for crossovers, so the
+ * row has to look at the format to tell a song from a crossover.
+ */
+val MediaNode.isMusicVideo: Boolean
+    get() = format.equals("MUSIC", ignoreCase = true) ||
+        format.equals("MUSIC_VIDEO", ignoreCase = true)
+
+/**
  * Whether this title has not aired yet, so there is no episode of it to have watched.
  *
  * AniList's own `status`, not an inference from a missing start date: a show can
@@ -97,7 +110,11 @@ fun formatLabelOf(rawFormat: String?, isManga: Boolean): String {
         "MANGA" -> "Manga"
         "NOVEL" -> "Novel"
         "ONE_SHOT" -> "One Shot"
-        "MUSIC_VIDEO" -> "Music Video"
+        // AniList spells the format `MUSIC`; `MUSIC_VIDEO` is kept as an alias
+        // because it is the word the API documentation uses and a fixture or a
+        // future field could carry it. Mapping only the alias meant every real
+        // music video fell through to the generic branch and read "Music".
+        "MUSIC", "MUSIC_VIDEO" -> "Music Video"
         else -> raw.lowercase(Locale.ROOT)
             .replace('_', ' ')
             .replaceFirstChar { it.uppercase(Locale.ROOT) }
@@ -327,11 +344,18 @@ val MediaNode.staffList: List<MediaStaffEdge> get() = staff?.edges ?: emptyList(
  *     show was made from (or the show a manga became) leads its group rather than
  *     trailing it - which is also what keeps the adaptation inside the cap on a
  *     franchise with a dozen spin-offs;
- *  3. everything else (`SIDE_STORY`, `SPIN_OFF`, `ALTERNATIVE`, `SUMMARY`, and any type
+ *  3. music videos next, so a long show's songs are not pushed past the cap by its
+ *     specials;
+ *  4. everything else (`SIDE_STORY`, `SPIN_OFF`, `ALTERNATIVE`, `SUMMARY`, and any type
  *     AniList adds later) after it.
  *
- * Deduplicated by id, because the same title can be related twice through two different
- * arcs.
+ * A `CHARACTER` edge is kept only when one end is a music video. AniList files a
+ * song as `CHARACTER` rather than `SIDE_STORY`, so the old blanket exclusion hid
+ * every music video on every anime page - the exact relation the format field is
+ * there to explain.
+ *
+ * Deduplicated by namespace and id, because the same title can be related twice
+ * through two different arcs and an anime and a manga can share a number.
  *
  * A node whose own `type` is null is treated as anime - [isManga] is false for it, and
  * the activity feed and the widget fixtures are the two sources that can build a node
@@ -340,16 +364,26 @@ val MediaNode.staffList: List<MediaStaffEdge> get() = staff?.edges ?: emptyList(
 val MediaNode.relatedMedia: List<MediaRelationEdge>
     get() {
         val ownType = if (isManga) "MANGA" else "ANIME"
+        val subjectIsMusicVideo = isMusicVideo
         return relations?.edges
             ?.filter { edge ->
+                val isCharacterEdge = edge.relationType.equals("CHARACTER", ignoreCase = true)
+                // A music video is attached to the show it features with a
+                // `CHARACTER` edge, which is otherwise the one relation type this
+                // row must not draw: a `CHARACTER` edge between two ordinary titles
+                // is a crossover, not a franchise entry. Keep the edge when either
+                // end is a music video, and only then.
+                val isMusicVideoConnection = edge.node.isMusicVideo || subjectIsMusicVideo
                 edge.node.id != id &&
-                    !edge.relationType.equals("CHARACTER", ignoreCase = true) &&
+                    (!isCharacterEdge || isMusicVideoConnection) &&
                     (
                         edge.node.type.equals(ownType, ignoreCase = true) ||
                             edge.relationType.isAdaptationRelation
                         )
             }
-            ?.distinctBy { it.node.id }
+            // Namespace and id, not the id alone: an anime and a manga adaptation can
+            // share a number, and collapsing them dropped one of the two.
+            ?.distinctBy { it.node.type?.uppercase(Locale.ROOT).orEmpty() to it.node.id }
             ?.sortedWith(RELATION_ROW_ORDER)
             ?.take(MAX_RELATIONS)
             ?: emptyList()
@@ -361,14 +395,22 @@ private val String?.isAdaptationRelation: Boolean
 
 /**
  * Where a relation sits in the row: the franchise spine first, then the adaptation,
- * then the side material, then the types this app has never been taught.
+ * then music videos, then the side material, then the types this app has never been
+ * taught.
+ *
+ * Music videos get their own rank because AniList attaches them with `CHARACTER`
+ * edges and a long-running show can have dozens of side stories. Leaving them in
+ * the catch-all rank put them past the twelve-card cap on exactly the franchises
+ * that have music videos to show - One Piece's three are behind thirty specials.
  */
 private val MediaRelationEdge.relationRank: Int
-    get() = when (relationType?.uppercase(Locale.ROOT)) {
-        "PREQUEL", "SEQUEL", "PARENT" -> 0
-        "ADAPTATION", "SOURCE" -> 1
-        "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY" -> 2
-        else -> 3
+    get() = when {
+        node.isMusicVideo -> 2
+        relationType?.uppercase(Locale.ROOT) in setOf("PREQUEL", "SEQUEL", "PARENT") -> 0
+        relationType?.uppercase(Locale.ROOT) in setOf("ADAPTATION", "SOURCE") -> 1
+        relationType?.uppercase(Locale.ROOT) in
+            setOf("SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY") -> 3
+        else -> 4
     }
 
 /**
@@ -405,6 +447,12 @@ private val RELATION_ROW_ORDER = compareBy<MediaRelationEdge>(
 val MediaRelationEdge.typeLabel: String
     get() {
         val raw = relationType?.takeIf { it.isNotBlank() } ?: return "Related"
+        // `CHARACTER` normally means a crossover, but AniList uses the same edge
+        // for "this song features these characters". The format is the only thing
+        // that tells the two apart, and "Character" is not what the card is.
+        if (node.isMusicVideo && raw.equals("CHARACTER", ignoreCase = true)) {
+            return "Music video"
+        }
         return when (raw.uppercase(Locale.ROOT)) {
             "PREQUEL" -> "Prequel"
             "SEQUEL" -> "Sequel"
@@ -425,6 +473,23 @@ val MediaRelationEdge.typeLabel: String
     }
 
 /**
+ * [typeLabel] read from [subject]'s side of the edge.
+ *
+ * A music video's only relation is a `CHARACTER` edge back to the show whose
+ * characters it features. On the song's page "Character" would name the wrong
+ * end of the relationship, so the label says where the show appears instead.
+ */
+fun MediaRelationEdge.typeLabelFor(subject: MediaNode): String =
+    if (relationType.equals("CHARACTER", ignoreCase = true) &&
+        subject.isMusicVideo &&
+        !node.isMusicVideo
+    ) {
+        "Featured in"
+    } else {
+        typeLabel
+    }
+
+/**
  * The one-line summary under a related title's name.
  *
  * The title page's relation cards used to be a poster, a relation label and a name,
@@ -441,9 +506,10 @@ val MediaRelationEdge.typeLabel: String
  *
  * The year prefers `seasonYear` and falls back to the start date's year: AniList sets
  * the season on anything it has scheduled, and a title old enough to have aired is
- * often missing it while carrying a full start date. `episodes` is only added when
+ * often missing it while carrying a full start date. The length is only added when
  * it is a real count - a zero there is the API saying it does not know, and
- * "0 eps" is a claim rather than a gap. "eps" rather than "episodes" because the
+ * "0 eps" is a claim rather than a gap. Episodes for an anime, chapters (or volumes
+ * when chapters are unknown) for a manga: "eps" rather than "episodes" because the
  * whole line has to fit a 144dp card beside the format and the year.
  *
  * Status is shown only when it is *news* - airing, upcoming, on hiatus, cancelled.
@@ -456,8 +522,26 @@ val MediaRelationEdge.metaLabel: String
         val node = node
         val parts = buildList {
             add(node.formatLabel)
-            node.episodes?.takeIf { it > 0 }
-                ?.let { add(if (it == 1) "1 ep" else "$it eps") }
+            // The length is a different fact per namespace: an anime has episodes,
+            // a manga has chapters and (sometimes) volumes. Only reading
+            // `episodes` here meant every manga relation card silently lost its
+            // length, while an anime card beside it said "TV · 12 eps".
+            val length = when {
+                node.isManga && (node.chapters ?: 0) > 0 -> {
+                    val chapters = node.chapters!!
+                    if (chapters == 1) "1 ch" else "$chapters ch"
+                }
+                node.isManga && (node.volumes ?: 0) > 0 -> {
+                    val volumes = node.volumes!!
+                    if (volumes == 1) "1 vol" else "$volumes vols"
+                }
+                (node.episodes ?: 0) > 0 -> {
+                    val episodes = node.episodes!!
+                    if (episodes == 1) "1 ep" else "$episodes eps"
+                }
+                else -> null
+            }
+            length?.let(::add)
             (node.seasonYear ?: node.startDate?.year)?.let { add(it.toString()) }
             val status = node.statusLabel
             if (status != "Finished" && status != "Unknown") add(status)
@@ -652,6 +736,24 @@ fun MediaNode.watchFractionLabel(): String? {
 fun MediaNode.withSummaryProgress(summary: MediaNode): MediaNode =
     if (mediaListEntry != null || summary.mediaListEntry == null) this
     else copy(mediaListEntry = summary.mediaListEntry)
+
+/**
+ * The fetched detail for [summary], but only when it is the same media namespace.
+ *
+ * `MediaDetailStore` keys its fetch cache by type-and-id because `anime/1` and
+ * `manga/1` are different titles. The map the screens read is keyed by id alone,
+ * which was safe while a screen only ever held one title - and stopped being safe
+ * when a relation card let one screen walk from an anime to a manga. A manga
+ * relation with the same numeric id as a previously opened anime then painted the
+ * anime's synopsis, cast and cover over the manga until the real fetch landed.
+ *
+ * A missing node is the right answer here: the sheet keeps drawing its summary
+ * and the in-flight fetch publishes the correct detail for the new namespace.
+ */
+fun Map<Int, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
+    this[summary.id]?.takeIf { detail ->
+        detail.type.equals(summary.type, ignoreCase = true)
+    }
 
 /** HTML tags AniList interleaves into `description`. */
 private val TAG_PATTERN = Regex("<[^>]*>")

@@ -267,8 +267,11 @@ private fun LoadedPersonProfile(
                 ProfileFacts(facts = state.facts)
             }
 
-            ProfileBiography(description = state.description)
-
+            // The works come before the biography on purpose. A long biography is
+            // measured first, and on the old order it pushed the one row this page
+            // exists for - the titles the person is on - below the sheet's viewport.
+            // A reader who tapped a creator to see their other work had to scroll
+            // past an essay to find it, which read as the row never having loaded.
             if (state.voiceActors.isNotEmpty()) {
                 ProfileVoiceActors(credits = state.voiceActors, onOpenStaff = onOpenStaff)
             }
@@ -276,6 +279,7 @@ private fun LoadedPersonProfile(
             if (state.appearances.isNotEmpty()) {
                 ProfileAppearancesRow(
                     appearances = state.appearances,
+                    heading = if (state.kind == PersonKind.STAFF) "Worked on" else "Appears in",
                     listState = appearancesState,
                     onOpen = onOpenAppearance
                 )
@@ -290,6 +294,8 @@ private fun LoadedPersonProfile(
                     onOpen = onOpenCharacter
                 )
             }
+
+            ProfileBiography(description = state.description)
 
             // The escape hatch every in-app page carries. The sheet answers what AniList
             // knows; AniList's own page still has the comment thread and the edit history

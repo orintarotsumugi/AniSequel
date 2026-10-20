@@ -13,6 +13,7 @@ import com.anisequel.data.model.StaffCharacterEdge
 import com.anisequel.data.model.StaffCharacterMedia
 import com.anisequel.data.model.StaffCharacterNode
 import com.anisequel.data.model.StaffProfile
+import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.VoiceActor
 import com.anisequel.data.model.toLoadedState
 import com.anisequel.data.model.MediaNode
@@ -23,6 +24,7 @@ import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
+import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -409,9 +411,15 @@ class PersonProfileTest {
         assertEquals(listOf(7), character.toLoadedState().appearances.map { it.id })
     }
 
-    /** A staff member still asks for nodes, and the row still reads them. */
+    /**
+     * A response that answered `nodes` rather than `edges` still renders.
+     *
+     * The query moved both connections to edges when the credit and the voice actors
+     * moved onto them, but the model's fallback is what keeps an older cached response
+     * from blanking the row.
+     */
     @Test
-    fun `a staff member's titles are its nodes`() {
+    fun `a staff member's titles still read from nodes when an old response has them`() {
         val staff = StaffProfile(
             id = 1,
             media = ProfileAppearances(nodes = listOf(ProfileAppearance(id = 9)))
@@ -530,6 +538,122 @@ class PersonProfileTest {
     }
 
     /**
+     * The staff response's `staffMedia` is what the model calls `media`.
+     *
+     * This is the failure that made every creator's "Worked on" row empty: the query
+     * asked for `staffMedia`, the model declared `media`, and Moshi happily left the
+     * field null because nothing tied the two names together. A source-level test that
+     * builds a [StaffProfile] by hand cannot see it - the object is already mapped -
+     * so this one parses the wire response the same way Retrofit does.
+     */
+    @Test
+    fun `staffMedia parses into the media field`() {
+        val json = """
+            {
+              "Staff": {
+                "id": 97009,
+                "name": { "full": "Shinichirou Watanabe" },
+                "staffMedia": {
+                  "edges": [
+                    {
+                      "staffRole": "Director",
+                      "node": {
+                        "id": 1,
+                        "type": "ANIME",
+                        "title": { "romaji": "Cowboy Bebop" },
+                        "format": "TV"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val staff = Moshi.Builder().build()
+            .adapter(StaffProfileData::class.java)
+            .fromJson(json)!!
+            .staff!!
+
+        assertEquals(
+            "the field is named staffMedia on the wire and media in the model",
+            listOf(1),
+            staff.media?.titles?.map { it.id }
+        )
+        assertEquals("Director", staff.media?.titles?.single()?.staffRole)
+    }
+
+    /**
+     * One title credited several times is one poster.
+     *
+     * A staff connection returns an edge per credit, not per title: Watanabe's
+     * Cowboy Bebop edges include Script, Director, Storyboard and Episode Director.
+     * Drawn as sent, a twenty-five-edge row could be eight distinct posters and still
+     * spend the whole query on repeats - which is what "their works are not showing"
+     * looked like. The primary occupation also has to beat the connection's arbitrary
+     * role order, or a director's card is captioned "Script".
+     */
+    @Test
+    fun `one title credited with several staff roles is one card`() {
+        val staff = StaffProfile(
+            id = 97009,
+            primaryOccupations = listOf("Director", "Producer"),
+            media = ProfileAppearances(
+                edges = listOf(
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 20, type = "ANIME"),
+                        staffRole = "Script (eps 17, 21)"
+                    ),
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 20, type = "ANIME"),
+                        staffRole = "Director"
+                    ),
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 21, type = "ANIME"),
+                        staffRole = "Director"
+                    )
+                )
+            )
+        )
+
+        val appearances = staff.toLoadedState().appearances
+
+        assertEquals(listOf(20, 21), appearances.map { it.id })
+        assertEquals(
+            "the primary occupation wins over the first edge's secondary credit",
+            "Director",
+            appearances.first().staffRole
+        )
+    }
+
+    /**
+     * An anime and a manga sharing an id are two different titles.
+     *
+     * The same namespace collision [MediaCoverKey] documents: a person can appear in
+     * both, and collapsing them would drop one of the two posters from their page.
+     */
+    @Test
+    fun `an anime and a manga sharing an id are two cards`() {
+        val staff = StaffProfile(
+            id = 1,
+            media = ProfileAppearances(
+                edges = listOf(
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 1, type = "ANIME"),
+                        staffRole = "Director"
+                    ),
+                    ProfileAppearanceEdge(
+                        node = ProfileAppearance(id = 1, type = "MANGA"),
+                        staffRole = "Original Story"
+                    )
+                )
+            )
+        )
+
+        assertEquals(2, staff.toLoadedState().appearances.size)
+    }
+
+    /**
      * A character entry AniList did not name or identify is not drawn: the id is the
      * tap into the character's page and the name is the whole caption under the
      * portrait, so a card missing either has nothing to be. The raw node's id is
@@ -588,12 +712,12 @@ class PersonProfileTest {
         val query = GraphQLQueries.getStaffProfileQuery()
         assertTrue(
             "staffMedia must be edges: the credit hangs on them",
-            query.contains("staffMedia(perPage: 12, sort: [POPULARITY_DESC])") &&
+            query.contains("staffMedia(perPage: 25, sort: [POPULARITY_DESC])") &&
                 query.contains("edges") && query.contains("staffRole")
         )
         assertTrue(
             "the characters only exist under the characterMedia connection",
-            query.contains("characterMedia(perPage: 12, sort: [POPULARITY_DESC])") &&
+            query.contains("characterMedia(perPage: 25, sort: [POPULARITY_DESC])") &&
                 query.contains("characters {")
         )
     }

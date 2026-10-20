@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -603,7 +604,12 @@ fun InfoParentCard(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(48.dp)
+                        // A 48dp square cropped a 2:3 poster to its middle, so the
+                        // parent's cover lost the faces at the top and the title at
+                        // the bottom. The card keeps the app's cover shape and the
+                        // row centres it against the two lines of text.
+                        .width(48.dp)
+                        .aspectRatio(2f / 3f)
                         .clip(MaterialTheme.shapes.extraSmall)
                         .background(
                             sequel.parentCoverColor.toCoverColorOrNull()

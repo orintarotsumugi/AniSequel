@@ -59,18 +59,20 @@ import com.anisequel.ui.components.expressive.bouncyPress
  *
  * ## The titles, as a row of covers
  *
- * A row rather than a vertical list: a director has hundreds of credits, twelve of them
- * on this screen, and a reader recognises a poster rather than reading twelve lines. The
- * score rides on the artwork because it is the one number a poster cannot carry.
+ * A row rather than a vertical list: a director has hundreds of credits, a bounded
+ * selection of them on this screen, and a reader recognises a poster rather than
+ * reading a list of lines. The score rides on the artwork because it is the one number
+ * a poster cannot carry.
  */
 @Composable
 fun ProfileAppearancesRow(
     appearances: List<ProfileAppearance>,
     listState: LazyListState,
+    heading: String = "Appears in",
     onOpen: (ProfileAppearance) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        SectionHeading(title = "Appears in", icon = AppVectorIcons.List)
+        SectionHeading(title = heading, icon = AppVectorIcons.List)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(
             state = listState,

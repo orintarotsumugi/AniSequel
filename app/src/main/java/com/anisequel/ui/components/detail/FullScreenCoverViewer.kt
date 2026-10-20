@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,13 +49,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.englishName
@@ -78,6 +82,20 @@ fun FullScreenCoverViewer(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    // Measured rather than assumed: the pan limits used to be the constants 300f and
+    // 400f, so a tall cover could be dragged past its own edge on a narrow phone and
+    // a wide one could not be dragged far enough on a tablet.
+    var coverSize by remember { mutableStateOf(IntSize.Zero) }
+    val painter = rememberAsyncImagePainter(model = media.posterUrl)
+    val intrinsic = painter.intrinsicSize
+    // AniList covers are 2:3, and that is the right box until the real image says
+    // otherwise. Reading the painter's own size is what lets a rare non-2:3 cover -
+    // or a cropped upload - draw whole instead of letterboxing inside a fixed frame.
+    val coverAspect = if (intrinsic.width > 0f && intrinsic.height > 0f) {
+        intrinsic.width / intrinsic.height
+    } else {
+        DEFAULT_COVER_ASPECT
+    }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -189,61 +207,80 @@ fun FullScreenCoverViewer(
 
                     // Center Anime Cover Artwork with interactive Zoom & Pan
                     val coverBg = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest
-                    Box(
+                    // The frame is fitted to the artwork rather than to a 340x440
+                    // window: a 2:3 cover in that window letterboxed on one axis, so
+                    // the "full screen" viewer drew a poster smaller than the hero
+                    // it was opened from. `BoxWithConstraints` gives the space the
+                    // header and footer leave, and the cover takes the largest box
+                    // that fits it at its own ratio.
+                    BoxWithConstraints(
                         modifier = Modifier
-                            .weight(1f, fill = false)
-                            .padding(vertical = 12.dp)
-                            .shadow(
-                                elevation = 24.dp,
-                                shape = MaterialTheme.shapes.large,
-                                ambientColor = coverBg,
-                                spotColor = Color.Black
-                            )
-                            .clip(MaterialTheme.shapes.large)
-                            .background(coverBg)
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onDoubleTap = {
-                                        if (scale > 1.2f) {
-                                            scale = 1f
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val frameWidth = minOf(maxWidth, maxHeight * coverAspect)
+                        val frameHeight = frameWidth / coverAspect
+                        Box(
+                            modifier = Modifier
+                                .width(frameWidth)
+                                .height(frameHeight)
+                                .shadow(
+                                    elevation = 24.dp,
+                                    shape = MaterialTheme.shapes.large,
+                                    ambientColor = coverBg,
+                                    spotColor = Color.Black
+                                )
+                                .clip(MaterialTheme.shapes.large)
+                                .background(coverBg)
+                                .onSizeChanged { coverSize = it }
+                                .pointerInput(coverSize) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            if (scale > 1.2f) {
+                                                scale = 1f
+                                                offsetX = 0f
+                                                offsetY = 0f
+                                            } else {
+                                                scale = 2.4f
+                                            }
+                                        }
+                                    )
+                                }
+                                .pointerInput(coverSize) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val newScale = (scale * zoom).coerceIn(1f, 4.5f)
+                                        scale = newScale
+                                        if (newScale > 1f) {
+                                            // Half the overflow on each side: the
+                                            // image scales around its centre, so this
+                                            // is exactly how far it can move before
+                                            // an edge shows.
+                                            val maxX = coverSize.width * (newScale - 1f) / 2f
+                                            val maxY = coverSize.height * (newScale - 1f) / 2f
+                                            offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                            offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                        } else {
                                             offsetX = 0f
                                             offsetY = 0f
-                                        } else {
-                                            scale = 2.4f
                                         }
                                     }
-                                )
-                            }
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    val newScale = (scale * zoom).coerceIn(1f, 4.5f)
-                                    scale = newScale
-                                    if (newScale > 1f) {
-                                        val maxX = 300f * (newScale - 1f)
-                                        val maxY = 400f * (newScale - 1f)
-                                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
-                                    } else {
-                                        offsetX = 0f
-                                        offsetY = 0f
-                                    }
                                 }
-                            }
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                translationX = offsetX
-                                translationY = offsetY
-                            }
-                    ) {
-                        AsyncImage(
-                            model = media.posterUrl,
-                            contentDescription = media.displayName,
-                            modifier = Modifier
-                                .widthIn(max = 340.dp)
-                                .height(440.dp),
-                            contentScale = ContentScale.Fit
-                        )
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offsetX
+                                    translationY = offsetY
+                                }
+                        ) {
+                            Image(
+                                painter = painter,
+                                contentDescription = media.displayName,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
 
                     // Bottom Details Card: Titles & Dismiss Hint
@@ -342,3 +379,6 @@ fun FullScreenCoverViewer(
         }
     }
 }
+
+/** AniList's cover shape, used until the image's own dimensions arrive. */
+private const val DEFAULT_COVER_ASPECT = 2f / 3f

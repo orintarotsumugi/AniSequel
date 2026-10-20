@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,13 +38,14 @@ import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaStaffEdge
 import com.anisequel.data.model.characterList
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.metaLabel
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.roleLabel
 import com.anisequel.data.model.staffList
-import com.anisequel.data.model.typeLabel
+import com.anisequel.data.model.typeLabelFor
 import java.util.Locale
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
@@ -402,7 +404,10 @@ fun InfoRelationsSection(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         SectionHeading(
-            title = "Seasons & Relations",
+            // A manga does not have seasons; it has volumes and a source. The row is
+            // the same relation data in the same order, only the heading was written
+            // for the anime half of the app.
+            title = if (media.isManga) "Volumes & Relations" else "Seasons & Relations",
             icon = AppVectorIcons.FranchiseBranch,
             modifier = Modifier.padding(horizontal = PAGE_INSET)
         )
@@ -411,7 +416,7 @@ fun InfoRelationsSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items = related, key = { edge -> "relation_${edge.node.id}" }) { edge ->
-                RelationCard(edge = edge, onOpen = onOpen)
+                RelationCard(subject = media, edge = edge, onOpen = onOpen)
             }
         }
     }
@@ -419,6 +424,7 @@ fun InfoRelationsSection(
 
 @Composable
 private fun RelationCard(
+    subject: MediaNode,
     edge: MediaRelationEdge,
     onOpen: (MediaNode) -> Unit
 ) {
@@ -428,7 +434,10 @@ private fun RelationCard(
         Box(
             modifier = Modifier
                 .width(RELATION_CARD_WIDTH)
-                .height(RELATION_POSTER_HEIGHT)
+                // The app's cover shape, not a height guessed from one card and
+                // reused for every poster: 144x202 is not quite 2:3, so every
+                // relation was a few pixels squatter than the artwork.
+                .aspectRatio(RELATION_POSTER_ASPECT)
                 .clip(MaterialTheme.shapes.medium)
                 // Tinted with the poster's own dominant colour until the art loads,
                 // the same way the hero does: a grey rectangle tells the reader
@@ -448,7 +457,10 @@ private fun RelationCard(
                 modifier = Modifier.matchParentSize()
             )
             RolePill(
-                label = edge.typeLabel,
+                // The relation label is read from the subject's side: a music video
+                // reaches its show through a CHARACTER edge, and "Character" names
+                // the wrong end of that relationship on the song's own page.
+                label = edge.typeLabelFor(subject),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp)
@@ -489,15 +501,16 @@ private fun RelationCard(
 }
 
 /**
- * The relation card's width and poster height.
+ * The relation card's width and poster shape.
  *
  * Wider than the 132dp it used to be, because the card grew the metadata line under
- * the name and a line that always ellipsizes is not data. The ratio is kept from the
- * old card.
+ * the name and a line that always ellipsizes is not data. The height follows the
+ * artwork rather than a second hardcoded number - see the card's `aspectRatio`.
  */
 private val RELATION_CARD_WIDTH = 144.dp
 
-private val RELATION_POSTER_HEIGHT = 202.dp
+/** The 2:3 shape every AniList cover is authored in. */
+private val RELATION_POSTER_ASPECT = 2f / 3f
 
 /** A capsule label laid over artwork - a cast role, a crew position, a relation. */
 @Composable

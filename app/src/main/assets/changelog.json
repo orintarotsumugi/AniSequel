@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.4.1",
+      "entries": [
+        {
+          "title": "Creator pages show their works again",
+          "detail": "The staff profile asked AniList for `staffMedia` but declared the field as `media`, so Moshi never filled it and every creator's work row was empty while the same row on a character page rendered normally. The response is now mapped to the right field. The row also asks for twenty-five credits instead of twelve and collapses the several edges one title can occupy - a director who also wrote and storyboarded a film - so twelve edges can no longer turn into four posters. When one title arrives with several roles, the person's primary occupation wins over whichever credit AniList happened to list first."
+        },
+        {
+          "title": "Works come before the biography",
+          "detail": "A long biography was measured first and pushed the row the page exists for below the sheet's viewport, which read as the works never having loaded. The appearance and voiced-character rows now sit above the biography, and a creator's heading reads \"Worked on\" rather than \"Appears in\"."
+        },
+        {
+          "title": "Music videos appear on their shows again",
+          "detail": "AniList attaches a music video through a CHARACTER relation, the same type it uses for crossovers, so the relation row removed every song from every show that had one. A CHARACTER edge is now kept when either end is a music video, labelled \"Music video\", and ranked ahead of a long franchise's specials so the cap does not hide it."
+        },
+        {
+          "title": "Manga relations carry their length",
+          "detail": "Relation cards read only `episodes`, so a manga card showed its format and year but silently dropped its length. Cards now read chapters, or volumes when the chapter count is unknown, and a manga page's section heading is \"Volumes & Relations\" instead of \"Seasons & Relations\"."
+        },
+        {
+          "title": "Relations cannot mix up an anime and a manga",
+          "detail": "The relation row deduplicated by numeric id, and the detail map the screens read was keyed the same way, so a manga sharing a number with an anime could show the anime's poster, synopsis and cast. Both now compare the media namespace as well as the id, and a detail fetched for one namespace is never drawn for the other."
+        },
+        {
+          "title": "The full-screen cover fits the artwork",
+          "detail": "The viewer drew every cover into a fixed 340x440 window, which letterboxed a 2:3 poster on one axis, and its pan limits were the constants 300 and 400 regardless of screen or image size. The frame is now the largest box that fits the image's own aspect ratio, and the pan bounds are measured from the drawn cover."
+        },
+        {
+          "title": "Covers start loading sooner",
+          "detail": "The image client inherited OkHttp's default of five requests per host, so a relation row or a library grid downloaded five covers while the rest waited. The image dispatcher now allows sixteen per host, keeps a matching connection pool warm across a scroll, and still leaves the rate-limited GraphQL client untouched."
+        },
+        {
+          "title": "The parent's cover keeps its shape",
+          "detail": "The prequel/parent card cropped its cover into a 48dp square, cutting the faces off the top and the title off the bottom of a 2:3 poster. It is now a 48dp-wide poster at the app's cover ratio, centred against the text."
+        }
+      ]
+    },
+    {
       "version": "1.4.0",
       "entries": [
         {

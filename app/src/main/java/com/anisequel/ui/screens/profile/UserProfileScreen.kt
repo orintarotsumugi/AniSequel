@@ -60,6 +60,7 @@ import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.SequelDetailSheet
@@ -246,7 +247,7 @@ fun UserProfileScreen(
     var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
 
     val selectedSubject = selectedMedia?.let { summary ->
-        AnimeDetailSubject.Media(detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary)
+        AnimeDetailSubject.Media(detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary)
     }
     val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
 

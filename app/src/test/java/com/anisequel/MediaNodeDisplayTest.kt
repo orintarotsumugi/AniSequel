@@ -7,6 +7,7 @@ import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.alternativeTitleRows
+import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
@@ -15,6 +16,7 @@ import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.watchFraction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -275,6 +277,42 @@ class MediaNodeDisplayTest {
     }
 
     /**
+     * A manga has chapters, not episodes.
+     *
+     * The relation query asks for both counts, so a manga card can say how long the
+     * thing is without pretending it aired. Before this the line read "Manga · 2020"
+     * beside an anime card's "TV · 12 eps · 2020", which is a metadata line written
+     * for one namespace and reused for the other.
+     */
+    @Test
+    fun `a manga relation reports chapters rather than episodes`() {
+        assertEquals(
+            "Manga · 120 ch · 2020",
+            edge(
+                format = "MANGA",
+                type = "MANGA",
+                chapters = 120,
+                episodes = 24,
+                seasonYear = 2020
+            ).metaLabel
+        )
+    }
+
+    /**
+     * Volumes are the fallback when AniList does not know the chapter count.
+     *
+     * Plenty of manga entries carry volumes and a null chapter count, and the card
+     * should still say something about length rather than nothing.
+     */
+    @Test
+    fun `volumes stand in when chapters are unknown`() {
+        assertEquals(
+            "Manga · 12 vols · 2020",
+            edge(format = "MANGA", type = "MANGA", volumes = 12, seasonYear = 2020).metaLabel
+        )
+    }
+
+    /**
      * "1 eps" is the kind of detail that makes a whole row look machine-generated, and
      * a film is the common single-episode relation.
      */
@@ -347,6 +385,26 @@ class MediaNodeDisplayTest {
         assertFalse(label, label.contains("RELEASING"))
     }
 
+    // ---- detailFor ------------------------------------------------------------------
+
+    /**
+     * A published detail is only good for the namespace it was fetched in.
+     *
+     * `MediaDetailStore` fetches by type and id, but the map the screens read is keyed
+     * by id alone. A screen that walked from an anime to a manga with the same number
+     * would otherwise paint the anime's synopsis, cast and cover over the manga until
+     * the real detail arrived.
+     */
+    @Test
+    fun `a detail fetched for the other namespace is not shown`() {
+        val anime = MediaNode(id = 1, type = "ANIME", description = "An anime")
+        val manga = MediaNode(id = 1, type = "MANGA", description = "A manga")
+        val published = mapOf(1 to anime)
+
+        assertNull(published.detailFor(manga))
+        assertEquals(anime, published.detailFor(anime))
+    }
+
     // ---- helpers --------------------------------------------------------------------
 
     private fun node(
@@ -372,16 +430,21 @@ class MediaNodeDisplayTest {
         format: String? = "TV",
         status: String? = "FINISHED",
         episodes: Int? = null,
+        chapters: Int? = null,
+        volumes: Int? = null,
         seasonYear: Int? = null,
-        startYear: Int? = null
+        startYear: Int? = null,
+        type: String = "ANIME"
     ): MediaRelationEdge = MediaRelationEdge(
         relationType = "SEQUEL",
         node = MediaNode(
             id = 2,
-            type = "ANIME",
+            type = type,
             format = format,
             status = status,
             episodes = episodes,
+            chapters = chapters,
+            volumes = volumes,
             seasonYear = seasonYear,
             startDate = startYear?.let { FuzzyDate(year = it) }
         )
