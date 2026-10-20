@@ -39,8 +39,12 @@ import org.junit.Test
  * was right:
  *
  * ```kotlin
- * detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary
+ * detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
  * ```
+ *
+ * The lookup is namespace-aware as well as id-keyed: `anime/1` and `manga/1` are
+ * different titles, and a relation card that walks from one to the other must not
+ * paint the first one's fetched detail over the second.
  *
  * ## Why this is a source-level test
  *
@@ -90,7 +94,7 @@ class RelationDetailResolutionTest {
                 "and throws the answer away, so the page drawn is the relation node " +
                 "the card carried - no synopsis, no credits, and no relations of its " +
                 "own to follow:\n$branch",
-            branch.contains("detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary")
+            branch.contains("detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary")
         )
 
         val paintsTheTappedNode = Regex("""AnimeDetailSubject\.Media\(\s*(?:it|summary)\s*\)""")
