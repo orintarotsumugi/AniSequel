@@ -1232,6 +1232,16 @@ class AniListRepositoryImpl(
                 invalidateLists()
             }
 
+    /**
+     * Reads the viewer's entry, and the account's score format with it.
+     *
+     * The format is attached to the entry rather than returned separately so the
+     * editor has one object to build its form from - see
+     * [SimpleMediaListEntry.scoreFormat]. It is also what makes a title with *no*
+     * entry yet draw the right slider: the empty entry below still carries the
+     * format, so a hundred-point account creating an entry for the first time
+     * gets a 0-100 control instead of the old 0-10 guess.
+     */
     override suspend fun getMediaListEntry(
         mediaId: Int,
         userId: Int?
@@ -1249,7 +1259,10 @@ class AniListRepositoryImpl(
                 variables = variables
             ),
             apiService::getMediaListEntry
-        ).map { it.entry ?: SimpleMediaListEntry(mediaId = mediaId) }
+        ).map { data ->
+            val scoreFormat = data.viewer?.mediaListOptions?.scoreFormat
+            (data.entry ?: SimpleMediaListEntry(mediaId = mediaId)).copy(scoreFormat = scoreFormat)
+        }
     }
 
     override suspend fun saveMediaListEntry(edit: MediaEntryEdit): Result<SimpleMediaListEntry> {

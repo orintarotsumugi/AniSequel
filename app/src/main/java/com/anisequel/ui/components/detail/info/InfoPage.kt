@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.alternativeTitleRows
 import com.anisequel.data.model.characterList
 import com.anisequel.data.model.displayName
@@ -37,9 +39,9 @@ import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.streamingLinks
-import com.anisequel.data.model.weightLabel
-import com.anisequel.data.model.weightedTags
-import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.data.model.studioCredits
+import com.anisequel.data.model.synonymList
+import com.anisequel.data.repository.AniThemes
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
@@ -130,6 +132,21 @@ fun AnimeInfoPage(
     val sequel = subject.sequel
     val context = LocalContext.current
 
+    // The opening/ending row is the one section fed by a second service. The
+    // request is per title and cached for the session
+    // ([com.anisequel.data.repository.ThemeSongsRepository]); `produceState` is
+    // scoped to this page, so walking to a relation cancels the old title's
+    // fetch instead of letting it land on the new page.
+    val themeArtwork = media.bannerImage?.takeIf { it.isNotBlank() }
+        ?: media.coverImage?.bestUrl
+    val themeSongs by produceState(
+        initialValue = emptyList<ThemeSong>(),
+        media.id,
+        themeArtwork
+    ) {
+        value = AniThemes.repository().themes(media.id, themeArtwork)
+    }
+
     val collapseDistance = with(LocalDensity.current) { HERO_COLLAPSE.toPx() }
     val collapse = remember(listState, collapseDistance) {
         derivedStateOf {
@@ -209,10 +226,23 @@ fun AnimeInfoPage(
     // object.
     val sections = remember(media) {
         InfoSections(
-            altTitles = media.alternativeTitleRows,
-            genres = media.genreList,
-            tags = media.weightedTags.mapNotNull { it.weightLabel() },
+            hasMetaRows = media.alternativeTitleRows.isNotEmpty() ||
+                media.synonymList.isNotEmpty() ||
+                media.studioCredits.any { !it.isMain },
             streamingLinks = media.streamingLinks,
+            // Genres and AniList's tag list share one section now, and either is
+            // enough to draw it. The tags are read from `media.tags`, not from
+            // `weightedTags`: the spoiler tags are part of the section's own
+            // collapsible strip, so a title whose only tags are spoilers still
+            // has a Categories section worth showing.
+            hasCategories = media.genreList.isNotEmpty() || !media.tags.isNullOrEmpty(),
+            // Streaming links have their own card; this is every *other* link
+            // AniList files for the title.
+            hasExternalLinks = media.externalLinks.orEmpty().any {
+                !it.site.isNullOrBlank() &&
+                    !it.url.isNullOrBlank() &&
+                    !it.type.equals("STREAMING", ignoreCase = true)
+            },
             hasProgressCard = media.hasProgressCard,
             hasRankings = media.hasRankings,
             hasCast = media.characterList.isNotEmpty(),
@@ -220,7 +250,6 @@ fun AnimeInfoPage(
             hasStaff = media.staffList.isNotEmpty()
         )
     }
-    val altTitles = sections.altTitles
 
     var showCover by remember(media.id) { mutableStateOf(false) }
     if (showCover) {
@@ -306,34 +335,43 @@ fun AnimeInfoPage(
                 )
             }
 
-            val genres = sections.genres
-            if (genres.isNotEmpty()) {
-                item(key = "genres") {
-                    InfoChipCard(
-                        title = "Genres",
-                        icon = AppVectorIcons.Tag,
-                        labels = genres,
-                        modifier = Modifier.infoSection(7)
+            // The reference's "Categories": genres, weighted tags, the Expand
+            // control and the collapsible spoiler strip, in one section rather
+            // than the two cards genres and tags used to be.
+            if (sections.hasCategories) {
+                item(key = "categories") {
+                    InfoCategoriesSection(media = media, modifier = Modifier.infoSection(7))
+                }
+            }
+
+            if (sections.hasExternalLinks) {
+                item(key = "external_links") {
+                    InfoExternalLinksSection(media = media, modifier = Modifier.infoSection(8))
+                }
+            }
+
+            // Only added when the fetch landed with something: an empty item still
+            // costs the page's `spacedBy` gap. The row is cached per title, so a
+            // re-open draws it on the first pass.
+            if (themeSongs.isNotEmpty()) {
+                item(key = "theme_songs") {
+                    // `sectionReveal`, not `infoSection`: the row bleeds to the
+                    // screen edge, so the page must not add its inset on top of
+                    // the row's own content padding.
+                    InfoThemeSongsSection(
+                        themes = themeSongs,
+                        modifier = Modifier.sectionReveal(9)
                     )
                 }
             }
 
-            val tags = sections.tags
-            if (tags.isNotEmpty()) {
-                item(key = "tags") {
-                    InfoChipCard(
-                        title = "Tags",
-                        icon = AppVectorIcons.Trending,
-                        labels = tags,
-                        emphasis = true,
-                        modifier = Modifier.infoSection(8)
-                    )
-                }
-            }
-
-            if (altTitles.isNotEmpty()) {
-                item(key = "alt_titles") {
-                    InfoAltTitlesCard(rows = altTitles, modifier = Modifier.infoSection(9))
+            // Titles, Synonyms and Producers are disclosure rows now rather than
+            // a card of label/value pairs: each opens its own sheet with the
+            // complete list, which is what keeps six producers and fifteen
+            // synonyms from doubling the page's length.
+            if (sections.hasMetaRows) {
+                item(key = "meta_rows") {
+                    InfoMetaRowsSection(media = media, modifier = Modifier.infoSection(10))
                 }
             }
 
@@ -342,7 +380,7 @@ fun AnimeInfoPage(
             // nothing else on the page can state.
             if (sections.hasRankings) {
                 item(key = "rankings") {
-                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(10))
+                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(11))
                 }
             }
 
@@ -355,7 +393,7 @@ fun AnimeInfoPage(
                     InfoCharactersSection(
                         media = media,
                         onOpenCharacter = onOpenCharacter,
-                        modifier = Modifier.sectionReveal(11)
+                        modifier = Modifier.sectionReveal(12)
                     )
                 }
             }
@@ -365,7 +403,7 @@ fun AnimeInfoPage(
                     InfoRelationsSection(
                         media = media,
                         onOpen = onOpenMedia,
-                        modifier = Modifier.sectionReveal(12)
+                        modifier = Modifier.sectionReveal(13)
                     )
                 }
             }
@@ -375,7 +413,7 @@ fun AnimeInfoPage(
                     InfoStaffSection(
                         media = media,
                         onOpenStaff = onOpenStaff,
-                        modifier = Modifier.sectionReveal(13)
+                        modifier = Modifier.sectionReveal(14)
                     )
                 }
             }
@@ -384,7 +422,7 @@ fun AnimeInfoPage(
                 InfoExtrasCard(
                     media = media,
                     onOpenCover = { showCover = true },
-                    modifier = Modifier.infoSection(14)
+                    modifier = Modifier.infoSection(15)
                 )
             }
         }
@@ -420,10 +458,10 @@ fun AnimeInfoPage(
  * the section's own business.
  */
 private data class InfoSections(
-    val altTitles: List<Pair<String, String>>,
-    val genres: List<String>,
-    val tags: List<String>,
+    val hasMetaRows: Boolean,
     val streamingLinks: List<MediaExternalLink>,
+    val hasCategories: Boolean,
+    val hasExternalLinks: Boolean,
     val hasProgressCard: Boolean,
     val hasRankings: Boolean,
     val hasCast: Boolean,

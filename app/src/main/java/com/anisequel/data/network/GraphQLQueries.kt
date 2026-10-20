@@ -862,9 +862,21 @@ object GraphQLQueries {
      * omitted - the answer is the same shape whether it is yours or a stranger's -
      * so the caller supplies the id it already holds and the editor can never
      * silently open somebody else's entry.
+     *
+     * `Viewer.mediaListOptions.scoreFormat` rides along in the same document.
+     * `MediaList` has no score format of its own, and the editor's score control
+     * needs one: `score` is in the account's own units, so the slider's ceiling
+     * and its tick spacing are both unknowable without this enum. It used to be
+     * guessed from the score itself, which gave a hundred-point entry scored 8 a
+     * ten-point slider and let a five-point account write a score AniList
+     * rejects. One extra field on a request the editor already makes, rather
+     * than a second query for an enum.
      */
     val GET_MEDIA_LIST_ENTRY = """
         query MediaListEntry(${'$'}mediaId: Int, ${'$'}userId: Int) {
+          Viewer {
+            mediaListOptions { scoreFormat }
+          }
           MediaList(mediaId: ${'$'}mediaId, userId: ${'$'}userId) {
             id
             mediaId

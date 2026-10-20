@@ -173,7 +173,7 @@ dozen or so ideas AniSync has proven, on device, to be worth the code.
 | 13 | Library | Mutation coalescer for progress/score taps | P1 | S | Very low |
 | 14 | Library | Grid column count + per-account view prefs | P2 | S | Very low |
 | 15 | Library | Notes field in the entry editor | P2 | S | Low |
-| 16 | Entry | Format-aware score control (fix `TO-DO §4.3`) | P1 | M | Low |
+| 16 | Entry | Format-aware score control (fixed `TO-DO §4.3`; see that file's Closed section) | P1 | M | Low |
 | 17 | Entry | Dirty-state guard on sheet dismiss | P1 | S | Low |
 | 18 | Entry | `hiddenFromStatusLists` + priority | P2 | S | Low |
 | 19 | Detail | Where-to-watch above the fold | P1 | S | Low |

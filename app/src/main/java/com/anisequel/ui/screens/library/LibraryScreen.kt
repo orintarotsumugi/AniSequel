@@ -38,6 +38,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.navigation.mainBarClearance
@@ -63,13 +64,18 @@ import com.anisequel.ui.viewmodel.toMediaNode
  * is unchanged - [ProfileLibraryTab] is the composable the tab always was -
  * because the browsing surface was never the problem; where it hung was.
  *
- * ## Browsing only
+ * ## The sheet is the sheet
  *
- * No title is written from here: the sheet is opened read-only and there is no
- * add-to-list action, because a list is added to, scored and progressed from the
- * dashboard's rows, which already carry those controls. There is no activity
- * feed or comment thread either - those are about a *person*, and they stayed on
- * the profile this page left.
+ * A title here opens the same sheet the dashboard opens - same page, same
+ * "My Entry" destination - because that tab always holds the reader's own
+ * entry for the media, which has nothing to do with which list they came from.
+ * The host hands over a `RepositoryEntryEditor` when a session exists; without
+ * one the sheet is read-only and the tab is not drawn at all, which is the rule
+ * `EntryEditor` states. There is still no add-to-list action on this page: a
+ * library is titles already on the list, so there is nothing to add and the
+ * quick-add belongs to the dashboard's rows. There is no activity feed or
+ * comment thread either - those are about a *person*, and they stayed on the
+ * profile this page left.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +89,16 @@ fun LibraryScreen(
     onOpenTierList: () -> Unit,
     onOpenStudio: (Int, String?) -> Unit,
     onSignInAgain: () -> Unit,
+    /**
+     * Read/write access to the reader's own entry for the opened title, or null
+     * when there is no session to write with.
+     *
+     * Supplied by the host rather than built here: which account is signed in is
+     * the navigation's answer, not this page's - see
+     * `com.anisequel.ui.components.detail.RepositoryEntryEditor`. Null removes the
+     * "My Entry" destination entirely rather than drawing it disabled.
+     */
+    entryEditor: EntryEditor? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
@@ -268,9 +284,11 @@ fun LibraryScreen(
             onAddToWatching = {},
             onLoadDetail = detailHost.onLoadDetail,
             isDetailLoading = detailLoading,
-            // A library is browsed, not written, from this page: the editor
-            // belongs to the dashboard's own rows. See the KDoc.
-            canWriteToAniList = false,
+            // The sheet is the same one the dashboard opens, so it gets the same
+            // access: null here still draws the whole Info page, minus the one
+            // tab it cannot honour. See the KDoc on [entryEditor].
+            canWriteToAniList = entryEditor != null,
+            entryEditor = entryEditor,
             // A relation replaces the subject rather than stacking a sheet: see
             // `InfoRelationsSection`. The summary is kept alongside the fetched
             // detail so the reader's own progress survives the hop.
