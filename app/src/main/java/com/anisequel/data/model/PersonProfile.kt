@@ -2,6 +2,7 @@ package com.anisequel.data.model
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.util.Locale
 
 /**
  * One character, as their in-app profile page.
@@ -102,7 +103,17 @@ data class StaffProfile(
     val isFavourite: Boolean? = null,
     val dateOfBirth: FuzzyDate? = null,
     val dateOfDeath: FuzzyDate? = null,
-    /** The titles they worked on, most popular first. */
+    /**
+     * The titles they worked on, most popular first.
+     *
+     * The wire field is `staffMedia`, but the model calls it `media` so the mapper and
+     * the sheet can read a person's films the same way a character's appearances are
+     * read. Without this annotation Moshi looked for a field literally named `media`
+     * in the staff response, found none, and left this null - so every creator's
+     * "Worked on" row was empty while the same row on a character page filled
+     * normally. The data was on the wire the whole time.
+     */
+    @Json(name = "staffMedia")
     val media: ProfileAppearances? = null,
     /**
      * The characters they voiced, most popular title first.
@@ -151,10 +162,15 @@ data class StaffProfileData(
 /**
  * The titles a person appears in or worked on.
  *
- * No `pageInfo`: the row on a profile sheet is horizontal and bounded at twelve, so
- * pagination here would be a cursor nobody advances. The same decision as
- * `StudioMediaConnection`, which the studio page's paging rebuilds because it really
- * does page.
+ * No `pageInfo`: the row on a profile sheet is horizontal and bounded at the page
+ * size the query asks for, so pagination here would be a cursor nobody advances. The
+ * same decision as `StudioMediaConnection`, which the studio page's paging rebuilds
+ * because it really does page.
+ *
+ * The bound is larger than the number of cards a screen shows at once because a
+ * staff connection spends its edges on credits, not titles: one film can arrive
+ * several times, so asking for twelve edges once produced four posters. See
+ * [titlesFor].
  */
 @JsonClass(generateAdapter = true)
 data class ProfileAppearances(
@@ -186,9 +202,69 @@ data class ProfileAppearances(
      * do not ask for one.
      */
     val titles: List<ProfileAppearance>
-        get() = edges?.mapNotNull { edge ->
-            edge.node?.let { node -> node.copy(staffRole = edge.staffRole) }
-        } ?: nodes.orEmpty()
+        get() = titlesFor()
+
+    /**
+     * The titles, with duplicate roles on one title collapsed.
+     *
+     * A media connection returns one edge per credit, not one edge per title: a
+     * director who wrote, storyboarded and directed the same episode of the same show
+     * appears three times with the same `node`. Drawn as sent, the row repeated a
+     * handful of posters and the connection's page of edges was spent on duplicates -
+     * so twelve edges could be four titles, and the rest of a person's work was never
+     * requested. Deduplicating by namespace and id is what makes the row a
+     * filmography rather than a list of credits.
+     *
+     * [preferredRoles] is the person's `primaryOccupations`, when the caller has
+     * them. The duplicate edges for one title arrive in no useful order ("Script
+     * (eps 17, 21)" can precede "Director"), so the first edge is not reliably the
+     * credit that says why this person is on the page. A role matching one of their
+     * primary occupations wins instead; otherwise the first non-blank role is kept.
+     *
+     * `nodes` is still read as a fallback for a response written before the queries
+     * moved to edges - or a cache entry keyed to one - the same contract this
+     * property has always had.
+     */
+    fun titlesFor(preferredRoles: List<String> = emptyList()): List<ProfileAppearance> {
+        val edges = edges ?: return nodes.orEmpty()
+        val preferred = preferredRoles
+            .map { it.trim().lowercase(Locale.ROOT) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
+        // Insertion-ordered: the connection arrives most popular first, and the row
+        // draws that order, so deduplicating must not reshuffle it.
+        val byTitle = LinkedHashMap<Pair<String, Int>, ProfileAppearance>()
+        edges.forEach { edge ->
+            val node = edge.node ?: return@forEach
+            val key = node.type?.uppercase(Locale.ROOT).orEmpty() to node.id
+            val existing = byTitle[key]
+            byTitle[key] = if (existing == null) {
+                node.copy(staffRole = edge.staffRole)
+            } else {
+                existing.copy(
+                    staffRole = betterRole(existing.staffRole, edge.staffRole, preferred)
+                )
+            }
+        }
+        return byTitle.values.toList()
+    }
+
+    /**
+     * The credit to keep when one title arrives with several.
+     *
+     * A primary occupation is the strongest signal available: AniList says a director
+     * is a director, and "Director" is what a reader needs under the poster even when
+     * the connection listed "Script" first. With no preference, the first non-blank
+     * role wins because that is the connection's own ordering.
+     */
+    private fun betterRole(current: String?, candidate: String?, preferred: Set<String>): String? {
+        if (candidate.isNullOrBlank()) return current
+        if (current.isNullOrBlank()) return candidate
+        if (current.trim().lowercase(Locale.ROOT) in preferred) return current
+        if (candidate.trim().lowercase(Locale.ROOT) in preferred) return candidate
+        return current
+    }
 
     /**
      * Who voices this character, Japanese before English.
@@ -531,7 +607,9 @@ fun StaffProfile.toLoadedState(): PersonProfileState.Loaded = PersonProfileState
     facts = facts,
     description = description,
     siteUrl = siteUrl,
-    appearances = media?.titles.orEmpty(),
+    // Primary occupations are passed through so a title credited more than once
+    // ("Director" and "Script (eps 17, 21)") keeps the role the person is known for.
+    appearances = media?.titlesFor(primaryOccupations.orEmpty()).orEmpty(),
     // A person is not voiced, so the character-side row stays empty here; what a
     // voice actor *performed* is the other connection and the other row.
     voicedCharacters = characterMedia?.characters.orEmpty()

@@ -308,6 +308,11 @@ object GraphQLQueries {
      * related title was *called* and not when it aired, what it scored, or whether
      * it is out yet: the same household facts its own hero chip spells out above.
      *
+     * `chapters` and `volumes` are here for the manga half of the row. Without
+     * them a related manga card could say "Manga · 1999" and never how long the
+     * thing is, while the same card for an anime said "TV · 12 eps · 1999" - the
+     * metadata line was anime-shaped and the manga namespace was an afterthought.
+     *
      * It is the same `Media` type, so the fix is the same field list rather than a
      * second one - and a field list that exists twice is one that eventually
      * forgets half a relation. The cost is bounded the way it is here on purpose:
@@ -323,6 +328,8 @@ object GraphQLQueries {
                 format
                 status
                 episodes
+                chapters
+                volumes
                 season
                 seasonYear
                 averageScore
@@ -1078,7 +1085,7 @@ object GraphQLQueries {
             siteUrl
             isFavourite
             dateOfBirth { year month day }
-            media(perPage: 12, sort: [POPULARITY_DESC]) {
+            media(perPage: 25, sort: [POPULARITY_DESC]) {
               edges {
                 characterRole
                 voiceActors(language: JAPANESE) {
@@ -1114,9 +1121,14 @@ object GraphQLQueries {
      * `characterMedia` is the other half of what AniList knows about a creator: many
      * are voice actors as well, and `staffMedia` only says what was *produced* - never
      * who they *performed*. Its `characters` live on the edge beside `characterRole`,
-     * which is why this is asked for as `edges` too. Both connections are capped at
-     * twelve because a horizontal row shows twelve; the character's own connection is
-     * twelve for the same reason.
+     * which is why this is asked for as `edges` too.
+     *
+     * Both connections ask for twenty-five edges rather than twelve. A staff connection
+     * has one edge per *credit*, not per title - a director who also wrote and
+     * storyboarded a film appears on it several times - so twelve edges could fill the
+     * row with four posters and hide the rest of the filmography. The model collapses
+     * the duplicates ([ProfileAppearances.titlesFor]); the character connection spends
+     * one edge per title, so twenty-five is simply a longer row there.
      *
      * `primaryOccupations` is what distinguishes a voice actor from an animator, and
      * `yearsActive` and `homeTown` are the two facts a credit otherwise never carries.
@@ -1142,13 +1154,13 @@ object GraphQLQueries {
             isFavourite
             dateOfBirth { year month day }
             dateOfDeath { year month day }
-            staffMedia(perPage: 12, sort: [POPULARITY_DESC]) {
+            staffMedia(perPage: 25, sort: [POPULARITY_DESC]) {
               edges {
                 staffRole
                 node { $PROFILE_MEDIA_FIELDS }
               }
             }
-            characterMedia(perPage: 12, sort: [POPULARITY_DESC]) {
+            characterMedia(perPage: 25, sort: [POPULARITY_DESC]) {
               edges {
                 characterRole
                 characters {

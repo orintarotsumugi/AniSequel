@@ -96,6 +96,9 @@ class MediaFormatLabelTest {
      */
     @Test
     fun `an unrecognised format passes through readably`() {
+        // The API spells music videos `MUSIC`; `MUSIC_VIDEO` is kept as an alias
+        // because it is the word the docs use and a fixture can carry it.
+        assertEquals("Music Video", media("MUSIC").formatLabel)
         assertEquals("Music Video", media("MUSIC_VIDEO").formatLabel)
         // Not `Live action`: the fallback lowercases, title-cases the first
         // character and leaves the rest alone, so it reads "Live action". Pinning

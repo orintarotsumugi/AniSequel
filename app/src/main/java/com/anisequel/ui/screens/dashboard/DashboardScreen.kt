@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AniTopAppBar
 import com.anisequel.ui.components.EmptyStateView
@@ -210,7 +211,7 @@ fun DashboardScreen(
             // the detail request went out and its answer was thrown away.
             navigatedRelation != null -> navigatedRelation?.let { summary ->
                 AnimeDetailSubject.Media(
-                    detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary
+                    detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
                 )
             }
             selectedSequelId != null -> successState?.missedSequels
@@ -221,7 +222,7 @@ fun DashboardScreen(
                 ?.let { entry ->
                     val summary = entry.toDetailMedia()
                     AnimeDetailSubject.Media(
-                        detailNodes[entry.mediaId]?.withSummaryProgress(summary) ?: summary
+                        detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
                     )
                 }
             else -> null
