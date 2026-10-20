@@ -122,8 +122,12 @@ fun QuickFilterBar(
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         onClearAll()
                     },
+                    // 48dp, not the 28dp box the icon is drawn in. The button used to
+                    // be sized to its glyph, so the one control that undoes a filter was
+                    // the smallest target on the bar - and the glyph is what should be
+                    // small, not the area a finger has to hit.
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(48.dp)
                         .testTag("clear_filters_button")
                 ) {
                     Icon(

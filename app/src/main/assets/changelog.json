@@ -1,6 +1,47 @@
 {
   "versions": [
     {
+      "version": "1.4.2",
+      "entries": [
+        {
+          "title": "Relations can tell a source from its adaptation",
+          "detail": "The relation query asked for `relationType` at version 1, whose enum has no `SOURCE`, so a light novel and the anime made from it both arrived as `ADAPTATION` and the row could not say which was which. Both the list and detail queries now ask for version 2, so the adapter finally receives the value its existing \"Source\" label was written for."
+        },
+        {
+          "title": "The filter bar's clear button is a full-size target",
+          "detail": "The control that undoes a filter was sized to its 28dp glyph, making it the smallest target on a bar full of chips. The glyph is still 28dp; the area a finger has to hit is now 48dp."
+        },
+        {
+          "title": "Clearing an edit date no longer opens the picker",
+          "detail": "The X beside a date was a 20dp icon inside a row that was itself clickable, so a near miss opened the date picker instead of clearing the date. The X now has its own 48dp hit area and consumes the tap before the picker sees it."
+        },
+        {
+          "title": "Long pages can be navigated by heading",
+          "detail": "TalkBack could only read the title page, profile tabs and settings as one long list. Section titles, settings card titles and profile section headers now carry heading semantics, so they appear in the screen reader's heading navigation."
+        },
+        {
+          "title": "Settings states the app's privacy position",
+          "detail": "The About card now says plainly that AniSequel talks only to AniList and GitHub Releases, with no analytics, no telemetry and no third-party tracker."
+        },
+        {
+          "title": "Private notes can be written and cleared",
+          "detail": "The entry editor now loads, edits and saves AniList's private `notes` field, which the app was already reading but never showed. An empty field is sent as an explicit clear; saves from callers that do not edit notes omit the argument so they cannot erase a note they never loaded."
+        },
+        {
+          "title": "Charts can be read aloud",
+          "detail": "The status and format strips now expose one spoken summary of the shares they draw, and each bar or format row reads as a single phrase - label, count and percentage - instead of unrelated numbers."
+        },
+        {
+          "title": "Where to Watch lists the streaming services",
+          "detail": "The title page now asks for AniList's `externalLinks` and draws the services that carry the show above the synopsis. Only `STREAMING` links with a name and a URL are shown, duplicate regional entries collapse to one chip, and each 48dp chip opens the service in the browser."
+        },
+        {
+          "title": "A long bio cannot blank every cover",
+          "detail": "Cover links were aliased into one GraphQL document, so an over-complex bio could be refused whole and leave every poster on a placeholder with nothing on screen to explain it. Links are now requested ten at a time; a refused batch costs only its own cards, the successful batches are kept, and the refusal is logged instead of disappearing."
+        }
+      ]
+    },
+    {
       "version": "1.4.1",
       "entries": [
         {

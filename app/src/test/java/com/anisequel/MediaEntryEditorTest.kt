@@ -54,6 +54,7 @@ class MediaEntryEditorTest {
                   "progressVolumes": 3,
                   "score": 85,
                   "private": true,
+                  "notes": "Rewatch before the movie",
                   "startedAt": { "year": 2026, "month": 10, "day": 6 },
                   "completedAt": null
                 }
@@ -71,6 +72,7 @@ class MediaEntryEditorTest {
         // `private` is a Kotlin keyword, so the wire name is pinned by annotation.
         // A missed `@Json(name = "private")` reads null here and never fails a build.
         assertEquals(true, entry.isPrivate)
+        assertEquals("Rewatch before the movie", entry.notes)
         assertEquals(FuzzyDate(2026, 10, 6), entry.startedAt)
         assertEquals(null, entry.completedAt)
     }
@@ -123,7 +125,7 @@ class MediaEntryEditorTest {
         assertFalse("AniList has no finishedAt argument", query.contains("finishedAt"))
         // The whole-snapshot save depends on every editable field being declared,
         // or a cleared date would leave the old one on the server.
-        listOf("startedAt:", "progressVolumes:", "score:", "private:").forEach { field ->
+        listOf("startedAt:", "progressVolumes:", "score:", "private:", "notes:").forEach { field ->
             assertTrue("the save is missing $field", query.contains(field))
         }
     }
@@ -131,10 +133,25 @@ class MediaEntryEditorTest {
     @Test
     fun `loading asks for the fields the form draws`() {
         val query = GraphQLQueries.GET_MEDIA_LIST_ENTRY
-        listOf("status", "progress", "progressVolumes", "score", "private", "startedAt", "completedAt")
+        listOf("status", "progress", "progressVolumes", "score", "private", "notes", "startedAt", "completedAt")
             .forEach { field ->
                 assertTrue("the load is missing $field", query.contains(field))
             }
+    }
+
+    @Test
+    fun `an empty note is sent as a clear, and a caller that does not edit notes omits it`() {
+        val cleared = MediaEntryEdit(mediaId = 1, status = "CURRENT", notes = "").toSaveVariables()
+        // "" is AniList's clear. Omitting the argument would leave the old note in
+        // place, which reads as the field ignoring the edit.
+        assertTrue(cleared.containsKey("notes"))
+        assertEquals("", cleared["notes"])
+
+        val untouched = MediaEntryEdit(mediaId = 1, status = "CURRENT").toSaveVariables()
+        assertFalse(
+            "a caller that never loaded notes must not clear them",
+            untouched.containsKey("notes")
+        )
     }
 
     /**

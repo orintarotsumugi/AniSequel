@@ -145,6 +145,15 @@ fun InfoSettingsTab(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            // The app talks to exactly two hosts. Saying so is the privacy policy:
+            // there is no analytics SDK to describe, and "no telemetry" is only
+            // credible if the reader can see what *is* contacted.
+            Text(
+                text = "It talks only to AniList and GitHub Releases. There is no analytics, no telemetry, and no third-party tracker.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         UpdateSectionCard()

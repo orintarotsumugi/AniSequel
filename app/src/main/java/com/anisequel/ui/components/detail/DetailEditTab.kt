@@ -23,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -164,7 +165,8 @@ internal fun DetailEditTab(
                     score = updated.score,
                     startedAt = updated.startedAt,
                     completedAt = updated.completedAt,
-                    isPrivate = updated.isPrivate
+                    isPrivate = updated.isPrivate,
+                    notes = updated.notes
                 )
             ).fold(
                 onSuccess = { saved ->
@@ -348,6 +350,28 @@ internal fun DetailEditTab(
                     modifier = Modifier
                         .padding(top = 8.dp)
                         .testTag("edit_private_switch")
+                )
+            }
+
+            // Notes. AniList's own `notes` field, which the app was already reading
+            // into `SimpleMediaListEntry` but never drawing or sending.
+            EditorCard(
+                icon = AppVectorIcons.EditEntry,
+                title = "Notes",
+                subtitle = "Only you can see this",
+                testTag = "edit_notes_row"
+            ) {
+                OutlinedTextField(
+                    value = entryState.notes,
+                    onValueChange = { note -> state.draft = entryState.copy(notes = note) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                        .testTag("edit_notes_field"),
+                    label = { Text("Private note") },
+                    minLines = 3,
+                    maxLines = 6,
+                    shape = MaterialTheme.shapes.small
                 )
             }
         }

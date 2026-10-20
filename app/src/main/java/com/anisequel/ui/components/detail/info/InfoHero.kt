@@ -402,7 +402,7 @@ fun InfoHero(
  *
  * ## The title pill is a control, and it carries the two things this page lacked
  *
- * A thirteen-section page has no orientation and no way back. The pill is both: the
+ * A fourteen-section page has no orientation and no way back. The pill is both: the
  * label is a *button* that returns to the hero, and the same pill carries [progress]
  * as a wash that fills from the left as the reader descends. Both live inside the one
  * control rather than being added as a fourth floating element, because everything

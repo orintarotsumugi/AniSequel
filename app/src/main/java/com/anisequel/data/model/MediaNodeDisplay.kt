@@ -236,6 +236,29 @@ val MediaNode.sourceLabel: String?
 
 val MediaNode.durationLabel: String? get() = duration?.let { "$it mins / ep" }
 val MediaNode.trailerYoutubeUrl: String? get() = trailer?.youtubeUrl
+
+/**
+ * The links that actually lead to somewhere the title can be watched.
+ *
+ * AniList's `externalLinks` is one list of three kinds, and the kind is what
+ * decides whether a row belongs here: `SOCIAL` is a Facebook page, `INFO` is a
+ * wiki, and only `STREAMING` is a place to watch the show. A card that drew all
+ * three as "Where to watch" would offer a fan wiki as a streaming service.
+ *
+ * Both a site name and a URL are required, because a half-populated edge would
+ * draw a blank chip. Services are deduplicated by name: AniList often lists the
+ * same service twice for two regions, and two identical Crunchyroll chips are
+ * one choice, not two.
+ */
+val MediaNode.streamingLinks: List<MediaExternalLink>
+    get() = externalLinks.orEmpty()
+        .filter { it.type.equals(STREAMING_LINK_TYPE, ignoreCase = true) }
+        .filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
+        .distinctBy { it.site?.lowercase(Locale.ROOT) }
+
+/** AniList's `ExternalLinkType` member that means "a place to watch this". */
+private const val STREAMING_LINK_TYPE = "STREAMING"
+
 val MediaNode.synonymList: List<String> get() = synonyms?.filter { it.isNotBlank() } ?: emptyList()
 
 /**

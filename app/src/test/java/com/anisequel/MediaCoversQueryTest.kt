@@ -2,6 +2,8 @@ package com.anisequel
 
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.network.GraphQLQueries
+import com.anisequel.data.repository.MAX_COVER_BATCH_KEYS
+import com.anisequel.data.repository.mediaCoverBatches
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -160,6 +162,39 @@ class MediaCoversQueryTest {
             throw AssertionError("an empty cover batch must be rejected, not sent")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message?.isNotEmpty() == true)
+        }
+    }
+
+    @Test
+    fun `a link-heavy bio is split into documents AniList will accept`() {
+        // One document with an alias per link grows with the bio. AniList rejects
+        // an over-complex document whole, and a cover failure is invisible, so an
+        // uncapped batch would leave every poster in a "hall of fame" bio on a
+        // placeholder with nothing on screen to explain it.
+        val keys = (1..2 * MAX_COVER_BATCH_KEYS + 3).map { MediaCoverKey("ANIME", it) }
+
+        val batches = mediaCoverBatches(keys)
+
+        assertEquals(
+            "the remainder must still be asked for, not dropped",
+            keys,
+            batches.flatten()
+        )
+        assertTrue("no document may exceed the cap", batches.all { it.size <= MAX_COVER_BATCH_KEYS })
+        assertEquals(
+            "a full batch, a full batch, then the remainder",
+            listOf(MAX_COVER_BATCH_KEYS, MAX_COVER_BATCH_KEYS, 3),
+            batches.map { it.size }
+        )
+        batches.forEach { batch ->
+            // The cap only helps if each batch is still a valid document: one
+            // alias and one pair of variables per key in that batch.
+            val query = GraphQLQueries.getMediaCoversQuery(batch)
+            assertEquals(
+                "every key in a batch must have exactly one aliased field",
+                batch.size,
+                Regex("""m\d+: Page \{""").findAll(query).count()
+            )
         }
     }
 
