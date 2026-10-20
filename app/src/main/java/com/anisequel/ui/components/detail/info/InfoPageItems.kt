@@ -257,8 +257,15 @@ private fun Modifier.infoSection(index: Int): Modifier =
  * can change while the node it was derived from is the same object, so the work
  * belongs in one `remember(media)` on the page rather than in the item-listing
  * lambda that runs again on each pass. The booleans are stored rather than the
- * lists they were read from because that is all this file does with them: a
- * section that has nothing to show must not take a slot (see [infoPageItems]).
+ * lists they were read from because that is all this file does with them - the one
+ * exception is `streamingLinks`, which is kept as the list because the card is
+ * handed it straight.
+ *
+ * Every field is a flag or that one list: which sections draw is decided here, what
+ * they draw is each section's own business. The gates have to be able to answer
+ * *before* the list is built, because `Arrangement.spacedBy` charges every item its
+ * gap whether or not the item's content went on to draw anything (see
+ * [infoPageItems]).
  */
 internal data class InfoSections(
     val hasMetaRows: Boolean,
