@@ -181,7 +181,11 @@ class FindMissedSequelsUseCase {
             val matchesStatus = when (filterCriteria.statusFilter) {
                 StatusFilter.ALL -> true
                 StatusFilter.FINISHED -> sequel.status.equals("FINISHED", ignoreCase = true)
-                StatusFilter.RELEASING -> sequel.status.equals("RELEASING", ignoreCase = true)
+                // Through the model's own predicate, not the display label.
+                // `sequel.status` is `statusLabel` ("Airing"), so comparing it to
+                // the raw enum key "RELEASING" matched nothing at all - choosing
+                // "Airing" in the filter showed an empty list.
+                StatusFilter.RELEASING -> sequel.isAiring
                 // Through the model's own predicate, which the status chip also
                 // reads. A second case-insensitive string compare here is how the
                 // card and the filter end up disagreeing about one entry.

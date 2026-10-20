@@ -33,8 +33,8 @@ class UpdateManifestTest {
         {
           "version": "1.0.9",
           "version_code": 22,
-          "release_url": "https://github.com/LOST-4EVER/AniSequel/releases/tag/v1.0.9",
-          "download_url": "https://github.com/LOST-4EVER/AniSequel/releases/download/v1.0.9/anisequel-universal.apk",
+          "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v1.0.9",
+          "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v1.0.9/anisequel-universal.apk",
           "size_bytes": 2410756,
           "published_at": "2026-10-03T07:38:15Z",
           "notes": "  * Restore the release signing key dropped by the history rewrite\n  * Add \"Not interested\" per card\n\nBuild 22 from a4171424."
@@ -181,7 +181,7 @@ class UpdateManifestTest {
     fun `the manifest url points at this project's latest release asset`() {
         assertEquals(
             "the manifest must be read from the latest release asset of this repository",
-            "https://github.com/LOST-4EVER/AniSequel/releases/latest/download/update.json",
+            "https://github.com/orintarotsumugi/AniSequel/releases/latest/download/update.json",
             UPDATE_MANIFEST_URL
         )
 

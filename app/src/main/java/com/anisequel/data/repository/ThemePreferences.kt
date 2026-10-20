@@ -7,8 +7,14 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 private val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "anisequel_theme_prefs"
@@ -93,6 +99,9 @@ enum class MotionStyle(val storageValue: String, val displayName: String) {
  * turned on even by a developer.
  */
 class ThemePreferences(private val context: Context) {
+
+    /** Held for the revert timer, which must not keep an Activity alive. */
+    private val appContext: Context = context.applicationContext
 
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -208,11 +217,18 @@ class ThemePreferences(private val context: Context) {
         colorHex: String? = null,
         retainColor: Boolean = false
     ) {
+        // A new layer (or an explicit ending of one) supersedes any pending
+        // revert from the previous title.
+        cancelAnimeThemeRevert()
         context.themeDataStore.edit { preferences ->
             preferences[Keys.ANIME_THEME_ACTIVE] = active
-            if (colorHex != null) {
+            if (active && colorHex != null) {
                 preferences[Keys.ANIME_THEME_COLOR_HEX] = colorHex
             } else if (!active) {
+                // Always drop the cover colour when the layer is switched off.
+                // This used to keep it whenever a caller passed the old hex
+                // "for reference" - so `active = false` still left a colour
+                // behind that the next enable would silently restore.
                 preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
             }
             if (active && retainColor && colorHex != null) {
@@ -238,6 +254,36 @@ class ThemePreferences(private val context: Context) {
         context.themeDataStore.edit { preferences ->
             preferences[Keys.ANIME_THEME_REVERT_DURATION] = durationSeconds
         }
+    }
+
+    /**
+     * Schedules the temporary anime colour to go away **after the sheet closes**.
+     *
+     * This timer used to live in a `LaunchedEffect` inside the detail sheet, so
+     * dismissing the sheet cancelled it: picking "5 Minutes" or "10 Minutes"
+     * left the colour applied until the next title overwrote it, which made the
+     * setting indistinguishable from Retain. The job is process-scoped and
+     * app-context-bound so it can outlive the screen that started it.
+     */
+    fun scheduleAnimeThemeRevert(durationSeconds: Int) {
+        revertJob?.cancel()
+        if (durationSeconds <= 0) {
+            revertJob = null
+            return
+        }
+        revertJob = revertScope.launch {
+            delay(durationSeconds * 1000L)
+            appContext.themeDataStore.edit { preferences ->
+                preferences[Keys.ANIME_THEME_ACTIVE] = false
+                preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            }
+        }
+    }
+
+    /** Called when a new title (or Retain) takes over before an old timer fires. */
+    fun cancelAnimeThemeRevert() {
+        revertJob?.cancel()
+        revertJob = null
     }
 
     suspend fun setAppBackgroundColor(hex: String?) {
@@ -267,6 +313,7 @@ class ThemePreferences(private val context: Context) {
 
     /** Back to shipping defaults. Used by the "Reset appearance" action. */
     suspend fun reset() {
+        cancelAnimeThemeRevert()
         context.themeDataStore.edit { preferences ->
             preferences.remove(Keys.THEME_MODE)
             preferences.remove(Keys.USE_DYNAMIC_COLOR)
@@ -280,5 +327,17 @@ class ThemePreferences(private val context: Context) {
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
         }
+    }
+
+    private companion object {
+        /**
+         * The temporary anime layer's revert timer. Process-scoped on purpose:
+         * the sheet that started it is gone by the time it fires. There is only
+         * one temporary layer at a time, so one job is the whole state, and a
+         * new title (or Retain) cancels the previous one through
+         * [cancelAnimeThemeRevert].
+         */
+        val revertScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        var revertJob: Job? = null
     }
 }

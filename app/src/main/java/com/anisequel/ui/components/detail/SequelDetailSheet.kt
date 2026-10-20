@@ -168,29 +168,24 @@ fun SequelDetailSheet(
         }
     }
 
-    // The revert timer belongs to the *temporary* layer only. While Retain is on the
-    // colour was persisted as a custom hue, so deactivating the layer after a delay
-    // would flick the app between schemes for no gain - the retained accent is already
-    // what the user asked to keep.
-    LaunchedEffect(
-        themeSettings.animeThemeActive,
-        themeSettings.animeThemeRevertDuration,
-        themeSettings.animeThemeRetainColor
-    ) {
-        if (themeSettings.animeThemeActive &&
-            themeSettings.animeThemeRevertDuration > 0 &&
-            !themeSettings.animeThemeRetainColor
-        ) {
-            val delayMillis = themeSettings.animeThemeRevertDuration * 1000L
-            kotlinx.coroutines.delay(delayMillis)
-            themePreferences.setAnimeThemeActive(false, null)
-        }
-    }
-
+    // The revert timer starts when the sheet is *closed*, not while it is open.
+    // It used to be a `LaunchedEffect` here, which the dismiss disposed - so the
+    // "5 Minutes" and "10 Minutes" choices never fired at all, and a temporary
+    // colour outlived every title it was borrowed for. `handleDismiss` hands the
+    // delay to a process-scoped job in `ThemePreferences` instead.
     val handleDismiss: () -> Unit = {
         scope.launch {
-            if (themeSettings.animeThemeRevertDuration == 0) {
-                themePreferences.setAnimeThemeActive(false, null)
+            // Retain owns the colour: the sheet closing must not switch off the
+            // layer that is deliberately being kept. The immediate-revert branch
+            // used to ignore this and ended a retained colour on every close.
+            if (!themeSettings.animeThemeRetainColor) {
+                if (themeSettings.animeThemeRevertDuration == 0) {
+                    themePreferences.setAnimeThemeActive(false, null)
+                } else {
+                    themePreferences.scheduleAnimeThemeRevert(
+                        themeSettings.animeThemeRevertDuration
+                    )
+                }
             }
         }
         onDismiss()

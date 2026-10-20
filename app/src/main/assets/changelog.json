@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "1.4.0",
+      "entries": [
+        {
+          "title": "The Airing filter now shows airing sequels",
+          "detail": "Choosing Airing in the filter compared the card's display label, 'Airing', with AniList's raw status, 'RELEASING', so the filter always came back empty even when the dashboard was showing releasing shows. It now uses the same predicate as the status chip, so the filter and the card agree."
+        },
+        {
+          "title": "The release-year chart is chronological again",
+          "detail": "The Stats tab re-sorted year buckets by their printed labels, which put '19 before 1995 because an apostrophe sorts before a digit and pushed every pre-2000 year to the end of the chart. The buckets are already tallied and ordered by real year, so they now keep that order."
+        },
+        {
+          "title": "A progress or score revert is no longer lost mid-save",
+          "detail": "If you changed a value, then changed it back while the first request was still on the wire, the coalescer dropped the revert because it still believed the server held the original value. The revert is now queued as a compensating write, and closing an editor waits for a request that is already in flight instead of returning immediately."
+        },
+        {
+          "title": "The app lock swallows taps and survives rotation",
+          "detail": "The lock screen hid the list but did not consume pointer input, so taps and drags could still reach the live screen underneath. Every event is now consumed except the Unlock button's. Rotating the phone no longer re-arms the lock after you have unlocked it, and a biometric prompt that cannot be shown no longer leaves the Unlock button permanently inert."
+        },
+        {
+          "title": "An OAuth callback is handled once",
+          "detail": "The callback Intent stays attached to the Activity, so rotating the phone replayed the same redirect and re-saved the token (or re-showed a cancelled sign-in error). It is now handled only when the Activity is first created; callbacks that arrive while the app is already open still go through onNewIntent."
+        },
+        {
+          "title": "One auth session for the whole process",
+          "detail": "The auth repository was rebuilt on every rotation while the retained ViewModel kept the old one, leaving two token caches and defeating the network client's cache. It now lives in the Application, so the Activity and its ViewModel always share one session. Keystore encryption and token decryption have also moved off the main thread."
+        },
+        {
+          "title": "A custom canvas colour is a dark-mode choice again",
+          "detail": "The canvas choices are all dark colours and the setting is described as a dark-mode preference, but the colour was also applied in light mode, where it left dark text on a nearly black background. It now applies only to the dark theme, so switching to light mode restores readable contrast."
+        },
+        {
+          "title": "Selection is announced, not just coloured",
+          "detail": "Filter chips and segmented controls showed their selected state only through colour. They now expose selected state and the right control role to accessibility services, so a screen reader can say which filter or tab is active."
+        },
+        {
+          "title": "Retained anime colours stay retained",
+          "detail": "Retain Anime Color could still lose the colour. Closing a sheet with the revert timer on Immediately switched the anime layer off even though Retain was on, and turning Retain off again did not return you to your previous theme because the layer outranks every other colour source. The layer now outlives the sheet whenever the colour is being retained, switching Retain off actually ends it, and disabling the anime layer always clears the cover colour instead of leaving a stale one to reappear. The temporary 5- and 10-minute choices also work now: their timer used to be cancelled the moment the sheet closed, so a temporary colour behaved exactly like a retained one."
+        },
+        {
+          "title": "Update checks use the repository's current address",
+          "detail": "The in-app updater, the Settings privacy note and the README still named the account the project used before it was renamed. GitHub redirects the old address today, but a redirect is not a contract; every link now uses the current repository name so update checks keep reaching the release assets directly."
+        }
+      ]
+    },
+    {
       "version": "1.3.9",
       "entries": [
         {

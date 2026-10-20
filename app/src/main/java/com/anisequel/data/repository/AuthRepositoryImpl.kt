@@ -8,12 +8,15 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.data.security.KeystoreTokenCipher
 import com.anisequel.data.security.TokenCipher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "anisequel_auth_prefs")
 
@@ -84,7 +87,11 @@ class AuthRepositoryImpl(
         emitAll(
             context.dataStore.data.map { preferences -> readToken(preferences) }
         )
-    }.onEach { token -> cachedToken = token }
+        // Decryption is a keystore call, and the flow is collected from the
+        // composition by AuthViewModel. A keystore round trip on the main thread
+        // is exactly the sort of blocking work that shows up as a stutter on
+        // cold start, so the whole read-and-migrate side runs on IO.
+    }.flowOn(Dispatchers.IO).onEach { token -> cachedToken = token }
 
     override val clientIdFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_CLIENT_ID]?.takeIf { it.isNotBlank() } ?: DEFAULT_CLIENT_ID
@@ -97,7 +104,9 @@ class AuthRepositoryImpl(
         // Encrypt before touching either cache. A failed encryption must leave
         // the previous session exactly as it was rather than half-written, and
         // it must never fall back to storing the bearer token in plaintext.
-        val encrypted = tokenCipher.encrypt(trimmed)
+        // Keystore work is off the caller's thread: sign-in runs on the main
+        // dispatcher and a hardware-backed encrypt is not free.
+        val encrypted = withContext(Dispatchers.IO) { tokenCipher.encrypt(trimmed) }
         cachedToken = trimmed
         context.dataStore.edit { preferences ->
             preferences[KEY_ENCRYPTED_ACCESS_TOKEN] = encrypted

@@ -54,6 +54,12 @@ class MutationCoalescer<K : Any, V>(
     /** The value each pending write will send, used to ignore a repeat. */
     private val pendingValues = HashMap<K, V>()
 
+    /** The job currently sending a value, per key. */
+    private val inFlight = HashMap<K, Job>()
+
+    /** The value that in-flight job is sending. */
+    private val inFlightValues = HashMap<K, V>()
+
     /** The last value the server accepted, used to suppress a no-op restore. */
     private val committed = HashMap<K, V>()
 
@@ -75,35 +81,71 @@ class MutationCoalescer<K : Any, V>(
      * value was already the committed one, or already the one about to be sent.
      */
     fun submit(key: K, value: V): Boolean = synchronized(lock) {
-        if (committed[key] == value) {
-            // The reader reverted the control to what the server already has.
-            // Cancelling a pending write here is the like -> unlike -> like
-            // sequence sending zero requests, not one request for the original
-            // value.
+        if (pendingValues[key] == value) return false
+
+        if (inFlightValues[key] == value) {
+            // The same value is already on its way. A compensating write queued
+            // while it was in flight (the reader moved away and came back) would
+            // now undo the value that is about to land, so drop it.
             pending.remove(key)?.cancel()
             pendingValues.remove(key)
             return false
         }
-        if (pendingValues[key] == value) return false
+
+        if (committed[key] == value && inFlightValues[key] == null) {
+            // The reader reverted the control to what the server already has,
+            // and no write is in flight that could land after this. Cancelling a
+            // pending write here is the like -> unlike -> like sequence sending
+            // zero requests, not one request for the original value.
+            //
+            // When a different value *is* in flight the revert cannot be
+            // dropped: that write is going to leave the server holding it, so a
+            // compensating write has to follow it. This is the race that lost a
+            // revert typed while the earlier request was still on the wire.
+            pending.remove(key)?.cancel()
+            pendingValues.remove(key)
+            return false
+        }
 
         pending.remove(key)?.cancel()
         pendingValues[key] = value
         pending[key] = scope.launch {
             delay(windowMillis)
 
+            val job = coroutineContext[Job] ?: return@launch
             // Read the value this job was scheduled with before the maps are
             // touched: a later submit may have replaced it, and this job is
             // cancelled in that case, but a cancellation that loses the race
             // must not commit the newer value under the older job.
             synchronized(lock) {
-                if (pending[key] !== coroutineContext[Job]) return@launch
+                if (pending[key] !== job) return@launch
                 pending.remove(key)
                 pendingValues.remove(key)
+                inFlight[key] = job
+                inFlightValues[key] = value
             }
 
-            commit(key, value)
+            try {
+                commit(key, value)
+            } finally {
+                synchronized(lock) {
+                    if (inFlight[key] === job) {
+                        inFlight.remove(key)
+                        inFlightValues.remove(key)
+                    }
+                }
+            }
 
-            synchronized(lock) { committed[key] = value }
+            synchronized(lock) {
+                // Only the newest write may become the baseline. A slow older
+                // request can finish after a newer one has already recorded its
+                // value; letting the older one write `committed` here would make
+                // the coalescer suppress the next tap against a value the server
+                // no longer holds.
+                if (pending[key] == null && inFlight[key] == null) {
+                    committed[key] = value
+                }
+            }
         }
         true
     }
@@ -113,10 +155,16 @@ class MutationCoalescer<K : Any, V>(
      *
      * Used by a screen that is closing and wants the last tap to land before it
      * reports the save complete. A no-op when nothing is queued.
+     *
+     * An in-flight write counts too: before this, closing the screen while the
+     * debounce had already elapsed returned immediately even though the request
+     * was still on the wire.
      */
     suspend fun flush(key: K) {
-        val job = synchronized(lock) { pending[key] } ?: return
-        job.join()
+        val pendingJob = synchronized(lock) { pending[key] }
+        pendingJob?.join()
+        val inFlightJob = synchronized(lock) { inFlight[key] }
+        inFlightJob?.join()
     }
 
     /** Drops a pending write, for a control the reader reverted themselves. */

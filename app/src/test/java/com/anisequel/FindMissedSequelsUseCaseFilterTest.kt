@@ -114,6 +114,34 @@ class FindMissedSequelsUseCaseFilterTest {
     }
 
     @Test
+    fun `choosing the airing status returns currently releasing sequels`() {
+        // The filter compared the card's display label ("Airing") to the raw
+        // AniList enum ("RELEASING"), so the Airing chip always produced an
+        // empty list even when the card showed a releasing sequel.
+        val airingSequel = MediaNode(
+            id = 203,
+            title = MediaTitle(english = "Airing Sequel"),
+            format = "TV",
+            status = "RELEASING",
+            episodes = 12
+        )
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, airedSequel, upcomingSequel, airingSequel)
+            )
+        )
+
+        val result = useCase.execute(
+            list,
+            FilterCriteria(statusFilter = StatusFilter.RELEASING)
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(203, result.single().sequelId)
+    }
+
+    @Test
     fun `the two statuses the chip could draw but the filter could not select are selectable`() {
         // Hiatus and Cancelled were drawn by `SequelStatusChip` - with their own
         // colours and icons - and absent from `StatusFilter`, so a cancelled entry

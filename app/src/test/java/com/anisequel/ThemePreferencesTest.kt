@@ -127,6 +127,59 @@ class ThemePreferencesTest {
         assertTrue(preferences.settings.first().animeThemeRetainColor)
     }
 
+    @Test
+    fun `retaining a cover colour writes the layer and the accent together`() = runTest {
+        val preferences = preferences()
+
+        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = true)
+
+        val settings = preferences.settings.first()
+        assertTrue(settings.animeThemeActive)
+        assertEquals("#7FA9D4", settings.animeThemeColorHex)
+        assertEquals(
+            "Retain has to outlive the sheet, so the cover colour must also be " +
+                "stored as the app's own accent",
+            "#7FA9D4",
+            settings.customColorHex
+        )
+    }
+
+    @Test
+    fun `turning the layer off always clears the stored cover colour`() = runTest {
+        val preferences = preferences()
+        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = true)
+
+        // A caller that passes the old hex "for reference" must not leave the
+        // layer half-off: the next enable would silently restore a colour the
+        // reader had already dismissed.
+        preferences.setAnimeThemeActive(false, "#7FA9D4")
+
+        val settings = preferences.settings.first()
+        assertFalse(settings.animeThemeActive)
+        assertEquals(null, settings.animeThemeColorHex)
+        assertEquals(
+            "the retained accent survives turning the temporary layer off",
+            "#7FA9D4",
+            settings.customColorHex
+        )
+    }
+
+    /**
+     * A temporary layer must not replace the reader's standing accent.
+     *
+     * Only Retain is allowed to write `customColorHex`; the "just show me this
+     * show's colour" path has to leave it exactly as it was.
+     */
+    @Test
+    fun `a temporary cover colour leaves the custom accent alone`() = runTest {
+        val preferences = preferences()
+        preferences.setCustomColorHex("#00BFA5")
+
+        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = false)
+
+        assertEquals("#00BFA5", preferences.settings.first().customColorHex)
+    }
+
     /**
      * The stored value is a string in a file that outlives the build that wrote
      * it. A value this build has never heard of must not be fatal - a theme
