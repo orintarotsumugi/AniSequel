@@ -14,6 +14,7 @@ import com.anisequel.data.model.MediaTag
 import com.anisequel.data.model.FuzzyDate
 import com.anisequel.domain.usecase.BuildListEntryInsightsUseCase
 import com.anisequel.domain.usecase.BuildListInsightsUseCase
+import com.anisequel.domain.usecase.BucketTally
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +46,31 @@ class BuildListInsightsUseCaseTest {
         favouredGenres = genres,
         favouredTags = tags
     )
+
+    @Test
+    fun `release-year buckets stay chronological across the two-digit label form`() {
+        // This list arrives chronological from BuildListEntryInsightsUseCase.
+        // Sorting it again by label put "'19" before "1995" because punctuation
+        // sorts before digits, which moved every pre-2000 year to the end.
+        val insights = useCase(
+            animeStatusDistribution = null,
+            animeScoreDistribution = null,
+            favouredFormats = null,
+            favouredYears = null,
+            favouredGenres = null,
+            favouredTags = null,
+            releaseYears = listOf(
+                BucketTally("1995", 2, 0f),
+                BucketTally("'06", 3, 0f),
+                BucketTally("'19", 4, 0f)
+            )
+        )
+
+        assertEquals(
+            listOf("1995", "'06", "'19"),
+            insights.releaseYears.map { it.label }
+        )
+    }
 
     @Test
     fun `statuses come out in a fixed order, not in count order`() {

@@ -291,7 +291,10 @@ fun AniSequelTheme(
             scheme
         }
 
-        if (bgCustomColor != null) {
+        // The canvas choices are dark colours and the setting is documented as
+        // a dark-mode choice. Applying one in light mode used to leave the
+        // light theme's near-black `onBackground` text on a black canvas.
+        if (bgCustomColor != null && darkTheme) {
             baseScheme.copy(
                 background = bgCustomColor,
                 surface = bgCustomColor,

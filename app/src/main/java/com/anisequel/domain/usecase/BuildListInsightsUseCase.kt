@@ -121,7 +121,11 @@ class BuildListInsightsUseCase {
                 sortByCountDescending = true,
                 limit = topTags
             ),
-            releaseYears = releaseYears.orEmpty().sortedBy { it.label },
+            // Already chronological: `BuildListEntryInsightsUseCase` tallies the
+            // real years and only then turns them into labels. Re-sorting here by
+            // label put "'19" before "1995" (an apostrophe sorts before a digit),
+            // so a pre-2000 title jumped to the end of the chart.
+            releaseYears = releaseYears.orEmpty(),
             // The top of the score scale as AniList reports it, so the chart can
             // colour a band by its position on the scale rather than by how common
             // that score is. A person whose best entry is 85 should see their
