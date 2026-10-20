@@ -6,14 +6,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -24,25 +25,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
-import com.anisequel.data.model.alternativeTitleRows
-import com.anisequel.data.model.characterList
+import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.displayName
-import com.anisequel.data.model.genreList
-import com.anisequel.data.model.hasProgressCard
-import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.pageUrl
-import com.anisequel.data.model.relatedMedia
-import com.anisequel.data.model.staffList
-import com.anisequel.data.model.streamingLinks
-import com.anisequel.data.model.weightLabel
-import com.anisequel.data.model.weightedTags
-import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.data.repository.AniThemes
 import com.anisequel.ui.components.detail.AnimeDetailSubject
-import com.anisequel.ui.components.detail.AnimeRankingsSection
-import com.anisequel.ui.components.detail.DetailActionRow
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import kotlinx.coroutines.launch
 
@@ -63,14 +52,27 @@ import kotlinx.coroutines.launch
  * is the only part of the sheet that can *write*, and it is reached from the floating
  * capsule rather than scrolled to by accident.
  *
+ * ## What is in this file, and what is not
+ *
+ * This function owns the page's *behaviour*: the state it derives, the one request
+ * it makes that is not AniList's, and the shell - a `LazyColumn` under a floating
+ * bar. What it *lists*, in order, is `infoPageItems`, and the decisions about which
+ * sections exist are [infoSectionsFor]. Those lived here too, and the body reached
+ * four hundred lines with fifteen `item { }` declarations in it - long enough to be
+ * reported as a Complex Method (CodeFactor failed the pull request that added the
+ * reference sections on exactly that). The split is by reason to change rather than
+ * by size: adding a section is a change to the list; retiming the hero is a change
+ * to this file.
+ *
  * ## The scroll-driven motion
  *
- * [collapse] is one `derivedStateOf` over the list's own scroll state, read as a
- * function by the hero's `graphicsLayer` and by nothing else - the parallax is a
- * draw-phase transform, and the page never recomposes while it is scrolling. The
- * floating bar is the one thing that *is* derived in composition, and it is derived
- * through a `derivedStateOf` producing a `Boolean`: the recomposition happens when
- * the bar crosses its threshold, not on the 300 frames before it.
+ * [rememberInfoCollapse] is one `derivedStateOf` over the list's own scroll state,
+ * read as a function by the hero's `graphicsLayer` and by nothing else - the
+ * parallax is a draw-phase transform, and the page never recomposes while it is
+ * scrolling. The floating bar is the one thing that *is* derived in composition,
+ * and it is derived through a `derivedStateOf` producing a `Boolean`: the
+ * recomposition happens when the bar crosses its threshold, not on the 300 frames
+ * before it.
  *
  * That threshold is not a number this file owns: the hero fades its lockup out
  * across the same stretch of scroll, so the two live together as
@@ -127,100 +129,22 @@ fun AnimeInfoPage(
     bottomContentPadding: Dp = 24.dp
 ) {
     val media = subject.media
-    val sequel = subject.sequel
     val context = LocalContext.current
 
-    val collapseDistance = with(LocalDensity.current) { HERO_COLLAPSE.toPx() }
-    val collapse = remember(listState, collapseDistance) {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) {
-                1f
-            } else {
-                (listState.firstVisibleItemScrollOffset.toFloat() / collapseDistance).coerceIn(0f, 1f)
-            }
-        }
-    }
-    // Keyed on [collapse], and that key is the whole fix - it used to be a bare
-    // `remember { }`.
-    //
-    // `SequelDetailSheet` hands this page a *different* `LazyListState` for every
-    // title: it keys the state on `subject.mediaId` so following a relation starts
-    // the new title at the top rather than inheriting the old one's offset. So when
-    // a relation is opened, [collapse] above is rebuilt against the new list state -
-    // and an unkeyed `remember` here would keep the *first* `derivedStateOf` it was
-    // ever given, whose lambda closes over the **old** list state. That state is
-    // detached from the list by then and keeps its last value, so the threshold was
-    // being compared against wherever the reader was on the title they just left.
-    //
-    // The reader is always *past* the hero when they open a relation - the relation
-    // row is a dozen sections down - so `collapse` read 1f, and the new title opened
-    // with its hero at the top **and** the docked bar already on screen over it. The
-    // hero and the bar each draw their own "Open on AniList" and "Close" controls, so
-    // that is two of each stacked in the same corner of a page that is supposed to
-    // have exactly one way out. Keying on [collapse] rebuilds the threshold with the
-    // scroll state it belongs to.
-    val showFloatingBar by remember(collapse) {
-        derivedStateOf { collapse.value > DOCKED_BAR_AT }
-    }
-
+    val themeSongs by rememberThemeSongs(media)
+    val collapse = rememberInfoCollapse(listState)
+    val showFloatingBar by rememberShowFloatingBar(collapse)
     // How much of the page is behind the reader, as a 0..1 share, for the docked
-    // bar's title pill to fill with. Read only inside that pill's `graphicsLayer`, so
-    // this recomputes during a scroll without recomposing anything - the same bargain
-    // `collapse` above makes.
-    //
-    // Measured in *items scrolled*, plus how far into the first visible one the
-    // reader is, rather than in pixels: the page's items differ in height by an order
-    // of magnitude (a 340dp hero against a one-line alternative-title row), so a
-    // pixel fraction would sit still across the hero and then race through the cards.
-    // `visibleItemsInfo.first().size` is the height of the item being scrolled out,
-    // which is the divisor that makes the offset mean "how far into this item".
-    val readProgress = remember(listState) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val total = info.totalItemsCount
-            if (total <= 1) {
-                1f
-            } else {
-                val itemHeight = (info.visibleItemsInfo.firstOrNull()?.size ?: 1).coerceAtLeast(1)
-                val scrolled = listState.firstVisibleItemIndex +
-                    (listState.firstVisibleItemScrollOffset.toFloat() / itemHeight)
-                (scrolled / (total - 1)).coerceIn(0f, 1f)
-            }
-        }
-    }
+    // bar's title pill to fill with. Read only inside that pill's `graphicsLayer`.
+    val readProgress = rememberReadProgress(listState)
     val scope = rememberCoroutineScope()
 
-    // Read once, before the list, because a section that decides for itself that it
-    // has nothing to show cannot also be the thing that decides not to take up a
-    // slot. `Arrangement.spacedBy` gives every item its trailing gap whether or not
-    // that item drew anything, so a `LazyColumn` item whose content returned early
-    // leaves a full 14dp hole in the page - and four of the sections here return
-    // early for ordinary titles (no progress on an unstarted show, no staff, no
-    // relations, no alternative titles). Hence the explicit `if` on each below.
-    //
-    // Every one of them in a single `remember(media)`, because every one is *derived*:
-    // these are extensions on `MediaNode` that walk, filter or sort a list, not fields.
-    // The page's body recomposes several times inside one open - the first frame, the
-    // `isDetailLoading` flip, the detail arriving, and the floating bar's visibility
-    // change - and each pass was rebuilding all of them, on frames the sheet was still
-    // animating. `weightedTags` sorts, `relatedMedia` filters, `characterList` maps
-    // edges; on a long-running show with a full cast that is the most expensive work
-    // the page did per pass, and none of it can change while `media` is the same
-    // object.
-    val sections = remember(media) {
-        InfoSections(
-            altTitles = media.alternativeTitleRows,
-            genres = media.genreList,
-            tags = media.weightedTags.mapNotNull { it.weightLabel() },
-            streamingLinks = media.streamingLinks,
-            hasProgressCard = media.hasProgressCard,
-            hasRankings = media.hasRankings,
-            hasCast = media.characterList.isNotEmpty(),
-            hasRelations = media.relatedMedia.isNotEmpty(),
-            hasStaff = media.staffList.isNotEmpty()
-        )
-    }
-    val altTitles = sections.altTitles
+    // Read once per title, before the list: every one of these is a derived walk
+    // over the node, and the page's body recomposes several times inside one open -
+    // the first frame, the `isDetailLoading` flip, the detail arriving, and the
+    // floating bar's visibility change. Rebuilding them on each of those passes is
+    // work the sheet was doing while it was still animating.
+    val sections = remember(media) { infoSectionsFor(media) }
 
     var showCover by remember(media.id) { mutableStateOf(false) }
     if (showCover) {
@@ -245,7 +169,7 @@ fun AnimeInfoPage(
             item(key = "hero") {
                 InfoHero(
                     media = media,
-                    relationLabel = sequel?.relationLabel,
+                    relationLabel = subject.sequel?.relationLabel,
                     collapse = { collapse.value },
                     onOpenCover = { showCover = true },
                     onClose = onClose,
@@ -253,140 +177,23 @@ fun AnimeInfoPage(
                 )
             }
 
-            // Only a franchise recommendation has a parent; an arriving or activity
-            // row is a show the viewer already tracks.
-            if (sequel != null) {
-                item(key = "parent") {
-                    InfoParentCard(sequel = sequel, modifier = Modifier.infoSection(1))
-                }
-            }
-
-            item(key = "actions") {
-                DetailActionRow(
-                    subject = subject,
-                    canWriteToAniList = canWriteToAniList,
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled,
-                    context = context,
-                    modifier = Modifier.infoSection(2)
-                )
-            }
-
-            if (sections.hasProgressCard) {
-                item(key = "progress") {
-                    InfoProgressCard(media = media, modifier = Modifier.infoSection(3))
-                }
-            }
-
-            if (sections.streamingLinks.isNotEmpty()) {
-                item(key = "streaming") {
-                    InfoWhereToWatchCard(
-                        links = sections.streamingLinks,
-                        modifier = Modifier.infoSection(4)
-                    )
-                }
-            }
-
-            item(key = "synopsis") {
-                InfoSynopsisCard(
-                    media = media,
-                    isDetailLoading = isDetailLoading,
-                    modifier = Modifier.infoSection(5)
-                )
-            }
-
-            item(key = "specs") {
-                InfoSpecsCard(
-                    media = media,
-                    isDetailLoading = isDetailLoading,
-                    onOpenStudio = onOpenStudio,
-                    modifier = Modifier.infoSection(6)
-                )
-            }
-
-            val genres = sections.genres
-            if (genres.isNotEmpty()) {
-                item(key = "genres") {
-                    InfoChipCard(
-                        title = "Genres",
-                        icon = AppVectorIcons.Tag,
-                        labels = genres,
-                        modifier = Modifier.infoSection(7)
-                    )
-                }
-            }
-
-            val tags = sections.tags
-            if (tags.isNotEmpty()) {
-                item(key = "tags") {
-                    InfoChipCard(
-                        title = "Tags",
-                        icon = AppVectorIcons.Trending,
-                        labels = tags,
-                        emphasis = true,
-                        modifier = Modifier.infoSection(8)
-                    )
-                }
-            }
-
-            if (altTitles.isNotEmpty()) {
-                item(key = "alt_titles") {
-                    InfoAltTitlesCard(rows = altTitles, modifier = Modifier.infoSection(9))
-                }
-            }
-
-            // The one section the reference has no equivalent for, and the reason it
-            // is kept: an all-time AniList ranking is a fact about this title that
-            // nothing else on the page can state.
-            if (sections.hasRankings) {
-                item(key = "rankings") {
-                    AnimeRankingsSection(media = media, modifier = Modifier.infoSection(10))
-                }
-            }
-
-            // `sectionReveal` rather than `infoSection` on the three below, and that
-            // is deliberate: they are not cards, so they draw their own heading inset
-            // and their own `LazyRow` content padding, and adding the page inset on top
-            // would double it. See `InfoTalent.kt`.
-            if (sections.hasCast) {
-                item(key = "cast") {
-                    InfoCharactersSection(
-                        media = media,
-                        onOpenCharacter = onOpenCharacter,
-                        modifier = Modifier.sectionReveal(11)
-                    )
-                }
-            }
-
-            if (sections.hasRelations) {
-                item(key = "relations") {
-                    InfoRelationsSection(
-                        media = media,
-                        onOpen = onOpenMedia,
-                        modifier = Modifier.sectionReveal(12)
-                    )
-                }
-            }
-
-            if (sections.hasStaff) {
-                item(key = "staff") {
-                    InfoStaffSection(
-                        media = media,
-                        onOpenStaff = onOpenStaff,
-                        modifier = Modifier.sectionReveal(13)
-                    )
-                }
-            }
-
-            item(key = "extras") {
-                InfoExtrasCard(
-                    media = media,
-                    onOpenCover = { showCover = true },
-                    modifier = Modifier.infoSection(14)
-                )
-            }
+            infoPageItems(
+                subject = subject,
+                sections = sections,
+                themeSongs = themeSongs,
+                isDetailLoading = isDetailLoading,
+                canWriteToAniList = canWriteToAniList,
+                holdDurationSeconds = holdDurationSeconds,
+                swipeEnabled = swipeEnabled,
+                context = context,
+                onAddToPlanning = onAddToPlanning,
+                onAddToWatching = onAddToWatching,
+                onOpenMedia = onOpenMedia,
+                onOpenStudio = onOpenStudio,
+                onOpenCharacter = onOpenCharacter,
+                onOpenStaff = onOpenStaff,
+                onOpenCover = { showCover = true }
+            )
         }
 
         InfoFloatingBar(
@@ -406,43 +213,120 @@ fun AnimeInfoPage(
 }
 
 /**
- * The page's section decisions, taken once per [MediaNode].
+ * The opening/ending row's data, the one thing on this page fetched from a second
+ * service.
  *
- * Every field is a derived read - the getters this replaces all walk something - and
- * the page's body recomposes several times while the sheet opens. Nothing here can
- * change while the node it was derived from is the same object, so the work belongs
- * in one `remember(media)`, not in the item-listing lambda that runs again on each
- * pass. The booleans are stored rather than the lists they were read from because
- * that is all the page does with them.
+ * The request is per title and cached for the session
+ * ([com.anisequel.data.repository.ThemeSongsRepository]); `produceState` is scoped
+ * to this page, so walking to a relation cancels the old title's fetch instead of
+ * letting it land on the new page.
  *
- * Types are all plain: `List<Pair<String, String>>` for the title rows, `List<String>`
- * for the chips, and flags for the sections whose *contents* (not their presence) are
- * the section's own business.
- */
-private data class InfoSections(
-    val altTitles: List<Pair<String, String>>,
-    val genres: List<String>,
-    val tags: List<String>,
-    val streamingLinks: List<MediaExternalLink>,
-    val hasProgressCard: Boolean,
-    val hasRankings: Boolean,
-    val hasCast: Boolean,
-    val hasRelations: Boolean,
-    val hasStaff: Boolean
-)
-
-/**
- * The page's inset and its place in the entrance stagger, in one call.
- *
- * Every card but the hero and the three artwork rows takes exactly this, and writing
- * it out fourteen times is how they drift apart.
- *
- * [PAGE_INSET] is the one in `InfoCards.kt`, not a second literal: the artwork rows
- * draw their own inset from that same value, and it used to exist twice in two files.
+ * The artwork key is the title's own banner (falling back to its cover): AnimeThemes
+ * has no per-sequence thumbnail, so the row is drawn on this title's key visual.
+ * It is a *key*, which is deliberate - if the detail fetch lands and supplies art
+ * the summary did not have, the row is re-derived rather than left with whatever
+ * the first frame could guess, and the second call is a cache hit.
  */
 @Composable
-private fun Modifier.infoSection(index: Int): Modifier =
-    padding(horizontal = PAGE_INSET).sectionReveal(index)
+private fun rememberThemeSongs(media: MediaNode): State<List<ThemeSong>> {
+    val artwork = media.bannerImage?.takeIf { it.isNotBlank() }
+        ?: media.coverImage?.bestUrl
+    return produceState(
+        initialValue = emptyList(),
+        media.id,
+        artwork
+    ) {
+        value = AniThemes.repository().themes(media.id, artwork)
+    }
+}
+
+/**
+ * How far the page has scrolled, as the hero's own 0..1 collapse.
+ *
+ * Measured against the hero's own height rather than against the screen: the point
+ * of the value is "the artwork has moved as far as it can usefully move", which is
+ * a property of the hero and not of the device.
+ *
+ * ## Keyed on [listState], and that key is the whole fix
+ *
+ * `SequelDetailSheet` hands this page a *different* `LazyListState` for every
+ * title: it keys the state on `subject.mediaId` so following a relation starts the
+ * new title at the top rather than inheriting the old one's offset. So when a
+ * relation is opened, this helper is called again against the new list state - and
+ * an unkeyed `remember` inside it would keep the *first* `derivedStateOf` it was
+ * ever given, whose lambda closes over the **old** list state. That state is
+ * detached from the list by then and keeps its last value, so the threshold was
+ * being compared against wherever the reader was on the title they just left.
+ *
+ * The reader is always *past* the hero when they open a relation - the relation row
+ * is a dozen sections down - so the collapse read 1f, and the new title opened with
+ * its hero at the top **and** the docked bar already on screen over it. The hero and
+ * the bar each draw their own "Open on AniList" and "Close" controls, so that is two
+ * of each stacked in the same corner of a page that is supposed to have exactly one
+ * way out. Keying on [listState] rebuilds the threshold with the scroll state it
+ * belongs to.
+ */
+@Composable
+private fun rememberInfoCollapse(listState: LazyListState): State<Float> {
+    val distance = with(LocalDensity.current) { HERO_COLLAPSE.toPx() }
+    return remember(listState, distance) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                (listState.firstVisibleItemScrollOffset.toFloat() / distance).coerceIn(0f, 1f)
+            }
+        }
+    }
+}
+
+/**
+ * Whether the docked bar has crossed its threshold, as its own `Boolean`.
+ *
+ * The bar is the one thing on this page derived *in composition* rather than in the
+ * draw phase, and it is derived through a `derivedStateOf` producing a `Boolean`:
+ * the recomposition happens when the bar crosses [DOCKED_BAR_AT], not on the 300
+ * frames before it.
+ *
+ * Keyed on [collapse] for the same reason [rememberInfoCollapse] is keyed on its
+ * list state: a new collapse must produce a threshold over the state it was built
+ * from, not keep the one from the title the reader just left.
+ */
+@Composable
+private fun rememberShowFloatingBar(collapse: State<Float>): State<Boolean> =
+    remember(collapse) {
+        derivedStateOf { collapse.value > DOCKED_BAR_AT }
+    }
+
+/**
+ * How much of the page is behind the reader, as a 0..1 share, for the docked bar's
+ * title pill to fill with. Read only inside that pill's `graphicsLayer`, so this
+ * recomputes during a scroll without recomposing anything - the same bargain the
+ * collapse makes.
+ *
+ * Measured in *items scrolled*, plus how far into the first visible one the reader
+ * is, rather than in pixels: the page's items differ in height by an order of
+ * magnitude (a 340dp hero against a one-line meta row), so a pixel fraction would
+ * sit still across the hero and then race through the cards.
+ * `visibleItemsInfo.first().size` is the height of the item being scrolled out,
+ * which is the divisor that makes the offset mean "how far into this item".
+ */
+@Composable
+private fun rememberReadProgress(listState: LazyListState): State<Float> =
+    remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            if (total <= 1) {
+                1f
+            } else {
+                val itemHeight = (info.visibleItemsInfo.firstOrNull()?.size ?: 1).coerceAtLeast(1)
+                val scrolled = listState.firstVisibleItemIndex +
+                    (listState.firstVisibleItemScrollOffset.toFloat() / itemHeight)
+                (scrolled / (total - 1)).coerceIn(0f, 1f)
+            }
+        }
+    }
 
 /**
  * How far the page scrolls before the hero counts as collapsed.

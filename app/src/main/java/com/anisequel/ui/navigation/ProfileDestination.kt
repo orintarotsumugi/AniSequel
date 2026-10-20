@@ -8,6 +8,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.screens.profile.UserProfileScreen
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
@@ -188,6 +189,19 @@ fun ProfileDestination(
         onNavigateBack = { navController.popBackStack() },
         isOwnProfile = isOwnProfile,
         viewerId = viewerId,
+        // The same sheet everywhere, so the same "My Entry" tab: the entry on it
+        // is the reader's own for that media, never the profile owner's, which is
+        // why a scanned profile gets it too and only a signed-out one does not.
+        // Built here rather than inside the screen because this is the caller
+        // that knows whether a session exists - [viewerId] is null exactly then.
+        // Keyed on both inputs and not held in a bare `remember`: the sheet
+        // re-loads the entry whenever the editor's identity changes, so a new
+        // instance per recomposition would be one entry fetch per frame.
+        entryEditor = remember(viewerId, repository) {
+            viewerId?.let {
+                RepositoryEntryEditor(repository = repository, viewerId = it)
+            }
+        },
         onOpenTierList = { navController.navigateSingle(AppRoutes.TIER_LIST) },
         // The reader is on a title that credits a studio; the studio page is a place
         // like any other, so it is pushed with the same single-top rule as every

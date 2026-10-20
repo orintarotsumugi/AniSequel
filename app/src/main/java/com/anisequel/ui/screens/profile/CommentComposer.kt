@@ -467,9 +467,13 @@ private fun FormatAction(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }
+    // 48dp, the platform's minimum touch target, rather than the 40dp box that
+    // was sized around the glyph. These three sit above a text field where every
+    // keystroke starts, so they are hit far more often than a toolbar normally is;
+    // the icon inside stays the size it was.
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .bouncyPress(pressedScale = 0.88f, interactionSource = interactionSource)
             .clickable(

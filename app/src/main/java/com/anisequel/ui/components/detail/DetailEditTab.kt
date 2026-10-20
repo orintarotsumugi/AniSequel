@@ -170,7 +170,11 @@ internal fun DetailEditTab(
                 )
             ).fold(
                 onSuccess = { saved ->
-                    state.markSaved(saved.toDraft())
+                    // The save payload has no `Viewer` in it, so the reply alone
+                    // cannot say how the score should be drawn. The draft's own
+                    // format is what keeps a hundred-point account on its scale
+                    // after a save whose score happens to be below ten.
+                    state.markSaved(saved.toDraft(updated.scoreFormat))
                     state.statusMessage = "Saved to your AniList list"
                 },
                 onFailure = { state.statusMessage = it.message ?: "Couldn't save your changes." }
@@ -308,11 +312,19 @@ internal fun DetailEditTab(
                 testTag = "edit_score_row"
             ) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
+                    // Ticks - and the value a drag lands on - come from the
+                    // account's format, not from the denominator: one tick per
+                    // whole point on every scale was why a decimal entry showing
+                    // "8.5 / 10" could only be dragged to 8 or 9. `quantise`
+                    // puts each drag on a value the format actually holds, which
+                    // is also what keeps a continuous slider (a hundred-point
+                    // scale draws no ticks) landing on whole points.
+                    val scale = ScoreScale(entryState.scoreMax, entryState.scoreStep)
                     Slider(
                         value = entryState.score.coerceIn(0.0, entryState.scoreMax.toDouble()).toFloat(),
-                        onValueChange = { state.draft = entryState.copy(score = it.toDouble()) },
+                        onValueChange = { state.draft = entryState.copy(score = scale.quantise(it.toDouble())) },
                         valueRange = 0f..entryState.scoreMax.toFloat(),
-                        steps = (entryState.scoreMax - 1).coerceAtLeast(0),
+                        steps = scale.steps,
                         modifier = Modifier.testTag("edit_score_slider")
                     )
                 }

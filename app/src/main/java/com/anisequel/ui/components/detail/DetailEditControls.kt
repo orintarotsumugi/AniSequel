@@ -102,14 +102,38 @@ internal data class EntryDraft(
      */
     val score: Double,
     /**
-     * The top of the slider, derived once from the loaded score.
+     * The top of the slider, from the account's own score format.
      *
-     * A stored score above ten can only be a hundred-point account, so the form
-     * follows the data rather than asking AniList for the format. It is captured
-     * in the draft rather than recomputed, or moving the slider under a hundred
-     * would shrink the scale - and the thumb - mid-drag.
+     * This used to be inferred from the loaded value - anything above ten was
+     * read as a hundred-point account - which was wrong for a hundred-point
+     * entry scored 8 or 10 (it opened on a 0-10 slider and could not reach the
+     * score the reader wanted) and for the five- and three-point formats (they
+     * opened on a 0-10 slider and could save a value the server rejects). The
+     * format now comes from `Viewer.mediaListOptions.scoreFormat` in the same
+     * request as the entry; [scoreScaleFor] keeps the old inference as the
+     * fallback for callers that cannot answer.
+     *
+     * Captured in the draft rather than recomputed, or moving the slider under a
+     * hundred would shrink the scale - and the thumb - mid-drag.
      */
     val scoreMax: Int,
+    /**
+     * One tick of the slider, in the account's own units.
+     *
+     * A tenth on a decimal account, a whole point everywhere else. Defaulted to
+     * 0.5 so a draft built without a format still lets the half score the row
+     * prints be set - see [scoreScaleFor].
+     */
+    val scoreStep: Double = 0.5,
+    /**
+     * The account's score format, when this draft was loaded through the
+     * repository.
+     *
+     * Kept on the draft so a save can rebuild the draft from AniList's answer
+     * with the same scale: the mutation's payload has no `Viewer` in it, so the
+     * reply alone cannot say how the score should be drawn.
+     */
+    val scoreFormat: ScoreFormat? = null,
     val startedAt: FuzzyDate?,
     val completedAt: FuzzyDate?,
     val isPrivate: Boolean,
@@ -123,15 +147,31 @@ internal data class EntryDraft(
     val notes: String = ""
 )
 
-internal fun SimpleMediaListEntry.toDraft(): EntryDraft {
+/**
+ * The draft, on the scale the entry's own account uses.
+ *
+ * Two overloads rather than a defaulted argument that reads `scoreFormat` off
+ * the receiver: a save response carries no format of its own, and the caller
+ * that has one - the draft being saved - has to be able to insist on it.
+ */
+internal fun SimpleMediaListEntry.toDraft(): EntryDraft = toDraft(ScoreFormat.fromApi(scoreFormat))
+
+internal fun SimpleMediaListEntry.toDraft(format: ScoreFormat?): EntryDraft {
     val rawScore = score ?: 0.0
+    // The loaded score is *not* quantised. A POINT_10_DECIMAL entry holding 8.3
+    // must keep 8.3 through a save the reader never touched - snapping it to the
+    // slider's nearest tick here would rewrite a score nobody edited. Only a
+    // drag goes through `ScoreScale.quantise`.
+    val scale = scoreScaleFor(format, rawScore)
     return EntryDraft(
         entryId = id,
         status = status,
         progress = progress ?: 0,
         progressVolumes = progressVolumes,
         score = rawScore,
-        scoreMax = if (rawScore > 10.0) 100 else 10,
+        scoreMax = scale.max,
+        scoreStep = scale.step,
+        scoreFormat = format,
         startedAt = startedAt,
         completedAt = completedAt,
         isPrivate = isPrivate ?: false,
@@ -244,13 +284,21 @@ internal class EntryEditState {
 
     /** Back to an entry that does not exist, so the form is ready to create one. */
     fun cleared() {
+        // The account's format outlives the entry that was deleted with it, so
+        // the blank form keeps the scale the previous draft was drawn with
+        // instead of falling back to 0-10. A hundred-point account that removed
+        // an entry could otherwise only score the next one out of ten.
+        val format = draft?.scoreFormat
+        val scale = scoreScaleFor(format, loadedScore = 0.0)
         draft = EntryDraft(
             entryId = null,
             status = null,
             progress = 0,
             progressVolumes = null,
             score = 0.0,
-            scoreMax = 10,
+            scoreMax = scale.max,
+            scoreStep = scale.step,
+            scoreFormat = format,
             startedAt = null,
             completedAt = null,
             isPrivate = false,
@@ -425,7 +473,14 @@ internal fun DateRow(
     }
 }
 
-/** One side of the progress stepper. */
+/**
+ * One side of the progress stepper.
+ *
+ * 48dp, not the 42dp it was: Android's minimum touch target. The two steppers are
+ * the controls a thumb aims at while looking at a poster rather than the form,
+ * and they were the smallest on a page full of 48dp targets. The glyph inside is
+ * unchanged - only the box a finger has to hit grew.
+ */
 @Composable
 internal fun StepButton(
     icon: ImageVector,
@@ -437,7 +492,7 @@ internal fun StepButton(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = Modifier
-            .size(42.dp)
+            .size(48.dp)
             .clickable(onClick = onClick)
             .testTag(testTag)
     ) {

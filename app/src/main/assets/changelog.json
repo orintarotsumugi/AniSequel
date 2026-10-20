@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.4.3",
+      "entries": [
+        {
+          "title": "The title page is the same wherever you open it",
+          "detail": "Opening a title from your Library, from a studio's filmography or from a profile's favourites gave a sheet with one fewer tab than the same title opened from the dashboard: only the dashboard passed an editor, so the \"My Entry\" destination was missing and one show was editable from one list and read-only from another. Every host with a session now hands the sheet the same editor, and the entry on that tab is always your own for the media, so the page and its capabilities match wherever the title was opened. A demo or signed-out session is still read-only, and still leaves the tab out rather than drawing one that cannot save."
+        },
+        {
+          "title": "Openings and endings are on the title page",
+          "detail": "AniList's API carries no theme-song fields at all, so the page now asks AnimeThemes for them and draws an \"Openings & Endings\" row: each sequence's badge (OP1, ED2) and song title on the title's own banner art, with a count in the heading. The request is made once per title and kept for the day, so re-opening a title or walking a franchise does not spend a second request on songs it already has - this is the one call on the page that does not come out of AniList's budget, and the service behind it is volunteer-run and rate-limited. A title AnimeThemes has nothing for simply leaves the row out, and the play control hands the clip to whatever you already watch video with rather than shipping a video player for six-second sequences."
+        },
+        {
+          "title": "Genres and tags are one Categories section",
+          "detail": "The two separate Genres and Tags cards are now one block under one heading: the genres first, then AniList's weighted tags with their match percentages, so \"Kaiju 93%\" sits next to the genres it belongs with. The tag list opens on the strongest few with a \"more\" control that is remembered per title, instead of twenty chips covering a third of the screen before the synopsis. Tags AniList marks as spoilers are no longer dropped either - they were left out of the chips while the heading still counted them, and they now sit behind their own strip that reveals nothing until you ask."
+        },
+        {
+          "title": "Every other AniList link is listed",
+          "detail": "AniList files more for a title than where it streams - the official site, news, a soundtrack page - and only the streaming entries were drawn. Those keep their own \"Where to Watch\" card, and everything else now has an \"External Links\" section under the details, so Crunchyroll no longer appears twice while the official site did not appear at all. A link with no name or no URL is dropped rather than drawn as a chip that opens nothing, and duplicates collapse to one."
+        },
+        {
+          "title": "Titles, synonyms and producers get their own rows",
+          "detail": "Alternative titles were a card of label/value pairs, synonyms were poured into one of those pairs, and the publishers were mixed into the specs grid's studio row. Each is now a disclosure row - Titles, Synonyms, Producers - and tapping one opens a sheet with the complete list, which is what keeps six producers and fifteen synonyms from doubling the page's length while keeping them one tap away. Producers are the credits AniList does not mark as the main studio, so a payload with no such credit simply leaves the row out."
+        },
+        {
+          "title": "The score slider follows the account's score format",
+          "detail": "The entry editor worked out its slider's scale from the loaded number - anything above ten meant a hundred-point account - so a hundred-point entry scored 8 or 10 opened on a 0-10 slider and could not be moved to the score the reader wanted, and five- and three-point accounts were offered values AniList rejects. The entry load now asks for `Viewer.mediaListOptions.scoreFormat` in the same request and the slider's ceiling comes from the account."
+        },
+        {
+          "title": "Half-point scores are reachable from the slider",
+          "detail": "Every scale got one tick per whole point, so a decimal account whose row already read 8.5 / 10 could only drag the thumb to 8 or 9. Ticks now follow the format's own step - a tenth on `POINT_10_DECIMAL`, a whole point on the integer formats - and each drag is snapped to a value that format actually holds. A score loaded from AniList is left alone until the slider is touched, so opening the form never rewrites it."
+        },
+        {
+          "title": "Three small controls now meet the 48dp touch target",
+          "detail": "The progress stepper's plus and minus buttons were 42dp, the composer's formatting buttons 40dp, and a comment's options button 36dp - all below Android's minimum touch target. Only the boxes around the glyphs grew; the icons inside are the size they were."
+        }
+      ]
+    },
+    {
       "version": "1.4.2",
       "entries": [
         {
