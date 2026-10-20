@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
@@ -101,7 +102,7 @@ fun LibraryScreen(
     var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
 
     val selectedSubject = selectedMedia?.let { summary ->
-        AnimeDetailSubject.Media(detailNodes[summary.id]?.withSummaryProgress(summary) ?: summary)
+        AnimeDetailSubject.Media(detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary)
     }
     val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
 

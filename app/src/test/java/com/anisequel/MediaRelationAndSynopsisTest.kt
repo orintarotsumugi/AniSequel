@@ -8,6 +8,8 @@ import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.descriptionBody
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.synopsis
+import com.anisequel.data.model.typeLabel
+import com.anisequel.data.model.typeLabelFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -53,13 +55,15 @@ class MediaRelationAndSynopsisTest {
         nodeType: String,
         id: Int,
         title: String,
-        startYear: Int? = null
+        startYear: Int? = null,
+        format: String? = null
     ) = MediaRelationEdge(
         relationType = type,
         node = MediaNode(
             id = id,
             type = nodeType,
             title = MediaTitle(english = title),
+            format = format,
             startDate = startYear?.let { FuzzyDate(year = it) }
         )
     )
@@ -257,6 +261,78 @@ class MediaRelationAndSynopsisTest {
         )
 
         assertEquals(listOf("A real sequel"), anime.relatedMedia.map { it.node.title?.english })
+    }
+
+    /**
+     * AniList files a music video as a `CHARACTER` edge, not a `SIDE_STORY`.
+     *
+     * `MUSIC` is a `MediaFormat`, so the node is still in the anime namespace and the
+     * old blanket "CHARACTER is a crossover" rule removed every song from every show
+     * that had one. Checked live: One Piece has "Kinen Satsuei" and "A-RA-SHI : Reborn"
+     * attached this way, and Oshi no Ko's "Idol" likewise.
+     */
+    @Test
+    fun `a music video attached through a character edge is kept`() {
+        val anime = MediaNode(
+            id = 150_672,
+            type = "ANIME",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("CHARACTER", "ANIME", 164_117, "Idol", format = "MUSIC"),
+                    relation("CHARACTER", "ANIME", 164_118, "A crossover", format = "TV")
+                )
+            )
+        )
+
+        val related = anime.relatedMedia.single()
+
+        assertEquals(164_117, related.node.id)
+        assertEquals("Music video", related.typeLabel)
+    }
+
+    /**
+     * The song's page reads the same edge from the other side.
+     *
+     * "Character" would name the wrong end of the relationship on the music video's
+     * own page, so the label says what the show is to the song instead.
+     */
+    @Test
+    fun `a music video labels the show it features`() {
+        val song = MediaNode(
+            id = 164_117,
+            type = "ANIME",
+            format = "MUSIC",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("CHARACTER", "ANIME", 150_672, "Oshi no Ko", format = "TV")
+                )
+            )
+        )
+
+        assertEquals("Featured in", song.relatedMedia.single().typeLabelFor(song))
+    }
+
+    /**
+     * The song comes before a show's specials, because a long franchise has more side
+     * stories than the twelve-card row can hold.
+     */
+    @Test
+    fun `music videos sort before side stories`() {
+        val anime = MediaNode(
+            id = 1,
+            type = "ANIME",
+            relations = MediaRelations(
+                edges = listOf(
+                    relation("SIDE_STORY", "ANIME", 10, "A 2020 special", startYear = 2020),
+                    relation("CHARACTER", "ANIME", 11, "A song", startYear = 2021, format = "MUSIC")
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("A song", "A 2020 special"),
+            anime.relatedMedia.map { it.node.title?.english }
+        )
     }
 
     // ---- the synopsis: AniList's credit line is not part of it -------------------

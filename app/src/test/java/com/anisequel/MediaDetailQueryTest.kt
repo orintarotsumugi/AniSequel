@@ -279,7 +279,12 @@ class MediaDetailQueryTest {
             "startDate",
             "nextAiringEpisode",
             "mediaListEntry",
-            "coverImage"
+            "coverImage",
+            // A manga relation's length is chapters, not episodes; without these
+            // the card says "Manga · 2020" while the anime beside it says
+            // "TV · 12 eps · 2020".
+            "chapters",
+            "volumes"
         ).forEach { field ->
             assertTrue(
                 "the relation node must carry `$field`. Without it the title page's " +
