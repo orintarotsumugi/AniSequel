@@ -1,5 +1,6 @@
 package com.anisequel.data.repository
 
+import android.util.Log
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.StaffProfile
@@ -73,6 +74,29 @@ import java.util.concurrent.ConcurrentHashMap
  * cannot flip the classification.
  */
 private val MUTATION_PATTERN = Regex("""^\s*mutation\b""")
+
+/**
+ * The most cover links one GraphQL document may carry.
+ *
+ * AniList rejects a document over its complexity limit with HTTP 400 for the
+ * whole document, and covers are the one request whose failure is deliberately
+ * invisible - a missing cover leaves the card on its placeholder, with nothing on
+ * screen to say why. A bio can link a dozen titles and a "hall of fame" can link
+ * fifty; before this cap they were all aliases in one document, so one refusal
+ * left every poster in the bio permanently blank.
+ *
+ * Ten keeps each document comfortably inside the limit and bounds the damage of
+ * a refusal to the ten cards that shared it. The rest of the bio is carried by
+ * further batches.
+ */
+internal const val MAX_COVER_BATCH_KEYS = 10
+
+/** Logcat tag for the cover batches. One line, warning level, never a UI message. */
+private const val COVER_LOG_TAG = "AniSequelCovers"
+
+/** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
+internal fun mediaCoverBatches(keys: List<MediaCoverKey>): List<List<MediaCoverKey>> =
+    keys.chunked(MAX_COVER_BATCH_KEYS)
 
 class AniListRepositoryImpl(
     private val apiService: AniListApiService,
@@ -1047,58 +1071,89 @@ class AniListRepositoryImpl(
         }
         if (missing.isEmpty()) return Result.success(resolved)
 
-        // One alias per key, so the response is read back by position - two keys
-        // sharing an id would otherwise need two aliases on the same field.
-        val variables = buildMap {
-            missing.forEachIndexed { index, key ->
-                put("id$index", key.id)
-                put("type$index", key.graphqlType)
-            }
-        }
+        // One alias per key in each batch, so the response is read back by
+        // position - two keys sharing an id would otherwise need two aliases on
+        // the same field. Batches rather than one document: see
+        // [MAX_COVER_BATCH_KEYS].
         val fresh = LinkedHashMap<MediaCoverKey, MediaCover>()
-        return execute(
-            GraphQLRequest(
-                query = GraphQLQueries.getMediaCoversQuery(missing),
-                variables = variables
-            ),
-            apiService::getMediaCovers
-        ).map { byAlias ->
-            // `execute` already unwrapped GraphQLResponse.data, so what arrives
-            // here *is* the alias map - there is no `.data` on it to reach for.
-            missing.forEachIndexed { index, key ->
-                // `firstOrNull` rather than a single node: the batch asks
-                // `Page.media` precisely so an id with no media is an empty list
-                // instead of a 404 that fails the other eleven cards. See
-                // [MediaCoverPage].
-                val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]?.media?.firstOrNull()
-                val url = node?.coverImage?.bestUrl
-                if (url != null) {
-                    // The key comes from the request rather than from
-                    // `node.type`. They should agree, but if AniList ever answers
-                    // with a different type than the one asked for, the card has to
-                    // find the cover under the key it requested it by or it draws
-                    // the placeholder over a request it already paid for.
-                    val cover = MediaCover(
-                        url = url,
-                        // The real title, which the query asks for on every entry.
-                        // A bio link of `anilist.co/anime/1` has no readable name in
-                        // it, so this is the only thing that can label the card with
-                        // anything but the type and a number.
-                        title = node.title?.bestTitleOrNull
-                    )
-                    if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
-                    fresh[key] = cover
-                    resolved[key] = cover
+        var anyAccepted = false
+        var firstFailure: Throwable? = null
+
+        mediaCoverBatches(missing).forEach { batch ->
+            val variables = buildMap {
+                batch.forEachIndexed { index, key ->
+                    put("id$index", key.id)
+                    put("type$index", key.graphqlType)
                 }
             }
-            // One store call for the whole batch: covers are the one cache the
-            // app fills a dozen entries at a time, and a rewrite per entry would
-            // serialize this kind a dozen times for one bio.
-            storeCovers(fresh)
-            // A media with no cover is absent from the answer rather than an error:
-            // the caller draws a placeholder, and one missing poster must not
-            // blank the other eleven cards beside it.
-            resolved
+            execute(
+                GraphQLRequest(
+                    query = GraphQLQueries.getMediaCoversQuery(batch),
+                    variables = variables
+                ),
+                apiService::getMediaCovers
+            ).fold(
+                onSuccess = { byAlias ->
+                    anyAccepted = true
+                    batch.forEachIndexed { index, key ->
+                        // `firstOrNull` rather than a single node: the batch asks
+                        // `Page.media` precisely so an id with no media is an empty
+                        // list instead of a 404 that fails the other eleven cards.
+                        // See [MediaCoverPage].
+                        val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]
+                            ?.media
+                            ?.firstOrNull()
+                        val url = node?.coverImage?.bestUrl
+                        if (url != null) {
+                            // The key comes from the request rather than from
+                            // `node.type`. They should agree, but if AniList ever
+                            // answers with a different type than the one asked for,
+                            // the card has to find the cover under the key it
+                            // requested it by or it draws the placeholder over a
+                            // request it already paid for.
+                            val cover = MediaCover(
+                                url = url,
+                                // The real title, which the query asks for on every
+                                // entry. A bio link of `anilist.co/anime/1` has no
+                                // readable name in it, so this is the only thing that
+                                // can label the card with anything but the type and a
+                                // number.
+                                title = node.title?.bestTitleOrNull
+                            )
+                            if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
+                            fresh[key] = cover
+                            resolved[key] = cover
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    if (firstFailure == null) firstFailure = error
+                    // A warning rather than an error banner: the reader cannot act
+                    // on "AniList refused a cover batch", and the cards are already
+                    // handling the absence. The line exists so the next occurrence
+                    // is diagnosable from logcat instead of merely quiet.
+                    Log.w(
+                        COVER_LOG_TAG,
+                        "AniList refused a cover batch of ${batch.size}",
+                        error
+                    )
+                }
+            )
+        }
+
+        // One store call for the whole response: covers are the one cache the app
+        // fills a dozen entries at a time, and a rewrite per entry would serialize
+        // this kind a dozen times for one bio.
+        storeCovers(fresh)
+        // A media with no cover is absent from the answer rather than an error: the
+        // caller draws a placeholder, and one missing poster must not blank the
+        // other eleven cards beside it. A partial answer is therefore a success -
+        // only a response where every batch was refused is reported as a failure.
+        val failure = firstFailure
+        return if (!anyAccepted && failure != null) {
+            Result.failure(failure)
+        } else {
+            Result.success(resolved)
         }
     }
 
@@ -1765,6 +1820,10 @@ internal fun MediaEntryEdit.toSaveVariables(): Map<String, Any?> = buildMap {
     put("startedAt", startedAt?.toVariables())
     put("completedAt", completedAt?.toVariables())
     put("private", isPrivate ?: false)
+    // Omitted rather than sent as null when the caller does not edit notes: a null
+    // argument is a no-op on AniList, while "" is the explicit clear the editor's
+    // empty field means.
+    notes?.let { put("notes", it) }
 }
 
 /**

@@ -422,7 +422,12 @@ object GraphQLQueries {
                   nextAiringEpisode { episode airingAt }
                   relations {
                     edges {
-                      relationType
+                      # Version 2 is what adds SOURCE to the enum. Version 1 has only
+                      # ADAPTATION, so a light novel -> anime edge reads as "Adaptation"
+                      # from both ends and the row cannot tell the source material from
+                      # the adaptation it became. The label code already handles SOURCE;
+                      # nothing was ever asking for it. See MediaNodeDisplay.relatedMedia.
+                      relationType(version: 2)
                       node { $RELATED_NODE_FIELDS }
                     }
                   }
@@ -749,6 +754,12 @@ object GraphQLQueries {
         startDate { year month day }
         mediaListEntry { status progress score(format: POINT_100) }
         trailer { id site }
+        externalLinks {
+          id
+          url
+          site
+          type
+        }
         rankings {
           id
           rank
@@ -766,7 +777,10 @@ object GraphQLQueries {
         }
         relations {
           edges {
-            relationType
+            # Version 2 adds SOURCE, which is the only way to tell a title's source
+            # material from an adaptation in the other direction. See the list query's
+            # copy of this comment for the full reasoning.
+            relationType(version: 2)
             node { $RELATED_NODE_FIELDS }
           }
         }
@@ -859,6 +873,7 @@ object GraphQLQueries {
             progressVolumes
             score
             private
+            notes
             startedAt { year month day }
             completedAt { year month day }
           }
@@ -887,6 +902,7 @@ object GraphQLQueries {
             ${'$'}startedAt: FuzzyDateInput
             ${'$'}completedAt: FuzzyDateInput
             ${'$'}private: Boolean
+            ${'$'}notes: String
         ) {
           SaveMediaListEntry(
               mediaId: ${'$'}mediaId
@@ -897,6 +913,7 @@ object GraphQLQueries {
               startedAt: ${'$'}startedAt
               completedAt: ${'$'}completedAt
               private: ${'$'}private
+              notes: ${'$'}notes
           ) {
             id
             mediaId
@@ -905,6 +922,7 @@ object GraphQLQueries {
             progressVolumes
             score
             private
+            notes
             startedAt { year month day }
             completedAt { year month day }
           }

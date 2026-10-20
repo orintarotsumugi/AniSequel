@@ -237,6 +237,14 @@ data class MediaNode(
     val source: String? = null,
     val duration: Int? = null,
     val trailer: MediaTrailer? = null,
+    /**
+     * Streaming, social and reference links, as AniList files them.
+     *
+     * Detail query only. The card that draws them filters to `STREAMING`; the
+     * rest are kept in the model rather than dropped at parse time so a future
+     * social row does not need a second query.
+     */
+    val externalLinks: List<MediaExternalLink>? = null,
     val synonyms: List<String>? = null,
     val meanScore: Int? = null,
     val rankings: List<MediaRanking>? = null,
@@ -273,6 +281,7 @@ data class MediaNode(
         source = detail.source ?: source,
         duration = detail.duration ?: duration,
         trailer = detail.trailer ?: trailer,
+        externalLinks = detail.externalLinks ?: externalLinks,
         synonyms = detail.synonyms ?: synonyms,
         meanScore = detail.meanScore ?: meanScore,
         rankings = detail.rankings ?: rankings,
@@ -332,6 +341,23 @@ data class MediaTrailer(
             "https://www.youtube.com/watch?v=$id"
         } else null
 }
+
+/**
+ * One of AniList's external links for a title.
+ *
+ * [type] is the discriminator that matters: `STREAMING`, `SOCIAL` or `INFO`.
+ * AniList files Netflix, Crunchyroll and a fan wiki in the same list, so a card
+ * that drew every link as "where to watch" would offer a Facebook page as a
+ * place to watch the show. [site] is the service's own name ("Crunchyroll"),
+ * which is the label; [url] is where the tap goes.
+ */
+@JsonClass(generateAdapter = true)
+data class MediaExternalLink(
+    val id: Int? = null,
+    val url: String? = null,
+    val site: String? = null,
+    val type: String? = null
+)
 
 /**
  * The studios credited on a media.
@@ -682,5 +708,15 @@ data class MediaEntryEdit(
     val score: Double? = null,
     val startedAt: FuzzyDate? = null,
     val completedAt: FuzzyDate? = null,
-    val isPrivate: Boolean? = null
+    val isPrivate: Boolean? = null,
+    /**
+     * The private note on the entry.
+     *
+     * Null means "this caller does not edit notes", so the argument is omitted and
+     * AniList leaves the stored note alone. The editor always passes a value -
+     * including the empty string, which is how a note is cleared; omitting the
+     * argument would leave the old note in place and read as the field ignoring
+     * the edit.
+     */
+    val notes: String? = null
 )

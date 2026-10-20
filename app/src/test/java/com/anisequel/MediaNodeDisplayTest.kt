@@ -1,6 +1,7 @@
 package com.anisequel
 
 import com.anisequel.data.model.FuzzyDate
+import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRanking
 import com.anisequel.data.model.MediaRelationEdge
@@ -13,6 +14,7 @@ import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.metaLabel
 import com.anisequel.data.model.progressCountLabel
+import com.anisequel.data.model.streamingLinks
 import com.anisequel.data.model.watchFraction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,9 +30,10 @@ import org.junit.Test
  * A `LazyColumn` item whose content returns early is not free: the list's
  * `Arrangement.spacedBy` gives every item its trailing gap whether or not the item
  * measured to anything, so a section that decided for itself that it had nothing to
- * show still left a hole in the page. Each of the four sections below returns early
- * for entirely ordinary titles - a show nobody has started, a show with no staff
- * listing, a show with no alternative titles, a show with no ranking.
+ * show still left a hole in the page. Each of the five sections below returns early
+ * for entirely ordinary titles - a show nobody has started, a show with no streaming
+ * links, a show with no staff listing, a show with no alternative titles, a show with
+ * no ranking.
  *
  * The fix was to have the page ask before it adds the item, which only works if the
  * predicate agrees with what the section would have drawn. That agreement is the
@@ -405,7 +408,64 @@ class MediaNodeDisplayTest {
         assertEquals(anime, published.detailFor(anime))
     }
 
+    // ---- streamingLinks --------------------------------------------------------------
+
+    /**
+     * `externalLinks` is three kinds in one list, and only one of them is a place
+     * to watch the show. Drawing all three would offer a wiki as a streamer.
+     */
+    @Test
+    fun `only streaming links reach the where-to-watch card`() {
+        val media = MediaNode(
+            id = 1,
+            externalLinks = listOf(
+                link(site = "Crunchyroll", type = "STREAMING"),
+                link(site = "Wikipedia", type = "INFO", url = "https://en.wikipedia.org/wiki/Test"),
+                link(site = "Facebook", type = "SOCIAL", url = "https://facebook.com/test")
+            )
+        )
+
+        assertEquals(listOf("Crunchyroll"), media.streamingLinks.map { it.site })
+    }
+
+    @Test
+    fun `a streaming link without a site or a url is not a chip`() {
+        val media = MediaNode(
+            id = 1,
+            externalLinks = listOf(
+                link(site = null),
+                link(url = null),
+                link(site = "Netflix", url = "https://netflix.com/title/1")
+            )
+        )
+
+        assertEquals(listOf("Netflix"), media.streamingLinks.map { it.site })
+    }
+
+    @Test
+    fun `the same service listed twice for two regions is one chip`() {
+        // AniList routinely files one service twice with different regional URLs.
+        // Two identical "Crunchyroll" chips would look like a duplicate, not a
+        // choice, so the first link wins.
+        val media = MediaNode(
+            id = 1,
+            externalLinks = listOf(
+                link(site = "Crunchyroll", url = "https://crunchyroll.com/a"),
+                link(site = "crunchyroll", url = "https://crunchyroll.com/b")
+            )
+        )
+
+        assertEquals(1, media.streamingLinks.size)
+        assertEquals("https://crunchyroll.com/a", media.streamingLinks.single().url)
+    }
+
     // ---- helpers --------------------------------------------------------------------
+
+    private fun link(
+        site: String? = "Crunchyroll",
+        type: String? = "STREAMING",
+        url: String? = "https://crunchyroll.com/test"
+    ): MediaExternalLink = MediaExternalLink(url = url, site = site, type = type)
 
     private fun node(
         title: MediaTitle? = null,

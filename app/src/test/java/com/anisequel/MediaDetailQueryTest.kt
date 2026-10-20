@@ -224,6 +224,27 @@ class MediaDetailQueryTest {
     }
 
     /**
+     * The where-to-watch card is only as good as the three fields it reads.
+     *
+     * `site` is the label, `url` is where the tap goes, and `type` is the
+     * discriminator that separates a streamer from a wiki or a Facebook page.
+     * Without `type` every external link would look like a place to watch the
+     * show; without `site` the card would have to invent a name.
+     */
+    @Test
+    fun `the detail query asks for the links the where-to-watch card draws`() {
+        val query = GraphQLQueries.getMediaDetailQuery("ANIME")
+        val links = query.substringAfter("externalLinks {").substringBefore("}")
+
+        listOf("url", "site", "type").forEach { field ->
+            assertTrue(
+                "the external-link selection is missing `$field`:\n$links",
+                links.contains(field)
+            )
+        }
+    }
+
+    /**
      * The credits have to be *every* studio, each with its id and its main flag.
      *
      * The document used to ask `studios(isMain: true) { nodes { ... } }`, which lost
@@ -291,6 +312,31 @@ class MediaDetailQueryTest {
                     "relation card can only print a poster and a name, which is what it " +
                     "did before this was fixed:\n$relations",
                 relations.contains(field)
+            )
+        }
+    }
+
+    /**
+     * `relationType` has to be asked for at version 2, on both documents.
+     *
+     * Version 1's enum has no `SOURCE`, so AniList answers `ADAPTATION` for both
+     * ends of a light-novel/anime pair and the label code - which already maps
+     * `SOURCE` to "Source" - can never see it. The row then reads "Adaptation" on
+     * the book and on the show, which is the one thing it was meant to distinguish.
+     */
+    @Test
+    fun `relation types are asked at version 2`() {
+        val detail = GraphQLQueries.getMediaDetailQuery("ANIME")
+
+        listOf(
+            "detail" to detail,
+            "list" to GraphQLQueries.GET_USER_ANIME_LIST,
+            "manga list" to GraphQLQueries.GET_USER_MANGA_LIST
+        ).forEach { (name, query) ->
+            assertTrue(
+                "the $name query still asks for relationType version 1, which has no " +
+                    "SOURCE and collapses every adaptation into one label:\n$query",
+                query.contains("relationType(version: 2)")
             )
         }
     }

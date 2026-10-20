@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -99,7 +101,11 @@ fun ProfileSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            // The profile tabs are long: a heading is the one thing TalkBack can
+            // enumerate them by. Same reason as `SectionHeading` on the title page.
+            modifier = Modifier
+                .weight(1f)
+                .semantics { heading() }
         )
         if (trailing != null) {
             Text(
