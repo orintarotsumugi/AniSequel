@@ -48,7 +48,9 @@ object CoverColorQuantizer {
     fun quantize(pixels: IntArray): Map<Int, Int> {
         val histogram = HashMap<Int, Int>(pixels.size.coerceAtMost(4096))
         for (pixel in pixels) {
-            if (((pixel ushr 24) and 0xFF) < 0x80) continue
+            // `ushr` fills with zeros, so the top byte is already 0..255.
+            val alpha = pixel ushr 24
+            if (alpha < 0x80) continue
             val red = (pixel shr 16) and 0xFF
             val green = (pixel shr 8) and 0xFF
             val blue = pixel and 0xFF

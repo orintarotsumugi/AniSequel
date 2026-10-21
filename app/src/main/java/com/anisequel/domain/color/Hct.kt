@@ -244,7 +244,7 @@ internal class ViewingConditions private constructor(
 
         private fun make(
             whitePoint: DoubleArray = doubleArrayOf(95.047, 100.0, 108.883),
-            adaptingLuminance: Double = (200.0 / PI) * ColorMath.yFromLstar(50.0) / 100.0,
+            adaptingLuminance: Double = 200.0 / PI * ColorMath.yFromLstar(50.0) / 100.0,
             backgroundLstar: Double = 50.0,
             surround: Double = 2.0,
             discountingIlluminant: Boolean = false
@@ -262,7 +262,7 @@ internal class ViewingConditions private constructor(
             val d = if (discountingIlluminant) {
                 1.0
             } else {
-                (f * (1.0 - (1.0 / 3.6) * exp((-adaptingLuminance - 42.0) / 92.0)))
+                (f * (1.0 - 1.0 / 3.6 * exp((-adaptingLuminance - 42.0) / 92.0)))
                     .coerceIn(0.0, 1.0)
             }
 
