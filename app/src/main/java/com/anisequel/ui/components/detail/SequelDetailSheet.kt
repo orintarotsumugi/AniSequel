@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.CoverColorRepository
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
