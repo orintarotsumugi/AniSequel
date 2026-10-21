@@ -3,6 +3,7 @@ package com.anisequel.ui.viewmodel
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.network.AniListErrorKind
 
 /**
  * The dashboard's public state contract.
@@ -48,7 +49,17 @@ sealed interface DashboardUiState {
     data class Error(
         val message: String,
         val canRetry: Boolean = true,
-        val isAuthError: Boolean = false
+        val isAuthError: Boolean = false,
+        /**
+         * The classified failure, when there was one.
+         *
+         * The screen uses it to choose the friendly headline, the joke and the
+         * reachability it can infer without a request. Null means the failure
+         * arrived as a plain [Throwable], and the screen falls back to its
+         * generic title; it is optional so every existing construction path
+         * keeps working.
+         */
+        val kind: AniListErrorKind? = null
     ) : DashboardUiState
 }
 

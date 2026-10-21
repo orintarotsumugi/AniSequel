@@ -62,7 +62,10 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.network.isConnectionTrouble
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -232,6 +235,28 @@ fun UserProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
+
+    // Same status probe as the dashboard, on the same repository call, so a
+    // failure on this screen gets the same verdict and the same jokes.
+    val apiProbe = rememberApiStatusProbe { repository.checkApiReachability() }
+    val apiStatus by apiProbe.ui.collectAsStateWithLifecycle()
+
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is UserOverviewUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is UserOverviewUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is UserOverviewUiState.Loading -> Unit
+        }
+    }
+
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
@@ -375,13 +400,21 @@ fun UserProfileScreen(
         ) {
             when (val state = uiState) {
                 is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
-                is UserOverviewUiState.Error -> ProfileErrorView(
-                    message = state.message,
-                    canRetry = state.canRetry,
-                    isAuthError = state.isAuthError,
-                    onRetry = { overviewViewModel.load() },
-                    onSignInAgain = onSignInAgain
-                )
+                is UserOverviewUiState.Error -> {
+                    LaunchedEffect(state.kind, state.message) {
+                        apiProbe.onFailure(state.kind)
+                    }
+                    ProfileErrorView(
+                        message = state.message,
+                        kind = state.kind,
+                        canRetry = state.canRetry,
+                        isAuthError = state.isAuthError,
+                        apiStatus = apiStatus,
+                        onCheckApiStatus = { apiProbe.probe() },
+                        onRetry = { overviewViewModel.load() },
+                        onSignInAgain = onSignInAgain
+                    )
+                }
                 is UserOverviewUiState.Success -> {
                     LaunchedEffect(state.userId) {
                         if (state.userId > 0) {
@@ -409,6 +442,11 @@ fun UserProfileScreen(
                     }
                 }
             }
+
+            ApiRecoveryOverlay(
+                visible = showRecovery,
+                onFinished = { showRecovery = false }
+            )
         }
     }
 

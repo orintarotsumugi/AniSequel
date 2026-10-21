@@ -15,6 +15,8 @@ import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -39,6 +41,22 @@ interface AniListRepository {
 
     suspend fun getViewer(): Result<ViewerProfile>
     suspend fun getUserByName(userName: String): Result<ViewerProfile>
+
+    /**
+     * Asks AniList "are you there?" with the smallest possible query and reports
+     * what came back.
+     *
+     * A default, not an abstract member: the demo repository and the test
+     * doubles have no network to probe, and forcing them to implement this
+     * would give every one of them a method that lies. They report [UNKNOWN],
+     * which is the truth for them - "nothing was checked" - and the UI already
+     * treats that as a non-verdict.
+     *
+     * [AniListRepositoryImpl] measures the round trip so the UI can distinguish
+     * "reachable" from "reachable but painfully slow", which is the difference
+     * between "wait" and "something is wrong on their side".
+     */
+    suspend fun checkApiReachability(): ApiStatusSnapshot = ApiStatusSnapshot(ApiReachability.UNKNOWN)
     /**
      * The user's full anime list.
      *

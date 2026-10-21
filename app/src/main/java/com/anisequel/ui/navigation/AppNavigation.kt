@@ -58,6 +58,7 @@ import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.StudioViewModel
 import com.anisequel.ui.viewmodel.TierListViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -737,8 +738,22 @@ fun AppNavigation(
                         // The account query is what failed, so its answer is this page's
                         // answer: retrying it here is a real retry, and a dead session
                         // offers the same way back rather than a button that cannot work.
+                        //
+                        // The route gets its own probe rather than borrowing the
+                        // dashboard's: this screen can be composed before the dashboard
+                        // exists, and a status strip that says nothing because another
+                        // screen never asked would be worse than one that asks here.
+                        val apiProbe = rememberApiStatusProbe {
+                            aniListRepository.checkApiReachability()
+                        }
+                        val apiStatus by apiProbe.ui.collectAsState()
+                        LaunchedEffect(viewerState.kind, viewerState.message) {
+                            apiProbe.onFailure(viewerState.kind)
+                        }
                         DashboardErrorView(
                             state = viewerState,
+                            apiStatus = apiStatus,
+                            onCheckApiStatus = { apiProbe.probe() },
                             onRetry = { mainDashboardViewModel?.loadData() },
                             onSignInAgain = authViewModel::logout
                         )
@@ -831,6 +846,7 @@ fun AppNavigation(
                     arrivingPreferences = arrivingPreferences,
                     quickAddPreferences = quickAddPreferences,
                     changelogRepository = changelogRepository,
+                    checkApiReachability = aniListRepository::checkApiReachability,
                     viewer = signedInViewer,
                     totalWatchedCount = successState?.totalWatchedCount,
                     totalMissedCount = successState?.totalMissedCount,

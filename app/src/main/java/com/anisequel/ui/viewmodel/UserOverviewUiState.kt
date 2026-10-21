@@ -5,6 +5,7 @@ import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.domain.usecase.ActivityCalendar
 import com.anisequel.domain.usecase.ListEntryInsights
 import com.anisequel.domain.usecase.ListInsights
@@ -99,6 +100,15 @@ sealed interface UserOverviewUiState {
     data class Error(
         val message: String,
         val canRetry: Boolean = true,
-        val isAuthError: Boolean = false
+        val isAuthError: Boolean = false,
+        /**
+         * The classified failure, when there was one.
+         *
+         * Null for a failure that arrived without an [AniListException] - in
+         * which case the screen falls back to its plain title and message.
+         * Optional so the demo mode and any older construction path keep
+         * compiling without inventing a classification they do not have.
+         */
+        val kind: AniListErrorKind? = null
     ) : UserOverviewUiState
 }

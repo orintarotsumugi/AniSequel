@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +35,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -48,6 +51,7 @@ import com.anisequel.ui.screens.profile.ProfileLoadingView
 import com.anisequel.ui.screens.profile.RememberedLibraryView
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserOverviewUiState
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
@@ -105,6 +109,28 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
+
+    // The same status probe as the profile and dashboard. The library is its own
+    // route, and a failure here is the one place a reader is most likely to blame
+    // the list rather than the API, so the verdict is worth drawing here too.
+    val apiProbe = rememberApiStatusProbe { repository.checkApiReachability() }
+    val apiStatus by apiProbe.ui.collectAsStateWithLifecycle()
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is UserOverviewUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is UserOverviewUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is UserOverviewUiState.Loading -> Unit
+        }
+    }
+
     // The manga half of the library. Collected at this level rather than inside
     // the grid because a fetch is already a request when it starts, and a
     // collection that started with a grid somebody scrolled away from would drop
@@ -230,13 +256,21 @@ fun LibraryScreen(
         ) {
             when (val state = uiState) {
                 is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
-                is UserOverviewUiState.Error -> ProfileErrorView(
-                    message = state.message,
-                    canRetry = state.canRetry,
-                    isAuthError = state.isAuthError,
-                    onRetry = { overviewViewModel.load() },
-                    onSignInAgain = onSignInAgain
-                )
+                is UserOverviewUiState.Error -> {
+                    LaunchedEffect(state.kind, state.message) {
+                        apiProbe.onFailure(state.kind)
+                    }
+                    ProfileErrorView(
+                        message = state.message,
+                        kind = state.kind,
+                        canRetry = state.canRetry,
+                        isAuthError = state.isAuthError,
+                        apiStatus = apiStatus,
+                        onCheckApiStatus = { apiProbe.probe() },
+                        onRetry = { overviewViewModel.load() },
+                        onSignInAgain = onSignInAgain
+                    )
+                }
                 is UserOverviewUiState.Success -> {
                     // Favourites are their own connection in AniList rather than a
                     // list status, so the Favourites filter tests membership of
@@ -270,6 +304,11 @@ fun LibraryScreen(
                     )
                 }
             }
+
+            ApiRecoveryOverlay(
+                visible = showRecovery,
+                onFinished = { showRecovery = false }
+            )
         }
     }
 

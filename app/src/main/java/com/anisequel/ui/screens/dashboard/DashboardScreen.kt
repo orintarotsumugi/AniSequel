@@ -60,9 +60,14 @@ import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.network.isConnectionTrouble
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import kotlinx.coroutines.flow.collectLatest
 
 private val MaxContentWidth = 640.dp
@@ -96,6 +101,35 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
+
+    // The connection status strip. The probe reads through the repository so it
+    // asks the same client, with the same auth and the same classifier, as every
+    // real request; the demo route has no repository and reports UNKNOWN rather
+    // than pretending to have checked.
+    val apiProbe = rememberApiStatusProbe {
+        repository?.checkApiReachability() ?: ApiStatusSnapshot(ApiReachability.UNKNOWN)
+    }
+    val apiStatus by apiProbe.ui.collectAsState()
+
+    // The heart gluing itself back together when a failed load succeeds. Kept at
+    // screen level because the error view is *replaced* by the success content,
+    // and an animation owned by the error view would be gone before it could
+    // finish - see ApiRecoveryOverlay.
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is DashboardUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is DashboardUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is DashboardUiState.Loading -> Unit
+        }
+    }
 
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository - the demo route - draws captions, not buttons.
@@ -309,8 +343,17 @@ fun DashboardScreen(
                 }
 
                 is DashboardUiState.Error -> {
+                    // Seed the strip from the failure, and probe only when the
+                    // failure left reachability genuinely unknown. Keyed on the
+                    // failure so a *new* error re-diagnoses instead of showing
+                    // the previous one's verdict.
+                    LaunchedEffect(state.kind, state.message) {
+                        apiProbe.onFailure(state.kind)
+                    }
                     DashboardErrorView(
                         state = state,
+                        apiStatus = apiStatus,
+                        onCheckApiStatus = { apiProbe.probe() },
                         onRetry = { dashboardViewModel.loadData() },
                         onSignInAgain = onSignInAgain
                     )
@@ -442,6 +485,11 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            ApiRecoveryOverlay(
+                visible = showRecovery,
+                onFinished = { showRecovery = false }
+            )
         }
     }
 

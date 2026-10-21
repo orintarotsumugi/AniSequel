@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,10 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.ui.components.ApiFailureBody
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.viewmodel.ApiStatusUi
 
 /**
  * The profile screen's waiting state.
@@ -83,8 +82,11 @@ fun ProfileLoadingView(
 @Composable
 fun ProfileErrorView(
     message: String,
+    kind: AniListErrorKind?,
     canRetry: Boolean,
     isAuthError: Boolean,
+    apiStatus: ApiStatusUi,
+    onCheckApiStatus: () -> Unit,
     onRetry: () -> Unit,
     onSignInAgain: () -> Unit,
     modifier: Modifier = Modifier
@@ -97,55 +99,20 @@ fun ProfileErrorView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = AppVectorIcons.Warning,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(48.dp)
+        ApiFailureBody(
+            kind = kind,
+            message = message,
+            isAuthError = isAuthError,
+            canRetry = canRetry,
+            status = apiStatus,
+            onCheckStatus = onCheckApiStatus,
+            onRetry = onRetry,
+            onSignInAgain = onSignInAgain,
+            // Existing automation selects these by name; keep the profile's
+            // tags rather than letting the shared body rename them.
+            retryTestTag = "profile_retry_button",
+            signInTestTag = "profile_sign_in_again_button"
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = if (isAuthError) "Session expired" else "Couldn't load this profile",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = ProfileMaxContentWidth)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (isAuthError) {
-            Button(
-                onClick = onSignInAgain,
-                modifier = Modifier
-                    .testTag("profile_sign_in_again_button")
-                    .bouncyPress(pressedScale = 0.96f)
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Login,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign in again")
-            }
-        } else if (canRetry) {
-            Button(
-                onClick = onRetry,
-                modifier = Modifier
-                    .testTag("profile_retry_button")
-                    .bouncyPress(pressedScale = 0.96f)
-            ) {
-                Text("Try again")
-            }
-        }
     }
 }
 

@@ -4,6 +4,14 @@
       "version": "1.5.1",
       "entries": [
         {
+          "title": "When AniList is down, Ani-chan is sleeping",
+          "detail": "A failed load no longer says \"connection error\" and leaves you guessing. Every failure now names what actually happened - no signal, a rate limit, an expired session, a server taking a nap - in a sentence you can act on, with one of forty-plus jokes underneath. A new status strip asks AniList with a tiny test request and tells you whether the problem is this device or the API itself, and the Check button re-asks on demand."
+        },
+        {
+          "title": "The heart breaks, then glues itself back together",
+          "detail": "A connection failure now cracks a heart in two (it beats first, which makes it worse). Below it are the joke, the status strip and two honest choices: try again, or go touch grass - which swaps the screen for a calmer note and a door back. When the API returns, the halves spring together and a green glue seam stitches them up, with a sparkle. The same scene is in Settings under AniList connection, where a check that turns from down to up plays the repair."
+        },
+        {
           "title": "Every title page can add to Planning",
           "detail": "The dashboard's quick-add control is now on the title page wherever it opens - your Library, a studio's filmography, a profile's favourites or activity feed, and the arriving rows. Tap once to put the title on your Planning list; hold the button (or swipe it sideways) to move it straight to Currently Watching. It is the same control, with the same gestures and springs, that the recommendation cards already had."
         },

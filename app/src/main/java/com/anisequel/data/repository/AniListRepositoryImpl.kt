@@ -23,6 +23,9 @@ import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListApiService
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.network.toReachability
 import com.anisequel.data.network.aniListHttpError
 import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.network.parseAniListErrorBody
@@ -33,6 +36,7 @@ import com.squareup.moshi.JsonDataException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import java.io.IOException
 import java.util.Locale
@@ -157,6 +161,24 @@ class AniListRepositoryImpl(
          * recurs across profiles, so a small cache here would miss constantly.
          */
         const val MAX_COVER_CACHE_ENTRIES = 512
+
+        /**
+         * How long the reachability probe may take before it is declared a
+         * non-answer. See [checkApiReachability] for why this is local to the
+         * probe rather than an OkHttp timeout.
+         */
+        const val API_PROBE_TIMEOUT_MILLIS = 8_000L
+
+        /**
+         * Above this, a successful probe is reported as [ApiReachability.SLOW]
+         * rather than ONLINE.
+         *
+         * AniList's normal round trip from a phone is a few hundred
+         * milliseconds. Two and a half seconds is not "slow-ish" - it is the
+         * server visibly labouring, and telling the reader that is more useful
+         * than a green tick that hides an impending timeout.
+         */
+        const val API_SLOW_PROBE_MILLIS = 2_500L
 
         /**
          * How many chunks of a large list the walk will chase before it gives up.
@@ -620,6 +642,57 @@ class AniListRepositoryImpl(
                 storeViewer(profile)
                 profile
             }
+    }
+
+    /**
+     * One tiny query, classified by the same [execute] every real request uses.
+     *
+     * ## Why it cannot just check `isConnected`
+     *
+     * A connected Wi-Fi radio proves nothing about AniList: captive portals,
+     * DNS failures, a blocked host and a 500 all have a perfectly healthy
+     * socket underneath them. This asks the actual API and reports what the
+     * actual API did, which is the only definition of "reachable" the status
+     * card is allowed to use.
+     *
+     * ## Why the timeout is here rather than on the OkHttp client
+     *
+     * The app's client is configured for real list queries - generous read
+     * timeouts so a 476-entry account can finish. A probe that inherits those
+     * would leave "Checking..." on screen for half a minute, which reads as a
+     * frozen app. Eight seconds is long past any healthy round trip and short
+     * enough that the dialog can still be cancelled by a human.
+     *
+     * `withTimeoutOrNull` rather than `withTimeout`: the timeout cancels
+     * [execute]'s coroutine, and [execute] deliberately rethrows cancellation,
+     * so a raw timeout would propagate as a cancellation of the *caller*.
+     * Returning null keeps the distinction between "AniList said no" and "we
+     * stopped waiting" explicit.
+     */
+    override suspend fun checkApiReachability(): ApiStatusSnapshot {
+        val startedAt = nowMillis()
+        val result = withTimeoutOrNull(API_PROBE_TIMEOUT_MILLIS) {
+            execute(GraphQLRequest(query = GraphQLQueries.API_STATUS), apiService::ping)
+        }
+        val elapsed = nowMillis() - startedAt
+        if (result == null) {
+            return ApiStatusSnapshot(reachability = ApiReachability.NO_ANSWER)
+        }
+        return result.fold(
+            onSuccess = {
+                ApiStatusSnapshot(
+                    reachability = if (elapsed >= API_SLOW_PROBE_MILLIS) {
+                        ApiReachability.SLOW
+                    } else {
+                        ApiReachability.ONLINE
+                    },
+                    latencyMillis = elapsed
+                )
+            },
+            onFailure = { error ->
+                ApiStatusSnapshot(reachability = (error as? AniListException)?.kind.toReachability())
+            }
+        )
     }
 
     /** Memory half of [knownViewer]; see [VIEWER_PROFILE_WINDOW_MILLIS]. */

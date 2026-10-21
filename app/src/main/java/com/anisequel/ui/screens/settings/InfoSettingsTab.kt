@@ -17,7 +17,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,9 +33,12 @@ import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListOAuth
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.StatsBanner
 import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 
 @Composable
 fun InfoSettingsTab(
@@ -41,9 +48,21 @@ fun InfoSettingsTab(
     totalWatchedCount: Int? = null,
     totalMissedCount: Int? = null,
     changelogRepository: ChangelogRepository? = null,
+    /**
+     * Asks AniList whether it is answering. Defaults to UNKNOWN so a preview or a
+     * demo build shows "not checked" rather than a fabricated verdict.
+     */
+    checkApiReachability: suspend () -> ApiStatusSnapshot = {
+        ApiStatusSnapshot(ApiReachability.UNKNOWN)
+    },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // One probe for this tab: the section's button opens the dialog, and the
+    // dialog reads and refreshes the same state - two probes would mean a Check
+    // tap in the dialog could disagree with the row the reader just tapped.
+    val apiProbe = rememberApiStatusProbe(checkApiReachability)
+    var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
     // Newest block in the changelog file, not a lookup by BuildConfig.VERSION_NAME:
     // the release workflow advances the patch number past the newest published
     // release, so the version a build reports is not knowable when the notes are
@@ -117,6 +136,39 @@ fun InfoSettingsTab(
                     value = if (viewer != null) "Write-enabled" else "Read-only on public profiles"
                 )
             }
+        }
+
+        // The connection card sits above About because it is the one diagnostic a
+        // reader can actually use: "is AniList awake, or is it my phone?" is the
+        // question every failed screen leaves them asking.
+        SectionCard(
+            title = "AniList connection",
+            icon = AppVectorIcons.BrokenHeart,
+            subtitle = "Check whether the API is answering"
+        ) {
+            Text(
+                text = "If loading feels stuck, ask AniList directly. The check tells you " +
+                    "whether the problem is this device or the API - and the heart breaks " +
+                    "or mends accordingly.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsButton(
+                text = "Check AniList now",
+                onClick = { showConnectionCheck = true },
+                icon = AppVectorIcons.HeartMended,
+                variant = SettingsButtonVariant.Tonal,
+                fillWidth = true,
+                testTag = "api_status_button"
+            )
+        }
+
+        if (showConnectionCheck) {
+            ConnectionCheckDialog(
+                probe = apiProbe,
+                onDismiss = { showConnectionCheck = false }
+            )
         }
 
         SectionCard(
