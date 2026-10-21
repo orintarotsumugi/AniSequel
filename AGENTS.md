@@ -5,8 +5,8 @@ obvious alternative was tried and cost something. The *why* is the point — if
 you cannot reproduce the failure, do not remove the rule, and do add the missing
 explanation.
 
-Read [README.md](README.md) for how the app is put together; this file is only
-about the constraints.
+Read [README.md](README.md) for the tour and [NOTES.md](NOTES.md) for why the
+app is put together that way; this file is only about the constraints.
 
 ---
 
@@ -118,7 +118,7 @@ It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
 - **The workflow verifies the signature for real**, with `apksigner verify
   --print-certs` against the pinned certificate digest, on non-PR runs only.
 
-Full history and the current fingerprint: [README § Release signing](README.md#release-signing).
+Full history and the current fingerprint: [BUILDING § Release signing](BUILDING.md#release-signing).
 
 ---
 
@@ -199,4 +199,6 @@ GitHub does not run workflows for `GITHUB_TOKEN` pushes.
 - Keep `gradle/libs.versions.toml`'s inline version reasoning. It is the only
   record of why a pin exists.
 - Significant architecture or protocol changes get a section in
-  [README.md](README.md), not just a code comment.
+  [NOTES.md](NOTES.md) — or in [ARCHITECTURE.md](ARCHITECTURE.md) if they change
+  the layering — not just a code comment. [README.md](README.md) is the tour and
+  stays short on purpose.

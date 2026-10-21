@@ -50,6 +50,7 @@ import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.toMediaNode
 
 /**
@@ -71,9 +72,11 @@ import com.anisequel.ui.viewmodel.toMediaNode
  * entry for the media, which has nothing to do with which list they came from.
  * The host hands over a `RepositoryEntryEditor` when a session exists; without
  * one the sheet is read-only and the tab is not drawn at all, which is the rule
- * `EntryEditor` states. There is still no add-to-list action on this page: a
- * library is titles already on the list, so there is nothing to add and the
- * quick-add belongs to the dashboard's rows. There is no activity feed or
+ * `EntryEditor` states. A library row's title is already on the list, so the
+ * sheet's quick add draws its "On Planning List" / "Currently Watching" badge
+ * there rather than a button - there is nothing to add. It is still offered for
+ * a title the reader walks to from a relation or opens from the cast, which is
+ * why the sheet owns the control and not this page. There is no activity feed or
  * comment thread either - those are about a *person*, and they stayed on the
  * profile this page left.
  */
@@ -111,6 +114,16 @@ fun LibraryScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // One-tap Planning for a title the sheet shows. The host writes through the
+    // same repository the rest of the page reads, and is only handed a session
+    // when the sheet has one: with no editor there is nothing to write with, and
+    // the row says so rather than drawing a button that cannot work.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = entryEditor != null
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
 
     // The poster that was tapped, as its own list node so the sheet has
     // something to draw on the first frame. The fetched detail supersedes it
@@ -273,8 +286,10 @@ fun LibraryScreen(
     // inside the content is torn down with the piece that drew it.
     //
     // The poster's detail sheet. A plain media subject: a library entry is a
-    // title the reader already tracks, so it has no parent and nothing to add -
-    // the same distinction [com.anisequel.data.model.ArrivingEntry] draws.
+    // title the reader already tracks, so it has no parent - the same
+    // distinction [com.anisequel.data.model.ArrivingEntry] draws. Its list
+    // status travels on the node itself, so the action row draws the badge
+    // rather than offering to add a title that is already there.
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
@@ -282,6 +297,9 @@ fun LibraryScreen(
             onDismiss = { selectedMedia = null },
             onAddToPlanning = {},
             onAddToWatching = {},
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             isDetailLoading = detailLoading,
             // The sheet is the same one the dashboard opens, so it gets the same

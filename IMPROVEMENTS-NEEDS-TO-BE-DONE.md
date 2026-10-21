@@ -62,7 +62,7 @@
 | DI | manual (hand-constructed in `Application`/routes) | Hilt |
 | Network | Retrofit + OkHttp + Moshi, GraphQL as strings | Apollo + codegen, normalized cache |
 | Persistence | DataStore prefs + JSON `SnapshotStore` | Room (v28) + Apollo normalized cache |
-| Offline stance | **deliberate**: no offline-first DB (`README § Deliberate non-goals`) | local-first: Room is the source of truth |
+| Offline stance | **deliberate**: no offline-first DB (`NOTES § Deliberate non-goals`) | local-first: Room is the source of truth |
 | Auth storage | plain DataStore | EncryptedSharedPreferences (AES-256-SIV/GCM) |
 | Widgets | 4 `RemoteViews` tiles | 5 `RemoteViews` tiles + notifications |
 | Tests | 88 JVM unit tests, no `androidTest` | JVM + instrumented + screenshot + a11y |
@@ -749,7 +749,7 @@ that it shares one layout.
    tested without a human.
 
 **Rule check.** RemoteViews XML is already the one sanctioned XML surface
-(`README § Home-screen widgets`); nothing here adds XML elsewhere. The budget
+(`NOTES § Home-screen widgets`); nothing here adds XML elsewhere. The budget
 maths is pure Kotlin and belongs in a testable helper.
 
 ---

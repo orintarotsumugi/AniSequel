@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.withListStatus
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.isManga
@@ -708,7 +709,7 @@ fun ProfileLibraryTab(
                             fadeInSpec = ExpressiveMotion.ListItemFadeIn,
                             fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                         ),
-                    onClick = { onOpenDetail(entry.media) }
+                    onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
                 )
             }
         }

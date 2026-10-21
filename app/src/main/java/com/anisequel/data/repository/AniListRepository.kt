@@ -15,8 +15,28 @@ import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 interface AniListRepository {
+    /**
+     * Bumped every time a write changes the viewer's lists.
+     *
+     * A write made on one screen is invisible to a screen that already loaded
+     * its data: the repository drops its caches, but `UserActivityViewModel` has
+     * its pages in its own state and the Activity tab is *not* refetched when it
+     * is re-entered (that is the pagination guard). So planning a title from the
+     * dashboard left the Activity feed claiming nothing had happened until the
+     * profile was closed and reopened.
+     *
+     * A counter rather than an event: there is no replay, no queue, and a
+     * collector that starts late reads the current value instead of missing the
+     * write. [AniListRepositoryImpl] overrides it; the demo and test doubles keep
+     * this never-changing flow, so nothing can depend on a signal they do not
+     * send.
+     */
+    val listMutationVersion: StateFlow<Long> get() = IdleListMutations
+
     suspend fun getViewer(): Result<ViewerProfile>
     suspend fun getUserByName(userName: String): Result<ViewerProfile>
     /**
@@ -290,6 +310,16 @@ interface AniListRepository {
  */
 private fun unsupported(operation: String): Nothing =
     throw UnsupportedOperationException("AniListRepository does not serve $operation")
+
+/**
+ * The never-changing [AniListRepository.listMutationVersion] a double gets.
+ *
+ * One instance shared by every implementation that does not override it, rather
+ * than a fresh flow per property read: a `get()` that allocated would hand a
+ * collector a different object on each recomposition, and the collector would
+ * restart on every frame of a title sheet.
+ */
+private val IdleListMutations = MutableStateFlow(0L)
 
 /**
  * How many titles one studio page asks for.

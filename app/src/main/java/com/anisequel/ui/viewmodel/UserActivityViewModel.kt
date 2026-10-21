@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -174,6 +175,58 @@ class UserActivityViewModel(
     private var loadJob: Job? = null
     private var nextPage = 1
     private var started = false
+
+    /**
+     * The mutation version whose effect this ViewModel has already applied.
+     *
+     * Null until the flow's first emission. That emission is the repository's
+     * current value - the count of writes made before this feed existed - not a
+     * change, so it is recorded and otherwise ignored. Reacting to it would
+     * refetch a feed the tab had just loaded.
+     */
+    private var seenListMutationVersion: Long? = null
+
+    init {
+        viewModelScope.launch {
+            aniListRepository.listMutationVersion.collect { version ->
+                val previous = seenListMutationVersion
+                seenListMutationVersion = version
+                if (previous == null || version == previous) return@collect
+                onListsChanged()
+            }
+        }
+    }
+
+    /**
+     * Reloads the viewer's own feed after a list write, and nothing else.
+     *
+     * ## Why the feed needs telling at all
+     *
+     * [loadFirstPage] deliberately does not refetch when the tab is re-entered,
+     * and the feed pages live in this ViewModel's state rather than in the
+     * repository's cache. So a title planned from the dashboard - or from a
+     * title page opened on this very profile - changed the account and left the
+     * Activity tab showing the list as it was before, indefinitely. The write is
+     * the one reliable moment to fetch it again.
+     *
+     * ## Why only the viewer's own feed
+     *
+     * A write is addressed to the reader's account. Somebody else's feed cannot
+     * have changed, and refetching it would spend one of AniList's ~30 requests
+     * a minute to draw the same rows - while the reader is standing on a
+     * stranger's profile. [viewerId] is null on a route that does not know the
+     * session (the demo, or a signed-out scan), and then the question cannot be
+     * answered, so nothing is refetched.
+     *
+     * [started] is the "was there anything to reload" question: a mutation while
+     * the tab has never been opened must not fetch a feed nobody asked for.
+     */
+    private fun onListsChanged() {
+        if (!started || isDemo) return
+        if (userId == null || userId != viewerId) return
+        nextPage = 1
+        fetch(forceRefresh = true)
+    }
 
     /**
      * Updates the user id once resolved from a profile overview scan.

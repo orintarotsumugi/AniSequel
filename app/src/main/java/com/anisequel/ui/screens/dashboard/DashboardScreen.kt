@@ -46,6 +46,7 @@ import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.StatsBanner
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -169,6 +170,21 @@ fun DashboardScreen(
     val successState = uiState as? DashboardUiState.Success
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
+
+    // One answer for "this screen may write to AniList", used by the sheet's
+    // editor, its quick add and the recommendation cards' own button. `!= false`
+    // rather than `== true` because a refresh briefly leaves the state outside
+    // `Success` - a demo session is the one case that is genuinely read-only, and
+    // it says so from inside `Success`.
+    val canWrite = successState?.canWriteToAniList != false
+
+    // One-tap Planning for a title the sheet is showing that is not one of the
+    // recommendation cards: an arriving row, or a relation walked to from either.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = canWrite
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsState()
 
     // One subject for the sheet, resolved from whichever source was tapped.
     //
@@ -451,10 +467,11 @@ fun DashboardScreen(
     }
 
     if (selectedSubject != null) {
-        // One answer for both the write flag and the editor, so the sheet cannot
-        // be told writes are unavailable while still being handed the tab that
-        // writes - or the reverse, a live editor hidden behind a false flag.
-        val canWrite = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
+        // `canWrite` is hoisted above, next to `successState`, so the write flag,
+        // the editor and the quick-add host above cannot be told different things:
+        // writes unavailable while still handed the tab that writes - or the
+        // reverse, a live editor hidden behind a false flag.
+        //
         // One definition of "the sheet is closed", used by the dismiss gesture and by
         // a tap on a studio credit. Written twice, the studio hop would have to
         // remember all three of the ids the sheet keys off - and forgetting one
@@ -470,6 +487,9 @@ fun DashboardScreen(
             onDismiss = closeSheet,
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },

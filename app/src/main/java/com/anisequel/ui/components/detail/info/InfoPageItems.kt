@@ -22,6 +22,7 @@ import com.anisequel.data.model.synonymList
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
+import com.anisequel.ui.viewmodel.QuickAddStatus
 
 /**
  * What the Info page lists, and in which order.
@@ -69,6 +70,9 @@ internal fun LazyListScope.infoPageItems(
     holdDurationSeconds: Int,
     swipeEnabled: Boolean,
     context: Context,
+    quickAddStatus: QuickAddStatus,
+    onAddMediaToPlanning: (MediaNode) -> Unit,
+    onAddMediaToWatching: (MediaNode) -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
     onAddToWatching: (MissedSequel) -> Unit,
     onOpenMedia: (MediaNode) -> Unit,
@@ -91,8 +95,12 @@ internal fun LazyListScope.infoPageItems(
         DetailActionRow(
             subject = subject,
             canWriteToAniList = canWriteToAniList,
+            quickAddStatus = quickAddStatus,
+            onAddMediaToPlanning = onAddMediaToPlanning,
+            onAddMediaToWatching = onAddMediaToWatching,
             onAddToPlanning = onAddToPlanning,
             onAddToWatching = onAddToWatching,
+            isDetailLoading = isDetailLoading,
             holdDurationSeconds = holdDurationSeconds,
             swipeEnabled = swipeEnabled,
             context = context,

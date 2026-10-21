@@ -66,6 +66,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -418,9 +419,19 @@ fun UserProfileScreen(
     // the sheet rather than to the profile loader.
     val profiles = rememberPersonProfileHost(repository)
 
+    // One-tap Planning for a title the sheet is showing - an activity row, a
+    // favourite, or a relation walked to from either. Gated on the same editor
+    // the "My Entry" tab uses, so a profile opened without a session (the demo,
+    // or a signed-out route) says "sign in" instead of drawing a write control.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = entryEditor != null
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
+
     // The activity row's detail sheet. A plain media subject: an activity entry
-    // is a show the person already tracks, so it has no parent and nothing to
-    // add - the same distinction [com.anisequel.data.model.ArrivingEntry] draws.
+    // is a show the person already tracks, so it has no parent - the same
+    // distinction [com.anisequel.data.model.ArrivingEntry] draws.
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
@@ -432,6 +443,9 @@ fun UserProfileScreen(
             onOpenMedia = { media -> selectedMedia = media },
             onAddToPlanning = {},
             onAddToWatching = {},
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = { id, type -> activityViewModel.loadDetail(id, type) },
             isDetailLoading = detailLoading,
             // Same sheet, same access as every other host: the tab follows the

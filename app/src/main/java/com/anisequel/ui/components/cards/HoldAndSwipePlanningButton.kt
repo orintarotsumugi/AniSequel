@@ -72,10 +72,52 @@ import kotlin.math.roundToInt
  *  - Tap: Adds anime to Planning list
  *  - Hold: Fills with progress; transitions to adding directly to Currently Watching
  *  - Swipe (if enabled): Horizontal slide gesture immediately confirms Currently Watching
+ *
+ * The dashboard's card draws this from a [MissedSequel]; every other title page
+ * draws the same control from a media id. Both go through
+ * [QuickAddPlanningButton] so the two cannot drift into different gestures.
  */
 @Composable
 fun HoldAndSwipePlanningButton(
     sequel: MissedSequel,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    modifier: Modifier = Modifier,
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
+) {
+    QuickAddPlanningButton(
+        mediaId = sequel.sequelId,
+        isAddedToPlanning = sequel.isAddedToPlanning,
+        isAddedToWatching = sequel.isAddedToWatching,
+        isBusy = sequel.isSavingToList,
+        onAddToPlanning = onAddToPlanning,
+        onAddToWatching = onAddToWatching,
+        modifier = modifier,
+        holdDurationSeconds = holdDurationSeconds,
+        swipeEnabled = swipeEnabled
+    )
+}
+
+/**
+ * The quick-add control itself, addressed by media id.
+ *
+ * Takes an id and its flags instead of a [MissedSequel] because a title page is not
+ * always showing a sequel: a Library row, an activity entry and a studio credit
+ * are all titles somebody may want to plan, and none of them has a parent to
+ * hang the dashboard's flags off. The flags live in
+ * [com.anisequel.ui.viewmodel.QuickAddStatus] for those hosts.
+ *
+ * `isAddedToWatching` is checked before `isAddedToPlanning` so a title that has
+ * been moved on from Planning shows the state it is in now rather than the one
+ * it used to be in.
+ */
+@Composable
+fun QuickAddPlanningButton(
+    mediaId: Int,
+    isAddedToPlanning: Boolean,
+    isAddedToWatching: Boolean,
+    isBusy: Boolean,
     onAddToPlanning: () -> Unit,
     onAddToWatching: () -> Unit,
     modifier: Modifier = Modifier,
@@ -103,23 +145,22 @@ fun HoldAndSwipePlanningButton(
     val swipeThresholdPx = with(density) { 90.dp.toPx() }
 
     // Handle already completed states
-    if (sequel.isAddedToWatching) {
+    if (isAddedToWatching) {
         WatchingCompletedBadge(
-            sequelId = sequel.sequelId,
+            mediaId = mediaId,
             modifier = modifier
         )
         return
     }
 
-    if (sequel.isAddedToPlanning) {
+    if (isAddedToPlanning) {
         PlanningCompletedBadge(
-            sequelId = sequel.sequelId,
+            mediaId = mediaId,
             modifier = modifier
         )
         return
     }
 
-    val isBusy = sequel.isAddingToPlanning || sequel.isAddingToWatching
     val holdDurationMs = (if (holdDurationSeconds == 5) 5000L else 3000L)
 
     // Animated container background transitioning from primary to info/watching color
@@ -157,7 +198,7 @@ fun HoldAndSwipePlanningButton(
             }
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .testTag("hold_swipe_button_${sequel.sequelId}")
+            .testTag("hold_swipe_button_$mediaId")
     ) {
         // Background reveal for horizontal swipe to watch
         if (swipeEnabled && !isBusy) {
@@ -329,7 +370,7 @@ fun HoldAndSwipePlanningButton(
 
 @Composable
 private fun WatchingCompletedBadge(
-    sequelId: Int,
+    mediaId: Int,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
@@ -340,7 +381,7 @@ private fun WatchingCompletedBadge(
             .fillMaxWidth()
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "Currently Watching" }
-            .testTag("watching_button_$sequelId"),
+            .testTag("watching_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.info,
@@ -363,7 +404,7 @@ private fun WatchingCompletedBadge(
 
 @Composable
 private fun PlanningCompletedBadge(
-    sequelId: Int,
+    mediaId: Int,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
@@ -374,7 +415,7 @@ private fun PlanningCompletedBadge(
             .fillMaxWidth()
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "On Planning list" }
-            .testTag("planned_button_$sequelId"),
+            .testTag("planned_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.success,

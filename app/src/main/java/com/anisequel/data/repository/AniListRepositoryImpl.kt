@@ -30,6 +30,9 @@ import com.anisequel.data.network.readCapped
 import com.anisequel.data.network.RequestCoalescer
 import com.anisequel.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import retrofit2.HttpException
 import java.io.IOException
 import java.util.Locale
@@ -397,6 +400,18 @@ class AniListRepositoryImpl(
     private var listEpoch = 0
 
     /**
+     * What [AniListRepository.listMutationVersion] publishes.
+     *
+     * Bumped beside [listEpoch] rather than derived from it, because the epoch is
+     * a private reconciliation counter for racing fetches and this is a public
+     * "a write happened" signal for screens that already loaded their data. They
+     * move together today; they are not the same question.
+     */
+    private val _listMutationVersion = MutableStateFlow(0L)
+
+    override val listMutationVersion: StateFlow<Long> = _listMutationVersion.asStateFlow()
+
+    /**
      * The signed-in viewer's own profile, on a fixed window.
      *
      * The one answer every launch used to buy before it could draw anything:
@@ -549,17 +564,39 @@ class AniListRepositoryImpl(
     }
 
     /**
-     * Drops every list the repository is holding, in both tiers.
+     * Drops everything a list write has made stale, in both tiers.
      *
      * Called by every mutation. The epoch bump plus [listCache].clear() is what it
      * always did; the snapshot has to go with them, or the next lookup would read
      * the pre-mutation list straight back off disk and the very thing the
      * invalidation exists to prevent would be served to the dashboard.
+     *
+     * It also has to reach three caches it used to leave alone:
+     *
+     *  - [detailCache], because a detail node carries the viewer's
+     *    `mediaListEntry`. A title added to Planning from one screen was served
+     *    from the cache to the next screen with no entry at all, so its title page
+     *    offered to add it *again*. The disk tier is repaired against the list
+     *    when it is read, so dropping the memory tier is enough.
+     *  - [activityCache], because the feed now has the entry the write created.
+     *    Leaving it is what made "added to Planning" invisible on the Activity
+     *    tab until the profile was reopened.
+     *  - [overviewCache] and its snapshot: the profile's stats total a list that
+     *    just changed, and a progress edit moves them.
+     *
+     * [_listMutationVersion] is what tells a screen that already loaded its data -
+     * the Activity feed, in particular - to fetch again; the caches above only
+     * help the next screen that asks.
      */
     private suspend fun invalidateLists() {
         listEpoch++
         listCache.clear()
+        detailCache.clear()
+        activityCache.clear()
+        overviewCache.clear()
         snapshots?.removeKind(SNAPSHOT_LIST)
+        snapshots?.removeKind(SNAPSHOT_OVERVIEW)
+        _listMutationVersion.value++
     }
 
     /**

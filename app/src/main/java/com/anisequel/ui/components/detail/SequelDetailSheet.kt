@@ -47,6 +47,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
+import com.anisequel.ui.viewmodel.QuickAddStatus
 import kotlinx.coroutines.launch
 
 /**
@@ -111,6 +112,26 @@ fun SequelDetailSheet(
     onOpenCharacter: ((Int) -> Unit)? = null,
     /** The same, for the crew row. */
     onOpenStaff: ((Int) -> Unit)? = null,
+    /**
+     * The quick-add state for every title this sheet can show, keyed by media id.
+     *
+     * A map rather than one value because the sheet walks relations in place: the
+     * reader can follow a prequel from the title they opened, and each title keeps
+     * its own in-flight flags and confirmation. Supplied by the screen's
+     * [com.anisequel.ui.viewmodel.PlanningAddHost]; empty on a host that has no
+     * repository to write with (the demo), where the row then offers the sign-in
+     * line instead.
+     */
+    quickAddStatuses: Map<Int, QuickAddStatus> = emptyMap(),
+    /**
+     * Adds the opened title to the viewer's Planning list.
+     *
+     * Only reached for a title that is not a dashboard recommendation - a sequel
+     * keeps the dashboard's own write, which also recomputes the card behind the
+     * sheet. See [DetailActionRow].
+     */
+    onAddMediaToPlanning: (MediaNode) -> Unit = {},
+    onAddMediaToWatching: (MediaNode) -> Unit = {},
     /**
      * Read/write access to the viewer's own entry, or null when the sheet is
      * read-only.
@@ -315,6 +336,10 @@ fun SequelDetailSheet(
                         swipeEnabled = swipeEnabled,
                         onAddToPlanning = onAddToPlanning,
                         onAddToWatching = onAddToWatching,
+                        quickAddStatus = quickAddStatuses[subject.mediaId]
+                            ?: QuickAddStatus(),
+                        onAddMediaToPlanning = onAddMediaToPlanning,
+                        onAddMediaToWatching = onAddMediaToWatching,
                         onClose = handleDismiss,
                         onOpenMedia = onOpenMedia,
                         onOpenStudio = onOpenStudio,
