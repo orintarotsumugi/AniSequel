@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.5.0",
+      "entries": [
+        {
+          "title": "The theme is built from the cover's own pixels",
+          "detail": "Opening a title now reads its cover art and derives the app's colour from the pixels you are looking at, the way Material You reads a wallpaper, instead of trusting AniList's single server-computed average of the whole file. A 128px decode is binned, scored by Material 3's rules - chroma is rewarded, hues are counted as a neighbourhood, and greys are dropped - so a black-and-white cover falls back to AniList's colour and then to the brand blue rather than producing a grey app."
+        },
+        {
+          "title": "Every Material role is now a real tonal palette",
+          "detail": "The old builder interpolated in HSL, where lightness is not luminance, so contrast and container relationships depended on the seed. A pure-Kotlin HCT/CAM16 engine now builds tonal-spot palettes at Material's fixed tones: 40/80 for primary, 10/90 for containers, 6/98 for surfaces and 30/80 for secondary text. Buttons, chips, the app bar and the sheet all move together because every one of the 36 scheme roles is generated, not just the handful that used to change."
+        },
+        {
+          "title": "The anime theme respects Light, Dark and System",
+          "detail": "Opening a title used to force the app dark to make the cover theme work, so a light-mode reader was handed a different theme with the show. Both schemes are generated now, and the layer follows the same Theme Mode choice as the rest of the app."
+        },
+        {
+          "title": "Retain Anime Color no longer depends on timing",
+          "detail": "The sheet read the stored preferences during its first composition, while DataStore was still loading, so a tap that beat the read saw the feature as off and never re-applied it. The colour work now waits for the real settings and then runs once. Retaining writes the anime colour and the standing accent in one transaction, so the app recolours once instead of twice."
+        },
+        {
+          "title": "Colour changes ease instead of cutting",
+          "detail": "A new scheme cross-fades every role over the same expressive spring the rest of the app uses, and snaps to the end when Motion is set to Instant. Opening a show now reads as the app taking on its colour rather than flashing a second theme."
+        },
+        {
+          "title": "The hero shares the theme's colour",
+          "detail": "The backdrop, cover shadow and buttons on the title page all read the same extracted seed, so an AniList colour that missed the artwork can no longer make the page and the theme disagree."
+        },
+        {
+          "title": "Startup no longer solves palettes nobody asked for",
+          "detail": "The generated palettes in the theme picker are built on first read instead of during class initialisation, so a cold start only solves the palette that is actually selected."
+        }
+      ]
+    },
+    {
       "version": "1.4.3",
       "entries": [
         {

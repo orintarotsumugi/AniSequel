@@ -36,10 +36,12 @@ import kotlinx.coroutines.launch
  * Anime colour matching — content-based dynamic colour.
  *
  * While you view a detail sheet, the app borrows the anime's cover colour the
- * way Dynamic colour borrows the wallpaper. "Retain Anime Color" is the half
- * that used to do nothing: when it is on, the cover colour is persisted as the
- * app's own custom hue, so the whole app keeps the anime's palette after the
- * sheet closes — there is nothing to revert.
+ * way Dynamic colour borrows the wallpaper. The seed is read from the cover's
+ * pixels - quantized and scored, not taken from AniList's single dominant-colour
+ * field - so the palette follows the artwork the reader is looking at. "Retain
+ * Anime Color" is the half that used to do nothing: when it is on, the cover
+ * colour is persisted as the app's own custom hue, so the whole app keeps the
+ * anime's palette after the sheet closes — there is nothing to revert.
  *
  * Both switches leave a clear exit: picking a palette, a hue or Reset
  * appearance in the other sections owns the accent again.

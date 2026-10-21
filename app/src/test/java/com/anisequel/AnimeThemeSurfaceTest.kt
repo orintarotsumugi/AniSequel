@@ -3,6 +3,7 @@ package com.anisequel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
+import com.anisequel.domain.color.Hct
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -38,6 +39,14 @@ import org.robolectric.RobolectricTestRunner
  * is a standing preference, and surfaces a user did not ask to change must not change
  * because they picked a hue - `appBackgroundColor` exists precisely to move the
  * background on purpose. Hence the opt-in flag rather than doing it for both.
+ *
+ * ## What the tone ladder changed about this file
+ *
+ * The old tests asserted HSL saturation and lightness. HSL lightness is not luminance,
+ * so "same lightness" did not mean "same contrast" - two hues at the same HSL lightness
+ * can be wildly different to read. The builder now uses HCT, where tone *is* CIELAB
+ * L*, and these tests assert the property that actually matters: the tinted ramp sits
+ * on the same luminance ladder as the brand's, and its hue is the show's.
  */
 @RunWith(RobolectricTestRunner::class)
 class AnimeThemeSurfaceTest {
@@ -124,41 +133,63 @@ class AnimeThemeSurfaceTest {
     }
 
     /**
-     * The tint is a hue swap on a fixed ladder, not a repaint.
+     * The tint is a hue swap on a fixed tone ladder, not a repaint.
      *
-     * Lightness is what the text contrast is made of - `onSurface` and
-     * `onSurfaceVariant` are fixed greys, so moving *lightness* is what would actually
-     * hurt legibility. Every role stays on the brand's own ladder, and the saturation
-     * comes down, so a red seed tints rather than repaints.
+     * Both schemes sample the neutral palette at the same tones. Tone in HCT is
+     * CIELAB L*, and L* determines Y, so the tinted and brand surfaces have the same
+     * Y by construction. That is the safety argument for tinting at all: `onSurface`
+     * keeps the same contrast it had against the brand, whatever the show's hue.
+     *
+     * The tolerance is for 8-bit rounding, not for a different ramp: a 0.005 change in
+     * luminance is half a channel step on a dark surface.
      */
     @Test
-    fun `tinting moves the hue and leaves the lightness alone`() {
+    fun `tinting keeps the tone ladder and therefore text contrast`() {
         val brand = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF7FA9D4)).second
         val tinted = DynamicThemeBuilder.createDynamicSchemes(Color(0xFFD64B4B), tintSurfaces = true).second
 
-        // `zip` hands back a Pair of Pairs, so this destructures the *one* parameter
-        // `forEach` takes into its two halves. Writing it as two parameters -
-        // `{ (a, b), (c, d) -> }` - reads as a two-arg lambda that `forEach` has no
-        // room for, and the compiler says so.
         surfaceRoles(brand).zip(surfaceRoles(tinted)).forEach { (brandRole, tintedRole) ->
             val role = brandRole.first
-            val brandColor = brandRole.second
-            val tintedColor = tintedRole.second
-            val brandHsl = hslOf(brandColor)
-            val tintedHsl = hslOf(tintedColor)
+            val brandLuminance = ColorUtils.calculateLuminance(brandRole.second.toArgb()).toDouble()
+            val tintedLuminance = ColorUtils.calculateLuminance(tintedRole.second.toArgb()).toDouble()
 
             assertEquals(
-                "$role: the surface ramp is a hue swap on a fixed lightness ladder - " +
-                    "that is the whole safety argument for tinting it at all",
-                brandHsl[2],
-                tintedHsl[2],
-                0.01f
+                "$role: the tint moved the surface off the brand's tone ladder, which " +
+                    "is what keeps onSurface readable against it",
+                brandLuminance,
+                tintedLuminance,
+                0.005
             )
+        }
+
+        assertTrue(
+            "onSurface has to stay readable on a tinted surface",
+            ColorUtils.calculateContrast(
+                tinted.onSurface.toArgb(),
+                tinted.background.toArgb()
+            ) >= 4.5
+        )
+    }
+
+    /**
+     * The backdrop is the show's hue, not just a different shade of navy.
+     *
+     * HCT hue is measured on the surface that is actually drawn, so this catches a
+     * tint that changed chroma but forgot the hue - which would leave every show on
+     * the same blue backdrop again.
+     */
+    @Test
+    fun `the tinted background follows the show's hue`() {
+        seeds.forEach { (name, seed) ->
+            val tinted = DynamicThemeBuilder.createDynamicSchemes(seed, tintSurfaces = true).second
+            val seedHue = Hct.fromInt(seed.toArgb()).hue
+            val surfaceHue = Hct.fromInt(tinted.background.toArgb()).hue
+            val delta = angularDistance(seedHue, surfaceHue)
+
             assertTrue(
-                "$role: the tint has to stay under the brand's own saturation, or a " +
-                    "red seed produces a brown card rather than a red-tinted one " +
-                    "(brand ${brandHsl[1]}, tinted ${tintedHsl[1]})",
-                tintedHsl[1] < brandHsl[1]
+                "$name: the backdrop sits ${delta} degrees from the cover's hue, so it " +
+                    "is not tinted with the show's colour at all",
+                delta < 20.0
             )
         }
     }
@@ -182,9 +213,8 @@ class AnimeThemeSurfaceTest {
         }
     }
 
-    private fun hslOf(color: Color): FloatArray {
-        val hsl = FloatArray(3)
-        ColorUtils.colorToHSL(color.toArgb(), hsl)
-        return hsl
+    private fun angularDistance(a: Double, b: Double): Double {
+        val raw = kotlin.math.abs(a - b) % 360.0
+        return if (raw > 180.0) 360.0 - raw else raw
     }
 }
