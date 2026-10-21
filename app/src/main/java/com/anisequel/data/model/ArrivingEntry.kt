@@ -24,7 +24,17 @@ data class ArrivingEntry(
     val nextAiringAt: Long?,
     val nextEpisodeNumber: Int?,
     val episodes: Int?,
-    val progress: Int?
+    val progress: Int?,
+    /**
+     * The viewer's own list status - `PLANNING`, `CURRENT`, `PAUSED`.
+     *
+     * Distinct from [status], which is AniList's status for the *show* (airing
+     * or announced). Kept because the title page opens from this row and has to
+     * know the entry is already on the viewer's list: without it the page
+     * offered to "add" a show they are currently watching, and AniList's add
+     * mutation would have moved it to Planning.
+     */
+    val listStatus: String? = null
 ) {
     val isAiring: Boolean
         get() = status.equals("RELEASING", ignoreCase = true)

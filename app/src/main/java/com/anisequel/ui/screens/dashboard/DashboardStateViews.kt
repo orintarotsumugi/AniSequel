@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,14 +21,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.anisequel.ui.components.ApiFailureBody
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerCard
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.viewmodel.ApiStatusUi
 import com.anisequel.ui.viewmodel.DashboardUiState
 
 @Composable
@@ -91,6 +90,8 @@ fun DashboardLoadingView(
 @Composable
 fun DashboardErrorView(
     state: DashboardUiState.Error,
+    apiStatus: ApiStatusUi,
+    onCheckApiStatus: () -> Unit,
     onRetry: () -> Unit,
     onSignInAgain: () -> Unit,
     modifier: Modifier = Modifier
@@ -103,54 +104,16 @@ fun DashboardErrorView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = AppVectorIcons.Warning,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(52.dp)
+        ApiFailureBody(
+            kind = state.kind,
+            message = state.message,
+            isAuthError = state.isAuthError,
+            canRetry = state.canRetry,
+            status = apiStatus,
+            onCheckStatus = onCheckApiStatus,
+            onRetry = onRetry,
+            onSignInAgain = onSignInAgain
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = if (state.isAuthError) "Session expired" else "AniList connection error",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = state.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (state.isAuthError) {
-            Button(
-                onClick = onSignInAgain,
-                modifier = Modifier
-                    .testTag("sign_in_again_button")
-                    .bouncyPress(pressedScale = 0.96f)
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Login,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Sign in again")
-            }
-        } else if (state.canRetry) {
-            Button(
-                onClick = onRetry,
-                modifier = Modifier
-                    .testTag("retry_button")
-                    .bouncyPress(pressedScale = 0.96f)
-            ) {
-                Text("Try again")
-            }
-        }
     }
 }
 

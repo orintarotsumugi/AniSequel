@@ -4,6 +4,7 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -17,6 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -47,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -62,6 +65,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveContainedLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.theme.AniSequelTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -72,10 +76,52 @@ import kotlin.math.roundToInt
  *  - Tap: Adds anime to Planning list
  *  - Hold: Fills with progress; transitions to adding directly to Currently Watching
  *  - Swipe (if enabled): Horizontal slide gesture immediately confirms Currently Watching
+ *
+ * The dashboard's card draws this from a [MissedSequel]; every other title page
+ * draws the same control from a media id. Both go through
+ * [QuickAddPlanningButton] so the two cannot drift into different gestures.
  */
 @Composable
 fun HoldAndSwipePlanningButton(
     sequel: MissedSequel,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    modifier: Modifier = Modifier,
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
+) {
+    QuickAddPlanningButton(
+        mediaId = sequel.sequelId,
+        isAddedToPlanning = sequel.isAddedToPlanning,
+        isAddedToWatching = sequel.isAddedToWatching,
+        isBusy = sequel.isSavingToList,
+        onAddToPlanning = onAddToPlanning,
+        onAddToWatching = onAddToWatching,
+        modifier = modifier,
+        holdDurationSeconds = holdDurationSeconds,
+        swipeEnabled = swipeEnabled
+    )
+}
+
+/**
+ * The quick-add control itself, addressed by media id.
+ *
+ * Takes an id and its flags instead of a [MissedSequel] because a title page is not
+ * always showing a sequel: a Library row, an activity entry and a studio credit
+ * are all titles somebody may want to plan, and none of them has a parent to
+ * hang the dashboard's flags off. The flags live in
+ * [com.anisequel.ui.viewmodel.QuickAddStatus] for those hosts.
+ *
+ * `isAddedToWatching` is checked before `isAddedToPlanning` so a title that has
+ * been moved on from Planning shows the state it is in now rather than the one
+ * it used to be in.
+ */
+@Composable
+fun QuickAddPlanningButton(
+    mediaId: Int,
+    isAddedToPlanning: Boolean,
+    isAddedToWatching: Boolean,
+    isBusy: Boolean,
     onAddToPlanning: () -> Unit,
     onAddToWatching: () -> Unit,
     modifier: Modifier = Modifier,
@@ -87,39 +133,34 @@ fun HoldAndSwipePlanningButton(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    // Hold progress state (0f to 1f)
+    // Hold progress state (0f to 1f). `holdJob` and the "a hold already
+    // committed" flag live inside the gesture modifier below: both are per-press
+    // facts that no layout reads, and keeping them in composition only made the
+    // button recompose for state nothing drew.
     var isHolding by remember { mutableStateOf(false) }
     val holdProgressAnim = remember { Animatable(0f) }
-    var holdJob by remember { mutableStateOf<Job?>(null) }
-    // True from the moment a hold reaches 100% until the finger lifts. The
-    // release branch decided "quick tap -> Add to Planning" from the elapsed
-    // fraction, and the hold handler snaps the animator back to 0f the instant
-    // it completes - so releasing after a completed hold read as a quick tap
-    // and wrote the same title to Planning right after Writing it to Watching.
-    var holdCommitted by remember { mutableStateOf(false) }
 
     // Swipe drag state
     val dragOffset = remember { Animatable(0f) }
     val swipeThresholdPx = with(density) { 90.dp.toPx() }
 
     // Handle already completed states
-    if (sequel.isAddedToWatching) {
+    if (isAddedToWatching) {
         WatchingCompletedBadge(
-            sequelId = sequel.sequelId,
+            mediaId = mediaId,
             modifier = modifier
         )
         return
     }
 
-    if (sequel.isAddedToPlanning) {
+    if (isAddedToPlanning) {
         PlanningCompletedBadge(
-            sequelId = sequel.sequelId,
+            mediaId = mediaId,
             modifier = modifier
         )
         return
     }
 
-    val isBusy = sequel.isAddingToPlanning || sequel.isAddingToWatching
     val holdDurationMs = (if (holdDurationSeconds == 5) 5000L else 3000L)
 
     // Animated container background transitioning from primary to info/watching color
@@ -147,6 +188,8 @@ fun HoldAndSwipePlanningButton(
 
     val shape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
 
+    val canSwipe = swipeEnabled && !isBusy
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -157,179 +200,248 @@ fun HoldAndSwipePlanningButton(
             }
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .testTag("hold_swipe_button_${sequel.sequelId}")
+            .testTag("hold_swipe_button_$mediaId")
     ) {
-        // Background reveal for horizontal swipe to watch
-        if (swipeEnabled && !isBusy) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(statusColors.infoContainer)
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = AppVectorIcons.Play,
-                        contentDescription = "Swipe to Watch",
-                        tint = statusColors.info,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Swipe to Watch",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColors.info
-                    )
-                }
-            }
+        if (canSwipe) {
+            SwipeToWatchReveal(
+                revealColor = statusColors.info,
+                containerColor = statusColors.infoContainer
+            )
         }
 
-        // Main button surface that slides on swipe and fills on hold
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
                 .clip(shape)
                 .background(buttonColor)
-                .pointerInput(isBusy, swipeEnabled, holdDurationMs) {
-                    if (isBusy) return@pointerInput
-
-                    // Gestures: Tap & Hold
-                    detectTapGestures(
-                        onPress = {
-                            isHolding = true
-                            holdCommitted = false
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-
-                            holdJob?.cancel()
-                            holdJob = coroutineScope.launch {
-                                holdProgressAnim.snapTo(0f)
-                                holdProgressAnim.animateTo(
-                                    targetValue = 1f,
-                                    animationSpec = tween(
-                                        durationMillis = holdDurationMs.toInt(),
-                                        easing = LinearEasing
-                                    )
-                                )
-                                // Hold reached 100% -> Trigger watching!
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                isHolding = false
-                                holdCommitted = true
-                                onAddToWatching()
-                                holdProgressAnim.snapTo(0f)
-                            }
-
-                            val released = tryAwaitRelease()
-                            isHolding = false
-
-                            if (released) {
-                                // User released before hold finished
-                                val elapsedFraction = holdProgressAnim.value
-                                holdJob?.cancel()
-                                coroutineScope.launch {
-                                    holdProgressAnim.animateTo(0f, ExpressiveMotion.FastEffects)
-                                }
-
-                                // Quick tap -> Add to Planning. Only when the hold
-                                // did not already commit: see `holdCommitted`.
-                                if (elapsedFraction < 0.25f && !holdCommitted) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onAddToPlanning()
-                                }
-                            } else {
-                                holdJob?.cancel()
-                                coroutineScope.launch { holdProgressAnim.snapTo(0f) }
-                            }
-                        }
-                    )
-                }
-                .then(
-                    if (swipeEnabled && !isBusy) {
-                        Modifier.pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragEnd = {
-                                    coroutineScope.launch {
-                                        if (dragOffset.value >= swipeThresholdPx) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onAddToWatching()
-                                        }
-                                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
-                                    }
-                                },
-                                onDragCancel = {
-                                    coroutineScope.launch {
-                                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
-                                    }
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val newOffset = (dragOffset.value + dragAmount.x).coerceIn(0f, swipeThresholdPx * 1.5f)
-                                    coroutineScope.launch { dragOffset.snapTo(newOffset) }
-                                }
-                            )
-                        }
-                    } else Modifier
+                .quickAddGestures(
+                    holdEnabled = !isBusy,
+                    swipeEnabled = canSwipe,
+                    holdDurationMs = holdDurationMs,
+                    swipeThresholdPx = swipeThresholdPx,
+                    holdProgress = holdProgressAnim,
+                    dragOffset = dragOffset,
+                    haptic = haptic,
+                    coroutineScope = coroutineScope,
+                    onHoldingChange = { isHolding = it },
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // Fill progress bar indicator while holding
-            if (progressFraction > 0.01f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progressFraction)
-                        .align(Alignment.CenterStart)
-                        .background(Color.White.copy(alpha = 0.28f))
-                )
-            }
+            HoldProgressFill(progressFraction = progressFraction)
+            QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+        }
+    }
+}
 
-            // Dynamic button content with icon & label
-            if (isBusy) {
-                ExpressiveContainedLoadingIndicator(
-                    modifier = Modifier.size(20.dp),
-                    containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
-                    indicatorColor = MaterialTheme.colorScheme.onPrimary
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                ) {
-                    val icon = if (isHolding) AppVectorIcons.Play else AppVectorIcons.BookmarkAdd
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+/**
+ * Tap to plan, hold to watch, swipe sideways for watching too.
+ *
+ * Split out of [QuickAddPlanningButton] because the gesture branches were most
+ * of that composable's complexity and none of its layout. `holdJob` and the
+ * "a hold already committed" flag live here, in the pointer-input coroutine,
+ * rather than in composition: no frame reads either one. The flag is not
+ * cosmetic - the hold handler snaps the fill back to 0f when it completes, so
+ * without it the release after a completed hold looks like a quick tap and the
+ * same title gets written to Planning immediately after Watching.
+ */
+private fun Modifier.quickAddGestures(
+    holdEnabled: Boolean,
+    swipeEnabled: Boolean,
+    holdDurationMs: Long,
+    swipeThresholdPx: Float,
+    holdProgress: Animatable<Float, AnimationVector1D>,
+    dragOffset: Animatable<Float, AnimationVector1D>,
+    haptic: HapticFeedback,
+    coroutineScope: CoroutineScope,
+    onHoldingChange: (Boolean) -> Unit,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit
+): Modifier {
+    if (!holdEnabled) return this
 
-                    AnimatedContent(
-                        targetState = isHolding,
-                        transitionSpec = {
-                            fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects)
-                        },
-                        label = "btn_label_anim"
-                    ) { holding ->
-                        Text(
-                            text = if (holding) "Hold for Watching..." else "Add to Planning",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            maxLines = 1
+    val tapAndHold = pointerInput(holdDurationMs) {
+        var holdJob: Job? = null
+        var holdCommitted = false
+
+        detectTapGestures(
+            onPress = {
+                onHoldingChange(true)
+                holdCommitted = false
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+                holdJob?.cancel()
+                holdJob = coroutineScope.launch {
+                    holdProgress.snapTo(0f)
+                    holdProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = holdDurationMs.toInt(),
+                            easing = LinearEasing
                         )
+                    )
+                    // Hold reached 100% -> Trigger watching!
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onHoldingChange(false)
+                    holdCommitted = true
+                    onAddToWatching()
+                    holdProgress.snapTo(0f)
+                }
+
+                val released = tryAwaitRelease()
+                onHoldingChange(false)
+
+                if (released) {
+                    // User released before hold finished
+                    val elapsedFraction = holdProgress.value
+                    holdJob?.cancel()
+                    coroutineScope.launch {
+                        holdProgress.animateTo(0f, ExpressiveMotion.FastEffects)
                     }
+
+                    // Quick tap -> Add to Planning. Only when the hold did not
+                    // already commit: see `holdCommitted` above.
+                    if (elapsedFraction < 0.25f && !holdCommitted) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAddToPlanning()
+                    }
+                } else {
+                    holdJob?.cancel()
+                    coroutineScope.launch { holdProgress.snapTo(0f) }
                 }
             }
+        )
+    }
+
+    val swipe = if (swipeEnabled) {
+        Modifier.pointerInput(Unit) {
+            detectDragGestures(
+                onDragEnd = {
+                    coroutineScope.launch {
+                        if (dragOffset.value >= swipeThresholdPx) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAddToWatching()
+                        }
+                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
+                    }
+                },
+                onDragCancel = {
+                    coroutineScope.launch {
+                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
+                    }
+                },
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    val newOffset = (dragOffset.value + dragAmount.x)
+                        .coerceIn(0f, swipeThresholdPx * 1.5f)
+                    coroutineScope.launch { dragOffset.snapTo(newOffset) }
+                }
+            )
+        }
+    } else {
+        Modifier
+    }
+
+    return this.then(tapAndHold).then(swipe)
+}
+
+/**
+ * The "Swipe to Watch" hint uncovered as the button slides right.
+ *
+ * Takes its two colours rather than reading the theme itself so the caller owns
+ * the only composition-local read.
+ */
+@Composable
+private fun SwipeToWatchReveal(revealColor: Color, containerColor: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(containerColor)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = AppVectorIcons.Play,
+                contentDescription = "Swipe to Watch",
+                tint = revealColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Swipe to Watch",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = revealColor
+            )
+        }
+    }
+}
+
+/** The white fill that grows across the button while a hold is in progress. */
+@Composable
+private fun BoxScope.HoldProgressFill(progressFraction: Float) {
+    if (progressFraction <= 0.01f) return
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .fillMaxWidth(progressFraction)
+            .align(Alignment.CenterStart)
+            .background(Color.White.copy(alpha = 0.28f))
+    )
+}
+
+/**
+ * What the button says: a spinner while saving, otherwise the icon and label
+ * that swaps from "Add to Planning" to "Hold for Watching..." as the hold starts.
+ */
+@Composable
+private fun QuickAddButtonFace(isBusy: Boolean, isHolding: Boolean) {
+    if (isBusy) {
+        ExpressiveContainedLoadingIndicator(
+            modifier = Modifier.size(20.dp),
+            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+            indicatorColor = MaterialTheme.colorScheme.onPrimary
+        )
+        return
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 12.dp)
+    ) {
+        val icon = if (isHolding) AppVectorIcons.Play else AppVectorIcons.BookmarkAdd
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+
+        AnimatedContent(
+            targetState = isHolding,
+            transitionSpec = {
+                fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects)
+            },
+            label = "btn_label_anim"
+        ) { holding ->
+            Text(
+                text = if (holding) "Hold for Watching..." else "Add to Planning",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1
+            )
         }
     }
 }
 
 @Composable
 private fun WatchingCompletedBadge(
-    sequelId: Int,
+    mediaId: Int,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
@@ -340,7 +452,7 @@ private fun WatchingCompletedBadge(
             .fillMaxWidth()
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "Currently Watching" }
-            .testTag("watching_button_$sequelId"),
+            .testTag("watching_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.info,
@@ -363,7 +475,7 @@ private fun WatchingCompletedBadge(
 
 @Composable
 private fun PlanningCompletedBadge(
-    sequelId: Int,
+    mediaId: Int,
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
@@ -374,7 +486,7 @@ private fun PlanningCompletedBadge(
             .fillMaxWidth()
             .height(44.dp)
             .clearAndSetSemantics { contentDescription = "On Planning list" }
-            .testTag("planned_button_$sequelId"),
+            .testTag("planned_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
         colors = ButtonDefaults.outlinedButtonColors(
             disabledContentColor = statusColors.success,

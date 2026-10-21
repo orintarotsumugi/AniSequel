@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
+import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.FollowersData
@@ -276,6 +277,11 @@ private class ChunkedListService(
     override suspend fun getStaffProfile(
         request: GraphQLRequest
     ): GraphQLResponse<StaffProfileData> = notServed("getStaffProfile")
+
+    // The reachability probe, added with the status strip. Refusing rather than
+    // answering keeps an accidental call from inventing a reachable AniList.
+    override suspend fun ping(request: GraphQLRequest): GraphQLResponse<ApiStatusData> =
+        notServed("ping")
 }
 
 private fun notServed(name: String): Nothing =

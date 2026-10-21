@@ -185,4 +185,46 @@ object AppExtraVectors {
             }
         }.build()
     }
+
+    /**
+     * Three blades of grass over a ground line, for the "go touch grass"
+     * recovery action.
+     *
+     * The ground stops short of both edges deliberately: a full-width bar at
+     * icon size reads as an underline beneath the blades, which is the one thing
+     * a lawn must not look like. The middle blade is straight and the outer two
+     * lean away from it, so the tuft still reads at 16dp where individual curves
+     * start to blur.
+     */
+    val GrassTuft: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "GrassTuft",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round
+            ) {
+                // Ground.
+                moveTo(3.5f, 20f)
+                lineTo(20.5f, 20f)
+
+                // Left blade, leaning out.
+                moveTo(8f, 20f)
+                quadTo(6.5f, 14.5f, 9.5f, 10.5f)
+
+                // Centre blade, upright.
+                moveTo(12f, 20f)
+                quadTo(12.5f, 13f, 12f, 8.5f)
+
+                // Right blade, leaning out.
+                moveTo(16f, 20f)
+                quadTo(17.5f, 14.5f, 14.5f, 10.5f)
+            }
+        }.build()
+    }
 }

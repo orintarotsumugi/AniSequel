@@ -46,6 +46,7 @@ import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.StatsBanner
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -59,9 +60,14 @@ import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.network.isConnectionTrouble
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import kotlinx.coroutines.flow.collectLatest
 
 private val MaxContentWidth = 640.dp
@@ -95,6 +101,15 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
+
+    // The connection status strip. The probe reads through the repository so it
+    // asks the same client, with the same auth and the same classifier, as every
+    // real request; the demo route has no repository and reports UNKNOWN rather
+    // than pretending to have checked.
+    val apiProbe = rememberApiStatusProbe {
+        repository?.checkApiReachability() ?: ApiStatusSnapshot(ApiReachability.UNKNOWN)
+    }
+    val apiStatus by apiProbe.ui.collectAsState()
 
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository - the demo route - draws captions, not buttons.
@@ -169,6 +184,21 @@ fun DashboardScreen(
     val successState = uiState as? DashboardUiState.Success
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
+
+    // One answer for "this screen may write to AniList", used by the sheet's
+    // editor, its quick add and the recommendation cards' own button. `!= false`
+    // rather than `== true` because a refresh briefly leaves the state outside
+    // `Success` - a demo session is the one case that is genuinely read-only, and
+    // it says so from inside `Success`.
+    val canWrite = successState?.canWriteToAniList != false
+
+    // One-tap Planning for a title the sheet is showing that is not one of the
+    // recommendation cards: an arriving row, or a relation walked to from either.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = canWrite
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsState()
 
     // One subject for the sheet, resolved from whichever source was tapped.
     //
@@ -293,8 +323,17 @@ fun DashboardScreen(
                 }
 
                 is DashboardUiState.Error -> {
+                    // Seed the strip from the failure, and probe only when the
+                    // failure left reachability genuinely unknown. Keyed on the
+                    // failure so a *new* error re-diagnoses instead of showing
+                    // the previous one's verdict.
+                    LaunchedEffect(state.kind, state.message) {
+                        apiProbe.onFailure(state.kind)
+                    }
                     DashboardErrorView(
                         state = state,
+                        apiStatus = apiStatus,
+                        onCheckApiStatus = { apiProbe.probe() },
                         onRetry = { dashboardViewModel.loadData() },
                         onSignInAgain = onSignInAgain
                     )
@@ -426,6 +465,8 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            DashboardRecovery(uiState = uiState)
         }
     }
 
@@ -451,10 +492,11 @@ fun DashboardScreen(
     }
 
     if (selectedSubject != null) {
-        // One answer for both the write flag and the editor, so the sheet cannot
-        // be told writes are unavailable while still being handed the tab that
-        // writes - or the reverse, a live editor hidden behind a false flag.
-        val canWrite = (uiState as? DashboardUiState.Success)?.canWriteToAniList != false
+        // `canWrite` is hoisted above, next to `successState`, so the write flag,
+        // the editor and the quick-add host above cannot be told different things:
+        // writes unavailable while still handed the tab that writes - or the
+        // reverse, a live editor hidden behind a false flag.
+        //
         // One definition of "the sheet is closed", used by the dismiss gesture and by
         // a tap on a studio credit. Written twice, the studio hop would have to
         // remember all three of the ids the sheet keys off - and forgetting one
@@ -470,6 +512,9 @@ fun DashboardScreen(
             onDismiss = closeSheet,
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
@@ -491,4 +536,36 @@ fun DashboardScreen(
     // row routes into the sheet's own relation navigation, which is how you walk
     // from a cast member to the next title without stacking a third window.
     profiles.Sheet { appearance -> navigatedRelation = appearance.toMediaNode() }
+}
+
+/**
+ * The heart gluing itself back together when a failed load succeeds.
+ *
+ * Kept at screen level because the error view is *replaced* by the success
+ * content, and an animation owned by the error view would be gone before it
+ * could finish - see [ApiRecoveryOverlay]. Extracted from [DashboardScreen] so
+ * the screen itself stays about layout: this owns two flags and the transition
+ * between them, and nothing else.
+ */
+@Composable
+private fun DashboardRecovery(uiState: DashboardUiState) {
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is DashboardUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is DashboardUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is DashboardUiState.Loading -> Unit
+        }
+    }
+    ApiRecoveryOverlay(
+        visible = showRecovery,
+        onFinished = { showRecovery = false }
+    )
 }

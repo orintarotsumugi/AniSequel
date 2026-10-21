@@ -63,5 +63,9 @@ fun ArrivingEntry.toDetailMedia(): MediaNode = MediaNode(
     } else {
         null
     },
-    mediaListEntry = progress?.let { SimpleMediaListEntry(progress = it) }
+    mediaListEntry = if (progress != null || listStatus != null) {
+        SimpleMediaListEntry(progress = progress, status = listStatus)
+    } else {
+        null
+    }
 )
