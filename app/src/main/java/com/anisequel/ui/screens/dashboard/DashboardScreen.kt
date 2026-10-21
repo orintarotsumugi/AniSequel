@@ -111,26 +111,6 @@ fun DashboardScreen(
     }
     val apiStatus by apiProbe.ui.collectAsState()
 
-    // The heart gluing itself back together when a failed load succeeds. Kept at
-    // screen level because the error view is *replaced* by the success content,
-    // and an animation owned by the error view would be gone before it could
-    // finish - see ApiRecoveryOverlay.
-    var awaitingRecovery by remember { mutableStateOf(false) }
-    var showRecovery by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState) {
-        when (val state = uiState) {
-            is DashboardUiState.Error ->
-                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
-
-            is DashboardUiState.Success -> if (awaitingRecovery) {
-                awaitingRecovery = false
-                showRecovery = true
-            }
-
-            is DashboardUiState.Loading -> Unit
-        }
-    }
-
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository - the demo route - draws captions, not buttons.
     val profiles = rememberPersonProfileHost(repository)
@@ -486,10 +466,7 @@ fun DashboardScreen(
                 }
             }
 
-            ApiRecoveryOverlay(
-                visible = showRecovery,
-                onFinished = { showRecovery = false }
-            )
+            DashboardRecovery(uiState = uiState)
         }
     }
 
@@ -559,4 +536,36 @@ fun DashboardScreen(
     // row routes into the sheet's own relation navigation, which is how you walk
     // from a cast member to the next title without stacking a third window.
     profiles.Sheet { appearance -> navigatedRelation = appearance.toMediaNode() }
+}
+
+/**
+ * The heart gluing itself back together when a failed load succeeds.
+ *
+ * Kept at screen level because the error view is *replaced* by the success
+ * content, and an animation owned by the error view would be gone before it
+ * could finish - see [ApiRecoveryOverlay]. Extracted from [DashboardScreen] so
+ * the screen itself stays about layout: this owns two flags and the transition
+ * between them, and nothing else.
+ */
+@Composable
+private fun DashboardRecovery(uiState: DashboardUiState) {
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is DashboardUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is DashboardUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is DashboardUiState.Loading -> Unit
+        }
+    }
+    ApiRecoveryOverlay(
+        visible = showRecovery,
+        onFinished = { showRecovery = false }
+    )
 }

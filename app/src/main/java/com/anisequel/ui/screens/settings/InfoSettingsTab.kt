@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.data.changelog.ChangelogVersion
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListOAuth
 import com.anisequel.data.network.ApiReachability
@@ -58,11 +59,6 @@ fun InfoSettingsTab(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    // One probe for this tab: the section's button opens the dialog, and the
-    // dialog reads and refreshes the same state - two probes would mean a Check
-    // tap in the dialog could disagree with the row the reader just tapped.
-    val apiProbe = rememberApiStatusProbe(checkApiReachability)
-    var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
     // Newest block in the changelog file, not a lookup by BuildConfig.VERSION_NAME:
     // the release workflow advances the patch number past the newest published
     // release, so the version a build reports is not knowable when the notes are
@@ -70,9 +66,6 @@ fun InfoSettingsTab(
     val changelog = remember(changelogRepository) {
         changelogRepository?.latestWithNotes()
     }
-    val changelogEntries = changelog?.entries
-        ?.filterNot { it.title.isNullOrBlank() }
-        .orEmpty()
 
     SettingsScrollColumn(modifier) {
         if (viewer != null) {
@@ -141,35 +134,7 @@ fun InfoSettingsTab(
         // The connection card sits above About because it is the one diagnostic a
         // reader can actually use: "is AniList awake, or is it my phone?" is the
         // question every failed screen leaves them asking.
-        SectionCard(
-            title = "AniList connection",
-            icon = AppVectorIcons.BrokenHeart,
-            subtitle = "Check whether the API is answering"
-        ) {
-            Text(
-                text = "If loading feels stuck, ask AniList directly. The check tells you " +
-                    "whether the problem is this device or the API - and the heart breaks " +
-                    "or mends accordingly.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsButton(
-                text = "Check AniList now",
-                onClick = { showConnectionCheck = true },
-                icon = AppVectorIcons.HeartMended,
-                variant = SettingsButtonVariant.Tonal,
-                fillWidth = true,
-                testTag = "api_status_button"
-            )
-        }
-
-        if (showConnectionCheck) {
-            ConnectionCheckDialog(
-                probe = apiProbe,
-                onDismiss = { showConnectionCheck = false }
-            )
-        }
+        ConnectionSection(checkApiReachability = checkApiReachability)
 
         SectionCard(
             title = "About",
@@ -210,59 +175,7 @@ fun InfoSettingsTab(
 
         UpdateSectionCard()
 
-        SectionCard(
-            title = "What's new",
-            icon = AppVectorIcons.NewReleases,
-            subtitle = changelog?.version?.let { "Release notes for $it" }
-                ?: BuildConfig.VERSION_NAME
-        ) {
-            if (changelogEntries.isEmpty()) {
-                Text(
-                    text = "No release notes for this version yet. They are on the download page in the meantime.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                changelogEntries.forEachIndexed { index, entry ->
-                    if (index > 0) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 6.dp, end = 10.dp)
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                            Column {
-                                Text(
-                                    text = entry.title.orEmpty(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = detail,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        ChangelogSectionCard(changelog = changelog)
 
         SectionCard(
             title = "Help & links",
@@ -294,5 +207,117 @@ fun InfoSettingsTab(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * The "AniList connection" card and the dialog it opens.
+ *
+ * Extracted from [InfoSettingsTab] so the tab stays a layout. One probe is shared
+ * by the row and the dialog - two would let a Check tap in the dialog disagree
+ * with the row that opened it - and that state belongs with the card, not with
+ * every other section in the tab.
+ */
+@Composable
+private fun ConnectionSection(checkApiReachability: suspend () -> ApiStatusSnapshot) {
+    val apiProbe = rememberApiStatusProbe(checkApiReachability)
+    var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
+
+    SectionCard(
+        title = "AniList connection",
+        icon = AppVectorIcons.BrokenHeart,
+        subtitle = "Check whether the API is answering"
+    ) {
+        Text(
+            text = "If loading feels stuck, ask AniList directly. The check tells you " +
+                "whether the problem is this device or the API - and the heart breaks " +
+                "or mends accordingly.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        SettingsButton(
+            text = "Check AniList now",
+            onClick = { showConnectionCheck = true },
+            icon = AppVectorIcons.HeartMended,
+            variant = SettingsButtonVariant.Tonal,
+            fillWidth = true,
+            testTag = "api_status_button"
+        )
+    }
+
+    if (showConnectionCheck) {
+        ConnectionCheckDialog(
+            probe = apiProbe,
+            onDismiss = { showConnectionCheck = false }
+        )
+    }
+}
+
+/**
+ * "What's new", rendered from the newest changelog block.
+ *
+ * The empty case is not an error: a build between releases can have notes for a
+ * version it has not shipped yet, and the card must still say something useful
+ * rather than render a blank section.
+ */
+@Composable
+private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
+    val entries = changelog?.entries
+        ?.filterNot { it.title.isNullOrBlank() }
+        .orEmpty()
+
+    SectionCard(
+        title = "What's new",
+        icon = AppVectorIcons.NewReleases,
+        subtitle = changelog?.version?.let { "Release notes for $it" }
+            ?: BuildConfig.VERSION_NAME
+    ) {
+        if (entries.isEmpty()) {
+            Text(
+                text = "No release notes for this version yet. They are on the download page in the meantime.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 6.dp, end = 10.dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Column {
+                            Text(
+                                text = entry.title.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

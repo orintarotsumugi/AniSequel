@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.data.network.ApiErrorCopy
 import com.anisequel.data.network.friendlyCopy
 import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -110,94 +111,153 @@ fun ApiFailureBody(
                 onNotNow = { touchingGrass = false }
             )
         } else {
-            if (brokenHeart) {
-                if (healedByCheck) HeartRepairScene() else HeartbreakScene()
-            } else {
-                Icon(
-                    imageVector = AppVectorIcons.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(52.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            Text(
-                text = liveCopy?.headline ?: copy?.headline
-                    ?: if (isAuthError) "Session expired" else "AniList connection error",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+            FailureArtwork(brokenHeart = brokenHeart, healedByCheck = healedByCheck)
+            FailureMessage(
+                copy = copy,
+                liveCopy = liveCopy,
+                isAuthError = isAuthError,
+                healedByCheck = healedByCheck,
+                message = message,
+                quip = quip
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (healedByCheck) {
-                    "The test request came back, so AniList is answering again. " +
-                        "This screen is the old failure - tap Try again to reload it."
-                } else {
-                    copy?.detail ?: message
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            val shownQuip = liveCopy?.quipFor("healed:$message") ?: quip
-            if (shownQuip != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = shownQuip,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontStyle = FontStyle.Italic,
-                    color = if (healedByCheck) {
-                        AniSequelTheme.statusColors.success
-                    } else {
-                        MaterialTheme.colorScheme.tertiary
-                    },
-                    textAlign = TextAlign.Center
-                )
-            }
-
             Spacer(modifier = Modifier.height(20.dp))
             ApiStatusCard(status = status, onCheckAgain = onCheckStatus)
             Spacer(modifier = Modifier.height(20.dp))
+            FailureActions(
+                isAuthError = isAuthError,
+                canRetry = canRetry,
+                retryTestTag = retryTestTag,
+                signInTestTag = signInTestTag,
+                onRetry = onRetry,
+                onSignInAgain = onSignInAgain,
+                onTouchGrass = { touchingGrass = true }
+            )
+        }
+    }
+}
 
-            if (isAuthError) {
-                Button(
-                    onClick = onSignInAgain,
-                    modifier = Modifier
-                        .testTag(signInTestTag)
-                        .bouncyPress(pressedScale = 0.96f)
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Login,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Sign in again")
-                }
-            } else if (canRetry) {
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier
-                        .testTag(retryTestTag)
-                        .bouncyPress(pressedScale = 0.96f)
-                ) {
-                    Text("Try again")
-                }
-                TextButton(
-                    onClick = { touchingGrass = true },
-                    modifier = Modifier.testTag("touch_grass_button")
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Grass,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Go touch grass")
-                }
-            }
+/**
+ * The picture above the words: a heart that broke, a heart that just got glued,
+ * or a warning for a failure that is not about reachability.
+ *
+ * Split out of [ApiFailureBody] because choosing it is three nested conditions,
+ * and the screen's own body reads better as "artwork, words, strip, choices".
+ */
+@Composable
+private fun FailureArtwork(brokenHeart: Boolean, healedByCheck: Boolean) {
+    if (!brokenHeart) {
+        Icon(
+            imageVector = AppVectorIcons.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(52.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        return
+    }
+    if (healedByCheck) HeartRepairScene() else HeartbreakScene()
+}
+
+/**
+ * The headline, the explanation and the joke - including the swap that happens
+ * when a live check turns green while this screen is still showing the old
+ * failure. [liveCopy] is non-null only in that case, so the screen stops
+ * contradicting itself without pretending the load itself succeeded.
+ */
+@Composable
+private fun FailureMessage(
+    copy: ApiErrorCopy?,
+    liveCopy: ApiErrorCopy?,
+    isAuthError: Boolean,
+    healedByCheck: Boolean,
+    message: String,
+    quip: String?
+) {
+    Text(
+        text = liveCopy?.headline ?: copy?.headline
+            ?: if (isAuthError) "Session expired" else "AniList connection error",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = if (healedByCheck) {
+            "The test request came back, so AniList is answering again. " +
+                "This screen is the old failure - tap Try again to reload it."
+        } else {
+            copy?.detail ?: message
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center
+    )
+    val shownQuip = liveCopy?.quipFor("healed:$message") ?: quip
+    if (shownQuip != null) {
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = shownQuip,
+            style = MaterialTheme.typography.bodySmall,
+            fontStyle = FontStyle.Italic,
+            color = if (healedByCheck) {
+                AniSequelTheme.statusColors.success
+            } else {
+                MaterialTheme.colorScheme.tertiary
+            },
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * One honest choice, plus the off-ramp. A dead session gets "Sign in again";
+ * everything else that can be retried gets "Try again" and "Go touch grass".
+ */
+@Composable
+private fun FailureActions(
+    isAuthError: Boolean,
+    canRetry: Boolean,
+    retryTestTag: String,
+    signInTestTag: String,
+    onRetry: () -> Unit,
+    onSignInAgain: () -> Unit,
+    onTouchGrass: () -> Unit
+) {
+    if (isAuthError) {
+        Button(
+            onClick = onSignInAgain,
+            modifier = Modifier
+                .testTag(signInTestTag)
+                .bouncyPress(pressedScale = 0.96f)
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Login,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Sign in again")
+        }
+    } else if (canRetry) {
+        Button(
+            onClick = onRetry,
+            modifier = Modifier
+                .testTag(retryTestTag)
+                .bouncyPress(pressedScale = 0.96f)
+        ) {
+            Text("Try again")
+        }
+        TextButton(
+            onClick = onTouchGrass,
+            modifier = Modifier.testTag("touch_grass_button")
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Grass,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Go touch grass")
         }
     }
 }
