@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +35,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -48,8 +51,10 @@ import com.anisequel.ui.screens.profile.ProfileLoadingView
 import com.anisequel.ui.screens.profile.RememberedLibraryView
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserOverviewUiState
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.toMediaNode
 
 /**
@@ -71,9 +76,11 @@ import com.anisequel.ui.viewmodel.toMediaNode
  * entry for the media, which has nothing to do with which list they came from.
  * The host hands over a `RepositoryEntryEditor` when a session exists; without
  * one the sheet is read-only and the tab is not drawn at all, which is the rule
- * `EntryEditor` states. There is still no add-to-list action on this page: a
- * library is titles already on the list, so there is nothing to add and the
- * quick-add belongs to the dashboard's rows. There is no activity feed or
+ * `EntryEditor` states. A library row's title is already on the list, so the
+ * sheet's quick add draws its "On Planning List" / "Currently Watching" badge
+ * there rather than a button - there is nothing to add. It is still offered for
+ * a title the reader walks to from a relation or opens from the cast, which is
+ * why the sheet owns the control and not this page. There is no activity feed or
  * comment thread either - those are about a *person*, and they stayed on the
  * profile this page left.
  */
@@ -102,6 +109,28 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
+
+    // The same status probe as the profile and dashboard. The library is its own
+    // route, and a failure here is the one place a reader is most likely to blame
+    // the list rather than the API, so the verdict is worth drawing here too.
+    val apiProbe = rememberApiStatusProbe { repository.checkApiReachability() }
+    val apiStatus by apiProbe.ui.collectAsStateWithLifecycle()
+    var awaitingRecovery by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is UserOverviewUiState.Error ->
+                if (state.kind.isConnectionTrouble()) awaitingRecovery = true
+
+            is UserOverviewUiState.Success -> if (awaitingRecovery) {
+                awaitingRecovery = false
+                showRecovery = true
+            }
+
+            is UserOverviewUiState.Loading -> Unit
+        }
+    }
+
     // The manga half of the library. Collected at this level rather than inside
     // the grid because a fetch is already a request when it starts, and a
     // collection that started with a grid somebody scrolled away from would drop
@@ -111,6 +140,16 @@ fun LibraryScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // One-tap Planning for a title the sheet shows. The host writes through the
+    // same repository the rest of the page reads, and is only handed a session
+    // when the sheet has one: with no editor there is nothing to write with, and
+    // the row says so rather than drawing a button that cannot work.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = entryEditor != null
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
 
     // The poster that was tapped, as its own list node so the sheet has
     // something to draw on the first frame. The fetched detail supersedes it
@@ -217,13 +256,21 @@ fun LibraryScreen(
         ) {
             when (val state = uiState) {
                 is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
-                is UserOverviewUiState.Error -> ProfileErrorView(
-                    message = state.message,
-                    canRetry = state.canRetry,
-                    isAuthError = state.isAuthError,
-                    onRetry = { overviewViewModel.load() },
-                    onSignInAgain = onSignInAgain
-                )
+                is UserOverviewUiState.Error -> {
+                    LaunchedEffect(state.kind, state.message) {
+                        apiProbe.onFailure(state.kind)
+                    }
+                    ProfileErrorView(
+                        message = state.message,
+                        kind = state.kind,
+                        canRetry = state.canRetry,
+                        isAuthError = state.isAuthError,
+                        apiStatus = apiStatus,
+                        onCheckApiStatus = { apiProbe.probe() },
+                        onRetry = { overviewViewModel.load() },
+                        onSignInAgain = onSignInAgain
+                    )
+                }
                 is UserOverviewUiState.Success -> {
                     // Favourites are their own connection in AniList rather than a
                     // list status, so the Favourites filter tests membership of
@@ -257,6 +304,11 @@ fun LibraryScreen(
                     )
                 }
             }
+
+            ApiRecoveryOverlay(
+                visible = showRecovery,
+                onFinished = { showRecovery = false }
+            )
         }
     }
 
@@ -273,8 +325,10 @@ fun LibraryScreen(
     // inside the content is torn down with the piece that drew it.
     //
     // The poster's detail sheet. A plain media subject: a library entry is a
-    // title the reader already tracks, so it has no parent and nothing to add -
-    // the same distinction [com.anisequel.data.model.ArrivingEntry] draws.
+    // title the reader already tracks, so it has no parent - the same
+    // distinction [com.anisequel.data.model.ArrivingEntry] draws. Its list
+    // status travels on the node itself, so the action row draws the badge
+    // rather than offering to add a title that is already there.
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
@@ -282,6 +336,9 @@ fun LibraryScreen(
             onDismiss = { selectedMedia = null },
             onAddToPlanning = {},
             onAddToWatching = {},
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             isDetailLoading = detailLoading,
             // The sheet is the same one the dashboard opens, so it gets the same

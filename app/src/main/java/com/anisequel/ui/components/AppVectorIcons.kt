@@ -58,6 +58,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.Api
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.Contrast
@@ -106,6 +108,18 @@ object AppVectorIcons {
     // link is the one pictogram that means "this is a URL" without a word.
     val CopyLink = Icons.Default.Link
     val Visibility = Icons.Default.Visibility
+
+    // The connection status strip's two faces. SignalOn is the same glyph the
+    // system Wi-Fi picker uses, so "can I reach AniList" reads without a label.
+    val SignalOn = Icons.Default.Wifi
+    val SignalOff = Icons.Default.WifiOff
+
+    // The heartbreak/recovery family. Both hearts are hand-authored halves in
+    // AppCustomVectors so the scene can animate them apart and back together;
+    // these two are the single-glyph versions for buttons and section headers.
+    val BrokenHeart = AppCustomVectors.BrokenHeart
+    val HeartMended = AppCustomVectors.HeartMended
+    val Grass = AppExtraVectors.GrassTuft
     val Play = Icons.Default.PlayArrow
     val Trailer = AppCustomVectors.TrailerPlay
     val Info = Icons.Default.Info

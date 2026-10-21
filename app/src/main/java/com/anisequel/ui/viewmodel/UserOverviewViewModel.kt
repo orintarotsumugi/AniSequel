@@ -388,7 +388,8 @@ class UserOverviewViewModel(
      */
     private fun errorState(error: Throwable, fallback: String) = UserOverviewUiState.Error(
         message = error.message ?: fallback,
-        isAuthError = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+        isAuthError = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION,
+        kind = (error as? AniListException)?.kind
     )
 
     class Factory(

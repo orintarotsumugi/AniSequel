@@ -761,6 +761,31 @@ fun MediaNode.withSummaryProgress(summary: MediaNode): MediaNode =
     else copy(mediaListEntry = summary.mediaListEntry)
 
 /**
+ * The viewer's list status, folded into a node that came off a list query.
+ *
+ * AniList puts the status on the *entry* and not on the media, so `entry.media`
+ * knows the viewer's progress and nothing about whether it is Planned, Watching
+ * or Complete. The title page needs the status: it is what decides between the
+ * quick-add control and its "on your list" badge, and a wrong answer there is
+ * not cosmetic - AniList's add mutation overwrites the entry, so offering
+ * "Add to Planning" on a completed show would move it back to Planning and drop
+ * the status the reader chose. Without this the Library drew the add button
+ * until its detail query answered.
+ *
+ * A status the detail query already resolved always wins; this only fills a
+ * blank.
+ */
+fun MediaNode.withListStatus(status: String?): MediaNode {
+    if (status.isNullOrBlank() || mediaListEntry?.status != null) return this
+    return copy(
+        mediaListEntry = (mediaListEntry ?: SimpleMediaListEntry()).copy(
+            mediaId = id,
+            status = status
+        )
+    )
+}
+
+/**
  * The fetched detail for [summary], but only when it is the same media namespace.
  *
  * `MediaDetailStore` keys its fetch cache by type-and-id because `anime/1` and

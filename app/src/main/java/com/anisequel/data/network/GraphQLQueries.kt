@@ -1310,4 +1310,22 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    /**
+     * "Are you there?", and nothing else.
+     *
+     * `__typename` is a GraphQL meta-field, so this resolves without touching a
+     * database row or a cache tier - which matters because the probe runs at
+     * exactly the moment AniList is suspected of being unwell. Asking for
+     * anything real would either fail for a reason that is not reachability or
+     * add load to a server that is already struggling.
+     *
+     * Named rather than anonymous so the query shows up in AniList's tooling as
+     * something deliberate, not as a stray fragment.
+     */
+    val API_STATUS = """
+        query AniSequelStatus {
+          __typename
+        }
+    """.trimIndent()
 }

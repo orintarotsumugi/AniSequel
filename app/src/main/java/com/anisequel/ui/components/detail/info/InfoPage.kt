@@ -33,6 +33,7 @@ import com.anisequel.data.model.pageUrl
 import com.anisequel.data.repository.AniThemes
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
+import com.anisequel.ui.viewmodel.QuickAddStatus
 import kotlinx.coroutines.launch
 
 /**
@@ -87,6 +88,16 @@ fun AnimeInfoPage(
     swipeEnabled: Boolean,
     onAddToPlanning: (MissedSequel) -> Unit,
     onAddToWatching: (MissedSequel) -> Unit,
+    /**
+     * This title's quick-add state for the action row.
+     *
+     * Only used for a title that is not a dashboard recommendation; see
+     * [DetailActionRow]. Defaulted so the page still draws for a host that has
+     * no [com.anisequel.ui.viewmodel.PlanningAddHost].
+     */
+    quickAddStatus: QuickAddStatus = QuickAddStatus(),
+    onAddMediaToPlanning: (MediaNode) -> Unit = {},
+    onAddMediaToWatching: (MediaNode) -> Unit = {},
     onClose: () -> Unit,
     /**
      * Opens a related title in place of this one.
@@ -186,6 +197,9 @@ fun AnimeInfoPage(
                 holdDurationSeconds = holdDurationSeconds,
                 swipeEnabled = swipeEnabled,
                 context = context,
+                quickAddStatus = quickAddStatus,
+                onAddMediaToPlanning = onAddMediaToPlanning,
+                onAddMediaToWatching = onAddMediaToWatching,
                 onAddToPlanning = onAddToPlanning,
                 onAddToWatching = onAddToWatching,
                 onOpenMedia = onOpenMedia,

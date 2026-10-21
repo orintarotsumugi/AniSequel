@@ -646,4 +646,138 @@ object AppCustomVectors {
             }
         }.build()
     }
+
+    /**
+     * The left half of a heart, with a straight seam down the centre line.
+     *
+     * The two halves are separate vectors on purpose: a broken heart cannot be
+     * animated by moving one glyph's halves apart, and drawing the split with a
+     * clip rectangle would cut the rounded outline flat. Authoring each half as
+     * its own closed path lets [com.anisequel.ui.components.HeartbreakScene]
+     * translate and rotate them independently, then bring them back together
+     * for the repair. Both are 24x24 so they line up at any size.
+     */
+    val HeartLeft: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "HeartLeft",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(12f, 21.2f)
+                curveTo(9.8f, 19.2f, 3f, 13.2f, 3f, 9.2f)
+                curveTo(3f, 6.2f, 5.3f, 4f, 8.2f, 4f)
+                curveTo(10.1f, 4f, 11.3f, 5.1f, 12f, 6.3f)
+                close()
+            }
+        }.build()
+    }
+
+    /** Mirror of [HeartLeft]; see its note for why the pair exists. */
+    val HeartRight: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "HeartRight",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(12f, 21.2f)
+                curveTo(14.2f, 19.2f, 21f, 13.2f, 21f, 9.2f)
+                curveTo(21f, 6.2f, 18.7f, 4f, 15.8f, 4f)
+                curveTo(13.9f, 4f, 12.7f, 5.1f, 12f, 6.3f)
+                close()
+            }
+        }.build()
+    }
+
+    /**
+     * Both halves with a deliberate gap between them, for the Settings action
+     * and the error screen's small counterpart to the full scene.
+     *
+     * The halves are nudged outward by 0.9 units rather than sharing the seam at
+     * x=12: at 18dp an exact seam renders as a hairline that disappears on a
+     * low-density screen, and a broken heart that reads as a whole one is the
+     * one thing this glyph must not do.
+     */
+    val BrokenHeart: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "BrokenHeart",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(11.1f, 21.2f)
+                curveTo(8.9f, 19.2f, 2.1f, 13.2f, 2.1f, 9.2f)
+                curveTo(2.1f, 6.2f, 4.4f, 4f, 7.3f, 4f)
+                curveTo(9.2f, 4f, 10.4f, 5.1f, 11.1f, 6.3f)
+                close()
+
+                moveTo(12.9f, 21.2f)
+                curveTo(15.1f, 19.2f, 21.9f, 13.2f, 21.9f, 9.2f)
+                curveTo(21.9f, 6.2f, 19.6f, 4f, 16.7f, 4f)
+                curveTo(14.8f, 4f, 13.6f, 5.1f, 12.9f, 6.3f)
+                close()
+            }
+        }.build()
+    }
+
+    /**
+     * A heart with a stitched seam: the "repaired" counterpart to
+     * [BrokenHeart].
+     *
+     * The stitch is three short horizontal bars across the centre line rather
+     * than a single vertical line, because a vertical line at icon size reads as
+     * a split - exactly the meaning this glyph has to reverse. Keep the bars
+     * inside the 4..20 x-band so they cannot poke past the heart's outline.
+     */
+    val HeartMended: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "HeartMended",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(12f, 21.2f)
+                curveTo(9.8f, 19.2f, 3f, 13.2f, 3f, 9.2f)
+                curveTo(3f, 6.2f, 5.3f, 4f, 8.2f, 4f)
+                curveTo(10.1f, 4f, 11.3f, 5.1f, 12f, 6.3f)
+                curveTo(12.7f, 5.1f, 13.9f, 4f, 15.8f, 4f)
+                curveTo(18.7f, 4f, 21f, 6.2f, 21f, 9.2f)
+                curveTo(21f, 13.2f, 14.2f, 19.2f, 12f, 21.2f)
+                close()
+            }
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round
+            ) {
+                moveTo(10.4f, 9.4f)
+                lineTo(13.6f, 9.4f)
+                moveTo(10.4f, 12.4f)
+                lineTo(13.6f, 12.4f)
+                moveTo(10.4f, 15.4f)
+                lineTo(13.6f, 15.4f)
+            }
+        }.build()
+    }
 }

@@ -49,6 +49,7 @@ import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.viewmodel.StudioViewModel
@@ -122,6 +123,15 @@ fun StudioScreen(
     val profiles = rememberPersonProfileHost(repository)
     val detailNodes by viewModel.detailNodes.collectAsState()
     val loadingDetailIds by viewModel.loadingDetailIds.collectAsState()
+
+    // One-tap Planning for a studio's title. A studio page carries no session of
+    // its own, so the host is gated on the editor the navigation passed - the
+    // same answer the sheet's "My Entry" destination uses.
+    val planningAdd = rememberPlanningAddHost(
+        repository = repository,
+        canWrite = entryEditor != null
+    )
+    val quickAddStatuses by planningAdd.statuses.collectAsState()
 
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -299,10 +309,11 @@ fun StudioScreen(
             // A relation replaces the subject rather than stacking a sheet; see
             // `InfoRelationsSection`.
             onOpenMedia = { media -> selectedMedia = media },
-            // Nothing to add from here: a studio page is not the viewer's list, and
-            // the sheet's quick-add belongs to the screen that discovered the title.
             onAddToPlanning = {},
             onAddToWatching = {},
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = { id, type -> viewModel.loadDetail(id, type) },
             isDetailLoading = summary.id in loadingDetailIds,
             // Same sheet, same access: the tab follows the editor, and an

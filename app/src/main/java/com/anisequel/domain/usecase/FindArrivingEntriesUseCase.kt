@@ -48,7 +48,8 @@ class FindArrivingEntriesUseCase {
                 nextAiringAt = media.nextAiringEpisode?.airingAt,
                 nextEpisodeNumber = media.nextAiringEpisode?.episode,
                 episodes = media.episodes,
-                progress = entry.progress
+                progress = entry.progress,
+                listStatus = ownStatus
             )
         }
 

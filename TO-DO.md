@@ -283,7 +283,7 @@ also touched source and so always ran the workflow.
 Pick one deliberately rather than leaving it to whoever pushes next:
 
 - **Accept the bypass** as the documented path for docs, and say so in
-  [README § CI](README.md).
+  [BUILDING § Continuous integration](BUILDING.md#continuous-integration).
 - **Add a cheap docs workflow** — `on: push: paths: ['**.md']` — running a link
   and anchor check. It satisfies the required checks without building an APK, and
   it would also catch the broken `#anchor` links the README accumulates.
@@ -604,7 +604,7 @@ no version attached to check it against. `app/src/main/assets/changelog.json` is
 now the single source, read by the "What's new" card and by the release workflow
 when it writes the GitHub release body. `ChangelogTest` exists because the
 workflow reads that file without any of this repo's tests running. See
-[README § Release notes](README.md#release-notes).
+[NOTES § Release notes](NOTES.md#release-notes).
 
 ### AI Studio leftovers were removed
 

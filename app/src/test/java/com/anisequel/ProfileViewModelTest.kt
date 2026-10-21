@@ -17,6 +17,8 @@ import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserSocialViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -63,6 +65,18 @@ class ProfileViewModelTest {
         var likeFetchCount = 0
         var repliesFetchCount = 0
         var postReplyFetchCount = 0
+
+        /**
+         * The write signal `AniListRepositoryImpl` publishes on every mutation.
+         *
+         * Exposed as a plain property so a test can bump it the way a write does,
+         * and read back through the interface property below. Starts at the same
+         * zero the real repository does: the ViewModel treats the first emission
+         * as a baseline, not as a write.
+         */
+        val mutations = MutableStateFlow(0L)
+
+        override val listMutationVersion: StateFlow<Long> get() = mutations
 
         override suspend fun getViewer(): Result<ViewerProfile> = Result.failure(UnsupportedOperationException())
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> = Result.failure(UnsupportedOperationException())
@@ -335,6 +349,75 @@ class ProfileViewModelTest {
 
         assertEquals(1, repository.activityFetchCount)
         assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Success)
+    }
+
+    /**
+     * The regression this signal exists for: a title planned from the dashboard
+     * never appeared on the Activity tab.
+     *
+     * The feed is loaded once and the tab's re-entry is deliberately a no-op, so
+     * the write changed the account and left the feed showing the list as it was
+     * before - with no state that would ever fetch it again.
+     */
+    @Test
+    fun `a list write refetches the viewer's own activity feed`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(1)))
+        )
+        val viewModel = UserActivityViewModel(repository, userId = 7, viewerId = 7)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+        assertEquals(1, repository.activityFetchCount)
+
+        // What `AniListRepositoryImpl.invalidateLists()` does on a write.
+        repository.mutations.value = 1
+        advanceUntilIdle()
+
+        assertEquals(
+            "the feed holds the viewer's own entries, so a write must fetch it again",
+            2,
+            repository.activityFetchCount
+        )
+        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Success)
+    }
+
+    @Test
+    fun `a list write does not refetch somebody else's activity feed`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(1)))
+        )
+        // Reading a stranger's profile: the feed is theirs, the session is the viewer's.
+        val viewModel = UserActivityViewModel(repository, userId = 7, viewerId = 99)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+        assertEquals(1, repository.activityFetchCount)
+
+        repository.mutations.value = 1
+        advanceUntilIdle()
+
+        assertEquals(
+            "a stranger's feed cannot have changed, so refetching it is a wasted request",
+            1,
+            repository.activityFetchCount
+        )
+    }
+
+    @Test
+    fun `a list write before the tab is opened does not start a fetch`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to listOf(createActivity(1)))
+        )
+        val viewModel = UserActivityViewModel(repository, userId = 7, viewerId = 7)
+
+        repository.mutations.value = 1
+        advanceUntilIdle()
+
+        assertEquals(
+            "the feed is fetched when the tab is selected, not by a write",
+            0,
+            repository.activityFetchCount
+        )
+        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Idle)
     }
 
     @Test

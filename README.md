@@ -1,1053 +1,170 @@
 # AniSequel
 
-An Android app that reads your AniList completed-anime history, walks each
-franchise's relation graph, and tells you what came next that you never got
-around to — then adds it to your Planning list in one tap.
+**Your AniList history, read backwards.** AniSequel walks the relation graph of
+every anime and manga you have finished and finds the sequels, films, OVAs and
+spin-offs you never got around to — then puts the good ones one tap from your
+Planning list.
 
-Not on the Play Store. Distributed as a signed universal APK from
-[GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with an
-in-app updater.
+<br>
 
-This file is about **how the app works and why it is built that way**. Three
-others share the job, and each is linked from here because knowing which one to
-open is most of the work:
+![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
+![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)
+![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-JVM%20only-6E56CF)
 
-| Document | For |
-| --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The exhaustive spec: every package, layer-by-layer deep dive, sequence diagrams and the multi-module blueprint |
-| [AGENTS.md](AGENTS.md) | The rules. Every one exists because the obvious alternative cost something |
-| [TO-DO.md](TO-DO.md) | Deliberately unimproved things, each with the reason it was left |
-
----
-
-## Table of contents
-
-- [What it does](#what-it-does)
-  - [The main bar](#the-main-bar)
-  - [The profile screen](#the-profile-screen)
-  - [The tier list](#the-tier-list)
-  - [Home-screen widgets](#home-screen-widgets)
-  - [Release notes](#release-notes)
-  - [Deliberate non-goals](#deliberate-non-goals)
-- [How the update flow works](#how-the-update-flow-works)
-- [Architecture](#architecture)
-- [Building it](#building-it)
-- [Testing](#testing)
-- [Release signing](#release-signing) — **read this before touching the keystore**
-- [Continuous integration](#continuous-integration)
-- [Project layout](#project-layout)
-- [Contributing](#contributing)
-- [License](#license)
+Not on the Play Store. Every release is a signed universal APK on
+[GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with a
+self-contained updater in the app — no Play Services, no AniSequel account, no
+middleman server.
 
 ---
 
 ## What it does
 
-- **Franchise traversal.** Walks AniList's `relations` graph rather than
-  trusting a "next season" field, so it catches renamed continuations, films,
-  OVAs and spin-offs that a simple title match would miss.
-- **Your profile, or somebody else's.** Scan a public AniList username without
-  signing in. Read-only, and the UI says so before the mutation fails.
-- **Home, Library, and your own profile.** The app's three pages, switched from a
-  floating capsule at the bottom of the screen — the Library is your own list,
-  drawn as a poster grid with per-status counts and search.
-- **One-tap Planning sync.** OAuth against your own AniList account. There is no
-  AniSequel account and no password to manage.
-- **Filters and hiding.** Sort, filter by relation type and status, search, and
-  hide entries you deliberately do not want to be reminded about — with undo.
-- **Material 3 Expressive UI.** Spring physics throughout, `RoundedPolygon`
-  artwork where a shape earns its keep, dynamic colour — drawn from the
-  wallpaper, or from an anime's cover art when you view it — and six theme
-  palettes.
-- **Edit your own entry.** The second destination of the title page's capsule
-  moves a title between Watching, Reading, Rewatching, Completed, Planning,
-  Paused and Dropped, sets progress, score and both dates, and marks the entry
-  private — staged locally and sent as one write, so nothing reaches AniList
-  until "Save changes".
-- **Home-screen widgets.** Four tiles — your recent activity, missed sequels,
-  arriving sequels, and one featured recommendation — drawn by the system
-  launcher from the data the app already has.
-- **Release notes in the app.** "What's new" in Settings → Info reads
-  `assets/changelog.json`, the same file the release workflow writes the GitHub
-  release body from.
-- **Self-contained updater.** No update library and no Play Services.
-
-### The title page
-
-What a tap on a title opens, and the answer to "what is this show" in one scroll:
-the key visual blurred behind its own title, the viewer's progress, the synopsis
-through the app's AniList-markdown renderer, the production facts, one Categories
-block (genres, the weighted thematic tags, and AniList's spoiler tags behind their
-own strip), the openings and endings (from AnimeThemes — the one section on the page
-that comes from a second service), the external links, the Titles/Synonyms/Producers
-disclosure rows, the cast with their voice actors, the crew, the rest of the
-franchise, and the things the app can do with the title. Editing the viewer's entry
-is the page's second destination, on a floating capsule at the bottom, because
-editing is a mode rather than a section of the page.
-
-It replaces three tabs — Story, Specs, My Entry — which had split one title's
-information across two of them. Four decisions in it are worth knowing before
-changing it:
-
-- **The action row is one control or two, and the button knows which.** A title
-  opened from a recommendation has a sequel to offer; an arriving row or an Activity
-  entry is a show already on somebody's list, so there is nothing to add. That second
-  case drew its single AniList button with `weight(1f)` and so filled the width of the
-  screen — a secondary "open on AniList" link rendering as the page's primary call to
-  action. It is weighted only when it has something to share the row with.
-- **It is a `LazyColumn`, and the scroll drives the motion.** The hero's parallax
-  and the floating bar read the list's scroll state: the parallax through a
-  function called inside a `graphicsLayer` lambda (draw phase, so a 120Hz scroll
-  touches no layout), and the bar through a `derivedStateOf` that produces a
-  `Boolean` (so it recomposes on the crossing rather than on every frame). As the
-  hero goes: the backdrop lags the page and dims, the title lockup lifts away
-  against it, and the two hand over to the docked bar, which slides in on the
-  spatial spring. That handover is timed by three constants that live together in
-  `InfoMotion.kt`, because it is a relationship between two files rather than a
-  rule either of them can break alone.
-  The docked bar's title pill is also the page's orientation and its way out: its
-  label is a button that animates the list back to the hero, and the same pill
-  carries the reader's progress as a wash that fills from the left, scaled in the
-  draw phase from a `() -> Float` so neither costs a recomposition on a scrolled
-  frame. It is also a fix, and the reason it is worth reading before touching: the
-  title used to give up half the bar to a `Spacer` that held a `weight(1f)` beside
-  it, so a long name was measured against half the width and ellipsized there —
-  `MARRIAGETO...` with a third of the screen empty beside it. One weighted child
-  is what makes the pill wrap a short title and still use all the room a long one
-  needs.
-- **The staggered entrance is capped, one-shot, and skipped on `INSTANT`.** Seven
-  sections at 55ms each is 385ms of stagger; the rest arrive together.
-  `sectionReveal` returns no modifier at all when the motion style is `INSTANT`,
-  because the delay *is* motion. Its "already played" flag is `rememberSaveable`,
-  not `remember`: the `LazyColumn` keeps an item's saved state under its key after
-  disposing the item, and the plain `remember` version replayed the whole stagger
-  on the way back up the page.
-- **The wavy progress bar is drawn, not a `LinearWavyProgressIndicator`.** The
-  height of that wave is the progress, which the M3 component's parameters cannot
-  express; its geometry lives in `domain/motion/WaveGeometry.kt` so the shape is
-  asserted by `WaveGeometryTest` rather than eyeballed. Its travelling phase is one
-  `rememberInfiniteTransition`, gated on there being progress to show, and its fill
-  springs from zero once per title.
-  **Track and fill are one path.** The fill used to be built as its own wave, with
-  its own amplitude and its own travelling phase, so the coloured stretch floated at
-  a different height from the track it was meant to be the first part of — a short
-  squiggle over a longer one, with the round cap landing off the curve. It is now the
-  same path drawn twice, the second time inside a `clipRect` of the watched width. A
-  clip cannot disagree with the shape it clips, which is the whole reason for the
-  change; a shared *amplitude variable* would have been one more thing to keep in
-  step, and it is what the two-path version was already passing to both halves.
-- **The data it needs was widened, not faked.** `GET_MEDIA_DETAIL` now also asks
-  for `characters` (with `voiceActors`), `staff` and `relations` — one request per
-  open, on a query that already fetched the synopsis, rankings and tags. The
-  relation row keeps **this title's own medium plus its cross-medium
-  `ADAPTATION`/`SOURCE` edge**, and sorts what it keeps: the franchise spine
-  (`PREQUEL`/`SEQUEL`/`PARENT`) in story order, the adaptation next, the side
-  material last. It used to filter to `ANIME` unconditionally, which is right for an
-  anime and exactly backwards for a manga: One Piece's 51 relations are almost all
-  `MANGA` — a `SPIN_OFF` per volume, a `SIDE_STORY`, a `PREQUEL` — and the `ANIME` ones
-  are all `ADAPTATION` entries, so a manga page listed the TV series and none of its
-  own franchise. Matching the subject's type fixed that and then hid the adaptation in
-  turn, because AniList files one in *both* directions — a manga page stopped showing
-  the anime it became. The sort exists because AniList returns edges in insertion order
-  (live check: One Piece interleaves a spin-off per volume with the adaptations) and the
-  row caps at 12, so the raw order decided what a long franchise showed.
-  `MediaRelationAndSynopsisTest` pins both halves.
-  It also asks for `title`, and **that field is not optional on a node this app uses
-  as a display record**: it was dropped on the assumption that the summary the sheet
-  opened from already carried one, which is true on the dashboard (the response is
-  folded into the list node with `withDetail`) and false on a profile, where the
-  fetched detail *replaces* the activity row's node. Opening a title from an Activity
-  row therefore rendered a page headed "Unknown Title" above a correct studio,
-  status, synopsis and cast. `MediaDetailQueryTest` pins the field.
-- **The relation nodes share `RELATED_NODE_FIELDS` with the list query.** They used
-  to carry a second, thinner field list of their own — a title, a format, an episode
-  count and a small cover — so the one screen whose job is to show the rest of a
-  franchise could name a related title and say nothing else about it. Each relation
-  now carries the season, the year, the score, the start date, the airing schedule
-  and the viewer's own entry, which is what `MediaRelationEdge.metaLabel` and the
-  card's score badge read. The cost is bounded the way it is there on purpose: this
-  runs once per *open* over at most twelve nodes, never per entry of a list.
-
-### Studio pages
-
-Every studio credited on a title is a chip on the title page — the hero lockup's
-studio chip and the credits in the Details card (the main ones; publishers and
-licensors have the Producers row, so no name is printed twice) — and each one opens
-that studio's own destination (`studio/{studioId}?name=…`). It is the same page
-whether it was reached from a title's credits, from another studio's filmography, or
-from a profile; it needs no session, because a studio is public AniList data.
-
-Four decisions hold it together:
-
-- **It is a route, not a sheet.** The title page is a sheet because it is something
-you look at *from* a list. A studio is somewhere you go: its filmography is longer
-than the page that mentioned it, and a sheet would be dismissed by the first back
-gesture and could not be linked or restored. Nothing else changes, though — tapping
-a poster on a studio page opens the same detail sheet the dashboard and
-the profile use — editor included, because the entry on that tab is always the
-reader's own for the title — so a title is the same page everywhere it appears.
-- **`Studio.media`, because `Page.media` cannot answer this.** The one query in
-this app whose shape is a requirement rather than a preference: AniList's
-`Page.media` has **no `studioId` argument**, and a document written with one is a
-400, not an empty page. The studio's own `media` connection is the only documented
-way to ask, its `perPage` ceiling is **25** (not the root `Page` query's 50), and it
-is asked for `START_DATE_DESC`. `StudioQueryTest` pins all four facts, because none
-of them can fail at compile time and all of them fail at runtime.
-- **The shelves are years, and the grouping is pure.** `domain/studio/StudioYearShelf.kt`
-turns a page-merged title list into shelves — newest year first, and one `TBA`
-shelf at the *top*, because an announced title is the most interesting thing on the
-page and AniList publishes no null ordering to rely on. It also drops duplicate ids,
-which paging makes necessary rather than hypothetical: pages are fetched minutes
-apart while AniList re-orders its own results, so one title can straddle a page
-boundary and otherwise appear twice, in two different years. `StudioYearShelfTest`
-asserts every one of those rules.
-- **The title page now asks for every studio, not the main one.** The document used
-to select `studios(isMain: true) { nodes { … } }`, which lost the publishers,
-licensors and producers AniList files in the same connection *and* lost the `isMain`
-flag that says which credit made the thing. It asks for the edges now, so the card
-draws every credit — filled for the main studios, quieter for the rest — and each
-one carries the id a tap needs. A credit AniList gave no id for is still drawn,
-as text: it is part of the answer to "who made this", it just cannot be followed.
-- **`Media.studios` is not paginated, and asking it to be takes down the whole page.**
-The edges selection is written `studios { edges { … } }` with **no arguments**. It was
-`studios(perPage: 25)`, on the assumption that a studio connection pages the way
-`characters` and `staff` on the same node do; it does not, and the field takes a `sort`
-and nothing else. This is the same class of fact as the `studioId` one above, with a
-far worse blast radius: GraphQL validates the whole document before resolving any of
-it, so AniList answered **400 with `data: null`** and the detail response lost
-*everything* it carries — the synopsis, the studio credits and the hero's studio chip,
-the cast, the crew, the tags, the rankings, the trailer — not just the studios. The
-dashboard hid most of it because `withDetail` merges onto a list node that already had
-`relations`; a title opened from a profile activity row has no such fallback and
-rendered with nothing but its summary. There is nothing to page anyway: a title has a
-handful of credits and AniList returns all of them under `edges`.
-`MediaDetailQueryArgumentTest` pins it, and pins at the same time that the two
-connections which *are* paginated keep their page sizes.
-- **The description is read as prose, not as a document.** AniList's `description` is
-markdown-with-HTML-glue and it ends with a provenance line — One Piece's with
-`\n<br><br>\n(Source: VIZ Media)`, most with `(Source: AniList)`. The card renders it
-through the app's AniList markdown pipeline, which reads that line as what it
-syntactically is — a paragraph — so every synopsis ended with its credit printed in body
-type under the last line of the story. It also counted toward the length test that
-offers "Read more", so a description that fitted on screen grew a button anyway.
-`MediaNode.descriptionBody` strips it, anchored per line and case-insensitively so a
-source merely *mentioned* mid-sentence is left alone. `RegexOption.MULTILINE` on that
-pattern is load-bearing: without it Kotlin anchors `^`/`$` to the whole description,
-the pattern then matches nothing but a description that is *entirely* a credit, and
-the strip is a silent no-op.
-
-### Character and staff pages
-
-Every face on a title's cast and crew rows — and every voice actor on a person's
-own page — opens a character or staff sheet over whatever drew it. One composable
-and one store serve both kinds; the two payloads stay apart in the state (see
-`PersonProfileState`), the renderer does not.
-
-- **Both halves of a media connection.** A character asks for `edges`, because the
-  edge is the only half that carries `characterRole` and `voiceActors`; a staff
-  member has neither and still asks for `nodes`. `ProfileAppearances.titles` reads
-  whichever half the query asked for, so one row of covers serves both.
-- **The header is a cover.** The hero is the title page's treatment at the size a
-  person's artwork can carry it: the portrait full-bleed behind a scrim that ends
-  on the sheet's own container colour, the portrait again as a rounded cover, the
-  name on the artwork. It used to be an 84dp face clipped to a pill sitting on the
-  sheet's container colour, and the "Appears in" posters were 112×158 pills — a
-  stretched pill is an *ellipse*, and an ellipse is not a cover. A portrait is a
-  rectangle, and `MaterialTheme.shapes.medium` is what every other cover in the app
-  is drawn with.
-- **"Voiced by" needed a second look at the schema.** AniList hangs the performers
-  on each media edge, per language, and the field **answers `null` when it is asked
-  without one** — checked against the live API before the query was written, not
-  discovered in production. It is asked for twice under two names
-  (`voiceActors(language: JAPANESE)` and the `voiceActorsEnglish` alias), and the
-  model deduplicates per language, Japanese first, because one actor usually voices
-  a character in every title they appear in. A row opens that actor's own page in
-  the same sheet; the sheet is re-keyed on the person, or the new page would inherit
-  the last one's scroll position.
-- **A person is fetched once.** The repository caches profiles, but a *request* is
-  not what the reader sees: reopening a face re-entered `Loading` and painted the
-  same answer back a frame later. `PersonProfileStore` remembers what it has loaded
-  (bounded, cleared wholesale past the cap) and answers a re-open synchronously,
-  before the sheet can draw a spinner.
-
-### The main bar
-
-Home, Library and the reader's own profile are the app's three pages, switched from a
-floating capsule at the bottom of the screen — the same `ExpressiveNavigationBar` the
-title page uses for its read/edit switch, springs and all. Home is the dashboard (the
-signed-in one, or the demo — to a reader without a session they are the same page),
-Library is the viewer's own list, and Profile is drawn as the viewer's own AniList
-avatar, falling back to a glyph while the avatar is still on its way. The viewer's
-face is also the way in from the top-left of the dashboard and of the Library page,
-and all three go through the same tap.
-
-The bar's whole visibility rule is one function, `mainTabForRoute` in
-`ui/navigation/MainTabs.kt`: a route that maps to a tab gets the bar, everything else
-gets the screen to itself. Settings, the tier list, a studio page, a scanned dashboard
-and somebody else's profile are pushed *from* a page, and a bar drawn over them would
-claim the reader is somewhere they are not — with a selected tab they never chose. The
-one that looks like a literal and is not is the profile: `NavDestination` reports the
-registered *pattern* (`profile?tab={tab}`), so the mapping matches the pattern.
-`MainTabsTest` pins the mapping, the order of the destinations (the bar turns its
-index back into a `MainTab` with `MainTab.entries[index]`) and that only the Profile
-tab carries the avatar.
-
-A tab tap replaces rather than pushes: `navigateToMainTab` pops back to Home with
-`saveState` and restores a tab's saved state on the way in, so Back from any of the
-three lands on Home instead of walking back through every tab visited, and returning
-to a page restores what it was showing. A repeat tap on the tab already on screen is
-a no-op (`launchSingleTop`, the same guard every other hop in the app uses). The demo
-profile keeps the rule its avatar always had: it replaces the demo dashboard rather
-than stacking on it.
-
-The rows the bar floats over leave it room with `mainBarClearance()` — the bar's 96dp
-plus the device's own navigation inset, read at draw time rather than assumed, so a
-gesture bar, a three-button bar and a cutout each get their own answer. The profile
-reserves it only where the bar is really drawn: on the viewer's own profile. A scanned
-or followed profile is a pushed screen with no bar and reserves the system inset
-alone, which is why the flag travels as a `CompositionLocal` rather than through
-four tab signatures.
-
-**The Library moved out of the profile for it.** The list was the fourth tab of every
-profile, including a stranger's, which made the thing a reader consults most often one
-tap deeper than the least — and spent a tab of every profile on the one list that
-profile was least likely to be opened for. The grid itself is unchanged
-(`ProfileLibraryTab`, still in `screens/profile/`), and so is its memory: the media
-type, filter, sort and its direction are resolved above the route and restored on
-return, along with the place in the grid. The anime half costs no new request — it is
-the same `user:<id>` list the dashboard already fetched, which is why the identity
-travels as the viewer's id rather than their name: the by-name key would miss that
-cache and re-download the app's most expensive query. Manga is still fetched the first
-time somebody filters to it, behind a spinner on that chip, and never again.
-
-### The profile screen
-
-Four tabs — Home (identity, bio, pinned favourites), Activity (calendar and paginated
-list history), Stats, and Social — switched from directly under the profile's top bar.
-They used to be a capsule at the bottom edge of the screen, which the app's main bar
-owns now; two bars stacked at one edge would be two answers to one question. Each tab
-keeps its own scroll position across a tab switch, because `AnimatedContent` disposes
-the tab it animates away from and anything remembered inside it dies with it.
-
-**A profile paints after one request.** The overview — identity, bio,
-favourites, and AniList's own aggregates — is published the moment it arrives.
-The media list is merged in behind it, because it is one request per 500 entries
-and, on a profile, only Stats reads it; the profile used to wait for the whole
-download before drawing a bio that had already come back. Between the two
-publishes `UserOverviewUiState.Success.isLibraryLoading` is true, and Stats renders
-"still counting" rather than a tally of zero — an empty list is a real answer for an
-account that tracks nothing, so the flag, not the emptiness, is what the screen
-reads.
-
-**Every favourites row on Home opens something.** Anime and manga open the title page,
-characters and staff hand off to the browser, and the studios were the only row that
-went nowhere — drawn as a `Text` inside a tinted capsule, so a chip indistinguishable
-from a control that did nothing on tap. Each studio chip now opens that studio's page,
-the same `(Int, String?)` pair the title page's own credits hand to the same route, and
-says whether it animates or publishes (a distinction the studio page leads with and a
-name alone does not carry). A chip with no id is drawn as text rather than as a button
-that cannot work — AniList's favourites always carry one, a fixture need not. The
-overview now fetches `favourites` and `siteUrl` on the studios as well, because the
-studio page leads with both and re-fetching them on arrival would break the one-request
-bargain above. `FavouriteStudioChipTest` pins the query *and* the three-hop wiring, since
-the likely way this breaks later is a new caller omitting the callback and inheriting
-the no-op default.
-
-**The anime theme is Material You, seeded from the cover.** AniList's
-`coverImage.color` is one server-computed average of the whole file, and it is
-frequently the background wash rather than the artwork, so the app used to theme
-itself from a colour the reader could not see. The seed now comes from the cover
-pixels: `CoverColorRepository` asks Coil for a 128px software decode (memory- and
-disk-cached, the same URL the hero is already loading), `CoverColorQuantizer`
-bins opaque pixels into a 5-bit histogram and ranks the bins with Material 3's
-`Score` rules — chroma is rewarded, hue is scored by a 15-degree neighbourhood so
-a gradient counts as one region, and anything below chroma 5 is dropped. A grey
-cover therefore produces *no* seed and falls back to AniList's field, then to the
-brand blue, rather than inventing a grey theme.
-
-The seed feeds a pure-Kotlin HCT/CAM16 port (`domain/color/Hct.kt`) that builds a
-Material 3 tonal-spot scheme: primary, secondary, tertiary, neutral and neutral
-variant palettes sampled at fixed tones — 40/80 for primaries, 10/90 for
-containers, 6/98 for surfaces, 30/80 for secondary text, 50/60 for outlines — and
-all 36 `ColorScheme` roles are generated for **both** light and dark. The error
-palette stays red whatever the show. The anime layer no longer forces dark mode:
-it follows Light/Dark/System, and the scheme cross-fades through
-`AnimatedColorScheme` instead of cutting. Surfaces take the show's hue only for
-the anime layer (`tintSurfaces`); the custom accent in Settings shares the builder
-and is a standing preference, so it must not repaint surfaces the user did not ask
-to change (`appBackgroundColor` exists to move the background on purpose).
-
-The tone ladder is also the accessibility argument: tone in HCT is CIELAB L*, so
-`onSurface`/`surface` and every container pair keep their contrast for a yellow
-cover exactly as for a blue one, and `readableOn` flips the foreground when a
-hue's tone 40 is too bright for white. `MaterialColorSchemeTest` pins Google's
-own `#6750A4` values and AA contrast across hues, `CoverColorQuantizerTest` the
-image path, `AnimeThemeSurfaceTest` the tint/surface invariant, and
-`AnimeCoverThemeWiringTest` the `isLoaded` race that used to make the feature work
-only when DataStore beat the tap.
-
-**Bios** are AniList-flavoured Markdown, rendered by
-`ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
-spoilers (`~!like this!~`), inline GIFs, `~~~a centred line~~~`, AniList links
-lifted into cover cards, and images. A spoiler is two controls rather than one: the
-collapsed prompt reveals it, and a labelled **Hide** closes it. The whole block used
-to be a single toggle, so *any* tap on revealed text closed it again — a thumb
-resting on the card hid what was being read, and a link inside a spoiler could never
-be opened, because the tap that reached it was swallowed by the toggle. A bio's cover cards cost **one** request:
-see `MediaCoversQueryTest` for why that document asks through a `Page`, and what
-used to make AniList reject it. Two deliberate gaps: tables and
-`(video)`-style embeds are only partly AniList-documented, so they are parsed
-conservatively, and underline has no working AniList syntax (`<u>` is accepted
-anyway rather than dropped, since dropping it would print the tag).
-
-**The comment thread is a place you can manage, not just read.** Replies hang off
-an activity and are fetched when the sheet is opened, with the composer in the same
-list. A comment can be liked, and the viewer's *own* comments can be rewritten or
-deleted: `SaveActivityReply` with an `id` is the schema's update and
-`DeleteActivityReply` is its own mutation. Both are gated on the signed-in viewer's
-id — the sheet checks it to decide whether to draw the menu, and the thread's store
-checks it again, because the server refuses a comment that is not yours and the UI
-should not invite the tap. The thread's state lives in
-`ui/viewmodel/CommentThreadStore.kt` rather than on `UserActivityViewModel`: the
-feed and the thread are two state machines that happen to share a profile, and the
-one thing they exchange is the card's reply count, which the store reports through
-a callback. A posted comment scrolls itself into view, keyed on the id the store
-recorded rather than on the list growing — a thread that merely *loaded* must not
-jump to its last comment. The two engagement sheets, the activity feed and the
-Social tab draw a shimmering sketch of the rows that are coming instead of a
-spinner in an empty page (`ShimmerBox`, `ui/components/ShimmerLoading.kt`).
-
-**Stats is why a profile fetches the list at all.** AniList publishes no aggregate
-for country of origin, release year, watch year or episode counts, so the Stats tab
-forces the whole anime list to be fetched and chunk-merged — and the profile used to
-discard all of it once it had tallied what it needed. The same list is what the
-Library page reads (see [The main bar](#the-main-bar)), which is why it costs no
-request of its own; manga is the one half nothing else needed, so it is fetched the
-first time somebody filters to it and then cached.
-
-### The tier list
-
-`domain/tier/` holds the rules, the geometry, the storage format and the exporter
-as pure Kotlin with no Android or Compose imports, so the whole arrangement is
-testable without a device. The profile's top bar opens it from a small trophy
-beside the name — and **only on your own profile**: the ranking is stored against
-the signed-in account, so it means nothing on somebody else's, which is why the
-control is hidden off your own rather than shown and re-explained.
-
-#### Lists are saved projects, and the screen opens on them
-
-The trophy opens a **library**: the lists you have, with the one you opened last
-offered to carry on with, a button for a new empty one, and rename/delete on every
-row. Picking one opens its board. There is one route and one piece of state behind
-that choice (`opened == null` is the library), so a deep link, a restored back
-stack and the system back gesture cannot disagree about where they are.
-
-Each list is a `TierListDocument` — an id, a name, its tiers and its placements —
-stored under its own key, with an index of ids beside it. That is deliberate:
-`Preferences` is an unordered map, so enumerating its keys would hand the library
-whatever order the file happened to be written in, and an interrupted delete would
-leave a document behind that still looked like a list. Writes are per document, so
-editing one list cannot rewrite another, and every edit is one `edit` transaction
-— a removed tier and the placements it drops are no longer two writes that could
-be separated by a crash. The list that existed before this change is migrated into
-the library once, from the two legacy keys, which are then left in place as the
-only copy of an upgrade that cannot be repeated.
-
-#### Every edit is undoable, and the undo is the previous document
-
-The ViewModel keeps a bounded stack of the documents as they were. A snapshot
-rather than a delta, because a delta has to be inverted correctly for a move, for
-a removal that dropped entries filed under the removed row, and for a seeding — and
-the one that is inverted wrong corrupts the list silently instead of failing.
-
-The snapshot is read *inside* the store's write transaction, which is what makes
-it exactly the state the edit replaced: a snapshot taken by the caller can be one
-write behind, and undo would then jump back past work the person wants to keep.
-
-#### Dragging is positional, and reaches past the screen
-
-A drop names a tier **and** a tile to go above, so dropping a poster between two
-others means what it looks like. A caret marks the seam it will land on. Holding a
-tile within 72dp of the top or bottom of the viewport scrolls the screen at up to
-9dp a frame, scaled by how close the finger is, and the ghost is translated by how
-far the board has moved since the tile was picked up — without that half, the tile
-slides out from under the finger exactly when the drag is longest.
-
-One layout is computed and intended for several renderers, rather than each
-arranging the list for itself — three independent arrangements is how an export
-ends up with the labels in a different order from the screen it came from.
-
-Export is **SVG**, and it is lossless rather than a screenshot: every glyph is
-still text and every rule is still a rectangle, so the file is sharp at any size.
-Posters are embedded as base64 rather than linked, which costs roughly 40-60KB
-each and buys a file that opens correctly in every viewer and every app it is
-shared into — a linked poster is blocked or skipped often enough that a tier list
-would otherwise arrive as a wall of empty tiles.
-
-### Home-screen widgets
-
-Four tiles, each answering one question without opening the app:
-
-| Widget | Answers | Tapping it opens |
-| --- | --- | --- |
-| AniSequel | How much have I logged recently — avatar, handle, latest title | Profile → Activity |
-| Missed Sequels | How many unwatched sequels are waiting, and the top one's poster | The dashboard |
-| Arriving Sequels | How many are airing or announced soon | The dashboard, arriving section |
-| Featured Sequel | One recommendation, given a whole poster — and what it is a sequel *to* | The detail sheet |
-
-They are `RemoteViews`, not Compose, which is the one place in the app where
-layout is XML: the launcher inflates them in its own process, so a `Composable`
-would not be reachable. `res/layout/widget_*.xml` and the three `res/drawable/
-widget_*.xml` shapes are therefore the **only** XML in the UI, and the
-"vectors only" rule in [APK size](#apk-size) holds for the Compose surface, not
-for these.
-
-Three decisions are load-bearing:
-
-- **The provider *is* the receiver.** There was once an `AniSequelWidgetReceiver`
-  in front of each provider, and it read only `EXTRA_APPWIDGET_ID` — the system
-  sends the update list as `EXTRA_APPWIDGET_IDS`, so the extra was almost always
-  absent and a freshly placed tile never received its first update at all.
-  `AppWidgetProvider` already unpacks both forms, so extending it is the whole
-  fix and there is no forwarding class left to get wrong.
-- **The shared update path is an `object`, not a base class.** The four
-  providers differ in exactly one thing: which layout they inflate and which
-  data they read. The placeholder render, the off-main-thread cover fetch and
-  the "always finish the pending result" contract were copy-pasted between them
-  verbatim, so a fix to the fetch had to be made four times and a mistake in one
-  copy shipped quietly in the other three. `WidgetUpdater` holds it — as an
-  object because `WidgetDeclarationTest` reads each provider's source and
-  requires the literal `: AppWidgetProvider()`, which a base class would hide.
-- **Every instance is painted immediately, without a cover.** The count and
-  caption are data the app already has; drawing them first is what stops a new
-  tile from sitting blank while a bitmap is fetched.
-
-`exported="false"` with no permission: the system broadcast is delivered either
-way and nothing outside the app needs to send one. The old
-`android.permission.BIND_APPWIDGET` declaration was in no Google sample and
-restricted the declaration for no gain.
-
-### Release notes
-
-`app/src/main/assets/changelog.json` is the single source of the app's release
-notes, and it has two consumers: the "What's new" card in Settings → Info reads
-it from inside the APK, and the release workflow reads the same file from the
-checkout to write the GitHub release body. Two consumers, one source, so they
-cannot drift — which is the whole point, because the notes used to be a
-hardcoded `listOf` in the Info tab that still described v1.0.21 features at
-v1.0.23, with no version attached to check it against.
-
-**The card shows the newest block in the file, not the block for
-`BuildConfig.VERSION_NAME`.** An exact lookup looks more correct and cannot work:
-the workflow *derives* the version it publishes by advancing the patch number
-past whatever release is newest, so a repo at 1.0.23 publishes as 1.0.29 and no
-changelog file can be written ahead of a number that does not exist until the
-build runs. A build one patch ahead of its notes then honestly says "what
-changed through 1.2.5" instead of showing an empty card or silently borrowing
-the wrong block. `ChangelogTest` pins the newest-first ordering, so "newest" means
-new *notes* rather than "whatever is at the top of the file".
-
-Every field is nullable and a malformed file degrades to an empty card, because
-this is a hand-edited file read by code that must not throw over a missing comma
-and take the Settings screen down with it.
-
-Shipping changes without adding a block is a broken build, not an oversight —
-[AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
-together, and `ChangelogTest` and `VersionBaselineTest` enforce it.
+- **Franchise traversal, not title matching.** A show's `relations` graph is
+  walked in both directions, so renamed continuations, films and side stories
+  are found even when the title gives nothing away.
+- **Your profile, or anybody's.** Scan a public AniList username without
+  signing in. Read-only, and the UI says so before a write can fail.
+- **Home, Library, Profile.** Three pages in a floating capsule at the bottom of
+  the screen. Library is your own list as a poster grid, with counts and search.
+- **One-tap Planning.** OAuth against your own AniList account, no AniSequel
+  password. Tap to plan, hold or swipe to start watching, from a recommendation
+  card or any title page.
+- **Filters, hiding, undo.** Sort and filter by relation type and status, search,
+  and hide the entries you would rather not be nagged about.
+- **A title page that answers everything.** Synopsis, categories, themes, cast,
+  crew, studios, openings and endings, the rest of the franchise, and an entry
+  editor on a second capsule.
+- **Studios and people are destinations too.** Every credit opens the studio's
+  filmography; every face opens the character, staff or voice-actor sheet.
+- **Material 3 Expressive throughout.** Spring physics, a blurred key visual
+  behind every title, and a Material You theme seeded from the cover art itself.
+- **A tier list, local and shareable.** Saved as projects, dragged positionally,
+  exported as a lossless SVG with its posters embedded.
+- **Four home-screen widgets.** Recent activity, missed sequels, arriving
+  sequels, and one featured recommendation.
+- **A real updater.** Resumable download, verified signature, cached APK across
+  the Settings round trip.
 
 ### Deliberate non-goals
 
-- **No offline-first database.** Every scan is a fresh read. Caching AniList
-  lists well is a larger project than this one, and a stale list here produces
-  confidently wrong answers, which is worse than no answer.
-- **No notifications.** The app offers an update when you open it. A background
-  poller would be a battery and privacy cost for a feature a sideloaded app does
-  not need.
+No offline-first database (a stale list gives confidently wrong answers) and no
+notifications (a sideloaded app does not need a background poller). More, with
+reasoning, in [NOTES.md](NOTES.md#deliberate-non-goals).
 
 ---
 
-## How the update flow works
+## Install
 
-This is the least obvious part of the app, so it is worth writing down.
+1. Download `anisequel-universal.apk` from the
+   [latest release](https://github.com/orintarotsumugi/AniSequel/releases/latest).
+2. Open it. Android will ask you to allow installs from your browser or file
+   manager — that grant is per-app and per-source, and it only ever has to be
+   given once.
+3. Keep the app installed. AniSequel offers the next update itself, and each
+   release installs over the previous one without losing anything.
 
-### Where the manifest comes from
-
-The app reads `update.json` from
-`releases/latest/download/update.json` — a **release asset**, not a file on
-`main`. That is not a stylistic choice:
-
-- `main` is protected and requires status checks. GitHub does not run workflows
-  for pushes made with `GITHUB_TOKEN`, so those checks can never report on such a
-  commit, and the hook rejects the push.
-- The push step used to end in `|| echo "Nothing to push."`, which turned that
-  rejection into a *green* step.
-
-The result was four releases (v1.0.15–v1.0.18) published while the manifest on
-`main` still advertised v1.0.14. Because `version_code` is what gets compared,
-an app already on 35 correctly decided "not newer" — so no user was ever offered
-the releases containing the fixes. The updater was not broken so much as deaf.
-
-A release asset has none of those problems: written by the same authenticated job
-that publishes the APK, needs no branch write, and `releases/latest` tracks the
-newest non-draft release so the URL is stable while its contents move forward.
-
-### What happens when you press Install
-
-```
-press "Install"
-      │
-      ├─ permission already granted?  ──yes──► download ──► open installer
-      │                                                  (reuse cached APK if
-      ▼                                                   the version matches)
-  download the APK anyway
-      │
-      ├─ permission granted? ──yes──► open installer
-      ▼
-  NeedsInstallPermission  ──"Open settings"──►  ACTION_MANAGE_UNKNOWN_APP_SOURCES
-      │
-      │  user grants it, comes back  ──►  MainActivity.onResume()
-      ▼
-  UpdateController.onAppResumed()  ──►  re-checks  ──►  opens the installer
-                                        on the APK already on disk
-```
-
-Four decisions are load-bearing here:
-
-1. **The download happens before the permission check.** The user has already
-   asked to update. Refusing to start over a setting they may have granted since
-   last launch is a worse outcome than downloading and then asking.
-2. **The first permission prompt is never unprompted.** It is only ever raised
-   in response to the user asking to update. `REQUEST_INSTALL_PACKAGES` is
-   declared in the manifest, but declaring it does not grant it — it only puts
-   the app on the list of packages allowed to ask.
-3. **The grant is observed, not polled.** Nothing in this process is told when
-   the user flips a switch in another app's Settings screen. The resume is the
-   only signal, which is why `MainActivity.onResume()` hands it to
-   `UpdateController.onAppResumed()`. Without that, the user grants the
-   permission, returns, and is asked to press a third button for something they
-   already requested.
-4. **The APK is kept across the Settings round trip.** The cache is keyed by
-   release version (`UpdateManager.downloadedApkFor`), so the trip costs one
-   download rather than two. Every download run used to wipe the directory
-   first, which meant going back to Settings could cost the whole transfer again.
-
-Opening the installer unprompted on resume is safe in the sense that matters:
-the system install dialog still requires the user's own confirmation, and no
-version of this app can install itself silently.
-
-### Two directories, and why the FileProvider is part of this
-
-An update is handed to the installer as a `content://` URI, because the
-installer runs as a different app and cannot read this app's private storage by
-path. That URI is minted by a `FileProvider`, and what it may publish is declared
-in `app/src/main/res/xml/update_file_paths.xml`.
-
-So the directory the updater downloads into and the directory that file declares
-are a pair, and nothing in the build connects them. They came apart in #61, when
-downloads moved out of `cacheDir` — deliberately, because the system may empty
-the cache whenever it likes, and a download that vanished during the trip to
-Settings had to be paid for twice — and the provider's paths stayed behind
-pointing at the now-empty cache directory. `getUriForFile` then threw on every
-downloaded APK, `openInstaller` contained the throw (correctly: the last step of
-an install must not crash the app), and every user on every device was told
-**"This device has no app installer."** A bug in the app, reported as a fact
-about their hardware.
-
-`UpdateFileProviderPathsTest` reads that XML and checks it against
-`UPDATE_DOWNLOAD_DIR`, so the pair cannot drift apart again.
-
-### Interrupted downloads continue
-
-The transfer writes `anisequel-<version_code>.apk.part` and only renames it into
-place once the bytes have been read back and vetted, so an interrupted transfer
-can never leave a truncated APK for the installer to choke on.
-
-It used to delete that `.part` on every failure and start again from zero. Now it
-asks for the rest:
-
-- a `206` continues from the bytes on disk, and the progress bar starts from
-  where the transfer is rather than from zero;
-- a `200` answering a ranged request means the server ignored the range and is
-  sending the whole file again — the `.part` is discarded and the transfer
-  restarts, because appending would produce a valid-looking zip of the wrong
-  bytes;
-- a `416` means the `.part` is longer than the file, so it cannot belong to this
-  asset; it is deleted and the single retry starts clean.
-
-`ApkDownloader` moves the bytes; `UpdateManager` judges them (zip magic, package
-name, signature) and is the only thing allowed to rename the file.
-
-The progress line also carries a speed, and it is measured over a rolling window
-rather than averaged across the whole transfer — so it reports the connection you
-have *now*. An average is dominated by the part of the transfer that already
-happened, which is exactly the number that is no longer true.
-`TransferRateTest` pins the window.
-
-### A download that cannot be installed stays downloaded
-
-When `openInstaller` failed, the app used to discard its record of the file it had
-already fetched and close the pop-up, so the update looked gone and the only way
-back to it was a fresh check. The APK is still on disk and still verified, so the
-failure message now sits above the button that tries again rather than replacing
-it. `UpdateDownloadStateTest` covers the same ground across a relaunch.
-
-This is the same instinct as the cache keyed by release version: the expensive,
-already-verified thing should survive a failure of something downstream of it.
-
-### What the updater will not do
-
-It cannot install without a user-visible confirmation — that has been true since
-Android 8, and it is a platform guarantee rather than a choice made here.
-
-Before a downloaded file is handed to the installer it must be a zip
-(`PK\x03\x04`), must match this app's package name if readable, and must carry
-either AniSequel's pinned release certificate
-(`01924c4a…1f82`) or the running app's own signing certificate. A release build
-refuses anything it cannot positively identify — "we could not read a signature"
-is the absence of proof, not a substitute for it.
+Android 12 (API 31) or newer. There are no density or ABI splits — the one APK
+is the app.
 
 ---
 
-## Architecture
+## Build it
 
-```
-ui/          Compose screens + ViewModels          (presentation)
-  widget/    AppWidgetProviders + RemoteViews      (the only XML UI)
-domain/      Use cases                             (pure logic, no Android)
-  usecase/   sequel detection, arriving, insights
-  tier/      tier-list rules, geometry, SVG export (no Android, no Compose)
-data/
-  network/   Retrofit + OkHttp + GraphQL + coalescing
-  repository/ AniListRepository, AuthRepository, DataStore preferences
-  update/    UpdateManager (check + verify), ApkDownloader (transfer), UpdateManifest
-  changelog/ assets/changelog.json -> release notes
-ui/components/update/   controller, states, dialogs, permission handling
-```
-
-- **UI** — Jetpack Compose, Material 3 Expressive, `StateFlow` + ViewModel. The
-  one exception is `ui/widget/`, which cannot be Compose because the launcher
-  inflates it in another process — see [Home-screen widgets](#home-screen-widgets).
-- **Domain** — `FindMissedSequelsUseCase`, `SaveToPlanningUseCase`,
-  `GetViewerProfileUseCase`, `FindArrivingEntriesUseCase`,
-  `BuildListInsightsUseCase`. Pure functions over data classes; this is where the
-  sequel-detection rules live, and where the tests are densest because that logic
-  is exactly what regresses silently. `domain/tier/` holds the tier list for the
-  same reason: rules, geometry, storage and the SVG exporter in one testable
-  package with no Android imports at all.
-- **Data** — Retrofit/Moshi/OkHttp, DataStore preferences, and a separate
-  `OkHttpClient` for the update manifest so the AniList auth interceptor can
-  never attach a bearer token to a public file.
-
-[ARCHITECTURE.md](ARCHITECTURE.md) is the exhaustive version of this section:
-every package, the layer deep dives, the OAuth and scan sequence diagrams, and
-the multi-module blueprint this is planned to grow into.
-
-### GraphQL over REST
-
-AniList only speaks GraphQL, so `AniListApiService` is a Retrofit interface
-whose "endpoints" are POSTs to `/graphql` with a query string body. Queries live
-in `GraphQLQueries.kt`.
-
-Two client interceptors matter:
-
-- **`AuthInterceptor`** attaches the OAuth bearer token.
-- **`RateLimitInterceptor`** absorbs the short spikes AniList's burst limiter
-  produces, and `RequestCoalescer` collapses identical in-flight queries — a
-  recompute triggered by both a filter change and a detail load must not become
-  two round trips.
-
-### Keeping the list fresh
-
-The AniList list is the app's whole input, and it is expensive: one
-`MediaListCollection` is the single most expensive request the app makes, against
-an API that allows roughly 30 requests a minute. It is also the thing that goes
-stale while you are not looking — you finish something in a browser, or an
-episode airs, and the dashboard you come back to is wrong.
-
-That collision used to be resolved badly, in the one direction that kept the
-dashboard stale: the list was cached for a flat hour, and nothing observed the
-app coming back. Android **resumes** a process rather than restarting it, so
-closing and reopening AniSequel answered from the same in-memory entry, and the
-ViewModel's one `init` load never ran again. Reopening was not a reload, and the
-only route to fresh data was the refresh button.
-
-Two mechanisms now share one setting, in **Settings → Edit**:
-
-| | |
-| --- | --- |
-| `RefreshIntervalPreferences` | DataStore-backed choice: Always, 15 min, 30 min (default), 1 hour, Manual |
-| `AniListRepositoryImpl` | reuses a completed list response for that long, then re-fetches |
-| `ListFreshnessWatch` | decides *when* to ask, owned by `DashboardViewModel` |
-
-The watch is driven by `LifecycleResumeEffect` in `DashboardScreen`, so it acts
-on every `ON_RESUME` and on every return to the destination, and it runs a timer
-only while the app is actually in the foreground. Two deliberate consequences:
-
-- **A setting changed in Settings takes effect immediately.** Both the repository
-  and the watch read the interval per lookup rather than capturing it, so
-  picking "15 min" does not need a restart.
-- **The timer is foreground-only, and there is no WorkManager job.** WorkManager
-  cannot run periodic work more often than every 15 minutes, is deliberately
-  inexact under doze, and would spend AniList's request budget refreshing a list
-  nobody is looking at.
-
-`Always` and `Manual` schedule no timer at all — `Always` has a zero window, so a
-loop would re-fetch continuously rather than on resume, and `Manual` must not
-re-fetch without the gesture. Both are decided entirely by the resume check.
-After a *failed* automatic fetch the loop waits a five-minute floor before asking
-again, so one dropped request cannot become a tight retry loop.
-
-### What survives closing the app
-
-Everything above decides *when* the app asks again. This decides what it has to
-ask for at all, and until recently the answer was "all of it": the repository's
-caches lived for exactly one process, so closing AniSequel — or letting Android
-reclaim it while the reader was in the browser — threw away the list, the viewer's
-own profile, and the synopsis, cast and studios of every title they had opened.
-The next launch bought the whole list back (one request per chunk of it, against
-an API that allows about thirty a minute), fetched the profile before it could
-even name the account, and re-read every title page whose data had not changed in
-the ten seconds the app was gone.
-
-`SnapshotStore` (`data/repository/SnapshotStore.kt`) is the tier underneath those
-caches: one JSON file per kind under `cacheDir/anilist_snapshots/`, written
-atomically (temp file, then rename) and read back with the timestamp it was
-written with, so reading a snapshot never renews it.
-
-| Snapshot | Reused for | Why that window |
-| --- | --- | --- |
-| `viewer` — the signed-in profile | **30 minutes**, fixed | The request every launch made before it could draw anything. Username, avatar and score totals do not change between two launches a minute apart, and a pasted token is verified after the caches are dropped, so this can never vouch for a refused session. |
-| `list` — the viewer's own anime and manga lists, and scanned profiles' | the refresh interval from Settings | It is the same answer the in-memory cache holds, so it keeps the same window — including `Manual`, where the disk copy is served until the reader refreshes by hand. |
-| `overview` — a profile page's bio, favourites and stats | the same setting | Same reason: it is the profile screen's copy of a thing the list window already governs. |
-| `detail` — a title's full record | **24 hours** | A synopsis, a cast, a studio and a release year arrive once and stay; what does move (a score, the next airing episode) is worth re-asking for the next day. |
-| `cover` — a bio's batched poster URLs | the list's window | Decoration for the profile that follows that window, and the images behind the URLs are already in Coil's disk cache. |
-
-Deliberately **not** on disk: the activity feed, the follower and following lists,
-and character/staff profiles. Each is paged, each is read while it is being
-browsed, and a feed served from yesterday would be a conversation the reader has
-already seen. They stay in memory for the session, exactly as before.
-
-Five rules keep the disk tier from becoming a bug, and each has a test:
-
-- **A snapshot is served with its own timestamp**, never with "now" — otherwise
-  the first lookup of every launch would renew it forever.
-- **A file is never trusted.** A corrupt file, a payload today's models cannot
-  parse, or one written by a previous release (whose queries may have asked for
-  fewer fields) is a miss, and the file is deleted rather than re-tried on every
-  open. The release that wrote it is part of the file's identity.
-- **A mutation clears the disk copy of the list too.** The list's `listEpoch`
-  invalidation was the memory half of "the entry you just saved is not in this
-  list any more"; leaving the file behind would have resurrected exactly the list
-  the mutation replaced.
-- **Signing out deletes all of it.** The list, the bio and the progress inside a
-  title record are per-person data, and unlike the in-memory maps nothing about
-  the process ending would ever take them off the disk.
-- **A title page from disk does not carry stale progress.** The snapshot is the
-  title's facts; the viewer's entry inside it is corrected against the list the
-  app is holding, or dropped when the list no longer has the title — so the sheet
-  and the row behind it cannot disagree about how far in you are.
-
-The store also bounds itself: past a per-kind byte budget the oldest entries go
-first, and the entry just written is never the one dropped.
-
-### One destination, one copy
-
-Every screen-to-screen hop goes through `NavHostController.navigateSingle`
-(`ui/navigation/NavigationActions.kt`) rather than a raw `navigate`. It is one line
-— `launchSingleTop = true` — and it is there because a plain `navigate` pushes the
-same destination again for every tap. A thumb that landed three times on the
-dashboard's avatar left three profiles on the back stack; all three look identical,
-so **Back** appeared to do nothing until the duplicates ran out, with three
-ViewModels and three scroll positions held alive behind them. It is not a crash,
-which is why it survived review.
-
-Routes that need a different back stack (sign-in, the demo dashboard) keep their
-own `popUpTo` and are left alone; the helper is for the plain "open a screen"
-cases. Tabs are not navigation at all — the profile's four tabs and the Settings
-three are one route with an index, so they cannot stack in the first place.
-
----
-
-## Building it
-
-### Prerequisites
-
-| Tool | Version | Why that one |
-| --- | --- | --- |
-| JDK | **21** (Temurin) | Newest LTS that AGP 9.4.1, Gradle 9.6.1 and the Robolectric runner in this repo are all verified against. A newer JDK runs the build and then breaks the JVM test step — which is the one step that is a real gate rather than advisory. |
-| Android SDK | compileSdk **36.1**, targetSdk **36**, minSdk **31** | `minorApiLevel = 1` on the 36 line. See [Minimum Android version](#minimum-android-version). |
-| Gradle | **9.6.1** | Pinned in `gradle/wrapper/gradle-wrapper.properties` *and* the workflow. It was `'current'` in CI at one point, which meant CI resolved whatever Gradle shipped that week while every local build used the pinned one. It is also the Gradle the committed AGP is green with; the two are one decision, because AGP refuses to start on an older Gradle. |
-| AGP | **9.4.1** | The newest stable — and still is. Moving this pin to 9.5.0 on the belief that the line had gone stable is what CI caught with `Plugin [id: 'com.android.application', version: '9.5.0'] was not found`; Google's metadata still lists `9.5.0-alpha10` as the newest, so there is no stable 9.5.0 to move to. An alpha *build system* is a different decision from an alpha UI library — material3 below is pinned to an alpha deliberately and for a written reason, whereas this one gates every build the project makes. |
-
-`settings.gradle.kts` applies the `foojay-resolver-convention` plugin, so a
-non-21 JDK does not fail with a bare toolchain error — it provisions one. That is
-convenience, not permission to drift: 21 is the version CI runs and the version
-the Robolectric step is verified against.
-
-### Commands
+JDK 21, Android SDK 36.1, Gradle comes with the wrapper.
 
 ```bash
 ./gradlew test              # JVM unit tests — the real gate
-./gradlew lintRelease       # advisory; never blocks a release
 ./gradlew assembleDebug     # debug APK
 ./gradlew assembleRelease   # signed release APK
 ```
 
 `assembleRelease` falls back to the debug keystore when no release key is
-configured, so a local release build always produces something installable. See
-[Release signing](#release-signing) before trusting that output.
+configured, so it always produces something installable — but read
+[Release signing](#release-signing) before you trust that output.
 
-### Dependency versions that are pinned deliberately
-
-`androidx.compose.material3` is pinned to **1.5.0-alpha14**, above the Compose
-BOM. This is not inertia:
-
-- `1.4.0` stable ships the *theming* half of Expressive
-  (`MaterialExpressiveTheme`, `MotionScheme`, `MaterialShapes`) but not the
-  component set. `LoadingIndicator`, `ContainedLoadingIndicator` and the
-  `Wavy*ProgressIndicators` are 1.5.0-alpha only.
-- alpha14 specifically, not a later alpha: from alpha16 onward material3 depends
-  on Compose UI 1.11+, which requires compileSdk 37. This app compiles against
-  36.1, so every later alpha fails AAR metadata checking.
-
-The second one that looks like a mistake is **KSP 2.3.12 next to Kotlin 2.4.21**.
-Since KSP 2.3.0 its versioning is decoupled from the Kotlin version, so the two
-move independently and the mismatched-looking pairing is the correct one. The
-moment it becomes a red flag is the moment it starts reading like the old
-`2.2.10-2.0.2` shape again, which would mean Kotlin and KSP have to be read
-together. The Compose compiler plugin, by contrast, *is* versioned from the same
-`kotlin` key and moves in lockstep with nothing to keep in step by hand.
-
-Both pins carry their reasoning inline in `gradle/libs.versions.toml`, which is
-the only record of why they exist.
+Prerequisites, pinned dependency versions and the reason for each pin live in
+[BUILDING.md § Prerequisites](BUILDING.md#prerequisites).
 
 ---
 
-## Testing
+## How it works
 
-```bash
-./gradlew test
+```
+ui/          Compose screens + ViewModels, widgets        (presentation)
+domain/      use cases, tier list, motion, studio shelves (pure Kotlin, no Android)
+data/        Retrofit + GraphQL, repositories, snapshots, updater
 ```
 
-There are 59 JVM unit suites and **no instrumented tests** — `androidTest/` does
-not exist, so there is nothing to run on a device and no test that needs an
-emulator to pass. Everything below is `testImplementation` and Robolectric or
-pure JUnit.
+- **Three layers, one rule.** `ui/` is Compose screens plus `StateFlow` and
+  ViewModels; the one place it is not Compose is `ui/widget/`, which the launcher
+  inflates in its own process. `domain/` is pure Kotlin — the use cases
+  (`FindMissedSequelsUseCase`, `SaveToPlanningUseCase`, `GetViewerProfileUseCase`,
+  `FindArrivingEntriesUseCase`, `BuildListInsightsUseCase`), the tier list, the
+  motion geometry — with no Android imports. `data/` is Retrofit, Moshi, OkHttp,
+  `AniListApiService` with its query strings in `GraphQLQueries.kt`,
+  `AuthRepository` and the OAuth token in DataStore, and `SnapshotStore`.
+- **One backend, and it is AniList's.** No AniSequel server. AniList speaks only
+  GraphQL, so every "endpoint" is a POST to `/graphql` with a query string body.
+  `AuthInterceptor` adds the OAuth token; `RateLimitInterceptor` absorbs AniList's
+  burst limiter; `RequestCoalescer` collapses identical in-flight queries. The
+  update manifest gets its own `OkHttpClient`, so the AniList interceptor can
+  never attach a bearer token to a public file.
+- **The list is expensive and goes stale.** One `MediaListCollection` is the
+  biggest request the app makes against an API of roughly thirty a minute. The
+  repository reuses it for the interval chosen in Settings (30 minutes by
+  default), and `ListFreshnessWatch` re-checks on every resume and on every
+  return to the dashboard — never in the background, because WorkManager cannot
+  run that often and would burn the request budget on a list nobody is reading.
+- **Closing the app does not throw the list away.** `SnapshotStore` keeps one
+  atomic JSON file per kind under the cache directory, with the window that kind
+  deserves: thirty minutes for your profile, the refresh interval for lists, a
+  day for a title's facts. A mutation or a sign-out takes the disk copy with it.
+- **The updater is its own small system**: manifest from a release asset, a
+  resumable `.part` download, and three checks — zip magic, package name,
+  signature — before anything reaches the installer. See
+  [UPDATER.md](UPDATER.md).
 
-| Area | Suite | Covers |
-| --- | --- | --- |
-| Sequel detection | `FindMissedSequelsUseCaseTest`, `…FilterTest`, `…CurrentlyWatchingTest` | The core rules, relation kinds, and two filter bugs that produced empty or misleading lists |
-| | `RelationGapTest` | Franchise gaps that are not "the next season" |
-| | `MissedSequelCachingTest`, `MissedSequelDetailTest` | Memoised derived values; what the card says about progress and air date |
-| | `FilterCriteriaNarrowingTest` | The one `isNarrowing` definition the badge, the filtered row and the chip all read |
-| | `UnreleasedMediaTest` | What counts as unaired |
-| | `FindArrivingEntriesUseCaseTest` | The "Currently arriving" section's derivation |
-| Network | `AniListJsonTest`, `AniListErrorMappingTest` | GraphQL response → model; failure classification behind "Try again" vs "Sign in again" |
-| | `RequestCoalescerTest`, `RateLimitInterceptorTest` | Identical in-flight queries cost one call; burst handling and `Retry-After` |
-| Profile | `UserOverviewLoadOrderTest` | The profile is published before the media list lands, and says so while it waits |
-| | `UserOverviewJsonTest`, `UserOverviewQueryTest` | Captured AniList responses, and the documents against what AniList actually serves |
-| | `ProfileViewModelTest`, `ProfileBioCollapseTest`, `ProfileTextFormattingTest` | Profile state; the bio card's collapse rule and its non-Markdown fallback text |
-| | `BuildActivityCalendarUseCaseTest`, `BuildListInsightsUseCaseTest` | The activity grid's layout; the Stats tab's reshaping of AniList's aggregates |
-| | `LibraryFilterTest`, `MediaStatusLabelTest`, `AnimeInfoSpecsTest` | Library filtering logic, status display, the title's spec derivations |
-| Title page | `WaveGeometryTest` | The wavy progress bar's amplitude, period and travelling phase |
-| Studio pages | `StudioQueryTest` | The one document shape AniList requires: `Studio.media` rather than a filtered `Page`, the 25-title ceiling, and the fields a shelf card and a tap need |
-| | `StudioYearShelfTest` | The shelves: year from the start date with a `seasonYear` fallback, newest first, `TBA` on top, in-year order preserved, duplicates dropped |
-| | `MediaDetailQueryTest`, `MediaDetailNamespacingTest`, `MediaNodeDisplayTest` | The detail document itself — the `title` it has to ask for, the relation fields it shares with the list query — and what a node prints when the summary it was opened from is replaced |
-| | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
-| | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `ReplyManagementQueryTest`, `CommentManagementTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers, and editing or deleting your own comment; the demo-mode activity fixture |
-| Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
-| | `MarkdownMediaPreviewTest` | How long one bio parse may take before the watchdog calls it looping |
-| | `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variables it needs, and why every alias goes through a `Page` |
-| Auth | `AuthRedirectTest`, `AniListOAuthTest` | Redirect handling, token storage, and the silent OAuth failures |
-| Updater | `UpdateManifestTest` | Manifest parsing and the version comparison everything rests on |
-| | `ApkDownloadResumeTest`, `TransferRateTest` | 206/200/416 range handling against a `.part` on disk; the speed shown under the bar |
-| | `UpdateDownloadStateTest` | The downloaded APK survives a relaunch and a failed installer handoff |
-| | `UpdateFileProviderPathsTest` | The declared `FileProvider` paths against the directory actually written to |
-| Tier list | `TierListTest`, `TierListSerialisationTest` | The rules and geometry; the on-disk format, which holds somebody's afternoon |
-| | `TierListDocumentTest`, `TierListPreferencesTest` | A list as a saved project; the library of documents written one at a time |
-| | `TierListPlacementTest`, `TierTrayDropTest`, `TierScreenLogicTest` | Where a dropped title lands, including out of the tray; the screen's un-drawn decisions |
-| Freshness | `RefreshIntervalTest`, `RefreshIntervalPreferencesTest`, `ListFreshnessWatchTest` | Staleness boundary, the interval surviving storage, foreground re-fetch, timer, retry floor |
-| Preferences & UI | `ThemePreferencesTest` | Appearance settings, and what happens after the switch is flipped |
-| | `ExpressiveShapesTest`, `VectorIconsTest`, `BackdropTransformTest` | Capsule geometry is not a stretched polygon; every hand-authored icon's name and 24×24 frame; hero image placement, and the gesture gate that decides whether it takes a drag at all |
-| | `EntryEditStateTest` | The entry editor loads once per title, survives tab switches, and keeps a hundred-point score scale and a manga's volumes |
-| Build & release | `KeystoreIntegrityTest` | No key material committed; the workflow reads secrets, not literals |
-| | `VersionBaselineTest`, `ChangelogTest` | The three version copies agree; the bundled notes are ordered and match the version |
-| | `ApkPackagingTest` | `dex.useLegacyPackaging` is set, and in the dex block |
-| | `WidgetDeclarationTest` | Each provider's declaration, and the literal `: AppWidgetProvider()` the shared updater's shape depends on |
-| | `ExampleRobolectricTest` | The Robolectric harness itself — if the runner breaks, it should break here first |
+The long versions are [ARCHITECTURE.md](ARCHITECTURE.md) (the spec) and
+[NOTES.md](NOTES.md) (the odd decisions, and the failures behind them).
 
-`test` is a **gate**; `lintRelease` is not (`abortOnError = false` *and*
-`checkReleaseBuilds = false` in `app/build.gradle.kts`, which is why the workflow
-treats it as advisory rather than claiming otherwise).
+---
 
-### Tests that exist because something broke
+## Documentation
 
-- **`ApkPackagingTest`** — v1.0.17 shipped a 4.15 MB APK against v1.0.16's
-  2.31 MB. `classes.dex` had actually *shrunk*; it was simply being stored
-  uncompressed, because `minSdk ≥ 28` makes AGP skip dex compression. One
-  flipped setting, ~1.9 MB, and nothing in review would have looked like a size
-  regression. The rule AGP applies is `minSdk >= 28`, so raising the floor to 31
-  does not bring it back — but nothing about that is obvious, which is why the
-  test reads `build.gradle.kts` rather than the build output.
-- **`MediaCoversQueryTest`** — every AniList preview card in every bio showed the
-  placeholder icon and no poster, and it did so from the day the feature shipped.
-  The batched cover document declared its variables as `id0: Int` while using
-  them as `$id0`, so AniList answered the whole thing with HTTP 400 - and the
-  assertion that should have caught it asserted the broken spelling instead. The
-  suite now also pins the reason each alias is resolved through a `Page`: the
-  same request written against the `Media` root field answers **404** as soon as
-  one linked id has no media, which blanked every other card in the bio.
-- **`MediaDetailQueryTest`** — v1.3.0 shipped a title page that could open headed
-  **Unknown Title**. `GET_MEDIA_DETAIL` did not ask for `title`, on the assumption
-  that the summary the sheet was opened from already had one. That holds on the
-  dashboard, which folds the response into the list node, and does not hold on a
-  profile, where the fetched detail *replaces* the activity row's node — so there
-  was nothing left to render. The suite pins the field in the document, the way
-  `MediaCoversQueryTest` pins its variable declarations, because a query is the one
-  kind of code here that no compiler checks.
-- **`VersionBaselineTest`** — the version lives in three places, and two of them
-  used to drift apart silently.
-- **`KeystoreIntegrityTest`** — see below.
-- **`ExpressiveShapesTest`** — `RoundedPolygon` is authored on a square
-  perimeter, and `toShape()` stretches it to whatever `Size` it is handed. On a
-  tab measured 120×44, `MaterialShapes.Pill` rendered as a 120×44 *ellipse*.
-- **`ListFreshnessWatchTest`** — the list was cached for an hour and nothing
-  watched for the app returning, so because Android *resumes* a process instead of
-  restarting it, reopening AniSequel produced the identical dashboard every time.
-  The suite pins the three things that fix had to get right: an overdue list is
-  re-fetched on resume, a fresh one is not (twenty resumes inside an interval cost
-  zero requests), and a failed fetch cannot become a tight retry loop.
-- **`WidgetDeclarationTest`** — v1.0.42 shipped a widget that could not be added
-  at all, from three declaration bugs no build step could see: `android:configure`
-  pointing at a provider rather than an Activity, a missing `initialLayout`, and
-  the `EXTRA_APPWIDGET_ID` / `EXTRA_APPWIDGET_IDS` mismatch described in
-  [Home-screen widgets](#home-screen-widgets). All three only surface when a user
-  drops the tile, and the launcher reports them as *the app is not installed*.
-- **`ChangelogTest`** — the release workflow reads `assets/changelog.json` without
-  any of this repo's tests running, so the file has to be right on its own. It is
-  hand-edited and prepend-only: a version with no written notes renders an empty
-  card and a generic release page, and a newest entry that drifts to the bottom
-  silently becomes the oldest. Malformed JSON is worse still, because
-  `ChangelogRepository` deliberately swallows parse errors so Settings cannot
-  crash — the safety net is exactly what would hide a broken file from a release.
-- **`RelationDetailResolutionTest`** — a relation followed from a title page opened
-  a visibly emptier page than the same title opened from the list: "no synopsis
-  available", no credits, and the relations row gone after a single hop. The sheet
-  did fetch the full record; the subject it drew was the thin relation node the
-  card carried, so the answer was thrown away. The guard pins the resolution (at
-  the source, because the regression is *which node is handed to the page* — there
-  is no Compose harness in the unit-test source set) and pins the merge the
-  resolution depends on.
-- **`SnapshotStoreTest` / `RepositorySnapshotsTest`** — every cache the app kept
-  lived for exactly one process, so each launch re-bought the whole list (one
-  request per chunk of it), the viewer's own profile before it could name the
-  account, and every title page whose synopsis, cast and studios had already been
-  read. The first suite pins the disk tier's contract — a value is served with the
-  moment it was *written*, a window is closed at both ends, anything unreadable is
-  a miss and never an exception, the cache is bounded — and the second pins the
-  policy: a launch inside the windows spends nothing, a mutation clears the disk
-  copy of the list too, signing out deletes all of it, and a title page served
-  from disk carries the list's progress rather than yesterday's.
+| | |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The exhaustive spec: layers, sequence diagrams, the multi-module plan |
+| [NOTES.md](NOTES.md) | Why the weird parts are weird. Read a section before changing its screen |
+| [BUILDING.md](BUILDING.md) | Prerequisites, tests, signing, CI, version numbers, APK size |
+| [UPDATER.md](UPDATER.md) | The update system end to end, and the failures it grew out of |
+| [AGENTS.md](AGENTS.md) | The rules. Every one cost something to learn |
+| [TO-DO.md](TO-DO.md) | Known improvements, each with the reason it was left |
+| [IMPROVEMENTS-NEEDS-TO-BE-DONE.md](IMPROVEMENTS-NEEDS-TO-BE-DONE.md) | A feature-by-feature comparison against AniSync, with a roadmap |
+
+Each layer directory carries a short `README.md` of its own — `data/`,
+`domain/`, `ui/`, `ui/screens/`, `ui/components/` — stating what belongs there
+and which mistakes have already been made in it.
+
+---
+
+## Release notes
+
+`app/src/main/assets/changelog.json` is the single source of the app's release
+notes. The "What's new" card in Settings → Info reads it from inside the APK;
+the release workflow reads the same file to write the GitHub release body. Two
+consumers, one source, so they cannot drift.
+
+The card shows the newest block rather than the block matching
+`BuildConfig.VERSION_NAME`, because the workflow derives the published version
+at build time and no file can be written ahead of a number that does not exist
+yet. Why that is the safer failure, and what `ChangelogTest` pins:
+[NOTES § Release notes](NOTES.md#release-notes).
+
+Adding notes and bumping the version are **one change**, not two —
+[AGENTS.md §6](AGENTS.md) makes it mandatory, and
+[VersionBaselineTest](BUILDING.md#version-numbers) enforces the three copies.
 
 ---
 
@@ -1055,143 +172,34 @@ treats it as advisory rather than claiming otherwise).
 
 > **Rotating the release key permanently breaks updates for every existing
 > install.** Android refuses to install over an app signed with a different key
-> (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) and there is no undo. Read
-> [AGENTS.md §5](AGENTS.md) before you go anywhere near the keystore.
+> (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) and there is no undo.
 
-Every release is signed with one long-lived key so Android accepts it as an
-in-place update.
+The key is **not in this repository**. It lives only in the `KEYSTORE_BASE64`,
+`STORE_PASSWORD` and `KEY_PASSWORD` repository secrets, and CI verifies the
+built APK with `apksigner verify --print-certs` against the pinned certificate:
 
-**The key is not in this repository.** It lives only in three repository
-secrets:
-
-| Secret | Contents |
-| --- | --- |
-| `KEYSTORE_BASE64` | `base64` of the JKS release keystore |
-| `STORE_PASSWORD` | Keystore password |
-| `KEY_PASSWORD` | Key password (same value as the store password) |
-
-### History
-
-The key was previously committed as `debug.keystore.base64` through v1.0.16.
-Base64 is an encoding, not encryption, so anyone who cloned the repo could
-decode it and sign an arbitrary "update" APK — which the in-app updater would
-accept, because until recently it only checked that the certificate matched the
-installed one.
-
-**The key rotated on 2026-10-05.** Releases up to and including v1.0.16 are
-signed by the original certificate
-(SHA-256 `c33eceb9…e4ab`). Because that keystore's password cannot be recovered
-from the repository, **no in-place update path exists from those installs** —
-anyone still on them must install this APK as a fresh download, losing local
-data.
-
-Every release from the rotation onward is signed by the certificate pinned at
-SHA-256 `01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82`, and
-so is every build made from the secret. **Nobody needs to uninstall when
-updating from the rotation onward.**
-
-Git history is deliberately left intact — that is where the old key now lives,
-and purging it hides a key that is already compromised without un-compromising
-it. Still keep a private, off-git backup: history can be lost, and regenerating
-a key does not restore update compatibility.
-
-### Three layers of verification
-
-1. **`KeystoreIntegrityTest`** — in the local and CI unit-test suite. Asserts
-   that no key material is committed, that `.gitignore` blocks keystore
-   extensions, and that the workflow sources both the key and its passwords from
-   secrets rather than literals.
-2. **`Restore the release signing key from secrets`** (workflow) — decodes
-   `KEYSTORE_BASE64`, fails with an actionable message if any secret is unset,
-   and validates the `upload` alias with `keytool`. There is deliberately **no**
-   `keytool -genkeypair` fallback: those branches previously turned a repository
-   with no secrets into a green build that signed every release with a fresh
-   random key, and every user who tried to install one got
-   `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
-3. **`Verify APK Release Signing Integrity`** (workflow) — runs `apksigner
-   verify --print-certs` on the built APK and compares the certificate digest to
-   the pinned fingerprint. Skipped on pull requests, which sign with a throwaway
-   key generated inside the runner.
-
-### Building a signed release locally
-
-```bash
-export KEYSTORE_PATH=/path/to/anisequel-release.jks
-export STORE_PASSWORD='<store password>'
-export KEY_PASSWORD='<key password>'
-./gradlew assembleRelease
 ```
+SHA-256 01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82
+```
+
+The key rotated on 2026-10-05; installs from v1.0.16 and earlier cannot update
+in place. Git history is deliberately not rewritten — the old key is already
+compromised, and hiding it would not un-compromise it. The full history, the
+three verification layers and the local signing recipe are in
+[BUILDING.md § Release signing](BUILDING.md#release-signing).
 
 ---
 
 ## Continuous integration
 
-One workflow, `.github/workflows/android-release.yml`, on push to `main`, on
-tags, on pull requests, and on manual dispatch. Two jobs, started together: an
-advisory lint job, and the release job that runs the gate and publishes.
+One workflow, `.github/workflows/android-release.yml`, on push, tags, pull
+requests and manual dispatch. Lint runs as its own advisory job while the
+release job runs the test gate, builds the APK, verifies its signature and
+publishes the release and `update.json`. Pull requests get a throwaway key and
+a comment telling them where the APK is; nothing from a PR is ever published.
 
-```
-lint (advisory, own runner)           build-and-release
-checkout → JDK 21 → Gradle 9.6.1      checkout → JDK 21 → Gradle 9.6.1 → actionlint
-   ↓                                     ↓
-lintRelease → annotations              ephemeral key (PR) | restore key from secrets (non-PR)
-                                         ↓
-                                       validate the key with keytool → resolve version
-                                         ↓
-                                       cache Robolectric's framework jars → test  ← THE GATE
-                                         ↓
-                                       assembleRelease → collect artifact
-                                         ↓
-                                       verify apksigner digest (non-PR only)
-                                         ↓
-                                       create/update release (non-PR)
-                                       → publish update.json (non-PR, branch pushes only)
-```
-
-Notable properties, each of which was a bug once:
-
-- **A pull request gets a throwaway key**, never the real one — GitHub withholds
-  secrets from forks, and a review build has no reason to hold the key that can
-  update every installed copy. The two publishing steps are gated on
-  `github.event_name != 'pull_request'`, so nothing signed in CI is ever shipped.
-- **A PR is told where its APK is.** The APK exists but is unfindable without it,
-  so the workflow links it on the PR and edits that comment in place rather than
-  posting one per push. It never fails the run over a permissions quirk — a red X
-  on an otherwise-good build trains people to ignore this workflow.
-- **`actionlint` runs first.** A duplicate YAML key makes the whole file invalid
-  and the only symptom is "this run likely failed because of a workflow file
-  issue". The workflow validates itself.
-- **Robolectric's framework jars are cached.** They are fetched by Robolectric's
-  own Maven resolver *during the test task*, not through Gradle, so they are in
-  no Gradle cache and a cold runner downloads ~100 MB of them before the first
-  test starts. That download — not the suite, which is about twenty seconds — is
-  what makes a cold test run slow. The cache is keyed on `gradle/libs.versions.toml`,
-  which is where the Robolectric version lives, so a bump cannot silently keep
-  testing against the previous release's jars.
-- **Lint is its own job, not a step in front of the tests.** `lintRelease`
-  compiles the release variant to build its model — about three minutes. In the
-  release job those three minutes were serialised ahead of the gate, so a broken
-  test waited for lint before the test step even started, and the APK step then
-  compiled the release variant again: only that step is given the resolved
-  version, and those `-P` flags change `BuildConfig`, an input to both KSP and
-  the Kotlin compile. Split onto its own runner, lint runs while the tests do,
-  and the gate is reached in about a minute instead of four. Neither job needs
-  the other: lint cannot hold up a release, and a failed release does not cancel
-  the annotations.
-- **A superseded pull-request run is cancelled.** Pushing a fix three times left
-  two full builds — R8 over the whole app, plus the tests — finishing behind the
-  one that mattered. `cancel-in-progress` is an expression rather than `true`:
-  it applies to pull requests only, because branch and tag runs are serialised
-  on purpose (two pushes landing together would both mint a release tag and race
-  to write `update.json`).
-- **The manifest commit is reported, not swallowed.** `main` is protected and
-  rejects `GITHUB_TOKEN` pushes, so `gradle.properties` and `update.json` still
-  need bringing forward by hand after a release. A `|| echo "Nothing to push."`
-  used to turn that rejection green, which is how a stale manifest stayed
-  invisible.
-
-`update.json`, `gradle.properties` and `app/build.gradle.kts` must all agree.
-`VersionBaselineTest` enforces it.
+The diagram, the Robolectric cache and the seven properties that were each a bug
+once are in [BUILDING.md § Continuous integration](BUILDING.md#continuous-integration).
 
 ---
 
@@ -1200,146 +208,45 @@ Notable properties, each of which was a bug once:
 ```
 AniSequel/
 ├── app/
-│   ├── build.gradle.kts          version baseline, packaging, R8, dependencies
-│   ├── proguard-rules.pro        Moshi/Retrofit reflection keep rules
+│   ├── build.gradle.kts           version baseline, R8, packaging
 │   └── src/
 │       ├── main/
 │       │   ├── java/com/anisequel/
-│       │   │   ├── data/         network, repository, update, changelog
-│       │   │   ├── domain/       pure logic: usecase, tier, motion, studio
+│       │   │   ├── data/          network, repository, update, changelog
+│       │   │   ├── domain/        use cases, tier, motion, studio, color
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
-│       │   ├── assets/
-│       │   │   └── changelog.json   release notes, one source for two readers
-│       │   └── res/
-│       │       ├── drawable/      adaptive-icon layers + the three widget shapes
-│       │       ├── layout/        widget RemoteViews layouts (no Compose lives here)
-│       │       ├── mipmap-anydpi-v26/ adaptive icons (no raster fallbacks)
-│       │       ├── values/        strings, colours, the system splash theme
-│       │       └── xml/           backup rules, FileProvider paths, widget configs
-│       └── test/                 66 JVM unit suites (there is no androidTest/)
-├── gradle/libs.versions.toml     every version, with the reasoning kept inline
-├── AGENTS.md                     the rules for working in this repo
-├── ARCHITECTURE.md               the exhaustive system specification
-├── TO-DO.md                      the improvement backlog
-├── metadata.json                 AI Studio template leftovers, kept minimal
-├── update.json                   what the updater reads from the release asset
+│       │   ├── assets/            changelog.json
+│       │   └── res/               the widget XML, adaptive icon, strings
+│       └── test/                  98 JVM test classes (there is no androidTest/)
+├── gradle/libs.versions.toml      every version, with its reasoning inline
+├── update.json                    what the updater reads from the release asset
 └── .github/workflows/
 ```
 
-**Each layer directory carries its own `README.md`** — `data/`, `domain/`, `ui/`,
-`ui/screens/` and `ui/components/` — saying what belongs there, what the placement rule
-is, and which mistakes have already been made in it. They are short on purpose: a
-second document to keep in step with the code is a document that goes stale, so each
-one records a *rule* and the failure that produced it rather than describing the files
-as they currently are. `ui/screens/` in particular spells out the one arrangement to
-avoid (a screen file at the `screens/` root with its components in a subdirectory), and
-`ui/components/` records the "one control, one declaration" rule that `EngagementAction`
-exists to satisfy.
-
 `applicationId` is `com.aistudio.anisequel.app`, not `com.anisequel`. The Kotlin
 package was renamed away from the Android Studio default, but the application ID
-is the identity every installed copy answers to and **cannot** be changed:
-editing it makes the next release a different app, every existing install
-rejects it as foreign, and there is no update path. The same trap as the key
-rotation below.
-
-### APK size
-
-R8 and `shrinkResources` are both on, with the *optimized* default proguard
-file, and there are deliberately **no `-keep` rules on `androidx.compose`** —
-adding any would be a large, avoidable regression. What that buys:
-
-- `material-icons-extended` ships ~30,000 icon classes; R8 prunes them to the
-  **54** the app actually references, all of them listed by name in
-  `ui/components/AppVectorIcons.kt` so the reachable set stays reviewable.
-  Disabling shrinking would ship all 30,000.
-- All iconography in the Compose UI is an `ImageVector`. There is not one PNG,
-  SVG or XML drawable in it, and no `res/anim` and no `res/font` anywhere.
-  The three `res/drawable/widget_*.xml` shapes are the exception, and not by
-  preference — a widget is `RemoteViews` inflated by the launcher in its own
-  process, so it cannot be a `Composable`.
-- `dependenciesInfo.includeInApk = false` keeps dependency metadata out of the
-  APK.
-- `androidResources.localeFilters += listOf("en")` drops the library locales.
-  Every string in this app is in the default `res/values/strings.xml`; there is
-  not one translated string in the repository. The other ~100 locales in a
-  release APK come from AndroidX, Material and friends, and nothing in this app
-  can draw them. If the app is ever translated, the new locale has to be added
-  there or its strings are filtered out of the build — which is exactly the
-  constraint to remember about that block, and it fails visibly (English UI in a
-  translated app) rather than silently. `resourceConfigurations` did this
-  before and was deprecated in AGP 8.8.
-- The animated-image decoder set is down to the one that can run. `NetworkClient`
-  used to register `ImageDecoderDecoder` behind `if (SDK_INT >= P)` and
-  `GifDecoder` below it; at `minSdk = 31` that guard is always true, so the
-  fallback could not execute on any device this app installs on. The branch and
-  the fallback are gone and R8 prunes the unused decoder's classes.
-  **`coil-gif` is still a dependency, though** — both decoders live in that one
-  artifact (`coil-gif-2.7.0.aar` contains `ImageDecoderDecoder.class`;
-  `coil-base` contains neither), so removing it breaks the build rather than
-  shrinking the APK. `MinimumSdkReachabilityTest` now fails the build if a
-  `Build.VERSION.SDK_INT` branch is decided before the app starts, so the next
-  raise of `minSdk` cannot quietly leave one behind.
-- `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see
-  `ApkPackagingTest` for the 1.9 MB this is worth.
-- The launcher is a pure adaptive icon (`mipmap-anydpi-v26`). The density-bucket
-  PNGs that Android Studio generates by default were unreachable on every
-  supported configuration and were removed.
-
-### Minimum Android version
-
-`minSdk = 31` — **Android 12**. Raised from 29 (Android 10) because every API
-branch below 31 in this codebase had stopped describing a device the app can be
-installed on, and the ones that remained were carrying caveat text rather than
-behaviour:
-
-| Was | Now |
-| --- | --- |
-| `supportsDynamicColor = SDK_INT >= S` | removed; dynamic colour exists everywhere |
-| Dynamic-colours switch `enabled = supportsDynamicColor` | removed; always live |
-| `canInstallPackages = SDK_INT < O \|\| canRequestPackageInstalls()` | `canRequestPackageInstalls()` |
-| `installPermissionSettings(): Intent?` | returns `Intent` |
-| `GET_SIGNING_CERTIFICATES or GET_SIGNATURES` | `GET_SIGNING_CERTIFICATES` |
-| deprecated `getPackageInfo(path, int)` on API 33+ | `PackageInfoFlags` |
-| `PackageInfo.signatures` signer fallback | `signingInfo` only |
-| Coil `if (SDK_INT >= P) ImageDecoderDecoder else GifDecoder` | `ImageDecoderDecoder`; `coil-gif` dropped |
-
-What 31 buys beyond tidiness: Material You works on every supported device, so
-the wallpaper theming that was previously "unavailable on some phones" is
-universal, and the system splash can be themed without a versioned resource.
-
-Dropping Android 10 and 11 is a real loss of installs. It is accepted deliberately
-— a per-API code path is a path that has to be reasoned about forever, and AGENTS.md
-already asks whether a resource is reachable on `minSdk` at all.
-
-`UpdateManager` still branches on `TIRAMISU` (33) for `PackageInfoFlags` and
-notification permission: those arrived *after* 31 and are still real.
+is the identity every installed copy answers to and **cannot** change: editing
+it makes the next release a different app, and every existing install rejects
+it. The same trap as rotating the key.
 
 ---
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) first — it records the rules this repo has learned the
-expensive way, and several of them exist because the obvious thing was wrong
-once.
+Read [AGENTS.md](AGENTS.md) first — it records the rules this repo learned the
+expensive way. The short version:
 
-The short version:
-
-- Keep files focused, and **under 700 lines**.
-- No emoji as UI icons. Vectors only.
-- Look up docs before adding a dependency, plugin or experimental API.
-- Never commit key material, and never rewrite history to hide it.
-- Bump the version in all three places and run `VersionBaselineTest`.
-- **Add a `changelog.json` block in the same change as the version bump.** The
-  release workflow publishes notes it did not write, and the in-app "What's new"
-  card reads the same file.
-- If you fixed a bug that reached a build, the regression test is the
-  deliverable — not the fix.
+- Keep files focused, under 700 lines, split by responsibility.
+- No emoji as UI icons. Pure Compose `ImageVector`; vectors only.
+- Look up the docs before adding a dependency, plugin or experimental API, and
+  check it against *this* repo's Kotlin, AGP and compileSdk.
+- Never commit key material. Never rewrite history to hide it.
+- Bump the version in all three places and add the `changelog.json` block in the
+  same change.
+- If a bug reached a build, the regression test is the deliverable.
 - `./gradlew test` must be green. Lint will not save you.
 
-Known improvements that are deliberately *not* done are tracked in
-[TO-DO.md](TO-DO.md), each with the reason it was left. The exhaustive system
-design is [ARCHITECTURE.md](ARCHITECTURE.md).
+---
 
 ## License
 

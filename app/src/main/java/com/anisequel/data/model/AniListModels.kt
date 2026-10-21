@@ -36,6 +36,20 @@ data class AniListErrorEnvelope(
     val errors: List<GraphQLError>? = null
 )
 
+/**
+ * The response to the reachability probe.
+ *
+ * `__typename` is a GraphQL meta-field every server answers, so the probe costs
+ * no resolver work on AniList's side - it is the cheapest question that still
+ * proves a real answer came back rather than a cached page or a proxy's login
+ * screen. The value is read only to force Moshi to parse it; a null body with
+ * no errors is treated as a malformed answer by the repository.
+ */
+@JsonClass(generateAdapter = true)
+data class ApiStatusData(
+    @Json(name = "__typename") val typeName: String?
+)
+
 @JsonClass(generateAdapter = true)
 data class ViewerData(
     @Json(name = "Viewer") val viewer: ViewerProfile?

@@ -1,6 +1,7 @@
 package com.anisequel.data.network
 
 import com.anisequel.data.model.ActivityDetailData
+import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.DeleteActivityReplyData
@@ -197,4 +198,15 @@ interface AniListApiService {
     suspend fun getStaffProfile(
         @Body request: GraphQLRequest
     ): GraphQLResponse<StaffProfileData>
+
+    /**
+     * The reachability probe. Deliberately the narrowest call in this interface:
+     * see [GraphQLQueries.API_STATUS] for why it asks for the root `__typename`
+     * instead of anything the app actually wants.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun ping(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ApiStatusData>
 }

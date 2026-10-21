@@ -34,6 +34,8 @@ import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -54,6 +56,17 @@ fun SettingsScreen(
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
     changelogRepository: ChangelogRepository,
+    /**
+     * The repository's reachability probe, passed as a function so Settings does
+     * not need the whole repository to ask one question.
+     *
+     * A default that reports UNKNOWN keeps every preview and every call site
+     * that has no network - the demo route, screenshot tests - compiling and
+     * honest rather than pretending the API is up.
+     */
+    checkApiReachability: suspend () -> ApiStatusSnapshot = {
+        ApiStatusSnapshot(ApiReachability.UNKNOWN)
+    },
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
@@ -172,6 +185,7 @@ fun SettingsScreen(
                     totalWatchedCount = totalWatchedCount,
                     totalMissedCount = totalMissedCount,
                     changelogRepository = changelogRepository,
+                    checkApiReachability = checkApiReachability,
                     modifier = Modifier.padding(paddingValues)
                 )
             }

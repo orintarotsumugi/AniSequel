@@ -437,7 +437,8 @@ class DashboardViewModel(
     private fun showError(error: Throwable, fallback: String) {
         _uiState.value = DashboardUiState.Error(
             message = error.message ?: fallback,
-            isAuthError = error.isAuthFailure()
+            isAuthError = error.isAuthFailure(),
+            kind = (error as? AniListException)?.kind
         )
     }
 
