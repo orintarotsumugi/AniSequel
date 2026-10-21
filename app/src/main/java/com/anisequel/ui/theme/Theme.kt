@@ -212,7 +212,12 @@ fun AniSequelTheme(
         if (animeThemeActive) DynamicThemeBuilder.parseHexColor(animeThemeColorHex) else null
     }
 
-    val darkTheme = if (animeThemeActive && animeColor != null) true else effectiveDark
+    // The anime layer follows Light/Dark/System. It used to force dark mode,
+    // which meant a reader on a light phone got a dark sheet the moment they
+    // opened a title - and made the light anime scheme below unreachable. Both
+    // schemes are generated now and the same mode switch that governs the rest of
+    // the app selects between them.
+    val darkTheme = effectiveDark
 
     val customColor = androidx.compose.runtime.remember(customColorHex) {
         DynamicThemeBuilder.parseHexColor(customColorHex)
@@ -244,17 +249,21 @@ fun AniSequelTheme(
     // because the next reader assumes there is a device class it excludes.
     //
     // The scheme builders used to run inline in the `when` below, so every
-    // recomposition of the theme - the whole app - re-derived the HSL
-    // transforms even when nothing about the colour had changed. The heavy
-    // half now runs once per colour, keyed on the parsed value.
-    val animeDarkScheme = androidx.compose.runtime.remember(animeColor) {
-        // `tintSurfaces = true`: the anime theme is an immersive layer the reader
-        // opened a specific show for, and the seed only reached `primary` before -
-        // so the background stayed navy on a Chainsaw Man page exactly as it did on
-        // a Frieren one, which is the one thing the setting is asking to change.
-        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true).second }
+    // recomposition of the theme - the whole app - re-derived the transforms
+    // even when nothing about the colour had changed. The heavy half now runs
+    // once per colour, keyed on the parsed value.
+    //
+    // The anime layer generates both light and dark. `tintSurfaces = true`
+    // because it is an immersive layer opened for a specific show: the cover's
+    // hue reaches the neutral palettes, so the background behind a Chainsaw Man
+    // page is not the brand navy it was behind a Frieren one.
+    val animeSchemes = androidx.compose.runtime.remember(animeColor) {
+        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true) }
     }
     val customDynamicSchemes = androidx.compose.runtime.remember(customColor) {
+        // A custom accent is a standing preference, not a title. Its surfaces
+        // stay on the brand's neutral hue: picking a colour in Settings must not
+        // repaint every card, which is what `appBackgroundColor` is for.
         customColor?.let { DynamicThemeBuilder.createDynamicSchemes(it) }
     }
     val context = LocalContext.current
@@ -268,7 +277,10 @@ fun AniSequelTheme(
         // Both asserts are gated by the same condition in the branch above, and
         // `remember` guarantees the same value a read would give - a kotlin
         // nullable here would only re-check what the branch already proved.
-        animeThemeActive && animeColor != null -> requireNotNull(animeDarkScheme)
+        animeThemeActive && animeColor != null -> {
+            val schemes = requireNotNull(animeSchemes)
+            if (darkTheme) schemes.second else schemes.first
+        }
         dynamicColor -> requireNotNull(wallpaperScheme)
         customColor != null -> {
             val (lightDynamic, darkDynamic) = requireNotNull(customDynamicSchemes)
@@ -305,6 +317,11 @@ fun AniSequelTheme(
         }
     }
 
+    // Every role eases to its new value instead of cutting. This is read after
+    // the true-black and custom-background overrides so those are animated too,
+    // and it is the scheme the M3 components actually receive.
+    val animatedColorScheme = rememberAnimatedColorScheme(colorScheme)
+
     CompositionLocalProvider(
         LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors
     ) {
@@ -313,7 +330,7 @@ fun AniSequelTheme(
         // expressive component in the app animates against. Colour, typography
         // and shapes are passed explicitly so this stays the app's identity.
         ExpressiveThemeHost(
-            colorScheme = colorScheme,
+            colorScheme = animatedColorScheme,
             motionStyle = motionStyle,
             content = content,
         )

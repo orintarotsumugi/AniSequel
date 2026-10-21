@@ -105,6 +105,24 @@ object ExpressiveMotion {
         colorEffects(stiffness = Spring.StiffnessMedium)
 
     /**
+     * The colour transition for a whole scheme.
+     *
+     * When the anime layer opens, every role moves at once - primary, containers,
+     * surfaces, outlines. Snapping them is what made the recolour read as a flash
+     * followed by the sheet arriving; Material You cross-fades the wallpaper
+     * palette instead. This is the slower of the two colour tokens because it is
+     * moving an entire screen's worth of roles rather than one control's state,
+     * and it stays `NoBouncy` for the same reason as [FastColorEffects]: an
+     * overshooting channel can leave the sRGB cube.
+     *
+     * Under [MotionStyle.INSTANT] the shared [colorEffects] helper returns `snap()`,
+     * so the whole scheme still changes in one frame when the reader has asked for
+     * no motion.
+     */
+    val ThemeColorEffects: FiniteAnimationSpec<Color> get() =
+        colorEffects(stiffness = Spring.StiffnessLow)
+
+    /**
      * The press spring shared by every press gesture below.
      *
      * One token rather than a literal per gesture, so `bouncyPress` and

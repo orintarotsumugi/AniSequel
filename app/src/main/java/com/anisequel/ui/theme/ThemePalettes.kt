@@ -230,52 +230,77 @@ data class ThemePalette(
             )
         )
 
-        val CYBER_JADE: ThemePalette = run {
+        val CYBER_JADE: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF00BFA5))
             ThemePalette(id = "cyber_jade", displayName = "Cyber Jade", light = l, dark = d)
         }
 
-        val NEON_VIOLET: ThemePalette = run {
+        val NEON_VIOLET: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF9C27B0))
             ThemePalette(id = "neon_violet", displayName = "Neon Violet", light = l, dark = d)
         }
 
-        val CRIMSON: ThemePalette = run {
+        val CRIMSON: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFFE53935))
             ThemePalette(id = "crimson", displayName = "Crimson", light = l, dark = d)
         }
 
-        val OCEAN: ThemePalette = run {
+        val OCEAN: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF0288D1))
             ThemePalette(id = "ocean", displayName = "Deep Ocean", light = l, dark = d)
         }
 
-        val MIDNIGHT_NEON: ThemePalette = run {
+        val MIDNIGHT_NEON: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFF00E5FF))
             ThemePalette(id = "midnight_neon", displayName = "Midnight Neon", light = l, dark = d)
         }
 
-        val GOLDEN_HOUR: ThemePalette = run {
+        val GOLDEN_HOUR: ThemePalette by lazy {
             val (l, d) = DynamicThemeBuilder.createDynamicSchemes(Color(0xFFFF9100))
             ThemePalette(id = "golden_hour", displayName = "Golden Hour", light = l, dark = d)
         }
 
-        val entries: List<ThemePalette> = listOf(
-            ANISDK,
-            SAKURA,
-            MIDNIGHT_NEON,
-            GOLDEN_HOUR,
-            CYBER_JADE,
-            NEON_VIOLET,
-            CRIMSON,
-            OCEAN,
-            MATCHA,
-            JUBITER,
-            AMBER
-        )
+        // Built on first read, which is the palette picker in Settings. It was a
+        // plain `val`, so the six generated palettes were constructed during
+        // class initialisation - and constructing one now runs the HCT solver
+        // twice for light and dark. Nothing at startup needs the full list; the
+        // theme needs exactly the one palette that `fromStorage` selected.
+        val entries: List<ThemePalette> by lazy {
+            listOf(
+                ANISDK,
+                SAKURA,
+                MIDNIGHT_NEON,
+                GOLDEN_HOUR,
+                CYBER_JADE,
+                NEON_VIOLET,
+                CRIMSON,
+                OCEAN,
+                MATCHA,
+                JUBITER,
+                AMBER
+            )
+        }
 
-        fun fromStorage(id: String?): ThemePalette =
-            entries.firstOrNull { it.id == id } ?: ANISDK
+        /**
+         * Looks a palette up by its stored id.
+         *
+         * Deliberately a `when` rather than `entries.firstOrNull`: `entries`
+         * builds the six generated palettes, and reading this at startup for the
+         * one palette the reader chose must not pay for the five they did not.
+         */
+        fun fromStorage(id: String?): ThemePalette = when (id) {
+            SAKURA.id -> SAKURA
+            MATCHA.id -> MATCHA
+            JUBITER.id -> JUBITER
+            AMBER.id -> AMBER
+            CYBER_JADE.id -> CYBER_JADE
+            NEON_VIOLET.id -> NEON_VIOLET
+            CRIMSON.id -> CRIMSON
+            OCEAN.id -> OCEAN
+            MIDNIGHT_NEON.id -> MIDNIGHT_NEON
+            GOLDEN_HOUR.id -> GOLDEN_HOUR
+            else -> ANISDK
+        }
     }
 }
 

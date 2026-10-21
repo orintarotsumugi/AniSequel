@@ -353,19 +353,38 @@ bargain above. `FavouriteStudioChipTest` pins the query *and* the three-hop wiri
 the likely way this breaks later is a new caller omitting the callback and inheriting
 the no-op default.
 
-**The anime theme reaches the background.** `DynamicThemeBuilder` derived the whole
-accent family from the title's colour and then handed back the brand's fixed navy
-surfaces, so a Chainsaw Man page and a Frieren page shared a `#0A1017` backdrop with a
-differently-coloured button on it. The surface ladder now takes the show's hue, via an
-opt-in `tintSurfaces` flag — opt-in because the *custom accent* in Settings shares this
-builder and is a standing preference, and surfaces the user did not ask to change must
-not change because they picked a hue (`appBackgroundColor` exists to move the background
-on purpose). Saturation is scaled to 62% of the brand ladder's, so a red seed tints
-rather than repaints (`#392827` at full strength is a brown card, not a red one), and
-lightness is untouched — that is the safety argument, since `onSurface` and
-`onSurfaceVariant` are fixed greys and only lightness is what legibility is made of.
-Measured across blue, red, violet and green seeds, every role lands within 0.2 of
-today's contrast ratio and several above it. `AnimeThemeSurfaceTest` pins it.
+**The anime theme is Material You, seeded from the cover.** AniList's
+`coverImage.color` is one server-computed average of the whole file, and it is
+frequently the background wash rather than the artwork, so the app used to theme
+itself from a colour the reader could not see. The seed now comes from the cover
+pixels: `CoverColorRepository` asks Coil for a 128px software decode (memory- and
+disk-cached, the same URL the hero is already loading), `CoverColorQuantizer`
+bins opaque pixels into a 5-bit histogram and ranks the bins with Material 3's
+`Score` rules — chroma is rewarded, hue is scored by a 15-degree neighbourhood so
+a gradient counts as one region, and anything below chroma 5 is dropped. A grey
+cover therefore produces *no* seed and falls back to AniList's field, then to the
+brand blue, rather than inventing a grey theme.
+
+The seed feeds a pure-Kotlin HCT/CAM16 port (`domain/color/Hct.kt`) that builds a
+Material 3 tonal-spot scheme: primary, secondary, tertiary, neutral and neutral
+variant palettes sampled at fixed tones — 40/80 for primaries, 10/90 for
+containers, 6/98 for surfaces, 30/80 for secondary text, 50/60 for outlines — and
+all 36 `ColorScheme` roles are generated for **both** light and dark. The error
+palette stays red whatever the show. The anime layer no longer forces dark mode:
+it follows Light/Dark/System, and the scheme cross-fades through
+`AnimatedColorScheme` instead of cutting. Surfaces take the show's hue only for
+the anime layer (`tintSurfaces`); the custom accent in Settings shares the builder
+and is a standing preference, so it must not repaint surfaces the user did not ask
+to change (`appBackgroundColor` exists to move the background on purpose).
+
+The tone ladder is also the accessibility argument: tone in HCT is CIELAB L*, so
+`onSurface`/`surface` and every container pair keep their contrast for a yellow
+cover exactly as for a blue one, and `readableOn` flips the foreground when a
+hue's tone 40 is too bright for white. `MaterialColorSchemeTest` pins Google's
+own `#6750A4` values and AA contrast across hues, `CoverColorQuantizerTest` the
+image path, `AnimeThemeSurfaceTest` the tint/surface invariant, and
+`AnimeCoverThemeWiringTest` the `isLoaded` race that used to make the feature work
+only when DataStore beat the tap.
 
 **Bios** are AniList-flavoured Markdown, rendered by
 `ui/components/markdown/`: headings, lists and checklists, code, blockquotes,
