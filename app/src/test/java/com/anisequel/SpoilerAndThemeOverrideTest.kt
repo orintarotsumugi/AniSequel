@@ -1,5 +1,12 @@
 package com.anisequel
 
+import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
+import com.anisequel.domain.color.Hct
+import com.anisequel.domain.color.MaterialColorSchemes
+import com.anisequel.domain.color.MaterialScheme
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -175,11 +182,13 @@ class SpoilerAndThemeOverrideTest {
      * No role may be left to Material's baseline scheme.
      *
      * `lightColorScheme(...)` and `darkColorScheme(...)` start from a purple-seeded
-     * baseline, so a role the call does not name is *purple*, not "unset". The fix is
-     * to copy off the app's own complete schemes instead.
+     * baseline, so a role the call does not name is *purple*, not "unset". The
+     * builder now generates a [com.anisequel.domain.color.MaterialScheme] and copies
+     * every one of its roles onto the Compose scheme. This asserts the copy is
+     * complete by comparing each role's value, not by trusting the list.
      */
     @Test
-    fun `the dynamic schemes are copied off the app's own, not built from M3's`() {
+    fun `every Material role is generated and copied onto the scheme`() {
         val builder = File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt"
@@ -197,11 +206,38 @@ class SpoilerAndThemeOverrideTest {
             "same for `darkColorScheme(`",
             Regex("""=\s*darkColorScheme\(""").containsMatchIn(code)
         )
-        assertTrue(
-            "both schemes are copies of the app's own, so a role this does not " +
-                "override keeps the brand navy rather than a second palette",
-            code.contains("LightColorScheme.copy(") && code.contains("DarkColorScheme.copy(")
+
+        assertEquals(
+            "the scheme and the test have to agree on how many roles Material 3 has",
+            36,
+            MaterialScheme.ROLE_NAMES.size
         )
+
+        val seed = Color(0xFFD64B4B)
+        val seedInt = seed.toArgb()
+        val (light, dark) = DynamicThemeBuilder.createDynamicSchemes(seed, tintSurfaces = true)
+        listOf(
+            Triple(
+                false,
+                light,
+                MaterialColorSchemes.tonalSpot(seedInt, dark = false, tintSurfaces = true)
+            ),
+            Triple(
+                true,
+                dark,
+                MaterialColorSchemes.tonalSpot(seedInt, dark = true, tintSurfaces = true)
+            )
+        ).forEach { (isDark, actual, expected) ->
+            MaterialScheme.ROLE_NAMES.forEach { role ->
+                assertEquals(
+                    "${if (isDark) "dark" else "light"}.$role is not the generated " +
+                        "value - a role the builder forgot keeps whichever scheme it " +
+                        "was copied from, which is the purple-border bug",
+                    expected.role(role),
+                    actual.role(role)
+                )
+            }
+        }
     }
 
     /**
@@ -218,7 +254,7 @@ class SpoilerAndThemeOverrideTest {
             tintSurfaces = true
         ).second
         val navy = DynamicThemeBuilder
-            .let { DynamicThemeBuilder.createDynamicSchemes(androidx.compose.ui.graphics.Color(0xFF7FA9D4)) }
+            .createDynamicSchemes(androidx.compose.ui.graphics.Color(0xFF7FA9D4))
             .second
 
         listOf(
@@ -237,44 +273,82 @@ class SpoilerAndThemeOverrideTest {
             assertNotEquals(
                 "$role is still the brand navy - this is the border under a red " +
                     "accent that made the anime theme look like it had not applied",
-                navy.surfaceContainerHigh,
-                colour
+                navy.role(role),
+                colour.toArgb()
             )
         }
     }
 
     /**
-     * What must *not* be re-derived from a title's colour.
+     * The error palette is a semantic colour, not part of the show's identity.
      *
-     * The status colours were picked by hand in `Color.kt` for contrast in both
-     * themes, and `onSurfaceVariant` is text on every secondary label. Tinting either
-     * is how a palette acquires content that fails 4.5:1.
+     * A red cover must not make an error state indistinguishable from the accent,
+     * and a green one must not make it green. Material 3 fixes the error palette
+     * (hue ~25); the builder keeps it fixed and only samples the tone ladder.
      */
     @Test
-    fun `status colours and secondary text stay the app's own`() {
-        val builder = File(
-            findProjectRoot(),
-            "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt"
-        ).readText()
-        val code = builder
-            .replace(Regex("""/\*[\s\S]*?\*/"""), "")
-            .replace(Regex("""//[^\n]*"""), "")
-
-        listOf("tertiary", "error", "onSurfaceVariant", "surfaceVariant").forEach { role ->
-            // `surfaceVariant` *is* routed into the ramp; the rest must not be.
-            if (role == "surfaceVariant") {
+    fun `the error palette stays red whatever the seed`() {
+        val seeds = listOf(
+            0xFFD64B4B.toInt(), 0xFF4BA86B.toInt(), 0xFF7FA9D4.toInt(), 0xFF9B5BD6.toInt()
+        )
+        seeds.forEach { seed ->
+            listOf(false, true).forEach { dark ->
+                val scheme = MaterialColorSchemes.tonalSpot(seed, dark = dark, tintSurfaces = true)
+                val hue = Hct.fromInt(scheme.error).hue
+                val delta = angularDistance(hue, 25.0)
                 assertTrue(
-                    "`surfaceVariant` is read by Material components and belongs in " +
-                        "the ramp",
-                    code.contains("surfaceVariant = ramp.surfaceContainerHigh")
+                    "the error role sits $delta degrees from Material's red, so a " +
+                        "title's accent has replaced the one colour that has to mean " +
+                        "the same thing in every theme",
+                    delta < 15.0
                 )
-            } else {
-                assertFalse(
-                    "$role must keep the hand-picked value from `Color.kt`: it is " +
-                        "either a status colour chosen for contrast or text on every " +
-                        "secondary label, and re-deriving it from a title's colour " +
-                        "breaks legibility",
-                    Regex("(^|[^a-zA-Z])" + role + " = ").containsMatchIn(code)
+                assertTrue(
+                    "onError has to be readable on error",
+                    ColorUtils.calculateContrast(scheme.onError, scheme.error) >= 4.5
+                )
+            }
+        }
+    }
+
+    /**
+     * Secondary text keeps AA contrast in every scheme.
+     *
+     * This was the requirement behind the old hand-picked `onSurfaceVariant`, and
+     * generating it is only acceptable because the tone ladder guarantees the same
+     * pair. Asserted on the generated values rather than the source, because the
+     * source can name the role and still pair it with the wrong tone.
+     */
+    @Test
+    fun `secondary text keeps AA contrast in every scheme`() {
+        val seeds = listOf(
+            0xFFD64B4B.toInt(), 0xFF4BA86B.toInt(), 0xFF7FA9D4.toInt(), 0xFFFFD54F.toInt()
+        )
+        seeds.forEach { seed ->
+            listOf(false, true).forEach { dark ->
+                val scheme = MaterialColorSchemes.tonalSpot(seed, dark = dark, tintSurfaces = true)
+                assertTrue(
+                    "${if (dark) "dark" else "light"}: onSurface on surface",
+                    ColorUtils.calculateContrast(scheme.onSurface, scheme.surface) >= 4.5
+                )
+                assertTrue(
+                    "${if (dark) "dark" else "light"}: onSurfaceVariant on " +
+                        "surfaceVariant",
+                    ColorUtils.calculateContrast(
+                        scheme.onSurfaceVariant,
+                        scheme.surfaceVariant
+                    ) >= 4.5
+                )
+                assertTrue(
+                    "${if (dark) "dark" else "light"}: onSurfaceVariant on surface - " +
+                        "the pair secondary labels are actually drawn on",
+                    ColorUtils.calculateContrast(
+                        scheme.onSurfaceVariant,
+                        scheme.surface
+                    ) >= 4.5
+                )
+                assertTrue(
+                    "${if (dark) "dark" else "light"}: onPrimary on primary",
+                    ColorUtils.calculateContrast(scheme.onPrimary, scheme.primary) >= 4.5
                 )
             }
         }
@@ -283,9 +357,11 @@ class SpoilerAndThemeOverrideTest {
     /**
      * Text contrast has to survive the tint.
      *
-     * The tint changes chroma and never lightness, so this is really a guard on the
-     * ramp's ladder rather than on the hue - but it is the failure a future edit to
-     * `SURFACE_TINT_SCALE` would cause, and it is the one thing that must not regress.
+     * Both palettes are sampled at the same HCT tones, so the tinted and brand
+     * surfaces share a luminance ladder by construction. This is the guard that a
+     * future edit to the neutral palette's chroma cannot quietly move a surface to
+     * a different tone, which is what would break `onSurface` and
+     * `onSurfaceVariant`.
      */
     @Test
     fun `tinting does not change lightness on any role`() {
@@ -337,9 +413,10 @@ class SpoilerAndThemeOverrideTest {
     /**
      * A grey seed has to produce a usable scheme rather than collapsing.
      *
-     * `createDynamicSchemes` coerces saturation to at least 0.2 and the tint scale is
-     * 0.62, so the floor is 0.124 - enough chroma to be a tinted neutral, and not so
-     * much that a show's dominant grey repaints the app.
+     * A grey cover has no hue worth trusting, so the builder falls back to the
+     * brand hue and the primary-chroma floor. The surfaces then come from the same
+     * (slightly chromatic) neutral palette as the tinted path, which keeps the
+     * page dark and gives it a blue-grey cast instead of the old flat navy.
      */
     @Test
     fun `a grey seed still produces a tinted scheme, not a flat one`() {
@@ -354,7 +431,7 @@ class SpoilerAndThemeOverrideTest {
             luminanceOf(grey.background) < 0.2
         )
         assertNotEquals(
-            "and it has to have picked up the seed's chroma rather than staying the " +
+            "and it has to have picked up the neutral palette rather than staying the " +
                 "brand navy",
             grey.background,
             DynamicThemeBuilder.createDynamicSchemes(androidx.compose.ui.graphics.Color(0xFF808080))
@@ -369,35 +446,25 @@ class SpoilerAndThemeOverrideTest {
          * In a companion object because `const val` is only allowed at top level,
          * in a named object, or in a companion - not in a class body.
          *
-         * Was 0.004, which is **below the worst case the implementation actually
-         * produces** - measured across five hues and all eleven ramp roles, the
-         * largest drift is 0.0162, at `surfaceBright` under a hue-120 seed. So the
-         * assertion could never have passed, whatever the code did. It was not a
-         * test that caught a regression; it was a test that could not run.
-         *
-         * The confusion underneath it: `tintedDarkRamp` pins HSL *lightness*
-         * exactly - `role(saturation, lightness)` takes the same lightness whether
-         * or not it tints - and HSL lightness is not WCAG relative luminance. The
-         * two agree at the neutral hue and drift apart as hue moves, because the
-         * WCAG coefficients weight the channels the hue lands on. So "lightness is
-         * preserved" is the invariant the code guarantees; "luminance barely moves"
-         * is a weaker consequence of it, and the bound has to sit above the
-         * consequence, not below.
-         *
-         * 0.02 is about 1.2x the worst measured drift, so it still fails for a
-         * palette that genuinely shifted its lightness - which is the regression it
-         * exists to catch - while passing for the tinting the app actually does.
+         * This used to be 0.02, and the comment explained at length why "HSL
+         * lightness is preserved but luminance drifts". That reasoning belonged to
+         * the old HSL ramp and is now the wrong model: the builder samples both
+         * palettes at the same HCT tone, tone is CIELAB L*, and L* determines Y.
+         * The two must therefore have the same luminance up to the rounding of an
+         * 8-bit channel - which is what 0.005 allows. A larger drift means the
+         * tint left the tone ladder, which is the regression this guards.
          */
-        const val LUMINANCE_TOLERANCE = 0.02
+        const val LUMINANCE_TOLERANCE = 0.005
     }
 
     /**
      * The relative luminance of a colour, per WCAG.
      *
-     * Returns [Double] rather than `Float` because the comparison is made with
-     * JUnit's `assertEquals(message, expected, actual, delta)` and only that
-     * overload exists - there is no `Float` one. A `Float` here is not implicitly
-     * widened in that position, and the test file does not compile.
+     * Returns [Double] so the comparison is made with JUnit's
+     * `assertEquals(message, expected, actual, delta)` overload in [Double].
+     * The channels are `Float`; widening once here keeps the arithmetic and the
+     * 0.005 tolerance in the same type instead of introducing a `Float` delta
+     * that rounds differently at the boundary.
      */
     private fun luminanceOf(color: androidx.compose.ui.graphics.Color): Double {
         fun channel(c: Float): Double {
@@ -407,6 +474,58 @@ class SpoilerAndThemeOverrideTest {
         return 0.2126 * channel(color.red) +
             0.7152 * channel(color.green) +
             0.0722 * channel(color.blue)
+    }
+
+    /**
+     * The Compose scheme's value for a role, by the name the domain scheme uses.
+     *
+     * This is the test's own mapping on purpose: comparing through it is what catches
+     * the builder wiring, say, `onSurfaceVariant` to `surfaceVariant`. A helper that
+     * read the builder's own map would have the same mistake as the builder.
+     */
+    private fun ColorScheme.role(name: String): Int = when (name) {
+        "primary" -> primary.toArgb()
+        "onPrimary" -> onPrimary.toArgb()
+        "primaryContainer" -> primaryContainer.toArgb()
+        "onPrimaryContainer" -> onPrimaryContainer.toArgb()
+        "inversePrimary" -> inversePrimary.toArgb()
+        "secondary" -> secondary.toArgb()
+        "onSecondary" -> onSecondary.toArgb()
+        "secondaryContainer" -> secondaryContainer.toArgb()
+        "onSecondaryContainer" -> onSecondaryContainer.toArgb()
+        "tertiary" -> tertiary.toArgb()
+        "onTertiary" -> onTertiary.toArgb()
+        "tertiaryContainer" -> tertiaryContainer.toArgb()
+        "onTertiaryContainer" -> onTertiaryContainer.toArgb()
+        "error" -> error.toArgb()
+        "onError" -> onError.toArgb()
+        "errorContainer" -> errorContainer.toArgb()
+        "onErrorContainer" -> onErrorContainer.toArgb()
+        "background" -> background.toArgb()
+        "onBackground" -> onBackground.toArgb()
+        "surface" -> surface.toArgb()
+        "onSurface" -> onSurface.toArgb()
+        "surfaceVariant" -> surfaceVariant.toArgb()
+        "onSurfaceVariant" -> onSurfaceVariant.toArgb()
+        "surfaceTint" -> surfaceTint.toArgb()
+        "inverseSurface" -> inverseSurface.toArgb()
+        "inverseOnSurface" -> inverseOnSurface.toArgb()
+        "outline" -> outline.toArgb()
+        "outlineVariant" -> outlineVariant.toArgb()
+        "scrim" -> scrim.toArgb()
+        "surfaceBright" -> surfaceBright.toArgb()
+        "surfaceContainer" -> surfaceContainer.toArgb()
+        "surfaceContainerHigh" -> surfaceContainerHigh.toArgb()
+        "surfaceContainerHighest" -> surfaceContainerHighest.toArgb()
+        "surfaceContainerLow" -> surfaceContainerLow.toArgb()
+        "surfaceContainerLowest" -> surfaceContainerLowest.toArgb()
+        "surfaceDim" -> surfaceDim.toArgb()
+        else -> throw IllegalArgumentException("unknown role '$name'")
+    }
+
+    private fun angularDistance(a: Double, b: Double): Double {
+        val raw = kotlin.math.abs(a - b) % 360.0
+        return if (raw > 180.0) 360.0 - raw else raw
     }
 
     private fun findProjectRoot(): File {

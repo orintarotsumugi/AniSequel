@@ -36,13 +36,17 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
+import com.anisequel.data.model.posterUrl
+import com.anisequel.data.repository.CoverColorRepository
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
+import com.anisequel.domain.color.ArgbHex
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
+import com.anisequel.ui.theme.CoverColors
 import kotlinx.coroutines.launch
 
 /**
@@ -160,20 +164,62 @@ fun SequelDetailSheet(
 
     LaunchedEffect(subject.mediaId, subject.media.type) {
         onLoadDetail(subject.mediaId, subject.media.type)
-        if (themeSettings.animeThemeActive) {
-            val colorHex = media.posterColor ?: "#0057B7"
-            // One call, one transaction, one recolour of the app.
-            //
-            // "Retain" means the anime's colour becomes the app's accent, not just a
-            // glow around this sheet: it is persisted as a custom hue so the whole
-            // app - and the next launch - keeps it. There is an exit hatch: picking a
-            // palette or a hue in the Theme tab clears it, as does Reset appearance.
-            themePreferences.setAnimeThemeActive(
-                active = true,
-                colorHex = colorHex,
-                retainColor = themeSettings.animeThemeRetainColor
-            )
+    }
+
+    // The colour comes from the pixels, and the effect waits for the stored
+    // preferences before it writes any.
+    //
+    // It used to read `themeSettings` during the sheet's first composition and
+    // apply the theme in the same `LaunchedEffect` that loaded the detail. The
+    // flow starts at its initial value - `isLoaded = false`, feature off - so a
+    // sheet opened while DataStore was still reading saw the feature as off and
+    // never re-ran the effect when the real settings arrived. The result was the
+    // reported "sometimes it works": whether the app recoloured depended on
+    // whether the preferences happened to beat the tap. Keying on `isLoaded` is
+    // the fix: the effect is inert until the real values are there, then runs
+    // exactly once for this title.
+    //
+    // Extraction runs even when the anime layer is off, because the hero uses
+    // the same seed for its backdrop and shadow. It is one 128px decode from
+    // Coil's cache - the hero is already loading the full image - and it means
+    // the artwork's colour is right whether or not the global recolour is on.
+    LaunchedEffect(
+        subject.mediaId,
+        subject.media.type,
+        media.posterUrl,
+        themeSettings.isLoaded,
+        themeSettings.animeThemeActive,
+        themeSettings.animeThemeRetainColor
+    ) {
+        if (!themeSettings.isLoaded) return@LaunchedEffect
+
+        val seed = CoverColorRepository.extract(context, media.posterUrl)
+        if (seed != null) {
+            CoverColors.put(media.posterUrl, seed)
         }
+
+        if (!themeSettings.animeThemeActive) return@LaunchedEffect
+
+        // Fallback order, most specific first: the cover's own pixels, then
+        // AniList's dominant colour (which is still the cover, just computed
+        // elsewhere), then the brand. A grey cover legitimately produces no
+        // seed, and the app should still recolour to *something* the reader
+        // recognises rather than doing nothing.
+        val colorHex = seed?.let { ArgbHex.format(it) }
+            ?: media.posterColor
+            ?: "#0057B7"
+
+        // One call, one transaction, one recolour of the app.
+        //
+        // "Retain" means the anime's colour becomes the app's accent, not just a
+        // glow around this sheet: it is persisted as a custom hue so the whole
+        // app - and the next launch - keeps it. There is an exit hatch: picking a
+        // palette or a hue in the Theme tab clears it, as does Reset appearance.
+        themePreferences.setAnimeThemeActive(
+            active = true,
+            colorHex = colorHex,
+            retainColor = themeSettings.animeThemeRetainColor
+        )
     }
 
     // The revert timer starts when the sheet is *closed*, not while it is open.

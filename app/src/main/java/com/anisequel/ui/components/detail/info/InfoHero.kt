@@ -62,6 +62,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
+import com.anisequel.ui.theme.CoverColors
 
 /**
  * The Info page's hero: the artwork, behind its own title.
@@ -134,7 +135,13 @@ fun InfoHero(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val coverColor = media.posterColor.toCoverColorOrNull()
+    // The extracted seed first. It is read from the pixels the reader is looking
+    // at, and it is the same colour the theme is built from - so the hero's
+    // backdrop, the shadow around the cover and the buttons below cannot be three
+    // different readings of the same artwork. AniList's own field is the fallback
+    // for the frames before the decode lands, and for a cover that cannot be read.
+    val coverColor = CoverColors.color(media.posterUrl)
+        ?: media.posterColor.toCoverColorOrNull()
         ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val surface = MaterialTheme.colorScheme.surface
     // The key visual, always - the KDoc above is the long version of why.
