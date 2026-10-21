@@ -1,6 +1,7 @@
 package com.anisequel
 
 import com.anisequel.data.model.AniListErrorEnvelope
+import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
@@ -159,6 +160,12 @@ class AniListErrorMappingTest {
         override suspend fun getStudio(
             request: GraphQLRequest
         ): GraphQLResponse<StudioData> = notServed("getStudio")
+
+        // Added with the status strip. Failure classification never asks whether
+        // AniList is reachable, so an accidental call should fail loudly.
+        override suspend fun ping(
+            request: GraphQLRequest
+        ): GraphQLResponse<ApiStatusData> = notServed("ping")
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
@@ -411,6 +418,11 @@ class RequestCoalescingPolicyTest {
         override suspend fun getStudio(
             request: GraphQLRequest
         ): GraphQLResponse<StudioData> = notServed("getStudio")
+
+        // See the note on the same override in `FakeService`.
+        override suspend fun ping(
+            request: GraphQLRequest
+        ): GraphQLResponse<ApiStatusData> = notServed("ping")
     }
 
     @Test

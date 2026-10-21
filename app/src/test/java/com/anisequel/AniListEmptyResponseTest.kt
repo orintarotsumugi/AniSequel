@@ -6,6 +6,7 @@ import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityFeedPage
 import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.DeleteActivityReplyData
@@ -407,6 +408,11 @@ private class FakeService(
     override suspend fun deleteActivityReply(
         request: GraphQLRequest
     ): GraphQLResponse<DeleteActivityReplyData> = notServed("deleteActivityReply")
+
+    // The reachability probe, added with the status strip. These tests do not
+    // check reachability; refusing keeps an accidental call from inventing one.
+    override suspend fun ping(request: GraphQLRequest): GraphQLResponse<ApiStatusData> =
+        notServed("ping")
 }
 
 private fun notServed(operation: String): Nothing =
