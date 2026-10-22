@@ -6,7 +6,6 @@ import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.ui.viewmodel.ApiStatusProbeState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -43,24 +42,25 @@ class ApiStatusProbeTest {
 
         probe.probe()
         runCurrent()
-        if (calls != 1) error("DIAG first check: calls=$calls ui=${probe.ui.value}")
+        assertEquals("the first check did not start", 1, calls)
 
         // The reader taps Check while the automatic probe is still in flight.
         probe.probe()
         runCurrent()
-        if (calls != 1) error("DIAG concurrent tap: calls=$calls ui=${probe.ui.value}")
+        assertEquals("the tap started a second concurrent request", 1, calls)
 
         gate.complete(Unit)
-        advanceUntilIdle()
-        if (calls != 2) error("DIAG queued tap lost: calls=$calls ui=${probe.ui.value}")
-        if (probe.ui.value.reachability != ApiReachability.ONLINE) {
-            error("DIAG reachability: calls=$calls ui=${probe.ui.value}")
-        }
+        // `runCurrent`, not `advanceUntilIdle`: the probe is launched in
+        // `backgroundScope`, and `advanceUntilIdle` intentionally stops once only
+        // background coroutines are left unprocessed. It would return with the
+        // gate still unread and the strip still checking, which is the very state
+        // this test exists to rule out.
+        runCurrent()
+        assertEquals("the tap was thrown away instead of queued", 2, calls)
+        assertEquals(ApiReachability.ONLINE, probe.ui.value.reachability)
         // The verdict on screen has to be the second request's, not the first's.
-        if (probe.ui.value.latencyMillis != 20L) {
-            error("DIAG latency: calls=$calls ui=${probe.ui.value}")
-        }
-        if (probe.ui.value.isChecking) error("DIAG still checking: calls=$calls ui=${probe.ui.value}")
+        assertEquals(20L, probe.ui.value.latencyMillis)
+        assertFalse(probe.ui.value.isChecking)
     }
 
     @Test
@@ -100,7 +100,10 @@ class ApiStatusProbeTest {
         )
 
         probe.probe()
-        advanceUntilIdle()
+        // Same background-scope caveat as above: `advanceUntilIdle` would return
+        // without running the request, so the initial UNKNOWN state would pass
+        // this test without the catch ever executing.
+        runCurrent()
 
         assertEquals(ApiReachability.UNKNOWN, probe.ui.value.reachability)
         assertFalse("the strip was left checking forever", probe.ui.value.isChecking)
