@@ -320,6 +320,31 @@ name: the by-name key would miss that cache and re-download the app's most
 expensive query. Manga is still fetched the first time somebody filters to it,
 behind a spinner on that chip, and never again.
 
+**A failure on one of these pages is a sentence, not a scene.** The full AniList
+failure theatre — the broken heart, the probe's status strip, the joke and the
+"go touch grass" off-ramp — was shared by the dashboard, the Profile and the
+Library, on the theory that one failure should look the same everywhere. It read
+correctly on the dashboard, which has nothing else to show, and wrongly on the
+other two: it arrived over content the reader had been reading a second earlier
+and pushed the only control that helps below a screenful of animation. The
+theatre now belongs to `ApiFailureBody` on the dashboard's error screen and to
+the Settings connection check, which reuses the same heart scene; Profile and
+Library draw `ProfileErrorView`, which is the same `friendlyCopy()` words
+(headline, detail and one quip) with the two honest exits and no scene. That view
+is the shared one: the Library route's pre-`ViewModel` fallback, where the
+viewer query itself failed, uses it too.
+
+**A joke turns up above the bar, now and then.** `JokeToastHost` is mounted by
+`AppNavigation` next to `MainBar` and gated on the same `mainTabForRoute`, so it
+exists only on the three pages the bar owns — never over login, Settings or a
+title sheet. It waits a random 1.5–4 minutes for the first line and 4–15 for each
+one after, stays five seconds, and leaves on a tap. Its pool is `AppJokes`, a
+plain object with no Android imports so `AppJokesTest` can pin the things a
+review cannot see: that no line is duplicated, and that two in a row are never
+the same. The wait runs inside a `LifecycleResumeEffect`, so a joke cannot
+come due while the app is in the background and be waiting when the reader
+returns.
+
 ---
 
 ## The profile screen

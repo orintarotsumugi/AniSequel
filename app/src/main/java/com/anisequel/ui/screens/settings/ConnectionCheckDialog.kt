@@ -42,6 +42,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.ApiStatusProbeState
 import com.anisequel.ui.viewmodel.ApiStatusUi
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 /**
@@ -88,12 +89,23 @@ fun ConnectionCheckDialog(
         if (status.isChecking || status.reachability == ApiReachability.UNKNOWN) {
             return@LaunchedEffect
         }
-        if (seenProblem && status.reachability.isReachable) {
-            celebrating = true
-            delay(2_100)
-            celebrating = false
-        }
+        val recovered = seenProblem && status.reachability.isReachable
+        // Recorded before the celebration starts, so the next result is judged
+        // against *this* one rather than against whatever the state was before the
+        // delay below. It used to be written after the delay, which made the order
+        // depend on whether the effect survived to the end of it.
         seenProblem = !status.reachability.isReachable
+        if (recovered) celebrating = true
+    }
+
+    // Timed separately on purpose. Keyed on the status, the effect above is
+    // cancelled the moment another check starts, and a `celebrating` flag set
+    // inside it stayed true forever when that happened - the dialog then drew the
+    // repair scene with no Close button and no way out of it.
+    LaunchedEffect(celebrating) {
+        if (!celebrating) return@LaunchedEffect
+        delay(2_100)
+        celebrating = false
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -121,6 +133,14 @@ fun ConnectionCheckDialog(
                             probe.probe()
                         },
                         onClose = onDismiss
+                    )
+
+                    // A check that never produced a verdict is not a failure. It
+                    // used to fall into the broken-heart branch below, so a probe
+                    // that could not run announced "Ani-chan is confused" beside a
+                    // heart breaking over a question nobody had answered yet.
+                    status.reachability == ApiReachability.UNKNOWN -> UnknownContent(
+                        onCheck = { probe.probe() }
                     )
 
                     status.reachability.isReachable -> AwakeContent(
@@ -188,6 +208,53 @@ private fun CheckingContent() {
     )
 }
 
+/**
+ * The honest "no verdict" state.
+ *
+ * Not the same thing as "down": the request never produced an answer the probe
+ * could classify, so the dialog says so, offers the check again, and leaves the
+ * heart whole. Showing the break scene here was a claim about AniList that the
+ * app had not earned.
+ */
+@Composable
+private fun UnknownContent(onCheck: () -> Unit) {
+    Icon(
+        imageVector = AppVectorIcons.Info,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(52.dp)
+    )
+    Spacer(modifier = Modifier.height(14.dp))
+    Text(
+        text = ApiReachability.UNKNOWN.label,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = ApiReachability.UNKNOWN.detail(),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(
+        text = "Nothing is broken. The question just has not been answered yet.",
+        style = MaterialTheme.typography.bodySmall,
+        fontStyle = FontStyle.Italic,
+        color = MaterialTheme.colorScheme.tertiary,
+        textAlign = TextAlign.Center
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    Button(
+        onClick = onCheck,
+        modifier = Modifier.bouncyPress(pressedScale = 0.96f)
+    ) {
+        Text("Check now")
+    }
+}
+
 @Composable
 private fun AwakeContent(
     reachability: ApiReachability,
@@ -233,6 +300,10 @@ private fun BrokenContent(
     onTouchGrass: () -> Unit
 ) {
     val copy = reachability.friendlyCopy()
+    // Rerolled per result, because the latency is not a reliable seed: two checks
+    // that both come back "not answering" carry no latency at all, and the reader
+    // tapping Try again then saw the identical joke every time.
+    val quipSeed = remember(reachability, latencyMillis) { Random.nextInt() }
 
     HeartbreakScene()
     Text(
@@ -250,7 +321,7 @@ private fun BrokenContent(
     )
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = copy.quipFor("${reachability.name}:$latencyMillis"),
+        text = copy.quipFor("${reachability.name}:$latencyMillis:$quipSeed"),
         style = MaterialTheme.typography.bodySmall,
         fontStyle = FontStyle.Italic,
         color = MaterialTheme.colorScheme.tertiary,

@@ -13,27 +13,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.network.AniListErrorKind
-import com.anisequel.ui.components.ApiFailureBody
+import com.anisequel.data.network.friendlyCopy
+import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.viewmodel.ApiStatusUi
+import com.anisequel.ui.components.expressive.bouncyPress
+import kotlin.random.Random
 
 /**
  * The profile screen's waiting state.
@@ -72,12 +81,26 @@ fun ProfileLoadingView(
 }
 
 /**
- * The profile screen's failure state.
+ * The profile and Library pages' failure state - deliberately the quiet one.
+ *
+ * ## Why this is not the dashboard's error body
+ *
+ * It was: `ApiFailureBody` drew the heartbreak, the status strip, the joke and
+ * the "go touch grass" off-ramp here too, on the theory that one failure should
+ * look the same everywhere. On the dashboard the reader has nothing else to look
+ * at, so the scene *is* the screen. On the Profile and Library pages it arrived
+ * over content the reader had been reading a moment earlier, pushed the retry
+ * button below a full-screen column of theatre, and read as a production that had
+ * happened *to* their list rather than as a reload that did not work.
+ *
+ * So the theatre stays where it was asked for - the dashboard's error screen and
+ * the Settings connection check - and this page says what happened, makes one
+ * joke and offers the two honest exits. [kind] still chooses the words, so the
+ * calm view is specific rather than a generic "something went wrong".
  *
  * A dead session offers the way back to sign-in rather than a Retry button that
- * fails identically every time - the same rule the dashboard follows, and for
- * the same reason: a retry that cannot work reads as the app not knowing what is
- * wrong, and here the user has just been told their sign-in succeeded.
+ * fails identically every time - the same rule the dashboard follows: a retry
+ * that cannot work reads as the app not knowing what is wrong.
  */
 @Composable
 fun ProfileErrorView(
@@ -85,34 +108,99 @@ fun ProfileErrorView(
     kind: AniListErrorKind?,
     canRetry: Boolean,
     isAuthError: Boolean,
-    apiStatus: ApiStatusUi,
-    onCheckApiStatus: () -> Unit,
     onRetry: () -> Unit,
     onSignInAgain: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val copy = kind?.friendlyCopy()
+    // Drawn once per failure rather than derived from the message. A derived seed
+    // is stable across a retry *of the same failure*, which handed a retry loop
+    // the same joke every time - the one thing a pool exists to avoid.
+    //
+    // The attempt counter is not decoration. `UserOverviewViewModel.load()` does
+    // not publish a Loading state at the start of a retry, so this screen stays
+    // composed with the same kind and message while the second request runs;
+    // keying on those alone left the retry with the identical seed and the
+    // identical joke. The counter is bumped by the retry button, so the key
+    // changes exactly when a new answer was asked for. The dashboard does not
+    // need this because its retry goes through Loading and disposes this body.
+    val attempt = remember { mutableIntStateOf(0) }
+    val quipSeed = remember(kind, message, attempt.intValue) { Random.nextInt() }
+    val quip = copy?.quipFor("${kind?.name.orEmpty()}:$message:$quipSeed")
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            // Two sentences, one joke and one button do not fill a landscape
+            // phone, but they can outgrow it on a large font: the column scrolls
+            // rather than clipping the only control on the page.
+            .verticalScroll(rememberScrollState())
             .padding(32.dp)
             .testTag("profile_error"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        ApiFailureBody(
-            kind = kind,
-            message = message,
-            isAuthError = isAuthError,
-            canRetry = canRetry,
-            status = apiStatus,
-            onCheckStatus = onCheckApiStatus,
-            onRetry = onRetry,
-            onSignInAgain = onSignInAgain,
-            // Existing automation selects these by name; keep the profile's
-            // tags rather than letting the shared body rename them.
-            retryTestTag = "profile_retry_button",
-            signInTestTag = "profile_sign_in_again_button"
+        Icon(
+            imageVector = AppVectorIcons.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(40.dp)
         )
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = copy?.headline
+                ?: if (isAuthError) "Session expired" else "AniList connection error",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = copy?.detail ?: message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 420.dp)
+        )
+        if (quip != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = quip,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.tertiary,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        if (isAuthError) {
+            Button(
+                onClick = onSignInAgain,
+                modifier = Modifier
+                    .testTag("profile_sign_in_again_button")
+                    .bouncyPress(pressedScale = 0.96f)
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Login,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("Sign in again")
+            }
+        } else if (canRetry) {
+            Button(
+                onClick = {
+                    attempt.intValue += 1
+                    onRetry()
+                },
+                modifier = Modifier
+                    .testTag("profile_retry_button")
+                    .bouncyPress(pressedScale = 0.96f)
+            ) {
+                Text("Try again")
+            }
+        }
     }
 }
 
