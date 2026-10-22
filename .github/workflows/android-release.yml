@@ -452,6 +452,11 @@ jobs:
           ./gradlew test --stacktrace
           echo "::endgroup::"
 
+      - name: Dump failing test report
+        if: failure()
+        run: |
+          find app/build/test-results -name '*.xml' -print -exec sed -n '1,80p' {} \;
+
       - name: Build Release APK
         run: |
           # The version name is resolved before the build and passed in, so the
