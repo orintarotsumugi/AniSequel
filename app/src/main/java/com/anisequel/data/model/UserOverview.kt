@@ -57,34 +57,31 @@ data class UserOverview(
 )
 
 /**
- * `User.stats` - deprecated by AniList in favour of `User.statistics`, and the
- * only one of the two that carries data.
+ * `User.stats` - deprecated by AniList in favour of `User.statistics`, and still
+ * the only source for two things.
  *
- * This is the awkward part of the profile screen and it is worth writing down in
- * full, because the schema actively misleads here:
+ * ## What is still read from here, and why
  *
- * `User.statistics` (`UserStatisticTypes`) is the documented, non-deprecated
- * replacement, and it answers every per-status / per-genre / per-format question
- * with `[]`. Checked against AniList for accounts holding 142 and 258 scored
- * anime, and for the site's own account: `statuses: []`, `genres: []`, and zeros
- * everywhere else, while `count`, `meanScore`, `episodesWatched` and
- * `minutesWatched` come back populated. The sub-selections are simply not served.
+ *  - [activityHistory] is this type's per-day history and carries AniList's own
+ *    intensity [level]. No replacement exists anywhere in the schema, and
+ *    deriving days from list entries has a gap: bumping progress on a show you
+ *    are watching is activity and produces no `completedAt` anywhere.
+ *  - The status, score and list-score distributions still answer here and have no
+ *    equivalent that the Stats tab can use without a second interpretation step.
  *
- * `User.stats` is marked "Replaced with statistics field" and is what actually
- * answers. Every list below is served from it, for one request and about 6 KB.
+ * ## What was removed, and it is not cosmetic
  *
- * The consequences are handled rather than hidden:
+ * This type used to carry `favouredFormats`, `favouredYears`, `favouredGenres`
+ * and `favouredTags`. On 2026-10-22 any one of those four makes AniList answer
+ * **HTTP 500** for the entire profile document (`data.User = null`, four generic
+ * "Internal Server Error" entries), verified against the live API. Since the
+ * profile screen was the only reader, every Profile and Library open became the
+ * "Ani-chan is having a nap" page while the dashboard kept working.
  *
- *  - The two halves that *do* work on `statistics` are read from there, so the
- *    query does not pay twice for the same number.
- *  - [ActivityCalendar] is built from [activityHistory], which is this type's
- *    own per-day history and carries AniList's own intensity [level]. The
- *    alternative - deriving days from list entries - has a gap the reference
- *    implementation does not: bumping progress on a show you are watching is
- *    activity and produces no `completedAt` anywhere.
- *  - The distributions the profile screen shows are marked
- *    `UserOverviewQueryTest` as coming from a deprecated field, so that whoever
- *    finds this after AniList removes `stats` knows exactly what to move.
+ * They are not modelled here any more, so a future edit cannot ask for them by
+ * accident. The same distributions are read from
+ * `User.statistics.anime` - see [UserFormatStatistic] and siblings - which is
+ * populated and is the field AniList actually maintains.
  */
 @JsonClass(generateAdapter = true)
 data class AniListUserStats(
@@ -96,11 +93,7 @@ data class AniListUserStats(
     val mangaStatusDistribution: List<StatusAmount>? = null,
     val animeScoreDistribution: List<ScoreAmount>? = null,
     val animeListScores: ListScoreStats? = null,
-    val mangaListScores: ListScoreStats? = null,
-    val favouredFormats: List<FormatAmount>? = null,
-    val favouredYears: List<YearAmount>? = null,
-    val favouredGenres: List<GenreAmount>? = null,
-    val favouredTags: List<TagAmount>? = null
+    val mangaListScores: ListScoreStats? = null
 )
 
 /**

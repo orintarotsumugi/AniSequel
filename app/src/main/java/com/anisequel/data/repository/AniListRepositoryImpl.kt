@@ -246,6 +246,18 @@ class AniListRepositoryImpl(
         const val VIEWER_PROFILE_WINDOW_MILLIS = 30 * 60 * 1000L
 
         /**
+         * How old a saved copy may be and still be drawn instead of a failure page.
+         *
+         * Thirty days, not "forever". A list that is a month old is still this
+         * account's list and infinitely more useful than a screen saying AniList is
+         * asleep; a list from two years ago is a different season of somebody's
+         * life and would quietly claim they had not added anything since. Past this
+         * the snapshot is treated as absent and the error page is the honest
+         * answer.
+         */
+        const val STALE_FALLBACK_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000L
+
+        /**
          * How long a title's fetched facts may be reused, by the title's own
          * release status.
          *
@@ -714,6 +726,66 @@ class AniListRepositoryImpl(
             ttlMillis = VIEWER_PROFILE_WINDOW_MILLIS
         ) ?: return null
         viewerCache = CachedViewer(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
+    /**
+     * The viewer from memory at any age, for [lastKnownViewer].
+     *
+     * Deliberately not [cachedViewer]: that one treats an old entry as absent, and
+     * the whole point here is to answer with it anyway. The timestamp is kept, so
+     * the freshness watch upstream can still tell how old the copy is.
+     */
+    private fun viewerAnyAge(): ViewerProfile? = viewerCache?.profile
+
+    override suspend fun lastKnownViewer(): ViewerProfile? {
+        viewerAnyAge()?.let { return it }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_VIEWER,
+            key = SNAPSHOT_VIEWER_KEY,
+            type = ViewerProfile::class.java,
+            ttlMillis = STALE_FALLBACK_WINDOW_MILLIS
+        ) ?: return null
+        viewerCache = CachedViewer(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
+    override suspend fun lastKnownOverview(userId: Int?, userName: String?): UserOverview? {
+        val key = overviewCacheKey(userId, userName)
+        overviewCache[key]?.let { return it.overview }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_OVERVIEW,
+            key = key,
+            type = UserOverview::class.java,
+            ttlMillis = STALE_FALLBACK_WINDOW_MILLIS
+        ) ?: return null
+        overviewCache[key] = CachedOverview(stored.value, stored.storedAtMillis)
+        return stored.value
+    }
+
+    override suspend fun lastKnownAnimeList(userId: Int): MediaListCollection? =
+        lastKnownList("user:$userId")
+
+    override suspend fun lastKnownAnimeListByUsername(userName: String): MediaListCollection? =
+        lastKnownList("userName:${userName.trim().lowercase(Locale.ROOT)}")
+
+    /**
+     * The list held for [key], however old - the one read that ignores the window.
+     *
+     * The memory tier is consulted first because a fetch that has already happened
+     * this session is fresher than the file, and because the file read parses the
+     * whole multi-megabyte payload. Either way the entry keeps its own timestamp,
+     * so nothing here extends a cache's life.
+     */
+    private suspend fun lastKnownList(key: String): MediaListCollection? {
+        listCache[key]?.let { return it.collection }
+        val stored = snapshots?.read(
+            kind = SNAPSHOT_LIST,
+            key = key,
+            type = MediaListCollection::class.java,
+            ttlMillis = STALE_FALLBACK_WINDOW_MILLIS
+        ) ?: return null
+        listCache[key] = CachedList(stored.value, stored.storedAtMillis)
         return stored.value
     }
 

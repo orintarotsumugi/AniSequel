@@ -26,11 +26,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -441,6 +443,7 @@ internal fun libraryProgressLabel(entry: MediaListEntryItem): String? {
  * survives on the cover because it sits in the top-left corner, which is empty
  * padding on almost every cover; a two-line title does not.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileLibraryTab(
     animeEntries: List<MediaListEntryItem>,
@@ -488,7 +491,18 @@ fun ProfileLibraryTab(
      * See [RememberedLibraryView].
      */
     remembered: RememberedLibraryView,
-    gridState: LazyGridState = rememberLazyGridState()
+    gridState: LazyGridState = rememberLazyGridState(),
+    /**
+     * A refresh the reader asked for with the pull gesture.
+     *
+     * The page had no way to ask for a new list at all: the only refresh lived on
+     * the dashboard, so reading the Library after finishing a show meant leaving
+     * the page and pulling there. The gesture is the one every scrollable page in
+     * this app already uses for the same question, and the profile's refresh bar
+     * still carries the progress - this only gives the page a way to start it.
+     */
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     /**
@@ -597,12 +611,21 @@ fun ProfileLibraryTab(
         return
     }
 
+    // The refresh indicator is drawn over the grid rather than above it, so
+    // pulling does not move the posters the reader is looking at - the same rule
+    // the dashboard follows. `modifier` moves to the wrapper; the grid keeps its
+    // own fill so the two cannot disagree about the available height.
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize()
+    ) {
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
         // the grid must not reflow when the window changes, because the person's
         // scroll position would no longer be the entry they were looking at.
         columns = GridCells.Fixed(3),
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .testTag("library_grid"),
         state = gridState,
@@ -713,6 +736,7 @@ fun ProfileLibraryTab(
                 )
             }
         }
+    }
     }
 }
 

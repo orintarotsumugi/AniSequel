@@ -63,7 +63,19 @@ object AppJokes {
         "A twelve-episode show and a free weekend. We both know how this ends.",
         "The plot twist was in the opening. Nobody watches the opening.",
         "Your queue has a queue. It is queues all the way down.",
-        "The cliffhanger ended the episode and your sleep schedule took the fall."
+        "The cliffhanger ended the episode and your sleep schedule took the fall.",
+        "The sequel was announced before you finished the prequel.",
+        "You opened the app to check one show. That was twenty minutes ago.",
+        "Nobody has ever needed a tier list. Everybody has made one.",
+        "The insert song started and suddenly you are running somewhere.",
+        "Your 'on hold' list is a museum of good intentions.",
+        "Episode one of a long runner is a commitment, not a sample.",
+        "The villain had a point. The soundtrack agreed with them.",
+        "You remember the ending theme. Not the ending.",
+        "Somewhere, a second season is still 'in production'.",
+        "Your list says paused. Your heart says rewatch.",
+        "The three-episode rule was invented by somebody with free time.",
+        "You will absolutely start it tomorrow. Right after this one."
     )
 
     /** One line, uniformly at random. */
