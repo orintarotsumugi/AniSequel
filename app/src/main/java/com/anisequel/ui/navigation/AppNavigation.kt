@@ -891,7 +891,8 @@ fun AppNavigation(
                 // so a joke parked just clear of the bar would occasionally be
                 // drawn through an "Added to Planning" confirmation. The clearance
                 // already includes the device's navigation inset.
-                .padding(horizontal = 16.dp, bottom = mainBarClearance() + 72.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = mainBarClearance() + 72.dp)
         )
     }
 }
