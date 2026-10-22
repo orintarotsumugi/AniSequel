@@ -88,6 +88,11 @@ object AppVectorIcons {
     val SequelArrow = Icons.AutoMirrored.Filled.ArrowForward
     val SequelJump = AppCustomVectors.SequelJump
     val FranchiseBranch = AppExtraVectors.FranchiseBranch
+
+    // The Library destination. A shelf of books, not the Stats tab's stopwatch:
+    // "the list I keep" and "time spent watching" shared one glyph, which made two
+    // unrelated destinations look like the same page at 22dp.
+    val Library = AppExtraVectors.LibraryShelf
     val CheckDouble = AppExtraVectors.CheckDouble
     val CalendarClock = AppExtraVectors.CalendarClock
     val BookmarkAdd = Icons.Default.BookmarkAdd

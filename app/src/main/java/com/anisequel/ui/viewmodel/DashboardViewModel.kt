@@ -238,6 +238,17 @@ class DashboardViewModel(
 
     private var cachedViewer: ViewerProfile? = null
     private var cachedCollection: MediaListCollection? = null
+
+    /**
+     * Whether the pair above came from the disk snapshot rather than the network.
+     *
+     * Set when the saved copy is painted at the start of a load and cleared the
+     * moment a live list is folded in. [recompute] reads it, so every Success
+     * published from the cached pair carries `isCached = true` without each call
+     * site having to remember - and the flag cannot be forgotten by the next path
+     * that publishes a state.
+     */
+    private var showingCachedData = false
     private val addedToPlanningIds = mutableSetOf<Int>()
     private val addedToWatchingIds = mutableSetOf<Int>()
     private var searchJob: Job? = null
@@ -379,13 +390,39 @@ class DashboardViewModel(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val username = targetUsername?.takeUnless { it.isBlank() }
-            _uiState.value = DashboardUiState.Loading(
-                if (username != null) {
-                    "Searching for @$username on AniList..."
-                } else {
-                    "Connecting to AniList..."
+
+            // Paint the saved copy *before* the network is asked anything.
+            //
+            // The disk tier already served a cold start inside the refresh
+            // window, but the screen still went through `Loading` first and had
+            // nothing left to draw when a request failed. Reading the snapshot
+            // here makes the first frame the reader's own list, and turns a failed
+            // fetch from "full-screen failure" into "the list you had, marked as a
+            // saved copy". Signed-in only: the public-profile path is addressed by
+            // name and has no viewer record to read.
+            if (username == null) {
+                val savedViewer = aniListRepository.lastKnownViewer()
+                val savedList = savedViewer?.let { aniListRepository.lastKnownAnimeList(it.id) }
+                if (savedViewer != null && savedList != null) {
+                    cachedViewer = savedViewer
+                    cachedCollection = savedList
+                    showingCachedData = true
+                    invalidateDerivedState(clearDetailCache = true)
                 }
-            )
+            }
+
+            // Only when nothing was painted above. Assigning this unconditionally
+            // is what used to blank a perfectly good saved copy for the length of
+            // the request it was about to make.
+            if (_uiState.value !is DashboardUiState.Success) {
+                _uiState.value = DashboardUiState.Loading(
+                    if (username != null) {
+                        "Searching for @$username on AniList..."
+                    } else {
+                        "Connecting to AniList..."
+                    }
+                )
+            }
 
             // A public profile is two independent requests: the profile is
             // looked up by name and so is the list, so neither needs the
@@ -411,20 +448,56 @@ class DashboardViewModel(
             viewerResult.fold(
                 onSuccess = { viewer ->
                     cachedViewer = viewer
-                    _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
+                    if (_uiState.value !is DashboardUiState.Success) {
+                        _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
+                    }
 
                     val listResult = listDeferred?.await() ?: aniListRepository.getUserAnimeList(viewer.id)
                     listResult.fold(
                         onSuccess = { collection ->
                             cachedCollection = collection
+                            showingCachedData = false
                             freshnessWatch.markLoaded()
                             // A new list invalidates everything derived from it.
                             invalidateDerivedState()
                         },
-                        onFailure = { err -> showError(err, fallback = "Failed to fetch anime list") }
+                        onFailure = { err ->
+                            // The saved copy is on screen and is still the reader's
+                            // list. Replacing it with a failure page would throw away
+                            // the data the page exists to show, so it stays - marked
+                            // as cached - and the retry is a pull or a refresh.
+                            val cached = _uiState.value as? DashboardUiState.Success
+                            if (cached != null) {
+                                _uiState.value = cached.copy(isRefreshing = false)
+                                if (cached.isCached) {
+                                    _eventFlow.emit(
+                                        DashboardEvent.ShowSnackbar("Offline - showing your saved copy.")
+                                    )
+                                }
+                            } else {
+                                showError(err, fallback = "Failed to fetch anime list")
+                            }
+                        }
                     )
                 },
-                onFailure = { err -> showError(err, fallback = "Failed to connect with AniList") }
+                onFailure = { err ->
+                    val cached = _uiState.value as? DashboardUiState.Success
+                    // A rejected token is the one failure the saved copy cannot
+                    // paper over: the screen would keep drawing a session that no
+                    // longer works, and the sign-in button that fixes it is on the
+                    // error state this would replace.
+                    val isDeadSession = (err as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+                    if (cached != null && !isDeadSession) {
+                        _uiState.value = cached.copy(isRefreshing = false)
+                        if (cached.isCached) {
+                            _eventFlow.emit(
+                                DashboardEvent.ShowSnackbar("AniList is not answering - showing your saved copy.")
+                            )
+                        }
+                    } else {
+                        showError(err, fallback = "Failed to connect with AniList")
+                    }
+                }
             )
         }
     }
@@ -498,6 +571,7 @@ class DashboardViewModel(
             aniListRepository.getUserAnimeList(viewer.id, forceRefresh = true).fold(
                 onSuccess = { collection ->
                     cachedCollection = collection
+                    showingCachedData = false
                     // Both a manual refresh and an automatic one land here, so
                     // this is the single place the freshness clock restarts.
                     // Without it the interval is measured from the *previous*
@@ -634,6 +708,7 @@ class DashboardViewModel(
             totalWatchedCount = watchedCount,
             totalMissedCount = updated.size,
             isRefreshing = false,
+            isCached = showingCachedData,
             isDemoMode = isDemo,
             canWriteToAniList = canWriteToAniList
         )

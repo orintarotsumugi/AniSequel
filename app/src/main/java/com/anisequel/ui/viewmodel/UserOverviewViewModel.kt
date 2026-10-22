@@ -3,15 +3,20 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.anisequel.data.model.AnimeStats
 import com.anisequel.data.model.FavouriteCharacter
 import com.anisequel.data.model.FavouriteStaff
+import com.anisequel.data.model.FormatAmount
+import com.anisequel.data.model.GenreAmount
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.TagAmount
 import com.anisequel.data.model.UserOverview
+import com.anisequel.data.model.YearAmount
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
@@ -25,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Every list entry on a collection, flattened and de-duplicated by media id.
@@ -211,6 +217,30 @@ class UserOverviewViewModel(
         loadJob = viewModelScope.launch {
             val name = username?.takeUnless { it.isBlank() }
 
+            // Paint the saved copy before the first request leaves.
+            //
+            // This is the profile and Library half of the dashboard's cold-start
+            // paint. Without it a cold start went straight to `Loading`, and a
+            // failed request went straight to the failure page - even though the
+            // bio, the favourites and the whole list were sitting in the snapshot
+            // directory. Not on a manual refresh (`forceRefresh`): the reader
+            // asked for a new answer, not for the one they are already reading.
+            var paintedList: MediaListCollection? = null
+            if (!isDemo && !forceRefresh) {
+                val saved = aniListRepository.lastKnownOverview(userId, name)
+                if (saved != null) {
+                    paintedList = lastKnownListForScreen()
+                    _uiState.value = buildState(
+                        overview = saved,
+                        list = paintedList,
+                        isRefreshing = false,
+                        isLibraryLoading = paintedList == null,
+                        isCached = true
+                    )
+                    loadMediaCovers(saved.about)
+                }
+            }
+
             // One request for the page, and the expensive half beside it.
             //
             // The two used to be awaited together, on the argument that a page
@@ -239,7 +269,22 @@ class UserOverviewViewModel(
                 // cannot be shown either way, and the list query is the
                 // expensive half of the pair.
                 listDeferred.cancel()
-                _uiState.value = errorState(error, "Failed to load the AniList profile")
+                val cached = _uiState.value as? UserOverviewUiState.Success
+                // A dead token is not something a saved copy may hide: the profile
+                // would keep claiming a session that AniList has already refused,
+                // and the "Sign in again" exit is on the error state.
+                val isDeadSession = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+                if (cached != null && !isDeadSession) {
+                    // The saved copy is on screen and belongs to this person. Keep
+                    // it, marked as such, instead of replacing a readable profile
+                    // with a failure page. The flag is preserved rather than forced:
+                    // a refresh of a live page that fails leaves a live page behind,
+                    // and calling that "saved" would be wrong in the other
+                    // direction.
+                    _uiState.value = cached.copy(isRefreshing = false)
+                } else {
+                    _uiState.value = errorState(error, "Failed to load the AniList profile")
+                }
                 return@launch
             }
 
@@ -282,7 +327,13 @@ class UserOverviewViewModel(
             // "Nothing in this list yet" over an account with nine hundred entries,
             // with every chip reading (0) and no way to try again.
             val listResult = listDeferred.await()
-            val list = listResult.getOrNull()
+            val liveList = listResult.getOrNull()
+            // A failed list fetch falls back to the last one this device has, on
+            // the same terms as the profile itself. The bio and the favourites are
+            // already live by here, so the alternative was a page that is half
+            // today and half empty - with every chart reading zero.
+            val list = liveList ?: paintedList ?: if (isDemo) null else lastKnownListForScreen()
+            val usedSavedList = liveList == null && list != null
 
             _uiState.value = buildState(
                 overview = overview,
@@ -294,7 +345,10 @@ class UserOverviewViewModel(
                         ?: "AniList didn't return this list."
                 } else {
                     null
-                }
+                },
+                // The overview itself is live here, so the page is only cached
+                // when the list half had to be given up on.
+                isCached = usedSavedList
             )
         }
     }
@@ -317,13 +371,28 @@ class UserOverviewViewModel(
         load(forceRefresh = true)
     }
 
+    /**
+     * The last list this device holds for whoever this screen is showing.
+     *
+     * Same identifier the fetch would use, so the signed-in profile reads the same
+     * `user:<id>` entry the dashboard filled. Null in demo mode and for a profile
+     * opened with neither id nor name - there is nothing to look up.
+     */
+    private suspend fun lastKnownListForScreen(): MediaListCollection? = when {
+        isDemo -> null
+        userId != null -> aniListRepository.lastKnownAnimeList(userId)
+        else -> username?.takeIf { it.isNotBlank() }
+            ?.let { aniListRepository.lastKnownAnimeListByUsername(it) }
+    }
+
     private fun buildState(
         overview: UserOverview,
         list: MediaListCollection?,
         isRefreshing: Boolean,
         isLibraryLoading: Boolean = false,
         /** Null on the way in; see [UserOverviewUiState.Success.libraryError]. */
-        libraryError: String? = null
+        libraryError: String? = null,
+        isCached: Boolean = false
     ): UserOverviewUiState.Success {
         val favourites = overview.favourites
         val animeStats = overview.statistics?.anime
@@ -355,10 +424,15 @@ class UserOverviewViewModel(
             insights = buildListInsights(
                 animeStatusDistribution = aggregate?.animeStatusDistribution,
                 animeScoreDistribution = aggregate?.animeScoreDistribution,
-                favouredFormats = aggregate?.favouredFormats,
-                favouredYears = aggregate?.favouredYears,
-                favouredGenres = aggregate?.favouredGenres,
-                favouredTags = aggregate?.favouredTags,
+                // These four come from `statistics.anime`, not from the deprecated
+                // `stats` block: requesting `stats.favouredFormats` (and its three
+                // siblings) makes AniList answer HTTP 500 for the entire profile
+                // document, which is what the profile and Library pages were
+                // showing as "Ani-chan is having a nap". See [AnimeStats].
+                favouredFormats = animeStats?.formatAmounts(),
+                favouredYears = animeStats?.releaseYearAmounts(),
+                favouredGenres = animeStats?.genreAmounts(),
+                favouredTags = animeStats?.tagAmounts(),
                 countries = entries.countries,
                 releaseYears = entries.releaseYears
             ),
@@ -377,6 +451,7 @@ class UserOverviewViewModel(
             isRefreshing = isRefreshing,
             isLibraryLoading = isLibraryLoading,
             libraryError = libraryError,
+            isCached = isCached,
             isDemoMode = isDemo
         )
     }
@@ -407,6 +482,49 @@ class UserOverviewViewModel(
         ) as T
     }
 }
+
+/**
+ * `statistics.anime` distributions, in the shapes `BuildListInsightsUseCase`
+ * already takes.
+ *
+ * The alternative was to change the chart builder and its tests to the API's own
+ * field names. That is a bigger change than the bug asks for: the builder's job is
+ * "turn tallies into sorted chart buckets", it already has a tested contract, and
+ * a rename would make the diff about naming rather than about the four fields that
+ * were returning HTTP 500. The translation is here, in one place, so the mapping
+ * (`count` -> `amount`, `Float` -> `Int`) is visible exactly once.
+ *
+ * A null `meanScore` becomes null rather than 0: a tally with no scores behind it
+ * has no mean, and zero is a score a person could plausibly have given.
+ */
+private fun AnimeStats.formatAmounts(): List<FormatAmount> =
+    formats.orEmpty().mapNotNull { row ->
+        val format = row.format ?: return@mapNotNull null
+        FormatAmount(format = format, amount = row.count ?: 0)
+    }
+
+private fun AnimeStats.releaseYearAmounts(): List<YearAmount> =
+    releaseYears.orEmpty().mapNotNull { row ->
+        val year = row.releaseYear ?: return@mapNotNull null
+        YearAmount(year = year, amount = row.count ?: 0, meanScore = row.meanScore?.roundToInt())
+    }
+
+private fun AnimeStats.genreAmounts(): List<GenreAmount> =
+    genres.orEmpty().mapNotNull { row ->
+        val genre = row.genre ?: return@mapNotNull null
+        GenreAmount(
+            genre = genre,
+            amount = row.count ?: 0,
+            meanScore = row.meanScore?.roundToInt(),
+            timeWatched = row.minutesWatched?.toInt()
+        )
+    }
+
+private fun AnimeStats.tagAmounts(): List<TagAmount> =
+    tags.orEmpty().mapNotNull { row ->
+        val tag = row.tag ?: return@mapNotNull null
+        TagAmount(tag = tag, amount = row.count ?: 0, meanScore = row.meanScore?.roundToInt())
+    }
 
 /**
  * Drops repeated entries from a favourites connection.

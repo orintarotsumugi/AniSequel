@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.5.3",
+      "entries": [
+        {
+          "title": "Profile and Library load again",
+          "detail": "AniList quietly broke four fields in the profile query. Asking for any one of them made the whole request fail with a server error, so the Profile and Library pages showed \"Ani-chan is having a nap\" while Home - which uses a different query - kept working. The charts now read the same numbers from the block AniList actually maintains: formats, release years, genres and tags, all populated again."
+        },
+        {
+          "title": "Your list is there before the network is",
+          "detail": "Opening the app now paints the copy already on your device first, then refreshes behind it. If AniList does not answer, that copy stays instead of being replaced by a failure page, with a small \"Saved copy\" pill so a day-old list never pretends to be a live one. Home, Profile and Library all do this, and a saved copy up to thirty days old is still considered yours to read."
+        },
+        {
+          "title": "A library icon that looks like a library",
+          "detail": "The Library tab was borrowing the Stats tab's stopwatch, which read as time watched and made two different destinations share one glyph. It is now the app's own shelf-of-books vector, drawn in the same style as the rest of the icon set."
+        },
+        {
+          "title": "No more empty stat charts",
+          "detail": "Format, genre, tag and release-year distributions are read from the modern statistics block, which returns real tallies for real accounts. The Stats tab and the demo both draw from the same shape, so the fixture can no longer pass while the live request fails."
+        },
+        {
+          "title": "The Library and profile pull their own weight",
+          "detail": "The Library grid now refreshes with the pull gesture instead of sending you back to Home to refresh there, the bar above it says how many titles are in the list, and the profile finally has a refresh control - its refresh bar existed but nothing could start it. The profile's title crossfades from \"Profile\" to the account name instead of reading \"AniList\" while it loads, and the Saved copy pill springs in and out rather than snapping on the line above the content."
+        },
+        {
+          "title": "Twenty-three more ways for Ani-chan to be asleep",
+          "detail": "The failure pool gained another twenty-three lines - a coma arc, a container that restarted with the plot, a health check answering \"lol\" - plus four new rate-limit lines and twelve more ambient jokes for the toast above the bar."
+        }
+      ]
+    },
+    {
       "version": "1.5.2",
       "entries": [
         {

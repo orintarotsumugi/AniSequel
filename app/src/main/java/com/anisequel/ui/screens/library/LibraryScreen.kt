@@ -1,5 +1,9 @@
 package com.anisequel.ui.screens.library
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,9 +41,11 @@ import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
+import com.anisequel.ui.components.SavedCopyPill
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.profile.ProfileErrorView
@@ -152,12 +158,38 @@ fun LibraryScreen(
                                 maxLines = 1
                             )
                             if (success != null) {
-                                Text(
-                                    text = "@${success.username}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
+                                // The size is part of the subtitle because it is
+                                // the one thing a reader opening this page wants
+                                // before scrolling: how much is here. Counted from
+                                // the anime list, which is the half this title
+                                // describes; the Manga chip carries its own.
+                                val titleCount = success.libraryAnime.size
+                                val subtitle = buildString {
+                                    append('@').append(success.username)
+                                    if (!success.isLibraryLoading && titleCount > 0) {
+                                        append(" \u00b7 ").append(titleCount)
+                                        append(if (titleCount == 1) " title" else " titles")
+                                    }
+                                }
+                                // The count arrives a beat after the name does,
+                                // because it comes with the list. A hard swap of a
+                                // line in the bar reads as a glitch; this is the
+                                // effects spring, so the number lands quietly.
+                                AnimatedContent(
+                                    targetState = subtitle,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                    },
+                                    label = "library_subtitle"
+                                ) { text ->
+                                    Text(
+                                        text = text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                         // Beside the title rather than in `actions`, for the reason
@@ -254,27 +286,42 @@ fun LibraryScreen(
                         (state.favouriteAnime + state.favouriteManga)
                             .mapNotNullTo(mutableSetOf()) { it.id }
                     }
-                    ProfileLibraryTab(
-                        animeEntries = state.libraryAnime,
-                        mangaEntries = mangaLibrary,
-                        favouriteIds = favouriteIds,
-                        isLoadingManga = isLoadingManga,
-                        // The list is only on the critical path of this page and
-                        // the profile's Stats tab, so the flag is threaded here
-                        // rather than baked into `libraryAnime` being empty - an
-                        // empty list is a real answer for an account that tracks
-                        // nothing.
-                        isAnimeLoading = state.isLibraryLoading,
-                        // A list that could not be read is not an empty one.
-                        libraryError = state.libraryError,
-                        onLoadManga = { overviewViewModel.loadMangaLibrary() },
-                        // This page's whole bottom clearance, including the
-                        // system navigation inset; see [mainBarClearance].
-                        contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
-                        onOpenDetail = { selectedMedia = it },
-                        gridState = gridState,
-                        remembered = remembered
-                    )
+                    // The pill is above the grid rather than inside it: the grid
+                    // scrolls, and a notice about the whole page should not leave
+                    // the screen with the first poster.
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        SavedCopyPill(
+                            visible = state.isCached,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                        ProfileLibraryTab(
+                            modifier = Modifier.weight(1f),
+                            animeEntries = state.libraryAnime,
+                            mangaEntries = mangaLibrary,
+                            favouriteIds = favouriteIds,
+                            isLoadingManga = isLoadingManga,
+                            // The list is only on the critical path of this page
+                            // and the profile's Stats tab, so the flag is threaded
+                            // here rather than baked into `libraryAnime` being
+                            // empty - an empty list is a real answer for an
+                            // account that tracks nothing.
+                            isAnimeLoading = state.isLibraryLoading,
+                            // A list that could not be read is not an empty one.
+                            libraryError = state.libraryError,
+                            onLoadManga = { overviewViewModel.loadMangaLibrary() },
+                            // This page's whole bottom clearance, including the
+                            // system navigation inset; see [mainBarClearance].
+                            contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
+                            onOpenDetail = { selectedMedia = it },
+                            gridState = gridState,
+                            remembered = remembered,
+                            // The pull gesture lives on the grid, the progress bar
+                            // on the profile header the route above draws - one
+                            // refresh, two places it is visible from.
+                            isRefreshing = state.isRefreshing,
+                            onRefresh = { overviewViewModel.refresh() }
+                        )
+                    }
                 }
             }
         }

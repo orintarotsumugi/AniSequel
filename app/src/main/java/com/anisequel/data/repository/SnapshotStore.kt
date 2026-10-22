@@ -117,7 +117,13 @@ class SnapshotStore(
             drop(kind, key)
             return@withLock null
         }
-        val value = runCatching { moshi.adapter(type).fromJson(entry.payload) }.getOrNull()
+        // Parsed off the main thread. A completed list is multi-megabyte JSON,
+        // and this read is on the cold-start path: decoding it inline showed up
+        // as first-frame jank in exactly the launch the disk tier exists to make
+        // fast. The mutex is already suspend, so the context switch is free here.
+        val value = withContext(Dispatchers.IO) {
+            runCatching { moshi.adapter(type).fromJson(entry.payload) }.getOrNull()
+        }
         if (value == null) {
             // Distinct from expiry: these bytes will never parse, so leaving
             // them would buy a file read on every open to answer the same "no".
@@ -143,7 +149,11 @@ class SnapshotStore(
         storedAtMillis: Long = nowMillis()
     ) {
         lock.withLock {
-            entries(kind)[key] = SnapshotEntry(storedAtMillis, moshi.adapter(type).toJson(value))
+            // Serialised on the IO dispatcher for the same reason the read is
+            // parsed there: a list snapshot is megabytes, and encoding it on the
+            // caller's thread is jank in the middle of a refresh.
+            val payload = withContext(Dispatchers.IO) { moshi.adapter(type).toJson(value) }
+            entries(kind)[key] = SnapshotEntry(storedAtMillis, payload)
             persist(kind)
         }
     }
@@ -162,10 +172,15 @@ class SnapshotStore(
     ) {
         if (values.isEmpty()) return
         lock.withLock {
-            val adapter = moshi.adapter(type)
             val target = entries(kind)
-            values.forEach { (key, value) ->
-                target[key] = SnapshotEntry(storedAtMillis, adapter.toJson(value))
+            // One context switch for the whole batch, and off the caller's
+            // thread - see [write].
+            val encoded = withContext(Dispatchers.IO) {
+                val adapter = moshi.adapter(type)
+                values.mapValues { (_, value) -> adapter.toJson(value) }
+            }
+            encoded.forEach { (key, payload) ->
+                target[key] = SnapshotEntry(storedAtMillis, payload)
             }
             persist(kind)
         }

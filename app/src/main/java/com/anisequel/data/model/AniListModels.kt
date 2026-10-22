@@ -91,17 +91,17 @@ data class UserAvatar(
  * anime-only in practice and `chaptersRead`/`volumesRead` manga-only, and AniList
  * reports zeros rather than nulls for the ones that do not apply.
  *
- * Note what is deliberately **not** here: `meanScore`, `statuses` and `genres`.
+ * `meanScore` is read from here rather than from `stats.animeListScores` - two
+ * sources for one number is how the Stats tab and the header card end up quoting
+ * different values.
  *
- *  - `statuses` and `genres` are the obvious-looking way to get "7 watching, 128
- *    completed" and a top-genres chart straight from AniList, and they are asked
- *    for in [com.anisequel.data.network.GraphQLQueries.GET_USER_OVERVIEW] nowhere
- *    because they answer `[]` for every user that was tried - including accounts
- *    with hundreds of scored entries. The distributions come from the deprecated
- *    `User.stats` block instead; see [AniListUserStats].
- *  - `meanScore` did work on this field, so it is read from here rather than from
- *    `stats.animeListScores` - two sources for one number is how the Stats tab and
- *    the header card end up quoting different values.
+ * The distributions used to be absent from this type, on the documented belief
+ * that AniList answered them with `[]`. That is not true any more (re-checked
+ * against the live API on 2026-10-22), and it has to be false in practice: the
+ * four `stats.favoured*` fields the app used instead now answer HTTP 500 for the
+ * whole document. See [com.anisequel.data.network.GraphQLQueries.GET_USER_OVERVIEW].
+ * So `formats`, `releaseYears`, `genres` and `tags` live here now, and the profile
+ * screen's charts are built from them.
  */
 @JsonClass(generateAdapter = true)
 data class UserStatistics(
@@ -115,6 +115,56 @@ data class AnimeStats(
     val episodesWatched: Int? = null,
     val minutesWatched: Long? = null,
     /** AniList reports `Float`; Moshi reads a JSON number into a `Double`. */
+    val meanScore: Double? = null,
+    /**
+     * Per-format tallies, replacing `stats.favouredFormats`.
+     *
+     * [UserFormatStatistic.count] is the entry count the old `amount` was, and it
+     * is what the chart draws.
+     */
+    val formats: List<UserFormatStatistic>? = null,
+    /** Per-release-year tallies, replacing `stats.favouredYears`. */
+    val releaseYears: List<UserReleaseYearStatistic>? = null,
+    /** Per-genre tallies, replacing `stats.favouredGenres`. */
+    val genres: List<UserGenreStatistic>? = null,
+    /** Per-tag tallies, replacing `stats.favouredTags`. */
+    val tags: List<UserTagStatistic>? = null
+)
+
+/**
+ * One row of `UserStatistics.formats`.
+ *
+ * `count` rather than `amount` is the API's own name here, unlike the deprecated
+ * block's spelling; the mapping to the chart's `amount` happens once, in
+ * `UserOverviewViewModel`.
+ */
+@JsonClass(generateAdapter = true)
+data class UserFormatStatistic(
+    /** `TV`, `MOVIE`, `OVA`, `ONA`, `SPECIAL`, `TV_SHORT`, `MUSIC` or null. */
+    val format: String? = null,
+    val count: Int? = null,
+    val meanScore: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class UserReleaseYearStatistic(
+    val releaseYear: Int? = null,
+    val count: Int? = null,
+    val meanScore: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class UserGenreStatistic(
+    val genre: String? = null,
+    val count: Int? = null,
+    val meanScore: Double? = null,
+    val minutesWatched: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class UserTagStatistic(
+    val tag: MediaTag? = null,
+    val count: Int? = null,
     val meanScore: Double? = null
 )
 

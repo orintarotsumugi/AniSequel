@@ -94,6 +94,16 @@ sealed interface UserOverviewUiState {
          * read are different, and only one of them is a thing about the person.
          */
         val libraryError: String? = null,
+        /**
+         * Whether this page is the device's saved copy rather than a live answer.
+         *
+         * The profile and Library used to have two outcomes: live data, or a
+         * failure page. There is a third - the answer is on disk, the network is
+         * not answering - and presenting that as a live page is a lie the screen
+         * does not need to tell. The list is still worth reading; it is just not
+         * current, and the header says so.
+         */
+        val isCached: Boolean = false,
         val isDemoMode: Boolean = false
     ) : UserOverviewUiState
 

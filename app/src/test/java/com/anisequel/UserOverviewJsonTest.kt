@@ -70,7 +70,21 @@ class UserOverviewJsonTest {
               "createdAt": 1397079561,
               "updatedAt": 1788149467,
               "statistics": {
-                "anime": { "count": 258, "episodesWatched": 3152, "minutesWatched": 78350, "meanScore": 76.41 },
+                "anime": {
+                  "count": 258,
+                  "episodesWatched": 3152,
+                  "minutesWatched": 78350,
+                  "meanScore": 76.41,
+                  "formats": [
+                    { "format": "TV", "count": 121, "meanScore": 74.2 },
+                    { "format": "MOVIE", "count": 42, "meanScore": 80.1 }
+                  ],
+                  "releaseYears": [ { "releaseYear": 2014, "count": 6, "meanScore": 74 } ],
+                  "genres": [ { "genre": "Drama", "count": 59, "meanScore": 75.4, "minutesWatched": 15064 } ],
+                  "tags": [
+                    { "tag": { "id": 1, "name": "Male Protagonist" }, "count": 12, "meanScore": 70.5 }
+                  ]
+                },
                 "manga": { "count": 0, "chaptersRead": 0, "volumesRead": 0, "meanScore": 0 }
               },
               "stats": {
@@ -93,16 +107,7 @@ class UserOverviewJsonTest {
                   { "score": 100, "amount": 7 }
                 ],
                 "animeListScores": { "meanScore": 74, "standardDeviation": 17 },
-                "mangaListScores": null,
-                "favouredFormats": [
-                  { "format": "TV", "amount": 121 },
-                  { "format": "MOVIE", "amount": 42 }
-                ],
-                "favouredYears": [ { "year": 2014, "amount": 6, "meanScore": 74 } ],
-                "favouredGenres": [ { "genre": "Drama", "amount": 59, "meanScore": 75, "timeWatched": 15064 } ],
-                "favouredTags": [
-                  { "tag": { "id": 1, "name": "Male Protagonist" }, "amount": 12, "meanScore": 70 }
-                ]
+                "mangaListScores": null
               },
               "favourites": {
                 "anime": {
@@ -207,7 +212,7 @@ class UserOverviewJsonTest {
     }
 
     @Test
-    fun `reads the deprecated stats block, which is where the distributions live`() {
+    fun `reads the distributions that are still served by the deprecated stats block`() {
         val stats = parse<UserOverviewData>(capturedOverview).user!!.stats!!
 
         assertEquals(79918, stats.watchedTime)
@@ -218,11 +223,30 @@ class UserOverviewJsonTest {
         assertEquals(202, stats.animeStatusDistribution.first { it.status == "COMPLETED" }.amount)
         assertEquals(74, stats.animeListScores!!.meanScore)
         assertEquals(17, stats.animeListScores.standardDeviation)
-        assertEquals(121, stats.favouredFormats!!.first().amount)
-        assertEquals(2014, stats.favouredYears!!.first().year)
-        assertEquals("Drama", stats.favouredGenres!!.first().genre)
+    }
+
+    /**
+     * The four distributions that moved off `stats`.
+     *
+     * These used to be read from `stats.favoured*`, and each of those fields now
+     * answers HTTP 500 for the whole profile document - see
+     * `GraphQLQueries.GET_USER_OVERVIEW`. The live shape of the replacement uses
+     * `count` where the old one used `amount`, nests the tag object the same way,
+     * and reports `meanScore` as a Float rather than an Int.
+     */
+    @Test
+    fun `reads the modern statistics distributions that replaced the 500ing fields`() {
+        val anime = parse<UserOverviewData>(capturedOverview).user!!.statistics!!.anime!!
+
+        assertEquals(121, anime.formats!!.first().count)
+        assertEquals("TV", anime.formats.first().format)
+        assertEquals(2014, anime.releaseYears!!.first().releaseYear)
+        assertEquals("Drama", anime.genres!!.first().genre)
+        assertEquals(15064L, anime.genres.first().minutesWatched)
         // Tags nest a MediaTag object, not a name string.
-        assertEquals("Male Protagonist", stats.favouredTags!!.first().tag!!.name)
+        assertEquals("Male Protagonist", anime.tags!!.first().tag!!.name)
+        // A Float arrives intact; the chart mapping is what rounds it.
+        assertEquals(70.5, anime.tags.first().meanScore!!, 0.001)
     }
 
     @Test

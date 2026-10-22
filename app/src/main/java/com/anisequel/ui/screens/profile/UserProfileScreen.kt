@@ -273,14 +273,32 @@ fun UserProfileScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = (uiState as? UserOverviewUiState.Success)
+                        // "Profile" until the name is known, then the name.
+                        //
+                        // It used to fall back to "AniList", which read as a data
+                        // value - the account's name - rather than as the page's
+                        // title, and made every scanned profile look like the
+                        // official account for the length of its load. The
+                        // crossfade is short and on the effects spring: the title
+                        // is in the reader's peripheral vision while they read the
+                        // page, and a hard swap there reads as a flicker.
+                        AnimatedContent(
+                            targetState = (uiState as? UserOverviewUiState.Success)
                                 ?.username
                                 ?.let { "@$it" }
-                                ?: "AniList",
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
+                                ?: "Profile",
+                            transitionSpec = {
+                                fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                            },
+                            label = "profile_title"
+                        ) { title ->
+                            Text(
+                                text = title,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
                         // Only on the reader's own profile: the tier list is their
                         // personal ranking, and the trophy used to appear here on
                         // everyone's - tapping it from a follower's page opened the
@@ -326,6 +344,26 @@ fun UserProfileScreen(
                     }
                 },
                 actions = {
+                    // The page had a refresh bar but no way to start a refresh:
+                    // `UserOverviewViewModel.refresh()` was reachable only from
+                    // code that nothing called, so the bar was decoration for a
+                    // state the reader could not enter. The demo has nothing to
+                    // re-fetch, so the control is left out there rather than
+                    // drawn as a button that does nothing.
+                    if ((uiState as? UserOverviewUiState.Success)?.isDemoMode == false) {
+                        IconButton(
+                            onClick = { overviewViewModel.refresh() },
+                            modifier = Modifier
+                                .testTag("profile_refresh_button")
+                                .bouncyPress(pressedScale = 0.9f)
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Refresh,
+                                contentDescription = "Refresh profile"
+                            )
+                        }
+                    }
+
                     val siteUrl = (uiState as? UserOverviewUiState.Success)?.siteUrl
                     if (siteUrl != null) {
                         IconButton(

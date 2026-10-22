@@ -45,10 +45,23 @@ composeBom = "2025.11.01"
 # morphing ButtonGroup are only in 1.5.0-alpha, so material3 is pinned above the
 # BOM deliberately. The BOM still governs everything else in the Compose stack.
 #
-# alpha14 specifically, not a later alpha: from alpha16 onward material3 depends
-# on Compose UI 1.11+ / 1.12+, which require compileSdk 37. This app compiles
-# against 36.1, so every later alpha fails AAR metadata checking. alpha14 is the
-# newest one still on the Compose 1.8 line.
+# alpha14 specifically, not a later alpha, and this was re-checked on 2026-10-22
+# when an update was requested. There is still no version that can replace it:
+#
+#  - 1.5.0-alpha15 is the very next release, and its published POM depends on
+#    **Compose UI 1.11.0-alpha06** (see
+#    https://dl.google.com/dl/android/maven2/androidx/compose/material3/material3/1.5.0-alpha15/material3-1.5.0-alpha15.pom).
+#    That is already off the Compose 1.8 line this app resolves through the BOM,
+#    and it is exactly the transitive upgrade the `compileSdk 37` rule below is
+#    about.
+#  - 1.5.0-beta01 / beta02 exist now and are newer still, so they inherit the
+#    same problem. alpha23 removed material3's *own* compileSdk 37 requirement,
+#    but alpha24 moved its Compose dependency to the 1.12 line, which has it.
+#
+# So the pin stays. Bumping it is not a maintenance chore here - it is a build
+# that fails at AAR metadata checking, or worse, one that resolves a mixed UI
+# stack. The upgrade path is a `compileSdk` raise, tracked in TO-DO.md, not an
+# edit to this line.
 #
 # Verified by extracting each artifact and compiling against the real signatures,
 # not by reading release notes.

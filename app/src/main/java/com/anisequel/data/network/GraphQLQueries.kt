@@ -128,19 +128,30 @@ object GraphQLQueries {
      * per branch is five branches' worth of image URLs parsed for art that never
      * leaves the screen.
      *
-     * ## The `stats` block
+     * ## The `stats` block, and the four fields that stopped answering
      *
-     * `stats` is the field AniList marks deprecated, and it is here because the
-     * replacement is not served: `statistics.anime.statuses`, `.genres`,
-     * `.formats` and `.releaseYears` all answer `[]` for every account tried,
-     * including ones with hundreds of scored entries, while the same query's
-     * `count`, `meanScore` and `minutesWatched` come back populated. The
-     * per-distribution data the Stats tab is built around only exists under
-     * `stats`. It costs about 6 KB in the same request - one round trip, not two.
+     * `stats` is the field AniList marks deprecated. It is still needed for
+     * `activityHistory` - the per-day calendar has no replacement anywhere in the
+     * schema - and for the status, score and list-score distributions, which
+     * still come back populated.
      *
-     * `UserOverviewQueryTest` asserts the block is present, so that whoever finds
-     * this the day AniList retires `stats` sees the removal noted rather than
-     * discovering it as an empty Stats tab.
+     * Its four `favoured*` sub-selections are gone, and their absence is the fix
+     * for the profile screen failing to load at all. Verified against the live API
+     * on 2026-10-22: asking for any one of `favouredFormats`, `favouredYears`,
+     * `favouredGenres` or `favouredTags` makes the whole document answer **HTTP
+     * 500** with `{"errors":[{"message":"Internal Server Error"}]}` and
+     * `data.User = null`. The failure is server-side and unconditional, so every
+     * profile and Library open became the "Ani-chan is having a nap" page while
+     * the dashboard - which does not use this query - kept working.
+     *
+     * The distributions they used to carry now come from the non-deprecated
+     * `statistics.anime` block. That block was previously believed to answer `[]`;
+     * re-checked live, it is populated for real accounts (150 entries: TV 115,
+     * MOVIE 23, Romance 87, 2026 26), so the comment that said otherwise was the
+     * stale part, not the schema.
+     *
+     * `UserOverviewQueryTest` pins both halves: the broken fields must not be
+     * requested, and the replacement must be.
      */
     val GET_USER_OVERVIEW = """
         query GetUserOverview(${'$'}userId: Int, ${'$'}userName: String) {
@@ -162,6 +173,10 @@ object GraphQLQueries {
                 episodesWatched
                 minutesWatched
                 meanScore
+                formats { format count meanScore }
+                releaseYears { releaseYear count meanScore }
+                genres { genre count meanScore minutesWatched }
+                tags { tag { id name } count meanScore }
               }
               manga {
                 count
@@ -179,10 +194,6 @@ object GraphQLQueries {
               animeScoreDistribution { score amount }
               animeListScores { meanScore standardDeviation }
               mangaListScores { meanScore standardDeviation }
-              favouredFormats { format amount }
-              favouredYears { year amount meanScore }
-              favouredGenres { genre amount meanScore }
-              favouredTags { tag { id name } amount meanScore }
             }
             favourites {
               anime(perPage: 12) { nodes { $FAVOURITE_MEDIA_FIELDS } }

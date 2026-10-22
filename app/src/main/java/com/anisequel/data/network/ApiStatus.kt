@@ -201,7 +201,11 @@ fun AniListErrorKind.friendlyCopy(): ApiErrorCopy = when (this) {
             "You are going faster than the plot.",
             "The refresh button is not a slot machine.",
             "Ani-chan can only read so fast.",
-            "One request per breath. House rules."
+            "One request per breath. House rules.",
+            "That was not a challenge. It was a limit.",
+            "Ani-chan is asking you to slow your roll.",
+            "The request queue is a queue, not a suggestion.",
+            "You are spending requests like they are free. They are not."
         )
     )
 
@@ -392,7 +396,30 @@ private val DOWN_JOKES = listOf(
     "Ani-chan is in the recap movie. Same frames, no new data.",
     "The request reached the server and was never seen again.",
     "Ani-chan is doing the thing where it stands dramatically in the rain.",
-    "Somewhere a cron job is crying in production."
+    "Somewhere a cron job is crying in production.",
+    "Ani-chan is re-reading the error log like it is a light novel.",
+    "The server is in a coma arc. The doctors say three episodes.",
+    "Ani-chan rolled the credits early and hopes you did not notice.",
+    "The response is stuck behind a very slow gate.",
+    "Ani-chan is buffering its opening theme.",
+    "Somewhere, a container restarted and took the plot with it.",
+    "The request went to the beach episode. It will be back with no new information.",
+    "Ani-chan is practicing its comeback monologue. It needs a minute.",
+    "The database is doing that thing where it stares out of a train window.",
+    "Ani-chan tripped on the ethernet cable it was told not to touch.",
+    "The uptime is fine. The uptime is lying.",
+    "The API is in a training arc. Nobody knows how long those take.",
+    "Ani-chan is waiting for its turn in the queue. There is no queue.",
+    "Somewhere, a health check just said 'lol'.",
+    "The server is pretending to be a background character.",
+    "Ani-chan is doing the recap. Same plot, no data.",
+    "The backend is powering up with a very long stock-footage sequence.",
+    "Ani-chan took the day off to reread its own documentation.",
+    "The request reached the server and was politely declined by the void.",
+    "Ani-chan is on a vision quest. It forgot to bring the response.",
+    "The socket is open. The answer is not in it.",
+    "Ani-chan is doing that thing where it stands on a cliff until sunrise.",
+    "Ani-chan is waiting for the filler arc to end. So are we."
 )
 
 /** Offline deserves its own voice: the problem is the reader's side, not Ani-chan's. */

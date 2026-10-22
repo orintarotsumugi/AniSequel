@@ -48,13 +48,17 @@ internal fun mainTabDestinations(profileAvatarUrl: String?): List<NavigationDest
                 icon = AppVectorIcons.ProfileHome,
                 testTag = "main_tab_home"
             )
-            // The profile's own Library chip glyph, deliberately: it is the same
-            // list, and a reader who learned the stopwatch in the profile should
-            // find it again on the bar rather than learn a second icon for one
-            // destination.
+            // A shelf of books, and it used to be the Stats tab's stopwatch.
+            //
+            // The old glyph was borrowed "because it is the same list", which was
+            // true only when the Library *was* the profile's fourth tab. Once it
+            // became a page of its own, the stopwatch read as time watched - and
+            // it was the same glyph as the episode-count chart, so two different
+            // destinations were drawn as one icon. This is the app's own vector,
+            // per AGENTS.md §2, not a font glyph.
             MainTab.LIBRARY -> NavigationDestination(
                 label = "Library",
-                icon = AppVectorIcons.StatEpisodeCount,
+                icon = AppVectorIcons.Library,
                 testTag = "main_tab_library"
             )
             MainTab.PROFILE -> NavigationDestination(

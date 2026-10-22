@@ -698,6 +698,24 @@ Five rules keep the disk tier from becoming a bug, and each has a test:
   app is holding, or dropped when the list no longer has the title — so the sheet
   and the row behind it cannot disagree about how far in you are.
 
+### The saved copy is a floor, not a ceiling
+
+A snapshot used to be readable only inside the window above, which is the right
+rule for the answer to "what is my list *now*" and the wrong one for "can I draw
+anything while AniList is not answering". Past the window a cold start had nothing
+even though the whole list was on disk, and a failed request replaced the screen
+with the failure page.
+
+Since 1.5.3 the dashboard, profile and Library paint the last known copy **before**
+the first request leaves, then replace it when a live answer lands. If the request
+fails, the copy stays and is marked with a `Saved copy` pill rather than being
+thrown away. The readers behind this (`lastKnownViewer`, `lastKnownOverview`,
+`lastKnownAnimeList`, `lastKnownAnimeListByUsername`) deliberately ignore the
+refresh interval but stop at **30 days**: a month-old list is still this account's
+list, a two-year-old one is a different season of their life. A rejected token is
+the one failure the copy may not hide — that screen needs the sign-in exit the
+error state provides.
+
 The store also bounds itself: past a per-kind byte budget the oldest entries go
 first, and the entry just written is never the one dropped.
 
