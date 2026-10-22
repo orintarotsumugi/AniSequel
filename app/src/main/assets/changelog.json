@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.5.2",
+      "entries": [
+        {
+          "title": "The API check no longer takes over your own pages",
+          "detail": "1.5.1 put the whole AniList failure scene - the broken heart, the status strip, the joke and the \"go touch grass\" exit - on the Profile and Library pages, where it arrived over content you had been reading a second earlier and buried the retry button under a screenful of theatre. Those two pages now say what happened, make one joke and offer the two honest exits; the scene stays where you went looking for it, on the dashboard's error screen and the Settings connection check."
+        },
+        {
+          "title": "The heartbreak got a better performance",
+          "detail": "The heart now beats twice, the second time harder, then shivers and compresses before it gives. The crack itself throws a shockwave with debris flying out of the seam, and the halves part on a bouncy spring, sink with their own weight and settle. It is still the same two vector halves coming apart and the same green glue stitching them back together, just with the beat and the brace that make it read as a heart failing instead of a shape being pulled apart."
+        },
+        {
+          "title": "Twenty more ways for Ani-chan to be asleep",
+          "detail": "The down pool gained twenty lines - a Friday deploy, a beach episode, a flashback arc, a dropped database that bounced twice, a Wi-Fi isekai and a cron job crying in production - for sixty-eight in total. A retry loop now also lands on a *new* joke each time: the seed was derived from the failure's own text, which is identical on every retry of the same failure, so the pool had been handing you the same line every time you tapped Try again."
+        },
+        {
+          "title": "A joke now and then, from nowhere",
+          "detail": "Every few minutes, while you are on Home, Library or your own Profile, a small card slides down above the bar with a line about backlogs, recaps and rewatches. It waits between four and fifteen minutes (the first one comes sooner), stays for five seconds, and leaves on a tap. It never appears over the login screen, Settings or a title sheet, and it stops the moment the app goes to the background."
+        },
+        {
+          "title": "The Check button always answers",
+          "detail": "Tapping Check while a check was already running did nothing at all - the tap was dropped rather than queued - so the strip showed the answer to a request you did not make. A tap is now queued and runs as soon as the current request lands. A check that could not produce a verdict no longer draws the broken heart and \"Ani-chan is confused\" in Settings; it says the question is unanswered and offers to ask again. And a probe whose request threw no longer leaves the strip checking forever."
+        }
+      ]
+    },
+    {
       "version": "1.5.1",
       "entries": [
         {

@@ -86,9 +86,13 @@ data class ApiStatusSnapshot(
  *
  * The joke is a [List] rather than a single line so repeated failures do not
  * show the same sentence every time, and [quipFor] picks one deterministically
- * from the failure's own text - deterministic so that a recomposition cannot
- * reshuffle the joke under the reader's eyes, and keyed on the message so two
- * *different* failures usually land on two different jokes.
+ * from the seed it is given - deterministic so that a recomposition cannot
+ * reshuffle the joke under the reader's eyes.
+ *
+ * Callers that want a *retry* to land on a different line append a per-instance
+ * random seed to the key: seeding on `kind:message` alone is stable across every
+ * retry of the same failure, which is the loop the pool exists to break. See
+ * `ApiFailureBody` and `ProfileErrorView`.
  */
 data class ApiErrorCopy(
     val headline: String,
@@ -315,7 +319,7 @@ fun ApiReachability.friendlyCopy(): ApiErrorCopy = when (this) {
  * The big one: every joke about AniList not being there.
  *
  * Shared by [AniListErrorKind.SERVER] and every "no answer" result, because the
- * reader's experience is identical in all of them. Forty-odd lines is not
+ * reader's experience is identical in all of them. Nearly seventy lines is not
  * excess: the whole point is that a person hammering Retry does not see the same
  * sentence twice before they give up, and that a joke which lands badly for one
  * reader is not the only one on offer.
@@ -368,7 +372,27 @@ private val DOWN_JOKES = listOf(
     "Ani-chan is waiting for the dub to come out.",
     "The racks are warm, the API is cold.",
     "Ani-chan rolled a natural one.",
-    "This episode is a recap. The servers are recapping."
+    "This episode is a recap. The servers are recapping.",
+    "Ani-chan is rereading the same chapter until the server comes back.",
+    "Somebody deployed on a Friday. We all know how this ends.",
+    "Ani-chan is in the onsen. The steam got into the racks.",
+    "The request is queued behind a very long opening theme.",
+    "Ani-chan is waiting for the recap episode to finish. It has been twenty minutes.",
+    "The backend is having a beach episode.",
+    "Ani-chan is monologuing before it answers. It always does this.",
+    "The server is in a flashback arc. Give it a moment.",
+    "Ani-chan dropped the database. It bounced. Twice.",
+    "The uptime needle is twitching ominously. That is a technical term.",
+    "Ani-chan is stuck in an isekai where the Wi-Fi is a plot device.",
+    "The server is powering up. Give it three episodes.",
+    "Ani-chan is resolving a cliffhanger with the database.",
+    "The CDN is having a filler arc.",
+    "Ani-chan is waiting for the sub to drop. Any minute now.",
+    "The load balancer rolled a critical failure.",
+    "Ani-chan is in the recap movie. Same frames, no new data.",
+    "The request reached the server and was never seen again.",
+    "Ani-chan is doing the thing where it stands dramatically in the rain.",
+    "Somewhere a cron job is crying in production."
 )
 
 /** Offline deserves its own voice: the problem is the reader's side, not Ani-chan's. */
