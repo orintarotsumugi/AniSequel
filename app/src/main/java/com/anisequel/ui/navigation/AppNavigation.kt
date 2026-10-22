@@ -10,6 +10,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -30,6 +32,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.ui.components.JokeToastHost
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.data.network.NetworkClient
@@ -42,10 +45,10 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
-import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardScreen
 import com.anisequel.ui.screens.library.LibraryScreen
 import com.anisequel.ui.screens.login.LoginScreen
+import com.anisequel.ui.screens.profile.ProfileErrorView
 import com.anisequel.ui.screens.profile.ProfileLoadingView
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.screens.settings.SettingsScreen
@@ -58,7 +61,6 @@ import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.StudioViewModel
 import com.anisequel.ui.viewmodel.TierListViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
-import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -739,21 +741,18 @@ fun AppNavigation(
                         // answer: retrying it here is a real retry, and a dead session
                         // offers the same way back rather than a button that cannot work.
                         //
-                        // The route gets its own probe rather than borrowing the
-                        // dashboard's: this screen can be composed before the dashboard
-                        // exists, and a status strip that says nothing because another
-                        // screen never asked would be worse than one that asks here.
-                        val apiProbe = rememberApiStatusProbe {
-                            aniListRepository.checkApiReachability()
-                        }
-                        val apiStatus by apiProbe.ui.collectAsState()
-                        LaunchedEffect(viewerState.kind, viewerState.message) {
-                            apiProbe.onFailure(viewerState.kind)
-                        }
-                        DashboardErrorView(
-                            state = viewerState,
-                            apiStatus = apiStatus,
-                            onCheckApiStatus = { apiProbe.probe() },
+                        // The calm error view, not the dashboard's failure theatre. This
+                        // is one of the bar's pages - the reader tapped Library to see
+                        // their list, not to watch a heart break - and the probe, status
+                        // strip and "go touch grass" off-ramp that used to be built here
+                        // pushed the only useful control below a full screen of scene.
+                        // The bits of it that carry information are still in the copy:
+                        // the headline and detail come from the same friendly sentences.
+                        ProfileErrorView(
+                            message = viewerState.message,
+                            kind = viewerState.kind,
+                            canRetry = viewerState.canRetry,
+                            isAuthError = viewerState.isAuthError,
                             onRetry = { mainDashboardViewModel?.loadData() },
                             onSignInAgain = authViewModel::logout
                         )
@@ -878,6 +877,23 @@ fun AppNavigation(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+
+        // A joke, now and then, above the bar. Mounted by the host for the same
+        // reason the bar is: only the host knows which page is on screen, and a
+        // screen cannot draw a toast that outlives it. Gated on `currentTab` so it
+        // never arrives over login, Settings or a title sheet - see [JokeToastHost].
+        JokeToastHost(
+            enabled = currentTab != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                // Above the bar, and above the dashboard's snackbar rather than on
+                // top of it: the dashboard anchors that host at `MainBarClearance`,
+                // so a joke parked just clear of the bar would occasionally be
+                // drawn through an "Added to Planning" confirmation. The clearance
+                // already includes the device's navigation inset.
+                .padding(horizontal = 16.dp)
+                .padding(bottom = mainBarClearance() + 72.dp)
+        )
     }
 }
 

@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.ApiStatusUi
+import kotlin.random.Random
 
 /**
  * The whole "AniList is not answering" screen, in one place.
@@ -43,9 +45,12 @@ import com.anisequel.ui.viewmodel.ApiStatusUi
  * The dashboard and a user profile both had their own copy of the same column -
  * warning icon, "AniList connection error", the raw exception message, one
  * button - and that is why the app had two slightly different ways of saying
- * one thing. The heartbreak, the status strip, the joke and the "go touch grass"
- * exit are now identical on both, and a third screen gets them by calling this
- * instead of by growing a fourth variant.
+ * one thing. This is now the dashboard's version: the heartbreak, the status
+ * strip, the joke and the "go touch grass" exit all live here, and the Settings
+ * dialog borrows the same artwork. The Profile and Library pages deliberately
+ * do *not* use it - see
+ * [com.anisequel.ui.screens.profile.ProfileErrorView] for why the same failure
+ * is a sentence there rather than a scene.
  *
  * ## What "go touch grass" actually does
  *
@@ -71,9 +76,15 @@ fun ApiFailureBody(
     signInTestTag: String = "sign_in_again_button"
 ) {
     val copy = kind?.friendlyCopy()
-    // The failure's own text seeds the joke so two different failures usually
-    // land on two different lines, while a recomposition never reshuffles it.
-    val quip = copy?.quipFor("${kind?.name.orEmpty()}:$message")
+    // The seed is drawn once per failure instance, not derived from the text.
+    // Deriving it made the line stable under recomposition - which was the point -
+    // but also stable across every *retry* of the same failure, so a reader
+    // hammering Retry was shown the same joke each time: exactly the loop the pool
+    // exists to avoid. `remember(kind, message)` keeps one line while this failure
+    // is on screen, and a retry that passes through Loading composes a new body
+    // with a new line.
+    val quipSeed = remember(kind, message) { Random.nextInt() }
+    val quip = copy?.quipFor("${kind?.name.orEmpty()}:$message:$quipSeed")
     // A broken heart for a connection that failed; a warning for an answer we
     // did not like (dead token, missing profile). Animating heartbreak at a
     // 404 would be a lie about what happened.

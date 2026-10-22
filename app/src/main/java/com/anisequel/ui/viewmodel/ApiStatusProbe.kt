@@ -48,6 +48,16 @@ data class ApiStatusUi(
  * one. Without the cancel, the strip would briefly announce the previous
  * failure's verdict under the new failure's headline - a stale status is worse
  * than a spinner, because it looks authoritative.
+ *
+ * ## Why a tap during a probe is *queued* rather than ignored
+ *
+ * A manual Check while the automatic probe of the same failure is still running
+ * used to be dropped on the floor. The reader tapped a button, watched a spinner
+ * that had been running before their tap, and got the answer to a request they
+ * did not make - or, worse, no change at all when they tapped after the screen
+ * had already painted the result. The tap now remembers that one more answer is
+ * wanted and runs it as soon as the current request finishes, which is also what
+ * keeps the strip's "Check again" honest while it is checking.
  */
 @Stable
 class ApiStatusProbeState internal constructor(
@@ -63,6 +73,9 @@ class ApiStatusProbeState internal constructor(
 
     private var inFlight: Job? = null
 
+    /** A tap that arrived while [inFlight] was still running; see the class KDoc. */
+    private var pendingProbe = false
+
     /**
      * Called once when an error state appears.
      *
@@ -72,23 +85,52 @@ class ApiStatusProbeState internal constructor(
      */
     fun onFailure(kind: AniListErrorKind?) {
         inFlight?.cancel()
+        inFlight = null
+        // The old failure's queued tap belongs to the old failure's question.
+        pendingProbe = false
         _ui.value = ApiStatusUi(reachability = kind.toReachability())
         if (kind == null || kind.isWorthProbing()) {
             probe()
         }
     }
 
-    /** The manual "Check" action. Re-entrant calls are ignored, not queued. */
+    /**
+     * The manual "Check" action.
+     *
+     * Re-entrant calls do not start a second request - one answer at a time is
+     * what the API's rate limit asks for - but they are not discarded either: the
+     * scope below runs one more request when the current one lands.
+     */
     fun probe() {
-        if (inFlight?.isActive == true) return
+        if (inFlight?.isActive == true) {
+            pendingProbe = true
+            return
+        }
         inFlight = scope.launch {
-            _ui.update { it.copy(isChecking = true) }
-            val snapshot = requestStatus()
-            _ui.value = ApiStatusUi(
-                reachability = snapshot.reachability,
-                latencyMillis = snapshot.latencyMillis,
-                isChecking = false
-            )
+            do {
+                // Cleared before the request so a tap that arrives *during* it is
+                // seen by the check at the bottom of the loop.
+                pendingProbe = false
+                _ui.update { it.copy(isChecking = true) }
+                val snapshot = try {
+                    requestStatus()
+                } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                    // A newer failure cancelled this probe; the state is already
+                    // its own and rethrowing is what stops the loop.
+                    throw cancellation
+                } catch (unexpected: Exception) {
+                    // The repository is expected to classify its own failures, but
+                    // an exception escaping here used to leave `isChecking` true
+                    // forever *and* crash the scope it was launched in. The honest
+                    // answer is the same one an unfinished check gets: no verdict.
+                    ApiStatusSnapshot(ApiReachability.UNKNOWN)
+                }
+                _ui.value = ApiStatusUi(
+                    reachability = snapshot.reachability,
+                    latencyMillis = snapshot.latencyMillis,
+                    isChecking = false
+                )
+            } while (pendingProbe)
         }
     }
 }
