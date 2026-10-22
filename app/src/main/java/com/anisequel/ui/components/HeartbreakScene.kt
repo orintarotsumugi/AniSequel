@@ -236,7 +236,8 @@ private fun HeartPair(
             // proportions, so the burst is a heart-shaped spray, not a compass.
             val angles = listOf(0.2f, 0.9f, 1.7f, 2.5f, 3.4f, 4.2f, 5.0f, 5.8f)
             angles.forEachIndexed { index, angle ->
-                val length = (7f + (index % 3) * 3f).dp.toPx()
+                val step = index % 3
+                val length = (7f + step * 3f).dp.toPx()
                 val start = ringRadius * 0.5f
                 val end = start + length * alpha
                 val dx = kotlin.math.cos(angle)
