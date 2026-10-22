@@ -227,4 +227,65 @@ object AppExtraVectors {
             }
         }.build()
     }
+
+    /**
+     * Three books on a shelf, for the Library destination.
+     *
+     * The tab used to borrow the Stats tab's stopwatch (`Icons.Default.Timer`),
+     * which read as "time spent" rather than "the list I keep" and made Library and
+     * the Stats chart share a glyph for two unrelated destinations. Spines are
+     * filled and the shelf is stroked, which is what keeps them legible at 22dp:
+     * three outlines at that size merge into a smudge.
+     *
+     * The middle book is taller and the third leans, so the silhouette is not three
+     * identical bars - the shape that reads as a bar chart of three values. Gaps are
+     * real space between subpaths rather than cut-outs, so no winding trick is
+     * needed here.
+     */
+    val LibraryShelf: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "LibraryShelf",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                // Book one, upright.
+                moveTo(4f, 4.5f)
+                lineTo(8.6f, 4.5f)
+                lineTo(8.6f, 20f)
+                lineTo(4f, 20f)
+                close()
+
+                // Book two, taller.
+                moveTo(9.8f, 2.5f)
+                lineTo(14.4f, 2.5f)
+                lineTo(14.4f, 20f)
+                lineTo(9.8f, 20f)
+                close()
+
+                // Book three, leaning against the others.
+                moveTo(15.8f, 5.4f)
+                lineTo(20f, 6.6f)
+                lineTo(18.5f, 20f)
+                lineTo(15.2f, 20f)
+                close()
+            }
+
+            // The shelf, inset at both ends so it reads as a surface the books
+            // stand on rather than as a rule under the icon.
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.6f,
+                strokeLineCap = StrokeCap.Round
+            ) {
+                moveTo(2.5f, 21f)
+                lineTo(21.5f, 21f)
+            }
+        }.build()
+    }
 }

@@ -21,52 +21,79 @@ import org.junit.Test
  * serves.
  *
  * Every assertion here came out of asking the live API rather than reading the
- * schema, which is the only reason the app works: `User.statistics` - the field
- * AniList documents as the replacement for the deprecated one - answers `[]` for
- * every sub-selection that a stats screen needs, while the deprecated `User.stats`
- * answers all of them. A profile screen written from the schema alone would have
- * been a screen full of empty charts.
+ * schema, and the answer has changed since this class was written.
+ *
+ * It used to pin the opposite of what it pins now: `User.statistics` was believed
+ * to answer `[]` for every sub-selection a stats screen needs, so the distributions
+ * were read from the deprecated `User.stats` block. Re-checked against the live API
+ * on 2026-10-22, `statistics.anime.formats/releaseYears/genres/tags` are populated
+ * (150-entry account: TV 115, MOVIE 23, Romance 87, 2026 26) - and four
+ * `stats.favoured*` fields returned **HTTP 500 for the whole document**, which took
+ * the profile and Library screens down with them.
+ *
+ * So these tests now guard the migration in both directions: the broken fields must
+ * never be requested, and the working replacements must be.
  */
 class UserOverviewQueryTest {
 
     private val overview = GraphQLQueries.GET_USER_OVERVIEW
 
     @Test
-    fun `asks for the deprecated aggregate stats, because the replacement is empty`() {
-        // The assertion is on presence, not absence: this is the one place in the
-        // app that reads a field AniList marks for removal, and it is the only
-        // source of the status / format / score / genre / tag / year
-        // distributions. If this ever goes empty, the Stats tab is the casualty and
-        // this test is where somebody finds out why.
-        assertTrue(
-            "User.stats carries every distribution the Stats tab draws; " +
-                "statistics.*.statuses and .genres answer [] on every account tried",
-            overview.contains("stats {")
-        )
+    fun `never asks for the four fields that answer HTTP 500`() {
+        // Verified against the live API on 2026-10-22: any one of these makes the
+        // entire profile document fail with
+        //
+        //     HTTP 500
+        //     {"errors":[{"message":"Internal Server Error","status":500}, ...],
+         //      "data":{"User":null}}
+        //
+        // and the profile and Library pages draw "Ani-chan is having a nap". They
+        // are deprecated, broken server-side, and have working replacements -
+        // there is no version of this where requesting them is correct.
         listOf(
-            "activityHistory",
-            "animeStatusDistribution",
-            "animeScoreDistribution",
-            "animeListScores",
             "favouredFormats",
             "favouredYears",
             "favouredGenres",
             "favouredTags"
+        ).forEach { field ->
+            assertFalse(
+                "stats.$field answers HTTP 500 for the whole document",
+                overview.contains(field)
+            )
+        }
+    }
+
+    @Test
+    fun `asks the deprecated block only for what it still serves`() {
+        // `stats` is still needed: `activityHistory` has no replacement anywhere in
+        // the schema, and the status/score distributions still answer here.
+        assertTrue("the activity calendar has no other source", overview.contains("stats {"))
+        listOf(
+            "activityHistory",
+            "animeStatusDistribution",
+            "animeScoreDistribution",
+            "animeListScores"
         ).forEach { field ->
             assertTrue("stats block is missing $field", overview.contains(field))
         }
     }
 
     @Test
-    fun `does not ask for the statistics sub-selections AniList answers with an empty array`() {
-        // Each of these is documented, typed, and returns `[]` - checked against
-        // accounts with 142 and 258 scored anime and the site's own account. An
-        // empty array parses cleanly, so nothing in the app would notice: the
-        // screen would just render a chart of zeroes.
-        listOf("statuses", "genres", "formats", "releaseYears", "startYears", "lengths", "scores").forEach { field ->
-            assertFalse(
-                "statistics.$field answers [] and must not be requested",
-                overview.contains(field)
+    fun `reads the distributions from statistics, which is where they are served`() {
+        // This used to assert the opposite, on the belief that every sub-selection
+        // of `statistics.anime` answered `[]`. Re-checked live against an account
+        // with 150 entries, it is populated (TV 115, MOVIE 23, Romance 87, 2026 26),
+        // so the belief was the stale thing and the charts were being sourced from a
+        // block that now returns a 500.
+        listOf(
+            "formats { format count meanScore }",
+            "releaseYears { releaseYear count meanScore }",
+            "genres { genre count meanScore minutesWatched }",
+            "tags { tag { id name } count meanScore }"
+        ).forEach { selection ->
+            assertTrue(
+                "statistics.anime is missing $selection, which is what the Stats charts draw",
+                overview.contains(selection)
             )
         }
     }

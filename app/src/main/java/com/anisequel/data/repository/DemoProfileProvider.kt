@@ -10,8 +10,6 @@ import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.FavouriteStaffConnection
 import com.anisequel.data.model.Favourites
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.FormatAmount
-import com.anisequel.data.model.GenreAmount
 import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.ListScoreStats
 import com.anisequel.data.model.MangaStats
@@ -25,11 +23,13 @@ import com.anisequel.data.model.ScoreAmount
 import com.anisequel.data.model.StatusAmount
 import com.anisequel.data.model.StudioConnection
 import com.anisequel.data.model.StudioNode
-import com.anisequel.data.model.TagAmount
 import com.anisequel.data.model.UserAvatar
+import com.anisequel.data.model.UserFormatStatistic
+import com.anisequel.data.model.UserGenreStatistic
 import com.anisequel.data.model.UserOverview
+import com.anisequel.data.model.UserReleaseYearStatistic
 import com.anisequel.data.model.UserStatistics
-import com.anisequel.data.model.YearAmount
+import com.anisequel.data.model.UserTagStatistic
 
 /**
  * The demo profile screen's fixture.
@@ -76,10 +76,19 @@ object DemoProfileProvider {
         ),
         bannerImage = "https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922-YfZhKBUDDS6L.jpg",
         statistics = UserStatistics(
+            // The distributions live here rather than in `stats` because that is
+            // where the real query reads them now: the four `stats.favoured*`
+            // fields answer HTTP 500 for the whole document. A fixture built on
+            // the old shape would let the Stats tab pass its demo run while the
+            // real request could not complete at all.
             anime = AnimeStats(
                 count = 261,
                 episodesWatched = 3842,
-                minutesWatched = 92_208
+                minutesWatched = 92_208,
+                formats = demoFormats(),
+                releaseYears = demoReleaseYears(),
+                genres = demoGenres(),
+                tags = demoTags()
             ),
             manga = MangaStats(
                 count = 21,
@@ -261,35 +270,54 @@ object DemoProfileProvider {
         ),
         animeScoreDistribution = demoScoreDistribution(),
         animeListScores = ListScoreStats(meanScore = 84, standardDeviation = 18),
-        mangaListScores = ListScoreStats(meanScore = 89, standardDeviation = 12),
-        favouredFormats = listOf(
-            FormatAmount("TV", 104),
-            FormatAmount("MOVIE", 21),
-            FormatAmount("ONA", 6),
-            FormatAmount("SPECIAL", 4)
-        ),
-        favouredYears = listOf(
-            YearAmount(2006, 1, 72), YearAmount(2009, 1, 68), YearAmount(2011, 1, 81),
-            YearAmount(2013, 2, 75), YearAmount(2014, 4, 88), YearAmount(2015, 3, 71),
-            YearAmount(2016, 5, 90), YearAmount(2017, 2, 66), YearAmount(2018, 5, 84),
-            YearAmount(2019, 9, 77), YearAmount(2020, 6, 92), YearAmount(2021, 12, 79),
-            YearAmount(2022, 17, 85), YearAmount(2023, 20, 73), YearAmount(2024, 16, 88),
-            YearAmount(2025, 12, 69), YearAmount(2026, 20, 82)
-        ),
-        favouredGenres = listOf(
-            GenreAmount("Action", 96, 78, 38_040),
-            GenreAmount("Fantasy", 74, 85, 27_210),
-            GenreAmount("Adventure", 61, 82, 24_880),
-            GenreAmount("Romance", 44, 88, 12_400),
-            GenreAmount("Comedy", 39, 71, 9_120),
-            GenreAmount("Drama", 33, 90, 14_600)
-        ),
-        favouredTags = listOf(
-            TagAmount(MediaTag(id = 1, name = "Male Protagonist"), 88, 74),
-            TagAmount(MediaTag(id = 2, name = "Female Protagonist"), 61, 81),
-            TagAmount(MediaTag(id = 3, name = "Ensemble Cast"), 44, 86),
-            TagAmount(MediaTag(id = 4, name = "Isekai"), 39, 68)
-        )
+        mangaListScores = ListScoreStats(meanScore = 89, standardDeviation = 12)
+    )
+
+    /** Format tallies, in the shape `statistics.anime.formats` answers. */
+    private fun demoFormats() = listOf(
+        UserFormatStatistic("TV", 104, 84.0),
+        UserFormatStatistic("MOVIE", 21, 88.0),
+        UserFormatStatistic("ONA", 6, 79.0),
+        UserFormatStatistic("SPECIAL", 4, 71.0)
+    )
+
+    /** Release-year tallies, in the shape `statistics.anime.releaseYears` answers. */
+    private fun demoReleaseYears() = listOf(
+        UserReleaseYearStatistic(2006, 1, 72.0),
+        UserReleaseYearStatistic(2009, 1, 68.0),
+        UserReleaseYearStatistic(2011, 1, 81.0),
+        UserReleaseYearStatistic(2013, 2, 75.0),
+        UserReleaseYearStatistic(2014, 4, 88.0),
+        UserReleaseYearStatistic(2015, 3, 71.0),
+        UserReleaseYearStatistic(2016, 5, 90.0),
+        UserReleaseYearStatistic(2017, 2, 66.0),
+        UserReleaseYearStatistic(2018, 5, 84.0),
+        UserReleaseYearStatistic(2019, 9, 77.0),
+        UserReleaseYearStatistic(2020, 6, 92.0),
+        UserReleaseYearStatistic(2021, 12, 79.0),
+        UserReleaseYearStatistic(2022, 17, 85.0),
+        UserReleaseYearStatistic(2023, 20, 73.0),
+        UserReleaseYearStatistic(2024, 16, 88.0),
+        UserReleaseYearStatistic(2025, 12, 69.0),
+        UserReleaseYearStatistic(2026, 20, 82.0)
+    )
+
+    /** Genre tallies. `minutesWatched` is what the old `timeWatched` carried. */
+    private fun demoGenres() = listOf(
+        UserGenreStatistic("Action", 96, 78.0, 38_040L),
+        UserGenreStatistic("Fantasy", 74, 85.0, 27_210L),
+        UserGenreStatistic("Adventure", 61, 82.0, 24_880L),
+        UserGenreStatistic("Romance", 44, 88.0, 12_400L),
+        UserGenreStatistic("Comedy", 39, 71.0, 9_120L),
+        UserGenreStatistic("Drama", 33, 90.0, 14_600L)
+    )
+
+    /** Tag tallies, with the tag objects the chart labels from. */
+    private fun demoTags() = listOf(
+        UserTagStatistic(MediaTag(id = 1, name = "Male Protagonist"), 88, 74.0),
+        UserTagStatistic(MediaTag(id = 2, name = "Female Protagonist"), 61, 81.0),
+        UserTagStatistic(MediaTag(id = 3, name = "Ensemble Cast"), 44, 86.0),
+        UserTagStatistic(MediaTag(id = 4, name = "Isekai"), 39, 68.0)
     )
 
     /**

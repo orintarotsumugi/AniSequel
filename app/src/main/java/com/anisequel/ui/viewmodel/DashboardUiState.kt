@@ -37,6 +37,17 @@ sealed interface DashboardUiState {
         val totalWatchedCount: Int,
         val totalMissedCount: Int,
         val isRefreshing: Boolean = false,
+        /**
+         * Whether what is on screen is the device's saved copy rather than a live
+         * answer.
+         *
+         * It exists so the screen can say so. A cold start paints the snapshot
+         * first and then replaces it when the network answers; when the network
+         * does not answer, the snapshot stays and this flag stays true. Silently
+         * presenting a day-old list as today's is the failure this avoids - the
+         * list is still worth drawing, it just is not current.
+         */
+        val isCached: Boolean = false,
         val isDemoMode: Boolean = false,
         /**
          * Whether "Add to Planning" can actually reach AniList. False in demo

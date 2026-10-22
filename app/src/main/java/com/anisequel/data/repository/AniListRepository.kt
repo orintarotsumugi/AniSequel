@@ -195,6 +195,41 @@ interface AniListRepository {
     ): Result<UserOverview> = unsupported("getUserOverview")
 
     /**
+     * The last answer this device has for something, whatever its age.
+     *
+     * ## Why this is separate from the ordinary cached reads
+     *
+     * Every other read here honours the refresh interval, and that is right for
+     * the answer to "what is my list now". It is the wrong question for "can I
+     * draw anything at all while the network is down": the disk snapshots hold a
+     * complete list and profile, and refusing them because they are 31 minutes old
+     * is how a cold start with no signal landed on a full-screen failure page over
+     * data the device already had.
+     *
+     * So these are deliberately TTL-free (with a wide outer bound in the
+     * implementation) and are meant for two moments only:
+     *
+     *  - first paint on a cold start, before the network answers; and
+     *  - the fallback when a fetch fails.
+     *
+     * A caller that shows this data should say it is a saved copy - the screen's
+     * `isCached` flag - rather than passing it off as live.
+     *
+     * Defaulted to null for the demo and test doubles, which have no disk tier and
+     * therefore no saved copy to offer.
+     */
+    suspend fun lastKnownViewer(): ViewerProfile? = null
+
+    /** See [lastKnownViewer]. Keyed exactly as [getUserOverview] is. */
+    suspend fun lastKnownOverview(userId: Int?, userName: String?): UserOverview? = null
+
+    /** See [lastKnownViewer]. Keyed exactly as [getUserAnimeList] is. */
+    suspend fun lastKnownAnimeList(userId: Int): MediaListCollection? = null
+
+    /** See [lastKnownViewer]. Keyed exactly as [getUserAnimeListByUsername] is. */
+    suspend fun lastKnownAnimeListByUsername(userName: String): MediaListCollection? = null
+
+    /**
      * One page of the person's list activity, newest first.
      *
      * [userId] only - the feed is not addressable by name, and the profile

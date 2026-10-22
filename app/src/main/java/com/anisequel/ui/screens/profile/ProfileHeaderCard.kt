@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.PannableBackdrop
+import com.anisequel.ui.components.SavedCopyPill
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 
@@ -135,6 +136,16 @@ fun ProfileHeaderCard(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+        )
+
+        // Under the name rather than over the banner: it annotates the account,
+        // not the artwork, and the banner is the one place on this page with
+        // enough colour already. Always composed (and zero-height when hidden) so
+        // a refresh that lands can animate it away instead of snapping the header
+        // below it up by a row.
+        SavedCopyPill(
+            visible = state.isCached,
+            modifier = Modifier.padding(top = 6.dp)
         )
 
         Spacer(modifier = Modifier.height(6.dp))

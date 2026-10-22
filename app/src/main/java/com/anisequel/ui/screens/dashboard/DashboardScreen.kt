@@ -64,6 +64,7 @@ import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.ui.components.ApiRecoveryOverlay
+import com.anisequel.ui.components.SavedCopyPill
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
@@ -360,6 +361,16 @@ fun DashboardScreen(
                             if (state.isDemoMode) {
                                 item(key = "demo_banner") {
                                     DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
+                                }
+                            }
+
+                            // Only present when there is something to say. The
+                            // item is added and removed rather than animated in
+                            // place so the list does not reserve 14dp of spacing
+                            // for a pill nobody can see.
+                            if (state.isCached) {
+                                item(key = "saved_copy") {
+                                    SavedCopyPill(visible = true)
                                 }
                             }
 
