@@ -25,6 +25,7 @@ import com.anisequel.domain.usecase.FindMissedSequelsUseCase
 import com.anisequel.domain.usecase.GetViewerProfileUseCase
 import com.anisequel.domain.usecase.SaveToPlanningUseCase
 import com.anisequel.ui.components.detail.EntryEditor
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -390,38 +391,8 @@ class DashboardViewModel(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val username = targetUsername?.takeUnless { it.isBlank() }
-
-            // Paint the saved copy *before* the network is asked anything.
-            //
-            // The disk tier already served a cold start inside the refresh
-            // window, but the screen still went through `Loading` first and had
-            // nothing left to draw when a request failed. Reading the snapshot
-            // here makes the first frame the reader's own list, and turns a failed
-            // fetch from "full-screen failure" into "the list you had, marked as a
-            // saved copy". Signed-in only: the public-profile path is addressed by
-            // name and has no viewer record to read.
-            if (username == null) {
-                val savedViewer = aniListRepository.lastKnownViewer()
-                val savedList = savedViewer?.let { aniListRepository.lastKnownAnimeList(it.id) }
-                if (savedViewer != null && savedList != null) {
-                    cachedViewer = savedViewer
-                    cachedCollection = savedList
-                    showingCachedData = true
-                    invalidateDerivedState(clearDetailCache = true)
-                }
-            }
-
-            // Only when nothing was painted above. Assigning this unconditionally
-            // is what used to blank a perfectly good saved copy for the length of
-            // the request it was about to make.
-            if (_uiState.value !is DashboardUiState.Success) {
-                _uiState.value = DashboardUiState.Loading(
-                    if (username != null) {
-                        "Searching for @$username on AniList..."
-                    } else {
-                        "Connecting to AniList..."
-                    }
-                )
+            if (!paintSavedCopy()) {
+                _uiState.value = DashboardUiState.Loading(loadingMessage(username))
             }
 
             // A public profile is two independent requests: the profile is
@@ -444,60 +415,85 @@ class DashboardViewModel(
                 async { aniListRepository.getUserAnimeListByUsername(name) }
             }
 
-            val viewerResult = viewerDeferred.await()
-            viewerResult.fold(
-                onSuccess = { viewer ->
-                    cachedViewer = viewer
-                    if (_uiState.value !is DashboardUiState.Success) {
-                        _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
-                    }
+            viewerDeferred.await().fold(
+                onSuccess = { viewer -> loadListFor(viewer, listDeferred) },
+                onFailure = { error -> keepSavedCopyOrFail(error, "Failed to connect with AniList") }
+            )
+        }
+    }
 
-                    val listResult = listDeferred?.await() ?: aniListRepository.getUserAnimeList(viewer.id)
-                    listResult.fold(
-                        onSuccess = { collection ->
-                            cachedCollection = collection
-                            showingCachedData = false
-                            freshnessWatch.markLoaded()
-                            // A new list invalidates everything derived from it.
-                            invalidateDerivedState()
-                        },
-                        onFailure = { err ->
-                            // The saved copy is on screen and is still the reader's
-                            // list. Replacing it with a failure page would throw away
-                            // the data the page exists to show, so it stays - marked
-                            // as cached - and the retry is a pull or a refresh.
-                            val cached = _uiState.value as? DashboardUiState.Success
-                            if (cached != null) {
-                                _uiState.value = cached.copy(isRefreshing = false)
-                                if (cached.isCached) {
-                                    _eventFlow.emit(
-                                        DashboardEvent.ShowSnackbar("Offline - showing your saved copy.")
-                                    )
-                                }
-                            } else {
-                                showError(err, fallback = "Failed to fetch anime list")
-                            }
-                        }
-                    )
-                },
-                onFailure = { err ->
-                    val cached = _uiState.value as? DashboardUiState.Success
-                    // A rejected token is the one failure the saved copy cannot
-                    // paper over: the screen would keep drawing a session that no
-                    // longer works, and the sign-in button that fixes it is on the
-                    // error state this would replace.
-                    val isDeadSession = (err as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
-                    if (cached != null && !isDeadSession) {
-                        _uiState.value = cached.copy(isRefreshing = false)
-                        if (cached.isCached) {
-                            _eventFlow.emit(
-                                DashboardEvent.ShowSnackbar("AniList is not answering - showing your saved copy.")
-                            )
-                        }
-                    } else {
-                        showError(err, fallback = "Failed to connect with AniList")
-                    }
-                }
+    /**
+     * The saved copy, painted as the first frame of a load.
+     *
+     * Split out of [loadData] partly because it is a state machine of its own -
+     * read, adopt, recompute, report whether anything was drawn - and partly
+     * because the whole pipeline in one function had grown past what CodeFactor's
+     * "complex method" gate tolerates. The gate is coarse, but the split is the
+     * one a reader wants anyway.
+     *
+     * Signed-in only: the public-profile path is addressed by name and has no
+     * viewer record to read.
+     */
+    private suspend fun paintSavedCopy(): Boolean {
+        if (!targetUsername.isNullOrBlank()) return false
+        val savedViewer = aniListRepository.lastKnownViewer() ?: return false
+        val savedList = aniListRepository.lastKnownAnimeList(savedViewer.id) ?: return false
+        cachedViewer = savedViewer
+        cachedCollection = savedList
+        showingCachedData = true
+        invalidateDerivedState(clearDetailCache = true)
+        return true
+    }
+
+    private fun loadingMessage(username: String?): String =
+        if (username != null) {
+            "Searching for @$username on AniList..."
+        } else {
+            "Connecting to AniList..."
+        }
+
+    /** The second half of [loadData]: the profile answered, so ask for its list. */
+    private suspend fun loadListFor(
+        viewer: ViewerProfile,
+        listDeferred: Deferred<Result<MediaListCollection>>?
+    ) {
+        cachedViewer = viewer
+        if (_uiState.value !is DashboardUiState.Success) {
+            _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
+        }
+
+        val listResult = listDeferred?.await() ?: aniListRepository.getUserAnimeList(viewer.id)
+        listResult.fold(
+            onSuccess = { collection ->
+                cachedCollection = collection
+                showingCachedData = false
+                freshnessWatch.markLoaded()
+                // A new list invalidates everything derived from it.
+                invalidateDerivedState()
+            },
+            onFailure = { error -> keepSavedCopyOrFail(error, "Failed to fetch anime list") }
+        )
+    }
+
+    /**
+     * The saved copy is on screen and is still the reader's list, so a failed
+     * request leaves it there, marked as cached.
+     *
+     * A rejected token is the one failure this may not paper over: the screen
+     * would keep drawing a session that no longer works, and the "Sign in again"
+     * exit lives on the error state this would replace.
+     */
+    private suspend fun keepSavedCopyOrFail(error: Throwable, fallback: String) {
+        val cached = _uiState.value as? DashboardUiState.Success
+        val isDeadSession = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+        if (cached == null || isDeadSession) {
+            showError(error, fallback)
+            return
+        }
+        _uiState.value = cached.copy(isRefreshing = false)
+        if (cached.isCached) {
+            _eventFlow.emit(
+                DashboardEvent.ShowSnackbar("Showing your saved copy - AniList did not answer.")
             )
         }
     }
