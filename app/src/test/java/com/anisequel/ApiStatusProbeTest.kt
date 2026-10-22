@@ -43,20 +43,24 @@ class ApiStatusProbeTest {
 
         probe.probe()
         runCurrent()
-        assertEquals("the first check did not start", 1, calls)
+        if (calls != 1) error("DIAG first check: calls=$calls ui=${probe.ui.value}")
 
         // The reader taps Check while the automatic probe is still in flight.
         probe.probe()
         runCurrent()
-        assertEquals("the tap started a second concurrent request", 1, calls)
+        if (calls != 1) error("DIAG concurrent tap: calls=$calls ui=${probe.ui.value}")
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertEquals("the tap was thrown away instead of queued", 2, calls)
-        assertEquals(ApiReachability.ONLINE, probe.ui.value.reachability)
+        if (calls != 2) error("DIAG queued tap lost: calls=$calls ui=${probe.ui.value}")
+        if (probe.ui.value.reachability != ApiReachability.ONLINE) {
+            error("DIAG reachability: calls=$calls ui=${probe.ui.value}")
+        }
         // The verdict on screen has to be the second request's, not the first's.
-        assertEquals(20L, probe.ui.value.latencyMillis)
-        assertFalse(probe.ui.value.isChecking)
+        if (probe.ui.value.latencyMillis != 20L) {
+            error("DIAG latency: calls=$calls ui=${probe.ui.value}")
+        }
+        if (probe.ui.value.isChecking) error("DIAG still checking: calls=$calls ui=${probe.ui.value}")
     }
 
     @Test
