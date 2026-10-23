@@ -258,10 +258,10 @@ class TierScreenLogicTest {
 
     @Test
     fun `a drop on the second line of a wrapped row goes into that line`() {
-        // The branch that only exists because a row wraps: six tiles in a row four
-        // wide are two lines, and a drop on the lower one has to mean a position on
-        // the lower one - not "somewhere in this row", which is what the old
-        // tier-only drop said.
+        // The branch that only exists because a row wraps: six tiles in a row
+        // three wide are two lines, and a drop on the lower one has to mean a
+        // position on the lower one - not "somewhere in this row", which is what
+        // the old tier-only drop said.
         val wrapped = layoutTierList(
             tiers = listOf(TierDefinition("s", "S", 0xFFE5484D)),
             assignment = TierAssignment((1..6).associateWith { "s" }),
@@ -270,7 +270,9 @@ class TierScreenLogicTest {
             subtitle = null,
             options = options
         )
-        val secondLine = wrapped.items.sortedBy { it.y }.drop(4)
+        // `ScreenTierOptions` fits three 72-unit tiles per 360-unit row, so the
+        // first tile of the second line is the fourth item.
+        val secondLine = wrapped.items.sortedBy { it.y }.drop(3)
 
         val onSecondLine = tierDropPlacement(
             rows = wrapped.rows,

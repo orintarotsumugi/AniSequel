@@ -62,6 +62,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 @Composable
 internal fun TierPlaceSheet(
     title: String,
+    coverUrl: String?,
     tiers: List<TierDefinition>,
     currentTierId: String?,
     onMove: (String) -> Unit,
@@ -78,14 +79,38 @@ internal fun TierPlaceSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 20.dp)
         ) {
-            Text(
-                text = title.ifBlank { "Move to" },
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-            )
+            // The cover is what the person just tapped, so the sheet opens with
+            // the thing they are moving rather than only its name. A title-only
+            // header made a sheet about a poster look like a sheet about a string.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val placeholder = rememberVectorPainter(AppVectorIcons.List)
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 60.dp)
+                        .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentScale = ContentScale.Crop,
+                    placeholder = placeholder,
+                    error = placeholder,
+                    fallback = placeholder
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                    text = title.ifBlank { "Move to" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             TierChoiceList(
                 tiers = tiers,
@@ -320,6 +345,8 @@ internal fun TierManageSheet(
     onRename: (String, String) -> Unit,
     onAdd: () -> Unit,
     onRemove: (String) -> Unit,
+    onColor: (TierDefinition) -> Unit,
+    onScoreFloor: (TierDefinition) -> Unit,
     onClearPlacements: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -364,24 +391,50 @@ internal fun TierManageSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(tierRowColor(tier.colorArgb))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "${tier.label} - $members",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
+                        // The swatch is the colour control, not a decoration. A
+                        // separate "change colour" row for every tier would double
+                        // the height of the sheet to edit the one property people
+                        // change most.
+                        IconButton(
+                            onClick = { onColor(tier) },
+                            modifier = Modifier.testTag("tier_colour_button")
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .background(tierRowColor(tier.colorArgb))
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${tier.label} - $members",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            TextButton(
+                                onClick = { onScoreFloor(tier) },
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 32.dp)
+                                    .testTag("tier_band_button")
+                            ) {
+                                Text(
+                                    text = tier.scoreFloor?.let { "Rating $it+" }
+                                        ?: "Set rating band",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (tier.scoreFloor != null) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
                         TextButton(
                             onClick = { renamingId = tier.id },
                             modifier = Modifier.defaultMinSize(

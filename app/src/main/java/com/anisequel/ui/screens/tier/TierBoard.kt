@@ -1,75 +1,42 @@
 package com.anisequel.ui.screens.tier
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
-import com.anisequel.domain.tier.TierItemBox
+import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListLayout
-import com.anisequel.domain.tier.TierRowBox
 import com.anisequel.domain.tier.layoutTierList
-import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
@@ -89,6 +56,9 @@ internal fun TierBoardHost(
     tiers: List<TierDefinition>,
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
+    display: TierDisplay,
+    zoom: Float,
+    onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
@@ -114,6 +84,9 @@ internal fun TierBoardHost(
                 tiers = tiers,
                 assignment = assignment,
                 candidates = candidates,
+                display = display,
+                zoom = zoom,
+                onZoomChange = onZoomChange,
                 viewport = viewport,
                 scrollState = scrollState,
                 onMove = onMove,
@@ -162,13 +135,15 @@ private fun TierBoard(
     tiers: List<TierDefinition>,
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
+    display: TierDisplay,
+    zoom: Float,
+    onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
     onDragHintChanged: (String?) -> Unit
 ) {
-    var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     var draggingId by remember { mutableStateOf<Int?>(null) }
     var dragOrigin by remember { mutableStateOf(Offset.Zero) }
     // Held as the state object rather than read with `by`, because the dragged
@@ -181,7 +156,15 @@ private fun TierBoard(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
 
-    val options = remember(widthDp, zoom) { ScreenTierOptions.copy(width = widthDp / zoom) }
+    val options = remember(widthDp, zoom, display) {
+        ScreenTierOptions.copy(
+            width = widthDp / zoom,
+            // No caption band when the name is on the cover or hidden. Keeping
+            // the band would leave a strip of empty background under every poster
+            // and make a cover-only board look like a bug rather than a choice.
+            captionHeight = if (display.hasCaptionBand) ScreenTierOptions.captionHeight else 0f
+        )
+    }
     val arrangement = remember(options, tiers, assignment, candidates, listName) {
         layoutTierList(
             tiers = tiers,
@@ -315,7 +298,7 @@ private fun TierBoard(
     // Boolean", which describes an API shape this project has never compiled
     // against.)
     val transformState = rememberTransformableState { zoomChange, _, _ ->
-        zoom = clampTierZoom(zoom * zoomChange)
+        onZoomChange(clampTierZoom(zoom * zoomChange))
     }
 
     val dragBox = draggingId?.let { arrangement.boxByMediaId[it] }
@@ -386,6 +369,7 @@ private fun TierBoard(
             arrangement = arrangement,
             options = options,
             zoom = zoom,
+            display = display,
             candidateById = candidateById,
             hoveredTierId = dropTarget.tierId,
             dropCaret = caret,
@@ -400,6 +384,8 @@ private fun TierBoard(
                 zoom = zoom,
                 posterHeight = options.posterHeight * zoom,
                 captionHeight = options.captionHeight * zoom,
+                showTitle = display.showTitles,
+                titlePosition = display.titlePosition,
                 travel = dragTravel,
                 // How far the board has scrolled since the tile was picked up,
                 // read in the draw phase for the same reason the travel is.
@@ -439,6 +425,7 @@ private fun TierGeometry(
     arrangement: TierListLayout,
     options: TierLayoutOptions,
     zoom: Float,
+    display: TierDisplay,
     candidateById: Map<Int, TierCandidate>,
     hoveredTierId: String?,
     dropCaret: TierCaret?,
@@ -449,6 +436,14 @@ private fun TierGeometry(
     // and the positions they are measured against cannot drift apart.
     val drawnItems = remember(arrangement, skipMediaId) {
         visibleTierItems(arrangement.items, skipMediaId)
+    }
+    // How many posters each row holds, for the count under its label. Counted
+    // from `arrangement.items` rather than `drawnItems` so the number does not
+    // drop by one while its poster is being carried - the row still holds it.
+    val memberCounts = remember(arrangement) {
+        arrangement.rows.associate { row ->
+            row.tierId to arrangement.items.count { it.y >= row.y && it.bottom <= row.bottom }
+        }
     }
     val slots = remember(arrangement, drawnItems, dropCaret) {
         buildList {
@@ -465,7 +460,13 @@ private fun TierGeometry(
             arrangement.rows.forEach { row ->
                 TierRowStrip(
                     row = row,
-                    labelGutter = options.labelGutter,
+                    // Scaled with the row it fills, for the same reason the tiles
+                    // are: the layout places the first poster at
+                    // `(padding + labelGutter) * zoom`, so a fixed gutter would sit
+                    // inside the poster area at 75% and leave a band of empty row at
+                    // 200%, with the label centred in the wrong strip either way.
+                    labelGutter = options.labelGutter * zoom,
+                    memberCount = memberCounts[row.tierId] ?: 0,
                     highlighted = row.tierId == hoveredTierId
                 )
             }
@@ -483,9 +484,17 @@ private fun TierGeometry(
                 // version of a tile and the tile was not.
                 TierPosterTile(
                     candidate = candidateById[box.mediaId],
-                    width = box.width,
+                    // All three scaled: the slot is measured at `box.width * zoom`
+                    // and the tile sizes its own artwork from these numbers. Passing
+                    // the unscaled width left a 72-unit-wide column inside a
+                    // 144-unit slot at 200%, so the poster rendered as a tall strip
+                    // and the ghost that is picked up from it was suddenly wider
+                    // than the tile it replaced.
+                    width = box.width * zoom,
                     posterHeight = options.posterHeight * zoom,
                     captionHeight = options.captionHeight * zoom,
+                    showTitle = display.showTitles,
+                    titlePosition = display.titlePosition,
                     onTap = { onItemTap(box.mediaId) }
                 )
             }
@@ -526,228 +535,3 @@ private fun TierGeometry(
 
 /** One position, in the layout's own dp units, before zoom is applied. */
 private data class Slot(val x: Float, val y: Float, val width: Float, val height: Float)
-
-/**
- * A tier's coloured row, with its label in the gutter.
- *
- * The label is vertically centred for the same reason the SVG writer centres it:
- * a one-item row and a four-item row are 128dp and 512dp tall, and a top-aligned
- * label makes the short one read as a section header rather than as the same
- * control with less in it.
- *
- * The highlight animates *colour* on the border and never the row's size. Growing
- * a row while a tile is being dropped onto it would reflow every other tile in
- * that row under the finger that is holding the tile being dragged.
- */
-@Composable
-private fun TierRowStrip(row: TierRowBox, labelGutter: Float, highlighted: Boolean) {
-    val shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
-    val border by animateColorAsState(
-        targetValue = if (highlighted) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            Color.Transparent
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "tier_row_highlight"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(shape)
-            // The same 0.92 the SVG writer uses, so a shared list does not change
-            // temperature between the screen and the file exported from it.
-            .background(tierRowColor(row.colorArgb).copy(alpha = 0.92f))
-            .border(3.dp, border, shape),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .width(labelGutter.dp)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = row.label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-        }
-    }
-}
-
-/**
- * The bar that shows where a dropped tile will land.
- *
- * The row highlight says *which* row; this says *where in it*, which is the
- * difference the positional drop introduced - dropping onto the third poster now
- * means "third", and without a mark at that seam the tile would appear somewhere
- * in the row with nothing having said where. It is a capsule rather than a
- * rectangle for the same reason every other bar in this app is: `toShape()` on a
- * stretched polygon draws an ellipse.
- */
-@Composable
-private fun TierDropCaret() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.primary)
-            .testTag("tier_drop_caret")
-    )
-}
-
-/**
- * One poster, its caption, and - when there is one - its AniList score.
- *
- * The caption sits *under* the poster rather than across it. `FavouriteMediaRow`
- * records why this app already tried the other way: AniList covers carry the
- * series' own typography, frequently vertical and running to the edges, and a
- * caption over that is unreadable. The score badge stays on the cover because a
- * two-digit number in the top-start corner lands on padding that is empty on
- * almost every poster, which is the same reason the Library page's progress badge
- * survives in the same corner.
- *
- * `defaultMinSize` is deliberately absent here. Every tile is measured with
- * `Constraints.fixed` at `itemWidth`, which is already above 48dp, so a minimum
- * would be a no-op that reads like a guarantee it is not enforcing - the real
- * floor is `ScreenTierOptions.itemWidth`, and it is the thing to change if it
- * ever needs to move.
- */
-@Composable
-private fun TierPosterTile(
-    candidate: TierCandidate?,
-    width: Float,
-    posterHeight: Float,
-    captionHeight: Float,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val placeholder = rememberVectorPainter(AppVectorIcons.List)
-
-    Column(
-        modifier = modifier
-            .width(width.dp)
-            // Before the clickable, sharing one source: sharing is what cancels
-            // the press spring the moment the gesture turns into a scroll instead
-            // of leaving the tile squashed under a finger that is scrolling.
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onTap)
-            .testTag("tier_tile")
-    ) {
-        Box(
-            modifier = Modifier
-                .width(width.dp)
-                .height(posterHeight.dp)
-                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            AsyncImage(
-                model = candidate?.coverUrl,
-                contentDescription = candidate?.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = placeholder,
-                error = placeholder,
-                fallback = placeholder
-            )
-
-            // AniList answers 0 as readily as null for "nobody has scored this",
-            // and a badge reading "0" claims a title is terrible rather than
-            // unrated.
-            val score = candidate?.averageScore
-            if (score != null && score > 0) {
-                Text(
-                    text = score.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .clip(ExpressiveShapes.pill)
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
-
-        Text(
-            text = candidate?.title.orEmpty(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .width(width.dp)
-                .height(captionHeight.dp)
-        )
-    }
-}
-
-/**
- * The poster under the finger, lifted clear of the board.
- *
- * Both the translation and the lift are read inside `graphicsLayer`, so a drag
- * invalidates the draw pass alone. Offsetting the node during layout instead would
- * re-measure and re-place the whole board on every pointer move, which is what
- * makes a drag inside a scrolling list stutter.
- *
- * Drawn as a sibling *after* [TierGeometry] so it lands on top. A `Layout` draws
- * its children in the order it emitted them and has no z-index, so the only way to
- * put the dragged tile above the row it is hovering over is not to emit it there.
- *
- * The dimensions handed in are already multiplied by `zoom`: the ghost has to be
- * the same size on screen as the slot it came out of, or releasing it lands the
- * finger on a different part of the tile than the one they picked up.
- *
- * [scrollShift] is the second half of that promise. The board moves when
- * auto-scroll runs and the finger does not, so a ghost translated by the drag
- * alone would slide away from the finger by exactly the distance the list had
- * scrolled - at the moment the person is dragging the furthest and can see the
- * least.
- */
-@Composable
-private fun TierDragGhost(
-    box: TierItemBox,
-    candidate: TierCandidate?,
-    zoom: Float,
-    posterHeight: Float,
-    captionHeight: Float,
-    travel: State<Offset>,
-    scrollShift: () -> Float
-) {
-    val lift by animateFloatAsState(
-        targetValue = 1.12f,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "tier_drag_lift"
-    )
-
-    TierPosterTile(
-        candidate = candidate,
-        width = box.width * zoom,
-        posterHeight = posterHeight,
-        captionHeight = captionHeight,
-        onTap = {},
-        modifier = Modifier
-            .offset(x = (box.x * zoom).dp, y = (box.y * zoom).dp)
-            // `travel.value` is read *inside* the layer block, which is what keeps
-            // a pointer move down to a draw invalidation instead of a rebuild of
-            // this modifier chain every frame.
-            .graphicsLayer {
-                translationX = travel.value.x
-                translationY = travel.value.y + scrollShift()
-                scaleX = lift
-                scaleY = lift
-            }
-            .testTag("tier_drag_ghost")
-    )
-}
