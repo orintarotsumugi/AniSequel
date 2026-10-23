@@ -329,7 +329,7 @@ internal fun TierBoardScreen(
                     onAddTitles = { addingTitles = true }
                 )
 
-                if (hiddenTotal > 0 && (visibleAssignment.isNotEmpty() || assignment.isEmpty())) {
+                if (hiddenTotal > 0 && (!visibleAssignment.isEmpty || assignment.isEmpty)) {
                     TierFilterNotice(
                         count = hiddenTotal,
                         onOpenFilters = { filtering = true }
@@ -369,7 +369,7 @@ internal fun TierBoardScreen(
                 when {
                     // Nothing ranked at all, and there is something to rank: the
                     // first-run state with both routes into the feature.
-                    assignment.isEmpty() && (visibleCandidates.isNotEmpty() || candidates.isEmpty()) -> {
+                    assignment.isEmpty && (visibleCandidates.isNotEmpty() || candidates.isEmpty()) -> {
                         TierEmptyState(
                             candidates = visibleCandidates,
                             unrankedCount = unranked.size,
@@ -382,9 +382,9 @@ internal fun TierBoardScreen(
                     // Ranked titles exist but the filters hide every one of them.
                     // Not the empty state: seeding here would offer to overwrite a
                     // list the person already built.
-                    visibleAssignment.isEmpty() -> {
+                    visibleAssignment.isEmpty -> {
                         TierFilteredEmptyState(
-                            hiddenCount = if (assignment.isEmpty()) hiddenTotal else hiddenRanked,
+                            hiddenCount = if (assignment.isEmpty) hiddenTotal else hiddenRanked,
                             onOpenFilters = { filtering = true },
                             onShowAll = {
                                 onFilterChange(TierFilter(emptySet(), emptySet()))
@@ -434,7 +434,7 @@ internal fun TierBoardScreen(
                 if (hint != null) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(ExpressiveShapes.pill))
+                            .clip(ExpressiveShapes.pill)
                             .background(MaterialTheme.colorScheme.inverseSurface)
                             .padding(horizontal = 16.dp, vertical = 9.dp)
                             .testTag("tier_drag_hint")
