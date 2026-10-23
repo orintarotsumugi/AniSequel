@@ -337,11 +337,6 @@ private fun TierCandidateRow(candidate: TierCandidate, onClick: () -> Unit) {
  * of ranking to one tap.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-// The sheet's branches are alternative layouts of the same rows - renaming,
-// deleting, clearing placements, colour and band - not nested logic. Pulling the
-// row out into its own composable would hand it seven parameters, which detekt's
-// parameter-count rule would then report in turn.
-@Suppress("ComplexMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun TierManageSheet(
     tiers: List<TierDefinition>,
@@ -355,9 +350,14 @@ internal fun TierManageSheet(
     onClearPlacements: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var renamingId by remember { mutableStateOf<String?>(null) }
     var pendingRemoval by remember { mutableStateOf<TierDefinition?>(null) }
     var clearingPlacements by remember { mutableStateOf(false) }
+    val rowActions = TierManageRowActions(
+        rename = onRename,
+        remove = { tier -> pendingRemoval = tier },
+        color = onColor,
+        scoreFloor = onScoreFloor
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -381,93 +381,12 @@ internal fun TierManageSheet(
             }
 
             items(tiers, key = { it.id }) { tier ->
-                val members = memberCounts[tier.id] ?: 0
-                if (renamingId == tier.id) {
-                    TierRenameField(
-                        initial = tier.label,
-                        maxLength = TIER_LABEL_MAX_LENGTH,
-                        onCancel = { renamingId = null },
-                        onConfirm = { label ->
-                            onRename(tier.id, label)
-                            renamingId = null
-                        }
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // The swatch is the colour control, not a decoration. A
-                        // separate "change colour" row for every tier would double
-                        // the height of the sheet to edit the one property people
-                        // change most.
-                        IconButton(
-                            onClick = { onColor(tier) },
-                            modifier = Modifier.testTag("tier_colour_button")
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .background(tierRowColor(tier.colorArgb))
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${tier.label} - $members",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            TextButton(
-                                onClick = { onScoreFloor(tier) },
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = 32.dp)
-                                    .testTag("tier_band_button")
-                            ) {
-                                Text(
-                                    text = tier.scoreFloor?.let { "Rating $it+" }
-                                        ?: "Set rating band",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (tier.scoreFloor != null) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                        }
-                        TextButton(
-                            onClick = { renamingId = tier.id },
-                            modifier = Modifier.defaultMinSize(
-                                minWidth = 48.dp,
-                                minHeight = 48.dp
-                            )
-                        ) {
-                            Text("Rename")
-                        }
-                        TextButton(
-                            onClick = { pendingRemoval = tier },
-                            // `removeTier` refuses to go below one row, because
-                            // with nothing left there is nowhere to drag onto.
-                            // Disabled rather than hidden so the control does not
-                            // appear and disappear as tiers come and go.
-                            enabled = tiers.size > 1,
-                            modifier = Modifier.defaultMinSize(
-                                minWidth = 48.dp,
-                                minHeight = 48.dp
-                            )
-                        ) {
-                            Text(
-                                text = "Remove",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
+                TierManageRow(
+                    tier = tier,
+                    members = memberCounts[tier.id] ?: 0,
+                    canRemove = tiers.size > 1,
+                    actions = rowActions
+                )
             }
 
             item(key = "add") {
@@ -565,6 +484,124 @@ internal fun TierManageSheet(
                 }
             }
         )
+    }
+}
+
+/**
+ * What one tier row can ask the sheet to do.
+ *
+ * Kept together so the row itself stays about laying out a caption, a swatch, a
+ * band and two buttons. Removing is a request to open the confirmation, not to
+ * delete: the dialog lives in the sheet because it needs the tier's member count
+ * and the shared `pendingRemoval` state.
+ */
+private class TierManageRowActions(
+    val rename: (String, String) -> Unit,
+    val remove: (TierDefinition) -> Unit,
+    val color: (TierDefinition) -> Unit,
+    val scoreFloor: (TierDefinition) -> Unit
+)
+
+/**
+ * One tier in the manage sheet.
+ *
+ * Extracted from [TierManageSheet] because the rename field is the only branch the
+ * row has and keeping it in the sheet made every row's editing state part of the
+ * sheet's. `remember(tier.id)` gives each row its own: scrolling a half-typed name
+ * away and back starts the rename again rather than reopening it mid-word.
+ */
+@Composable
+private fun TierManageRow(
+    tier: TierDefinition,
+    members: Int,
+    canRemove: Boolean,
+    actions: TierManageRowActions
+) {
+    var renaming by remember(tier.id) { mutableStateOf(false) }
+
+    if (renaming) {
+        TierRenameField(
+            initial = tier.label,
+            maxLength = TIER_LABEL_MAX_LENGTH,
+            onCancel = { renaming = false },
+            onConfirm = { label ->
+                actions.rename(tier.id, label)
+                renaming = false
+            }
+        )
+        return
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // The swatch is the colour control, not a decoration. A separate "change
+        // colour" row for every tier would double the height of the sheet to edit
+        // the one property people change most.
+        IconButton(
+            onClick = { actions.color(tier) },
+            modifier = Modifier.testTag("tier_colour_button")
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(tierRowColor(tier.colorArgb))
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${tier.label} - $members",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            TextButton(
+                onClick = { actions.scoreFloor(tier) },
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 32.dp)
+                    .testTag("tier_band_button")
+            ) {
+                Text(
+                    text = tier.scoreFloor?.let { "Rating $it+" } ?: "Set rating band",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (tier.scoreFloor != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+        }
+        TextButton(
+            onClick = { renaming = true },
+            modifier = Modifier.defaultMinSize(
+                minWidth = 48.dp,
+                minHeight = 48.dp
+            )
+        ) {
+            Text("Rename")
+        }
+        TextButton(
+            onClick = { actions.remove(tier) },
+            // `removeTier` refuses to go below one row, because with nothing left
+            // there is nowhere to drag onto. Disabled rather than hidden so the
+            // control does not appear and disappear as tiers come and go.
+            enabled = canRemove,
+            modifier = Modifier.defaultMinSize(
+                minWidth = 48.dp,
+                minHeight = 48.dp
+            )
+        ) {
+            Text(
+                text = "Remove",
+                color = MaterialTheme.colorScheme.error
+            )
+        }
     }
 }
 

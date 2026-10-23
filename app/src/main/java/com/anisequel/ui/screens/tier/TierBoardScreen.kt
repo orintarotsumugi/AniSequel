@@ -87,13 +87,6 @@ import kotlinx.coroutines.delay
  * It is a sibling of the scrolling column instead, so it stays where it is.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-// One composition root: the scaffold, the scroll, the drag/zoom hosts and every
-// sheet share about twenty hoisted values (viewport, selected tier ids, zoom,
-// filter). Extracting a "content" composable would pass all of them through or
-// widen them to `internal`, which makes the invariants worse - the same trade-off
-// recorded for DashboardViewModel in AGENTS.md. The metric counts one branch per
-// sheet, not tangled logic.
-@Suppress("ComplexMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun TierBoardScreen(
     document: TierListDocument,
@@ -127,13 +120,7 @@ internal fun TierBoardScreen(
     val scrollState = rememberScrollState()
     val viewport = remember { TierBoardViewport() }
 
-    var placingMediaId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var addingTitles by rememberSaveable { mutableStateOf(false) }
-    var managingTiers by rememberSaveable { mutableStateOf(false) }
-    var filtering by rememberSaveable { mutableStateOf(false) }
-    var displaying by rememberSaveable { mutableStateOf(false) }
-    var coloringTierId by rememberSaveable { mutableStateOf<String?>(null) }
-    var bandTierId by rememberSaveable { mutableStateOf<String?>(null) }
+    val sheets = rememberTierBoardSheetState()
     var dragHint by remember { mutableStateOf<String?>(null) }
 
     // The board's zoom is a *local* value between gestures so a pinch does not
@@ -240,7 +227,7 @@ internal fun TierBoardScreen(
                 actions = {
                     Box {
                         IconButton(
-                            onClick = { filtering = true },
+                            onClick = { sheets.filtering = true },
                             modifier = Modifier.testTag("tier_filter_button")
                         ) {
                             Icon(
@@ -263,7 +250,7 @@ internal fun TierBoardScreen(
                         }
                     }
                     IconButton(
-                        onClick = { displaying = true },
+                        onClick = { sheets.displaying = true },
                         modifier = Modifier.testTag("tier_display_button")
                     ) {
                         Icon(
@@ -272,7 +259,7 @@ internal fun TierBoardScreen(
                         )
                     }
                     TextButton(
-                        onClick = { managingTiers = true },
+                        onClick = { sheets.managingTiers = true },
                         modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                     ) {
                         Icon(
@@ -326,45 +313,18 @@ internal fun TierBoardScreen(
                     total = candidates.size,
                     unranked = unranked.size,
                     undoLabel = undoLabel,
-                    onAddTitles = { addingTitles = true }
+                    onAddTitles = { sheets.addingTitles = true }
                 )
 
-                if (hiddenTotal > 0 && (!visibleAssignment.isEmpty || assignment.isEmpty)) {
-                    TierFilterNotice(
-                        count = hiddenTotal,
-                        onOpenFilters = { filtering = true }
-                    )
-                }
-
-                // Both messages are `AnimatedContent` rather than a nullable row:
-                // the outgoing text is kept alive while it fades and the container
-                // animates its height, so dismissing a notice shrinks the message
-                // it was showing instead of collapsing an empty box.
-                AnimatedContent(
-                    targetState = notice,
-                    transitionSpec = {
-                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
-                            fadeOut(ExpressiveMotion.FastEffects)
-                    },
-                    label = "tier_notice"
-                ) { message ->
-                    if (message != null) {
-                        TierNotice(text = message, onDismiss = onDismissNotice)
-                    }
-                }
-
-                // The ViewModel already drops orphaned entries from the displayed
-                // assignment, so saying so is what stops the missing posters
-                // reading as data loss.
-                if (orphaned > 0) {
-                    TierNotice(
-                        text = "$orphaned " +
-                            (if (orphaned == 1) "title was" else "titles were") +
-                            " filed under a tier that no longer exists. They are not shown" +
-                            " until you place them again.",
-                        onDismiss = null
-                    )
-                }
+                TierBoardNotices(
+                    hiddenTotal = hiddenTotal,
+                    assignmentEmpty = assignment.isEmpty,
+                    visibleAssignmentEmpty = visibleAssignment.isEmpty,
+                    onOpenFilters = { sheets.filtering = true },
+                    notice = notice,
+                    onDismissNotice = onDismissNotice,
+                    orphaned = orphaned
+                )
 
                 when {
                     // Nothing ranked at all, and there is something to rank: the
@@ -375,7 +335,7 @@ internal fun TierBoardScreen(
                             unrankedCount = unranked.size,
                             isSeeding = isSeeding,
                             onSeed = onSeed,
-                            onAddTitles = { addingTitles = true }
+                            onAddTitles = { sheets.addingTitles = true }
                         )
                     }
 
@@ -385,7 +345,7 @@ internal fun TierBoardScreen(
                     visibleAssignment.isEmpty -> {
                         TierFilteredEmptyState(
                             hiddenCount = if (assignment.isEmpty) hiddenTotal else hiddenRanked,
-                            onOpenFilters = { filtering = true },
+                            onOpenFilters = { sheets.filtering = true },
                             onShowAll = {
                                 onFilterChange(TierFilter(emptySet(), emptySet()))
                             }
@@ -404,7 +364,7 @@ internal fun TierBoardScreen(
                             viewport = viewport,
                             scrollState = scrollState,
                             onMove = onMove,
-                            onItemTap = { mediaId -> placingMediaId = mediaId },
+                            onItemTap = { mediaId -> sheets.placingMediaId = mediaId },
                             onDragHintChanged = { hint -> dragHint = hint }
                         )
                         TierBoardLegend()
@@ -500,8 +460,8 @@ internal fun TierBoardScreen(
                     // poster back into the pool is exactly that - so a mis-drop is
                     // undone by dropping it where it started.
                     onDrop = { mediaId, tierId -> onMove(mediaId, tierId, null) },
-                    onItemTap = { mediaId -> placingMediaId = mediaId },
-                    onBrowse = { addingTitles = true },
+                    onItemTap = { mediaId -> sheets.placingMediaId = mediaId },
+                    onBrowse = { sheets.addingTitles = true },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
 
@@ -527,93 +487,33 @@ internal fun TierBoardScreen(
         }
     }
 
-    val placing = placingMediaId
-    if (placing != null) {
-        TierPlaceSheet(
-            title = candidates.firstOrNull { it.mediaId == placing }?.title.orEmpty(),
-            coverUrl = candidates.firstOrNull { it.mediaId == placing }?.coverUrl,
+    TierBoardSheetsHost(
+        state = sheets,
+        data = TierBoardSheetData(
             tiers = tiers,
-            currentTierId = assignment.tierOf(placing),
-            onMove = { tierId ->
-                onMove(placing, tierId, null)
-                placingMediaId = null
-            },
-            onRemove = {
-                onMove(placing, null, null)
-                placingMediaId = null
-            },
-            onDismiss = { placingMediaId = null }
-        )
-    }
-
-    if (addingTitles) {
-        TierAddTitlesSheet(
+            assignment = assignment,
+            candidates = candidates,
             unranked = unranked,
-            tiers = tiers,
-            currentTierOf = { mediaId -> assignment.tierOf(mediaId) },
-            onMove = onMove,
-            onDismiss = { addingTitles = false }
-        )
-    }
-
-    if (managingTiers) {
-        TierManageSheet(
-            tiers = tiers,
-            memberCounts = tiers.associate { it.id to assignment.membersOf(it.id).size },
-            rankedCount = ranked,
-            onRename = onRenameTier,
-            onAdd = onAddTier,
-            onRemove = onRemoveTier,
-            onColor = { tier -> coloringTierId = tier.id },
-            onScoreFloor = { tier -> bandTierId = tier.id },
-            onClearPlacements = onClearPlacements,
-            onDismiss = { managingTiers = false }
-        )
-    }
-
-    if (filtering) {
-        TierFilterSheet(
+            ranked = ranked,
             filter = filter,
+            display = display,
+            zoom = zoom
+        ),
+        actions = TierBoardSheetActions(
+            onMove = onMove,
+            onRenameTier = onRenameTier,
+            onAddTier = onAddTier,
+            onRemoveTier = onRemoveTier,
+            onTierColor = onTierColor,
+            onTierScoreFloor = onTierScoreFloor,
             onFilterChange = onFilterChange,
-            onDismiss = { filtering = false }
-        )
-    }
-
-    if (displaying) {
-        TierDisplaySheet(
-            // The live zoom, not the stored one: a pinch is persisted on a
-            // debounce, so the stored value can be up to a gesture behind the
-            // board. Toggling a title in here must not write that stale number
-            // back over the zoom the person just set.
-            display = display.copy(zoom = zoom),
             onDisplayChange = onDisplayChange,
-            // Reset goes through the same local value the stepper writes, so it
-            // cannot lose a race with the debounced write of the zoom it replaced.
+            // Through the local value the stepper writes, so reset cannot lose a
+            // race with the debounced write of the zoom it replaced.
             onResetZoom = { zoom = 1f },
-            onDismiss = { displaying = false }
+            onClearPlacements = onClearPlacements
         )
-    }
-
-    val coloring = coloringTierId?.let { id -> tiers.firstOrNull { it.id == id } }
-    if (coloring != null) {
-        TierColorDialog(
-            tier = coloring,
-            onPick = { color ->
-                onTierColor(coloring.id, color)
-                coloringTierId = null
-            },
-            onDismiss = { coloringTierId = null }
-        )
-    }
-
-    val bandTier = bandTierId?.let { id -> tiers.firstOrNull { it.id == id } }
-    if (bandTier != null) {
-        TierScoreFloorDialog(
-            tier = bandTier,
-            onSet = { floor -> onTierScoreFloor(bandTier.id, floor) },
-            onDismiss = { bandTierId = null }
-        )
-    }
+    )
 }
 
 /** How long a pinch has to be still before its zoom is written to the store. */
