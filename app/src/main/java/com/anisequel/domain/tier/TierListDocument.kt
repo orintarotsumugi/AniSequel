@@ -3,6 +3,43 @@ package com.anisequel.domain.tier
 import java.util.Locale
 
 /**
+ * Where a title is drawn relative to its poster.
+ *
+ * [UNDER_COVER] keeps the caption band the board was built with. [ON_COVER]
+ * overlays the name on the artwork's top edge with a scrim, which is how a
+ * spreadsheet of covers stays legible when the names are the only thing between
+ * you and a wall of faces.
+ */
+enum class TierTitlePosition {
+    UNDER_COVER,
+    ON_COVER
+}
+
+/**
+ * The drawing preferences of one list.
+ *
+ * Defaults match the board as it was before these existed, so a document saved by
+ * an older build opens looking exactly as it did. [zoom] is stored as-is and
+ * clamped by the board: the valid range is a UI fact, and a value outside it from
+ * a future build should not make this one crash on open.
+ */
+data class TierDisplay(
+    val showTitles: Boolean = true,
+    val titlePosition: TierTitlePosition = TierTitlePosition.UNDER_COVER,
+    val zoom: Float = 1f
+) {
+    /**
+     * Whether the layout should reserve the caption band below each poster.
+     *
+     * A name on the cover or no name at all means no band, and the row gets
+     * shorter instead of leaving a strip of empty background under every poster.
+     * The board's geometry is recomputed from this, so the two renderers agree.
+     */
+    val hasCaptionBand: Boolean
+        get() = showTitles && titlePosition == TierTitlePosition.UNDER_COVER
+}
+
+/**
  * One saved tier list, as a thing with a name and an identity of its own.
  *
  * ## Why this exists at all
@@ -31,6 +68,15 @@ data class TierListDocument(
     val name: String,
     val tiers: List<TierDefinition> = StandardTiers,
     val assignment: TierAssignment = TierAssignment(),
+    /**
+     * How this list is drawn, as opposed to what it contains.
+     *
+     * Per list rather than global, because it is part of how *this* board reads:
+     * a wall of posters with no names suits a list of covers, while a list of
+     * obscure titles needs the caption. Sharing one setting across every list
+     * meant switching to a cover-only board and back reset it.
+     */
+    val display: TierDisplay = TierDisplay(),
     /**
      * Epoch millis of the last write, or 0 for a list that has never been saved.
      *

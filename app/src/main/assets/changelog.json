@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.5.5",
+      "entries": [
+        {
+          "title": "The tier board opens on what you have actually watched",
+          "detail": "A tier list is a judgement, and the longest list most people keep is the planning list - titles nobody has scored, that no drag can rank against anything. Planning is hidden by default now, and a filter sheet switches list statuses (watching, rewatching, completed, paused, dropped, planning) and airing statuses (releasing, finished, not yet aired, hiatus, cancelled) independently. Filters apply to the board and the unranked shelf together, so a hidden title cannot be dropped into a tier by accident, and the header keeps the totals while a notice says how many titles the filters are holding back. Nothing is deleted, and \"Show everything\" puts it all back in one tap."
+        },
+        {
+          "title": "Undo and redo, both on the board",
+          "detail": "Undo existed; redo did not, which made an undo a decision you had to be sure about. Both now sit in a floating toolbar at the bottom of the board, within reach of the hand that made the drop, with the label of the last edit in the header. A new edit clears the redo stack - once you change something else, the branch you undid away from is no longer the future of the list - and both stacks are cleared when you switch lists."
+        },
+        {
+          "title": "Tiers carry a rating band you can edit",
+          "detail": "Ranking from AniList scores used to read six bands from a fixed table, so a custom tier could never have one and editing a standard tier's meaning changed nothing. The band lives on the tier now and is edited from the tier manager: a 0-100 score floor on a five-point grid, or no band at all. A band of zero accepts every scored title; no band accepts none, so a tier you added but have not given a meaning to stays empty instead of collecting strays."
+        },
+        {
+          "title": "Tier colours are editable",
+          "detail": "The coloured square in the tier manager is now the colour control. It opens a twelve-colour palette - the standard six plus six that are still legible under white text - and a recoloured tier keeps its id, so nothing filed under it moves. A newly added tier walks the same palette instead of arriving as another identical grey row."
+        },
+        {
+          "title": "Zoom works like a spreadsheet",
+          "detail": "Pinch to zoom still works, and now there is a stepper for it: out, the percentage, in. The range is 75% to 200%, a press moves a quarter of it, and tapping the percentage resets to 100%. Zoom is per list and remembered, so a cover-only board at 180% comes back that way, and the posters and their rows are laid out from the same geometry at every level."
+        },
+        {
+          "title": "Titles can move onto the cover, or go away",
+          "detail": "A display sheet turns names off entirely or moves them from under each poster onto its top edge, over a scrim that fades into the artwork. The layout stops reserving a caption band when there is no caption under it, so a cover-only board closes the gap instead of leaving a strip of empty background under every poster, and the score badge moves out of the name's way."
+        },
+        {
+          "title": "The board has more room and a bigger drop target",
+          "detail": "Rows are taller, posters are wider and the gap between them is larger, so a three-across grid at 360dp is comfortable to read and to hit. The tier rows themselves are the drop targets - the row under the finger highlights before the release - and the drag ghost keeps the poster's size while the board scrolls underneath it."
+        }
+      ]
+    },
+    {
       "version": "1.5.4",
       "entries": [
         {
