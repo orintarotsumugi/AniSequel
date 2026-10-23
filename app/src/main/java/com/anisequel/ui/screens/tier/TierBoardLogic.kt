@@ -52,6 +52,16 @@ internal const val TIER_MIN_ZOOM = 0.75f
 internal const val TIER_MAX_ZOOM = 2.0f
 
 /**
+ * One press of the board's zoom buttons.
+ *
+ * A quarter rather than a tenth: the range is 1.25 wide, so a tenth would need
+ * ten presses to cross it and the percentage readout would be the only thing
+ * moving. Four presses go from end to end, and a pinch still gives every value in
+ * between.
+ */
+internal const val TIER_ZOOM_STEP = 0.25f
+
+/**
  * Constrains a pinch to the range the board can actually render at.
  *
  * NaN is not hypothetical: a pinch's zoom factor is a ratio of the distance
@@ -87,14 +97,20 @@ internal const val TIER_DROP_SNAP_SLOP = 16f
  */
 internal val ScreenTierOptions = TierLayoutOptions(
     width = 360f,
-    labelGutter = 52f,
-    padding = 10f,
-    itemWidth = 64f,
-    itemGap = 6f,
-    rowGap = 8f,
-    captionHeight = 32f,
+    labelGutter = 56f,
+    padding = 12f,
+    // 72dp rather than 64dp: at 64 the caption under a cover was two lines of
+    // 11sp in a 32dp band, which is the size at which a title stops being
+    // readable on a phone and starts being a texture. Three tiles still fit a
+    // 360dp screen, and the row keeps the same shape at 411dp.
+    itemWidth = 72f,
+    itemGap = 8f,
+    rowGap = 10f,
+    captionHeight = 34f,
     headerHeight = 0f,
-    minRowHeight = 48f,
+    // Tall enough for the label and its count. An empty row is a drop target,
+    // so it has to read as a row rather than as a hairline between two others.
+    minRowHeight = 64f,
     minCanvasHeight = 200f
 )
 

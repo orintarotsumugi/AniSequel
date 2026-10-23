@@ -62,6 +62,8 @@ fun TierListScreen(
     val isSeeding by viewModel.isSeeding.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val undoLabel by viewModel.undoLabel.collectAsStateWithLifecycle()
+    val redoLabel by viewModel.redoLabel.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
 
     val document = opened
 
@@ -89,17 +91,25 @@ fun TierListScreen(
             document = document,
             assignment = assignment,
             candidates = candidates,
+            filter = filter,
             orphaned = orphaned,
             isSeeding = isSeeding,
             notice = notice,
             undoLabel = undoLabel,
+            redoLabel = redoLabel,
             onSeed = viewModel::seedFromScores,
             onMove = viewModel::moveTo,
             onClearPlacements = viewModel::clearPlacements,
             onUndo = viewModel::undo,
+            onRedo = viewModel::redo,
             onRenameTier = viewModel::renameTier,
             onAddTier = viewModel::addTier,
             onRemoveTier = viewModel::removeTier,
+            onTierColor = viewModel::setTierColor,
+            onTierScoreFloor = viewModel::setTierScoreFloor,
+            onFilterChange = viewModel::setFilter,
+            onDisplayChange = viewModel::setDisplay,
+            onZoomChange = viewModel::setZoom,
             onDismissNotice = viewModel::dismissNotice,
             onLeave = viewModel::closeList,
             modifier = modifier

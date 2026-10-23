@@ -9,8 +9,10 @@ import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
@@ -232,6 +234,12 @@ object AppVectorIcons {
     val ThemeDark = Icons.Outlined.DarkMode
     val Restore = Icons.Outlined.RestartAlt
     val Tune = Icons.Outlined.Tune
+
+    // The tier board's undo/redo pair. Auto-mirrored: in a right-to-left locale
+    // the arrows have to point the other way, and a hand-flipped glyph here would
+    // be the one control on the screen pointing backwards.
+    val Undo = Icons.AutoMirrored.Filled.Undo
+    val Redo = Icons.AutoMirrored.Filled.Redo
     val NewReleases = Icons.Outlined.NewReleases
     val FullscreenExpand = AppCustomVectors.FullscreenExpand
 

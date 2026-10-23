@@ -1,15 +1,19 @@
 package com.anisequel.ui.screens.tier
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +32,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,27 +47,36 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
+import com.anisequel.domain.tier.TierDisplay
+import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierListDocument
-import com.anisequel.domain.tier.unseedableCount
+import com.anisequel.domain.tier.onlyFor
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
-import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
-import com.anisequel.ui.components.expressive.ExpressiveStateChip
-import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import kotlinx.coroutines.delay
 
 /**
  * The open list: its rows, its posters, and the edits to both.
  *
  * Stateless in the sense that matters - it is handed a document and it hands
  * decisions back - so the one thing it owns is what a *visit* owns: which sheet is
- * open, the scroll position, and what the finger is currently over. Everything
- * that outlives the screen is already in the store by the time it is drawn, which
- * is why leaving this screen cannot lose anything.
+ * open, the scroll position, the zoom, and what the finger is currently over.
+ * Everything that outlives the screen is already in the store by the time it is
+ * drawn, which is why leaving this screen cannot lose anything.
+ *
+ * ## Filters change what is drawn, not what is stored
+ *
+ * The assignment handed in is the whole list. This screen derives a *visible*
+ * assignment and a *visible* pool from it, and the board is built from those: a
+ * hidden title that still held a slot would leave a poster-shaped hole in its row,
+ * and a tray that still offered it would invite the person to rank something the
+ * filter says they are not looking at. The counts in the header stay totals, so
+ * hiding never looks like losing.
  *
  * ## The drag hint is pinned to the screen, not to the board
  *
@@ -77,29 +92,70 @@ internal fun TierBoardScreen(
     document: TierListDocument,
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
+    filter: TierFilter,
     orphaned: Int,
     isSeeding: Boolean,
     notice: String?,
     undoLabel: String?,
+    redoLabel: String?,
     onSeed: () -> Unit,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onClearPlacements: () -> Unit,
     onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onRenameTier: (String, String) -> Unit,
     onAddTier: () -> Unit,
     onRemoveTier: (String) -> Unit,
+    onTierColor: (String, Long) -> Unit,
+    onTierScoreFloor: (String, Int?) -> Unit,
+    onFilterChange: (TierFilter) -> Unit,
+    onDisplayChange: (TierDisplay) -> Unit,
+    onZoomChange: (Float) -> Unit,
     onDismissNotice: () -> Unit,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val tiers = document.tiers
+    val display = document.display
     val scrollState = rememberScrollState()
     val viewport = remember { TierBoardViewport() }
 
     var placingMediaId by rememberSaveable { mutableStateOf<Int?>(null) }
     var addingTitles by rememberSaveable { mutableStateOf(false) }
     var managingTiers by rememberSaveable { mutableStateOf(false) }
+    var filtering by rememberSaveable { mutableStateOf(false) }
+    var displaying by rememberSaveable { mutableStateOf(false) }
+    var coloringTierId by rememberSaveable { mutableStateOf<String?>(null) }
+    var bandTierId by rememberSaveable { mutableStateOf<String?>(null) }
     var dragHint by remember { mutableStateOf<String?>(null) }
+
+    // The board's zoom is a *local* value between gestures so a pinch does not
+    // write to DataStore on every frame; the stored value is the starting point
+    // and the debounce below is the only writer. `rememberSaveable` keyed on the
+    // list id means switching lists starts from that list's own zoom rather than
+    // carrying the previous one across.
+    var zoom by rememberSaveable(document.id) {
+        mutableFloatStateOf(clampTierZoom(display.zoom))
+    }
+
+    // A change made elsewhere - "Reset zoom" in the display sheet - has to reach
+    // the board. Comparing first stops this from fighting the local value on the
+    // composition where the debounced write lands.
+    LaunchedEffect(display.zoom) {
+        val stored = clampTierZoom(display.zoom)
+        if (stored != zoom) zoom = stored
+    }
+
+    // Debounced rather than written on every pinch frame. A `delay` inside a
+    // `LaunchedEffect` keyed on the zoom is the whole debounce: a new value
+    // cancels the pending write, so the store sees the value the gesture settled
+    // on and nothing in between.
+    LaunchedEffect(zoom) {
+        if (zoom != clampTierZoom(display.zoom)) {
+            delay(ZOOM_WRITE_DELAY_MS)
+            onZoomChange(zoom)
+        }
+    }
 
     // The pool's drag, hoisted above both the tray that writes it and the overlay
     // below that draws its ghost. The ghost has to be a sibling of the board rather
@@ -108,13 +164,43 @@ internal fun TierBoardScreen(
     val trayDrag = remember { TierTrayDrag() }
 
     val ranked = assignment.tierIdByMediaId.size
-    val subtitle = tierListSubtitle(ranked, candidates.size)
+    val visibleCandidates = remember(candidates, filter) {
+        candidates.filter(filter::allows)
+    }
+    val visibleIds = remember(visibleCandidates) {
+        visibleCandidates.mapTo(HashSet()) { it.mediaId }
+    }
+    // Placements the library has no entry for: a title removed from the viewer's
+    // list, or a library that has not loaded yet. The filter has no status to judge
+    // those by, so they are kept rather than hidden - and they are not counted as
+    // "hidden by filters" either, which is why the board does not show a filter
+    // notice over a list that is merely still loading.
+    val libraryIds = remember(candidates) { candidates.mapTo(HashSet()) { it.mediaId } }
+    val unplaceableIds = remember(assignment, libraryIds) {
+        assignment.tierIdByMediaId.keys.filterNotTo(HashSet()) { it in libraryIds }
+    }
+    val visibleAssignment = remember(assignment, visibleIds, unplaceableIds) {
+        assignment.onlyFor(visibleIds, unplaceableIds)
+    }
+    val hiddenRanked = ranked - visibleAssignment.tierIdByMediaId.size
+    val hiddenTotal = candidates.size - visibleCandidates.size
     // Read from the two values the screen already has rather than asked of the
     // ViewModel, which would mean a third collection of the same data and a
     // recomposition of this screen every time the pool or the assignment moved.
-    val unranked = remember(candidates, assignment) {
-        candidates.filter { it.mediaId !in assignment.tierIdByMediaId }
+    val unranked = remember(visibleCandidates, assignment) {
+        visibleCandidates.filter { it.mediaId !in assignment.tierIdByMediaId }
     }
+
+    // The floating toolbar sits above the tray, or above the screen edge when the
+    // tray is empty. The board reserves that whole strip as bottom padding: the
+    // legend is the last thing in the scrolling column, and chrome floating over
+    // the one row that explains the gestures is worse than a little empty space.
+    val controlsBottom = if (unranked.isEmpty()) {
+        16.dp
+    } else {
+        TIER_TRAY_HEIGHT + TIER_CONTROLS_GAP
+    }
+    val boardBottomInset = controlsBottom + TIER_CONTROLS_HEIGHT + 8.dp
 
     Scaffold(
         modifier = modifier
@@ -145,6 +231,39 @@ internal fun TierBoardScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        IconButton(
+                            onClick = { filtering = true },
+                            modifier = Modifier.testTag("tier_filter_button")
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Filter,
+                                contentDescription = "Filters"
+                            )
+                        }
+                        // A dot rather than a count: the number of hidden statuses
+                        // is not a number anybody acts on, but "a filter is on" is
+                        // the thing that explains a short board.
+                        if (!filter.isDefault) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 10.dp, end = 10.dp)
+                                    .size(8.dp)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { displaying = true },
+                        modifier = Modifier.testTag("tier_display_button")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.SectionAppearance,
+                            contentDescription = "Display options"
+                        )
+                    }
                     TextButton(
                         onClick = { managingTiers = true },
                         modifier = Modifier.defaultMinSize(minHeight = 48.dp)
@@ -188,20 +307,43 @@ internal fun TierBoardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    // Exactly the tray's height, so the last tier row can always be
-                    // scrolled clear of it. Without this the tray covers whichever
-                    // row happens to be at the bottom, and a drop onto a row the
-                    // finger is not over looks like a dropped gesture.
-                    .padding(bottom = if (unranked.isEmpty()) 0.dp else TIER_TRAY_HEIGHT)
+                    // The tray's height plus the floating toolbar, so the last
+                    // tier row and the legend can always be scrolled clear of
+                    // both. Without this the tray covers whichever row happens to
+                    // be at the bottom, and a drop onto a row the finger is not
+                    // over looks like a dropped gesture.
+                    .padding(bottom = boardBottomInset)
             ) {
-                TierBoardCounts(subtitle = subtitle)
+                TierBoardHeader(
+                    ranked = ranked,
+                    total = candidates.size,
+                    unranked = unranked.size,
+                    undoLabel = undoLabel,
+                    onAddTitles = { addingTitles = true }
+                )
 
-                notice?.let { message ->
-                    TierNotice(text = message, onDismiss = onDismissNotice)
+                if (hiddenTotal > 0 && (visibleAssignment.isNotEmpty() || assignment.isEmpty())) {
+                    TierFilterNotice(
+                        count = hiddenTotal,
+                        onOpenFilters = { filtering = true }
+                    )
                 }
 
-                undoLabel?.let { label ->
-                    TierUndoRow(label = label, onUndo = onUndo)
+                // Both messages are `AnimatedContent` rather than a nullable row:
+                // the outgoing text is kept alive while it fades and the container
+                // animates its height, so dismissing a notice shrinks the message
+                // it was showing instead of collapsing an empty box.
+                AnimatedContent(
+                    targetState = notice,
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
+                    label = "tier_notice"
+                ) { message ->
+                    if (message != null) {
+                        TierNotice(text = message, onDismiss = onDismissNotice)
+                    }
                 }
 
                 // The ViewModel already drops orphaned entries from the displayed
@@ -217,55 +359,122 @@ internal fun TierBoardScreen(
                     )
                 }
 
-                if (assignment.isEmpty) {
-                    TierEmptyState(
-                        candidates = candidates,
-                        unrankedCount = unranked.size,
-                        isSeeding = isSeeding,
-                        onSeed = onSeed,
-                        onAddTitles = { addingTitles = true }
-                    )
-                } else {
-                    TierBoardHost(
-                        listName = document.name,
-                        tiers = tiers,
-                        assignment = assignment,
-                        candidates = candidates,
-                        viewport = viewport,
-                        scrollState = scrollState,
-                        onMove = onMove,
-                        onItemTap = { mediaId -> placingMediaId = mediaId },
-                        onDragHintChanged = { hint -> dragHint = hint }
-                    )
-                    TierBoardLegend()
+                when {
+                    // Nothing ranked at all, and there is something to rank: the
+                    // first-run state with both routes into the feature.
+                    assignment.isEmpty() && (visibleCandidates.isNotEmpty() || candidates.isEmpty()) -> {
+                        TierEmptyState(
+                            candidates = visibleCandidates,
+                            unrankedCount = unranked.size,
+                            isSeeding = isSeeding,
+                            onSeed = onSeed,
+                            onAddTitles = { addingTitles = true }
+                        )
+                    }
+
+                    // Ranked titles exist but the filters hide every one of them.
+                    // Not the empty state: seeding here would offer to overwrite a
+                    // list the person already built.
+                    visibleAssignment.isEmpty() -> {
+                        TierFilteredEmptyState(
+                            hiddenCount = if (assignment.isEmpty()) hiddenTotal else hiddenRanked,
+                            onOpenFilters = { filtering = true },
+                            onShowAll = {
+                                onFilterChange(TierFilter(emptySet(), emptySet()))
+                            }
+                        )
+                    }
+
+                    else -> {
+                        TierBoardHost(
+                            listName = document.name,
+                            tiers = tiers,
+                            assignment = visibleAssignment,
+                            candidates = visibleCandidates,
+                            display = display,
+                            zoom = zoom,
+                            onZoomChange = { value -> zoom = clampTierZoom(value) },
+                            viewport = viewport,
+                            scrollState = scrollState,
+                            onMove = onMove,
+                            onItemTap = { mediaId -> placingMediaId = mediaId },
+                            onDragHintChanged = { hint -> dragHint = hint }
+                        )
+                        TierBoardLegend()
+                    }
                 }
             }
 
-            dragHint?.let { hint ->
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                        .testTag("tier_drag_hint")
-                ) {
-                    Text(
-                        text = hint,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            AnimatedContent(
+                targetState = dragHint,
+                transitionSpec = {
+                    (fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                        initialScale = 0.92f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )) togetherWith
+                        (fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                            targetScale = 0.92f,
+                            animationSpec = ExpressiveMotion.FastSpatial
+                        ))
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp),
+                label = "tier_drag_hint"
+            ) { hint ->
+                if (hint != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(ExpressiveShapes.pill))
+                            .background(MaterialTheme.colorScheme.inverseSurface)
+                            .padding(horizontal = 16.dp, vertical = 9.dp)
+                            .testTag("tier_drag_hint")
+                    ) {
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
+            }
+
+            // The board's own controls, floating over the bottom-end of the board
+            // and above the tray. One row rather than a column so it covers the
+            // smallest possible strip of the last tier.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 16.dp,
+                        bottom = controlsBottom
+                    )
+                    .testTag("tier_board_controls"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TierHistoryControls(
+                    canUndo = undoLabel != null,
+                    canRedo = redoLabel != null,
+                    onUndo = onUndo,
+                    onRedo = onRedo
+                )
+                TierZoomControls(
+                    zoom = zoom,
+                    onZoomOut = { zoom = clampTierZoom(zoom - TIER_ZOOM_STEP) },
+                    onZoomIn = { zoom = clampTierZoom(zoom + TIER_ZOOM_STEP) },
+                    onResetZoom = { zoom = 1f }
+                )
             }
 
             // The pool, pinned over the bottom of the scroll, and the ghost it
             // drags. Both are siblings of the scrolling column on purpose: the tray
             // has to stay put while the board scrolls under it, and the ghost has to
             // be able to leave it.
-            if (!unranked.isEmpty()) {
+            if (unranked.isNotEmpty()) {
                 TierTray(
                     candidates = unranked,
                     drag = trayDrag,
@@ -283,6 +492,7 @@ internal fun TierBoardScreen(
                     // undone by dropping it where it started.
                     onDrop = { mediaId, tierId -> onMove(mediaId, tierId, null) },
                     onItemTap = { mediaId -> placingMediaId = mediaId },
+                    onBrowse = { addingTitles = true },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
 
@@ -312,6 +522,7 @@ internal fun TierBoardScreen(
     if (placing != null) {
         TierPlaceSheet(
             title = candidates.firstOrNull { it.mediaId == placing }?.title.orEmpty(),
+            coverUrl = candidates.firstOrNull { it.mediaId == placing }?.coverUrl,
             tiers = tiers,
             currentTierId = assignment.tierOf(placing),
             onMove = { tierId ->
@@ -344,238 +555,57 @@ internal fun TierBoardScreen(
             onRename = onRenameTier,
             onAdd = onAddTier,
             onRemove = onRemoveTier,
+            onColor = { tier -> coloringTierId = tier.id },
+            onScoreFloor = { tier -> bandTierId = tier.id },
             onClearPlacements = onClearPlacements,
             onDismiss = { managingTiers = false }
         )
     }
-}
 
-/**
- * The counts, on their own row.
- *
- * The title is not here: it is the app bar's, which is where a back arrow lives
- * too, and repeating it one row down would put two different answers to "where
- * am I" on one screen.
- */
-@Composable
-private fun TierBoardCounts(subtitle: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+    if (filtering) {
+        TierFilterSheet(
+            filter = filter,
+            onFilterChange = onFilterChange,
+            onDismiss = { filtering = false }
         )
     }
-}
 
-/**
- * One line of plain reporting, with a close only when there is something to
- * close.
- *
- * The orphan notice has no dismiss because it is not a message that was sent -
- * it is the current state of the data, and it goes away by itself when the
- * person places those titles.
- */
-@Composable
-private fun TierNotice(text: String, onDismiss: (() -> Unit)?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
-            .background(AniSequelTheme.statusColors.infoContainer)
-            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.Info,
-            contentDescription = null,
-            tint = AniSequelTheme.statusColors.onInfoContainer,
-            modifier = Modifier.size(18.dp)
+    if (displaying) {
+        TierDisplaySheet(
+            // The live zoom, not the stored one: a pinch is persisted on a
+            // debounce, so the stored value can be up to a gesture behind the
+            // board. Toggling a title in here must not write that stale number
+            // back over the zoom the person just set.
+            display = display.copy(zoom = zoom),
+            onDisplayChange = onDisplayChange,
+            // Reset goes through the same local value the stepper writes, so it
+            // cannot lose a race with the debounced write of the zoom it replaced.
+            onResetZoom = { zoom = 1f },
+            onDismiss = { displaying = false }
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = AniSequelTheme.statusColors.onInfoContainer,
-            modifier = Modifier.weight(1f)
-        )
-        if (onDismiss != null) {
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = AppVectorIcons.Close,
-                    contentDescription = "Dismiss",
-                    tint = AniSequelTheme.statusColors.onInfoContainer
-                )
-            }
-        }
     }
-}
 
-/**
- * "Filed under A - Undo" for the edit that has just happened.
- *
- * A drop is one gesture and no confirmation, and the row it lands in is decided by
- * a finger that is covering part of the board. Undo is what makes that safe to do
- * quickly - and it is named for what it would take back, because a bare "Undo" asks
- * somebody to remember an action they were not paying attention to.
- *
- * It survives until the next edit, rather than timing out: a toast that expires
- * while a person is looking at where a poster went is a toast that has already
- * failed them.
- */
-@Composable
-private fun TierUndoRow(label: String, onUndo: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(start = 12.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        TextButton(
-            onClick = onUndo,
-            modifier = Modifier
-                .defaultMinSize(minHeight = 48.dp)
-                .testTag("tier_undo_button")
-        ) {
-            Text("Undo")
-        }
-    }
-}
-
-/**
- * The state a list with nothing in it is in, offering both ways out of it.
- *
- * The unscored count is stated *before* the button, not after the press. Seeding
- * skips those titles - correctly, since filing an unrated title under F asserts a
- * judgement nobody made - and a person who presses the button expecting 271
- * posters and gets 259 has been told nothing about where the other twelve went.
- */
-@Composable
-private fun TierEmptyState(
-    candidates: List<TierCandidate>,
-    unrankedCount: Int,
-    isSeeding: Boolean,
-    onSeed: () -> Unit,
-    onAddTitles: () -> Unit
-) {
-    val unscored = unseedableCount(candidates)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        ExpressiveEmptyOrb(
-            icon = AppVectorIcons.Trophy,
-            containerColor = AniSequelTheme.statusColors.infoContainer,
-            iconTint = AniSequelTheme.statusColors.info
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "Nothing ranked yet",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = if (candidates.isEmpty()) {
-                "Your library has not loaded, so there is nothing to rank yet."
-            } else {
-                "Rank ${candidates.size} titles by their AniList score, or place them yourself."
+    val coloring = coloringTierId?.let { id -> tiers.firstOrNull { it.id == id } }
+    if (coloring != null) {
+        TierColorDialog(
+            tier = coloring,
+            onPick = { color ->
+                onTierColor(coloring.id, color)
+                coloringTierId = null
             },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            onDismiss = { coloringTierId = null }
         )
+    }
 
-        if (unscored > 0) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "$unscored of ${candidates.size} " +
-                    (if (unscored == 1) "title has" else "titles have") +
-                    " no AniList score and will not be ranked. " +
-                    (if (unscored == 1) "It stays" else "They stay") +
-                    " for you to place.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-        ExpressivePrimaryButton(
-            text = "Rank from AniList scores",
-            onClick = onSeed,
-            icon = AppVectorIcons.Trophy,
-            loading = isSeeding,
-            enabled = candidates.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        ExpressiveStateChip(
-            label = if (unrankedCount == 0) {
-                "No titles left to place"
-            } else {
-                "Start empty - add titles ($unrankedCount)"
-            },
-            selected = false,
-            onClick = onAddTitles,
-            minTouchTargetHeight = 48.dp
+    val bandTier = bandTierId?.let { id -> tiers.firstOrNull { it.id == id } }
+    if (bandTier != null) {
+        TierScoreFloorDialog(
+            tier = bandTier,
+            onSet = { floor -> onTierScoreFloor(bandTier.id, floor) },
+            onDismiss = { bandTierId = null }
         )
     }
 }
 
-/**
- * What the gestures are, under the board.
- *
- * A long press and a pinch are both invisible: nothing on a board full of posters
- * says either exists, and the drag is the whole feature. It is the last row of the
- * screen rather than a hint card, because it is a legend for the thing above it -
- * and it says the one non-obvious thing, which is that releasing off every row
- * takes a title out of the list.
- */
-@Composable
-private fun TierBoardLegend() {
-    Text(
-        text = "Hold a cover to move it, and drop it between two others to place " +
-            "it exactly. Pinch to zoom. Release off the rows to take it out.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
-    )
-}
-
-/**
- * The line under the title, stated as counts rather than as a claim.
- *
- * "Your library has not loaded yet" is its own case because the alternative -
- * "0 of 0 titles ranked" - is a true statement about an empty set and a false
- * one about the person's account.
- */
-internal fun tierListSubtitle(ranked: Int, librarySize: Int): String = when {
-    librarySize == 0 -> "Your library has not loaded yet"
-    ranked == 0 -> "Nothing ranked yet"
-    else -> "$ranked of $librarySize titles ranked"
-}
+/** How long a pinch has to be still before its zoom is written to the store. */
+private const val ZOOM_WRITE_DELAY_MS = 600L

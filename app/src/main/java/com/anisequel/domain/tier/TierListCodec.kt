@@ -16,12 +16,19 @@ package com.anisequel.domain.tier
  *
  * ## The format is line-based, and it stays that way
  *
- * Not JSON, not a serialization library. A list is one line of `label|colour|id`
- * fields for the tiers and one line of `mediaId:tierId` pairs for the placements,
- * and a document is four of those lines. Every reader here skips what it cannot
- * parse and keeps what it can, because the failure mode of a strict parse is not a
- * crash: it is a *successful load of an empty list*, which looks exactly like the
- * person's work having been deleted, with nothing on screen that says why.
+ * Not JSON, not a serialization library. A list is one line of
+ * `label|colour|id|floor` fields for the tiers and one line of `mediaId:tierId`
+ * pairs for the placements, and a document is five of those lines. Every reader
+ * here skips what it cannot parse and keeps what it can, because the failure mode
+ * of a strict parse is not a crash: it is a *successful load of an empty list*,
+ * which looks exactly like the person's work having been deleted, with nothing on
+ * screen that says why.
+ *
+ * The fourth tier field and the fifth document line were added by the board
+ * redesign (editable rating bands, title placement, zoom). Both readers accept
+ * the older, shorter form: a tier with no floor decodes with `scoreFloor = null`,
+ * and a document with no display line gets [TierDisplay]'s defaults. That is what
+ * lets an install upgrade without its list changing shape.
  *
  * ## Why the tiers' text is escaped and the placements' is not
  *
@@ -45,16 +52,22 @@ private const val DOCUMENT_LINE_SEPARATOR = '\n'
 // ---------------------------------------------------------------------------
 
 /**
- * `label|colour|id`, comma-separated, in the order given.
+ * `label|colour|id|floor`, comma-separated, in the order given.
  *
- * The id is last so that renaming a row rewrites only the visible part of its own
- * field and a reader written for an older layout still finds the colour where it
- * expects it.
+ * The id stays before the floor so that the fields a reader written for the old
+ * layout understands - label, colour, id - are still in the positions it expects;
+ * that reader rejects the extra part rather than misreading one, which is the
+ * honest failure. A tier with no band writes an empty fourth part, so the shape of
+ * the line does not change depending on whether a band happens to be set.
  */
 fun encodeTiers(tiers: List<TierDefinition>): String =
     tiers.joinToString(FIELD_SEPARATOR.toString()) {
-        listOf(escape(it.label), it.colorArgb.toString(), escape(it.id))
-            .joinToString(PART_SEPARATOR.toString())
+        listOf(
+            escape(it.label),
+            it.colorArgb.toString(),
+            escape(it.id),
+            it.scoreFloor?.toString().orEmpty()
+        ).joinToString(PART_SEPARATOR.toString())
     }
 
 /**
@@ -69,11 +82,23 @@ fun decodeTiers(raw: String?): List<TierDefinition> {
     if (raw.isNullOrBlank()) return StandardTiers
     val parsed = splitEscaped(raw, FIELD_SEPARATOR).mapNotNull { field ->
         val parts = splitEscaped(field, PART_SEPARATOR)
-        if (parts.size != 3) return@mapNotNull null
+        // Three parts is a tier written before bands existed; four is current.
+        // Anything else is a field this reader does not understand, and guessing
+        // where its separators were is how a label ends up in the colour column.
+        if (parts.size !in 3..4) return@mapNotNull null
         val color = unescape(parts[1]).toLongOrNull() ?: return@mapNotNull null
         val label = unescape(parts[0]).trim()
         val id = unescape(parts[2]).trim()
-        if (label.isEmpty() || id.isEmpty()) null else TierDefinition(id, label, color)
+        if (label.isEmpty() || id.isEmpty()) {
+            null
+        } else {
+            // A fourth part that is present but not a number loses the *band*,
+            // not the row. The row is where the placements live; a band is one tap
+            // to set again, and dropping the row would orphan everything filed
+            // under it.
+            val floor = parts.getOrNull(3)?.trim()?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+            TierDefinition(id, label, color, scoreFloor = floor)
+        }
     }
     return parsed.ifEmpty { StandardTiers }
 }
@@ -119,18 +144,61 @@ fun decodeAssignment(raw: String?): TierAssignment {
 // ---------------------------------------------------------------------------
 
 /**
- * One saved list as four lines: name, last write, tiers, placements.
+ * The drawing preferences as one comma-separated line.
+ *
+ * `showTitles,position,zoom`, in that order, with the position stored by its enum
+ * name so an added position reads as a token rather than as an ordinal that
+ * silently means a different one. Kept public so the round trip can be tested
+ * without a whole document.
+ */
+fun encodeDisplay(display: TierDisplay): String = listOf(
+    if (display.showTitles) "1" else "0",
+    display.titlePosition.name,
+    display.zoom.toString()
+).joinToString(FIELD_SEPARATOR.toString())
+
+/**
+ * The display preferences [encodeDisplay] wrote, or the defaults.
+ *
+ * Every field falls back on its own: a build that learns to store the zoom but
+ * not the title position still gets its zoom back. A non-finite zoom is treated
+ * as absent rather than passed on - it is the one value here that can make the
+ * board's layout maths produce NaN and draw nothing at all.
+ */
+fun decodeDisplay(raw: String?): TierDisplay {
+    if (raw.isNullOrBlank()) return TierDisplay()
+    val parts = raw.split(FIELD_SEPARATOR)
+    val showTitles = when (parts.getOrNull(0)?.trim()?.lowercase()) {
+        "0", "false" -> false
+        "1", "true" -> true
+        else -> true
+    }
+    val position = when (parts.getOrNull(1)?.trim()) {
+        TierTitlePosition.ON_COVER.name -> TierTitlePosition.ON_COVER
+        else -> TierTitlePosition.UNDER_COVER
+    }
+    val zoom = parts.getOrNull(2)?.trim()?.toFloatOrNull()?.takeIf { it.isFinite() } ?: 1f
+    return TierDisplay(showTitles = showTitles, titlePosition = position, zoom = zoom)
+}
+
+/**
+ * One saved list as five lines: name, last write, tiers, placements, display.
  *
  * The id is not in there. It is the *key* the document is stored under, and a value
  * that appears both in a key and in the value is a value that can disagree with
  * itself - which is exactly what makes a document unopenable rather than merely
  * misnamed.
+ *
+ * The display line is last so that a reader written before it existed sees exactly
+ * the four lines it knew, and a reader from this build sees the fifth when it is
+ * there.
  */
 fun encodeTierListDocument(document: TierListDocument): String = listOf(
     escape(document.name.trim()),
     document.updatedAt.toString(),
     encodeTiers(document.tiers),
-    encodeAssignment(document.assignment)
+    encodeAssignment(document.assignment),
+    encodeDisplay(document.display)
 ).joinToString(DOCUMENT_LINE_SEPARATOR.toString())
 
 /**
@@ -151,6 +219,9 @@ fun decodeTierListDocument(id: String, raw: String?): TierListDocument? {
         name = name.ifEmpty { TIER_LIST_BASE_NAME },
         tiers = decodeTiers(lines.getOrNull(2)),
         assignment = decodeAssignment(lines.getOrNull(3)),
+        // Absent on a document written before display options existed, which is
+        // exactly the state whose defaults reproduce that board.
+        display = decodeDisplay(lines.getOrNull(4)),
         // A document from a build that wrote fewer lines than this one reads keeps
         // its content and reads as never-written, which sorts it to the bottom of
         // an "updated" sort rather than claiming it was touched now.

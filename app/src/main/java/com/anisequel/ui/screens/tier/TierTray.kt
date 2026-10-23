@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.tier
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,15 +8,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,6 +31,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -40,15 +44,18 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveCountBadge
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 // ---------------------------------------------------------------------------
-// The pool, drawn as a tray under the board.
+// The pool, drawn as a shelf under the board.
 //
 // ## Why this is not part of `layoutTierList`
 //
@@ -161,19 +168,27 @@ private fun edgeDistance(y: Float, band: TierRowBand): Float = when {
     else -> 0f
 }
 
-/** Height the tray reserves at the bottom of the screen, as the board's bottom padding. */
-internal val TIER_TRAY_HEIGHT: Dp = 116.dp
-
-/** Tray poster width. AniList covers are 2:3, so a tile is 1.5x this tall. */
-internal val TIER_TRAY_ITEM_WIDTH: Dp = 56.dp
+/**
+ * Height the tray occupies at the bottom of the screen.
+ *
+ * The screen reserves this plus the floating toolbar as the board's bottom
+ * padding. The three parts have to add up exactly:
+ * [TIER_TRAY_HEADER_HEIGHT] for the label row, [TIER_TRAY_ITEM_HEIGHT] for the
+ * posters, and [TIER_TRAY_BOTTOM_GAP] under them. A tray declared taller than its
+ * content leaves the board reserving dead space; a tray declared shorter clips its
+ * posters, and then the hit test in `trayItemAt` is aimed at a poster that is not
+ * drawn where it thinks. The sum is asserted by `TierBoardRedesignTest`.
+ */
+internal val TIER_TRAY_HEADER_HEIGHT: Dp = 40.dp
+internal val TIER_TRAY_ITEM_WIDTH: Dp = 64.dp
 
 /** The poster's height, a constant so the hit test and the tile cannot disagree. */
 internal val TIER_TRAY_ITEM_HEIGHT: Dp = TIER_TRAY_ITEM_WIDTH * 1.5f
+internal val TIER_TRAY_BOTTOM_GAP: Dp = 8.dp
+internal val TIER_TRAY_HEIGHT: Dp =
+    TIER_TRAY_HEADER_HEIGHT + TIER_TRAY_ITEM_HEIGHT + TIER_TRAY_BOTTOM_GAP
 
-/** Height of the tray's own label row, above the posters. */
-private val TRAY_HEADER_HEIGHT: Dp = 18.dp
-
-private val TRAY_ITEM_GAP = 6.dp
+private val TRAY_ITEM_GAP = 8.dp
 private val TRAY_PADDING = 12.dp
 
 /**
@@ -189,6 +204,10 @@ private val TRAY_PADDING = 12.dp
  * would file into. It is a callback rather than the bands themselves because the
  * board is what knows where its rows ended up; this file has no business knowing
  * that, and a second copy of the answer here is how the two would drift.
+ *
+ * The header is a full-width tap target that opens the picker. The tray is a
+ * sideways row, so the two-hundredth unranked title is a lot of swiping away; the
+ * sheet is where you go when you know the title's name rather than its poster.
  */
 @Composable
 internal fun TierTray(
@@ -197,6 +216,7 @@ internal fun TierTray(
     resolveTier: (windowX: Float, windowY: Float) -> String?,
     onDrop: (mediaId: Int, tierId: String?) -> Unit,
     onItemTap: (Int) -> Unit,
+    onBrowse: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (candidates.isEmpty()) return
@@ -209,8 +229,10 @@ internal fun TierTray(
     var trayWindowY by remember { mutableFloatStateOf(0f) }
 
     Surface(
-        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp,
+        shadowElevation = 10.dp,
         modifier = modifier
             .fillMaxWidth()
             .height(TIER_TRAY_HEIGHT)
@@ -228,7 +250,7 @@ internal fun TierTray(
                 val tileHeightPx = TIER_TRAY_ITEM_HEIGHT.value * pxPerDp
                 val gapPx = TRAY_ITEM_GAP.value * pxPerDp
                 val paddingPx = TRAY_PADDING.value * pxPerDp
-                val postersTopPx = TRAY_HEADER_HEIGHT.value * pxPerDp
+                val postersTopPx = TIER_TRAY_HEADER_HEIGHT.value * pxPerDp
 
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
@@ -284,19 +306,42 @@ internal fun TierTray(
                 )
             }
     ) {
-        Column {
-            Text(
-                text = "Unranked - hold and drag onto a tier",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
                 modifier = Modifier
-                    .height(TRAY_HEADER_HEIGHT)
-                    .padding(start = 12.dp, end = 12.dp)
-            )
+                    .fillMaxWidth()
+                    .height(TIER_TRAY_HEADER_HEIGHT)
+                    .clickable(onClick = onBrowse)
+                    .padding(horizontal = TRAY_PADDING)
+                    .testTag("tier_tray_browse"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Unranked",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                ExpressiveCountBadge(count = candidates.size)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "Browse all",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = AppVectorIcons.SequelArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+
             LazyRow(
                 state = listState,
-                contentPadding = PaddingValues(horizontal = 12.dp),
+                contentPadding = PaddingValues(horizontal = TRAY_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(TRAY_ITEM_GAP),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -306,6 +351,8 @@ internal fun TierTray(
                     TierTrayTile(candidate = candidate, onTap = { onItemTap(candidate.mediaId) })
                 }
             }
+
+            Spacer(modifier = Modifier.height(TIER_TRAY_BOTTOM_GAP))
         }
     }
 }
@@ -322,8 +369,12 @@ internal fun TierTray(
  * A miss means "start no drag", the same answer the board gives for the same
  * reason: the tray is wider than its contents on most screens, and the space to
  * the right of the last poster is not a poster.
+ *
+ * `internal` rather than private so `TierBoardRedesignTest` can pin it against the
+ * same constants the tray lays its posters out with. The two drifting apart is not
+ * a cosmetic bug: the drag picks up the poster next to the one under the finger.
  */
-private fun trayItemAt(
+internal fun trayItemAt(
     count: Int,
     pointerX: Float,
     pointerY: Float,
@@ -362,7 +413,7 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
             modifier = Modifier
                 .width(TIER_TRAY_ITEM_WIDTH)
                 .height(TIER_TRAY_ITEM_HEIGHT)
-                .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
+                .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop,
             placeholder = placeholder,
@@ -386,6 +437,7 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
 @Composable
 internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifier) {
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
+    val shape = remember { RoundedCornerShape(ExpressiveShapes.SmallCorner) }
 
     Box(
         modifier = modifier
@@ -394,10 +446,12 @@ internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifi
             // Transformed in the draw phase, so the lift costs a repaint rather
             // than a recomposition - the rule AGENTS.md section 3 asks for.
             .graphicsLayer {
-                scaleX = 1.15f
-                scaleY = 1.15f
+                scaleX = 1.12f
+                scaleY = 1.12f
+                shadowElevation = 16f
+                this.shape = shape
             }
-            .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .testTag("tier_tray_ghost")
     ) {

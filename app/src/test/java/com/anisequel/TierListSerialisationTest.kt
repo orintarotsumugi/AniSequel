@@ -192,7 +192,7 @@ class TierListSerialisationTest {
 
     @Test
     fun `a document's name may contain a newline without breaking the format`() {
-        // Documents are four *lines*, so a name that could contain a real newline
+        // Documents are five *lines*, so a name that could contain a real newline
         // would turn one document into two. It is escaped like every other
         // separator, which is what makes that impossible rather than unlikely.
         val document = TierListDocument(id = "list1", name = "First\nSecond")
