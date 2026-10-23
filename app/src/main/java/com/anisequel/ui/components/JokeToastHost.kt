@@ -1,6 +1,7 @@
 package com.anisequel.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -168,7 +169,12 @@ fun JokeToastHost(
         val scale by transition.animateFloat(
             transitionSpec = { ExpressiveMotion.FastSpatial },
             label = "joke_toast_scale"
-        ) { shown -> if (shown) 1f else 0.92f }
+        // The lambda receives the `EnterExitState`, not a Boolean: this is the
+        // `AnimatedVisibility` transition, whose two states are Visible and the
+        // pre/post states either side of it. Reading it as a Boolean does not
+        // compile, and reading `targetState` alone would snap instead of
+        // animating the collapse.
+        ) { state -> if (state == EnterExitState.Visible) 1f else 0.92f }
 
         Surface(
             // Tapping dismisses it early. No scrim and no modal: it is a remark,
