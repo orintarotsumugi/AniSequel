@@ -65,6 +65,7 @@ import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.components.detail.AnimeDetailSubject
@@ -145,6 +146,19 @@ fun UserProfileScreen(
      * parameter and not a field on that ViewModel.
      */
     repository: com.anisequel.data.repository.AniListRepository,
+    /**
+     * The app's one on-demand detail store.
+     *
+     * Passed in rather than reached for on [activityViewModel], which is where this
+     * screen used to get it. That store was one of four - the dashboard, the
+     * activity feed, the studio page and the Library each held their own - so the
+     * same title opened from two tabs was two fetches, two caches and, in the
+     * profile's case, a merge that could disagree with the Library's. One host for
+     * the app is what makes a title the same page wherever the tap came from; the
+     * dashboard keeps its own only because its store also folds the answer into
+     * the recommendation cards behind the sheet.
+     */
+    detailHost: MediaDetailHost,
     /**
      * Identifies *which* profile this is, for state that must not be shared between
      * two of them.
@@ -241,8 +255,8 @@ fun UserProfileScreen(
     // bio renders immediately and posters fill in underneath the reader.
     val mediaCovers by overviewViewModel.mediaCovers.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val detailNodes by activityViewModel.detailNodes.collectAsStateWithLifecycle()
-    val loadingDetailIds by activityViewModel.loadingDetailIds.collectAsStateWithLifecycle()
+    val detailNodes by detailHost.details.collectAsStateWithLifecycle()
+    val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // `rememberSaveable` keys its registry entry on the *composition slot*, not on
@@ -264,6 +278,16 @@ fun UserProfileScreen(
         AnimeDetailSubject.Media(detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary)
     }
     val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
+
+    // The person whose profile sheet is opened from the cast and crew rows, and from
+    // the pinned characters and staff on the Home tab.
+    //
+    // Passed in rather than reached for on a ViewModel: `UserOverviewViewModel` holds
+    // its repository privately, and a cast tap is a *read* belonging to whoever drew
+    // the sheet rather than to the profile loader. Declared above the `Scaffold`
+    // rather than beside the sheet it draws, because the Home tab needs the two
+    // callbacks and it is composed *inside* the Scaffold's content.
+    val profiles = rememberPersonProfileHost(repository)
 
     Scaffold(
         modifier = modifier
@@ -449,20 +473,18 @@ fun UserProfileScreen(
                             mediaCovers = mediaCovers,
                             onOpenUser = onOpenUser,
                             onOpenDetail = { selectedMedia = it },
-                            onOpenStudio = onOpenStudio
+                            onOpenStudio = onOpenStudio,
+                            // The pinned people rows open the same in-app profile
+                            // sheet the cast rows do; null falls back to the
+                            // AniList page.
+                            onOpenCharacter = profiles.onOpenCharacter,
+                            onOpenStaff = profiles.onOpenStaff
                         )
                     }
                 }
             }
         }
     }
-
-    // The person whose profile sheet is opened from the cast and crew rows.
-    //
-    // Passed in rather than reached for on a ViewModel: `UserOverviewViewModel` holds
-    // its repository privately, and a cast tap is a *read* belonging to whoever drew
-    // the sheet rather than to the profile loader.
-    val profiles = rememberPersonProfileHost(repository)
 
     // One-tap Planning for a title the sheet is showing - an activity row, a
     // favourite, or a relation walked to from either. Gated on the same editor
@@ -491,7 +513,7 @@ fun UserProfileScreen(
             quickAddStatuses = quickAddStatuses,
             onAddMediaToPlanning = planningAdd.onAddToPlanning,
             onAddMediaToWatching = planningAdd.onAddToWatching,
-            onLoadDetail = { id, type -> activityViewModel.loadDetail(id, type) },
+            onLoadDetail = detailHost.onLoadDetail,
             isDetailLoading = detailLoading,
             // Same sheet, same access as every other host: the tab follows the
             // editor, and with no session the page is exactly what it was.
@@ -573,7 +595,11 @@ private fun ProfileTabsContent(
     onOpenUser: (FollowUser) -> Unit,
     onOpenDetail: (MediaNode) -> Unit,
     /** Forwarded to the Home tab's pinned-studio chips. */
-    onOpenStudio: (Int, String?) -> Unit
+    onOpenStudio: (Int, String?) -> Unit,
+    /** Forwarded to the Home tab's pinned characters; null opens the AniList page. */
+    onOpenCharacter: ((Int) -> Unit)? = null,
+    /** The same, for the pinned staff row. */
+    onOpenStaff: ((Int) -> Unit)? = null
 ) {
     // Hoisted above [AnimatedContent] so each tab keeps its own scroll position.
     //
@@ -696,6 +722,8 @@ private fun ProfileTabsContent(
                     contentPadding = padding,
                     onOpenDetail = onOpenDetail,
                     onOpenStudio = onOpenStudio,
+                    onOpenCharacter = onOpenCharacter,
+                    onOpenStaff = onOpenStaff,
                     listState = homeListState,
                     mediaCovers = mediaCovers
                 )

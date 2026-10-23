@@ -30,8 +30,14 @@ import com.anisequel.ui.viewmodel.UserOverviewUiState
  * rather than handing the tap to the browser. The favourites are the shows a person
  * chose to show off, so tapping one should answer with the synopsis, scores and specs
  * the app already knows how to render - and the sheet still carries the AniList link
- * for the one who wants the page. Characters, staff and studios have no media sheet,
- * so they keep the external link.
+ * for the one who wants the page.
+ *
+ * A pinned character or staff member opens the same in-app profile sheet a title's
+ * cast and crew rows open. They used to be the two rows that left the app: the tap
+ * went straight to `openExternalUrl`, so a face that opened a sheet from a title
+ * opened a browser tab from a profile. The browser is still the fallback when this
+ * host has no repository to fetch a profile with, which is the one case where a
+ * sheet could only report a failure.
  */
 @Composable
 fun ProfileHomeTab(
@@ -45,6 +51,17 @@ fun ProfileHomeTab(
      * same route, so "open this studio" has one definition on this screen.
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /**
+     * Opens a pinned character's in-app profile sheet, or null when this host has
+     * no repository to fetch one with.
+     *
+     * Nullable rather than a no-op for the reason `PersonProfileHost` states: a
+     * portrait that looks tappable and does nothing is worse than one that opens
+     * the AniList page, which is what null falls back to.
+     */
+    onOpenCharacter: ((Int) -> Unit)? = null,
+    /** The same, for the pinned staff row. */
+    onOpenStaff: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     /** Media key to cover, for the AniList cards inside the bio. */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
@@ -147,7 +164,11 @@ fun ProfileHomeTab(
             item(key = "favourite_characters_row") {
                 FavouriteCharacterRow(
                     characters = state.favouriteCharacters,
-                    onOpen = { url -> url?.let { openExternalUrl(context, it) } }
+                    onOpen = { character ->
+                        val open = onOpenCharacter
+                        if (open != null) open(character.id)
+                        else character.siteUrl?.let { openExternalUrl(context, it) }
+                    }
                 )
             }
         }
@@ -164,7 +185,11 @@ fun ProfileHomeTab(
             item(key = "favourite_staff_row") {
                 FavouriteStaffRow(
                     staff = state.favouriteStaff,
-                    onOpen = { url -> url?.let { openExternalUrl(context, it) } }
+                    onOpen = { member ->
+                        val open = onOpenStaff
+                        if (open != null) open(member.id)
+                        else member.siteUrl?.let { openExternalUrl(context, it) }
+                    }
                 )
             }
         }

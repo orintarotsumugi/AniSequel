@@ -38,10 +38,11 @@ import kotlinx.coroutines.launch
  * ## The detail sheet
  *
  * Tapping a poster opens the same sheet the dashboard and profile use, so the heavy
- * fields come from [MediaDetailStore]. `isDemo` is deliberately **false** even when
- * the page was reached from the demo dashboard: everything on this screen was
- * fetched from AniList - a studio has no fixture data and needs no session to read -
- * so skipping the fetch would leave a real title's sheet half empty.
+ * fields come from the app's shared `MediaDetailHost` - not from a store of this
+ * ViewModel's own, which is what made a title walked to from a filmography a second
+ * cache beside the Library's. The host always fetches, which matters here: a studio
+ * has no fixture data and needs no session to read, so its page is live even when
+ * the app is showing the demo dashboard.
  */
 class StudioViewModel(
     private val aniListRepository: AniListRepository,
@@ -74,26 +75,10 @@ class StudioViewModel(
     private val _state = MutableStateFlow<StudioUiState>(StudioUiState.Loading)
     val state: StateFlow<StudioUiState> = _state.asStateFlow()
 
-    private val detailStore = MediaDetailStore(
-        repository = aniListRepository,
-        scope = viewModelScope,
-        isDemo = false
-    )
-
-    val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
-    val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
-
-    /**
-     * Fetches the heavy fields for one of the studio's titles.
-     *
-     * The type travels with the id because the studio's filmography mixes anime and
-     * manga - a publisher's page is mostly manga - and an untyped fetch resolves
-     * against both namespaces and can answer with the wrong title. See
-     * [MediaDetailStore.load].
-     */
-    fun loadDetail(mediaId: Int, mediaType: String? = null) {
-        detailStore.load(mediaId, mediaType)
-    }
+    // The detail sheet's store is not held here. It used to be, which made a title
+    // opened from a filmography a second cache beside the Library's and the
+    // profile's - two answers to "what is this title". The navigation owns the one
+    // store and passes it to the screen; see `MediaDetailHost`.
 
     private var loadJob: Job? = null
     private var nextPage = 1

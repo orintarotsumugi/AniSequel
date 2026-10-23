@@ -11,14 +11,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * The detail sheet's on-demand media detail, shared by the dashboard and the
- * profile.
+ * The detail sheet's on-demand media detail.
  *
- * Both screens describe a show with the node their own query returned - a list
- * node, or a thin arriving/activity summary - and fetch the heavy fields from
- * AniList when the user opens it. One implementation so the request, the
- * loading flag and the "already have this" guard cannot drift between the two
- * ViewModels.
+ * Every screen describes a show with the node its own query returned - a list
+ * node, a thin arriving/activity summary, or a pinned favourite - and fetches the
+ * heavy fields from AniList when the user opens it. One implementation so the
+ * request, the loading flag and the "already have this" guard cannot drift between
+ * callers; one *instance* for the Library, the Profile and the studio page, held by
+ * `MediaDetailHost`, so the same title is the same page everywhere. The dashboard
+ * holds its own because its store also folds each answer into the cards behind the
+ * sheet.
  *
  * ## Why a failure is swallowed
  *

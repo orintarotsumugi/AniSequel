@@ -797,10 +797,21 @@ fun MediaNode.withListStatus(status: String?): MediaNode {
  *
  * A missing node is the right answer here: the sheet keeps drawing its summary
  * and the in-flight fetch publishes the correct detail for the new namespace.
+ *
+ * A summary with **no** type is the one exception, and it accepts the detail. It
+ * cannot be namespace-checked, and discarding the answer is how the profile's
+ * pinned titles used to open with no synopsis, cast or specs at all: their query
+ * did not select `type`, so `"ANIME".equals(null)` was false and the fetched page
+ * was thrown away while the Library - whose query does select it - opened the very
+ * same title correctly. The query asks for `type` now, which is the real fix; this
+ * is the half that stops a future source which forgets the field from degrading to
+ * an empty page. The cost is bounded: a typeless summary also fires a typeless
+ * `Media(id:)`, so the sheet was already asking an ambiguous question about this
+ * id, and this shows that answer rather than discarding it.
  */
 fun Map<Int, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
     this[summary.id]?.takeIf { detail ->
-        detail.type.equals(summary.type, ignoreCase = true)
+        summary.type == null || detail.type.equals(summary.type, ignoreCase = true)
     }
 
 /** HTML tags AniList interleaves into `description`. */

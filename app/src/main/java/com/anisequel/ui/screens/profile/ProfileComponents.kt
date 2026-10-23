@@ -253,7 +253,17 @@ private fun favouriteCaption(media: MediaNode): String {
 @Composable
 fun FavouriteCharacterRow(
     characters: List<FavouriteCharacter>,
-    onOpen: (String?) -> Unit,
+    /**
+     * A tap on a portrait, with the person it belongs to.
+     *
+     * The person rather than the site URL, because *where* the tap goes is the
+     * screen's answer, not this row's: with a repository it is the in-app profile
+     * sheet every cast row already opens, and only a host without one falls back to
+     * the browser. This used to take `(String?) -> Unit` and the profile handed it
+     * `openExternalUrl`, so the same face opened a page in one place and a sheet in
+     * another - and the pinned row was the one that left the app.
+     */
+    onOpen: (FavouriteCharacter) -> Unit,
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth
 ) {
@@ -268,7 +278,7 @@ fun FavouriteCharacterRow(
                 subtitle = "${character.favourites ?: 0} favourites",
                 imageUrl = character.image?.bestUrl,
                 placeholder = AppVectorIcons.FavouriteCharacters,
-                onClick = { onOpen(character.siteUrl) }
+                onClick = { onOpen(character) }
             )
         },
         testTag = "favourite_characters_row",
@@ -287,7 +297,8 @@ fun FavouriteCharacterRow(
 @Composable
 fun FavouriteStaffRow(
     staff: List<FavouriteStaff>,
-    onOpen: (String?) -> Unit,
+    /** The same contract as [FavouriteCharacterRow]'s `onOpen`: the person, not a URL. */
+    onOpen: (FavouriteStaff) -> Unit,
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth
 ) {
@@ -305,7 +316,7 @@ fun FavouriteStaffRow(
                     ?: "${member.favourites ?: 0} favourites",
                 imageUrl = member.image?.bestUrl,
                 placeholder = AppVectorIcons.FavouriteStaff,
-                onClick = { onOpen(member.siteUrl) }
+                onClick = { onOpen(member) }
             )
         },
         testTag = "favourite_staff_row",

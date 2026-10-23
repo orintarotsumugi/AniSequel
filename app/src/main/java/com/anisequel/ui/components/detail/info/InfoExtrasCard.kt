@@ -178,8 +178,14 @@ private fun CopyLinkRow(
     }
 }
 
-/** How long the copy row acknowledges a tap before it returns to being a control. */
-private const val COPY_CONFIRMATION_MILLIS = 1800L
+/**
+ * How long a copy control acknowledges a tap before it returns to being a control.
+ *
+ * Shared with the title sheet's copy buttons rather than duplicated: the two are
+ * the same interaction, and two windows that drifted apart would make one of them
+ * read as broken.
+ */
+internal const val COPY_CONFIRMATION_MILLIS = 1800L
 
 @Composable
 private fun InfoExtraRow(

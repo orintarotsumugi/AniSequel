@@ -308,12 +308,14 @@ class DashboardViewModel(
     private var discoveredSource: MediaListCollection? = null
 
     /**
-     * Detail fetched on demand for the sheet, shared with the profile screen's
-     * loader. See [MediaDetailStore].
+     * Detail fetched on demand for the sheet.
      *
-     * The list folds a fetched node into its own entry through
-     * [foldDetailIntoList] so a card open behind the sheet updates without a
-     * full recompute.
+     * The dashboard is the one host that keeps a store of its own rather than the
+     * app's shared `MediaDetailHost`: this one folds a fetched node into the
+     * recommendation list through [foldDetailIntoList] and reads
+     * [MediaDetailStore.cached] during recompute, so its store is also a writer
+     * into the dashboard's own list. That is an addition to the shared rule, not a
+     * second rule - the request, the cache key and the merge are the same code.
      */
     private val detailStore = MediaDetailStore(
         repository = aniListRepository,

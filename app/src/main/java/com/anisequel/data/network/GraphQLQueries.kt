@@ -102,9 +102,20 @@ object GraphQLQueries {
      * are asked for on the *list* query's relation nodes already, where they are
      * read - asking for them again per favourite would be the same field twice
      * for two different reasons.
+     *
+     * `type` is not a display field and is not optional. It is the namespace the
+     * detail sheet fetches and merges by - `anime/1` and `manga/1` are different
+     * titles sharing a number - and it was missing here while every other media
+     * source carried it. Tapping a pinned manga therefore asked AniList for the
+     * id with no type, which resolves against both namespaces and answers with
+     * whichever it prefers, and `detailFor` then refused to merge the answer into
+     * the typeless summary. The profile's favourites opened without a synopsis,
+     * cast or specs while the very same title opened fine from the Library, whose
+     * list query does select it. `UserOverviewQueryTest` pins the field.
      */
     private const val FAVOURITE_MEDIA_FIELDS = """
                 id
+                type
                 title { english romaji native }
                 format
                 status

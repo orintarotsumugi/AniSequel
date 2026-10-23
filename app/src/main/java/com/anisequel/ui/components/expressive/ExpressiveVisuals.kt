@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.rememberIsResumed
 
 private const val EXPRESSIVE_TAG = "expressive_"
 
@@ -145,6 +146,22 @@ fun ExpressiveLoadingOverlay(
  * infinite transition cannot be skipped conditionally: a composable that
  * sometimes owns a clock would change the shape of the composition every time the
  * motion style changed. The static path allocates no animation at all.
+ *
+ * ## The clock also stops when the app is not on screen
+ *
+ * The cost the Instant branch could not cover was this one: the transition kept
+ * ticking behind an orb on a stopped Activity, because a
+ * `rememberInfiniteTransition` runs for as long as it is composed and an empty
+ * state is composed inside a plain `Column` - scrolling it away does not dispose
+ * it, and neither does leaving the app. It is gated on `rememberIsResumed` now,
+ * which is the same signal the joke toast's timer uses.
+ *
+ * The branch joins the Instant one rather than wrapping the animation, so the
+ * static composable is the *only* thing composed while the app is in the
+ * background: no clock is allocated to be paused, which is the point. Because
+ * both branches are the same pair of composables, resuming swaps one for the
+ * other and the orb's silhouette restarts from the cookie - a shape change the
+ * reader cannot see, since they were not looking at the screen a frame earlier.
  */
 @Composable
 fun ExpressiveEmptyOrb(
@@ -153,7 +170,9 @@ fun ExpressiveEmptyOrb(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
-    if (ExpressiveMotion.speed == MotionStyle.INSTANT) {
+    val resumed = rememberIsResumed()
+
+    if (ExpressiveMotion.speed == MotionStyle.INSTANT || !resumed) {
         StaticEmptyOrb(
             icon = icon,
             modifier = modifier,

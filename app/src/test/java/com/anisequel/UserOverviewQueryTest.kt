@@ -118,6 +118,34 @@ class UserOverviewQueryTest {
     }
 
     @Test
+    fun `pinned media carries its type, because the tap opens a namespaced page`() {
+        // The favourites block is the one media source in the app that used to omit
+        // `type`. It is not a display field: the detail sheet fetches and merges by
+        // media namespace, because `anime/1` and `manga/1` are different titles that
+        // share a number. Without it, tapping a pinned manga asked AniList for the
+        // bare id - which resolves against both namespaces and answers with whichever
+        // it prefers - and `detailFor` then refused to merge the answer into the
+        // typeless summary, so the profile's favourites opened with no synopsis,
+        // cast or specs while the same title opened correctly from the Library.
+        val favourites = overview
+            .substringAfter("favourites {")
+            .substringBefore("characters(perPage")
+        val branches = listOf(
+            "anime(perPage: 12) { nodes {" to "} }",
+            "manga(perPage: 12) { nodes {" to "} }"
+        )
+
+        branches.forEach { (open, close) ->
+            val fields = favourites.substringAfter(open).substringBefore(close)
+            assertTrue(
+                "$open must select `type`; without it the detail fetch is untyped and " +
+                    "the sheet cannot tell which title it was given",
+                fields.contains("type")
+            )
+        }
+    }
+
+    @Test
     fun `caps each favourites branch at twelve`() {
         // AniList allows 25 and will send all of them. The rows show about four;
         // the rest is image URLs parsed for art that never leaves the screen.

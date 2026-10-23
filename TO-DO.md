@@ -179,21 +179,29 @@ Do it a group at a time; the registrations do not call each other.
 orb. It ticks for as long as the composable is in the tree, including when the
 orb is off-screen.
 
-Two of the three costs that used to be grouped under this entry are now gone:
+Three of the four costs that used to be grouped under this entry are now gone:
 
 - The instant motion style no longer runs the clock at all - the orb branches to
   a static composable instead of animating a shape it then ignores.
 - The morph progress is read by `MorphShape` *while drawing* rather than in
   composition, so a frame of the morph no longer recomposes the empty state.
+- **A stopped Activity no longer animates it either.** The branch is gated on
+  `rememberIsResumed`, so while the app is in the background the static composable
+  is the only one composed and no clock is allocated to be paused. That is the
+  same signal the joke toast's timer uses.
 
-What is left is the transition itself ticking behind an orb that has been
-scrolled out of view. The shimmer loader had the same shape and is fixed - its
-phase clock is now hoisted and shared across every skeleton on screen.
+What is left is the transition ticking behind an orb that has been **scrolled out
+of view while the app is resumed**. That is the narrow case: an empty state sits
+in a plain `Column` rather than a lazy list, so scrolling it away does not dispose
+it. The shimmer loader had the same shape and is fixed - its phase clock is now
+hoisted and shared across every skeleton on screen.
 
-Same fix applies: derive the animation from a shared phase, and stop driving it
-when the surface is not visible. There is no visible-surface API in the current
-Compose version being targeted, so this needs either a lifecycle gate or an
-accept-and-measure decision.
+The fix is a visibility gate, not a lifecycle one: there is no visible-surface API
+in the Compose version being targeted, so it needs either an
+`onGloballyPositioned`-derived "is any of this on screen" check (cheap, but it
+runs a layout pass on every scroll) or an accept-and-measure decision. Do not
+replace the lifecycle gate with one of those without measuring - the lifecycle
+gate is the part that was free.
 
 ### 2.2 No animation regression tests
 
@@ -619,10 +627,12 @@ lists Room.
 
 ### Partial: the empty-state orb animates while off-screen
 
-Two of the three costs are gone — the instant motion style no longer runs the
-clock at all, and the morph progress is read while drawing rather than in
-composition. What remains is the transition ticking behind an orb that has been
-scrolled out of view; it is still tracked as [§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
+Three of the four costs are gone — the instant motion style no longer runs the
+clock at all, the morph progress is read while drawing rather than in composition,
+and a stopped Activity no longer drives it at all (`rememberIsResumed`). What
+remains is the transition ticking behind an orb that has been scrolled out of view
+*while the app is resumed*; it is still tracked as
+[§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
 
 ### The detail sheet's three tabs became one page
 
