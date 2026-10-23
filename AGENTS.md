@@ -10,6 +10,25 @@ app is put together that way; this file is only about the constraints.
 
 ---
 
+## 0. Never push to `main` — open a pull request
+
+- **Every change lands through a branch and a pull request.** Branch off
+  `main`, commit, push the branch, and open the PR. Do not commit to `main` and
+  do not push to it, not even for a one-line fix and not even when the tests
+  pass locally.
+- **Why:** `main` is the release branch. The workflow treats a non-PR run as
+  shippable — it builds, verifies the signature and publishes the release and
+  `update.json` manifest — so a direct push is a release attempt that skipped
+  review. A push made during this project failed to compile in CI, and
+  force-pushing `main` to undo it was rejected by branch protection, so the
+  broken commit could not be withdrawn. The PR is the only checkpoint between a
+  commit and users.
+- **If a commit already reached `main`**, do not try to rewrite `main`. Land the
+  fix forward through a PR and say plainly in the PR what reached `main` and
+  when.
+
+---
+
 ## 1. Size and structure
 
 - **Keep files focused, and under 700 lines.** The number is a ceiling, not a
