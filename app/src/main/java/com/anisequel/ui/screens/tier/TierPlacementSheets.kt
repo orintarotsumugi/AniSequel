@@ -337,6 +337,11 @@ private fun TierCandidateRow(candidate: TierCandidate, onClick: () -> Unit) {
  * of ranking to one tap.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+// The sheet's branches are alternative layouts of the same rows - renaming,
+// deleting, clearing placements, colour and band - not nested logic. Pulling the
+// row out into its own composable would hand it seven parameters, which detekt's
+// parameter-count rule would then report in turn.
+@Suppress("ComplexMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun TierManageSheet(
     tiers: List<TierDefinition>,
