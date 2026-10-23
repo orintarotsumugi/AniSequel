@@ -10,7 +10,10 @@ import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.domain.tier.TIER_LIST_NAME_MAX_LENGTH
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
+import com.anisequel.domain.tier.TierColorPalette
 import com.anisequel.domain.tier.TierDefinition
+import com.anisequel.domain.tier.TierDisplay
+import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierListDocument
 import com.anisequel.domain.tier.TierUndoEntry
 import com.anisequel.domain.tier.TierUndoStack
@@ -129,6 +132,33 @@ class TierListViewModel(
      */
     val undoLabel: StateFlow<String?> = _undoLabel.asStateFlow()
 
+    /**
+     * The stack of edits that have been undone, so they can be put back.
+     *
+     * Separate from the undo stack and cleared by every *new* edit: once the person
+     * changes something else, the branch they undid away from is no longer the
+     * future of this list. Keeping it would offer a redo that silently drops the
+     * work done since the undo.
+     */
+    private val redoStack = TierUndoStack()
+
+    private val _redoLabel = MutableStateFlow<String?>(null)
+
+    /** What "Redo" would put back, or null when nothing has been undone. */
+    val redoLabel: StateFlow<String?> = _redoLabel.asStateFlow()
+
+    /**
+     * What the board and the tray are currently showing.
+     *
+     * Session state, like [_openedId]: it describes this visit, not the list. It is
+     * *not* saved per list because a filter is a question you ask for a moment
+     * ("what am I still watching?") rather than a property of the ranking. The
+     * default hides planning, which is the one piece of that question that is
+     * always true for a fresh visit.
+     */
+    private val _filter = MutableStateFlow(TierFilter.Default)
+    val filter: StateFlow<TierFilter> = _filter.asStateFlow()
+
     private val _candidates = MutableStateFlow<List<TierCandidate>>(emptyList())
     val candidates: StateFlow<List<TierCandidate>> = _candidates.asStateFlow()
 
@@ -188,7 +218,12 @@ class TierListViewModel(
                 mediaId = media.id,
                 title = title,
                 coverUrl = media.coverImage?.bestUrl,
-                averageScore = media.averageScore
+                averageScore = media.averageScore,
+                // Two different statuses on purpose: `entry.status` is where the
+                // viewer put it, `media.status` is whether it is still airing.
+                // The filter asks about both and they are not interchangeable.
+                listStatus = entry.status,
+                airingStatus = media.status
             )
         }
     }
@@ -205,6 +240,8 @@ class TierListViewModel(
         // a switch would offer to undo somebody else's list under this one's name.
         undoStack.clear()
         _undoLabel.value = null
+        redoStack.clear()
+        _redoLabel.value = null
         viewModelScope.launch { preferences.setLastOpened(listId) }
     }
 
@@ -213,6 +250,8 @@ class TierListViewModel(
         _openedId.value = null
         undoStack.clear()
         _undoLabel.value = null
+        redoStack.clear()
+        _redoLabel.value = null
     }
 
     /**
@@ -230,6 +269,8 @@ class TierListViewModel(
             _openedId.value = id
             undoStack.clear()
             _undoLabel.value = null
+            redoStack.clear()
+            _redoLabel.value = null
         }
     }
 
@@ -254,6 +295,8 @@ class TierListViewModel(
                 _openedId.value = null
                 undoStack.clear()
                 _undoLabel.value = null
+                redoStack.clear()
+                _redoLabel.value = null
             }
         }
     }
@@ -277,6 +320,10 @@ class TierListViewModel(
             if (mutation.after == mutation.before) return@launch
             undoStack.push(TierUndoEntry(mutation.before, label))
             _undoLabel.value = label
+            // A new edit is a new branch: whatever was undone is no longer the
+            // future of this list, and redoing it would silently discard this.
+            redoStack.clear()
+            _redoLabel.value = null
         }
     }
 
@@ -327,7 +374,11 @@ class TierListViewModel(
     fun seedFromScores() {
         if (_isSeeding.value) return
         val listId = _openedId.value ?: return
-        val pool = _candidates.value
+        // Seed what the board is showing, not everything the viewer has ever
+        // listed. With planning hidden by default this is the difference between
+        // ranking the titles they have an opinion about and sweeping in a hundred
+        // unwatched ones.
+        val pool = _candidates.value.filter(_filter.value::allows)
         if (pool.isEmpty()) return
         val current = library.value.document(listId) ?: return
         if (!current.isEmpty) return
@@ -349,6 +400,8 @@ class TierListViewModel(
                 if (mutation != null && mutation.after != mutation.before) {
                     undoStack.push(TierUndoEntry(mutation.before, "Ranked from AniList scores"))
                     _undoLabel.value = "Ranked from AniList scores"
+                    redoStack.clear()
+                    _redoLabel.value = null
                 }
 
                 val skipped = unseedableCount(pool)
@@ -390,13 +443,51 @@ class TierListViewModel(
         }
     }
 
-    /** Adds a tier below the last one, with an id derived from its position. */
+    /**
+     * Adds a tier below the last one, with an id derived from its position.
+     *
+     * The colour walks [TierColorPalette] by position rather than being the same
+     * grey every time: a list with four custom tiers used to be four identical
+     * grey rows, which is the one thing a colour-coded board must not be. It is
+     * still just a starting point - the manage sheet recolours it in one tap.
+     */
     fun addTier() {
         edit("Added a tier") { document ->
             val current = document.tiers
             val id = "custom_${current.size}_" +
                 current.joinToString("") { it.id }.hashCode().toUInt().toString(16)
-            document.copy(tiers = current + TierDefinition(id, "New tier", NEW_TIER_COLOR))
+            val color = TierColorPalette[current.size % TierColorPalette.size]
+            document.copy(tiers = current + TierDefinition(id, "New tier", color))
+        }
+    }
+
+    /** Recolours one tier. The id is untouched, so nothing filed under it moves. */
+    fun setTierColor(tierId: String, colorArgb: Long) {
+        edit("Changed a tier colour") { document ->
+            document.copy(
+                tiers = document.tiers.map {
+                    if (it.id == tierId) it.copy(colorArgb = colorArgb) else it
+                }
+            )
+        }
+    }
+
+    /**
+     * Sets the score band a tier accepts, or clears it with null.
+     *
+     * Clamped to AniList's 0-100 range here rather than in the sheet, so a value
+     * from any future caller cannot produce a band that no title can clear. A
+     * cleared band is not the same as a band of 0: 0 accepts every scored title,
+     * null accepts none, and the manage sheet offers both.
+     */
+    fun setTierScoreFloor(tierId: String, floor: Int?) {
+        val clamped = floor?.coerceIn(0, 100)
+        edit(if (clamped == null) "Removed a rating band" else "Changed a rating band") { document ->
+            document.copy(
+                tiers = document.tiers.map {
+                    if (it.id == tierId) it.copy(scoreFloor = clamped) else it
+                }
+            )
         }
     }
 
@@ -432,8 +523,88 @@ class TierListViewModel(
      */
     fun undo() {
         val entry = undoStack.pop() ?: return
+        val current = opened.value
         _undoLabel.value = undoStack.label
-        viewModelScope.launch { preferences.restore(entry.document) }
+        // The *current* document becomes the redo snapshot, and the edit's own
+        // label describes it: "Redo: Filed under S" is the edit being put back,
+        // which is the same label undo showed a moment ago.
+        if (current != null && current.id == entry.document.id) {
+            redoStack.push(TierUndoEntry(current, entry.label))
+        }
+        _redoLabel.value = redoStack.label
+        // A snapshot carries the display options that were current when the edit
+        // was made. Undo is about the ranking, not the view: restoring the stored
+        // zoom would snap the board back to whatever it was at the time of the
+        // drag, even though a display change is deliberately not an undo entry.
+        val restored = if (current != null && current.id == entry.document.id) {
+            entry.document.copy(display = current.display)
+        } else {
+            entry.document
+        }
+        viewModelScope.launch { preferences.restore(restored) }
+    }
+
+    /**
+     * Puts back the last edit [undo] took away.
+     *
+     * The mirror of undo, and it has to be, or the two stacks drift: the state
+     * being replaced is pushed onto undo, so undoing a redo returns to exactly the
+     * state the redo started from. Both stacks are cleared together whenever the
+     * board changes lists.
+     */
+    fun redo() {
+        val entry = redoStack.pop() ?: return
+        val current = opened.value
+        _redoLabel.value = redoStack.label
+        if (current != null && current.id == entry.document.id) {
+            undoStack.push(TierUndoEntry(current, entry.label))
+        }
+        _undoLabel.value = undoStack.label
+        val restored = if (current != null && current.id == entry.document.id) {
+            entry.document.copy(display = current.display)
+        } else {
+            entry.document
+        }
+        viewModelScope.launch { preferences.restore(restored) }
+    }
+
+    /** Replaces the session filter; the board and tray both read it. */
+    fun setFilter(filter: TierFilter) {
+        _filter.value = filter
+    }
+
+    /**
+     * Changes how the open list is drawn.
+     *
+     * Deliberately outside [edit]: display options are not work to undo, and a
+     * zoom step pushed onto the undo stack would mean the next "Undo" after
+     * zooming in undid the zoom instead of the drag the person actually regrets.
+     * [TierListPreferences.mutate] still skips the write when nothing changed, so
+     * a debounced zoom that settles on the value already stored costs no write.
+     */
+    fun setDisplay(display: TierDisplay) {
+        writeDisplay { display }
+    }
+
+    /**
+     * Stores the board's zoom after a pinch or a button press.
+     *
+     * A separate entry point rather than a whole [TierDisplay] from the caller:
+     * the zoom settles on a debounce while the display sheet may have changed the
+     * title options in between, and writing the board's stale copy of the other
+     * fields would undo that.
+     */
+    fun setZoom(zoom: Float) {
+        writeDisplay { it.copy(zoom = zoom) }
+    }
+
+    private fun writeDisplay(change: (TierDisplay) -> TierDisplay) {
+        val listId = _openedId.value ?: return
+        viewModelScope.launch {
+            preferences.mutate(listId) { document ->
+                document.copy(display = change(document.display))
+            }
+        }
     }
 
     fun dismissNotice() {
@@ -453,6 +624,5 @@ class TierListViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
-        const val NEW_TIER_COLOR = 0xFF9E9A99
     }
 }

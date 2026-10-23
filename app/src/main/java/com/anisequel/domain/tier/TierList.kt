@@ -27,7 +27,22 @@ data class TierDefinition(
      * the SVG writer reads, and an `Int` that has to be masked differently by each
      * renderer is a bug waiting for the one that forgets.
      */
-    val colorArgb: Long
+    val colorArgb: Long,
+    /**
+     * The lowest AniList score this tier accepts when seeding, or null for a tier
+     * with no band.
+     *
+     * It lives on the tier rather than in a map keyed by id because the band is a
+     * property of *this row*: it has to travel with a rename, survive a reorder,
+     * and be editable per row. It used to be a module-level map of the six
+     * standard ids, which meant a custom tier could never have a band at all and
+     * the bands could not be changed without changing the code.
+     *
+     * Null is not zero: a tier with no band is never assigned by seeding, while a
+     * band of 0 accepts every scored title. That is the difference between "this
+     * tier is not score-based" and "everything belongs here".
+     */
+    val scoreFloor: Int? = null
 )
 
 /**
@@ -37,17 +52,42 @@ data class TierDefinition(
  * legible to somebody who has seen a hundred of them without being told what the
  * letters mean. F rather than E, for the same reason.
  *
- * These are the *defaults*, not a fixed set - [tierForScore] reads whatever list
- * it is handed, and the tiers are reorderable, addable and removable. What is
- * fixed is only the score bands, so that "what does S mean" keeps one answer.
+ * These are the *defaults*, not a fixed set - [seedFromScores] reads whatever list
+ * it is handed, and the tiers are reorderable, addable and removable. The score
+ * bands travel on each [TierDefinition] and are editable too; these six are only
+ * the bands a fresh list starts with.
  */
 val StandardTiers: List<TierDefinition> = listOf(
-    TierDefinition("s", "S", 0xFFE5484D),
-    TierDefinition("a", "A", 0xFFF76B15),
-    TierDefinition("b", "B", 0xFFFFC53D),
-    TierDefinition("c", "C", 0xFF30A46C),
-    TierDefinition("d", "D", 0xFF0091FF),
-    TierDefinition("f", "F", 0xFF8E8E93)
+    TierDefinition("s", "S", 0xFFE5484D, scoreFloor = 85),
+    TierDefinition("a", "A", 0xFFF76B15, scoreFloor = 75),
+    TierDefinition("b", "B", 0xFFFFC53D, scoreFloor = 65),
+    TierDefinition("c", "C", 0xFF30A46C, scoreFloor = 55),
+    TierDefinition("d", "D", 0xFF0091FF, scoreFloor = 45),
+    TierDefinition("f", "F", 0xFF8E8E93, scoreFloor = 0)
+)
+
+/**
+ * The colours a tier can be given, as ARGB longs.
+ *
+ * One shared list rather than a picker that invents hues: the standard six are in
+ * here, so recolouring "S" to the red it started as is possible, and a custom tier
+ * added next gets a colour from the same family rather than a new hue nobody
+ * reviewed. Ordered so that walking it gives neighbouring tiers clearly different
+ * fills.
+ */
+val TierColorPalette: List<Long> = listOf(
+    0xFFE5484D, // red
+    0xFFF76B15, // orange
+    0xFFFFC53D, // amber
+    0xFF30A46C, // green
+    0xFF0091FF, // blue
+    0xFF8E4EC6, // violet
+    0xFFE93D82, // pink
+    0xFF12A594, // teal
+    0xFF8E8E93, // grey
+    0xFF6F4E37, // brown
+    0xFF6366F1, // indigo
+    0xFFB58900  // gold
 )
 
 /**
@@ -63,7 +103,24 @@ data class TierCandidate(
     val title: String,
     val coverUrl: String? = null,
     /** AniList's 0-100 average, or null/0 when nobody has scored it. */
-    val averageScore: Int? = null
+    val averageScore: Int? = null,
+    /**
+     * The viewer's own list status: `CURRENT`, `PLANNING`, `COMPLETED`, ...
+     *
+     * Kept as AniList's own uppercase token rather than an enum here, because the
+     * filter is the only reader and an enum would need a translation layer whose
+     * only job is to be wrong for the one status AniList adds next. Null means the
+     * entry arrived without a status, which filters treat as "unknown" and keep
+     * visible rather than silently hiding somebody's title.
+     */
+    val listStatus: String? = null,
+    /**
+     * The media's airing status: `RELEASING`, `FINISHED`, `NOT_YET_RELEASED`, ...
+     *
+     * Different from [listStatus] on purpose: "I dropped it" and "it finished
+     * airing" are separate facts and the filter asks about both.
+     */
+    val airingStatus: String? = null
 )
 
 /**
@@ -87,22 +144,116 @@ data class TierAssignment(
 }
 
 /**
- * The AniList score at which a title earns each standard tier.
+ * The ids in [visibleIds], plus [keepIds], preserving the stored order.
  *
- * Keyed by tier id rather than being a positional list, because the two are not
- * the same thing once the tiers are customisable. A positional list paired with
+ * Used to keep the board honest while a filter is on: the arrangement is built
+ * from the placements that survive, not from all of them, or a hidden title would
+ * still hold a slot and leave a blank poster-shaped hole in its row. Order is kept
+ * so a filter never reshuffles a tier.
+ *
+ * [keepIds] is for placements the library has no entry for - a title removed from
+ * the viewer's AniList list, or a library that has not loaded yet. The filter has
+ * no status to judge those by, so hiding them would both drop a placement nobody
+ * filtered out and make the "hidden by filters" count blame the filter for it.
+ */
+fun TierAssignment.onlyFor(visibleIds: Set<Int>, keepIds: Set<Int> = emptySet()): TierAssignment {
+    if (tierIdByMediaId.isEmpty()) return this
+    val filtered = tierIdByMediaId.filterKeys { it in visibleIds || it in keepIds }
+    if (filtered.size == tierIdByMediaId.size) return this
+    return TierAssignment(filtered)
+}
+
+/**
+ * One list status a filter can hide, with the label the sheet draws.
+ *
+ * Anime-only labels because the tier list is fed by `getUserAnimeList`; a manga
+ * list would need "Reading" and that is a different query, not a different filter.
+ */
+data class TierStatusOption(val value: String, val label: String)
+
+val TierListStatusOptions: List<TierStatusOption> = listOf(
+    TierStatusOption("CURRENT", "Watching"),
+    TierStatusOption("REPEATING", "Rewatching"),
+    TierStatusOption("COMPLETED", "Completed"),
+    TierStatusOption("PAUSED", "Paused"),
+    TierStatusOption("DROPPED", "Dropped"),
+    TierStatusOption("PLANNING", "Planning")
+)
+
+val TierAiringStatusOptions: List<TierStatusOption> = listOf(
+    TierStatusOption("RELEASING", "Releasing"),
+    TierStatusOption("FINISHED", "Finished"),
+    TierStatusOption("NOT_YET_RELEASED", "Not yet aired"),
+    TierStatusOption("HIATUS", "Hiatus"),
+    TierStatusOption("CANCELLED", "Cancelled")
+)
+
+/**
+ * Which candidates a tier list is currently showing.
+ *
+ * ## Why planning is hidden by default
+ *
+ * A planning list is aspirational: it is the longest list most people have, and
+ * it is the one whose titles have no score to seed from and no judgement to
+ * record. Drawing them first meant the board opened on a wall of things the
+ * person had not watched, and every drag had to work around them. They are still
+ * rankable - the chip is one tap away - but the board opens on the titles the
+ * person has actually formed an opinion about.
+ *
+ * ## Hidden sets, not shown sets
+ *
+ * The state is "what is hidden" rather than "what is shown" so that a status
+ * AniList adds tomorrow is visible without a code change. A new status that
+ * nobody has decided to hide is not silently filtered out of somebody's list.
+ *
+ * Both dimensions are independent: hiding "Dropped" does not unhide "Finished".
+ */
+data class TierFilter(
+    val hiddenListStatuses: Set<String> = setOf("PLANNING"),
+    val hiddenAiringStatuses: Set<String> = emptySet()
+) {
+    /** True when [candidate] passes both dimensions. */
+    fun allows(candidate: TierCandidate): Boolean =
+        (candidate.listStatus == null || candidate.listStatus !in hiddenListStatuses) &&
+            (candidate.airingStatus == null || candidate.airingStatus !in hiddenAiringStatuses)
+
+    fun withListStatusHidden(status: String, hidden: Boolean): TierFilter = copy(
+        hiddenListStatuses = if (hidden) {
+            hiddenListStatuses + status
+        } else {
+            hiddenListStatuses - status
+        }
+    )
+
+    fun withAiringStatusHidden(status: String, hidden: Boolean): TierFilter = copy(
+        hiddenAiringStatuses = if (hidden) {
+            hiddenAiringStatuses + status
+        } else {
+            hiddenAiringStatuses - status
+        }
+    )
+
+    /** The default state, which is what the filter sheet's reset restores. */
+    val isDefault: Boolean
+        get() = this == Default
+
+    companion object {
+        val Default = TierFilter()
+    }
+}
+
+/**
+ * The score bands a tier list seeds with, read off the tiers themselves.
+ *
+ * Keyed by id rather than being a positional list, because the two are not the
+ * same thing once the tiers are customisable. A positional list paired with
  * whatever tiers it was handed silently gave a person's brand-new tier the "S"
  * band's meaning, which is not what adding a tier means. Keyed by id, a tier that
- * is not in this map simply has no band, and a custom tier starts empty.
+ * has no [TierDefinition.scoreFloor] simply has no band, and a custom tier starts
+ * empty until the person gives it one.
  */
-private val DEFAULT_SCORE_FLOORS = mapOf(
-    "s" to 85,
-    "a" to 75,
-    "b" to 65,
-    "c" to 55,
-    "d" to 45,
-    "f" to 0
-)
+fun scoreFloorsOf(tiers: List<TierDefinition>): Map<String, Int> =
+    tiers.mapNotNull { tier -> tier.scoreFloor?.let { tier.id to it } }.toMap()
 
 /**
  * Files candidates into tiers by their AniList score.
@@ -116,11 +267,15 @@ private val DEFAULT_SCORE_FLOORS = mapOf(
  *
  * Tiers with no floor are never assigned to: a tier the person has added but not
  * given a meaning to should stay empty rather than collect strays.
+ *
+ * The `floors` parameter is kept so callers that seed a *preview* against bands
+ * that are not saved yet can pass them explicitly; the default is the bands the
+ * tiers carry.
  */
 fun seedFromScores(
     candidates: List<TierCandidate>,
     tiers: List<TierDefinition> = StandardTiers,
-    floors: Map<String, Int> = DEFAULT_SCORE_FLOORS
+    floors: Map<String, Int> = scoreFloorsOf(tiers)
 ): TierAssignment {
     if (tiers.isEmpty()) return TierAssignment()
 
