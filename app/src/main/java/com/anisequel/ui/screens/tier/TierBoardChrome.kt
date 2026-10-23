@@ -1,7 +1,11 @@
 package com.anisequel.ui.screens.tier
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -276,6 +280,63 @@ internal fun TierFilterNotice(count: Int, onOpenFilters: () -> Unit) {
         ) {
             Text("Filters", fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/**
+ * The three lines the board can show above its rows.
+ *
+ * One composable rather than three blocks in the screen for the same reason the
+ * sheets moved into a host: each notice is a dismissible message with its own open
+ * condition, and keeping them here lets the screen's composition root stay about
+ * layout. The filter notice is state, not a message - it has no dismiss because
+ * dismissing it would not change what is hidden - while the orphan notice stays
+ * until those placements are made again.
+ */
+@Composable
+internal fun TierBoardNotices(
+    hiddenTotal: Int,
+    assignmentEmpty: Boolean,
+    visibleAssignmentEmpty: Boolean,
+    onOpenFilters: () -> Unit,
+    notice: String?,
+    onDismissNotice: () -> Unit,
+    orphaned: Int
+) {
+    // While every placement is filtered out the empty state below already says so,
+    // and two notices stacked over it is one explanation too many. A filtered
+    // assignment is only worth a notice when something *else* is still drawn.
+    if (hiddenTotal > 0 && (!visibleAssignmentEmpty || assignmentEmpty)) {
+        TierFilterNotice(count = hiddenTotal, onOpenFilters = onOpenFilters)
+    }
+
+    // Both messages are `AnimatedContent` rather than a nullable row: the outgoing
+    // text is kept alive while it fades and the container animates its height, so
+    // dismissing a notice shrinks the message it was showing instead of collapsing
+    // an empty box.
+    AnimatedContent(
+        targetState = notice,
+        transitionSpec = {
+            fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                fadeOut(ExpressiveMotion.FastEffects)
+        },
+        label = "tier_notice"
+    ) { message ->
+        if (message != null) {
+            TierNotice(text = message, onDismiss = onDismissNotice)
+        }
+    }
+
+    // The ViewModel already drops orphaned entries from the displayed assignment,
+    // so saying so is what stops the missing posters reading as data loss.
+    if (orphaned > 0) {
+        TierNotice(
+            text = "$orphaned " +
+                (if (orphaned == 1) "title was" else "titles were") +
+                " filed under a tier that no longer exists. They are not shown" +
+                " until you place them again.",
+            onDismiss = null
+        )
     }
 }
 
