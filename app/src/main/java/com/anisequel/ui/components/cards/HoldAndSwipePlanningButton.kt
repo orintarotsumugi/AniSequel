@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveContainedLoadingIndicator
@@ -186,7 +187,18 @@ fun QuickAddPlanningButton(
         label = "btn_press_scale"
     )
 
-    val shape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
+    // The hold is a shape as well as a colour.
+    //
+    // At rest this is the theme's small rounded rectangle; as the hold fills it
+    // rounds into a capsule, and it springs back out on release. The fill said how
+    // far the hold had got, but the control kept the same outline throughout, so
+    // the one gesture that means something different from a tap (hold = Watching,
+    // tap = Planning) looked identical to it until the colour had already changed.
+    // `PillCorner` is more than half the 44dp height below, so `RoundedCornerShape`
+    // clamps it to a true capsule rather than an ellipse.
+    val shape = RoundedCornerShape(
+        lerp(ExpressiveShapes.SmallCorner, ExpressiveShapes.PillCorner, progressFraction)
+    )
 
     val canSwipe = swipeEnabled && !isBusy
 

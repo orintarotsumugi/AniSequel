@@ -248,11 +248,18 @@ data class MediaNode(
     /**
      * `ANIME` or `MANGA`.
      *
-     * Only the activity feed asks for it, to label an item "Watched" or "Read"
-     * - the same status means different things for the two media types and the
-     * feed cannot tell them apart without it. Also asked for by the media list
-     * query now, so the Library page can filter by the media's own type
-     * instead of guessing from the list an entry arrived in.
+     * The activity feed asks for it to label an item "Watched" or "Read" - the
+     * same status means different things for the two media types and the feed
+     * cannot tell them apart without it. The media list query asks for it so the
+     * Library page can filter by the media's own type instead of guessing from
+     * the list an entry arrived in.
+     *
+     * The profile's favourites ask for it too, and there it is load-bearing rather
+     * than cosmetic: the detail sheet fetches and merges by media namespace, so a
+     * typeless favourite fired an untyped `Media(id:)` - ambiguous across
+     * `anime/` and `manga/` - and `detailFor` then refused to merge the answer, so
+     * the pinned titles opened with no synopsis at all. See `detailFor` and
+     * `FAVOURITE_MEDIA_FIELDS`.
      */
     val type: String? = null,
     /**

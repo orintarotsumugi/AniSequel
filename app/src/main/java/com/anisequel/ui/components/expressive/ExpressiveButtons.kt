@@ -3,6 +3,7 @@ package com.anisequel.ui.components.expressive
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -40,19 +41,31 @@ fun ExpressivePrimaryButton(
     loading: Boolean = false,
     enabled: Boolean = true
 ) {
-    val cornerRadius by animateDpAsState(
-        targetValue = if (loading) ExpressiveShapes.PillCorner else ExpressiveShapes.MediumCorner,
-        animationSpec = ExpressiveMotion.FastSpatialDp,
-        label = "button_corner_radius"
-    )
-
     // Shared with `bouncyPress` so the press comes from the `Button`, which knows
     // the difference between a tap and a drag. Without it, `bouncyPress` installs
     // a pointer-input loop that calls this button pressed the instant a finger
-    // lands and releases it when the finger travels — so a drag that started on
+    // lands and releases it when the finger travels - so a drag that started on
     // this button could spring it twice, which on the app's primary action is
     // both wrong and very visible.
     val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    // The shape morph: the button rests as the theme's medium rounded rectangle
+    // and rounds into a true capsule while it is pressed, which is Material 3
+    // Expressive's press behaviour and the one shape change this control was
+    // missing. `PillCorner` is half of the 48dp height below, so the pressed
+    // shape is a capsule by measurement rather than by eye; the same radius is
+    // what `loading` already morphs to, so a tap that becomes a request is one
+    // continuous change instead of two.
+    val cornerRadius by animateDpAsState(
+        targetValue = if (loading || pressed) {
+            ExpressiveShapes.PillCorner
+        } else {
+            ExpressiveShapes.MediumCorner
+        },
+        animationSpec = ExpressiveMotion.FastSpatialDp,
+        label = "button_corner_radius"
+    )
 
     Button(
         onClick = onClick,

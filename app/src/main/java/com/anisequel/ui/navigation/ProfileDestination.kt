@@ -10,6 +10,7 @@ import com.anisequel.data.model.FollowUser
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.screens.profile.UserProfileScreen
+import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.UserSocialViewModel
@@ -104,6 +105,16 @@ val ProfileIdArguments = listOf(navArgument("userId") { type = NavType.IntType }
 @Composable
 fun ProfileDestination(
     repository: AniListRepository,
+    /**
+     * The app's one on-demand media-detail store.
+     *
+     * Owned by the navigation beside the other app-scoped stores, because a title
+     * opened here and the same title opened from the Library have to be one page: one
+     * fetch, one cache, one merge rule. Held by the route instead, each profile would
+     * build a store of its own and re-fetch a synopsis the Library already had -
+     * which is exactly the "different in the profile" behaviour this replaced.
+     */
+    detailHost: MediaDetailHost,
     username: String,
     userId: Int?,
     isDemo: Boolean,
@@ -173,6 +184,7 @@ fun ProfileDestination(
         // fetch with. Passed rather than reached for on a ViewModel, which holds its
         // own privately.
         repository = repository,
+        detailHost = detailHost,
         overviewViewModel = overviewViewModel,
         activityViewModel = activityViewModel,
         socialViewModel = socialViewModel,

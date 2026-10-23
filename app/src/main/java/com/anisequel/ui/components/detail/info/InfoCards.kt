@@ -41,10 +41,10 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StudioCredit
-import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.descriptionBody
 import com.anisequel.data.model.formatLabel
+import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.releaseLabel
@@ -137,7 +137,7 @@ fun InfoProgressCard(
     val count = media.progressCountLabel ?: return
     val isManga = media.isManga
     val nextEpisode = media.airingEpisodeNumber
-    val countdown = media.airingCountdown()
+    val countdown = rememberAiringCountdown(media)
 
     InfoCard(
         modifier = modifier.testTag("info_progress_card"),
@@ -164,7 +164,24 @@ fun InfoProgressCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Episode $nextEpisode airs in $countdown",
+                    // Two bugs in one line, both of which the reader saw.
+                    //
+                    // The noun and verb were the anime half's: `isManga` was
+                    // already read above and used for the card's title, so a manga
+                    // drew a *Reading Progress* card over a sentence announcing
+                    // that its next episode would air.
+                    //
+                    // And the line read "airs in in 3d", because
+                    // [com.anisequel.data.model.AiringCountdown] already returns
+                    // the preposition - "in 3d", "in 5h", "in 30m", "now" - and
+                    // this string added a second one. The `now` case printed
+                    // "airs in now", which is how it survived review: it only
+                    // looked wrong for the last minute.
+                    text = if (isManga) {
+                        "Chapter $nextEpisode publishes $countdown"
+                    } else {
+                        "Episode $nextEpisode airs $countdown"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -330,6 +347,16 @@ fun InfoSpecsCard(
     // `filter`, not `firstOrNull()`: several studios routinely share the main flag.
     val mainStudios = studios.filter { it.isMain }
 
+    // The next episode, for a show the reader has *not* added to their list. The
+    // progress card states it for a title they have started; a currently airing
+    // show they have not started said nothing at all about when more of it
+    // arrives, which is one of the two reasons to open the page of a running show.
+    //
+    // Gated on `hasProgressCard` rather than always drawn: that card is the one a
+    // tracker reads, and two countdowns a scroll apart would tick out of step and
+    // disagree by up to a minute.
+    val untrackedAiring = if (media.hasProgressCard) null else rememberAiringCountdown(media)
+
     val facts = buildList {
         if (media.isManga) {
             add("Chapters" to (media.chapters?.toString() ?: "TBA"))
@@ -340,6 +367,13 @@ fun InfoSpecsCard(
         media.duration?.let { add("Duration" to "${it}m") }
         media.seasonLabel?.let { add("Season" to it.uppercase()) }
         add("Status" to media.statusLabel.uppercase())
+        untrackedAiring?.let { countdown ->
+            add(
+                (if (media.isManga) "Next chapter" else "Next episode") to
+                    listOfNotNull(media.airingEpisodeNumber?.toString(), countdown)
+                        .joinToString(" · ")
+            )
+        }
         add("Format" to media.formatLabel)
         media.sourceLabel?.let { add("Source" to it) }
         media.averageScore?.let { add("Score" to "$it%") }

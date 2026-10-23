@@ -408,6 +408,26 @@ class MediaNodeDisplayTest {
         assertEquals(anime, published.detailFor(anime))
     }
 
+    /**
+     * A summary that arrived without a type accepts the detail it fetched.
+     *
+     * The profile's pinned media was exactly this: its query did not select `type`,
+     * so the tap fired an untyped fetch and `detailFor` compared `"ANIME"` against
+     * `null`, rejected the answer and left the sheet with the thin favourite node -
+     * no synopsis, no cast, no specs - while the Library opened the same title
+     * correctly. The query selects the field now; this keeps a future source that
+     * forgets it from silently reproducing the empty page. There is no namespace to
+     * check, and the sheet was already asking an ambiguous `Media(id:)` question, so
+     * showing that answer beats discarding it.
+     */
+    @Test
+    fun `a summary with no type accepts the detail it fetched`() {
+        val typeless = MediaNode(id = 1)
+        val fetched = MediaNode(id = 1, type = "MANGA", description = "A manga")
+
+        assertEquals(fetched, mapOf(1 to fetched).detailFor(typeless))
+    }
+
     // ---- streamingLinks --------------------------------------------------------------
 
     /**

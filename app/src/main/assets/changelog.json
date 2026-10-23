@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.5.4",
+      "entries": [
+        {
+          "title": "The same title opens the same page on every tab",
+          "detail": "A pinned title, an activity row, a library entry and a studio's filmography opened through four separate detail stores, so the same show could arrive as two different pages - and a title the Library had already loaded was fetched again from a profile. They share one store now, which means the same synopsis, cast, specs and \"My Entry\" tab wherever the tap came from, and leaving a tab no longer throws away what was already fetched. The pinned favourites also carry their media type now: without it a pinned manga asked AniList for the bare id, which resolves against both anime and manga and can answer with the anime sharing that number, and the sheet then refused to merge the answer - so a profile's favourites opened with no synopsis at all while the same titles opened correctly from the Library."
+        },
+        {
+          "title": "Pinned characters and staff open in the app",
+          "detail": "The faces in a profile's Favourite Characters and Favourite Staff rows used to hand the tap to the AniList website, so the same person opened a sheet from a title's cast row and a browser page from a profile. They now open the same in-app profile sheet everywhere, with the browser kept as the fallback for a host that has no session to fetch a profile with."
+        },
+        {
+          "title": "The quick-add hold has a shape, not just a colour",
+          "detail": "Tapping the quick-add control plans a title; holding it fills toward Currently Watching. The fill was the only sign the hold was working - the button kept the same outline the whole way - so the one gesture that means something different from a tap looked like a tap until the colour had changed. It now rounds from a rounded rectangle into a capsule as the hold completes and springs back out on release. The app's primary button does the same under a finger: it rests as a rounded square and becomes a capsule while pressed, and stays one while a request is in flight."
+        },
+        {
+          "title": "The Info page counts down once",
+          "detail": "The progress card printed \"airs in in 3d\" - the countdown already returns its own preposition - and described a manga as airing episodes. A manga now says \"Chapter 12 publishes in 3d\", and a title with no progress card of its own gets a \"Next episode\" or \"Next chapter\" line in the specs card instead, so the date is in one place or the other, never both and never missing."
+        },
+        {
+          "title": "Long Info rows scroll, and copying says so",
+          "detail": "The sheet behind a meta row's \"...\" now scrolls when the list is longer than the sheet, and its chevron points down to say so instead of sideways. Copying a title confirms it in place - the icon turns into a check and the row tints - rather than leaving the reader to guess whether the tap registered."
+        },
+        {
+          "title": "The joke toast rises instead of falling",
+          "detail": "It is anchored to the bottom of the screen, and it used to animate in from above - so the one surface meant to feel like the app raising a remark read as the bar dropping it. It rises from the bar now, grows out of its own bottom edge, and leaves the way it came. The glyph it was wearing is the app's update-available mark, the same one on the update dialog, so it now wears the sparkle instead; it sits a little higher off a busy page; and it is announced to a screen reader, which it never was - a surface that appears by itself used to be completely silent."
+        },
+        {
+          "title": "The empty state stops breathing in the background",
+          "detail": "The morphing orb behind an empty page kept its animation running for as long as the screen was composed, which includes the whole time the app was in the background. It draws one static shape while the app is not on screen and starts the clock again when it is. Same orb, no frames spent on a screen nobody is looking at."
+        },
+        {
+          "title": "Typing in the search box no longer repaints the whole app",
+          "detail": "Every dashboard update replaced the state the app's root was reading, so each character typed into the filter box recomposed the navigation host, the bar and the toast just to find out that nothing had changed. The viewer and the home-screen widget inputs are derived now, and the widget sync runs in a scope of its own, so a keystroke redraws only what actually moved."
+        }
+      ]
+    },
+    {
       "version": "1.5.3",
       "entries": [
         {

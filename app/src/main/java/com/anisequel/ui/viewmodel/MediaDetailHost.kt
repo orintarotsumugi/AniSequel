@@ -12,20 +12,29 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * The whole of [MediaDetailStore] that a screen without a ViewModel needs.
+ * The whole of [MediaDetailStore] that a screen needs, held once for the app.
  *
- * ## Why a fourth owner exists
+ * ## Why one owner now
  *
- * The store is the one implementation of the detail sheet's on-demand fetch, with
- * three owners today: the dashboard, the activity feed and the studio page, each
- * holding one through its ViewModel. The Library page is not ViewModel-backed, so
- * somebody has to hold the fourth store - this, the two flows and the load
- * callback, with nothing of its own.
+ * The store is the one implementation of the detail sheet's on-demand fetch. It
+ * used to have four owners: the dashboard, the activity feed and the studio page
+ * each held one through a ViewModel, and the Library held this one because it is
+ * not ViewModel-backed. Four caches meant the same title opened from two tabs was
+ * two requests, two loading flags and two merge answers - the "it opens a
+ * different thing in the profile" report - and a title the Library had already
+ * loaded still arrived thin somewhere else.
+ *
+ * The Library, the Profile and the studio page now share this host, created once in
+ * `AppNavigation`, so opening a title is the same page wherever the tap came from
+ * and leaving a tab no longer throws away a synopsis. The dashboard keeps its own
+ * store for one reason: that store also folds each answer into the recommendation
+ * cards behind the sheet ([MediaDetailStore]'s `onLoaded`), which is a
+ * dashboard-only write. It is an addition, not a different rule.
  *
  * ## Why the scope is owned here
  *
  * The store takes a [CoroutineScope] because a fetch must outlive the tap that
- * started it, and each ViewModel passes its own `viewModelScope`. This owner has
+ * started it, and a ViewModel passes its own `viewModelScope`. This owner has
  * to build one instead, created - and cancelled - by [rememberMediaDetailHost]
  * rather than handed in by its caller: a scope belongs to whoever made it (the
  * rule `PersonProfileStore` records), and one a caller disposed could cancel work
@@ -33,16 +42,19 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * A `SupervisorJob`, so the failures stay per-fetch: the store already swallows a
  * failed detail load, but the scope under it must not take the other requests in
- * flight down with it. `Dispatchers.Main.immediate` is the dispatcher the three
+ * flight down with it. `Dispatchers.Main.immediate` is the dispatcher the
  * `viewModelScope`s run on, so a host-owned store publishes at the same point in
  * the frame as a ViewModel-owned one - the sheet cannot tell the two apart.
  *
- * ## Why [isDemo] is carried
+ * ## Why [isDemo] is still a parameter
  *
- * Demo data is already complete, and there is no session to fetch a title with.
- * The store answers both with one rule - `isDemo` means "do not fetch" - but
- * somebody has to say it, and the screen cannot: whether there is a session is a
- * property of the route, not of the sheet.
+ * Demo data is already complete, so the store's rule is "`isDemo` means do not
+ * fetch". Whether there is a session used to be a property of the route, which is
+ * why the flag lived on the host. The shared host passes false: it also serves the
+ * studio page, whose titles are live even in the demo, so a blanket "do not fetch"
+ * would leave a real studio title's sheet half empty. The demo's own summaries are
+ * complete already, so the fetch they trigger is redundant rather than wrong. The
+ * parameter stays for a caller that only ever holds complete summaries.
  */
 class MediaDetailHost internal constructor(
     private val store: MediaDetailStore
@@ -61,9 +73,11 @@ class MediaDetailHost internal constructor(
  * Remembers a [MediaDetailHost] for the life of this composition, with a scope
  * of its own that is cancelled with it.
  *
- * Mirrors `rememberPersonProfileHost`: built once per screen and disposed when
- * that screen leaves, so nothing is shared between two callers and one page's
- * fetch cannot appear in another page's spinner.
+ * Called once, at the app's navigation root, so every tab that draws the sheet
+ * shares one store. That is the point: a fetch started from the Library is still
+ * there when the reader opens the same title from a profile, and one page's
+ * spinner is the spinner on every page that can see that title. Call it per
+ * *route* and the sharing - and the bug it fixes - comes back.
  */
 @Composable
 fun rememberMediaDetailHost(

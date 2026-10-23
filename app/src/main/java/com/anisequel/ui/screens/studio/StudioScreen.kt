@@ -46,6 +46,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
+import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -105,6 +106,16 @@ fun StudioScreen(
      */
     repository: com.anisequel.data.repository.AniListRepository? = null,
     /**
+     * The app's one on-demand detail store.
+     *
+     * Passed in rather than built here, because the title this page opens has to be
+     * the same page the Library and the Profile open: one fetch, one cache, one
+     * merge rule. A studio page used to hold a store of its own, so a title walked
+     * to from a filmography was fetched a second time and could disagree with the
+     * same title opened from a list. See [MediaDetailHost].
+     */
+    detailHost: MediaDetailHost,
+    /**
      * Read/write access to the viewer's own entry for the opened title, or null
      * when there is no session to write with.
      *
@@ -121,8 +132,8 @@ fun StudioScreen(
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository draws captions, not buttons.
     val profiles = rememberPersonProfileHost(repository)
-    val detailNodes by viewModel.detailNodes.collectAsState()
-    val loadingDetailIds by viewModel.loadingDetailIds.collectAsState()
+    val detailNodes by detailHost.details.collectAsState()
+    val loadingDetailIds by detailHost.loading.collectAsState()
 
     // One-tap Planning for a studio's title. A studio page carries no session of
     // its own, so the host is gated on the editor the navigation passed - the
@@ -314,7 +325,7 @@ fun StudioScreen(
             quickAddStatuses = quickAddStatuses,
             onAddMediaToPlanning = planningAdd.onAddToPlanning,
             onAddMediaToWatching = planningAdd.onAddToWatching,
-            onLoadDetail = { id, type -> viewModel.loadDetail(id, type) },
+            onLoadDetail = detailHost.onLoadDetail,
             isDetailLoading = summary.id in loadingDetailIds,
             // Same sheet, same access: the tab follows the editor, and an
             // unauthenticated reader gets exactly the page they always got.

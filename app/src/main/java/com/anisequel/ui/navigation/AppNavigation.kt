@@ -1,12 +1,9 @@
 package com.anisequel.ui.navigation
 
+import android.content.Context
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,12 +13,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -33,8 +30,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.ui.components.JokeToastHost
+import com.anisequel.ui.components.JokeToastLift
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
@@ -63,6 +62,7 @@ import com.anisequel.ui.viewmodel.TierListViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 object AppRoutes {
     const val LOGIN = "login"
@@ -80,44 +80,32 @@ object AppRoutes {
 private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
 
 /**
- * Expressive spatial spring for the cross-route slide transitions.
+ * The route transitions use the app's shared motion tokens rather than their own
+ * copies.
  *
- * A purposeless fixed-duration tween used to fly the screens with no
- * overshoot; the same bouncy spring physics the rest of the app uses are the
- * motion routes should use too.
- */
-private val RouteSlideSpring: FiniteAnimationSpec<IntOffset> get() =
-    when (com.anisequel.ui.components.expressive.ExpressiveMotion.speed) {
-        com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
-        com.anisequel.data.repository.MotionStyle.SMOOTH -> spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        )
-        com.anisequel.data.repository.MotionStyle.CHILL -> spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        )
-    }
-
-/**
- * Effects-style fade that accompanies [RouteSlideSpring] on route transitions.
+ * These two were private re-declarations, forty lines apart, of the springs
+ * [ExpressiveMotion] already publishes:
+ *
+ *  - The slide was `ExpressiveMotion.DefaultSpatialOffset` exactly - the same
+ *    `INSTANT`/`SMOOTH`/`CHILL` branches, the same `NoBouncy`/`MediumLow` in
+ *    `SMOOTH`, the same `0.65f` in `CHILL`. A change to how the app slides would
+ *    have moved every list and press and left the pages on the old physics, with
+ *    nothing to notice it but the eye.
+ *  - The fade was `ExpressiveMotion.DefaultEffects` *except* that its `SMOOTH`
+ *    branch was pinned to `StiffnessMediumLow` while the shared effects token uses
+ *    `StiffnessMedium`. That was not a decision anyone made - it was the copy
+ *    drifting - so the routes now fade at the same speed as every other fade in
+ *    the app. The difference is one spring stiffness on a ~200ms fade; it is not
+ *    a motion redesign, and it is the point of having one token.
+ *
  * A pure slide crosses one surface over the other; the slide plus a short fade
  * gives the incoming surface something to compose against - without it, the
  * underneath content reads as the background rather than as replaced content
- * while the slide is moving.
+ * while the slide is moving. The fade is the effects token, not the spatial one,
+ * for the same reason colour transitions are: it must not overshoot.
  */
-private val RouteFadeEffect: FiniteAnimationSpec<Float> get() =
-    when (com.anisequel.ui.components.expressive.ExpressiveMotion.speed) {
-        com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
-        com.anisequel.data.repository.MotionStyle.SMOOTH -> spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        )
-        com.anisequel.data.repository.MotionStyle.CHILL -> spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        )
-    }
+private val RouteSlideSpring get() = ExpressiveMotion.DefaultSpatialOffset
+private val RouteFadeEffect get() = ExpressiveMotion.DefaultEffects
 
 @Composable
 fun AppNavigation(
@@ -293,7 +281,21 @@ fun AppNavigation(
     // call sequence crashes at runtime.
     val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
     val dashboardState by dashboardFlow.collectAsState()
-    val signedInViewer = (dashboardState as? DashboardUiState.Success)?.viewer
+
+    // Derived rather than read straight off the state, because `uiState` is
+    // replaced on every dashboard recompute - which includes every character
+    // typed into the dashboard's search box. A plain read here subscribed this
+    // composable, the app's root, to all of them, so each keystroke recomposed the
+    // `NavHost`, the bar and the toast host to discover that the viewer was still
+    // the same person. `derivedStateOf` compares by equality, so it invalidates
+    // only when the identity actually changes.
+    //
+    // Keyed on the flow because signing in or out swaps the ViewModel and with it
+    // the state being read; a derived state built over the old one would keep
+    // reporting the previous account's viewer.
+    val signedInViewer by remember(dashboardFlow) {
+        derivedStateOf { (dashboardState as? DashboardUiState.Success)?.viewer }
+    }
 
     // The Library page's remembered filters and grid position, resolved beside the
     // other app-scoped stores rather than inside the route: the route is disposed
@@ -303,10 +305,24 @@ fun AppNavigation(
     // process, as everywhere.
     val librarySelection = rememberLibrarySelection(libraryPreferences)
     val libraryGridState = rememberLazyGridState()
-    // The Library sheet's on-demand detail fetches, held here for the same reason:
-    // opening a title, leaving and coming back must not re-fetch a synopsis the store
-    // already has.
-    val libraryDetailHost = rememberMediaDetailHost(aniListRepository, isDemo = authenticated == null)
+    // The detail sheet's on-demand fetches, held here for the whole app rather than
+    // per route: the Library, the Profile and a studio page all open the same
+    // `SequelDetailSheet`, and each used to own a store of its own. That is why the
+    // same title opened from two tabs was two requests and two caches, and why a
+    // title the Library had already loaded could still arrive at a profile without
+    // its data. One host makes the sheet the same page wherever the tap came from;
+    // leaving a tab and coming back no longer re-fetches a synopsis it already has.
+    //
+    // The dashboard is the one exception, and it is not a second rule: its store
+    // also folds each answer into the recommendation cards behind the sheet, which
+    // is a dashboard-only write. See `MediaDetailHost`.
+    //
+    // Deliberately not gated on `authenticated`: this host now serves the studio
+    // page too, whose titles are fetched live even in the demo, so a "do not
+    // fetch" flag here would leave a real studio title's sheet half empty. The
+    // demo's own summaries are complete already, so the fetch they trigger is
+    // redundant rather than wrong.
+    val detailHost = rememberMediaDetailHost(aniListRepository)
 
     // The one entry editor the non-dashboard hosts share: the Library and the
     // studio page open the same `SequelDetailSheet` the dashboard does, and a
@@ -392,56 +408,15 @@ fun AppNavigation(
         }
     }
 
-    // Keep home screen widgets in sync with the live dashboard counts.
+    // Keeps the home-screen widgets in step with the live dashboard counts.
     //
-    // Keyed on the values the widgets actually render, not on the whole state
-    // object. The state instance is replaced on every filter keystroke (the
-    // search box triggers a recompute), so keying on it re-rendered three
-    // widgets per character typed to write numbers that had not changed. The
-    // viewer, the two counts and the top entries are the only inputs.
-    //
-    // The top arriving entry is a key of its own because the tiles now render
-    // its cover and title, and its size can be unchanged while the entry at the
-    // front of the list changes - which would otherwise leave the previous
-    // poster on the tile.
-    val widgetSuccess = dashboardState as? DashboardUiState.Success
-    val widgetTopMissedId = widgetSuccess?.missedSequels?.firstOrNull()?.sequelId
-    val widgetTopArrivingId = widgetSuccess?.arriving?.firstOrNull()?.mediaId
-    // The avatar is the activity tile's artwork, so the tile repaints when it
-    // changes even if nothing else about the viewer did.
-    val widgetAvatarUrl = widgetSuccess?.viewer?.avatar?.large
-        ?: widgetSuccess?.viewer?.avatar?.medium
-    LaunchedEffect(
-        widgetSuccess?.viewer?.id,
-        widgetSuccess?.viewer?.name,
-        widgetSuccess?.totalMissedCount,
-        widgetSuccess?.arriving?.size,
-        widgetTopMissedId,
-        widgetTopArrivingId,
-        widgetAvatarUrl
-    ) {
-        val success = widgetSuccess ?: return@LaunchedEffect
-        val top = success.missedSequels.firstOrNull()
-        val arriving = success.arriving.firstOrNull()
-        com.anisequel.ui.widget.AniSequelWidgetData.updateData(
-            context = context,
-            missedCount = success.totalMissedCount,
-            arrivingCount = success.arriving.size,
-            username = success.viewer.name,
-            topMissedTitle = top?.sequelTitle,
-            topMissedParent = top?.parentTitle,
-            topMissedCover = top?.sequelCoverUrl,
-            topMissedColor = top?.coverColor,
-            arrivingTitle = arriving?.title,
-            arrivingCover = arriving?.coverUrl,
-            arrivingColor = arriving?.coverColor,
-            activityArt = widgetAvatarUrl
-        )
-        com.anisequel.ui.widget.AniSequelWidgetProvider.updateAll(context)
-        com.anisequel.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
-        com.anisequel.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
-        com.anisequel.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
-    }
+    // Called rather than inlined because nothing in this body may read the
+    // dashboard state: `uiState` is replaced on every filter keystroke, and a
+    // read here invalidated the app's root - the `NavHost`, the bar and the toast
+    // host - once per character typed into the dashboard's search box. Hoisting
+    // the sync into its own composable confines that invalidation to a scope that
+    // draws nothing.
+    WidgetSync(dashboardFlow = dashboardFlow, context = context)
 
     Box(modifier = modifier.fillMaxSize()) {
         NavHost(
@@ -622,6 +597,7 @@ fun AppNavigation(
                 val username = signedInViewer?.name ?: DEMO_USERNAME
                 ProfileDestination(
                     repository = aniListRepository,
+                    detailHost = detailHost,
                     username = username,
                     userId = signedInViewer?.id,
                     // The viewer reading, which on this route is also the profile in
@@ -650,6 +626,7 @@ fun AppNavigation(
                 val username = backStackEntry.arguments?.getString("username").orEmpty()
                 ProfileDestination(
                     repository = aniListRepository,
+                    detailHost = detailHost,
                     username = username,
                     // No id for a scanned profile: `getUserByName` has already been
                     // asked for it by the dashboard that led here, but its id is not
@@ -675,6 +652,7 @@ fun AppNavigation(
                 val userId = backStackEntry.arguments?.getInt("userId") ?: 0
                 ProfileDestination(
                     repository = aniListRepository,
+                    detailHost = detailHost,
                     // The name is only a label at this point; the query is by id. The
                     // follower row carries both, so an empty name would be a bug in
                     // the caller rather than a real case, and it still fetches.
@@ -784,7 +762,7 @@ fun AppNavigation(
                 LibraryScreen(
                     repository = aniListRepository,
                     overviewViewModel = libraryViewModel,
-                    detailHost = libraryDetailHost,
+                    detailHost = detailHost,
                     remembered = librarySelection,
                     gridState = libraryGridState,
                     onOpenProfile = { navController.navigateToMainTab(MainTab.PROFILE, signedIn = authenticated != null) },
@@ -822,6 +800,7 @@ fun AppNavigation(
                     viewModel = studioViewModel,
                     studioId = studioId,
                     repository = aniListRepository,
+                    detailHost = detailHost,
                     initialName = studioName,
                     onNavigateBack = { navController.popBackStack() },
                     // Single-top: a studio page credits studios, so a reader can go
@@ -890,10 +869,81 @@ fun AppNavigation(
                 // top of it: the dashboard anchors that host at `MainBarClearance`,
                 // so a joke parked just clear of the bar would occasionally be
                 // drawn through an "Added to Planning" confirmation. The clearance
-                // already includes the device's navigation inset.
+                // already includes the device's navigation inset, and the extra
+                // lift is the toast's own constant so the two cannot drift.
                 .padding(horizontal = 16.dp)
-                .padding(bottom = mainBarClearance() + 72.dp)
+                .padding(bottom = mainBarClearance() + JokeToastLift)
         )
+    }
+}
+
+/**
+ * Keeps the home-screen widgets in sync with the live dashboard counts.
+ *
+ * ## Why it is a composable of its own
+ *
+ * It used to be inlined in [AppNavigation]'s body, and that put a read of the
+ * dashboard state in the app's root composition. `uiState` is replaced on every
+ * recompute - including every character typed into the dashboard's search box -
+ * so each keystroke recomposed the `NavHost`, the main bar and the joke toast to
+ * write widget counts that had not changed. Nothing here draws anything, so the
+ * whole job belongs in a scope of its own.
+ *
+ * ## Why the effect is keyed on the rendered values
+ *
+ * Keyed on the values the widgets actually render, not on the whole state
+ * object: the state instance changes on every keystroke, so keying on it
+ * re-rendered four widgets per character to write numbers that had not changed.
+ * The viewer, the two counts and the top entries are the only inputs.
+ *
+ * The top arriving entry is a key of its own because the tiles render its cover
+ * and title, and its size can be unchanged while the entry at the front of the
+ * list changes - which would otherwise leave the previous poster on the tile.
+ *
+ * The avatar is the activity tile's artwork, so the tile repaints when it changes
+ * even if nothing else about the viewer did.
+ */
+@Composable
+private fun WidgetSync(
+    dashboardFlow: StateFlow<DashboardUiState?>,
+    context: Context
+) {
+    val dashboardState by dashboardFlow.collectAsState()
+    val success = dashboardState as? DashboardUiState.Success
+    val topMissedId = success?.missedSequels?.firstOrNull()?.sequelId
+    val topArrivingId = success?.arriving?.firstOrNull()?.mediaId
+    val avatarUrl = success?.viewer?.avatar?.large ?: success?.viewer?.avatar?.medium
+
+    LaunchedEffect(
+        success?.viewer?.id,
+        success?.viewer?.name,
+        success?.totalMissedCount,
+        success?.arriving?.size,
+        topMissedId,
+        topArrivingId,
+        avatarUrl
+    ) {
+        val current = success ?: return@LaunchedEffect
+        val top = current.missedSequels.firstOrNull()
+        val arriving = current.arriving.firstOrNull()
+        com.anisequel.ui.widget.AniSequelWidgetData.updateData(
+            context = context,
+            missedCount = current.totalMissedCount,
+            arrivingCount = current.arriving.size,
+            username = current.viewer.name,
+            topMissedTitle = top?.sequelTitle,
+            topMissedParent = top?.parentTitle,
+            topMissedCover = top?.sequelCoverUrl,
+            topMissedColor = top?.coverColor,
+            arrivingTitle = arriving?.title,
+            arrivingCover = arriving?.coverUrl,
+            arrivingColor = arriving?.coverColor,
+            activityArt = avatarUrl
+        )
+        com.anisequel.ui.widget.AniSequelWidgetProvider.updateAll(context)
+        com.anisequel.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
+        com.anisequel.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
+        com.anisequel.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
     }
 }
 

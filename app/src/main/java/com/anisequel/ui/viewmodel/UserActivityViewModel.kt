@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ListActivity
-import com.anisequel.data.model.MediaNode
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
@@ -146,31 +145,15 @@ class UserActivityViewModel(
     val likers: StateFlow<LikersState?> = _likers.asStateFlow()
 
     /**
-     * Detail fetched on demand for the entry an activity row opens.
+     * The detail sheet's store is not held here.
      *
-     * Shares [MediaDetailStore] with the dashboard: an activity row's own media
-     * node is a thin summary - title, cover, format, episodes - and the sheet's
-     * query is what fills in the synopsis, ratings and tags.
+     * An activity row's own media node is a thin summary - title, cover, format,
+     * episodes - and the sheet's query is what fills in the synopsis, ratings and
+     * tags. That query used to run through a store of this ViewModel's own, which
+     * meant the same title opened from the profile and from the Library was two
+     * fetches and two caches. The navigation owns the one store and hands it to the
+     * screen; see `MediaDetailHost`.
      */
-    private val detailStore = MediaDetailStore(
-        repository = aniListRepository,
-        scope = viewModelScope,
-        isDemo = isDemo
-    )
-
-    val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
-    val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
-
-    /**
-     * Fetches the heavy fields for one entry, namespaced by media type.
-     *
-     * Namespaced because the id is not enough to name a title: AniList numbers
-     * `anime/` and `manga/` independently, so an untyped fetch resolves against
-     * both and can answer with the wrong one. See [MediaDetailStore.load].
-     */
-    fun loadDetail(mediaId: Int, mediaType: String? = null) {
-        detailStore.load(mediaId, mediaType)
-    }
 
     private var loadJob: Job? = null
     private var nextPage = 1
