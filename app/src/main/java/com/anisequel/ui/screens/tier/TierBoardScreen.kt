@@ -87,6 +87,13 @@ import kotlinx.coroutines.delay
  * It is a sibling of the scrolling column instead, so it stays where it is.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+// One composition root: the scaffold, the scroll, the drag/zoom hosts and every
+// sheet share about twenty hoisted values (viewport, selected tier ids, zoom,
+// filter). Extracting a "content" composable would pass all of them through or
+// widen them to `internal`, which makes the invariants worse - the same trade-off
+// recorded for DashboardViewModel in AGENTS.md. The metric counts one branch per
+// sheet, not tangled logic.
+@Suppress("ComplexMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun TierBoardScreen(
     document: TierListDocument,
@@ -408,14 +415,16 @@ internal fun TierBoardScreen(
             AnimatedContent(
                 targetState = dragHint,
                 transitionSpec = {
-                    (fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                    // Infix `togetherWith` binds looser than `+`, so the two
+                    // enter/exit pairs group without parentheses around each side.
+                    fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
                         initialScale = 0.92f,
                         animationSpec = ExpressiveMotion.FastSpatial
-                    )) togetherWith
-                        (fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                    ) togetherWith
+                        fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
                             targetScale = 0.92f,
                             animationSpec = ExpressiveMotion.FastSpatial
-                        ))
+                        )
                 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
