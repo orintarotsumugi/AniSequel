@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.unseedableCount
@@ -48,15 +47,15 @@ import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.theme.AniSequelTheme
-import kotlin.math.roundToInt
 
 /**
- * The screen's chrome: the header, the notices, the empty state, the legend, and
- * the floating history/zoom toolbar.
+ * The screen's chrome: the header, the notices, the empty states and the legend.
  *
  * The board file is gestures and geometry; these are the things above and below
  * it that say what the board is showing. They were in the screen file, which was
- * doing three jobs at once.
+ * doing three jobs at once. The floating undo/export/zoom toolbar moved to
+ * `TierBoardToolbar.kt` when the lock and export actions pushed this file past
+ * the length one reviewer can hold in a pass.
  */
 
 /**
@@ -340,123 +339,6 @@ internal fun TierBoardNotices(
     }
 }
 
-/** The height of the history/zoom toolbar, shared with the board's bottom inset. */
-internal val TIER_CONTROLS_HEIGHT: Dp = 48.dp
-
-/** The gap between that toolbar and the tray, or the screen edge when there is none. */
-internal val TIER_CONTROLS_GAP: Dp = 12.dp
-
-/**
- * The board's bottom-end toolbar: undo/redo beside the zoom stepper.
- *
- * At the bottom rather than in the app bar for two reasons. A drop is made with a
- * thumb near the bottom of the screen, so the control that takes it back belongs
- * within reach of the hand that made it; and the app bar already carries the
- * list's name, the filter and the tier editor, which is as many 48dp targets as a
- * 360dp bar holds without truncating the one piece of text that says which list
- * you are in.
- *
- * Undo and redo stay drawn when their stacks are empty, disabled rather than
- * hidden: a control that appears and disappears under a thumb is a control that
- * gets pressed by accident the moment it appears.
- */
-@Composable
-internal fun TierHistoryControls(
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(
-            onClick = onUndo,
-            enabled = canUndo,
-            modifier = Modifier.testTag("tier_undo_button")
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Undo,
-                contentDescription = "Undo"
-            )
-        }
-        IconButton(
-            onClick = onRedo,
-            enabled = canRedo,
-            modifier = Modifier.testTag("tier_redo_button")
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Redo,
-                contentDescription = "Redo"
-            )
-        }
-    }
-}
-
-/**
- * The spreadsheet zoom stepper: out, the percentage, in.
- *
- * The percentage is a button as well as a readout, because the common case after
- * pinching to an unreadable zoom is "put it back to normal", and a tap on the
- * number is one gesture rather than counting presses. Pinch still works; this is
- * the discoverable, precise version of the same control.
- */
-@Composable
-internal fun TierZoomControls(
-    zoom: Float,
-    onZoomOut: () -> Unit,
-    onZoomIn: () -> Unit,
-    onResetZoom: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 4.dp)
-            .testTag("tier_zoom_controls"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(
-            onClick = onZoomOut,
-            enabled = zoom > TIER_MIN_ZOOM,
-            modifier = Modifier.testTag("tier_zoom_out")
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.StepDown,
-                contentDescription = "Zoom out"
-            )
-        }
-        TextButton(
-            onClick = onResetZoom,
-            modifier = Modifier
-                .defaultMinSize(minWidth = 56.dp, minHeight = 48.dp)
-                .testTag("tier_zoom_reset")
-        ) {
-            Text(
-                text = "${(zoom * 100).roundToInt()}%",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        IconButton(
-            onClick = onZoomIn,
-            enabled = zoom < TIER_MAX_ZOOM,
-            modifier = Modifier.testTag("tier_zoom_in")
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.StepUp,
-                contentDescription = "Zoom in"
-            )
-        }
-    }
-}
-
 /**
  * The board when every ranked title is hidden by the current filters.
  *
@@ -621,7 +503,7 @@ internal fun TierEmptyState(
  * takes a title out of the list.
  */
 @Composable
-internal fun TierBoardLegend() {
+internal fun TierBoardLegend(dragLocked: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -639,8 +521,13 @@ internal fun TierBoardLegend() {
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "Hold a cover to move it, and drop it between two others to place " +
-                "it exactly. Pinch to zoom. Release off the rows to take it out.",
+            text = if (dragLocked) {
+                "Board locked: pinch to zoom and scroll without moving covers. " +
+                    "Unlock from the zoom controls to drag again."
+            } else {
+                "Hold a cover to move it, and drop it between two others to place " +
+                    "it exactly. Pinch to zoom. Release off the rows to take it out."
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)

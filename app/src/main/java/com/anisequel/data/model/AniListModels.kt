@@ -334,10 +334,12 @@ data class MediaNode(
     /**
      * Overlay of the lazily-fetched detail onto this node.
      *
-     * The list query deliberately leaves `description`, `bannerImage` and
-     * `studios` unset, so those arrive later in a much smaller response. Null
-     * fields in [detail] must not erase what the list query already found -
-     * that is what this merge is for.
+     * The list query deliberately leaves `description` and `bannerImage` unset,
+     * so those arrive later in a much smaller response. It now asks for
+     * `studios` as well, because the tier board's studio filter reads a credit
+     * from every entry; the detail answer is still the richer one and wins when
+     * it has an edge list. Null fields in [detail] must not erase what the list
+     * query already found - that is what this merge is for.
      */
     fun withDetail(detail: MediaNode): MediaNode = copy(
         // Carried, not ignored. The detail query did not select `title` at all until

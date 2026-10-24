@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -107,5 +108,57 @@ class ApiStatusProbeTest {
 
         assertEquals(ApiReachability.UNKNOWN, probe.ui.value.reachability)
         assertFalse("the strip was left checking forever", probe.ui.value.isChecking)
+    }
+
+    /**
+     * A thrown check has to be *visible*, not merely survivable.
+     *
+     * The catch above stopped the crash, but a probe that threw was then
+     * indistinguishable from one that had not finished - the dialog said "the
+     * question has not been answered yet" and the reader tapped Check again with
+     * no idea the check itself was what failed. The count is what the dialog's
+     * toast keys on, so a retry that fails the same way must still count as a new
+     * failure rather than being swallowed as "same message as last time".
+     */
+    @Test
+    fun `every thrown check is counted so the dialog can say so again`() = runTest {
+        val probe = ApiStatusProbeState(
+            requestStatus = { error("the socket closed under us") },
+            scope = backgroundScope
+        )
+
+        probe.probe()
+        runCurrent()
+        assertEquals(1, probe.ui.value.failureCount)
+        assertEquals("the socket closed under us", probe.ui.value.failureMessage)
+
+        probe.probe()
+        runCurrent()
+        assertEquals("a retry that failed the same way was not counted", 2, probe.ui.value.failureCount)
+        assertEquals(ApiReachability.UNKNOWN, probe.ui.value.reachability)
+        assertFalse(probe.ui.value.isChecking)
+    }
+
+    @Test
+    fun `a check that answers clears the failure and keeps the count`() = runTest {
+        var answer: Result<ApiStatusSnapshot> = Result.failure(IllegalStateException("boom"))
+        val probe = ApiStatusProbeState(
+            requestStatus = { answer.getOrThrow() },
+            scope = backgroundScope
+        )
+
+        probe.probe()
+        runCurrent()
+        assertEquals(1, probe.ui.value.failureCount)
+
+        answer = Result.success(ApiStatusSnapshot(ApiReachability.ONLINE, latencyMillis = 42L))
+        probe.probe()
+        runCurrent()
+
+        assertEquals(ApiReachability.ONLINE, probe.ui.value.reachability)
+        assertNull("a successful check still carried the old failure", probe.ui.value.failureMessage)
+        // Monotonic: winding the count back would make the next failure look like
+        // the first one and the dialog would stay silent.
+        assertEquals(1, probe.ui.value.failureCount)
     }
 }

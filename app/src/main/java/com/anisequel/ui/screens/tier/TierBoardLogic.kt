@@ -47,19 +47,39 @@ import com.anisequel.domain.tier.TierRowBox
 internal fun tierRowColor(colorArgb: Long): Color =
     Color((colorArgb.toULong() and 0xFFFFFFFFUL) shl 32)
 
-/** Below this the captions stop being readable; above it a row holds one tile. */
-internal const val TIER_MIN_ZOOM = 0.75f
+/**
+ * Below this the captions stop being readable; above it a row holds one tile.
+ *
+ * The floor used to be 0.75, which made "whole list at a glance" impossible: a
+ * 300-title board was still dozens of screens tall. It is 0.35 now - roughly
+ * eleven tiles across a 360dp phone - and [TIER_CAPTION_MIN_ZOOM] is the
+ * separate decision about when captions stop being drawn. The two are not the
+ * same number on purpose: the board is still useful as a wall of covers well
+ * below the size at which a caption can be read.
+ */
+internal const val TIER_MIN_ZOOM = 0.35f
 internal const val TIER_MAX_ZOOM = 2.0f
+
+/**
+ * At or above this, tiles are big enough to carry a caption or a score badge.
+ *
+ * Below it the tile is under ~44dp wide, and the unscaled 11sp caption - which
+ * does not shrink with the board because text has its own minimum legible size -
+ * would either spill outside the tile or be clipped by the caption band. The
+ * band is removed at the same threshold in `TierBoard`, so the rows close up
+ * instead of leaving an empty strip under every cover.
+ */
+internal const val TIER_CAPTION_MIN_ZOOM = 0.6f
 
 /**
  * One press of the board's zoom buttons.
  *
- * A quarter rather than a tenth: the range is 1.25 wide, so a tenth would need
- * ten presses to cross it and the percentage readout would be the only thing
- * moving. Four presses go from end to end, and a pinch still gives every value in
- * between.
+ * A fifth rather than a quarter: the range grew from 1.25 wide (0.75-2) to 1.65
+ * (0.35-2), so a quarter would make the smallest steps coarser just as the range
+ * made them more useful. Five presses cross from 100% to the floor, and a pinch
+ * still gives every value in between.
  */
-internal const val TIER_ZOOM_STEP = 0.25f
+internal const val TIER_ZOOM_STEP = 0.2f
 
 /**
  * Constrains a pinch to the range the board can actually render at.

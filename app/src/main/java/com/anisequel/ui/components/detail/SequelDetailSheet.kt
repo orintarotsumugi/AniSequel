@@ -236,11 +236,13 @@ fun SequelDetailSheet(
         // glow around this sheet: it is persisted as a custom hue so the whole
         // app - and the next launch - keeps it. There is an exit hatch: picking a
         // palette or a hue in the Theme tab clears it, as does Reset appearance.
-        themePreferences.setAnimeThemeActive(
-            active = true,
-            colorHex = colorHex,
-            retainColor = themeSettings.animeThemeRetainColor
-        )
+        themeWrite {
+            themePreferences.setAnimeThemeActive(
+                active = true,
+                colorHex = colorHex,
+                retainColor = themeSettings.animeThemeRetainColor
+            )
+        }
     }
 
     // The revert timer starts when the sheet is *closed*, not while it is open.
@@ -253,13 +255,15 @@ fun SequelDetailSheet(
             // Retain owns the colour: the sheet closing must not switch off the
             // layer that is deliberately being kept. The immediate-revert branch
             // used to ignore this and ended a retained colour on every close.
-            if (!themeSettings.animeThemeRetainColor) {
-                if (themeSettings.animeThemeRevertDuration == 0) {
-                    themePreferences.setAnimeThemeActive(false, null)
-                } else {
-                    themePreferences.scheduleAnimeThemeRevert(
-                        themeSettings.animeThemeRevertDuration
-                    )
+            themeWrite {
+                if (!themeSettings.animeThemeRetainColor) {
+                    if (themeSettings.animeThemeRevertDuration == 0) {
+                        themePreferences.setAnimeThemeActive(false, null)
+                    } else {
+                        themePreferences.scheduleAnimeThemeRevert(
+                            themeSettings.animeThemeRevertDuration
+                        )
+                    }
                 }
             }
         }
@@ -363,5 +367,30 @@ fun SequelDetailSheet(
                 )
             }
         }
+    }
+}
+
+/**
+ * A theme write, where a failure is cosmetic rather than a screen.
+ *
+ * Opening a title writes the cover's colour into the theme preferences, and
+ * closing it schedules the revert. Both are `DataStore` round trips inside a
+ * coroutine the sheet owns - and a `DataStore` write answers a full disk or a
+ * corrupted file by *throwing*. An uncaught throw there does not fail the colour;
+ * it kills the coroutine, reaches the thread's handler and closes the app, which
+ * was the reported force-stop on opening a title. The accent is not worth that:
+ * a colour that could not be saved leaves the app looking like it did before the
+ * sheet opened, which is a quiet, survivable outcome.
+ *
+ * Cancellation is rethrown: it means the sheet is gone, not that the write
+ * failed.
+ */
+private suspend fun themeWrite(block: suspend () -> Unit) {
+    try {
+        block()
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        // Deliberately swallowed: see above.
     }
 }

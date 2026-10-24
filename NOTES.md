@@ -506,16 +506,27 @@ to 9dp a frame, scaled by how close the finger is, and the ghost is translated b
 how far the board has moved since the tile was picked up — without that half, the
 tile slides out from under the finger exactly when the drag is longest.
 
-One layout is computed and intended for several renderers, rather than each
-arranging the list for itself — three independent arrangements is how an export
-ends up with the labels in a different order from the screen it came from.
+One layout is computed and read by every renderer — Compose, the PNG exporter and
+the SVG writer — rather than each arranging the list for itself. Independent
+arrangements are how an export ends up with the labels in a different order from
+the screen it came from, and the bug is invisible because the exported file
+looks fine.
 
-Export is **SVG**, and it is lossless rather than a screenshot: every glyph is
-still text and every rule is still a rectangle, so the file is sharp at any size.
-Posters are embedded as base64 rather than linked, which costs roughly 40-60KB
-each and buys a file that opens correctly in every viewer and every app it is
-shared into — a linked poster is blocked or skipped often enough that a tier list
-would otherwise arrive as a wall of empty tiles.
+The board's shareable export is a **PNG**, rendered from that same layout at a
+fixed 1080-unit width. It is not a screenshot: a screenshot is the viewport by
+definition, so a 300-title board would be forty of them at whatever zoom the
+person last used. Posters are fetched through Coil at the tile's export size; one
+that fails is a filled tile with a readable caption rather than a failed export.
+The bitmap is capped by pixels rather than title count, so an unusually tall
+board is rendered slightly soft instead of throwing `OutOfMemoryError`. The
+board's zoom is deliberately not the export scale: 35% is a useful way to look at
+the board, not a useful resolution to share.
+
+`domain/tier/TierListSvg.kt` remains the lossless vector writer — every glyph is
+still text and every rule is still a rectangle, and posters are embedded as
+base64 rather than linked. It is kept as the renderer `TierListTest` can assert
+on without a device, and as the route to a printable export; the app's share
+sheet uses PNG because every messaging app accepts it.
 
 ---
 

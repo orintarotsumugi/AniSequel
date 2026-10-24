@@ -35,11 +35,13 @@ import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
@@ -153,6 +155,8 @@ object AppVectorIcons {
     val StepUp = Icons.Default.Add
     val StepDown = Icons.Default.Remove
     val Privacy = Icons.Default.Lock
+    val LockOpen = Icons.Default.LockOpen
+    val Export = Icons.Default.Image
     val EditEntry = Icons.Default.Edit
 
     // The profile screen's four destinations. Every one is named for what the
