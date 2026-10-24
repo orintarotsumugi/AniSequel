@@ -165,10 +165,28 @@ class MediaDetailStore(
         _loading.value = _loading.value + mediaId
         scope.launch {
             try {
-                repository.getMediaDetail(mediaId, mediaType).onSuccess { detail ->
+                // A repository that throws rather than returning a classified
+                // failure used to escape this launch: the `finally` below ran,
+                // and then the exception reached the thread's handler and closed
+                // the app *while the detail sheet was opening*. `repositoryResult`
+                // turns it into the failure this code already swallows, which is
+                // the behaviour the sheet was designed around - it keeps drawing
+                // the summary it already had.
+                repositoryResult {
+                    repository.getMediaDetail(mediaId, mediaType)
+                }.onSuccess { detail ->
                     cache[key] = detail
                     publish(mediaId, detail)
-                    onLoaded?.invoke(mediaId, detail)
+                    // The host's fold is a callback, and `onSuccess` rethrows
+                    // anything its lambda throws - so a listener that fails would
+                    // still have taken the fetch, and the launch, with it. The
+                    // detail is already published at this point; what the host
+                    // does with it is its own problem.
+                    try {
+                        onLoaded?.invoke(mediaId, detail)
+                    } catch (_: Exception) {
+                        // Deliberately swallowed: see above.
+                    }
                 }
                 // A failed detail load is not worth interrupting the user over:
                 // the sheet shows what the summary query already had.

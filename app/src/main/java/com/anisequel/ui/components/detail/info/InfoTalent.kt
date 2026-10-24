@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -92,7 +92,15 @@ fun InfoCharactersSection(
             contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items = cast, key = { edge -> "cast_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
+            // The id is the card's identity, but it is not guaranteed unique in
+            // the payload: a character can be credited twice (two voice tracks,
+            // one role), and a repeated `LazyRow` key is a hard
+            // `IllegalArgumentException` - the app closed while the title page was
+            // opening. The position only disambiguates; it changes nothing drawn.
+            itemsIndexed(
+                items = cast,
+                key = { index, edge -> "cast_${edge.node?.id ?: "row"}#$index" }
+            ) { _, edge ->
                 CharacterCard(edge = edge, onOpen = onOpenCharacter)
             }
         }
@@ -301,7 +309,10 @@ fun InfoStaffSection(
             contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items = crew, key = { edge -> "staff_${edge.node?.id ?: edge.hashCode()}" }) { edge ->
+            itemsIndexed(
+                items = crew,
+                key = { index, edge -> "staff_${edge.node?.id ?: "row"}#$index" }
+            ) { _, edge ->
                 StaffCard(edge = edge, onOpen = onOpenStaff)
             }
         }
@@ -415,7 +426,10 @@ fun InfoRelationsSection(
             contentPadding = PaddingValues(horizontal = PAGE_INSET),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items = related, key = { edge -> "relation_${edge.node.id}" }) { edge ->
+            itemsIndexed(
+                items = related,
+                key = { index, edge -> "relation_${edge.node.id}#$index" }
+            ) { _, edge ->
                 RelationCard(subject = media, edge = edge, onOpen = onOpen)
             }
         }

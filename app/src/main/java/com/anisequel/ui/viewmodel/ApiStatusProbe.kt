@@ -29,7 +29,26 @@ import kotlinx.coroutines.launch
 data class ApiStatusUi(
     val reachability: ApiReachability = ApiReachability.UNKNOWN,
     val latencyMillis: Long? = null,
-    val isChecking: Boolean = false
+    val isChecking: Boolean = false,
+    /**
+     * Why the last check produced no verdict, or null when it produced one.
+     *
+     * A repository normally classifies its own failures into a
+     * [ApiStatusSnapshot]; this is the other half - the request threw instead of
+     * answering - and the dialog turns it into a toast. The probe still reports
+     * [ApiReachability.UNKNOWN] because that is the truth: the question was not
+     * answered, and claiming "offline" would be inventing an answer.
+     */
+    val failureMessage: String? = null,
+    /**
+     * How many checks have thrown, ever.
+     *
+     * The toast is keyed on a count rather than on [failureMessage] because two
+     * failed checks in a row usually fail with the *same* message, and an effect
+     * keyed on an unchanged string would show the first toast and silently skip
+     * the retry the reader just asked for.
+     */
+    val failureCount: Int = 0
 )
 
 /**
@@ -88,7 +107,18 @@ class ApiStatusProbeState internal constructor(
         inFlight = null
         // The old failure's queued tap belongs to the old failure's question.
         pendingProbe = false
-        _ui.value = ApiStatusUi(reachability = kind.toReachability())
+        // `copy` rather than a fresh `ApiStatusUi`: `failureCount` is monotonic by
+        // contract (the dialog's toast is keyed on it), and replacing the whole
+        // value reset it to zero, so a failure after an automatic probe looked
+        // like the first one again.
+        _ui.update { previous ->
+            previous.copy(
+                reachability = kind.toReachability(),
+                latencyMillis = null,
+                isChecking = false,
+                failureMessage = null
+            )
+        }
         if (kind == null || kind.isWorthProbing()) {
             probe()
         }
@@ -111,7 +141,8 @@ class ApiStatusProbeState internal constructor(
                 // Cleared before the request so a tap that arrives *during* it is
                 // seen by the check at the bottom of the loop.
                 pendingProbe = false
-                _ui.update { it.copy(isChecking = true) }
+                _ui.update { it.copy(isChecking = true, failureMessage = null) }
+                var failureMessage: String? = null
                 val snapshot = try {
                     requestStatus()
                 } catch (cancellation: kotlinx.coroutines.CancellationException) {
@@ -122,14 +153,25 @@ class ApiStatusProbeState internal constructor(
                     // The repository is expected to classify its own failures, but
                     // an exception escaping here used to leave `isChecking` true
                     // forever *and* crash the scope it was launched in. The honest
-                    // answer is the same one an unfinished check gets: no verdict.
+                    // answer is the same one an unfinished check gets: no verdict -
+                    // and the message is kept so the dialog can say, in a toast,
+                    // that the check itself is what failed.
+                    failureMessage = unexpected.message
                     ApiStatusSnapshot(ApiReachability.UNKNOWN)
                 }
-                _ui.value = ApiStatusUi(
-                    reachability = snapshot.reachability,
-                    latencyMillis = snapshot.latencyMillis,
-                    isChecking = false
-                )
+                _ui.update { previous ->
+                    ApiStatusUi(
+                        reachability = snapshot.reachability,
+                        latencyMillis = snapshot.latencyMillis,
+                        isChecking = false,
+                        failureMessage = failureMessage,
+                        failureCount = if (failureMessage == null) {
+                            previous.failureCount
+                        } else {
+                            previous.failureCount + 1
+                        }
+                    )
+                }
             } while (pendingProbe)
         }
     }

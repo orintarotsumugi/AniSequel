@@ -142,7 +142,11 @@ class CommentThreadStore(
             val result = if (isDemo) {
                 Result.success(emptyList())
             } else {
-                repository.getActivityReplies(activityId)
+                // `repositoryResult`, not a bare call: a repository that throws
+                // instead of answering returns a failure here, which this fold
+                // draws as the thread's error row. A bare call left the throw to
+                // the coroutine, and the coroutine took the app with it.
+                repositoryResult { repository.getActivityReplies(activityId) }
             }
             // Discard a response for a thread the user has already closed or
             // replaced: the state is only written if it is still this thread.
@@ -186,7 +190,7 @@ class CommentThreadStore(
         _state.value = current.copy(isPosting = true, postError = null)
 
         scope.launch {
-            repository.postActivityReply(activityId, trimmed).fold(
+            repositoryResult { repository.postActivityReply(activityId, trimmed) }.fold(
                 onSuccess = { reply ->
                     val latest = _state.value?.takeIf { it.activityId == activityId } ?: return@fold
                     _state.value = latest.copy(
@@ -249,7 +253,7 @@ class CommentThreadStore(
         write(optimistic, current.pendingReplyLikes + replyId)
 
         scope.launch {
-            repository.toggleActivityReplyLike(replyId).fold(
+            repositoryResult { repository.toggleActivityReplyLike(replyId) }.fold(
                 onSuccess = { result ->
                     write(
                         optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
@@ -327,7 +331,9 @@ class CommentThreadStore(
         _state.value = current.copy(action = action.copy(isBusy = true, error = null))
 
         scope.launch {
-            repository.editActivityReply(reply.id, current.activityId, text).fold(
+            repositoryResult {
+                repository.editActivityReply(reply.id, current.activityId, text)
+            }.fold(
                 onSuccess = { updated ->
                     // The same guard every other write on this thread uses: the
                     // sheet may have been closed or replaced while the request was
@@ -373,7 +379,7 @@ class CommentThreadStore(
         _state.value = current.copy(action = action.copy(isBusy = true, error = null))
 
         scope.launch {
-            repository.deleteActivityReply(reply.id).fold(
+            repositoryResult { repository.deleteActivityReply(reply.id) }.fold(
                 onSuccess = {
                     val latest = _state.value?.takeIf { it.activityId == current.activityId }
                         ?: return@fold

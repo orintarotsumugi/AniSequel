@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -98,7 +98,17 @@ fun InfoThemeSongsSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(items = themes, key = { it.label }) { theme ->
+            // The label is the card's identity *unless* the service answers two
+            // themes with the same one - an OP whose slug is shared, or two
+            // entries with no slug and no sequence, both of which fall back to
+            // `OP`. A repeated key is not a doubled row: Compose throws
+            // `Key "..." was already used`, and the sheet that was opening the
+            // title closes the app instead. The position disambiguates without
+            // affecting anything visible, and the row is static per title.
+            itemsIndexed(
+                items = themes,
+                key = { index, theme -> "theme_${theme.label}#$index" }
+            ) { _, theme ->
                 ThemeSongCard(theme = theme)
             }
         }
