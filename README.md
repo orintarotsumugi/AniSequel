@@ -41,7 +41,8 @@ middleman server.
 - **Material 3 Expressive throughout.** Spring physics, a blurred key visual
   behind every title, and a Material You theme seeded from the cover art itself.
 - **A tier list, local and shareable.** Saved as projects, dragged positionally,
-  exported as a lossless SVG with its posters embedded.
+  filtered by genre and studio, and exported as one full-board PNG that can be
+  shared or saved to Pictures (with a lossless SVG renderer behind it).
 - **Four home-screen widgets.** Recent activity, missed sequels, arriving
   sequels, and one featured recommendation.
 - **A real updater.** Resumable download, verified signature, cached APK across

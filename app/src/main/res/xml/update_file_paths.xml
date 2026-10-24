@@ -1,36 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Only the update downloads are exposed.
+    The app's two shareable directories, and nothing else.
 
     A FileProvider that was given a broad path - "everything under the app's
     own files" - would let any app that could name our authority read the
-    user's downloaded releases. This exposes one subdirectory of the app's
-    private storage, and it holds nothing but APKs this app downloaded from the
-    project's own GitHub releases.
+    user's downloaded releases or exported boards. These are the two
+    subdirectories that are handed to another app on purpose:
 
-    `files-path`, not `cache-path`, and this line is load-bearing in a way that
-    is invisible until it is wrong.
+    `files-path/updates`
+    A downloaded APK. `files-path`, not `cache-path`, and this line is
+    load-bearing in a way that is invisible until it is wrong: the cache is the
+    one Android is free to empty whenever it likes, and a downloaded APK must
+    outlive the trip to Settings where the user grants the install permission -
+    so #61 moved these downloads into the app's private files storage. This
+    entry did not follow them: the provider was still publishing an empty
+    directory under the cache. Nothing reports that at build time.
+    `FileProvider.getUriForFile` throws at *runtime*, on the downloaded APK, the
+    first time the user presses Install; `openInstaller` swallows the throw and
+    reports that nothing opened; and the updater says "This device has no app
+    installer" on a phone with a perfectly working package installer. Every
+    update on every device failed that way, and the download itself was fine.
 
-    The two name different directories. The cache is the one Android is free to
-    empty whenever it likes, and a downloaded APK must outlive the trip to
-    Settings where the user grants the install permission - so #61 moved these
-    downloads into the app's private files storage. This entry did not follow
-    them: the provider was still publishing an empty directory under the cache.
+    `cache-path/exports`
+    A PNG rendered by the tier board's exporter. The opposite trade-off on
+    purpose: the file exists for one share-chooser round trip, and the system is
+    welcome to evict it afterwards. It is written to `cacheDir/exports`, which is
+    exactly what this root publishes. Moving either half without the other fails
+    at the same final step - the chooser receives no URI - so the two are one
+    contract just as the update pair is.
 
-    Nothing reports that at build time. `FileProvider.getUriForFile` throws at
-    *runtime*, on the downloaded APK, the first time the user presses Install;
-    `openInstaller` swallows the throw and reports that nothing opened; and the
-    updater says "This device has no app installer" - on a phone with a
-    perfectly working package installer, where the user is told to report a bug
-    against a device that does not exist. Every update on every device failed
-    that way, and the download itself was fine.
-
-    `UpdateFileProviderPathsTest` reads this file and compares it with the
-    directory `UpdateManager` actually writes to, so the two cannot drift apart
-    again without a test going red.
+    `UpdateFileProviderPathsTest` reads this file and compares the update root
+    with the directory `UpdateManager` actually writes to, so those two cannot
+    drift apart again without a test going red.
 -->
 <paths>
     <files-path
         name="updates"
         path="updates/" />
+    <cache-path
+        name="exports"
+        path="exports/" />
 </paths>

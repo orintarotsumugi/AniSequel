@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.MediaListEntryItem
+import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.StoredTierLibrary
 import com.anisequel.data.repository.TierListPreferences
@@ -223,7 +224,23 @@ class TierListViewModel(
                 // viewer put it, `media.status` is whether it is still airing.
                 // The filter asks about both and they are not interchangeable.
                 listStatus = entry.status,
-                airingStatus = media.status
+                airingStatus = media.status,
+                // Empty rather than null on both: a list snapshot written before
+                // the query asked for these fields has neither, and the filter is
+                // the reader that must not crash on an older cache.
+                genres = media.genres.orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct(),
+                // Main animation studios only. `studioCredits` already falls back
+                // to the flat `nodes` shape for payloads that carry no edges, and
+                // marks those main, which is what keeps an old list response
+                // filterable instead of silently studio-less.
+                studios = media.studioCredits
+                    .filter { it.isMain }
+                    .map { it.name.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
             )
         }
     }

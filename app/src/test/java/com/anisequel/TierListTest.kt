@@ -4,10 +4,12 @@ import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
+import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListSvg
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.domain.tier.seedFromScores
+import com.anisequel.domain.tier.studioFacetOptions
 import com.anisequel.domain.tier.unseedableCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -375,5 +377,97 @@ class TierListTest {
         if (viewBox != null) {
             assertFalse("viewBox carries a locale comma: $viewBox", viewBox.contains(","))
         }
+    }
+
+    // ---- Genre and studio filters ------------------------------------------
+
+    @Test
+    fun `a genre filter keeps the union of the selected genres`() {
+        val action = TierCandidate(mediaId = 1, title = "Action", genres = listOf("Action"))
+        val comedy = TierCandidate(mediaId = 2, title = "Comedy", genres = listOf("Comedy"))
+        val both = TierCandidate(
+            mediaId = 3,
+            title = "Both",
+            genres = listOf("Action", "Comedy")
+        )
+
+        val comedyOnly = TierFilter.Default.copy(genres = setOf("Comedy"))
+        assertFalse(comedyOnly.allows(action))
+        assertTrue(comedyOnly.allows(comedy))
+        assertTrue(comedyOnly.allows(both))
+
+        val either = comedyOnly.copy(genres = setOf("Action", "Comedy"))
+        assertTrue(either.allows(action))
+        assertTrue(either.allows(comedy))
+    }
+
+    @Test
+    fun `a title with no genres only passes when no genre is selected`() {
+        val unknown = TierCandidate(mediaId = 1, title = "Unknown")
+
+        assertTrue(TierFilter.Default.allows(unknown))
+        assertFalse(TierFilter.Default.copy(genres = setOf("Action")).allows(unknown))
+    }
+
+    @Test
+    fun `the studio filter is off by default and ignores a stored selection`() {
+        val mappa = TierCandidate(mediaId = 1, title = "Mappa", studios = listOf("MAPPA"))
+        val filter = TierFilter.Default.copy(studios = setOf("Bones"))
+
+        // Off is the default, and a selection made while the section was open
+        // must not keep filtering after it is switched off.
+        assertFalse(filter.studiosEnabled)
+        assertTrue(filter.allows(mappa))
+
+        val enabled = filter.withStudiosEnabled(true)
+        assertFalse(enabled.allows(mappa))
+        assertTrue(enabled.copy(studios = setOf("MAPPA")).allows(mappa))
+    }
+
+    @Test
+    fun `studio options are ordered by how many titles each studio made`() {
+        val options = studioFacetOptions(
+            listOf(
+                TierCandidate(mediaId = 1, title = "One", studios = listOf("Bones")),
+                TierCandidate(mediaId = 2, title = "Two", studios = listOf("MAPPA")),
+                TierCandidate(mediaId = 3, title = "Three", studios = listOf("MAPPA")),
+                TierCandidate(mediaId = 4, title = "Four", studios = listOf(" MAPPA "))
+            )
+        )
+
+        assertEquals(listOf("MAPPA", "Bones"), options.map { it.value })
+        assertEquals(3, options.first().count)
+        assertEquals("MAPPA", options.first().label)
+    }
+
+    @Test
+    fun `a genre or studio listed twice on one title is counted once`() {
+        val options = studioFacetOptions(
+            listOf(
+                TierCandidate(
+                    mediaId = 1,
+                    title = "Duplicated",
+                    studios = listOf("MAPPA", "MAPPA")
+                )
+            )
+        )
+
+        assertEquals(1, options.single().count)
+    }
+
+    @Test
+    fun `show everything clears genre and studio choices`() {
+        val filtered = TierFilter.Default
+            .withGenre("Action", true)
+            .withStudio("MAPPA", true)
+            .withStudiosEnabled(true)
+
+        val everything = TierFilter.ShowEverything
+        assertTrue(everything.genres.isEmpty())
+        assertTrue(everything.studios.isEmpty())
+        assertFalse(everything.studiosEnabled)
+        assertFalse(everything.isDefault)
+        assertTrue(everything.hiddenListStatuses.isEmpty())
+        assertTrue(filtered.genres.isNotEmpty())
     }
 }
