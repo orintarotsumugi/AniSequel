@@ -7,7 +7,9 @@ import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierListDocument
+import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
+import com.anisequel.domain.tier.TIER_SEARCH_MAX_LENGTH
 import com.anisequel.domain.tier.decodeDisplay
 import com.anisequel.domain.tier.decodeTierListDocument
 import com.anisequel.domain.tier.decodeTiers
@@ -17,6 +19,7 @@ import com.anisequel.domain.tier.encodeTiers
 import com.anisequel.domain.tier.onlyFor
 import com.anisequel.domain.tier.scoreFloorsOf
 import com.anisequel.domain.tier.seedFromScores
+import com.anisequel.domain.tier.tierCaption
 import com.anisequel.domain.tier.tierTileCornerRadius
 import com.anisequel.ui.screens.tier.TIER_EXPORT_WIDTH_STANDARD
 import com.anisequel.ui.screens.tier.TIER_EXPORT_WIDTH_ULTRA
@@ -109,6 +112,74 @@ class TierBoardRedesignTest {
                 .withListStatusHidden("COMPLETED", false)
                 .withAiringStatusHidden("RELEASING", false)
                 .isDefault
+        )
+    }
+
+    // ---- The name search ---------------------------------------------------
+
+    @Test
+    fun `the name search matches title words in any order and any case`() {
+        // A literal substring search cannot find "Attack on Titan" from "attack
+        // titan", which is how people type two-word titles. Every token has to
+        // appear somewhere, in any order.
+        val titan = TierCandidate(mediaId = 1, title = "Attack on Titan")
+
+        assertTrue(TierFilter.Default.withQuery("TITAN attack").allows(titan))
+        assertFalse(TierFilter.Default.withQuery("bocchi").allows(titan))
+    }
+
+    @Test
+    fun `the name search reads romaji and native names as well as the caption`() {
+        // The caption is the English name; somebody who knows the romaji should
+        // still find the poster. These names are never drawn, only searched.
+        val titan = TierCandidate(
+            mediaId = 1,
+            title = "Attack on Titan",
+            alternativeTitles = listOf("Shingeki no Kyojin", "進撃の巨人")
+        )
+
+        assertTrue(TierFilter.Default.withQuery("shingeki").allows(titan))
+        assertTrue(TierFilter.Default.withQuery("進撃").allows(titan))
+    }
+
+    @Test
+    fun `a trailing space survives the field so a second word can be typed`() {
+        // Trimming on every keystroke made "attack titan" impossible to type: the
+        // space vanished before the next letter arrived. The matcher normalises
+        // the value; the field keeps it as typed.
+        assertEquals("attack ", TierFilter.Default.withQuery("attack ").query)
+    }
+
+    @Test
+    fun `a search is active state and clearing it restores the default`() {
+        val searching = TierFilter.Default.withQuery("titan")
+
+        assertFalse(searching.isDefault)
+        assertTrue(searching.hasQuery)
+        assertTrue(searching.withQuery("").isDefault)
+        // Whitespace is not a search, so it must not light the filter dot either.
+        assertTrue(TierFilter.Default.withQuery("   ").isDefault)
+    }
+
+    @Test
+    fun `a pasted paragraph cannot become an unbounded filter`() {
+        assertEquals(
+            TIER_SEARCH_MAX_LENGTH,
+            TierFilter.Default.withQuery("x".repeat(TIER_SEARCH_MAX_LENGTH * 3)).query.length
+        )
+    }
+
+    @Test
+    fun `show everything is a fresh filter, so it clears the name search`() {
+        // The button hands the board a new `ShowEverything`, not a copy of the
+        // current filter with its statuses removed. If the query lived anywhere
+        // else - a saved field, a remembered value in the sheet - this is the
+        // assertion that would fail rather than the button silently keeping it.
+        assertTrue(TierFilter.ShowEverything.query.isEmpty())
+        assertFalse(TierFilter.ShowEverything.hasQuery)
+        assertTrue(
+            "show everything must put planning back on the board",
+            TierFilter.ShowEverything.allows(candidate(1, listStatus = "PLANNING"))
         )
     }
 
@@ -232,6 +303,32 @@ class TierBoardRedesignTest {
         )
         assertFalse(TierDisplay(showTitles = false).hasCaptionBand)
         assertTrue(TierDisplay().hasCaptionBand)
+    }
+
+    @Test
+    fun `a title length survives a round trip`() {
+        val display = TierDisplay(titleLength = TierTitleLength.SHORT)
+
+        assertEquals(display, decodeDisplay(encodeDisplay(display)))
+    }
+
+    @Test
+    fun `a display line written before lengths existed reads as the standard one`() {
+        // Three fields: show, position, zoom. The fourth is absent, not corrupt,
+        // so the board must open exactly as that build left it.
+        assertEquals(TierTitleLength.STANDARD, decodeDisplay("1,ON_COVER,1.5").titleLength)
+        assertEquals(TierTitleLength.STANDARD, decodeDisplay("1,UNDER_COVER,1,not-a-length").titleLength)
+    }
+
+    @Test
+    fun `a caption is cut to the length the board chose`() {
+        val long = "That Time I Got Reincarnated as a Slime"
+
+        assertEquals(14, tierCaption(long, TierTitleLength.SHORT).length)
+        assertTrue(tierCaption(long, TierTitleLength.SHORT).endsWith("…"))
+        assertEquals(long, tierCaption(long, TierTitleLength.FULL))
+        // A short name is left alone rather than padded to the cap.
+        assertEquals("Bocchi", tierCaption("Bocchi", TierTitleLength.SHORT))
     }
 
     @Test

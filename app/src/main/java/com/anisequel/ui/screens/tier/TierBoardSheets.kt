@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TierColorPalette
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
+import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import kotlin.math.roundToInt
@@ -147,6 +148,41 @@ internal fun TierDisplaySheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "Name length",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                // The length is shared by the three renderers rather than being
+                // a screen-only preference: an export that cut names differently
+                // from the board it came from was the divergence this closes.
+                text = "How much of each name a caption shows, on the board and in " +
+                    "the exported image.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TierTitleLength.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.label,
+                        selected = display.titleLength == option,
+                        onClick = {
+                            onDisplayChange(display.copy(titleLength = option))
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .testTag("tier_title_length_${option.name}"),
+                        minTouchTargetHeight = 48.dp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(18.dp))

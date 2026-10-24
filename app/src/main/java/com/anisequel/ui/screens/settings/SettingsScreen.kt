@@ -7,54 +7,91 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.model.ViewerProfile
-import com.anisequel.data.repository.AppLockPreferences
-import com.anisequel.data.repository.ArrivingPreferences
-import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.repository.AppLockPreferences
+import com.anisequel.data.repository.ArrivingPreferences
+import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.QuickAddPreferences
+import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveTabBar
-import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.screens.settings.EditSettingsTab
-import com.anisequel.ui.screens.settings.InfoSettingsTab
-import com.anisequel.ui.screens.settings.ThemeTab
 import com.anisequel.ui.viewmodel.AuthViewModel
+import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The pages behind the Settings hub.
+ *
+ * They are an enum rather than a nested navigation graph because they are not
+ * destinations a link or a back stack should be able to reach on their own: the
+ * hub is the only entrance, and `BackHandler` stepping out of a page is the whole
+ * navigation contract.
+ */
+private enum class SettingsPage(val title: String, val subtitle: String) {
+    APPEARANCE("Appearance", "Colour, background and motion"),
+    JOKES("Jokes", "Ani-chan's timing and placement"),
+    LIBRARY("Library & dashboard", "Refresh, arriving rows and quick add"),
+    ACCOUNT("AniList account", "Client ID, session and app lock"),
+    ABOUT("About & support", "Release notes, updates and privacy")
+}
+
+/**
+ * Settings, as a shelf of intentions instead of three filing tabs.
+ *
+ * ## What was wrong with the tabs
+ *
+ * "Info", "Theme" and "Edit" named the files the screen was built from, not the
+ * things a reader wanted to change. The third tab carried refresh rate, quick
+ * add, app lock, the Client ID and sign-out because they had nowhere else to go,
+ * and the first one carried the profile, the diagnostic, the changelog and the
+ * updater for the same reason. A tab that means "everything else" is a tab that
+ * gets read top to bottom every time.
+ *
+ * The hub gives every intention a named row with a sentence under it, and the
+ * detail a page of its own. The tab bodies were not thrown away - Theme and the
+ * account, library and info pages were already good cards; they are now reached
+ * from a row instead of a bar, and the old Edit tab was split by subject.
+ *
+ * ## Why `AnimatedContent` still uses `using null`
+ *
+ * The pages are scrollable columns, and the previous tab implementation carried
+ * a comment about a crash from the default `SizeTransform` animating the
+ * container's height while the outgoing page settled its scroll. That reasoning
+ * still holds: the height snaps, the fades and scales are draw-phase and stay.
+ */
 @Composable
 fun SettingsScreen(
     authViewModel: AuthViewModel,
     themePreferences: ThemePreferences,
+    jokePreferences: JokePreferences,
     appLockPreferences: AppLockPreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
-    quickAddPreferences: com.anisequel.data.repository.QuickAddPreferences,
+    quickAddPreferences: QuickAddPreferences,
     changelogRepository: ChangelogRepository,
     /**
      * The repository's reachability probe, passed as a function so Settings does
@@ -74,121 +111,247 @@ fun SettingsScreen(
     totalMissedCount: Int? = null,
     modifier: Modifier = Modifier
 ) {
-    BackHandler { onNavigateBack() }
+    var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
+    var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
+    // One probe for the row's dialog. The Info page owns a separate probe for its
+    // own check button; the two are independent requests, and sharing one would
+    // make a check on one page spin the other.
+    val apiProbe = rememberApiStatusProbe(checkApiReachability)
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    BackHandler {
+        if (page != null) page = null else onNavigateBack()
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize().testTag("settings_screen"),
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Settings", fontWeight = FontWeight.SemiBold) },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier
-                                .testTag("settings_back_button")
-                                .bouncyPress(pressedScale = 0.9f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-
-                HorizontalDivider()
-                ExpressiveTabBar(
-                    tabs = listOf("Info", "Theme", "Edit"),
-                    selectedIndex = selectedTab,
-                    onSelect = { selectedTab = it },
-                    // "Info"/"Edit" as bare words left the reader guessing which
-                    // was which; the icons say it before the labels are read.
-                    icons = listOf(AppVectorIcons.Info, AppVectorIcons.SectionAppearance, AppVectorIcons.Tune),
-                    modifier = Modifier.testTag("settings_tabs")
-                )
-            }
-        }
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
-        // The tab body used to be a bare `when` inside `key(selectedTab)`: the old tab
-        // was gone and the new one was fully drawn on the same frame, so a tap on the
-        // tab bar appeared to do nothing until the eye caught the different heading. All
-        // three tabs now cross over on the shared spring tokens.
-        //
-        // Fade *and scale*, not a horizontal slide: a slide would run a layout-phase
-        // offset on two scrollable columns for every frame of the transition, and these
-        // three tabs are siblings rather than pages of a sequence, so a direction would
-        // be inventing an order the tab bar does not have. `scaleIn`/`scaleOut` are
-        // `graphicsLayer` transforms, which is the draw phase the motion rules ask for.
-        //
-        // `AnimatedContent` keys its composition per target, which is what `key()` was
-        // doing: switching tabs must not carry one tab's remembered state into another.
-        AnimatedContent(
-            targetState = selectedTab,
-            transitionSpec = {
-                // The brackets, and the `using(null)` after them, are both
-                // load-bearing: an infix call binds *looser* than `+`, so
-                // without them `using` would attach to `scaleOut(...)` alone -
-                // an `ExitTransition`, which has no such extension - and the
-                // file would not compile. (Before `using` there was no reason
-                // for them; detekt flagged the bare brackets as noise when the
-                // halves were written out, which is what CodeFactor caught.)
-                //
-                // The `null` drops the default `SizeTransform`, which animates
-                // the container's height between tabs while the tab being left
-                // may still be settling its own scroll - these tabs are
-                // scrollable columns, and this container's height decides their
-                // viewport. That is the shape the crash was reported with.
-                // The height snaps between tabs now; the fades and the scales
-                // are draw-phase and stay.
-                (
-                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                        scaleIn(
-                            animationSpec = ExpressiveMotion.FastSpatial,
-                            initialScale = 0.94f
-                        ) togetherWith
-                        fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                        scaleOut(
-                            animationSpec = ExpressiveMotion.FastSpatial,
-                            targetScale = 1.04f
-                        )
-                    ) using null
-            },
-            label = "settings_tab_transition",
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .testTag("settings_tab_content")
-        ) { tab ->
-            when (tab) {
-                2 -> EditSettingsTab(
-                    authViewModel = authViewModel,
-                    appLockPreferences = appLockPreferences,
-                    refreshIntervalPreferences = refreshIntervalPreferences,
-                    arrivingPreferences = arrivingPreferences,
-                    quickAddPreferences = quickAddPreferences,
-                    onNavigateToLogin = onNavigateToLogin,
-                    modifier = Modifier.padding(paddingValues)
-                )
-                1 -> ThemeTab(
-                    themePreferences = themePreferences,
-                    modifier = Modifier.padding(paddingValues)
-                )
-                else -> InfoSettingsTab(
-                    viewer = viewer,
-                    onNavigateToLogin = onNavigateToLogin,
-                    onSignOut = authViewModel::logout,
-                    totalWatchedCount = totalWatchedCount,
-                    totalMissedCount = totalMissedCount,
-                    changelogRepository = changelogRepository,
-                    checkApiReachability = checkApiReachability,
-                    modifier = Modifier.padding(paddingValues)
+                .padding(paddingValues)
+        ) {
+            AnimatedContent(
+                targetState = page,
+                transitionSpec = {
+                    (
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                            scaleIn(
+                                animationSpec = ExpressiveMotion.FastSpatial,
+                                initialScale = 0.96f
+                            ) togetherWith
+                            fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                            scaleOut(
+                                animationSpec = ExpressiveMotion.FastSpatial,
+                                targetScale = 1.03f
+                            )
+                        ) using null
+                },
+                label = "settings_page_transition",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("settings_tab_content")
+            ) { destination ->
+                if (destination == null) {
+                    SettingsRoot(
+                        onClose = onNavigateBack,
+                        onOpen = { page = it },
+                        onCheckConnection = { showConnectionCheck = true }
+                    )
+                } else {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        SettingsSubHeader(
+                            title = destination.title,
+                            subtitle = destination.subtitle,
+                            onBack = { page = null }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            SettingsPageContent(
+                                page = destination,
+                                authViewModel = authViewModel,
+                                themePreferences = themePreferences,
+                                jokePreferences = jokePreferences,
+                                appLockPreferences = appLockPreferences,
+                                refreshIntervalPreferences = refreshIntervalPreferences,
+                                arrivingPreferences = arrivingPreferences,
+                                quickAddPreferences = quickAddPreferences,
+                                changelogRepository = changelogRepository,
+                                checkApiReachability = checkApiReachability,
+                                viewer = viewer,
+                                onNavigateToLogin = onNavigateToLogin,
+                                totalWatchedCount = totalWatchedCount,
+                                totalMissedCount = totalMissedCount
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showConnectionCheck) {
+                ConnectionCheckDialog(
+                    probe = apiProbe,
+                    onDismiss = { showConnectionCheck = false }
                 )
             }
         }
+    }
+}
+
+/**
+ * The shelf.
+ *
+ * The sections are the reader's questions in order: how it looks, how it behaves,
+ * who it is signed in as, whether the network is awake, and what changed. Each
+ * row is its own card with a 10dp gap, so a tap that lands between two rows hits
+ * the background instead of the wrong setting.
+ */
+@Composable
+private fun SettingsRoot(
+    onClose: () -> Unit,
+    onOpen: (SettingsPage) -> Unit,
+    onCheckConnection: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = MaxSettingsContentWidth)
+                .fillMaxWidth()
+        ) {
+            SettingsHubHeader(onClose = onClose)
+
+            SettingsSectionLabel("Personalization")
+            SettingsRows {
+                SettingsHubRow(
+                    icon = AppVectorIcons.SectionAppearance,
+                    title = "Appearance",
+                    subtitle = "Colour, background and motion",
+                    onClick = { onOpen(SettingsPage.APPEARANCE) },
+                    testTag = "settings_row_appearance"
+                )
+                SettingsHubRow(
+                    icon = AppVectorIcons.AnimeSparkle,
+                    title = "Jokes",
+                    subtitle = "Ani-chan's timing and placement",
+                    onClick = { onOpen(SettingsPage.JOKES) },
+                    testTag = "settings_row_jokes"
+                )
+            }
+
+            SettingsSectionLabel("Library")
+            SettingsRows {
+                SettingsHubRow(
+                    icon = AppVectorIcons.Tune,
+                    title = "Library & dashboard",
+                    subtitle = "Refresh, arriving rows and quick add",
+                    onClick = { onOpen(SettingsPage.LIBRARY) },
+                    testTag = "settings_row_library"
+                )
+            }
+
+            SettingsSectionLabel("Network")
+            SettingsRows {
+                SettingsHubRow(
+                    icon = AppVectorIcons.BrokenHeart,
+                    title = "AniList connection",
+                    subtitle = "Ask AniList whether it is awake",
+                    onClick = onCheckConnection,
+                    testTag = "settings_row_connection"
+                )
+            }
+
+            SettingsSectionLabel("Accounts")
+            SettingsRows {
+                SettingsHubRow(
+                    icon = AppVectorIcons.SectionAniList,
+                    title = "AniList account",
+                    subtitle = "Client ID, session and app lock",
+                    onClick = { onOpen(SettingsPage.ACCOUNT) },
+                    testTag = "settings_row_account"
+                )
+            }
+
+            SettingsSectionLabel("About & Support")
+            SettingsRows {
+                SettingsHubRow(
+                    icon = AppVectorIcons.SectionAbout,
+                    title = "About & support",
+                    subtitle = "Release notes, updates and privacy",
+                    onClick = { onOpen(SettingsPage.ABOUT) },
+                    testTag = "settings_row_about"
+                )
+            }
+
+            Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                SettingsVersionFooter(
+                    versionName = BuildConfig.VERSION_NAME,
+                    versionCode = BuildConfig.VERSION_CODE
+                )
+            }
+        }
+    }
+}
+
+/** The 20dp gutter and 10dp gaps every group of rows shares. */
+@Composable
+private fun SettingsRows(content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        content()
+    }
+}
+
+/** The body of a hub page, with every control the old tabs had. */
+@Composable
+private fun SettingsPageContent(
+    page: SettingsPage,
+    authViewModel: AuthViewModel,
+    themePreferences: ThemePreferences,
+    jokePreferences: JokePreferences,
+    appLockPreferences: AppLockPreferences,
+    refreshIntervalPreferences: RefreshIntervalPreferences,
+    arrivingPreferences: ArrivingPreferences,
+    quickAddPreferences: QuickAddPreferences,
+    changelogRepository: ChangelogRepository,
+    checkApiReachability: suspend () -> ApiStatusSnapshot,
+    viewer: ViewerProfile?,
+    onNavigateToLogin: () -> Unit,
+    totalWatchedCount: Int?,
+    totalMissedCount: Int?
+) {
+    when (page) {
+        SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
+        SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
+        SettingsPage.LIBRARY -> LibrarySettingsTab(
+            refreshIntervalPreferences = refreshIntervalPreferences,
+            arrivingPreferences = arrivingPreferences,
+            quickAddPreferences = quickAddPreferences
+        )
+        SettingsPage.ACCOUNT -> EditSettingsTab(
+            authViewModel = authViewModel,
+            appLockPreferences = appLockPreferences,
+            onNavigateToLogin = onNavigateToLogin
+        )
+        SettingsPage.ABOUT -> InfoSettingsTab(
+            viewer = viewer,
+            onNavigateToLogin = onNavigateToLogin,
+            onSignOut = authViewModel::logout,
+            totalWatchedCount = totalWatchedCount,
+            totalMissedCount = totalMissedCount,
+            changelogRepository = changelogRepository,
+            checkApiReachability = checkApiReachability
+        )
     }
 }

@@ -57,13 +57,19 @@ object TierListSvg {
      * `"data:image/jpeg;base64,..."` form. Taking it already assembled keeps base64
      * encoding out of this layer, where it would be untestable and where the
      * caller already has the bytes in hand.
+     *
+     * [display] is the board's own title preference. It used to be absent, which
+     * meant this renderer always drew a caption under every poster whether the
+     * board showed names, put them on the artwork, or asked for the short form -
+     * the one exporter that silently disagreed with the screen it mirrored.
      */
     fun write(
         layout: TierListLayout,
         tiers: List<TierDefinition>,
         candidates: List<TierCandidate>,
         embeddedPosters: Map<Int, String> = emptyMap(),
-        palette: Palette = Palette()
+        palette: Palette = Palette(),
+        display: TierDisplay = TierDisplay()
     ): String = buildString {
         append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n")
         append("<svg xmlns=\"http://www.w3.org/2000/svg\" ")
@@ -90,6 +96,10 @@ object TierListSvg {
         }
 
         val tierById = tiers.associateBy { it.id }
+        // One map rather than `firstOrNull` per tile: a 300-title board did
+        // 300 x 300 comparisons inside the builder, and the layout after it is
+        // otherwise linear.
+        val candidateById = candidates.associateBy { it.mediaId }
 
         layout.rows.forEach { row ->
             if (tierById[row.tierId] == null) {
@@ -116,7 +126,7 @@ object TierListSvg {
         }
 
         layout.items.forEach { box ->
-            val candidate = candidates.firstOrNull { it.mediaId == box.mediaId }
+            val candidate = candidateById[box.mediaId]
             // Read from the layout, never re-derived. `box.height` is poster
             // *plus caption*, so multiplying it by 1.5 inflated every poster by
             // 86% and dropped the caption baseline inside the artwork.
@@ -126,8 +136,17 @@ object TierListSvg {
             // 96-unit one, so the SVG's covers were visibly rounder than the
             // board's at every size but the default.
             val corner = tierTileCornerRadius(box.width)
+            // Defined once per tile and used by both the artwork and the
+            // on-cover scrim. The id is prefixed because an XML id cannot start
+            // with a digit.
+            val clipId = "tile-${box.mediaId}"
 
             append("  <g>\n")
+            append("    <clipPath id=\"").append(clipId).append("\">\n")
+            append("      <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
+                .append("\" width=\"").append(num(box.width)).append("\" height=\"")
+                .append(num(posterHeightForBox)).append("\" rx=\"").append(num(corner)).append("\"/>\n")
+            append("    </clipPath>\n")
             append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
                 .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
                 .append("\" rx=\"").append(num(corner)).append("\" fill=\"").append(hex(palette.tileFill)).append("\"/>\n")
@@ -136,14 +155,7 @@ object TierListSvg {
                 // `<image>` has no corner radius, so the artwork used to cover the
                 // rounded rect underneath with square corners - the SVG was the
                 // only renderer whose covers were not rounded at all. Clipping to
-                // the same rect is what makes the three renderers agree. The id is
-                // prefixed because an XML id cannot start with a digit.
-                val clipId = "tile-${box.mediaId}"
-                append("    <clipPath id=\"").append(clipId).append("\">\n")
-                append("      <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
-                    .append("\" width=\"").append(num(box.width)).append("\" height=\"")
-                    .append(num(posterHeightForBox)).append("\" rx=\"").append(num(corner)).append("\"/>\n")
-                append("    </clipPath>\n")
+                // the same rect is what makes the three renderers agree.
                 append("    <image x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
                     .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
                     .append("\" preserveAspectRatio=\"xMidYMid slice\" ")
@@ -151,12 +163,31 @@ object TierListSvg {
                     .append("href=\"").append(escape(dataUri)).append("\"/>\n")
             }
 
-            candidate?.title?.let { title ->
-                append("    <text x=\"").append(num(box.x + box.width / 2f))
-                    .append("\" y=\"").append(num(box.y + posterHeightForBox + 18f))
-                    .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
-                    .append("font-size=\"11\" fill=\"").append(hex(palette.captionText))
-                    .append("\" text-anchor=\"middle\">").append(escape(truncate(title))).append("</text>\n")
+            if (display.showTitles && candidate != null) {
+                val caption = escape(tierCaption(candidate.title, display.titleLength))
+                when (display.titlePosition) {
+                    TierTitlePosition.UNDER_COVER -> {
+                        append("    <text x=\"").append(num(box.x + box.width / 2f))
+                            .append("\" y=\"").append(num(box.y + posterHeightForBox + 18f))
+                            .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
+                            .append("font-size=\"11\" fill=\"").append(hex(palette.captionText))
+                            .append("\" text-anchor=\"middle\">").append(caption).append("</text>\n")
+                    }
+                    TierTitlePosition.ON_COVER -> {
+                        // A scrim rather than a solid band, matching the board's
+                        // gradient closely enough for a vector file: a flat
+                        // strip across the top of every cover reads as a table.
+                        append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
+                            .append("\" width=\"").append(num(box.width)).append("\" height=\"28\"")
+                            .append(" fill=\"#000000\" fill-opacity=\"0.55\"")
+                            .append(" clip-path=\"url(#").append(clipId).append(")\"/>\n")
+                        append("    <text x=\"").append(num(box.x + box.width / 2f))
+                            .append("\" y=\"").append(num(box.y + 15f))
+                            .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
+                            .append("font-size=\"11\" fill=\"").append(hex(palette.labelText))
+                            .append("\" text-anchor=\"middle\">").append(caption).append("</text>\n")
+                    }
+                }
             }
             append("  </g>\n")
         }
@@ -217,7 +248,4 @@ object TierListSvg {
         }
     }
 
-    /** Shortens a caption to something that fits under a tile. */
-    private fun truncate(title: String, max: Int = 22): String =
-        if (title.length <= max) title else title.take(max - 1).trimEnd() + "…"
 }

@@ -30,6 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -175,6 +177,11 @@ fun ExpressivePolygonSegmentedBar(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A segmented choice moves a filled pill across the bar; without a tick the
+    // only evidence of the tap is an animation already in progress. This is the
+    // shared control behind Theme and Motion, so one line gives the family the
+    // same feedback.
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -221,7 +228,10 @@ fun ExpressivePolygonSegmentedBar(
                     }
                     .clip(ExpressiveShapes.pillSoft)
                     .background(container)
-                    .clickable { onSelect(index) }
+                    .clickable {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(index)
+                    }
                     .semantics {
                         this.selected = selected
                         role = Role.RadioButton
@@ -277,6 +287,7 @@ fun ExpressiveSegmentedBar(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -336,7 +347,10 @@ fun ExpressiveSegmentedBar(
                     }
                     .clip(shape)
                     .background(containerColor)
-                    .clickable { onSelect(index) }
+                    .clickable {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(index)
+                    }
                     .semantics {
                         this.selected = selected
                         role = Role.Tab

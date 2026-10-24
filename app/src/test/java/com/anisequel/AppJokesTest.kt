@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.ui.components.AppJokes
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,7 +23,10 @@ class AppJokesTest {
         assertTrue(
             "the joke pool has shrunk to ${AppJokes.lines.size} lines; " +
                 "a random toast needs enough of them not to repeat within a day",
-            AppJokes.lines.size >= 20
+            // 1.5.8 more than doubled the pool. The old floor of 20 was the
+            // minimum that could survive an afternoon; this one keeps a session
+            // from cycling back to the same line in the same day.
+            AppJokes.lines.size >= 150
         )
     }
 
@@ -56,5 +60,30 @@ class AppJokesTest {
             assertNotEquals("the toast repeated its previous line", previous, next)
             previous = next
         }
+    }
+
+    @Test
+    fun `the shuffle bag uses every line once before repeating any`() {
+        // Avoiding only the previous line let the toast tell the same joke again
+        // an hour later. A reader experiences the pool across a session, not as
+        // adjacent draws, so the whole pool has to cycle.
+        val seen = mutableSetOf<String>()
+        val drawn = mutableListOf<String>()
+
+        repeat(AppJokes.lines.size) {
+            val next = AppJokes.pickUnseen(seen)
+            assertFalse("the toast repeated a line before the pool was spent", next in seen)
+            seen += next
+            drawn += next
+        }
+
+        assertEquals(AppJokes.lines.toSet(), drawn.toSet())
+    }
+
+    @Test
+    fun `a spent pool still answers with a real line`() {
+        val next = AppJokes.pickUnseen(AppJokes.lines.toSet())
+
+        assertTrue("the bag returned a line that is not in the pool", next in AppJokes.lines)
     }
 }
