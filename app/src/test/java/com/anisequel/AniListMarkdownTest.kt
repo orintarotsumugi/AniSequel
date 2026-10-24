@@ -1069,6 +1069,54 @@ class AniListMarkdownTest {
         assertSame("the second parse must be the cached list", first, second)
     }
 
+    /**
+     * Arbitrary text must never throw out of the parser.
+     *
+     * Both screens this parser serves render text nobody in the app wrote - a
+     * stranger's comment and an AniList synopsis - and the parse runs during
+     * composition. An input the tokenizer did not anticipate therefore did not
+     * draw a broken paragraph: it closed the app on the screen that was opening.
+     * These are the shapes that stress the pattern set without being valid
+     * Markdown; none of them is allowed to be an exception.
+     */
+    @Test
+    fun `malformed markup is text, not an exception`() {
+        val inputs = listOf(
+            "![alt](",
+            "[label](https://",
+            "[![alt](cover](target",
+            "**".repeat(40) + "x" + "*".repeat(40),
+            "&#xZZ; &#99999999999999999999; &amp",
+            "~~~center",
+            "| a | b |\n|---|---|\n| only one |",
+            "```",
+            "> > > > quoted",
+            "img(" + "9".repeat(400) + "%)"
+        )
+
+        // The assertion is that none of these throws; the parsed shape is beside
+        // the point, because the fallback is allowed to be plain text.
+        inputs.forEach { AniListMarkdownParser.parse(it) }
+    }
+
+    /**
+     * Nested centered blocks are the one recursive part of the block walk, and
+     * the recursion is capped so a pathological document cannot exhaust the
+     * stack - a `StackOverflowError` is not something a Compose frame survives.
+     */
+    @Test
+    fun `deeply nested centered blocks parse without exhausting the stack`() {
+        val nested = buildString {
+            repeat(400) { appendLine("~~~center") }
+            appendLine("deep")
+            repeat(400) { appendLine("~~~") }
+        }
+
+        val nodes = AniListMarkdownParser.parse(nested)
+
+        assertTrue("the document parsed to nothing at all", nodes.isNotEmpty())
+    }
+
     /** The plain text of a parsed document's paragraphs, for assertions about decoded prose. */
     private fun paragraphText(nodes: List<MarkdownNode>): String =
         nodes.filterIsInstance<MarkdownNode.Paragraph>()

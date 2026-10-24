@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -216,6 +217,38 @@ class MediaDetailNamespacingTest {
         assertEquals(MediaCoverKey("ANIME", 1), MediaCoverKey("ANIME", 1))
     }
 
+    /**
+     * A detail fetch that throws must not escape the store's coroutine.
+     *
+     * The store already treats a *failed* detail load as unremarkable - the sheet
+     * keeps drawing the summary it was opened with - but that design only covers
+     * the `Result.failure` half. A repository that throws instead used to take
+     * the throw into `viewModelScope`, and Android answers an uncaught exception
+     * there by closing the app while the detail sheet is opening. The spinner
+     * must also clear, or the page shows a loading state for a request that has
+     * already ended.
+     */
+    @Test
+    fun `a detail fetch that throws is swallowed like a failure`() = runTest {
+        val repository = RecordingRepository(throwOnDetail = true)
+        val store = storeFor(repository, testScheduler)
+
+        store.load(mediaId = 1, mediaType = "ANIME")
+        advanceUntilIdle()
+
+        assertNull("a thrown fetch must not publish anything", store.details.value[1])
+        assertFalse(
+            "the spinner outlived the request",
+            store.loading.value.contains(1)
+        )
+        // And the next open is allowed to try again: the in-flight guard has to
+        // have been cleared, or one failed open disables that title for the
+        // session.
+        store.load(mediaId = 1, mediaType = "ANIME")
+        advanceUntilIdle()
+        assertEquals(2, repository.requests.size)
+    }
+
     // ---- helpers -----------------------------------------------------------------
 
     /**
@@ -257,11 +290,21 @@ class MediaDetailNamespacingTest {
      * a test that *did* reach one by accident would fail loudly instead of quietly
      * answering.
      */
-    private class RecordingRepository : AniListRepository {
+    private class RecordingRepository(
+        /**
+         * Answers the detail fetch by throwing rather than returning a failure.
+         *
+         * The repository classifies its own failures; this exists to pin what the
+         * store does when one gets past that, which is the shape that used to
+         * close the app.
+         */
+        private val throwOnDetail: Boolean = false
+    ) : AniListRepository {
         val requests = mutableListOf<Pair<String?, Int>>()
 
         override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> {
             requests += mediaType to mediaId
+            if (throwOnDetail) throw IllegalStateException("the socket closed under us")
             val label = mediaType ?: "UNTYPED"
             return Result.success(
                 MediaNode(

@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -255,6 +256,34 @@ class CommentManagementTest {
             assertEquals("posted", replies.single().text)
         }
 
+    /**
+     * A repository that throws is a thread that says why, not an app that closes.
+     *
+     * The thread's load was written as `repository.getActivityReplies(...).fold`,
+     * which is only total if the repository answers with a `Result`. The
+     * repository is built to - but the one thing that cannot happen is the other
+     * branch reaching a `launch` on `viewModelScope`, because a supervisor job
+     * does not contain an uncaught exception: it hands it to Android, and the app
+     * is gone while the sheet is opening. This is the reported force-stop, pinned
+     * at the layer that used to let it through.
+     */
+    @Test
+    fun `a reply fetch that throws becomes the thread's error row`() = runTest(testDispatcher) {
+        val repository = FakeCommentRepository(throwOnLoad = true)
+        val viewModel = buildViewModel(repository)
+        openThread(viewModel)
+
+        val state = viewModel.comments.value
+        assertNotNull("the thread never opened", state)
+        assertEquals(false, state!!.isLoading)
+        assertEquals(
+            "the thrown message should be what the row shows",
+            "the socket closed under us",
+            state.loadError
+        )
+        assertTrue(state.replies.isEmpty())
+    }
+
     /** The id the manage tests sign in as; [mineReply] authors their comments. */
     private val viewerId = 7
 
@@ -292,7 +321,15 @@ class CommentManagementTest {
             Result.success(ActivityReply(id = 1, text = "posted")),
         var editResult: Result<ActivityReply> =
             Result.success(ActivityReply(id = 1, text = "edited")),
-        var deleteResult: Result<Unit> = Result.success(Unit)
+        var deleteResult: Result<Unit> = Result.success(Unit),
+        /**
+         * Answers the thread fetch by throwing rather than by returning a failure.
+         *
+         * The repository is supposed to classify everything, so this is the case
+         * the call site has to survive precisely because it is not supposed to
+         * happen.
+         */
+        private val throwOnLoad: Boolean = false
     ) : AniListRepository {
         var repliesFetchCount = 0
         var postReplyFetchCount = 0
@@ -347,6 +384,7 @@ class CommentManagementTest {
 
         override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> {
             repliesFetchCount++
+            if (throwOnLoad) throw IllegalStateException("the socket closed under us")
             return Result.success(replies)
         }
 

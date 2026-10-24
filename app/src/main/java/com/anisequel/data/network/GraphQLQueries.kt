@@ -441,6 +441,19 @@ object GraphQLQueries {
                   averageScore
                   startDate { year month day }
                   coverImage { extraLarge large color }
+                  # The tier board's genre and studio filters read these two.
+                  # `studios` was deliberately absent while every reader of a list
+                  # entry only needed a cover and a score; the studio filter is the
+                  # first reader that needs the credit, and a second per-title
+                  # detail request would spend one of AniList's 30-a-minute calls
+                  # for every row of the board. `isMain` is the animation studio;
+                  # the same connection also carries publishers.
+                  genres
+                  # `id` is kept for the credit type's navigation key;
+                  # `isAnimationStudio` is not: the board filters on the credit
+                  # AniList flagged `isMain`, and nothing on this path reads the
+                  # studio's own type.
+                  studios { edges { isMain node { id name } } }
                   nextAiringEpisode { episode airingAt }
                   relations {
                     edges {

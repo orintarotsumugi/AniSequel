@@ -139,7 +139,7 @@ class StudioViewModel(
             }
 
             val page = nextPage
-            aniListRepository.getStudio(studioId, page)
+            repositoryResult { aniListRepository.getStudio(studioId, page) }
                 .onSuccess { node ->
                     received += node.media?.nodes.orEmpty()
                     // A short page is the end of the filmography. `>=` rather than

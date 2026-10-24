@@ -28,6 +28,8 @@ internal class TierBoardSheetState {
     var managingTiers by mutableStateOf(false)
     var filtering by mutableStateOf(false)
     var displaying by mutableStateOf(false)
+    var zooming by mutableStateOf(false)
+    var exporting by mutableStateOf(false)
     var coloringTierId by mutableStateOf<String?>(null)
     var bandTierId by mutableStateOf<String?>(null)
 }
@@ -40,6 +42,8 @@ private val TierBoardSheetStateSaver: Saver<TierBoardSheetState, Any> = mapSaver
             "managing" to state.managingTiers,
             "filtering" to state.filtering,
             "displaying" to state.displaying,
+            "zooming" to state.zooming,
+            "exporting" to state.exporting,
             "coloring" to state.coloringTierId,
             "band" to state.bandTierId
         )
@@ -51,6 +55,8 @@ private val TierBoardSheetStateSaver: Saver<TierBoardSheetState, Any> = mapSaver
             managingTiers = saved["managing"] as Boolean? ?: false
             filtering = saved["filtering"] as Boolean? ?: false
             displaying = saved["displaying"] as Boolean? ?: false
+            zooming = saved["zooming"] as Boolean? ?: false
+            exporting = saved["exporting"] as Boolean? ?: false
             coloringTierId = saved["coloring"] as String?
             bandTierId = saved["band"] as String?
         }
@@ -63,14 +69,19 @@ internal fun rememberTierBoardSheetState(): TierBoardSheetState =
 
 /** The data every sheet reads, kept together so the host has three arguments. */
 internal data class TierBoardSheetData(
+    val listName: String,
     val tiers: List<TierDefinition>,
     val assignment: TierAssignment,
     val candidates: List<TierCandidate>,
+    /** Placements and candidates that survive the current filters. */
+    val visibleAssignment: TierAssignment,
+    val visibleCandidates: List<TierCandidate>,
     val unranked: List<TierCandidate>,
     val ranked: Int,
     val filter: TierFilter,
     val display: TierDisplay,
-    val zoom: Float
+    val zoom: Float,
+    val zoomLocked: Boolean
 )
 
 /**
@@ -90,6 +101,8 @@ internal class TierBoardSheetActions(
     val onFilterChange: (TierFilter) -> Unit,
     val onDisplayChange: (TierDisplay) -> Unit,
     val onResetZoom: () -> Unit,
+    val onZoomChange: (Float) -> Unit,
+    val onZoomLockChange: (Boolean) -> Unit,
     val onClearPlacements: () -> Unit
 )
 
@@ -155,6 +168,7 @@ internal fun TierBoardSheetsHost(
     if (state.filtering) {
         TierFilterSheet(
             filter = data.filter,
+            candidates = data.candidates,
             onFilterChange = actions.onFilterChange,
             onDismiss = { state.filtering = false }
         )
@@ -172,6 +186,29 @@ internal fun TierBoardSheetsHost(
             // cannot lose a race with the debounced write of the zoom it replaced.
             onResetZoom = actions.onResetZoom,
             onDismiss = { state.displaying = false }
+        )
+    }
+
+    if (state.zooming) {
+        TierZoomSheet(
+            zoom = data.zoom,
+            locked = data.zoomLocked,
+            onZoomChange = actions.onZoomChange,
+            onLockChange = actions.onZoomLockChange,
+            onResetZoom = actions.onResetZoom,
+            onDismiss = { state.zooming = false }
+        )
+    }
+
+    if (state.exporting) {
+        TierExportSheet(
+            listName = data.listName,
+            tiers = data.tiers,
+            assignment = data.visibleAssignment,
+            candidates = data.visibleCandidates,
+            display = data.display,
+            ranked = data.ranked,
+            onDismiss = { state.exporting = false }
         )
     }
 

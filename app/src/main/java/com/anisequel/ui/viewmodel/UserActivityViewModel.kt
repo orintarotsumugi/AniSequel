@@ -296,7 +296,9 @@ class UserActivityViewModel(
             val result = if (isDemo) {
                 Result.success(aniListRepository.getDemoUserActivity())
             } else {
-                aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
+                repositoryResult {
+                    aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
+                }
             }
 
             result.fold(
@@ -378,7 +380,7 @@ class UserActivityViewModel(
         replaceActivity(optimistic, addPending = activityId)
 
         viewModelScope.launch {
-            aniListRepository.toggleActivityLike(activityId).fold(
+            repositoryResult { aniListRepository.toggleActivityLike(activityId) }.fold(
                 onSuccess = { result ->
                     replaceActivity(
                         optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
@@ -415,7 +417,7 @@ class UserActivityViewModel(
             val result = if (isDemo) {
                 Result.success(emptyList())
             } else {
-                aniListRepository.getActivityLikes(activityId)
+                repositoryResult { aniListRepository.getActivityLikes(activityId) }
             }
             // Discard a response for a sheet the user has already closed or
             // replaced: the state is only written if it is still this activity.

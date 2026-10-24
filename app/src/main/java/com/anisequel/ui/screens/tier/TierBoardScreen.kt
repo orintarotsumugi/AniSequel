@@ -11,12 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -132,6 +128,14 @@ internal fun TierBoardScreen(
         mutableFloatStateOf(clampTierZoom(display.zoom))
     }
 
+    // Whether the board's long-press drag is off. Remembered across rotation,
+    // but never written to the store: it exists for the length of one pinch, not
+    // as a display preference, and persisting it would silently leave a board
+    // that cannot be ranked after the next launch. It is not keyed on the list
+    // because switching lists is not a reason to re-enable tile dragging under a
+    // finger that just locked it.
+    var zoomLocked by rememberSaveable { mutableStateOf(false) }
+
     // A change made elsewhere - "Reset zoom" in the display sheet - has to reach
     // the board. Comparing first stops this from fighting the local value on the
     // composition where the debounced write lands.
@@ -225,6 +229,15 @@ internal fun TierBoardScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { sheets.zooming = true },
+                        modifier = Modifier.testTag("tier_zoom_button")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Search,
+                            contentDescription = "Zoom"
+                        )
+                    }
                     Box {
                         IconButton(
                             onClick = { sheets.filtering = true },
@@ -258,17 +271,19 @@ internal fun TierBoardScreen(
                             contentDescription = "Display options"
                         )
                     }
-                    TextButton(
+                    // An icon rather than a "Tiers" text button. Four actions and
+                    // a back arrow have to fit a 360dp bar; the word cost ~92dp
+                    // and left the list's own name with about a hundred, which is
+                    // not enough for the one piece of text that says which list
+                    // is open.
+                    IconButton(
                         onClick = { sheets.managingTiers = true },
-                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                        modifier = Modifier.testTag("tier_manage_button")
                     ) {
                         Icon(
                             imageVector = AppVectorIcons.Tune,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            contentDescription = "Manage tiers"
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Tiers")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -347,7 +362,7 @@ internal fun TierBoardScreen(
                             hiddenCount = if (assignment.isEmpty) hiddenTotal else hiddenRanked,
                             onOpenFilters = { sheets.filtering = true },
                             onShowAll = {
-                                onFilterChange(TierFilter(emptySet(), emptySet()))
+                                onFilterChange(TierFilter.ShowEverything)
                             }
                         )
                     }
@@ -363,11 +378,12 @@ internal fun TierBoardScreen(
                             onZoomChange = { value -> zoom = clampTierZoom(value) },
                             viewport = viewport,
                             scrollState = scrollState,
+                            dragEnabled = !zoomLocked,
                             onMove = onMove,
                             onItemTap = { mediaId -> sheets.placingMediaId = mediaId },
                             onDragHintChanged = { hint -> dragHint = hint }
                         )
-                        TierBoardLegend()
+                        TierBoardLegend(dragLocked = zoomLocked)
                     }
                 }
             }
@@ -429,10 +445,13 @@ internal fun TierBoardScreen(
                     canUndo = undoLabel != null,
                     canRedo = redoLabel != null,
                     onUndo = onUndo,
-                    onRedo = onRedo
+                    onRedo = onRedo,
+                    onExport = { sheets.exporting = true }
                 )
                 TierZoomControls(
                     zoom = zoom,
+                    locked = zoomLocked,
+                    onToggleLock = { zoomLocked = !zoomLocked },
                     onZoomOut = { zoom = clampTierZoom(zoom - TIER_ZOOM_STEP) },
                     onZoomIn = { zoom = clampTierZoom(zoom + TIER_ZOOM_STEP) },
                     onResetZoom = { zoom = 1f }
@@ -490,14 +509,18 @@ internal fun TierBoardScreen(
     TierBoardSheetsHost(
         state = sheets,
         data = TierBoardSheetData(
+            listName = document.name,
             tiers = tiers,
             assignment = assignment,
             candidates = candidates,
+            visibleAssignment = visibleAssignment,
+            visibleCandidates = visibleCandidates,
             unranked = unranked,
             ranked = ranked,
             filter = filter,
             display = display,
-            zoom = zoom
+            zoom = zoom,
+            zoomLocked = zoomLocked
         ),
         actions = TierBoardSheetActions(
             onMove = onMove,
@@ -511,6 +534,8 @@ internal fun TierBoardScreen(
             // Through the local value the stepper writes, so reset cannot lose a
             // race with the debounced write of the zoom it replaced.
             onResetZoom = { zoom = 1f },
+            onZoomChange = { value -> zoom = clampTierZoom(value) },
+            onZoomLockChange = { locked -> zoomLocked = locked },
             onClearPlacements = onClearPlacements
         )
     )
