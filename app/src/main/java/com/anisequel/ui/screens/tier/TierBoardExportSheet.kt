@@ -161,7 +161,8 @@ internal fun TierExportSheet(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Renders every tier and every ranked poster as one PNG, not " +
-                    "just what fits on screen. The current filters are kept.",
+                    "just what fits on screen. The current filters - including a " +
+                    "name search - and the board's title settings are kept.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

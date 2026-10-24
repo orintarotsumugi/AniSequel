@@ -46,7 +46,9 @@ import coil.compose.AsyncImage
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierRowBox
+import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
+import com.anisequel.domain.tier.tierCaption
 import com.anisequel.domain.tier.tierTileCornerRadius
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -281,11 +283,18 @@ internal fun TierPosterTile(
     captionHeight: Float,
     showTitle: Boolean,
     titlePosition: TierTitlePosition,
+    titleLength: TierTitleLength,
     onTap: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // The same caption the exports draw, cut to the same length. It used to be
+    // the raw title here and a 22-character `truncate` in the SVG writer, so the
+    // one renderer that was not the screen chose how much of a name fitted.
+    val caption = remember(candidate?.title, titleLength) {
+        candidate?.title?.let { tierCaption(it, titleLength) }.orEmpty()
+    }
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
     val shape = remember(width) {
         RoundedCornerShape(tierTileCornerRadius(width).dp)
@@ -379,7 +388,7 @@ internal fun TierPosterTile(
                         .padding(horizontal = 5.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = candidate?.title.orEmpty(),
+                        text = caption,
                         style = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp),
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -398,7 +407,7 @@ internal fun TierPosterTile(
             Spacer(modifier = Modifier.height(2.dp))
 
             Text(
-                text = candidate?.title.orEmpty(),
+                text = caption,
                 // A tighter line height than `labelSmall` ships with: two lines
                 // have to fit the band the layout reserved, and a clipped second
                 // line reads as a missing title rather than as a long one.
@@ -446,6 +455,7 @@ internal fun TierDragGhost(
     captionHeight: Float,
     showTitle: Boolean,
     titlePosition: TierTitlePosition,
+    titleLength: TierTitleLength,
     travel: State<Offset>,
     scrollShift: () -> Float
 ) {
@@ -468,6 +478,7 @@ internal fun TierDragGhost(
         captionHeight = captionHeight,
         showTitle = showTitle,
         titlePosition = titlePosition,
+        titleLength = titleLength,
         onTap = {},
         // The ghost is a picture of the finger's cargo, not a control. A
         // clickable here would answer taps meant for the board underneath it.

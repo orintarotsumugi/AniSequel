@@ -512,6 +512,7 @@ private fun TierGeometry(
                     captionHeight = options.captionHeight * zoom,
                     showTitle = showTitles,
                     titlePosition = display.titlePosition,
+                    titleLength = display.titleLength,
                     enabled = editable,
                     onTap = { onItemTap(box.mediaId) }
                 )

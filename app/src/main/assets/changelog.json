@@ -1,6 +1,47 @@
 {
   "versions": [
     {
+      "version": "1.5.8",
+      "entries": [
+        {
+          "title": "The tier list can be searched by name",
+          "detail": "The filter sheet has a search field above the status chips. It matches the name on the poster and AniList's English, romaji and native names, so shingeki finds Attack on Titan; every word you type has to match, in any order, so attack titan and titan attack both work. The field shows how many titles matched and has a clear button, searches apply to the board, the unranked shelf and the exported image, and clearing the search leaves the status, genre and studio filters exactly as they were. Nothing is removed from your list, and the filter dot on the app bar lights for a search the same way it does for any other filter."
+        },
+        {
+          "title": "Names can sit where you want, and be as long as you want",
+          "detail": "Display options already let a name sit under the cover or on it; beside that choice is now a length - Short, Standard or Full. Short keeps a dense board readable at a glance, Full prints the whole title, and the default cuts a name at a sensible point with an ellipsis. The board, the PNG export and the SVG export all read the same setting, so a file cannot show more of a name than the screen it came from."
+        },
+        {
+          "title": "The exports now match the board",
+          "detail": "Three divergences closed. The SVG writer used to draw a caption under every poster no matter what the board showed, including when names were turned off or moved onto the artwork; it now reads the same title settings and draws the on-cover scrim. The PNG put the score badge in the top corner even when the name was across the top, where the two overlapped - it moves to the bottom like the board's. And both exporters now centre a caption from the font's own metrics instead of a constant baseline, so a descender is no longer clipped at the bottom of the image."
+        },
+        {
+          "title": "Ani-chan remembers which joke she told",
+          "detail": "The random toast now draws from a shuffle bag: every line appears once before any line is repeated, so a joke you read an hour ago cannot come back while there are still new ones. The pool grew by eighteen lines, the first joke arrives sooner - 45 seconds to two minutes rather than one and a half to four - and the pill has an Ani-chan label, a tinted sparkle and a hairline edge so it reads as the app speaking rather than as a notification from nobody."
+        },
+        {
+          "title": "Faster filters, and a faster vector export",
+          "detail": "The name filter builds one lowercased haystack per title when the library loads, instead of lowercasing every title on every keystroke, and normalises the query once per filter value rather than once per candidate. The SVG writer looks each tile's title up in one map instead of scanning the whole candidate list per poster, which turns a 300-title export from 90,000 comparisons into 300. A failed PNG render now recycles the bitmap it had already allocated, instead of leaving the largest allocation in the app to the collector."
+        },
+        {
+          "title": "Smaller board fixes",
+          "detail": "The filter dot counts a name search as a filter; Show everything and Default both clear the search; a pasted paragraph is capped at 64 characters rather than becoming an unbounded query; and the keyboard's Search key puts the keyboard away instead of running a second, different filter. The export sheet's description now says the name search is included."
+        },
+        {
+          "title": "Settings is a shelf now, not three tabs",
+          "detail": "Info, Theme and Edit named the files the screen was built from, not the things you wanted to change, and Edit carried refresh, arrival rows, quick add, the Client ID, the app lock and sign-out because they had nowhere else to go. Settings now opens on a shelf of rounded icon rows - Appearance, Jokes, Library & dashboard, AniList account, AniList connection and About & support - and each row opens a focused page. The old Edit tab was split in two, so refresh and quick add live together and the account page holds the session and the lock. Every old control is still there under a name that says what it does, and the screen closes with the round button in the corner."
+        },
+        {
+          "title": "Ani-chan can be tuned, moved, and previewed",
+          "detail": "The joke pool more than doubled to 178 lines, and the shuffle bag still shows every line once before repeating any. Settings now lets you choose the pace - Calm, Normal or Chatty - and whether the pill sits at the top or the bottom edge. You can also choose whether jokes stay on the main pages or are allowed over pages you open from them, such as Settings, the tier list and a title; the sign-in screen stays quiet either way. Turning jokes off keeps the pace you chose, so turning them back on does not silently reset it, and a Preview button asks the real toast to appear at the edge you picked, even while jokes are off. The card still lives in Settings and is saved on the device."
+        },
+        {
+          "title": "The connection check is straight with you",
+          "detail": "The Settings-side AniList check used to borrow the random failure quips, so a diagnostic you asked for could answer with a joke about naps. It no longer pulls from the joke pool: every line in that dialog now says what actually happened, and a probe that cannot finish says so plainly instead of rerolling. The heart, the status strip and the go-touch-grass exit are unchanged, and the ambient Ani-chan toast is the only place random lines appear."
+        }
+      ]
+    },
+    {
       "version": "1.5.7",
       "entries": [
         {

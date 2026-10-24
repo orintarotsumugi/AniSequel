@@ -146,15 +146,20 @@ fun decodeAssignment(raw: String?): TierAssignment {
 /**
  * The drawing preferences as one comma-separated line.
  *
- * `showTitles,position,zoom`, in that order, with the position stored by its enum
- * name so an added position reads as a token rather than as an ordinal that
- * silently means a different one. Kept public so the round trip can be tested
- * without a whole document.
+ * `showTitles,position,zoom,length`, in that order, with both enums stored by
+ * name so an added value reads as a token rather than as an ordinal that silently
+ * means a different one. Kept public so the round trip can be tested without a
+ * whole document.
+ *
+ * The length is the fourth field rather than a replacement for the zoom, so a
+ * document written by a build that predates it still reads exactly as it did: an
+ * absent fourth part falls back to the standard length.
  */
 fun encodeDisplay(display: TierDisplay): String = listOf(
     if (display.showTitles) "1" else "0",
     display.titlePosition.name,
-    display.zoom.toString()
+    display.zoom.toString(),
+    display.titleLength.name
 ).joinToString(FIELD_SEPARATOR.toString())
 
 /**
@@ -178,7 +183,17 @@ fun decodeDisplay(raw: String?): TierDisplay {
         else -> TierTitlePosition.UNDER_COVER
     }
     val zoom = parts.getOrNull(2)?.trim()?.toFloatOrNull()?.takeIf { it.isFinite() } ?: 1f
-    return TierDisplay(showTitles = showTitles, titlePosition = position, zoom = zoom)
+    val length = when (parts.getOrNull(3)?.trim()) {
+        TierTitleLength.SHORT.name -> TierTitleLength.SHORT
+        TierTitleLength.FULL.name -> TierTitleLength.FULL
+        else -> TierTitleLength.STANDARD
+    }
+    return TierDisplay(
+        showTitles = showTitles,
+        titlePosition = position,
+        titleLength = length,
+        zoom = zoom
+    )
 }
 
 /**

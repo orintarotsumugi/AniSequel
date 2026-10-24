@@ -1,0 +1,262 @@
+package com.anisequel.ui.screens.settings
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.ArrivingPreferences
+import com.anisequel.data.repository.QuickAddPreferences
+import com.anisequel.data.repository.RefreshInterval
+import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
+import kotlinx.coroutines.launch
+
+/**
+ * How the saved list is read and how the dashboard presents it.
+ *
+ * These three cards used to share a tab with the AniList Client ID, the app lock
+ * and the sign-out button, under the heading "Edit" - a name that describes the
+ * source file rather than anything a reader is trying to do. They share a page
+ * now because they are one question: how fresh the list is and what the
+ * dashboard does with it.
+ */
+@Composable
+fun LibrarySettingsTab(
+    refreshIntervalPreferences: RefreshIntervalPreferences,
+    arrivingPreferences: ArrivingPreferences,
+    quickAddPreferences: QuickAddPreferences,
+    modifier: Modifier = Modifier
+) {
+    SettingsScrollColumn(modifier) {
+        ListRefreshCard(refreshIntervalPreferences)
+        ArrivingSectionCard(arrivingPreferences)
+        QuickAddSectionCard(quickAddPreferences)
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * How often the saved list is re-read from AniList.
+ *
+ * The setting exists because of a bug, not a preference. Nothing used to watch
+ * for the app returning to the foreground, and the list was cached for a flat
+ * hour, so closing and reopening AniSequel - which Android does by resuming the
+ * process rather than restarting it - showed the identical dashboard every time.
+ * Finishing something on AniList in another app changed nothing until an hour
+ * had passed or the refresh button was tapped.
+ *
+ * ## Why chips and not `ExpressivePolygonSegmentedBar`
+ *
+ * The segmented bar is how the Theme tab picks one of two or three values. There
+ * are five here, and every one of them is short but not equally short - "Always",
+ * "15 min", "30 min", "1 hour", "Manual" - squeezed into equal halves of a
+ * phone-width row. A wrapping [FlowRow] of pills is the same interaction with a
+ * layout that cannot clip a label, which is what `PaletteSwatch` does for the
+ * same reason.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferences) {
+    val scope = rememberCoroutineScope()
+    val interval by refreshIntervalPreferences.interval.collectAsState(
+        initial = RefreshInterval.DEFAULT
+    )
+
+    SectionCard(
+        title = "List refresh",
+        icon = AppVectorIcons.Schedule,
+        subtitle = "How fresh your scan stays."
+    ) {
+        Text(
+            text = "AniSequel re-reads your list when you come back to the app if it is " +
+                "older than this, and on its own while it stays open. Pull down or " +
+                "use the refresh button any time to check immediately.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.testTag("refresh_interval_row")
+        ) {
+            RefreshInterval.entries.forEach { option ->
+                RefreshIntervalChip(
+                    interval = option,
+                    selected = option == interval,
+                    onClick = { scope.launch { refreshIntervalPreferences.setInterval(option) } }
+                )
+            }
+        }
+
+        // Shown only once the interval is something other than the default, so the
+        // card grows a button the moment a chip is chosen. A bare `if` did that by
+        // appearing fully drawn on the next frame and shoving the card's bottom edge
+        // down instantly; the spring expansion makes the row the thing that moves.
+        // `FastSpatialSize` rather than the `Int` token: `expandVertically` is typed
+        // on `FiniteAnimationSpec<IntSize>`, because what it animates is the row's
+        // measured height rather than a count. The `Int` token looks like the closer
+        // match and does not compile.
+        AnimatedVisibility(
+            visible = interval != RefreshInterval.DEFAULT,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
+                SettingsButton(
+                    text = "Use AniSequel's default",
+                    onClick = { scope.launch { refreshIntervalPreferences.reset() } },
+                    icon = AppVectorIcons.Restore,
+                    variant = SettingsButtonVariant.Text,
+                    fillWidth = true,
+                    testTag = "reset_refresh_interval_button"
+                )
+            }
+        }
+    }
+}
+
+/**
+ * How the dashboard's airing and upcoming rows behave.
+ *
+ * Two switches because they answer different questions: hiding the section
+ * removes the rows above search entirely (and with them every poster load on the
+ * path to a list), while compact keeps the information in plain rows that fetch
+ * no artwork - the entire cost of those cards is the image. Compact is
+ * meaningless on a hidden section, so it disables along with it.
+ */
+@Composable
+private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
+    val scope = rememberCoroutineScope()
+    val settings by arrivingPreferences.settings.collectAsState(
+        initial = ArrivingPreferences.ArrivingSettings()
+    )
+
+    SectionCard(
+        title = "Dashboard",
+        icon = AppVectorIcons.Tv,
+        subtitle = "The Currently arriving rows."
+    ) {
+        SwitchRow(
+            title = "Currently arriving",
+            subtitle = "Show airing and upcoming rows above search.",
+            checked = settings.showArrivingSection,
+            onCheckedChange = { enabled ->
+                scope.launch { arrivingPreferences.setShowArrivingSection(enabled) }
+            },
+            modifier = Modifier.testTag("arriving_section_switch")
+        )
+        SwitchRow(
+            title = "Compact arriving rows",
+            subtitle = "Plain rows that load no artwork - less data, less battery.",
+            checked = settings.compactArrivingCards,
+            enabled = settings.showArrivingSection,
+            onCheckedChange = { compact ->
+                scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
+            },
+            modifier = Modifier.testTag("compact_arriving_switch")
+        )
+    }
+}
+
+/** One refresh interval, selected or not. */
+@Composable
+private fun RefreshIntervalChip(
+    interval: RefreshInterval,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    // These were four `if (selected)` reads, which made this the one control in
+    // Settings that snapped while everything around it travelled: the container, the
+    // label and the border all swapped on the frame of the tap. The colours ride the
+    // colour-effects spring and the border width the spatial one, because a width is
+    // geometry and geometry gets the spatial curve.
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_content"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (selected) 2.dp else 1.dp,
+        animationSpec = ExpressiveMotion.FastSpatialDp,
+        label = "refresh_chip_border_width"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "refresh_chip_border_colour"
+    )
+
+    Row(
+        modifier = Modifier
+            .clip(ExpressiveShapes.pill)
+            .background(container)
+            .border(
+                BorderStroke(width = borderWidth, color = borderColor),
+                shape = ExpressiveShapes.pill
+            )
+            .bouncyPress(pressedScale = 0.94f)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .semantics {
+                this.selected = selected
+                role = Role.RadioButton
+            }
+            .testTag("refresh_interval_${interval.storageValue}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = interval.displayName,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = content
+        )
+    }
+}

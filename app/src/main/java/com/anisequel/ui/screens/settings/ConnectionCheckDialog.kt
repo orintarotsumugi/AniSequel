@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.friendlyCopy
 import com.anisequel.ui.components.ApiStatusCard
@@ -45,7 +44,6 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.ApiStatusProbeState
 import com.anisequel.ui.viewmodel.ApiStatusUi
-import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 /**
@@ -56,8 +54,17 @@ import kotlinx.coroutines.delay
  * The check is a request and, when it fails, a *moment*: the heart breaks, the
  * status explains itself, and there are exactly two honest things to do - try
  * again or go outside. Hiding that behind a row whose text quietly changes would
- * waste the one place the app can be funny about an outage that no other screen
- * is showing yet.
+ * waste the one place the app explains an outage that no other screen is showing
+ * yet.
+ *
+ * ## Why the check has no random jokes
+ *
+ * It used to borrow the failure copy's quip pool, so opening Settings and asking
+ * a direct diagnostic question could be answered with a joke about naps. The
+ * ambient toast already owns the app's random voice; a check the reader started
+ * on purpose is a moment for the verdict, not for a reroll. Every line here is
+ * fixed copy that says what happened, and "go touch grass" stays because it is
+ * an exit rather than a punchline.
  *
  * ## Why the repair animation only plays on a recovery
  *
@@ -84,8 +91,8 @@ fun ConnectionCheckDialog(
     var requested by remember { mutableStateOf(false) }
 
     // A check that threw is the one failure the dialog cannot draw as a verdict:
-    // there is no latency, no reachability and no joke that is about AniList.
-    // It used to be indistinguishable from "the question has not been answered
+    // there is no latency and no reachability to report. It used to be
+    // indistinguishable from "the question has not been answered
     // yet", so a broken probe looked exactly like a slow one and the reader
     // tapped Check again with no idea anything had gone wrong. The toast says
     // the check itself failed; the dialog stays up and stays usable, because the
@@ -101,13 +108,13 @@ fun ConnectionCheckDialog(
         val failures = status.failureCount
         if (failures <= toastedFailures) return@LaunchedEffect
         toastedFailures = failures
-        // A joke rather than the raw exception: the message from a probe that
+        // Fixed copy rather than the raw exception: the message from a probe that
         // threw is a socket or a parser talking, not something a reader can act
-        // on. The dialog itself carries the honest "no verdict" copy.
-        val quip = AniListErrorKind.UNKNOWN.friendlyCopy().quipFor("probe:$failures")
+        // on. No random quip here - this is a diagnostic the reader asked for,
+        // not an ambient joke, and a reroll would obscure whether the check ran.
         Toast.makeText(
             context,
-            "The check didn't finish. $quip",
+            "The check didn't finish. Try again in a moment.",
             Toast.LENGTH_LONG
         ).show()
     }
@@ -178,9 +185,7 @@ fun ConnectionCheckDialog(
 
                     status.reachability.isReachable -> AwakeContent(
                         reachability = status.reachability,
-                        detail = status.reachability.detail(status.latencyMillis),
-                        quip = status.reachability.friendlyCopy()
-                            .quipFor(status.reachability.name)
+                        detail = status.reachability.detail(status.latencyMillis)
                     )
 
                     else -> BrokenContent(
@@ -291,8 +296,7 @@ private fun UnknownContent(onCheck: () -> Unit) {
 @Composable
 private fun AwakeContent(
     reachability: ApiReachability,
-    detail: String,
-    quip: String
+    detail: String
 ) {
     Icon(
         imageVector = AppVectorIcons.HeartMended,
@@ -314,14 +318,6 @@ private fun AwakeContent(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center
     )
-    Spacer(modifier = Modifier.height(10.dp))
-    Text(
-        text = quip,
-        style = MaterialTheme.typography.bodySmall,
-        fontStyle = FontStyle.Italic,
-        color = AniSequelTheme.statusColors.success,
-        textAlign = TextAlign.Center
-    )
 }
 
 @Composable
@@ -333,10 +329,6 @@ private fun BrokenContent(
     onTouchGrass: () -> Unit
 ) {
     val copy = reachability.friendlyCopy()
-    // Rerolled per result, because the latency is not a reliable seed: two checks
-    // that both come back "not answering" carry no latency at all, and the reader
-    // tapping Try again then saw the identical joke every time.
-    val quipSeed = remember(reachability, latencyMillis) { Random.nextInt() }
 
     HeartbreakScene()
     Text(
@@ -350,14 +342,6 @@ private fun BrokenContent(
         text = copy.detail,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = copy.quipFor("${reachability.name}:$latencyMillis:$quipSeed"),
-        style = MaterialTheme.typography.bodySmall,
-        fontStyle = FontStyle.Italic,
-        color = MaterialTheme.colorScheme.tertiary,
         textAlign = TextAlign.Center
     )
     Spacer(modifier = Modifier.height(16.dp))

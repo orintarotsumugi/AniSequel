@@ -215,6 +215,7 @@ internal fun TierDragGhostOverlay(
         captionHeight = options.captionHeight * zoom,
         showTitle = showTitles,
         titlePosition = display.titlePosition,
+        titleLength = display.titleLength,
         travel = drag.travel,
         // How far the board has scrolled since the tile was picked up, read in
         // the draw phase for the same reason the travel is.

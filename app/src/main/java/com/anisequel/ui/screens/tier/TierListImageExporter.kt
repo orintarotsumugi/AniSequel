@@ -13,7 +13,6 @@ import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.text.TextPaint
-import android.text.TextUtils
 import androidx.core.graphics.drawable.toBitmap
 import coil.imageLoader
 import coil.request.CachePolicy
@@ -26,10 +25,11 @@ import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListLayout
-import com.anisequel.domain.tier.TierRowBox
+import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.domain.tier.onlyFor
+import com.anisequel.domain.tier.tierCaption
 import com.anisequel.domain.tier.tierTileCornerRadius
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -112,22 +112,34 @@ internal suspend fun renderTierListImage(
     }
     val bitmap = allocated ?: return@withContext null
 
-    val canvas = Canvas(bitmap)
-    canvas.drawColor(EXPORT_BACKGROUND)
-    canvas.scale(scale, scale)
+    // Every path out of the drawing block has to free the output. This used to
+    // return the bitmap on success and let the caller's catch turn a failure into
+    // a null *without* recycling it, so an OutOfMemoryError midway through
+    // drawing a 4K board left the largest allocation in the app to the collector
+    // while the sheet was still open.
+    try {
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(EXPORT_BACKGROUND)
+        canvas.scale(scale, scale)
 
-    drawHeading(canvas, layout.title, layout.subtitle, layout.width)
-    drawRows(canvas, layout.rows, layout.items, tiers)
-    drawItems(
-        context = context,
-        canvas = canvas,
-        layout = layout.items,
-        candidates = candidates,
-        scale = scale,
-        showUnderCover = plan.showUnderCover,
-        showOnCover = plan.showOnCover
-    )
-    bitmap
+        drawHeading(canvas, layout.title, layout.subtitle, layout.width)
+        drawRows(canvas, layout.rows, layout.items, tiers)
+        drawItems(
+            context = context,
+            canvas = canvas,
+            layout = layout.items,
+            candidates = candidates,
+            scale = scale,
+            showUnderCover = plan.showUnderCover,
+            showOnCover = plan.showOnCover,
+            titleLength = plan.titleLength,
+            captionBandHeight = plan.captionBandHeight
+        )
+        bitmap
+    } catch (failure: Throwable) {
+        bitmap.recycle()
+        throw failure
+    }
 }
 
 /**
@@ -186,7 +198,11 @@ internal fun estimateTierExportSize(
 private data class TierExportPlan(
     val layout: TierListLayout,
     val showUnderCover: Boolean,
-    val showOnCover: Boolean
+    val showOnCover: Boolean,
+    /** The preference the captions are cut with, shared with the board. */
+    val titleLength: TierTitleLength,
+    /** The strip under each poster the layout reserved, 0 when there is none. */
+    val captionBandHeight: Float
 )
 
 /**
@@ -216,6 +232,10 @@ private fun planTierExport(
         display.titlePosition == TierTitlePosition.UNDER_COVER
     val showOnCover = display.showTitles &&
         display.titlePosition == TierTitlePosition.ON_COVER
+    // Read from the same property the board's layout options read, rather than
+    // from `showUnderCover` alone: the two are the same answer today, and the
+    // next way a caption band can exist should not have to change two rules.
+    val captionBandHeight = if (display.hasCaptionBand) EXPORT_CAPTION_BAND_HEIGHT else 0f
     val options = TierLayoutOptions(
         width = 1080f,
         labelGutter = 84f,
@@ -223,7 +243,7 @@ private fun planTierExport(
         itemWidth = 72f,
         itemGap = 8f,
         rowGap = 10f,
-        captionHeight = if (showUnderCover) 26f else 0f,
+        captionHeight = captionBandHeight,
         headerHeight = 76f,
         minRowHeight = 56f,
         minCanvasHeight = 480f
@@ -242,7 +262,9 @@ private fun planTierExport(
     return TierExportPlan(
         layout = layout,
         showUnderCover = showUnderCover,
-        showOnCover = showOnCover
+        showOnCover = showOnCover,
+        titleLength = display.titleLength,
+        captionBandHeight = captionBandHeight
     )
 }
 
@@ -307,9 +329,6 @@ private const val MAX_EXPORT_SCALE = 8f
 private const val MAX_EXPORT_DIMENSION = 32_000
 
 private const val EXPORT_BACKGROUND = 0xFF14110F.toInt()
-private const val EXPORT_HEADING = 0xFFFFFFFF.toInt()
-private const val EXPORT_SUBHEADING = 0xB3FFFFFF.toInt()
-private const val EXPORT_LABEL = 0xFFFFFFFF.toInt()
 private const val EXPORT_CAPTION = 0xE6FFFFFF.toInt()
 private const val EXPORT_TILE_FILL = 0xFF2A2522.toInt()
 private const val EXPORT_TILE_STROKE = 0x33FFFFFF.toInt()
@@ -317,69 +336,8 @@ private const val EXPORT_SCORE_SCRIM = 0x99000000.toInt()
 private const val EXPORT_TITLE_SCRIM = 0xC4000000.toInt()
 private const val POSTER_BATCH = 8
 
-private fun drawHeading(
-    canvas: Canvas,
-    title: String,
-    subtitle: String?,
-    width: Float
-) {
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = EXPORT_HEADING
-        textSize = 26f
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
-    canvas.drawText(ellipsize(title, paint, width - 48f), 24f, 54f, paint)
-
-    if (subtitle != null) {
-        val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = EXPORT_SUBHEADING
-            textSize = 14f
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        }
-        canvas.drawText(ellipsize(subtitle, subtitlePaint, width - 48f), 24f, 78f, subtitlePaint)
-    }
-}
-
-private fun drawRows(
-    canvas: Canvas,
-    rows: List<TierRowBox>,
-    items: List<TierItemBox>,
-    tiers: List<TierDefinition>
-) {
-    val knownTiers = tiers.associateBy { it.id }
-    val rowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = EXPORT_LABEL
-        textSize = 20f
-        textAlign = Paint.Align.CENTER
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
-    val countPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = EXPORT_LABEL
-        alpha = 210
-        textSize = 11f
-        textAlign = Paint.Align.CENTER
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-    }
-
-    rows.forEach { row ->
-        if (knownTiers[row.tierId] == null) return@forEach
-        rowPaint.color = row.colorArgb.toInt()
-        rowPaint.alpha = 235
-        val rect = RectF(row.x, row.y, row.x + row.width, row.y + row.height)
-        canvas.drawRoundRect(rect, 10f, 10f, rowPaint)
-
-        val count = items.count { it.y >= row.y && it.bottom <= row.bottom }
-        val centerY = row.y + row.height / 2f
-        val label = ellipsize(row.label, labelPaint, 76f)
-        if (count > 0) {
-            canvas.drawText(label, row.x + 42f, centerY - 2f, labelPaint)
-            canvas.drawText(count.toString(), row.x + 42f, centerY + 15f, countPaint)
-        } else {
-            canvas.drawText(label, row.x + 42f, centerY + 7f, labelPaint)
-        }
-    }
-}
+/** The strip under a poster a caption sits in, in the layout's own units. */
+private const val EXPORT_CAPTION_BAND_HEIGHT = 26f
 
 /**
  * Draws every tile, in batches, releasing each batch's covers as it goes.
@@ -395,7 +353,9 @@ private suspend fun drawItems(
     candidates: List<TierCandidate>,
     scale: Float,
     showUnderCover: Boolean,
-    showOnCover: Boolean
+    showOnCover: Boolean,
+    titleLength: TierTitleLength,
+    captionBandHeight: Float
 ) {
     val candidateById = candidates.associateBy { it.mediaId }
 
@@ -434,26 +394,35 @@ private suspend fun drawItems(
             candidateById = candidateById,
             scale = scale
         )
-        batch.forEach { box ->
-            drawTile(
-                canvas = canvas,
-                box = box,
-                bitmap = posters[box.mediaId],
-                candidate = candidateById[box.mediaId],
-                tilePaint = tilePaint,
-                imagePaint = imagePaint,
-                strokePaint = strokePaint,
-                captionPaint = captionPaint,
-                scorePaint = scorePaint,
-                scoreBackground = scoreBackground,
-                scrimPaint = scrimPaint,
-                showUnderCover = showUnderCover,
-                showOnCover = showOnCover
-            )
+        // `finally`: a draw that throws - a recycled bitmap, an OOM on the
+        // canvas - used to skip the recycle below and leave the whole batch
+        // alive while the failure was reported.
+        try {
+            batch.forEach { box ->
+                drawTile(
+                    canvas = canvas,
+                    box = box,
+                    bitmap = posters[box.mediaId],
+                    candidate = candidateById[box.mediaId],
+                    tilePaint = tilePaint,
+                    imagePaint = imagePaint,
+                    strokePaint = strokePaint,
+                    captionPaint = captionPaint,
+                    scorePaint = scorePaint,
+                    scoreBackground = scoreBackground,
+                    scrimPaint = scrimPaint,
+                    showUnderCover = showUnderCover,
+                    showOnCover = showOnCover,
+                    titleLength = titleLength,
+                    captionBandHeight = captionBandHeight
+                )
+            }
+        } finally {
+            // The requests opt out of the memory cache, so nothing else
+            // references these pixels: freeing them here is what bounds the
+            // export's peak memory.
+            posters.values.forEach { it.recycle() }
         }
-        // The requests opt out of the memory cache, so nothing else references
-        // these pixels: freeing them here is what bounds the export's peak memory.
-        posters.values.forEach { it.recycle() }
     }
 }
 
@@ -470,7 +439,9 @@ private fun drawTile(
     scoreBackground: Paint,
     scrimPaint: Paint,
     showUnderCover: Boolean,
-    showOnCover: Boolean
+    showOnCover: Boolean,
+    titleLength: TierTitleLength,
+    captionBandHeight: Float
 ) {
     // The same corner fraction the board draws, so an exported tile is not rounder
     // than the tile it came from - the difference was most visible on a zoomed-out
@@ -502,19 +473,31 @@ private fun drawTile(
         canvas.restore()
     }
 
-    drawScoreBadge(canvas, box, candidate, scorePaint, scoreBackground)
+    // The board moves the badge to the opposite corner when the name is across
+    // the top; the export used to keep it at the top, so an exported ON_COVER
+    // board drew the score through the first word of every title.
+    drawScoreBadge(
+        canvas = canvas,
+        box = box,
+        candidate = candidate,
+        scorePaint = scorePaint,
+        scoreBackground = scoreBackground,
+        alignBottom = showOnCover
+    )
 
     canvas.drawRoundRect(poster, corner, corner, strokePaint)
 
     if (candidate == null) return
+    val captionText = tierCaption(candidate.title, titleLength)
     if (showUnderCover) {
-        val caption = ellipsize(candidate.title, captionPaint, box.width)
-        canvas.drawText(
-            caption,
-            box.x + box.width / 2f,
-            box.y + box.posterHeight + 16f,
-            captionPaint
-        )
+        val caption = ellipsize(captionText, captionPaint, box.width)
+        // Centred in the band the layout reserved, from the paint's own metrics.
+        // The baseline used to be `poster.bottom + 16`, a number that happened to
+        // sit inside a 26-unit band at 11pt and went wrong the moment the band or
+        // the type size changed - a descender cut at the bottom of the image.
+        val bandCenter = box.y + box.posterHeight + captionBandHeight / 2f
+        val baseline = bandCenter - (captionPaint.ascent() + captionPaint.descent()) / 2f
+        canvas.drawText(caption, box.x + box.width / 2f, baseline, captionPaint)
     } else if (showOnCover) {
         // A gradient rather than a solid strip, matching the board's scrim: a band
         // of flat paint across the top of every cover turns a board into a table.
@@ -532,13 +515,12 @@ private fun drawTile(
         canvas.clipPath(path)
         canvas.drawRect(box.x, box.y, box.x + box.width, scrimBottom, scrimPaint)
         canvas.restore()
-        val caption = ellipsize(candidate.title, captionPaint, box.width - 6f)
-        canvas.drawText(
-            caption,
-            box.x + box.width / 2f,
-            box.y + 15f,
-            captionPaint
-        )
+        val caption = ellipsize(captionText, captionPaint, box.width - 6f)
+        // Measured the same way as the caption under the cover: the ascent is
+        // negative, so this is "one text line down from the top edge", not a
+        // guessed constant that has to change with the type size.
+        val baseline = box.y + 4f - captionPaint.ascent()
+        canvas.drawText(caption, box.x + box.width / 2f, baseline, captionPaint)
     }
 }
 
@@ -555,7 +537,8 @@ private fun drawScoreBadge(
     box: TierItemBox,
     candidate: TierCandidate?,
     scorePaint: TextPaint,
-    scoreBackground: Paint
+    scoreBackground: Paint,
+    alignBottom: Boolean
 ) {
     val score = candidate?.averageScore ?: return
     if (score <= 0) return
@@ -566,7 +549,14 @@ private fun drawScoreBadge(
     val textWidth = scorePaint.measureText(text)
     val badgeHeight = scorePaint.textSize + paddingY * 2f
     val left = box.x + 4f
-    val top = box.y + 4f
+    // The board puts it at the bottom when the title is on the cover, so the two
+    // never overlap. Bottom-aligned here to match, not merely moved far enough
+    // down to miss this font size.
+    val top = if (alignBottom) {
+        box.y + box.posterHeight - badgeHeight - 4f
+    } else {
+        box.y + 4f
+    }
     val badge = RectF(left, top, left + textWidth + paddingX * 2f, top + badgeHeight)
     val radius = badge.height() / 2f
 
@@ -678,11 +668,3 @@ private fun Drawable.toExportBitmap(): Bitmap? {
         source
     }
 }
-
-private fun ellipsize(text: String, paint: Paint, maxWidth: Float): String =
-    TextUtils.ellipsize(
-        text,
-        TextPaint(paint),
-        maxWidth.coerceAtLeast(1f),
-        TextUtils.TruncateAt.END
-    ).toString()

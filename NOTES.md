@@ -558,6 +558,45 @@ base64 rather than linked. It is kept as the renderer `TierListTest` can assert
 on without a device, and as the route to a printable export; the app's share
 sheet uses PNG because every messaging app accepts it.
 
+### The name search matches words, not substrings
+
+The filter sheet's field is not `title.contains(query)`. People type
+`attack titan` for *Attack on Titan*, and a literal substring search finds
+nothing because "on" sits between the two words. The query is split on
+whitespace and every token has to appear somewhere in the candidate's
+`searchKey` — a single lowercased haystack built once per title from the caption
+and AniList's English, romaji and native names. That is also why the field keeps
+the raw string while `TierFilter.allows` normalises it: trimming on every
+keystroke made a second word impossible to type, because the space between the
+words disappeared before the next letter arrived.
+
+`searchKey` is a body property on `TierCandidate` rather than a function call in
+the matcher. The filter runs over every title on every keystroke, so lowercasing
+there was an allocation per title per character; built once, the whole dimension
+costs no allocation at all. It sits outside the data class's `equals` because it
+is derived text, not a second field to keep in step.
+
+### A caption's length is one decision, and the exports used to make their own
+
+`TierDisplay` carries a `TierTitleLength` beside its position. The board, the PNG
+exporter and the SVG writer all read it through `tierCaption`, because the same
+name cut in three different places is a file that disagrees with the screen it
+documents. Two of those disagreements were shipped before it existed:
+
+- **The SVG writer ignored the display entirely.** It drew a caption under every
+  poster whether the board showed names, put them on the artwork, or asked for
+the short form — and its own 22-character `truncate` was the only length rule in
+the codebase. It reads `TierDisplay` now, draws the on-cover scrim, and clips that
+  scrim to the same rounded tile as the artwork.
+- **The PNG put the score badge through an on-cover name.** The board moves the
+  badge to the bottom corner when the title is across the top; the export kept it
+  at the top. It follows the board now.
+
+Both exporters also centre a caption from the paint's own ascent and descent
+rather than from a constant baseline. `poster.bottom + 16` happened to sit inside
+a 26-unit band at 11pt, which is exactly the kind of coincidence that cuts a
+descender off the bottom of the image the moment either number changes.
+
 ---
 
 ## Home-screen widgets
@@ -775,5 +814,58 @@ crash, which is why it survived review.
 
 Routes that need a different back stack (sign-in, the demo dashboard) keep their
 own `popUpTo` and are left alone; the helper is for the plain "open a screen"
-cases. Tabs are not navigation at all — the profile's four tabs and the Settings
-three are one route with an index, so they cannot stack in the first place.
+cases. Tabs are not navigation at all — the profile's four tabs and the tier
+board's shelves are one route with an index, so they cannot stack in the first
+place.
+
+---
+
+## Settings is a hub, not a tab bar
+
+Settings used to be three tabs: **Info**, **Theme** and **Edit**. Those names
+described the source files, not anything a reader was trying to do, and "Edit"
+held six unrelated cards — refresh rate, quick add, app lock, the Client ID,
+sign-out and the redirect hint — because they had nowhere else to go. The first
+tab held the profile, the diagnostic, the changelog and the updater for the same
+reason. A tab that means "everything else" gets read end to end every time.
+
+Since 1.5.8 the screen opens on a shelf of rounded icon rows, each with a
+sentence under it: Appearance, Jokes, Library & dashboard, AniList account,
+AniList connection and About & support. A row opens a focused page and the
+`BackHandler` steps back to the shelf; the page state is an enum saved with
+`rememberSaveable`, deliberately not a nested nav graph, because the hub is the
+only entrance and a link should not be able to land on "app lock" without the
+shelf. The old Edit tab was split by subject: refresh, arrival rows and quick add
+moved to `LibrarySettingsTab`, the Client ID, session and lock stayed in
+`EditSettingsTab`. None of the controls were rewritten — the cards were already
+good; they were only filed under the wrong headings.
+
+The transition still drops the default `SizeTransform` (`using null`). The pages
+are scrollable columns, and animating the container's height while the outgoing
+page settles its own scroll is the crash shape that the tab version already
+documented. The fades and scales are draw-phase and stay.
+
+## Joke preferences are data, the host is policy
+
+The joke toast's four choices — on/off, frequency, edge and page scope — live in
+`domain/jokes/JokeSettings.kt` with no Android import, and are persisted by
+`data/repository/JokePreferences.kt`. The waits are properties of
+`JokeFrequency`, not constants in the host, because "Calm" and "Chatty" are only
+names for two pairs of numbers: a settings screen that owns the labels while the
+host owns the numbers can promise a pace it does not deliver.
+
+This split is also what makes the behaviour testable without a device.
+`JokeSettingsTest` pins that Off never schedules, that the master switch wins
+over Chatty, that every wait falls inside its frequency's window, and that a
+value written by a newer build falls back to Normal rather than throwing on
+launch. It is the same reason `AppJokes` has no Compose imports.
+
+The preview button does not mock the toast. It bumps a counter in
+`JokePreviewBus`, and the single host mounted by `AppNavigation` — which outlives
+the Settings page — draws the real pill at the chosen edge. That is the only way
+the preview can be honest about placement, and it is why the host is mounted even
+when jokes are off: an explicit request is not the ambient feature.
+
+The Settings-side AniList check no longer reads the failure copy's quip pool. It
+is a diagnostic the reader asked for, so every line is fixed copy; the random
+voice belongs to the ambient toast, where nobody is waiting for a verdict.
