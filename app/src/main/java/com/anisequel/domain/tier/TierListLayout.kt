@@ -1,12 +1,12 @@
 package com.anisequel.domain.tier
 
 /**
- * The geometry of a tier list, computed once and drawn two ways.
+ * The geometry of a tier list, computed once and read by every renderer.
  *
- * Compose and the SVG writer both read this and nothing else. A separate
- * arrangement in each renderer is how an exported file ends up with the labels in
- * a different order from the screen it was exported from, which is the kind of bug
- * nobody reports because the file "looks fine".
+ * Compose, the PNG exporter and the SVG writer all read this and nothing else. A
+ * separate arrangement in each renderer is how an exported file ends up with the
+ * labels in a different order from the screen it was exported from, which is the
+ * kind of bug nobody reports because the file "looks fine".
  */
 
 /**

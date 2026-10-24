@@ -35,149 +35,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.anisequel.domain.tier.TierAiringStatusOptions
 import com.anisequel.domain.tier.TierColorPalette
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
-import com.anisequel.domain.tier.TierFilter
-import com.anisequel.domain.tier.TierListStatusOptions
-import com.anisequel.domain.tier.TierStatusOption
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import kotlin.math.roundToInt
 
 /**
- * The board's settings sheets: filters, display, a tier's colour and its band.
+ * The board's display, colour and rating-band dialogs.
  *
- * Separate from `TierPlacementSheets` because these are *view* decisions while
- * those are placement decisions. The split is not cosmetic: the placement sheets
- * change the ranking and therefore the undo stack, and these do not.
+ * Filters, zoom and export live in their own files: they are three different
+ * sheets with three different reasons to change, and keeping them beside the
+ * display sheet had grown this file past the point where a reviewer could hold
+ * it in one pass.
  */
-
-/**
- * Which list and airing statuses are on the board.
- *
- * A chip is *selected when the status is shown*, not when it is hidden. That is
- * the reading people arrive with - a row of lit chips means "these are in" - and
- * the alternative ("lit means hidden") makes the default state, with planning
- * unlit, look like the only thing the screen is doing is hiding something. The
- * sentence above the chips says it outright anyway, because a control whose
- * polarity has to be inferred is a control that gets used backwards.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun TierFilterSheet(
-    filter: TierFilter,
-    onFilterChange: (TierFilter) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-                .testTag("tier_filter_sheet")
-        ) {
-            Text(
-                text = "Filters",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Unselected statuses are left out of the board and the unranked " +
-                    "shelf. Nothing is removed from your list.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-            TierFilterGroup(
-                title = "On your list",
-                options = TierListStatusOptions,
-                hidden = filter.hiddenListStatuses,
-                onToggle = { value, hide ->
-                    onFilterChange(filter.withListStatusHidden(value, hide))
-                }
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-            TierFilterGroup(
-                title = "Airing",
-                options = TierAiringStatusOptions,
-                hidden = filter.hiddenAiringStatuses,
-                onToggle = { value, hide ->
-                    onFilterChange(filter.withAiringStatusHidden(value, hide))
-                }
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = { onFilterChange(TierFilter.Default) },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                ) {
-                    Text("Default")
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                TextButton(
-                    onClick = { onFilterChange(TierFilter(emptySet(), emptySet())) },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                ) {
-                    Text("Show everything", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TierFilterGroup(
-    title: String,
-    options: List<TierStatusOption>,
-    hidden: Set<String>,
-    onToggle: (value: String, hide: Boolean) -> Unit
-) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Two columns built from `chunked` rather than `FlowRow`: the chips are
-        // short and the set is fixed, so a flow layout's wrapping would make two
-        // lists of different lengths look like different controls.
-        options.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { option ->
-                    val shown = option.value !in hidden
-                    ExpressiveStateChip(
-                        label = option.label,
-                        selected = shown,
-                        // Tapping a shown chip hides it, and the other way round.
-                        // `shown` is the current state, which is exactly the new
-                        // "hidden" value.
-                        onClick = { onToggle(option.value, shown) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        minTouchTargetHeight = 48.dp
-                    )
-                }
-                if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}
 
 /**
  * Names under the cover, on it, or not at all - plus a way back to 100%.

@@ -61,6 +61,7 @@ internal fun TierBoardHost(
     onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
+    dragEnabled: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
     onDragHintChanged: (String?) -> Unit
@@ -89,6 +90,7 @@ internal fun TierBoardHost(
                 onZoomChange = onZoomChange,
                 viewport = viewport,
                 scrollState = scrollState,
+                dragEnabled = dragEnabled,
                 onMove = onMove,
                 onItemTap = onItemTap,
                 onDragHintChanged = onDragHintChanged
@@ -140,6 +142,7 @@ private fun TierBoard(
     onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
+    dragEnabled: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
     onDragHintChanged: (String?) -> Unit
@@ -156,13 +159,28 @@ private fun TierBoard(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
 
+    // Locking the board while a tile is under the finger must not leave the
+    // ghost behind: the drag pointer handler is about to be removed, so its
+    // `onDragCancel` will never run.
+    LaunchedEffect(dragEnabled) {
+        if (!dragEnabled) {
+            draggingId = null
+            dragTravel.value = Offset.Zero
+        }
+    }
+
+    val tileTitles = display.showTitles && zoom >= TIER_CAPTION_MIN_ZOOM
     val options = remember(widthDp, zoom, display) {
         ScreenTierOptions.copy(
             width = widthDp / zoom,
-            // No caption band when the name is on the cover or hidden. Keeping
-            // the band would leave a strip of empty background under every poster
-            // and make a cover-only board look like a bug rather than a choice.
-            captionHeight = if (display.hasCaptionBand) ScreenTierOptions.captionHeight else 0f
+            // No caption band when the name is on the cover, hidden, or too
+            // small to read. Keeping the band at 35% would leave a 12dp strip
+            // of empty background under every 25dp poster.
+            captionHeight = if (display.hasCaptionBand && zoom >= TIER_CAPTION_MIN_ZOOM) {
+                ScreenTierOptions.captionHeight
+            } else {
+                0f
+            }
         )
     }
     val arrangement = remember(options, tiers, assignment, candidates, listName) {
@@ -303,6 +321,60 @@ private fun TierBoard(
 
     val dragBox = draggingId?.let { arrangement.boxByMediaId[it] }
 
+    // The drag handler is *removed* rather than merely disabled while the board
+    // is locked. Leaving a pointer input installed that ignores its drags still
+    // competes with `transformable` for the first pointer, which is the bug the
+    // lock exists to avoid: a pinch that starts on a poster was being eaten by
+    // the long-press drag detector before the second finger arrived.
+    val dragHandler = if (dragEnabled) {
+        Modifier.pointerInput(arrangement, zoom) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { offset ->
+                    val mediaId = tierItemAt(
+                        items = arrangement.items,
+                        x = offset.x / density.density / zoom,
+                        y = offset.y / density.density / zoom
+                    )
+                    if (mediaId == null) return@detectDragGesturesAfterLongPress
+                    draggingId = mediaId
+                    dragOrigin = offset
+                    dragTravel.value = Offset.Zero
+                    dragBoardTop = viewport.boardTop
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                onDrag = { change, amount ->
+                    change.consume()
+                    dragTravel.value += amount
+                },
+                onDragEnd = {
+                    val mediaId = draggingId
+                    if (mediaId != null) {
+                        // Read the live value rather than the one the last
+                        // composition saw: the final pointer move is not
+                        // required to have triggered a recomposition, and a
+                        // drop that lands one frame behind the finger is a
+                        // drop into the wrong row.
+                        val target = drop.value
+                        // A null tier id means the release landed off every
+                        // row, and a null tier id is exactly how `moveTo`
+                        // un-files a title. This is the only route to an empty
+                        // row that does not delete the row too. The second id
+                        // is where inside that row it goes.
+                        onMove(mediaId, target.tierId, target.beforeMediaId)
+                    }
+                    draggingId = null
+                    dragTravel.value = Offset.Zero
+                },
+                onDragCancel = {
+                    draggingId = null
+                    dragTravel.value = Offset.Zero
+                }
+            )
+        }
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,56 +392,14 @@ private fun TierBoard(
                 viewport.boardWidth = coordinates.size.width.toFloat()
             }
             .transformable(state = transformState)
-            .pointerInput(arrangement, zoom) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { offset ->
-                        val mediaId = tierItemAt(
-                            items = arrangement.items,
-                            x = offset.x / density.density / zoom,
-                            y = offset.y / density.density / zoom
-                        )
-                        if (mediaId == null) return@detectDragGesturesAfterLongPress
-                        draggingId = mediaId
-                        dragOrigin = offset
-                        dragTravel.value = Offset.Zero
-                        dragBoardTop = viewport.boardTop
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragTravel.value += amount
-                    },
-                    onDragEnd = {
-                        val mediaId = draggingId
-                        if (mediaId != null) {
-                            // Read the live value rather than the one the last
-                            // composition saw: the final pointer move is not
-                            // required to have triggered a recomposition, and a
-                            // drop that lands one frame behind the finger is a
-                            // drop into the wrong row.
-                            val target = drop.value
-                            // A null tier id means the release landed off every
-                            // row, and a null tier id is exactly how `moveTo`
-                            // un-files a title. This is the only route to an empty
-                            // row that does not delete the row too. The second id
-                            // is where inside that row it goes.
-                            onMove(mediaId, target.tierId, target.beforeMediaId)
-                        }
-                        draggingId = null
-                        dragTravel.value = Offset.Zero
-                    },
-                    onDragCancel = {
-                        draggingId = null
-                        dragTravel.value = Offset.Zero
-                    }
-                )
-            }
+            .then(dragHandler)
     ) {
         TierGeometry(
             arrangement = arrangement,
             options = options,
             zoom = zoom,
             display = display,
+            showTitles = tileTitles,
             candidateById = candidateById,
             hoveredTierId = dropTarget.tierId,
             dropCaret = caret,
@@ -384,7 +414,7 @@ private fun TierBoard(
                 zoom = zoom,
                 posterHeight = options.posterHeight * zoom,
                 captionHeight = options.captionHeight * zoom,
-                showTitle = display.showTitles,
+                showTitle = tileTitles,
                 titlePosition = display.titlePosition,
                 travel = dragTravel,
                 // How far the board has scrolled since the tile was picked up,
@@ -426,6 +456,7 @@ private fun TierGeometry(
     options: TierLayoutOptions,
     zoom: Float,
     display: TierDisplay,
+    showTitles: Boolean,
     candidateById: Map<Int, TierCandidate>,
     hoveredTierId: String?,
     dropCaret: TierCaret?,
@@ -493,7 +524,7 @@ private fun TierGeometry(
                     width = box.width * zoom,
                     posterHeight = options.posterHeight * zoom,
                     captionHeight = options.captionHeight * zoom,
-                    showTitle = display.showTitles,
+                    showTitle = showTitles,
                     titlePosition = display.titlePosition,
                     onTap = { onItemTap(box.mediaId) }
                 )

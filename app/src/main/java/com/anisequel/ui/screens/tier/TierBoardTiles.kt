@@ -112,6 +112,12 @@ internal fun TierRowStrip(
 ) {
     val tierColor = tierRowColor(row.colorArgb)
     val shape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
+    // At the 35% floor the gutter is under 20dp wide. A titleMedium label in it
+    // is clipped to a few pixels of a letter, and the count underneath it has
+    // nowhere to go. The row still has to say which tier it is, so the label
+    // drops to the smallest style and the count is omitted rather than drawn
+    // half outside the row.
+    val compact = labelGutter < 44f
 
     val fill by animateColorAsState(
         targetValue = tierRowFill(row.colorArgb, highlighted),
@@ -153,13 +159,17 @@ internal fun TierRowStrip(
             ) {
                 Text(
                     text = row.label,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = if (compact) {
+                        MaterialTheme.typography.labelSmall
+                    } else {
+                        MaterialTheme.typography.titleMedium
+                    },
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (memberCount > 0) {
+                if (memberCount > 0 && !compact) {
                     Text(
                         text = memberCount.toString(),
                         style = MaterialTheme.typography.labelSmall,
@@ -173,9 +183,14 @@ internal fun TierRowStrip(
         if (memberCount == 0) {
             Text(
                 text = "Drop titles here",
-                style = MaterialTheme.typography.labelMedium,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = (labelGutter + 14f).dp, end = 12.dp)
@@ -243,6 +258,12 @@ internal fun TierPosterTile(
     val shape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
     val titleOnCover = showTitle && titlePosition == TierTitlePosition.ON_COVER
     val titleUnderCover = showTitle && titlePosition == TierTitlePosition.UNDER_COVER
+    // The floor is 25dp a tile, and text does not scale with the board. A
+    // 10sp score badge on a 25dp poster is a black blob across the artwork, and
+    // an 11sp caption in a band the layout has already closed is invisible
+    // anyway. Both are dropped at the same threshold that closes the caption
+    // band, so the two decisions cannot disagree by a pixel.
+    val compact = width < ScreenTierOptions.itemWidth * TIER_CAPTION_MIN_ZOOM
 
     Column(
         modifier = modifier
@@ -275,7 +296,7 @@ internal fun TierPosterTile(
             // and a badge reading "0" claims a title is terrible rather than
             // unrated.
             val score = candidate?.averageScore
-            if (score != null && score > 0) {
+            if (!compact && score != null && score > 0) {
                 Text(
                     text = score.toString(),
                     style = MaterialTheme.typography.labelSmall,
@@ -294,7 +315,7 @@ internal fun TierPosterTile(
                 )
             }
 
-            if (titleOnCover) {
+            if (titleOnCover && !compact) {
                 // A scrim rather than a solid strip: covers are art, and a band of
                 // paint across the top of every one turns a board into a table.
                 // The gradient fades into the artwork so the title has a readable
@@ -329,7 +350,7 @@ internal fun TierPosterTile(
             }
         }
 
-        if (titleUnderCover) {
+        if (titleUnderCover && !compact) {
             Spacer(modifier = Modifier.height(2.dp))
 
             Text(

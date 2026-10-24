@@ -191,7 +191,7 @@ dozen or so ideas AniSync has proven, on device, to be worth the code.
 | 31 | Profile | Blocked-user filtering in activity | P2 | S | Low |
 | 32 | Profile | Reply threading from leading @mention | P2 | S | Low |
 | 33 | Profile | Content-limit pre-validation + rich-text composer | P2 | M | Low |
-| 34 | Tier | PNG/WebP share in addition to SVG; gallery save | P2 | M | Low |
+| 34 | Tier | PNG share + gallery save shipped in 1.5.6; WebP remains | P3 | S | Low |
 | 35 | Widgets | Image memory budget + 120ms fast-cover window | P1 | S | Low |
 | 36 | Widgets | Size ladder / `targetCellWidth` correctness | P2 | S | Low |
 | 37 | Widgets | `PendingIntent` identity via data URIs | P2 | S | Very low |
@@ -659,22 +659,20 @@ R8 rules. Charts stay `Canvas` + `clearAndSetSemantics`.
   one-time migration; every edit is one transaction and undo is the previous
   snapshot read inside the write.
 - Drag is positional (tier + tile-to-go-above), with edge auto-scroll and a ghost
-  translated by board movement. Export is lossless **SVG** with base64 posters.
+  translated by board movement. Sharing writes a full-board **PNG** rendered from
+  the same layout at a fixed 1080-unit width, with a gallery save through
+  `MediaStore`, and `domain/tier/TierListSvg.kt` remains the lossless vector
+  renderer with base64 posters.
 
 This is the strongest subsystem in either repo, and AniSync has no tier list at
-all. Only two borrowings are worth it.
+all. The raster share and gallery save are shipped; the remaining borrowing is
+smaller files.
 
 #### Improvements
 
-1. **Add a raster export alongside SVG — P2, M.** AniSync's share pipeline writes
-   a PNG/WebP via `capturable` with a **fixed 1080px export density**
-   (`ExportWidthPx = 1080f`, overriding `LocalDensity` for the capture node and
-   scaling *down* only for on-screen preview). SVG is great for a designer; most
-   people share into chat, where a PNG is what actually renders. Reuse the same
-   board layout composable and add "Share image" beside "Export SVG".
-2. **Gallery save + WebP** — P3, S. `MediaStore` insert with `IS_PENDING` (no
-   permission on API 29+, which is below AniSequel's floor anyway), and
-   WebP-lossless on API 30+ for smaller files that keep rounded corners.
+1. **WebP-lossless on API 30+** — P3, S. The PNG path is in place; a WebP
+   variant would cut the file size while keeping rounded corners. Already behind
+   AniSequel's floor, so no permission branch is needed.
 
 **Rule check.** `capturable` is one dependency; the export path is `ui/`, so the
 pure-`domain` tier rules are untouched. Do not move any layout maths out of

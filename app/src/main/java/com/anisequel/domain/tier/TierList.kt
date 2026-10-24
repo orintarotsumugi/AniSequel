@@ -5,9 +5,10 @@ package com.anisequel.domain.tier
  *
  * Everything here is pure: no Android, no Compose, no coroutines. That is not
  * tidiness for its own sake. The same layout produced by [layoutTierList] is
- * drawn two ways - on screen by Compose and into an SVG by [tierListToSvg] - and
- * two independent arrangements of the same list is exactly the situation where
- * one of them quietly disagrees with the other. One geometry, two renderers.
+ * drawn three ways - on screen by Compose, into a PNG by the board's exporter and
+ * into an SVG by [tierListToSvg] - and independent arrangements of the same list
+ * is exactly the situation where one of them quietly disagrees with the other.
+ * One geometry, three renderers.
  */
 
 /**
@@ -120,7 +121,26 @@ data class TierCandidate(
      * Different from [listStatus] on purpose: "I dropped it" and "it finished
      * airing" are separate facts and the filter asks about both.
      */
-    val airingStatus: String? = null
+    val airingStatus: String? = null,
+    /**
+     * AniList's genres for the title, as the filter sheet's genre chips.
+     *
+     * Defaulted to empty rather than nullable so every reader - the filter, the
+     * option builder and the exporter - can treat "no genres" as an ordinary
+     * value. A cached list from before the query asked for genres is the case
+     * this protects: it has no field, and the filter must show an empty section
+     * rather than crash on a missing list.
+     */
+    val genres: List<String> = emptyList(),
+    /**
+     * The title's main animation studios, by name.
+     *
+     * Only `isMain` credits are kept; AniList shares the `studios` connection
+     * between the animation studio and the publishers, and a studio filter that
+     * offered a publisher would be a filter that almost never matches anything
+     * the viewer thinks of as "made by".
+     */
+    val studios: List<String> = emptyList()
 )
 
 /**
@@ -210,12 +230,37 @@ val TierAiringStatusOptions: List<TierStatusOption> = listOf(
  */
 data class TierFilter(
     val hiddenListStatuses: Set<String> = setOf("PLANNING"),
-    val hiddenAiringStatuses: Set<String> = emptySet()
+    val hiddenAiringStatuses: Set<String> = emptySet(),
+    /**
+     * Genres to keep, or empty for every genre.
+     *
+     * Unlike the status dimensions this is a *shown* set rather than a hidden
+     * one. Statuses are a closed vocabulary AniList can extend, so "hide these"
+     * keeps a new status visible; genres are an open, per-title vocabulary where
+     * the useful question is "show me only these", and an empty set is the
+     * natural "no genre question". Titles with no genre at all are treated as
+     * passing a genre filter only when no genre is selected, because there is
+     * nothing on them to match.
+     */
+    val genres: Set<String> = emptySet(),
+    /** Studios to keep, or empty for every studio while [studiosEnabled] is on. */
+    val studios: Set<String> = emptySet(),
+    /**
+     * Whether the studio filter is applied at all.
+     *
+     * Off by default, because most boards never need it and the studio list is
+     * long enough to bury the genre chips. The selected set is kept while the
+     * section is off, so turning it back on restores the filter rather than
+     * silently forgetting it.
+     */
+    val studiosEnabled: Boolean = false
 ) {
-    /** True when [candidate] passes both dimensions. */
+    /** True when [candidate] passes every dimension. */
     fun allows(candidate: TierCandidate): Boolean =
         (candidate.listStatus == null || candidate.listStatus !in hiddenListStatuses) &&
-            (candidate.airingStatus == null || candidate.airingStatus !in hiddenAiringStatuses)
+            (candidate.airingStatus == null || candidate.airingStatus !in hiddenAiringStatuses) &&
+            (genres.isEmpty() || candidate.genres.any { it in genres }) &&
+            (!studiosEnabled || studios.isEmpty() || candidate.studios.any { it in studios })
 
     fun withListStatusHidden(status: String, hidden: Boolean): TierFilter = copy(
         hiddenListStatuses = if (hidden) {
@@ -233,14 +278,89 @@ data class TierFilter(
         }
     )
 
-    /** The default state, which is what the filter sheet's reset restores. */
+    fun withGenre(genre: String, selected: Boolean): TierFilter = copy(
+        genres = if (selected) genres + genre else genres - genre
+    )
+
+    fun withStudio(studio: String, selected: Boolean): TierFilter = copy(
+        studios = if (selected) studios + studio else studios - studio
+    )
+
+    fun withStudiosEnabled(enabled: Boolean): TierFilter = copy(studiosEnabled = enabled)
+
+    /**
+     * True when nothing is actually being filtered.
+     *
+     * Studio selections are ignored while [studiosEnabled] is off: the set is
+     * kept so switching the section back on restores it, but a kept selection
+     * that is not filtering anything must not light the filter dot on the app
+     * bar. The dot is a claim about the board, not about the sheet's memory.
+     */
     val isDefault: Boolean
-        get() = this == Default
+        get() = hiddenListStatuses == Default.hiddenListStatuses &&
+            hiddenAiringStatuses == Default.hiddenAiringStatuses &&
+            genres.isEmpty() &&
+            (!studiosEnabled || studios.isEmpty())
 
     companion object {
         val Default = TierFilter()
+
+        /** The "Show everything" state: statuses and both facet filters cleared. */
+        val ShowEverything = TierFilter(hiddenListStatuses = emptySet())
     }
 }
+
+/**
+ * One genre or studio the filter sheet can offer.
+ *
+ * The count is the number of library titles carrying the value, not a watch
+ * count from AniList: the list is the only data this screen has, and "how many
+ * titles in my list" is the question the section answers. Sorted by that count,
+ * the studios the viewer has watched most naturally come first.
+ */
+data class TierFacetOption(
+    val value: String,
+    val label: String,
+    val count: Int
+)
+
+/** Genres across [candidates], most common first, then alphabetically. */
+fun genreFacetOptions(candidates: List<TierCandidate>): List<TierFacetOption> =
+    facetOptions(candidates.flatMap { it.genres.normalizedFacetValues() })
+
+/** Studios across [candidates], most common first, then alphabetically. */
+fun studioFacetOptions(candidates: List<TierCandidate>): List<TierFacetOption> =
+    facetOptions(candidates.flatMap { it.studios.normalizedFacetValues() })
+
+/**
+ * One value per title, trimmed and without blanks.
+ *
+ * This has to happen per title, before the flatten: the same value can appear
+ * twice on one title (AniList has answered duplicate genre strings, and a cached
+ * response can carry `" MAPPA "` beside `"MAPPA"`), and adding each occurrence
+ * would inflate the count that decides the order.
+ */
+private fun List<String>.normalizedFacetValues(): List<String> =
+    map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+
+/**
+ * Counts the values and puts the busiest first.
+ *
+ * The counts decide the studio order, which is how "the studios I watch most"
+ * comes first without a second source of watch counts. Ties fall back to the
+ * name so the order is stable across recompositions.
+ */
+private fun facetOptions(values: List<String>): List<TierFacetOption> =
+    values.groupingBy { it }
+        .eachCount()
+        .map { (value, count) -> TierFacetOption(value = value, label = value, count = count) }
+        .sortedWith(
+            compareByDescending<TierFacetOption> { it.count }
+                .thenBy { it.label.lowercase(java.util.Locale.ROOT) }
+        )
+
 
 /**
  * The score bands a tier list seeds with, read off the tiers themselves.
