@@ -240,7 +240,16 @@ class TierListViewModel(
                     .filter { it.isMain }
                     .map { it.name.trim() }
                     .filter { it.isNotEmpty() }
-                    .distinct()
+                    .distinct(),
+                // Every name AniList has for the title, so the name filter finds
+                // "Attack on Titan" from `shingeki` and the reverse. The caption
+                // is still `title` alone; these exist only to be searched, which
+                // is what keeps a poster from growing a second line of aliases.
+                alternativeTitles = listOfNotNull(
+                    media.title?.romaji,
+                    media.title?.english,
+                    media.title?.native
+                )
             )
         }
     }

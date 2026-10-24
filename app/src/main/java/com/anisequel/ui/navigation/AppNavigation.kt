@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -29,6 +30,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.domain.jokes.JokePosition
+import com.anisequel.domain.jokes.JokeScope
+import com.anisequel.domain.jokes.JokeSettings
 import com.anisequel.ui.components.JokeToastHost
 import com.anisequel.ui.components.JokeToastLift
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
@@ -41,6 +45,7 @@ import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.HiddenSequelsPreferences
+import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
@@ -161,6 +166,14 @@ fun AppNavigation(
     val quickAddPreferences = remember(context) {
         com.anisequel.data.repository.QuickAddPreferences(context.applicationContext)
     }
+
+    // Application-scoped for the same reason as the rest: the toast host here and
+    // the joke card in Settings are two readers of one preference. Two DataStore
+    // instances would let the preview describe an edge the toast never uses.
+    val jokePreferences = remember(context) {
+        JokePreferences(context.applicationContext)
+    }
+    val jokeSettings by jokePreferences.settings.collectAsState(initial = JokeSettings())
 
     // The Library page's remembered media type. Application-scoped and built here
     // for the same reason as the rest: one DataStore reader per process, so the
@@ -823,6 +836,7 @@ fun AppNavigation(
                     refreshIntervalPreferences = refreshIntervalPreferences,
                     arrivingPreferences = arrivingPreferences,
                     quickAddPreferences = quickAddPreferences,
+                    jokePreferences = jokePreferences,
                     changelogRepository = changelogRepository,
                     checkApiReachability = aniListRepository::checkApiReachability,
                     viewer = signedInViewer,
@@ -857,22 +871,45 @@ fun AppNavigation(
             )
         }
 
-        // A joke, now and then, above the bar. Mounted by the host for the same
-        // reason the bar is: only the host knows which page is on screen, and a
-        // screen cannot draw a toast that outlives it. Gated on `currentTab` so it
-        // never arrives over login, Settings or a title sheet - see [JokeToastHost].
+        // A joke, now and then, at the edge the reader chose. Mounted by the host
+        // for the same reason the bar is: only the host knows which page is on
+        // screen, and a screen cannot draw a toast that outlives it.
+        //
+        // `active` is the page rule, not the switch: the host owns the switch,
+        // frequency and timing. Main-pages means the three pages the bar owns;
+        // Everywhere adds the pages pushed from them. Login is excluded from both
+        // arms - a joke over the sign-in screen is an interruption at the one
+        // moment the reader is deciding something.
+        val jokesAllowedHere = if (jokeSettings.scope == JokeScope.EVERYWHERE) {
+            currentRoute != null && currentRoute != AppRoutes.LOGIN
+        } else {
+            currentTab != null
+        }
+        val jokeAtTop = jokeSettings.position == JokePosition.TOP
         JokeToastHost(
-            enabled = currentTab != null,
+            settings = jokeSettings,
+            active = jokesAllowedHere,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                // Above the bar, and above the dashboard's snackbar rather than on
-                // top of it: the dashboard anchors that host at `MainBarClearance`,
-                // so a joke parked just clear of the bar would occasionally be
-                // drawn through an "Added to Planning" confirmation. The clearance
-                // already includes the device's navigation inset, and the extra
-                // lift is the toast's own constant so the two cannot drift.
-                .padding(horizontal = 16.dp)
-                .padding(bottom = mainBarClearance() + JokeToastLift)
+                .align(if (jokeAtTop) Alignment.TopCenter else Alignment.BottomCenter)
+                .then(
+                    if (jokeAtTop) {
+                        Modifier
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 12.dp)
+                    } else {
+                        // Above the bar, and above the dashboard's snackbar rather
+                        // than on top of it: the dashboard anchors that host at
+                        // `MainBarClearance`, so a joke parked just clear of the bar
+                        // would occasionally be drawn through an "Added to
+                        // Planning" confirmation. The clearance already includes
+                        // the device's navigation inset, and the extra lift is the
+                        // toast's own constant so the two cannot drift.
+                        Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = mainBarClearance() + JokeToastLift)
+                    }
+                )
         )
     }
 }

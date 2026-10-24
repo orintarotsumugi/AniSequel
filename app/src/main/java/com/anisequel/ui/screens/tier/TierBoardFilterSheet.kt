@@ -13,10 +13,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,8 +30,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TierAiringStatusOptions
 import com.anisequel.domain.tier.TierCandidate
@@ -35,6 +43,8 @@ import com.anisequel.domain.tier.TierListStatusOptions
 import com.anisequel.domain.tier.TierStatusOption
 import com.anisequel.domain.tier.genreFacetOptions
 import com.anisequel.domain.tier.studioFacetOptions
+import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 
 /**
@@ -63,6 +73,12 @@ internal fun TierFilterSheet(
 ) {
     val genres = remember(candidates) { genreFacetOptions(candidates) }
     val studios = remember(candidates) { studioFacetOptions(candidates) }
+    // The count is the answer to "did my search find anything", which is the
+    // question a search box otherwise leaves to a wall of empty rows. It reads
+    // the same `allows` the board does, so the number cannot disagree with what
+    // the sheet is filtering.
+    val matches = remember(candidates, filter) { candidates.count(filter::allows) }
+    val focusManager = LocalFocusManager.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -89,8 +105,68 @@ internal fun TierFilterSheet(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Unselected statuses are left out of the board and the unranked " +
-                    "shelf. Genres and studios narrow the board further. Nothing is " +
-                    "removed from your list.",
+                    "shelf. Genres, studios and a name search narrow the board further. " +
+                    "Nothing is removed from your list.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = filter.query,
+                onValueChange = { value -> onFilterChange(filter.withQuery(value)) },
+                label = { Text("Search by name") },
+                placeholder = { Text("attack titan") },
+                singleLine = true,
+                shape = ExpressiveShapes.pill,
+                leadingIcon = {
+                    Icon(
+                        imageVector = AppVectorIcons.Search,
+                        contentDescription = null
+                    )
+                },
+                // The slot is always composed, and empty when there is nothing
+                // to clear, so the field does not resize as the first character
+                // lands.
+                trailingIcon = {
+                    if (filter.query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onFilterChange(filter.withQuery("")) },
+                            modifier = Modifier.testTag("tier_filter_search_clear")
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Close,
+                                contentDescription = "Clear search"
+                            )
+                        }
+                    }
+                },
+                // The keyboard can cover the chips below it, and the person is
+                // usually done typing before they want them; Search just puts it
+                // away rather than running a second, different filter.
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { focusManager.clearFocus() }
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("tier_filter_search")
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                // Every word has to match, in any order, across the title and its
+                // English, romaji and native names - so `attack titan` and
+                // `shingeki` both find the same poster.
+                text = if (filter.hasQuery) {
+                    "$matches of ${candidates.size} " +
+                        if (candidates.size == 1) "title matches" else "titles match"
+                } else {
+                    "Search matches English, romaji and native titles. " +
+                        "Every word you type has to match."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

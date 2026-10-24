@@ -41,8 +41,9 @@ middleman server.
 - **Material 3 Expressive throughout.** Spring physics, a blurred key visual
   behind every title, and a Material You theme seeded from the cover art itself.
 - **A tier list, local and shareable.** Saved as projects, dragged positionally,
-  filtered by genre and studio, locked into view-only browsing, and exported as
-  one full-board PNG up to 4K that can be shared or saved to Pictures (with a
+  filtered by status, genre, studio and a name search, with names under or on the
+  cover and cut to a chosen length, locked into view-only browsing, and exported
+  as one full-board PNG up to 4K that can be shared or saved to Pictures (with a
   lossless SVG renderer behind it).
 - **Four home-screen widgets.** Recent activity, missed sequels, arriving
   sequels, and one featured recommendation.
@@ -154,7 +155,7 @@ and which mistakes have already been made in it.
 ## Release notes
 
 `app/src/main/assets/changelog.json` is the single source of the app's release
-notes. The "What's new" card in Settings → Info reads it from inside the APK;
+notes. The "What's new" block in Settings → About & support reads it from inside the APK;
 the release workflow reads the same file to write the GitHub release body. Two
 consumers, one source, so they cannot drift.
 
