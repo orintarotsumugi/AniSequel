@@ -75,8 +75,9 @@ internal fun TierZoomSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Pinch anywhere on the board, or drag the slider. If a " +
-                    "long-press keeps taking the pinch, lock the board first.",
+                text = "Pinch anywhere on the board, or drag the slider. One " +
+                    "finger scrolls the board; a pinch is two. Lock the board to " +
+                    "look around without any poster moving.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -130,12 +131,13 @@ internal fun TierZoomSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Lock tile dragging",
+                        text = "View only",
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Pinch and scroll without picking a poster up.",
+                        text = "Scroll and pinch freely; no poster can be picked up " +
+                            "or tapped into a tier until this is off.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

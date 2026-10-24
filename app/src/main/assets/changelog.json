@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.5.7",
+      "entries": [
+        {
+          "title": "The lock is a real view-only mode",
+          "detail": "Locking the board now stops every edit, not just the long-press drag: a tap no longer opens the placement sheet, and the unranked shelf will not start a drag or open the picker. The shelf dims and its header says View only instead of offering Browse all, a pill at the top of the board says the same and unlocks in one tap, and Add is disabled until the lock comes off. Scrolling and pinching keep working the whole time, because those are how a locked board is read."
+        },
+        {
+          "title": "One finger scrolls the board again",
+          "detail": "The board's pinch gesture also claimed one-finger pans and consumed them, so the column above and below the board scrolled while the board itself felt frozen - whether or not the lock was on. Pinch is now two fingers only: a single finger reaches the scroll untouched, a pinch still zooms, and lifting one finger mid-pinch no longer lets the remaining finger jump the board by half a screen."
+        },
+        {
+          "title": "Export at up to 4K, with the size shown before you share",
+          "detail": "The export sheet now offers 1080p, 2K and 4K, with 4K selected by default, and prints the exact pixel size of the file you are about to make. The renderer scales artwork, text and strokes by the same factor, streams posters in small batches and releases each one after it is drawn, so a 300-title board no longer has to hold every cover at once - and a device that cannot allocate the requested size steps down to a smaller complete image instead of failing. Score badges and the faded title band on each cover are in the file now too, so the export matches the board it came from."
+        },
+        {
+          "title": "Covers stay square at every zoom",
+          "detail": "A tile's corner used to be a fixed 12dp, which is a rounded square at 100% and very nearly a circle on a 25dp tile at the 35% zoom floor - the peeled look of the overview. The radius is now a share of the tile's width in all three renderers, so a zoomed-out board reads as a wall of posters, the tray matches it, and an exported PNG or SVG rounds the same corners as the screen."
+        },
+        {
+          "title": "Smaller motion and clarity fixes across the board",
+          "detail": "The drop marker springs into place instead of appearing fully formed, the lock icon and the zoom control colours animate between states, and the legend and shelf header crossfade rather than swapping text in one frame. Image elements in the SVG export are clipped to the tile, so their corners are rounded for the first time, and the export measures its output off the main thread so opening the sheet does not stutter on a large list."
+        }
+      ]
+    },
+    {
       "version": "1.5.6",
       "entries": [
         {

@@ -512,15 +512,45 @@ arrangements are how an export ends up with the labels in a different order from
 the screen it came from, and the bug is invisible because the exported file
 looks fine.
 
-The board's shareable export is a **PNG**, rendered from that same layout at a
-fixed 1080-unit width. It is not a screenshot: a screenshot is the viewport by
-definition, so a 300-title board would be forty of them at whatever zoom the
-person last used. Posters are fetched through Coil at the tile's export size; one
-that fails is a filled tile with a readable caption rather than a failed export.
-The bitmap is capped by pixels rather than title count, so an unusually tall
-board is rendered slightly soft instead of throwing `OutOfMemoryError`. The
-board's zoom is deliberately not the export scale: 35% is a useful way to look at
-the board, not a useful resolution to share.
+### The lock is a mode, not a gesture switch
+
+The lock used to disable the long-press drag and nothing else, so a "locked"
+board still opened the placement sheet on a tap and still accepted a drag out of
+the unranked shelf. It is view-only now: the tile installs neither its press
+spring nor its `clickable`, the shelf cancels any drag in flight and offers no
+Browse, the Add pill is disabled, and the screen's tap handlers check the same
+flag. Scrolling and pinching stay available because those are how a locked board
+is read. It is still session state, not a stored display preference: persisting
+it would leave a board that cannot be ranked after the next launch.
+
+### Pinch is two fingers, and the export is up to 4K
+
+The board's zoom used to be `Modifier.transformable`, which reports a one-finger
+pan as movement and consumes it. That is why the board refused to scroll under a
+single finger - the column above and below it scrolled while the board itself
+felt frozen. A small `pointerInput` now only acts while two or more pointers are
+down, so a one-finger drag reaches the screen's `verticalScroll` untouched; the
+local zoom value is kept for the gesture because the composition's value is a
+frame behind the next pointer event.
+
+The board's shareable export is a **PNG**, rendered from that same layout, at
+1080, 2160 or 3840 pixels across. It is not a screenshot: a screenshot is the
+viewport by definition, so a 300-title board would be forty of them at whatever
+zoom the person last used. The output scale is the requested width first and the
+heap second: `maxMemory * 0.33 / 4` bounds the bitmap's pixels, a failed
+allocation halves that budget and retries, and only a board too tall for the
+budget gives width back. Posters are requested at their drawn size with Coil's
+memory cache disabled and released batch by batch after they are drawn, so the
+peak is one batch rather than the whole board. The board's zoom is deliberately
+not the export scale: 35% is a useful way to look at the board, not a useful
+resolution to share.
+
+Tile corners are a fraction of the tile's width (`tierTileCornerRadius`), not a
+fixed radius. A constant 12dp is a rounded square on a 72dp tile and very nearly
+a circle on a 25dp one, which is the "peeled" look the overview had at the 35%
+zoom floor. The Compose board, the tray, the PNG exporter and the SVG writer all
+read the same helper, and the SVG clips its `<image>` to the rounded rect because
+an SVG image element has no corner radius of its own.
 
 `domain/tier/TierListSvg.kt` remains the lossless vector writer — every glyph is
 still text and every rule is still a rectangle, and posters are embedded as

@@ -1,45 +1,42 @@
 package com.anisequel.ui.screens.tier
 
-import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.net.Uri
-import android.os.Environment
-import android.provider.MediaStore
 import android.text.TextPaint
 import android.text.TextUtils
-import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import coil.imageLoader
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
-import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierItemBox
+import com.anisequel.domain.tier.TierLayoutOptions
+import com.anisequel.domain.tier.TierListLayout
 import com.anisequel.domain.tier.TierRowBox
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.domain.tier.onlyFor
+import com.anisequel.domain.tier.tierTileCornerRadius
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.IOException
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -54,19 +51,30 @@ import kotlin.math.sqrt
  * The board is inside a scrolling column, so the screen only ever holds the
  * viewport. A screenshot of it is a picture of *the phone*: whatever zoom the
  * person left the board at, whatever rows happened to be on screen, and the app's
- * chrome around them. This lays the whole visible assignment out at the
- * exporter's own 1080-unit width, which fits about eleven posters across and
- * puts a 300-title list into a single file. It is the same arrangement, so a row
- * cannot appear in a different order here than it does on the board.
+ * chrome around them. This lays the whole visible assignment out at the exporter's
+ * own 1080-unit width, which fits about eleven posters across and puts a
+ * 300-title list into a single file. It is the same arrangement, so a row cannot
+ * appear in a different order here than it does on the board.
  *
- * ## The bitmap is capped by pixels, not by title count
+ * ## The output is scaled to the requested width, up to 4K
  *
- * A 35-200% zoom range and a list that can be thousands of rows tall make "one
- * image" a memory question. The output scale is chosen so the result stays under
- * [MAX_EXPORT_PIXELS]; a very tall list is therefore rendered at slightly under
- * 1 px per layout unit rather than failing with an OOM. Text is drawn at the
- * scaled size, so the cap costs sharpness on the largest lists and never
- * correctness.
+ * The layout is authored in 1080 units; [targetWidth] asks for a bitmap
+ * 1080/2160/3840 pixels across and every unit - artwork, text, stroke - is scaled
+ * by the same factor. Two things cap it, and both are memory rather than taste:
+ * the bitmap has to fit in the heap ([exportPixelBudget]), and a list tall enough
+ * to make a 4K-wide image billions of pixels is scaled down until it does. A
+ * device that cannot allocate even the first attempt steps the budget down and
+ * tries again, because a slightly smaller export is better than no export.
+ *
+ * ## Posters are fetched at their drawn size and released in batches
+ *
+ * A poster is requested at exactly the pixels it occupies in the final bitmap, so
+ * it is never upscaled and never decoded twice as large as it is drawn. The
+ * requests opt out of Coil's memory cache - each cover appears once, so the cache
+ * would only hold a second copy of the whole board - and each batch is recycled
+ * after it is drawn. Retaining all covers until the end is what would turn a 4K
+ * export of a 300-title list into an out-of-memory crash: at 4K each tile is
+ * about 256x384, roughly 400 KB, and the sum is over a hundred megabytes.
  */
 internal suspend fun renderTierListImage(
     context: Context,
@@ -74,19 +82,135 @@ internal suspend fun renderTierListImage(
     tiers: List<TierDefinition>,
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
-    display: TierDisplay
+    display: TierDisplay,
+    targetWidth: Int = TIER_EXPORT_WIDTH_ULTRA
 ): Bitmap? = withContext(Dispatchers.Default) {
-    if (assignment.isEmpty || tiers.isEmpty()) return@withContext null
+    val plan = planTierExport(
+        listName = listName,
+        tiers = tiers,
+        assignment = assignment,
+        candidates = candidates,
+        display = display
+    ) ?: return@withContext null
+    val layout = plan.layout
 
-    // The board keeps a placement whose title is no longer in the library, so a
-    // filtered library that is still loading cannot make a placement look
-    // deleted. An *export* has no such job: there is no poster to fetch and no
-    // name to caption, so keeping the slot would draw a blank tile and push the
-    // counted titles into a lie. Drop those placements from the geometry instead
-    // of drawing around them.
+    // First choice is the requested resolution. A failed allocation halves the
+    // budget and retries, so a low-memory device gets a smaller complete image
+    // rather than the sheet's generic "could not be rendered".
+    var budget = exportPixelBudget()
+    var scale = 1f
+    var allocated: Bitmap? = null
+    while (allocated == null && budget >= MIN_EXPORT_PIXELS) {
+        scale = exportScale(
+            width = layout.width,
+            height = layout.height,
+            targetWidth = targetWidth,
+            maxPixels = budget
+        )
+        allocated = allocateBitmap(layout.width * scale, layout.height * scale)
+        if (allocated == null) budget /= 2.0
+    }
+    val bitmap = allocated ?: return@withContext null
+
+    val canvas = Canvas(bitmap)
+    canvas.drawColor(EXPORT_BACKGROUND)
+    canvas.scale(scale, scale)
+
+    drawHeading(canvas, layout.title, layout.subtitle, layout.width)
+    drawRows(canvas, layout.rows, layout.items, tiers)
+    drawItems(
+        context = context,
+        canvas = canvas,
+        layout = layout.items,
+        candidates = candidates,
+        scale = scale,
+        showUnderCover = plan.showUnderCover,
+        showOnCover = plan.showOnCover
+    )
+    bitmap
+}
+
+/**
+ * The output widths the export sheet offers.
+ *
+ * 1080 is the layout's own unit width, 2160 is 2x, and 3840 is 4K UHD - the
+ * width an image has to reach to be called 4K without a footnote. The taller
+ * dimension is whatever the board's aspect ratio produces; a 4K-wide board that
+ * happens to be 2000 units tall exports at 3840x7111, which is still a 4K-class
+ * file and is capped by [exportPixelBudget] on smaller devices.
+ */
+internal const val TIER_EXPORT_WIDTH_STANDARD = 1080
+internal const val TIER_EXPORT_WIDTH_HIGH = 2160
+internal const val TIER_EXPORT_WIDTH_ULTRA = 3840
+
+/** The size a given quality would actually produce, for the sheet's caption. */
+internal data class TierExportSize(val width: Int, val height: Int)
+
+/**
+ * What [renderTierListImage] would produce, without allocating the bitmap.
+ *
+ * The sheet shows "3840 x 2214 px" before the person presses anything, which is
+ * the difference between a quality switch and a promise. It runs the same plan
+ * and the same scale arithmetic as the renderer, so the number cannot drift from
+ * the file. The layout step allocates no bitmaps and is a single pass over the
+ * assignment.
+ */
+internal fun estimateTierExportSize(
+    listName: String,
+    tiers: List<TierDefinition>,
+    assignment: TierAssignment,
+    candidates: List<TierCandidate>,
+    display: TierDisplay,
+    targetWidth: Int
+): TierExportSize? {
+    val plan = planTierExport(
+        listName = listName,
+        tiers = tiers,
+        assignment = assignment,
+        candidates = candidates,
+        display = display
+    ) ?: return null
+    val scale = exportScale(
+        width = plan.layout.width,
+        height = plan.layout.height,
+        targetWidth = targetWidth,
+        maxPixels = exportPixelBudget()
+    )
+    return TierExportSize(
+        width = (plan.layout.width * scale).roundToInt().coerceAtLeast(1),
+        height = (plan.layout.height * scale).roundToInt().coerceAtLeast(1)
+    )
+}
+
+/** The arrangement, and the display decisions both the render and the size share. */
+private data class TierExportPlan(
+    val layout: TierListLayout,
+    val showUnderCover: Boolean,
+    val showOnCover: Boolean
+)
+
+/**
+ * Works out what the image will contain.
+ *
+ * The board keeps a placement whose title is no longer in the library, so a
+ * filtered library that is still loading cannot make a placement look deleted. An
+ * *export* has no such job: there is no poster to fetch and no name to caption, so
+ * keeping the slot would draw a blank tile and push the counted titles into a
+ * lie. Those placements are dropped from the geometry here rather than drawn
+ * around.
+ */
+private fun planTierExport(
+    listName: String,
+    tiers: List<TierDefinition>,
+    assignment: TierAssignment,
+    candidates: List<TierCandidate>,
+    display: TierDisplay
+): TierExportPlan? {
+    if (assignment.isEmpty || tiers.isEmpty()) return null
+
     val drawableIds = candidates.mapTo(HashSet()) { it.mediaId }
     val drawableAssignment = assignment.onlyFor(drawableIds)
-    if (drawableAssignment.isEmpty) return@withContext null
+    if (drawableAssignment.isEmpty) return null
 
     val showUnderCover = display.showTitles &&
         display.titlePosition == TierTitlePosition.UNDER_COVER
@@ -115,45 +239,73 @@ internal suspend fun renderTierListImage(
         subtitle = "$titleCount ${if (titleCount == 1) "title" else "titles"} · AniSequel",
         options = options
     )
-
-    val scale = exportScale(layout.width, layout.height)
-    val widthPx = (layout.width * scale).roundToInt().coerceAtLeast(1)
-    val heightPx = (layout.height * scale).roundToInt().coerceAtLeast(1)
-    val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    canvas.drawColor(EXPORT_BACKGROUND)
-    canvas.scale(scale, scale)
-
-    drawHeading(canvas, layout.title, layout.subtitle, layout.width)
-    drawRows(canvas, layout.rows, layout.items, tiers)
-    drawItems(
-        context = context,
-        canvas = canvas,
-        layout = layout.items,
-        candidates = candidates,
-        scale = scale,
+    return TierExportPlan(
+        layout = layout,
         showUnderCover = showUnderCover,
         showOnCover = showOnCover
     )
-    bitmap
 }
 
 /**
- * Picks a scale that keeps the bitmap under [MAX_EXPORT_PIXELS].
+ * Picks a scale that reaches [targetWidth] without exceeding [maxPixels].
  *
- * 2x is the ceiling because the layout is already 1080 units wide - an export
- * that is 2160px across is crisp on any phone and not wastefully large for a
- * short board. The floor is not fixed: a list tall enough to need less than 1x
- * still gets exported, because a slightly soft complete image beats a failure.
+ * The result is a *width* promise first and a memory promise second: a short board
+ * exports at exactly the chosen quality, and only a board too tall to fit the heap
+ * gives some of it back. The floor is not fixed at 1x - a 300-title list must
+ * still export something - but it is low enough that the complete image survives.
  */
-private fun exportScale(width: Float, height: Float): Float {
+private fun exportScale(
+    width: Float,
+    height: Float,
+    targetWidth: Int,
+    maxPixels: Double
+): Float {
     val basePixels = width.toDouble() * height.toDouble()
     if (basePixels <= 0.0) return 1f
-    val fit = sqrt(MAX_EXPORT_PIXELS / basePixels)
-    return min(2.0, fit).toFloat().coerceAtLeast(0.25f)
+    val byWidth = targetWidth.coerceAtLeast(1).toDouble() / width.toDouble()
+    val byBudget = sqrt(maxPixels / basePixels)
+    return min(byWidth, byBudget).toFloat().coerceIn(MIN_EXPORT_SCALE, MAX_EXPORT_SCALE)
 }
 
-private const val MAX_EXPORT_PIXELS = 16_000_000.0
+/**
+ * How many pixels this process can reasonably hold for one bitmap.
+ *
+ * The output is ARGB_8888, four bytes per pixel. A third of the heap leaves room
+ * for the app behind the sheet, the canvas's own allocation, and the poster batch
+ * being drawn into it. The floor is what makes an export possible on a small
+ * heap; the ceiling keeps a 4K-wide board from asking for a 256 MB bitmap that
+ * the PNG encoder would then need time and memory to walk.
+ */
+private fun exportPixelBudget(): Double {
+    val maxHeap = Runtime.getRuntime().maxMemory().toDouble()
+    return (maxHeap * 0.33 / 4.0).coerceIn(MIN_EXPORT_PIXELS, MAX_EXPORT_PIXELS)
+}
+
+/** Allocates the output, returning null instead of throwing on a tight heap. */
+private fun allocateBitmap(width: Float, height: Float): Bitmap? {
+    val pxWidth = width.roundToInt().coerceIn(1, MAX_EXPORT_DIMENSION)
+    val pxHeight = height.roundToInt().coerceIn(1, MAX_EXPORT_DIMENSION)
+    return try {
+        Bitmap.createBitmap(pxWidth, pxHeight, Bitmap.Config.ARGB_8888)
+    } catch (_: OutOfMemoryError) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+}
+
+/** Four bytes an output pixel, with room for a poster batch and the encoder. */
+private const val MIN_EXPORT_PIXELS = 4_000_000.0
+
+/** 32 MP: a 4K-width board up to about 8000 units tall. */
+private const val MAX_EXPORT_PIXELS = 33_554_432.0
+
+private const val MIN_EXPORT_SCALE = 0.25f
+private const val MAX_EXPORT_SCALE = 8f
+
+/** Bitmap's practical dimension ceiling; anything larger throws at allocation. */
+private const val MAX_EXPORT_DIMENSION = 32_000
+
 private const val EXPORT_BACKGROUND = 0xFF14110F.toInt()
 private const val EXPORT_HEADING = 0xFFFFFFFF.toInt()
 private const val EXPORT_SUBHEADING = 0xB3FFFFFF.toInt()
@@ -161,6 +313,8 @@ private const val EXPORT_LABEL = 0xFFFFFFFF.toInt()
 private const val EXPORT_CAPTION = 0xE6FFFFFF.toInt()
 private const val EXPORT_TILE_FILL = 0xFF2A2522.toInt()
 private const val EXPORT_TILE_STROKE = 0x33FFFFFF.toInt()
+private const val EXPORT_SCORE_SCRIM = 0x99000000.toInt()
+private const val EXPORT_TITLE_SCRIM = 0xC4000000.toInt()
 private const val POSTER_BATCH = 8
 
 private fun drawHeading(
@@ -227,6 +381,13 @@ private fun drawRows(
     }
 }
 
+/**
+ * Draws every tile, in batches, releasing each batch's covers as it goes.
+ *
+ * The tiles are laid out with gaps and never overlap, so drawing them in chunks
+ * cannot change the picture. The alternative - load every poster, then draw every
+ * poster - is what made the 4K export the largest allocation in the app.
+ */
 private suspend fun drawItems(
     context: Context,
     canvas: Canvas,
@@ -237,7 +398,6 @@ private suspend fun drawItems(
     showOnCover: Boolean
 ) {
     val candidateById = candidates.associateBy { it.mediaId }
-    val posters = loadPosters(context, layout, candidateById, scale)
 
     val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = EXPORT_TILE_FILL }
     val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -254,66 +414,173 @@ private suspend fun drawItems(
         textSize = 11f
         textAlign = Paint.Align.CENTER
     }
-    val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x99000000.toInt() }
+    val scorePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = EXPORT_LABEL
+        textSize = 10f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+    }
+    val scoreBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = EXPORT_SCORE_SCRIM
+    }
+    val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = EXPORT_TITLE_SCRIM
+    }
 
-    layout.forEach { box ->
-        val poster = RectF(box.x, box.y, box.x + box.width, box.y + box.posterHeight)
-        val path = Path().apply {
-            addRoundRect(poster, 8f, 8f, Path.Direction.CW)
+    layout.chunked(POSTER_BATCH).forEach { batch ->
+        val posters = loadPosterBatch(
+            context = context,
+            items = batch,
+            candidateById = candidateById,
+            scale = scale
+        )
+        batch.forEach { box ->
+            drawTile(
+                canvas = canvas,
+                box = box,
+                bitmap = posters[box.mediaId],
+                candidate = candidateById[box.mediaId],
+                tilePaint = tilePaint,
+                imagePaint = imagePaint,
+                strokePaint = strokePaint,
+                captionPaint = captionPaint,
+                scorePaint = scorePaint,
+                scoreBackground = scoreBackground,
+                scrimPaint = scrimPaint,
+                showUnderCover = showUnderCover,
+                showOnCover = showOnCover
+            )
         }
+        // The requests opt out of the memory cache, so nothing else references
+        // these pixels: freeing them here is what bounds the export's peak memory.
+        posters.values.forEach { it.recycle() }
+    }
+}
 
-        canvas.drawRoundRect(poster, 8f, 8f, tilePaint)
-        val bitmap = posters[box.mediaId]
-        if (bitmap != null && bitmap.width > 0 && bitmap.height > 0) {
-            canvas.save()
-            canvas.clipPath(path)
-            val destination = Rect(
+private fun drawTile(
+    canvas: Canvas,
+    box: TierItemBox,
+    bitmap: Bitmap?,
+    candidate: TierCandidate?,
+    tilePaint: Paint,
+    imagePaint: Paint,
+    strokePaint: Paint,
+    captionPaint: TextPaint,
+    scorePaint: TextPaint,
+    scoreBackground: Paint,
+    scrimPaint: Paint,
+    showUnderCover: Boolean,
+    showOnCover: Boolean
+) {
+    // The same corner fraction the board draws, so an exported tile is not rounder
+    // than the tile it came from - the difference was most visible on a zoomed-out
+    // screen, where a constant radius made the covers look peeled.
+    val corner = tierTileCornerRadius(box.width)
+    val poster = RectF(box.x, box.y, box.x + box.width, box.y + box.posterHeight)
+    val path = Path().apply {
+        addRoundRect(poster, corner, corner, Path.Direction.CW)
+    }
+
+    canvas.drawRoundRect(poster, corner, corner, tilePaint)
+    if (bitmap != null && bitmap.width > 0 && bitmap.height > 0) {
+        // Pixel-aligned destination: `drawBitmap` with a fractional Rect rounds
+        // its own edges, and a half-pixel seam under the stroke is the sort of
+        // thing that only shows up at 4K.
+        canvas.save()
+        canvas.clipPath(path)
+        canvas.drawBitmap(
+            bitmap,
+            centerCropSource(bitmap, poster),
+            Rect(
                 poster.left.roundToInt(),
                 poster.top.roundToInt(),
                 poster.right.roundToInt(),
                 poster.bottom.roundToInt()
-            )
-            canvas.drawBitmap(
-                bitmap,
-                centerCropSource(bitmap, poster),
-                destination,
-                imagePaint
-            )
-            canvas.restore()
-        }
-        canvas.drawRoundRect(poster, 8f, 8f, strokePaint)
-
-        val candidate = candidateById[box.mediaId] ?: return@forEach
-        if (showUnderCover) {
-            val caption = ellipsize(candidate.title, captionPaint, box.width)
-            canvas.drawText(
-                caption,
-                box.x + box.width / 2f,
-                box.y + box.posterHeight + 16f,
-                captionPaint
-            )
-        } else if (showOnCover) {
-            canvas.save()
-            canvas.clipPath(path)
-            canvas.drawRect(box.x, box.y, box.x + box.width, box.y + 24f, scrimPaint)
-            val caption = ellipsize(candidate.title, captionPaint, box.width - 6f)
-            canvas.drawText(
-                caption,
-                box.x + box.width / 2f,
-                box.y + 15f,
-                captionPaint
-            )
-            canvas.restore()
-        }
+            ),
+            imagePaint
+        )
+        canvas.restore()
     }
+
+    drawScoreBadge(canvas, box, candidate, scorePaint, scoreBackground)
+
+    canvas.drawRoundRect(poster, corner, corner, strokePaint)
+
+    if (candidate == null) return
+    if (showUnderCover) {
+        val caption = ellipsize(candidate.title, captionPaint, box.width)
+        canvas.drawText(
+            caption,
+            box.x + box.width / 2f,
+            box.y + box.posterHeight + 16f,
+            captionPaint
+        )
+    } else if (showOnCover) {
+        // A gradient rather than a solid strip, matching the board's scrim: a band
+        // of flat paint across the top of every cover turns a board into a table.
+        val scrimBottom = box.y + 28f
+        scrimPaint.shader = LinearGradient(
+            0f,
+            box.y,
+            0f,
+            scrimBottom,
+            intArrayOf(EXPORT_TITLE_SCRIM, 0x00000000),
+            null,
+            Shader.TileMode.CLAMP
+        )
+        canvas.save()
+        canvas.clipPath(path)
+        canvas.drawRect(box.x, box.y, box.x + box.width, scrimBottom, scrimPaint)
+        canvas.restore()
+        val caption = ellipsize(candidate.title, captionPaint, box.width - 6f)
+        canvas.drawText(
+            caption,
+            box.x + box.width / 2f,
+            box.y + 15f,
+            captionPaint
+        )
+    }
+}
+
+/**
+ * The AniList score, in the same corner the board puts it.
+ *
+ * The board has drawn this badge since the redesign; the export did not, so the
+ * "same arrangement" promise held for the rows and not for the numbers on them.
+ * A badge is small and cheap to draw, and without it an exported board gives a
+ * reader no way to tell a 92 from an 82 when the covers are unfamiliar.
+ */
+private fun drawScoreBadge(
+    canvas: Canvas,
+    box: TierItemBox,
+    candidate: TierCandidate?,
+    scorePaint: TextPaint,
+    scoreBackground: Paint
+) {
+    val score = candidate?.averageScore ?: return
+    if (score <= 0) return
+
+    val text = score.toString()
+    val paddingX = 4f
+    val paddingY = 1.5f
+    val textWidth = scorePaint.measureText(text)
+    val badgeHeight = scorePaint.textSize + paddingY * 2f
+    val left = box.x + 4f
+    val top = box.y + 4f
+    val badge = RectF(left, top, left + textWidth + paddingX * 2f, top + badgeHeight)
+    val radius = badge.height() / 2f
+
+    canvas.drawRoundRect(badge, radius, radius, scoreBackground)
+    val baseline = badge.centerY() - (scorePaint.ascent() + scorePaint.descent()) / 2f
+    canvas.drawText(text, badge.centerX(), baseline, scorePaint)
 }
 
 /**
  * The source rectangle for a center-cropped poster.
  *
- * `ContentScale.Crop` on the board cuts the longer axis rather than squeezing
- * the cover, and an export that stretched every 2:3 cover into a slightly
- * different tile would show artwork the board never showed.
+ * `ContentScale.Crop` on the board cuts the longer axis rather than squeezing the
+ * cover, and an export that stretched every 2:3 cover into a slightly different
+ * tile would show artwork the board never showed.
  */
 private fun centerCropSource(bitmap: Bitmap, destination: RectF): Rect {
     val bitmapWidth = bitmap.width.toFloat()
@@ -332,14 +599,14 @@ private fun centerCropSource(bitmap: Bitmap, destination: RectF): Rect {
 }
 
 /**
- * Fetches the posters in small batches and returns only the ones that decoded.
+ * Fetches one batch of posters and returns only the ones that decoded.
  *
- * A missing poster is a tile with its fill colour and a readable caption, which
- * is what the SVG exporter does too. The batch cap is what keeps a 300-title
- * board from opening 300 connections against a CDN at once, and the catch is
- * per poster: one 404 must not fail the whole image.
+ * A missing poster is a tile with its fill colour and a readable caption, which is
+ * what the SVG exporter does too. The batch cap is what keeps a 300-title board
+ * from opening 300 connections against a CDN at once, and the catch is per
+ * poster: one 404 must not fail the whole image.
  */
-private suspend fun loadPosters(
+private suspend fun loadPosterBatch(
     context: Context,
     items: List<TierItemBox>,
     candidateById: Map<Int, TierCandidate>,
@@ -354,19 +621,25 @@ private suspend fun loadPosters(
                 (box.posterHeight * scale).roundToInt().coerceAtLeast(1)
         )
     }
-    val loaded = mutableMapOf<Int, Bitmap>()
-    requests.chunked(POSTER_BATCH).forEach { batch ->
-        batch.map { (mediaId, url, size) ->
-            async(Dispatchers.IO) {
-                mediaId to loadPoster(context, url, size.first, size.second)
-            }
-        }.awaitAll().forEach { (mediaId, bitmap) ->
-            if (bitmap != null) loaded[mediaId] = bitmap
+    val loaded = requests.map { (mediaId, url, size) ->
+        async(Dispatchers.IO) {
+            mediaId to loadPoster(context, url, size.first, size.second)
         }
-    }
-    loaded
+    }.awaitAll()
+    loaded.mapNotNull { (mediaId, bitmap) ->
+        if (bitmap == null) null else mediaId to bitmap
+    }.toMap()
 }
 
+/**
+ * One poster at its drawn size.
+ *
+ * `memoryCachePolicy(DISABLED)` is what makes the batch's `recycle()` safe. Every
+ * cover in a board appears once, so the memory cache would never serve a hit
+ * during an export; it would only keep a second copy of each bitmap alive after
+ * the batch had been drawn. With the cache off, the result belongs to this
+ * request alone and can be freed as soon as the pixels are on the canvas.
+ */
 private suspend fun loadPoster(
     context: Context,
     url: String,
@@ -377,6 +650,7 @@ private suspend fun loadPoster(
         .data(url)
         .size(widthPx, heightPx)
         .allowHardware(false)
+        .memoryCachePolicy(CachePolicy.DISABLED)
         .build()
     when (val result = context.imageLoader.execute(request)) {
         is SuccessResult -> result.drawable.toExportBitmap()
@@ -404,109 +678,6 @@ private fun Drawable.toExportBitmap(): Bitmap? {
         source
     }
 }
-
-/**
- * Writes a PNG into the cache and hands its URI to whatever can share images.
- *
- * The cache, not the files directory: this file exists for one chooser round
- * trip and the system may evict it afterwards. Only the `exports/` directory is
- * published by the app's `FileProvider`, so a file written anywhere else here
- * would fail `getUriForFile` at the last step - the same two-strings-must-agree
- * trap the updater's paths file documents.
- */
-internal suspend fun shareTierListImage(
-    context: Context,
-    bitmap: Bitmap,
-    listName: String
-): Boolean {
-    val file = withContext(Dispatchers.IO) { writeExportFile(context, bitmap, listName) }
-    val uri = FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.fileprovider",
-        file
-    )
-    withContext(Dispatchers.Main) {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TITLE, listName)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(send, "Share tier list"))
-    }
-    return true
-}
-
-/** Writes a PNG to `Pictures/AniSequel` through MediaStore. */
-internal suspend fun saveTierListImage(
-    context: Context,
-    bitmap: Bitmap,
-    listName: String
-): Boolean = withContext(Dispatchers.IO) {
-    try {
-        val now = System.currentTimeMillis()
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "${safeName(listName)}-$now.png")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(
-                MediaStore.Images.Media.RELATIVE_PATH,
-                "${Environment.DIRECTORY_PICTURES}/AniSequel"
-            )
-            put(MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val resolver = context.contentResolver
-        val uri: Uri = resolver.insert(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            values
-        ) ?: return@withContext false
-
-        val written = resolver.openOutputStream(uri)?.use { output ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: false
-        if (!written) {
-            resolver.delete(uri, null, null)
-            return@withContext false
-        }
-
-        values.clear()
-        values.put(MediaStore.Images.Media.IS_PENDING, 0)
-        resolver.update(uri, values, null, null)
-        true
-    } catch (cancellation: CancellationException) {
-        throw cancellation
-    } catch (_: Exception) {
-        false
-    }
-}
-
-private fun writeExportFile(context: Context, bitmap: Bitmap, listName: String): File {
-    val directory = File(context.cacheDir, "exports").apply { mkdirs() }
-    val file = File(
-        directory,
-        "${safeName(listName)}-${System.currentTimeMillis()}.png"
-    )
-    file.outputStream().use { output ->
-        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
-            throw IOException("PNG encoding failed")
-        }
-    }
-    return file
-}
-
-/**
- * A file name that survives every filesystem without becoming a different name.
- *
- * The list name is user text: it can contain `/`, a colon, or a leading dot, and
- * a `File` built from it would write outside the cache or vanish as a hidden
- * file. Everything outside the conservative set becomes a dash, and the result
- * is bounded so the MediaStore display name stays usable.
- */
-private fun safeName(listName: String): String =
-    listName.trim()
-        .replace(Regex("[^A-Za-z0-9._-]+"), "-")
-        .trim('-', '.')
-        .take(60)
-        .ifBlank { "tier-list" }
 
 private fun ellipsize(text: String, paint: Paint, maxWidth: Float): String =
     TextUtils.ellipsize(

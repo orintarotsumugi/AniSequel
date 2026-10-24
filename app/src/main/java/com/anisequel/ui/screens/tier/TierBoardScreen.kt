@@ -1,19 +1,23 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,7 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,6 +79,15 @@ import kotlinx.coroutines.delay
  * and a tray that still offered it would invite the person to rank something the
  * filter says they are not looking at. The counts in the header stay totals, so
  * hiding never looks like losing.
+ *
+ * ## Lock is view-only
+ *
+ * The lock used to switch off the drag gesture and nothing else, so a "locked"
+ * board still opened its placement sheet on a tap and still accepted a drag out
+ * of the unranked tray. It is a mode now: no drag, no tap-to-place, no tray drag,
+ * and the pool says so instead of offering actions that do nothing. Scrolling and
+ * pinching stay available, because those are how a locked board is read rather
+ * than edited.
  *
  * ## The drag hint is pinned to the screen, not to the board
  *
@@ -118,6 +133,7 @@ internal fun TierBoardScreen(
 
     val sheets = rememberTierBoardSheetState()
     var dragHint by remember { mutableStateOf<String?>(null) }
+    val haptics = LocalHapticFeedback.current
 
     // The board's zoom is a *local* value between gestures so a pinch does not
     // write to DataStore on every frame; the stored value is the starting point
@@ -128,13 +144,32 @@ internal fun TierBoardScreen(
         mutableFloatStateOf(clampTierZoom(display.zoom))
     }
 
-    // Whether the board's long-press drag is off. Remembered across rotation,
-    // but never written to the store: it exists for the length of one pinch, not
-    // as a display preference, and persisting it would silently leave a board
-    // that cannot be ranked after the next launch. It is not keyed on the list
-    // because switching lists is not a reason to re-enable tile dragging under a
-    // finger that just locked it.
-    var zoomLocked by rememberSaveable { mutableStateOf(false) }
+    // Whether the board is in view-only mode. Remembered across rotation, but
+    // never written to the store: it exists for the length of one look at the
+    // board, not as a display preference, and persisting it would silently leave
+    // a board that cannot be ranked after the next launch. It is not keyed on the
+    // list because switching lists is not a reason to unlock a board the person
+    // just locked.
+    //
+    // It used to switch off *dragging only*. Tapping a poster still opened the
+    // placement sheet, so a locked board was still editable one tap at a time -
+    // the opposite of what the lock said. It is view-only now: no drag, no tap,
+    // no tray drag, and a one-finger scroll that the pinch detector no longer
+    // eats. Everything that changes the ranking goes through the same check.
+    var boardLocked by rememberSaveable { mutableStateOf(false) }
+
+    val setLocked: (Boolean) -> Unit = { locked ->
+        boardLocked = locked
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+
+    // One question for every edit entry point on the screen. The lock is a mode,
+    // so a tap, a drop and a browse must agree with the tile's own disabled state;
+    // four separate `if (!boardLocked)` checks is four places for a new edit path
+    // to be forgotten.
+    val whenEditable: (() -> Unit) -> Unit = { action ->
+        if (!boardLocked) action()
+    }
 
     // A change made elsewhere - "Reset zoom" in the display sheet - has to reach
     // the board. Comparing first stops this from fighting the local value on the
@@ -328,6 +363,7 @@ internal fun TierBoardScreen(
                     total = candidates.size,
                     unranked = unranked.size,
                     undoLabel = undoLabel,
+                    editable = !boardLocked,
                     onAddTitles = { sheets.addingTitles = true }
                 )
 
@@ -378,12 +414,15 @@ internal fun TierBoardScreen(
                             onZoomChange = { value -> zoom = clampTierZoom(value) },
                             viewport = viewport,
                             scrollState = scrollState,
-                            dragEnabled = !zoomLocked,
+                            dragEnabled = !boardLocked,
+                            editable = !boardLocked,
                             onMove = onMove,
-                            onItemTap = { mediaId -> sheets.placingMediaId = mediaId },
+                            onItemTap = { mediaId ->
+                                whenEditable { sheets.placingMediaId = mediaId }
+                            },
                             onDragHintChanged = { hint -> dragHint = hint }
                         )
-                        TierBoardLegend(dragLocked = zoomLocked)
+                        TierBoardLegend(locked = boardLocked)
                     }
                 }
             }
@@ -427,6 +466,14 @@ internal fun TierBoardScreen(
                 }
             }
 
+            TierBoardLockBanner(
+                visible = boardLocked,
+                onUnlock = { setLocked(false) },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            )
+
             // The board's own controls, floating over the bottom-end of the board
             // and above the tray. One row rather than a column so it covers the
             // smallest possible strip of the last tier.
@@ -450,8 +497,8 @@ internal fun TierBoardScreen(
                 )
                 TierZoomControls(
                     zoom = zoom,
-                    locked = zoomLocked,
-                    onToggleLock = { zoomLocked = !zoomLocked },
+                    locked = boardLocked,
+                    onToggleLock = { setLocked(!boardLocked) },
                     onZoomOut = { zoom = clampTierZoom(zoom - TIER_ZOOM_STEP) },
                     onZoomIn = { zoom = clampTierZoom(zoom + TIER_ZOOM_STEP) },
                     onResetZoom = { zoom = 1f }
@@ -466,6 +513,7 @@ internal fun TierBoardScreen(
                 TierTray(
                     candidates = unranked,
                     drag = trayDrag,
+                    enabled = !boardLocked,
                     resolveTier = { windowX, windowY ->
                         tierRowAt(
                             bands = viewport.rowBands,
@@ -478,9 +526,13 @@ internal fun TierBoardScreen(
                     // A null tier id is the instruction to un-file, and dropping a
                     // poster back into the pool is exactly that - so a mis-drop is
                     // undone by dropping it where it started.
-                    onDrop = { mediaId, tierId -> onMove(mediaId, tierId, null) },
-                    onItemTap = { mediaId -> sheets.placingMediaId = mediaId },
-                    onBrowse = { sheets.addingTitles = true },
+                    onDrop = { mediaId, tierId ->
+                        whenEditable { onMove(mediaId, tierId, null) }
+                    },
+                    onItemTap = { mediaId ->
+                        whenEditable { sheets.placingMediaId = mediaId }
+                    },
+                    onBrowse = { whenEditable { sheets.addingTitles = true } },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
 
@@ -520,7 +572,7 @@ internal fun TierBoardScreen(
             filter = filter,
             display = display,
             zoom = zoom,
-            zoomLocked = zoomLocked
+            boardLocked = boardLocked
         ),
         actions = TierBoardSheetActions(
             onMove = onMove,
@@ -535,10 +587,73 @@ internal fun TierBoardScreen(
             // race with the debounced write of the zoom it replaced.
             onResetZoom = { zoom = 1f },
             onZoomChange = { value -> zoom = clampTierZoom(value) },
-            onZoomLockChange = { locked -> zoomLocked = locked },
+            onZoomLockChange = { locked -> setLocked(locked) },
             onClearPlacements = onClearPlacements
         )
     )
+}
+
+/**
+ * The view-only pill: what the board is doing, and the way out of it.
+ *
+ * The lock is a mode, and a mode that only exists as a tinted icon on a small
+ * floating button is a mode nobody notices they are in - which is why this pill
+ * says it out loud and is itself the unlock. It sits where the drag hint appears;
+ * the two can never be on screen together, because a locked board starts no drag.
+ *
+ * A composable rather than a block inside [TierBoardScreen] so its enter/exit
+ * transition does not add branches to the screen's already-large body.
+ */
+@Composable
+private fun TierBoardLockBanner(
+    visible: Boolean,
+    onUnlock: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+            initialScale = 0.88f,
+            animationSpec = ExpressiveMotion.FastSpatial
+        ),
+        exit = fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+            targetScale = 0.88f,
+            animationSpec = ExpressiveMotion.FastSpatial
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(ExpressiveShapes.pill)
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                // The whole pill is the way out, not just the words: a target the
+                // finger already knows the position of.
+                .clickable(onClick = onUnlock)
+                .padding(horizontal = 14.dp, vertical = 9.dp)
+                .testTag("tier_lock_banner"),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Privacy,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+                text = "View only",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Tap to unlock",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
+            )
+        }
+    }
 }
 
 /** How long a pinch has to be still before its zoom is written to the store. */
