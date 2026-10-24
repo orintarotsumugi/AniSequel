@@ -1,5 +1,10 @@
 package com.anisequel.ui.screens.tier
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -25,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -49,9 +55,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.tier.TierCandidate
+import com.anisequel.domain.tier.tierTileCornerRadius
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveCountBadge
-import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 
 // ---------------------------------------------------------------------------
@@ -208,6 +215,13 @@ private val TRAY_PADDING = 12.dp
  * The header is a full-width tap target that opens the picker. The tray is a
  * sideways row, so the two-hundredth unranked title is a lot of swiping away; the
  * sheet is where you go when you know the title's name rather than its poster.
+ *
+ * [enabled] is the board's lock. While it is false the shelf is still drawn - the
+ * count is part of what the board is showing - but nothing in it starts a drag or
+ * opens a sheet, and its header says so instead of offering "Browse all" to a
+ * board that will ignore the tap. A drag already in flight is cancelled when the
+ * lock lands, because the pointer handler is removed underneath it and its
+ * `onDragCancel` would otherwise never run.
  */
 @Composable
 internal fun TierTray(
@@ -217,6 +231,7 @@ internal fun TierTray(
     onDrop: (mediaId: Int, tierId: String?) -> Unit,
     onItemTap: (Int) -> Unit,
     onBrowse: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (candidates.isEmpty()) return
@@ -227,6 +242,18 @@ internal fun TierTray(
 
     var trayWindowX by remember { mutableFloatStateOf(0f) }
     var trayWindowY by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(enabled) {
+        if (!enabled) drag.mediaId = null
+    }
+
+    // Dimmed rather than hidden: dimming says "still yours, just not editable",
+    // and the same shelf comes back at full strength when the lock goes off.
+    val posterAlpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.55f,
+        animationSpec = ExpressiveMotion.FastEffects,
+        label = "tier_tray_alpha"
+    )
 
     Surface(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -242,7 +269,8 @@ internal fun TierTray(
                 trayWindowX = window.x
                 trayWindowY = window.y
             }
-            .pointerInput(candidates, listState) {
+            .pointerInput(candidates, listState, enabled) {
+                if (!enabled) return@pointerInput
                 // Read outside the block and closed over by value: inside it the
                 // receiver is the pointer-input scope, which carries no Density.
                 val pxPerDp = density.density
@@ -311,7 +339,7 @@ internal fun TierTray(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(TIER_TRAY_HEADER_HEIGHT)
-                    .clickable(onClick = onBrowse)
+                    .clickable(enabled = enabled, onClick = onBrowse)
                     .padding(horizontal = TRAY_PADDING)
                     .testTag("tier_tray_browse"),
                 verticalAlignment = Alignment.CenterVertically
@@ -325,18 +353,44 @@ internal fun TierTray(
                 Spacer(modifier = Modifier.width(8.dp))
                 ExpressiveCountBadge(count = candidates.size)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Browse all",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = AppVectorIcons.SequelArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
+                AnimatedContent(
+                    targetState = enabled,
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
+                    label = "tier_tray_action"
+                ) { editable ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (editable) {
+                            Text(
+                                text = "Browse all",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = AppVectorIcons.SequelArrow,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = AppVectorIcons.Privacy,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "View only",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
 
             LazyRow(
@@ -346,9 +400,16 @@ internal fun TierTray(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(TIER_TRAY_ITEM_HEIGHT)
+                    // Read in the draw phase, so flipping the lock fades the
+                    // shelf without re-measuring every poster in it.
+                    .graphicsLayer { alpha = posterAlpha }
             ) {
                 items(candidates, key = { it.mediaId }) { candidate ->
-                    TierTrayTile(candidate = candidate, onTap = { onItemTap(candidate.mediaId) })
+                    TierTrayTile(
+                        candidate = candidate,
+                        enabled = enabled,
+                        onTap = { onItemTap(candidate.mediaId) }
+                    )
                 }
             }
 
@@ -392,9 +453,12 @@ internal fun trayItemAt(
 
 /** One unranked poster in the tray. */
 @Composable
-private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
+private fun TierTrayTile(candidate: TierCandidate, enabled: Boolean, onTap: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
+    val shape = remember {
+        RoundedCornerShape(tierTileCornerRadius(TIER_TRAY_ITEM_WIDTH.value).dp)
+    }
 
     Column(
         modifier = Modifier
@@ -402,9 +466,17 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
             // One interaction source, shared with the clickable below it. Sharing
             // is what cancels the press spring the moment the gesture becomes a
             // drag instead of leaving the tile squashed under a finger that has
-            // already picked it up.
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onTap)
+            // already picked it up. Neither is installed while the board is
+            // locked - the shelf is being looked at, not ranked from.
+            .then(
+                if (enabled) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+                        .clickable(interactionSource = interactionSource, onClick = onTap)
+                } else {
+                    Modifier
+                }
+            )
             .testTag("tier_tray_tile")
     ) {
         AsyncImage(
@@ -413,7 +485,7 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
             modifier = Modifier
                 .width(TIER_TRAY_ITEM_WIDTH)
                 .height(TIER_TRAY_ITEM_HEIGHT)
-                .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
+                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop,
             placeholder = placeholder,
@@ -437,7 +509,9 @@ private fun TierTrayTile(candidate: TierCandidate, onTap: () -> Unit) {
 @Composable
 internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifier) {
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
-    val shape = remember { RoundedCornerShape(ExpressiveShapes.SmallCorner) }
+    val shape = remember {
+        RoundedCornerShape(tierTileCornerRadius(TIER_TRAY_ITEM_WIDTH.value).dp)
+    }
 
     Box(
         modifier = modifier

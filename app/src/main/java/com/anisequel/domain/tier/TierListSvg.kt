@@ -121,16 +121,33 @@ object TierListSvg {
             // *plus caption*, so multiplying it by 1.5 inflated every poster by
             // 86% and dropped the caption baseline inside the artwork.
             val posterHeightForBox = box.posterHeight
+            // The same fraction the Compose board and the PNG exporter use. A
+            // literal 8 here was a fifth of a 40-unit tile and a twelfth of a
+            // 96-unit one, so the SVG's covers were visibly rounder than the
+            // board's at every size but the default.
+            val corner = tierTileCornerRadius(box.width)
 
             append("  <g>\n")
             append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
                 .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
-                .append("\" rx=\"8\" fill=\"").append(hex(palette.tileFill)).append("\"/>\n")
+                .append("\" rx=\"").append(num(corner)).append("\" fill=\"").append(hex(palette.tileFill)).append("\"/>\n")
 
             embeddedPosters[box.mediaId]?.let { dataUri ->
+                // `<image>` has no corner radius, so the artwork used to cover the
+                // rounded rect underneath with square corners - the SVG was the
+                // only renderer whose covers were not rounded at all. Clipping to
+                // the same rect is what makes the three renderers agree. The id is
+                // prefixed because an XML id cannot start with a digit.
+                val clipId = "tile-${box.mediaId}"
+                append("    <clipPath id=\"").append(clipId).append("\">\n")
+                append("      <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
+                    .append("\" width=\"").append(num(box.width)).append("\" height=\"")
+                    .append(num(posterHeightForBox)).append("\" rx=\"").append(num(corner)).append("\"/>\n")
+                append("    </clipPath>\n")
                 append("    <image x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
                     .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
                     .append("\" preserveAspectRatio=\"xMidYMid slice\" ")
+                    .append("clip-path=\"url(#").append(clipId).append(")\" ")
                     .append("href=\"").append(escape(dataUri)).append("\"/>\n")
             }
 

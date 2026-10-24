@@ -1,8 +1,9 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -12,10 +13,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,6 +58,7 @@ internal fun TierBoardHost(
     viewport: TierBoardViewport,
     scrollState: ScrollState,
     dragEnabled: Boolean,
+    editable: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
     onDragHintChanged: (String?) -> Unit
@@ -84,6 +88,7 @@ internal fun TierBoardHost(
                 viewport = viewport,
                 scrollState = scrollState,
                 dragEnabled = dragEnabled,
+                editable = editable,
                 onMove = onMove,
                 onItemTap = onItemTap,
                 onDragHintChanged = onDragHintChanged
@@ -139,6 +144,7 @@ private fun TierBoard(
     viewport: TierBoardViewport,
     scrollState: ScrollState,
     dragEnabled: Boolean,
+    editable: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
     onDragHintChanged: (String?) -> Unit
@@ -222,21 +228,62 @@ private fun TierBoard(
         onDragHintChanged = onDragHintChanged
     )
 
-    // No trailing return value: `rememberTransformableState`'s callback returns
-    // `Unit` in this Compose version, so the `true` that used to end this lambda
-    // was an unused expression - the compiler said so on every release build.
-    // (The comment above it claimed the callback "is `suspend` and returns a
-    // Boolean", which describes an API shape this project has never compiled
-    // against.)
-    val transformState = rememberTransformableState { zoomChange, _, _ ->
-        onZoomChange(clampTierZoom(zoom * zoomChange))
+    // ## Pinch is two fingers only; one finger belongs to the scroll
+    //
+    // This used to be `Modifier.transformable`. That modifier reports a *pan* as
+    // well as a zoom, and consumes the movement it reports - including a
+    // one-finger pan, which is exactly what the screen's `verticalScroll` needs.
+    // The result was a board that refused to scroll under a single finger no
+    // matter what the lock said: the gesture started, `transformable` consumed
+    // every move while its callback threw the pan away, and the column above and
+    // below the board scrolled normally while the board itself felt frozen.
+    //
+    // The detector below only acts while at least two pointers are down, so a
+    // one-finger drag reaches the scrollable untouched and a pinch still zooms.
+    // The value is kept locally for the gesture because the composition's `zoom`
+    // is a frame behind by the time the next pointer event arrives; the callback
+    // is read through `rememberUpdatedState` for the same reason (a
+    // `pointerInput(Unit)` block keeps the lambda from the composition that
+    // installed it).
+    val liveZoom by rememberUpdatedState(zoom)
+    val applyZoom by rememberUpdatedState(onZoomChange)
+    val pinchZoom = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            var gestureZoom = liveZoom
+            var zooming = false
+            // `while (true)` rather than a `do/while`: a value declared in the body
+            // of a `do` block is not in scope in its condition, and the pointer
+            // event is exactly what the condition needs. The `break` is the same
+            // "every pointer is up" test `awaitEachGesture` uses between gestures.
+            while (true) {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.count { it.pressed }
+                if (pressed >= 2) {
+                    val factor = event.calculateZoom()
+                    if (!factor.isNaN() && factor != 1f) {
+                        gestureZoom = clampTierZoom(gestureZoom * factor)
+                        applyZoom(gestureZoom)
+                        zooming = true
+                    }
+                    event.changes.forEach { if (it.pressed) it.consume() }
+                } else if (zooming) {
+                    // One finger lifted mid-pinch. Consume whatever is left of the
+                    // gesture so the scrollable cannot start from the second
+                    // finger and jump the board by half a screen.
+                    event.changes.forEach { if (it.pressed) it.consume() }
+                }
+                if (event.changes.none { it.pressed }) break
+            }
+        }
     }
 
     // The drag handler is *removed* rather than merely disabled while the board
     // is locked. Leaving a pointer input installed that ignores its drags still
-    // competes with `transformable` for the first pointer, which is the bug the
-    // lock exists to avoid: a pinch that starts on a poster was being eaten by
-    // the long-press drag detector before the second finger arrived.
+    // claims the first pointer for a long-press it will never finish, which is
+    // the bug the lock exists to avoid: a pinch that starts on a poster was
+    // being eaten by the drag detector before the second finger arrived - and a
+    // one-finger scroll that starts there can feel stuck for the same reason.
     val dragHandler = if (dragEnabled) {
         Modifier.tierDragHandler(
             drag = drag,
@@ -267,7 +314,7 @@ private fun TierBoard(
                 viewport.boardLeft = window.x
                 viewport.boardWidth = coordinates.size.width.toFloat()
             }
-            .transformable(state = transformState)
+            .then(pinchZoom)
             .then(dragHandler)
     ) {
         TierGeometry(
@@ -280,6 +327,7 @@ private fun TierBoard(
             hoveredTierId = dropTarget.tierId,
             dropCaret = caret,
             skipMediaId = drag.mediaId,
+            editable = editable,
             onItemTap = onItemTap
         )
 
@@ -398,6 +446,7 @@ private fun TierGeometry(
     hoveredTierId: String?,
     dropCaret: TierCaret?,
     skipMediaId: Int?,
+    editable: Boolean,
     onItemTap: (Int) -> Unit
 ) {
     // The one tile list the whole layout is built from, so the emitted children
@@ -463,6 +512,7 @@ private fun TierGeometry(
                     captionHeight = options.captionHeight * zoom,
                     showTitle = showTitles,
                     titlePosition = display.titlePosition,
+                    enabled = editable,
                     onTap = { onItemTap(box.mediaId) }
                 )
             }

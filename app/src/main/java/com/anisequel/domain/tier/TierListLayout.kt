@@ -65,6 +65,33 @@ data class TierListLayout(
 }
 
 /**
+ * Corner radius for a poster tile [width] output units wide.
+ *
+ * Proportional rather than a fixed 12dp, and this is the whole point. At 100%
+ * the board draws 72dp tiles, where 12dp is a rounded square; at the 35% zoom
+ * floor a tile is about 25dp wide, and the same 12dp radius turns it into a
+ * circle - the "peeled" covers that made the overview look like a tray of pills
+ * rather than a wall of posters. A radius that is a fraction of the tile stays a
+ * rounded square at every zoom level, and the cap keeps a 200% tile from growing
+ * a radius bigger than the one the design asks for.
+ *
+ * Lives here, beside [TierLayoutOptions], so the Compose board, the PNG exporter
+ * and the SVG writer all round the same corner. The divergence this prevents is
+ * the usual one: three renderers drawing the same geometry with three different
+ * radii, which nobody notices until the exported file is put next to the board.
+ */
+fun tierTileCornerRadius(width: Float): Float {
+    if (width <= 0f) return 0f
+    return (width * TIER_TILE_CORNER_FRACTION).coerceIn(0f, TIER_TILE_CORNER_MAX)
+}
+
+/** The share of a tile's width its corners take. ~8.6 units on a 72-unit tile. */
+const val TIER_TILE_CORNER_FRACTION = 0.12f
+
+/** The largest radius a tile may end up with, whatever its width. */
+const val TIER_TILE_CORNER_MAX = 12f
+
+/**
  * Knobs for the arrangement. Defaults are the on-screen sizes; the exporters
  * scale them rather than re-deriving a different shape.
  */
