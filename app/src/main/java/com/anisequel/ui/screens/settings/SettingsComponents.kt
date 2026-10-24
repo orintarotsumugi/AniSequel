@@ -25,10 +25,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -157,6 +159,10 @@ fun SwitchRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
+    // A switch that moves without a tick is the one place a settings screen can
+    // feel like a picture of a switch. TextHandleMove is the app's light tick -
+    // long-press is reserved for a destructive or dragged action.
+    val haptics = LocalHapticFeedback.current
     // The whole row is the target, not just the 52dp switch: a settings row whose
     // label does nothing when tapped is the most common way a screen like this
     // feels broken, and Android has trained people to expect the label to work.
@@ -164,7 +170,10 @@ fun SwitchRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange(!checked)
+            }
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -190,7 +199,12 @@ fun SwitchRow(
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            // Tapping the thumb never passes through the row's `clickable`, so the
+            // tick is repeated here rather than being the label's private reward.
+            onCheckedChange = { next ->
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange(next)
+            },
             enabled = enabled,
             modifier = Modifier.semantics { role = Role.Switch }
         )

@@ -140,8 +140,36 @@ data class TierCandidate(
      * offered a publisher would be a filter that almost never matches anything
      * the viewer thinks of as "made by".
      */
-    val studios: List<String> = emptyList()
-)
+    val studios: List<String> = emptyList(),
+    /**
+     * The other names AniList has for the same title: romaji, English, native.
+     *
+     * Search reads these, so a board showing "Attack on Titan" is still found by
+     * typing `shingeki`. They are never drawn: [title] is the one caption, and a
+     * second name under a poster would be a second spelling of the same thing.
+     */
+    val alternativeTitles: List<String> = emptyList()
+) {
+    /**
+     * The lowercased haystack the name filter searches, built once per title.
+     *
+     * A body property rather than a function because the filter runs over every
+     * candidate on every keystroke: lowercasing a title inside `allows` was an
+     * allocation per title per character typed. It is deliberately outside the
+     * data class's `equals` - this is derived text, not a second field to keep in
+     * step, and two candidates with the same fields are still the same candidate.
+     */
+    val searchKey: String = buildSearchKey(title, alternativeTitles)
+}
+
+/** The tokens a name search is matched against, in one allocation per candidate. */
+private fun buildSearchKey(title: String, alternatives: List<String>): String =
+    (listOf(title) + alternatives)
+        .asSequence()
+        .map { it.trim().lowercase(java.util.Locale.ROOT) }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .joinToString(" ")
 
 /**
  * Which tier each media id sits in.
@@ -253,14 +281,41 @@ data class TierFilter(
      * section is off, so turning it back on restores the filter rather than
      * silently forgetting it.
      */
-    val studiosEnabled: Boolean = false
+    val studiosEnabled: Boolean = false,
+    /**
+     * The name search, exactly as it was typed.
+     *
+     * Stored raw rather than trimmed so a trailing space survives the round trip
+     * through the sheet: trimming on every keystroke made it impossible to type a
+     * second word, because the space between the two disappeared before the next
+     * letter arrived. [allows] normalises it once per filter value instead.
+     */
+    val query: String = ""
 ) {
+    /**
+     * The query as the matcher reads it: lowercased, split on whitespace.
+     *
+     * Every token has to appear somewhere in [TierCandidate.searchKey], in any
+     * order. That is what makes `attack titan` find "Attack on Titan" without
+     * requiring the words to be adjacent - a literal substring search does not.
+     * Built once per filter value, not once per candidate per keystroke.
+     */
+    private val queryTokens: List<String> = query
+        .trim()
+        .lowercase(java.util.Locale.ROOT)
+        .split(TIER_SEARCH_WHITESPACE)
+        .filter { it.isNotEmpty() }
+
+    /** True when the name search is doing anything at all. */
+    val hasQuery: Boolean get() = queryTokens.isNotEmpty()
+
     /** True when [candidate] passes every dimension. */
     fun allows(candidate: TierCandidate): Boolean =
         (candidate.listStatus == null || candidate.listStatus !in hiddenListStatuses) &&
             (candidate.airingStatus == null || candidate.airingStatus !in hiddenAiringStatuses) &&
             (genres.isEmpty() || candidate.genres.any { it in genres }) &&
-            (!studiosEnabled || studios.isEmpty() || candidate.studios.any { it in studios })
+            (!studiosEnabled || studios.isEmpty() || candidate.studios.any { it in studios }) &&
+            (queryTokens.isEmpty() || queryTokens.all { it in candidate.searchKey })
 
     fun withListStatusHidden(status: String, hidden: Boolean): TierFilter = copy(
         hiddenListStatuses = if (hidden) {
@@ -289,6 +344,15 @@ data class TierFilter(
     fun withStudiosEnabled(enabled: Boolean): TierFilter = copy(studiosEnabled = enabled)
 
     /**
+     * Replaces the name search.
+     *
+     * Capped here rather than in the sheet so every path - a pasted string, a
+     * restored state, a future caller - hits the same ceiling, and whitespace is
+     * kept as typed for the reason [query] records.
+     */
+    fun withQuery(value: String): TierFilter = copy(query = value.take(TIER_SEARCH_MAX_LENGTH))
+
+    /**
      * True when nothing is actually being filtered.
      *
      * Studio selections are ignored while [studiosEnabled] is off: the set is
@@ -300,7 +364,8 @@ data class TierFilter(
         get() = hiddenListStatuses == Default.hiddenListStatuses &&
             hiddenAiringStatuses == Default.hiddenAiringStatuses &&
             genres.isEmpty() &&
-            (!studiosEnabled || studios.isEmpty())
+            (!studiosEnabled || studios.isEmpty()) &&
+            !hasQuery
 
     companion object {
         val Default = TierFilter()
@@ -323,6 +388,17 @@ data class TierFacetOption(
     val label: String,
     val count: Int
 )
+
+/**
+ * How long a name search may be.
+ *
+ * Long enough for any real title, short enough that a pasted paragraph cannot
+ * become a filter the sheet has to draw. Enforced by [TierFilter.withQuery].
+ */
+const val TIER_SEARCH_MAX_LENGTH = 64
+
+/** Any run of whitespace splits a search into words; one shared pattern. */
+private val TIER_SEARCH_WHITESPACE = Regex("\\s+")
 
 /** Genres across [candidates], most common first, then alphabetically. */
 fun genreFacetOptions(candidates: List<TierCandidate>): List<TierFacetOption> =

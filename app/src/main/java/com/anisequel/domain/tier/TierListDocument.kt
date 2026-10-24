@@ -16,6 +16,40 @@ enum class TierTitlePosition {
 }
 
 /**
+ * How much of a title the caption shows before it is cut.
+ *
+ * A caption is drawn in a tile the width of a small postage stamp, so the full
+ * name is frequently twice the space it has. Two lines and an ellipsis already
+ * bound it on screen, but the exports draw one line - and a long name there used
+ * to be truncated by a character count that was the same whatever the person had
+ * chosen. The lengths are a preference now, and all three renderers read the same
+ * one.
+ *
+ * [maxChars] is the complete caption including the ellipsis, or null for "do not
+ * cut it here" - the width-aware ellipsis each renderer applies still applies.
+ */
+enum class TierTitleLength(val label: String, val maxChars: Int?) {
+    SHORT("Short", 14),
+    STANDARD("Standard", 24),
+    FULL("Full", null)
+}
+
+/**
+ * The caption for [title] at [length].
+ *
+ * Shared by the board, the PNG exporter and the SVG writer. It used to live in
+ * the SVG file alone, as a 22-character `truncate` the other two renderers never
+ * called - so the same long title was cut in the vector export and merely
+ * ellipsized by width everywhere else.
+ */
+fun tierCaption(title: String, length: TierTitleLength): String {
+    val trimmed = title.trim()
+    val max = length.maxChars ?: return trimmed
+    if (max <= 0 || trimmed.length <= max) return trimmed
+    return trimmed.take(max - 1).trimEnd() + "…"
+}
+
+/**
  * The drawing preferences of one list.
  *
  * Defaults match the board as it was before these existed, so a document saved by
@@ -26,6 +60,14 @@ enum class TierTitlePosition {
 data class TierDisplay(
     val showTitles: Boolean = true,
     val titlePosition: TierTitlePosition = TierTitlePosition.UNDER_COVER,
+    /**
+     * How much of each name the caption shows.
+     *
+     * Independent of [titlePosition]: a board with the names on the artwork can
+     * still ask for the short form, which is what keeps a dense wall of covers
+     * readable instead of overlaying half a title per poster.
+     */
+    val titleLength: TierTitleLength = TierTitleLength.STANDARD,
     val zoom: Float = 1f
 ) {
     /**

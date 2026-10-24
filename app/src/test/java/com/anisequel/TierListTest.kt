@@ -4,9 +4,12 @@ import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
+import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListSvg
+import com.anisequel.domain.tier.TierTitleLength
+import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.domain.tier.seedFromScores
 import com.anisequel.domain.tier.studioFacetOptions
@@ -328,6 +331,43 @@ class TierListTest {
 
         assertFalse("no image element without a poster", svg.contains("<image"))
         assertTrue("the caption is still drawn", svg.contains("Title 1"))
+    }
+
+    @Test
+    fun `the svg follows the board's title settings`() {
+        // This renderer used to draw a caption under every poster no matter what
+        // the board showed: hidden names, on-cover names and the short length
+        // were all ignored, so the "lossless" export was the one file that
+        // disagreed with the screen it documented.
+        val longTitle = "That Time I Got Reincarnated as a Slime"
+        val assignment = TierAssignment(mapOf(1 to "s"))
+        val candidates = listOf(candidate(1, title = longTitle))
+        val layout = layoutTierList(
+            tiers = StandardTiers,
+            assignment = assignment,
+            candidates = candidates,
+            title = "T"
+        )
+        fun svg(display: TierDisplay) = TierListSvg.write(
+            layout = layout,
+            tiers = StandardTiers,
+            candidates = candidates,
+            display = display
+        )
+
+        assertFalse(
+            "a hidden title must not be written into the file",
+            svg(TierDisplay(showTitles = false)).contains("Slime")
+        )
+        assertTrue(
+            "the short length must cut the caption",
+            svg(TierDisplay(titleLength = TierTitleLength.SHORT)).contains("…")
+        )
+        assertTrue(
+            "an on-cover title needs its scrim",
+            svg(TierDisplay(titlePosition = TierTitlePosition.ON_COVER))
+                .contains("fill-opacity=\"0.55\"")
+        )
     }
 
     @Test
