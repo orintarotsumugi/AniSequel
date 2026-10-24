@@ -81,7 +81,7 @@ internal data class TierBoardSheetData(
     val filter: TierFilter,
     val display: TierDisplay,
     val zoom: Float,
-    val zoomLocked: Boolean
+    val boardLocked: Boolean
 )
 
 /**
@@ -192,7 +192,7 @@ internal fun TierBoardSheetsHost(
     if (state.zooming) {
         TierZoomSheet(
             zoom = data.zoom,
-            locked = data.zoomLocked,
+            locked = data.boardLocked,
             onZoomChange = actions.onZoomChange,
             onLockChange = actions.onZoomLockChange,
             onResetZoom = actions.onResetZoom,

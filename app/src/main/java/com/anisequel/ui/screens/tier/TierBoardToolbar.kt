@@ -1,5 +1,12 @@
 package com.anisequel.ui.screens.tier
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -13,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import kotlin.math.roundToInt
 
@@ -105,7 +114,7 @@ internal fun TierHistoryControls(
  * At the material minimum the pair would be over 400dp and would not fit a 360dp
  * screen beside the board at all. 36dp gives the board back the width while
  * keeping the whole target pressable. The lock is the exception to "small is
- * fine": it is the control that makes pinch zoom reachable, so it is tinted
+ * fine": it is the control that switches the board to view-only, so it is tinted
  * while it is on rather than being any larger than its neighbours.
  *
  * The percentage is a button as well as a readout, because the common case after
@@ -131,10 +140,8 @@ internal fun TierZoomControls(
             .testTag("tier_zoom_controls"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CompactTierButton(
-            icon = if (locked) AppVectorIcons.Privacy else AppVectorIcons.LockOpen,
-            contentDescription = if (locked) "Unlock tile dragging" else "Lock tile dragging",
-            selected = locked,
+        LockTierButton(
+            locked = locked,
             onClick = onToggleLock,
             modifier = Modifier.testTag("tier_zoom_lock")
         )
@@ -173,6 +180,80 @@ internal fun TierZoomControls(
 }
 
 /**
+ * The lock in the zoom stepper: the board's view-only switch.
+ *
+ * Its icon crossfades through a scale rather than swapping in one frame. The lock
+ * is a mode with no other visible consequence until somebody touches a poster, so
+ * the one moment it has to be legible is the moment it changes; a hard cut is
+ * easy to miss under a thumb.
+ *
+ * Deliberately not a `CompactTierButton`: that takes an `ImageVector`, and an
+ * animated image swap needs the composable that owns the transition.
+ */
+@Composable
+private fun LockTierButton(
+    locked: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val container by animateColorAsState(
+        targetValue = if (locked) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "tier_lock_container"
+    )
+    val tint by animateColorAsState(
+        targetValue = if (locked) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "tier_lock_tint"
+    )
+
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(container)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedContent(
+            targetState = locked,
+            transitionSpec = {
+                // `togetherWith` binds looser than `+`, so each enter/exit pair
+                // groups without a parenthesis - the same shape the drag hint uses.
+                scaleIn(
+                    initialScale = 0.55f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                ) + fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                    scaleOut(
+                        targetScale = 0.55f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) + fadeOut(ExpressiveMotion.FastEffects)
+            },
+            label = "tier_lock_icon"
+        ) { isLocked ->
+            Icon(
+                imageVector = if (isLocked) AppVectorIcons.Privacy else AppVectorIcons.LockOpen,
+                contentDescription = if (isLocked) {
+                    "Unlock the board"
+                } else {
+                    "Lock the board (view only)"
+                },
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
  * One 36dp icon in the floating toolbars.
  *
  * A plain `IconButton` cannot be this small: material3 wraps it in the 48dp
@@ -190,22 +271,29 @@ private fun CompactTierButton(
     enabled: Boolean = true,
     selected: Boolean = false
 ) {
-    val tint = when {
-        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        selected -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val tint by animateColorAsState(
+        targetValue = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "tier_tool_tint"
+    )
+    val container by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "tier_tool_container"
+    )
     Box(
         modifier = modifier
             .size(36.dp)
             .clip(RoundedCornerShape(percent = 50))
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                } else {
-                    Color.Transparent
-                }
-            )
+            .background(container)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,6 +47,7 @@ import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierRowBox
 import com.anisequel.domain.tier.TierTitlePosition
+import com.anisequel.domain.tier.tierTileCornerRadius
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -208,12 +211,28 @@ internal fun TierRowStrip(
  * in the row with nothing having said where. It is a capsule rather than a
  * rectangle for the same reason every other bar in this app is: `toShape()` on a
  * stretched polygon draws an ellipse.
+ *
+ * It blooms in rather than appearing fully formed. The mark is only on screen for
+ * the length of one drag, and a hard cut at a new x position reads as the layout
+ * jumping; a short spring from nothing reads as the mark arriving where the finger
+ * went. The animation is read in the draw phase, so a moving caret never
+ * recomposes the board underneath it.
  */
 @Composable
 internal fun TierDropCaret() {
+    val bloom = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        bloom.animateTo(1f, ExpressiveMotion.FastSpatial)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer {
+                scaleX = bloom.value
+                scaleY = 0.55f + 0.45f * bloom.value
+                alpha = bloom.value.coerceIn(0f, 1f)
+            }
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.primary)
             .testTag("tier_drop_caret")
@@ -241,6 +260,18 @@ internal fun TierDropCaret() {
  * would be a no-op that reads like a guarantee it is not enforcing - the real
  * floor is `ScreenTierOptions.itemWidth`, and it is the thing to change if it
  * ever needs to move.
+ *
+ * ## The corner is a share of the tile, not a constant
+ *
+ * The shape used to be a 12dp `RoundedCornerShape` at every zoom. At 100% that is
+ * a rounded square; at the 35% floor the tile is 25dp wide and the same 12dp
+ * radius is very nearly half its width, so the overview was a grid of circles -
+ * the covers looked "peeled". [tierTileCornerRadius] scales the radius with the
+ * drawn tile so it stays a square with a softened corner at every zoom.
+ *
+ * [enabled] is the board's lock. With it false the tile is drawn but nothing is
+ * installed to press: drag and tap are both edits, and a locked board is for
+ * looking, not for ranking.
  */
 @Composable
 internal fun TierPosterTile(
@@ -251,11 +282,14 @@ internal fun TierPosterTile(
     showTitle: Boolean,
     titlePosition: TierTitlePosition,
     onTap: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
-    val shape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
+    val shape = remember(width) {
+        RoundedCornerShape(tierTileCornerRadius(width).dp)
+    }
     val titleOnCover = showTitle && titlePosition == TierTitlePosition.ON_COVER
     val titleUnderCover = showTitle && titlePosition == TierTitlePosition.UNDER_COVER
     // The floor is 25dp a tile, and text does not scale with the board. A
@@ -271,8 +305,18 @@ internal fun TierPosterTile(
             // Before the clickable, sharing one source: sharing is what cancels
             // the press spring the moment the gesture turns into a scroll instead
             // of leaving the tile squashed under a finger that is scrolling.
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onTap)
+            //
+            // Neither is installed while the board is locked. A press spring on a
+            // tile that cannot be pressed is a promise the screen does not keep.
+            .then(
+                if (enabled) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+                        .clickable(interactionSource = interactionSource, onClick = onTap)
+                } else {
+                    Modifier
+                }
+            )
             .testTag("tier_tile")
     ) {
         Box(
@@ -410,10 +454,12 @@ internal fun TierDragGhost(
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "tier_drag_lift"
     )
-    // Hoisted rather than built inside the layer block: that block runs on every
-    // frame of the drag, and a fresh shape per frame is an allocation on the one
-    // path that has to stay cheap.
-    val ghostShape = remember { RoundedCornerShape(ExpressiveShapes.SmallCorner) }
+    // The same corner the tile it came from draws. A fixed radius here would keep
+    // the shadow round while the artwork inside it has become a square, which
+    // shows up as a pale halo at the corners of a zoomed-out ghost.
+    val ghostShape = remember(box.width, zoom) {
+        RoundedCornerShape(tierTileCornerRadius(box.width * zoom).dp)
+    }
 
     TierPosterTile(
         candidate = candidate,
@@ -423,6 +469,9 @@ internal fun TierDragGhost(
         showTitle = showTitle,
         titlePosition = titlePosition,
         onTap = {},
+        // The ghost is a picture of the finger's cargo, not a control. A
+        // clickable here would answer taps meant for the board underneath it.
+        enabled = false,
         modifier = Modifier
             .offset(x = (box.x * zoom).dp, y = (box.y * zoom).dp)
             // `travel.value` is read *inside* the layer block, which is what keeps

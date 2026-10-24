@@ -17,10 +17,14 @@ import com.anisequel.domain.tier.encodeTiers
 import com.anisequel.domain.tier.onlyFor
 import com.anisequel.domain.tier.scoreFloorsOf
 import com.anisequel.domain.tier.seedFromScores
+import com.anisequel.domain.tier.tierTileCornerRadius
+import com.anisequel.ui.screens.tier.TIER_EXPORT_WIDTH_STANDARD
+import com.anisequel.ui.screens.tier.TIER_EXPORT_WIDTH_ULTRA
 import com.anisequel.ui.screens.tier.TIER_TRAY_BOTTOM_GAP
 import com.anisequel.ui.screens.tier.TIER_TRAY_HEADER_HEIGHT
 import com.anisequel.ui.screens.tier.TIER_TRAY_HEIGHT
 import com.anisequel.ui.screens.tier.TIER_TRAY_ITEM_HEIGHT
+import com.anisequel.ui.screens.tier.estimateTierExportSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -295,6 +299,79 @@ class TierBoardRedesignTest {
         assertEquals(
             TIER_TRAY_HEIGHT,
             TIER_TRAY_HEADER_HEIGHT + TIER_TRAY_ITEM_HEIGHT + TIER_TRAY_BOTTOM_GAP
+        )
+    }
+
+    // ---- Tile corners and the export ---------------------------------------
+
+    @Test
+    fun `a tile's corner is a share of its width, not a fixed radius`() {
+        // The failure this pins: a constant 12dp radius on a 25dp tile at the 35%
+        // zoom floor turned every cover into a circle. The radius has to shrink
+        // with the tile, or the overview is a tray of pills.
+        val default = tierTileCornerRadius(72f)
+        val zoomedOut = tierTileCornerRadius(25f)
+
+        assertEquals(72f * 0.12f, default, 0.001f)
+        assertEquals(25f * 0.12f, zoomedOut, 0.001f)
+        // Under a quarter of the width is what keeps it reading as a square.
+        assertTrue(zoomedOut / 25f < 0.25f)
+        // And a zero or negative width draws nothing rather than a NaN rect.
+        assertEquals(0f, tierTileCornerRadius(0f), 0f)
+        assertEquals(0f, tierTileCornerRadius(-10f), 0f)
+    }
+
+    @Test
+    fun `a very wide tile stops growing its radius`() {
+        // A 200% zoom on a tablet would otherwise ask for a 24dp radius on a
+        // 200dp tile, which is a different shape from the one the design uses.
+        assertEquals(12f, tierTileCornerRadius(200f), 0f)
+    }
+
+    @Test
+    fun `the export estimate reaches the requested width on a short board`() {
+        // The sheet's caption is a promise: this is the same plan and scale maths
+        // the renderer runs, so a 4K chip has to report 3840 px (the heap budget
+        // only takes width back from boards too tall to hold).
+        val assignment = TierAssignment(linkedMapOf(1 to "s"))
+        val candidates = listOf(candidate(1, score = 88))
+
+        val ultra = estimateTierExportSize(
+            listName = "Mine",
+            tiers = StandardTiers,
+            assignment = assignment,
+            candidates = candidates,
+            display = TierDisplay(),
+            targetWidth = TIER_EXPORT_WIDTH_ULTRA
+        )
+        val standard = estimateTierExportSize(
+            listName = "Mine",
+            tiers = StandardTiers,
+            assignment = assignment,
+            candidates = candidates,
+            display = TierDisplay(),
+            targetWidth = TIER_EXPORT_WIDTH_STANDARD
+        )
+
+        assertEquals(TIER_EXPORT_WIDTH_ULTRA, ultra?.width)
+        assertEquals(TIER_EXPORT_WIDTH_STANDARD, standard?.width)
+        assertTrue((ultra?.height ?: 0) > 0)
+        // Both qualities describe the same board, so the taller file is the wider
+        // one - a mismatch would mean the height was not derived from the layout.
+        assertTrue((ultra?.height ?: 0) > (standard?.height ?: 0))
+    }
+
+    @Test
+    fun `an empty board has no export size to promise`() {
+        assertNull(
+            estimateTierExportSize(
+                listName = "Mine",
+                tiers = StandardTiers,
+                assignment = TierAssignment(emptyMap()),
+                candidates = emptyList(),
+                display = TierDisplay(),
+                targetWidth = TIER_EXPORT_WIDTH_ULTRA
+            )
         )
     }
 }
