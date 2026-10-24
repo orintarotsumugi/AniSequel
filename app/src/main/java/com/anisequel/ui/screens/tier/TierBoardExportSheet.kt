@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,7 @@ import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -52,6 +54,14 @@ import kotlinx.coroutines.launch
  * that accepts `image/png` are all ordinary outcomes here. The sheet renders and
  * reports the failure in place; the alternative is an export button that closes
  * the app on a bad connection.
+ *
+ * ## The work lives in [TierExportSession], not in the button
+ *
+ * Share and save are the same pipeline with a different last step, and both have
+ * to survive a recomposition halfway through. Keeping that in one small object -
+ * rather than in two nearly identical `scope.launch` blocks inside the layout -
+ * is what leaves this composable with nothing in it but what the sheet looks
+ * like.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,8 +85,21 @@ internal fun TierExportSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val request = remember(listName, tiers, assignment, candidates, display) {
+        TierExportRequest(
+            listName = listName,
+            tiers = tiers,
+            assignment = assignment,
+            candidates = candidates,
+            display = display
+        )
+    }
+    // Kept current rather than captured: the session is remembered for as long as
+    // the request is, and the host hands in a fresh lambda on every recomposition.
+    val dismiss = rememberUpdatedState(onDismiss)
+    val session = remember(request) {
+        TierExportSession(context, scope, request) { dismiss.value() }
+    }
     // Placements whose title is no longer in the library are still in the
     // assignment so the board can keep the slot, but the exporter drops them -
     // there is no poster to draw - so the count here is a promise about the
@@ -87,7 +110,7 @@ internal fun TierExportSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (!busy) onDismiss() },
+        onDismissRequest = { if (!session.busy) onDismiss() },
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -117,115 +140,23 @@ internal fun TierExportSheet(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            if (error != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = error.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
+            TierExportError(session.error)
 
             Spacer(modifier = Modifier.height(18.dp))
             if (titleCount == 0) {
-                Text(
-                    // Two different empty boards: one has nothing ranked, the
-                    // other has ranked titles the filters are holding back. The
-                    // fix is different, so the sentence cannot be the same.
-                    text = if (ranked == 0) {
-                        "Rank at least one title before exporting."
-                    } else {
-                        "No ranked title is visible with the current filters. " +
-                            "Clear one to include it in the image."
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                TierExportEmptyHint(ranked = ranked)
             } else {
                 ExpressivePrimaryButton(
                     text = "Share image",
-                    onClick = {
-                        busy = true
-                        error = null
-                        scope.launch {
-                            val bitmap = renderTierListImageSafely(
-                                context = context,
-                                listName = listName,
-                                tiers = tiers,
-                                assignment = assignment,
-                                candidates = candidates,
-                                display = display
-                            )
-                            if (bitmap == null) {
-                                error = "The image could not be rendered. Try again " +
-                                    "with fewer titles or a stronger connection."
-                                busy = false
-                                return@launch
-                            }
-                            val shared = try {
-                                shareTierListImage(context, bitmap, listName)
-                            } catch (cancellation: CancellationException) {
-                                throw cancellation
-                            } catch (_: Exception) {
-                                false
-                            } finally {
-                                bitmap.recycle()
-                            }
-                            busy = false
-                            if (shared) {
-                                onDismiss()
-                            } else {
-                                error = "No app on this device accepted the image."
-                            }
-                        }
-                    },
-                    loading = busy,
-                    enabled = !busy,
+                    onClick = session::share,
+                    loading = session.busy,
+                    enabled = !session.busy,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
-                    onClick = {
-                        busy = true
-                        error = null
-                        scope.launch {
-                            val bitmap = renderTierListImageSafely(
-                                context = context,
-                                listName = listName,
-                                tiers = tiers,
-                                assignment = assignment,
-                                candidates = candidates,
-                                display = display
-                            )
-                            if (bitmap == null) {
-                                error = "The image could not be rendered. Try again " +
-                                    "with fewer titles or a stronger connection."
-                                busy = false
-                                return@launch
-                            }
-                            val saved = try {
-                                saveTierListImage(context, bitmap, listName)
-                            } catch (cancellation: CancellationException) {
-                                throw cancellation
-                            } catch (_: Exception) {
-                                false
-                            } finally {
-                                bitmap.recycle()
-                            }
-                            busy = false
-                            if (saved) {
-                                Toast.makeText(
-                                    context,
-                                    "Saved to Pictures/AniSequel",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                onDismiss()
-                            } else {
-                                error = "The image could not be saved to your gallery."
-                            }
-                        }
-                    },
-                    enabled = !busy,
+                    onClick = session::save,
+                    enabled = !session.busy,
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 48.dp)
@@ -237,6 +168,149 @@ internal fun TierExportSheet(
     }
 }
 
+/** The last failure, if there was one, in the sheet rather than in a snackbar. */
+@Composable
+private fun TierExportError(message: String?) {
+    if (message == null) return
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error
+    )
+}
+
+/** Why there is nothing to export - which depends on what the filters did. */
+@Composable
+private fun TierExportEmptyHint(ranked: Int) {
+    Text(
+        // Two different empty boards: one has nothing ranked, the other has
+        // ranked titles the filters are holding back. The fix is different, so
+        // the sentence cannot be the same.
+        text = if (ranked == 0) {
+            "Rank at least one title before exporting."
+        } else {
+            "No ranked title is visible with the current filters. " +
+                "Clear one to include it in the image."
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/** Everything the render step needs, in the shape the two actions share. */
+private data class TierExportRequest(
+    val listName: String,
+    val tiers: List<TierDefinition>,
+    val assignment: TierAssignment,
+    val candidates: List<TierCandidate>,
+    val display: TierDisplay
+)
+
+/**
+ * Which button was pressed, and the two outcomes it can produce.
+ *
+ * The pair is attached to the action rather than left to the caller, so Share and
+ * Save cannot report each other's failure text - they are two lines in the same
+ * pipeline and the difference is exactly this enum.
+ */
+private enum class TierExportAction(
+    val success: TierExportOutcome,
+    val failure: TierExportOutcome
+) {
+    SHARE(TierExportOutcome.Shared, TierExportOutcome.ShareFailed),
+    SAVE(TierExportOutcome.Saved, TierExportOutcome.SaveFailed)
+}
+
+private enum class TierExportOutcome(val message: String?) {
+    Shared(null),
+    Saved(null),
+    RenderFailed(
+        "The image could not be rendered. Try again with fewer titles or a " +
+            "stronger connection."
+    ),
+    ShareFailed("No app on this device accepted the image."),
+    SaveFailed("The image could not be saved to your gallery.")
+}
+
+/**
+ * The sheet's in-flight state and the two side effects it can start.
+ *
+ * A plain class remembered by the sheet rather than two lambdas inside it: the
+ * buttons used to carry a dozen lines each of render/share/report, and both
+ * copies had to remember to clear `busy` on every exit - including the one where
+ * the bitmap is null and the one where the share intent is refused. [start] has
+ * that exit path once.
+ */
+private class TierExportSession(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val request: TierExportRequest,
+    private val onDismiss: () -> Unit
+) {
+    var busy by mutableStateOf(false)
+        private set
+
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    fun share() = start(TierExportAction.SHARE)
+
+    fun save() = start(TierExportAction.SAVE)
+
+    private fun start(action: TierExportAction) {
+        if (busy) return
+        busy = true
+        error = null
+        scope.launch {
+            val outcome = exportTierListImage(action, context, request)
+            busy = false
+            when (outcome) {
+                TierExportOutcome.Shared -> onDismiss()
+                TierExportOutcome.Saved -> {
+                    Toast.makeText(
+                        context,
+                        "Saved to Pictures/AniSequel",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onDismiss()
+                }
+                else -> error = outcome.message
+            }
+        }
+    }
+}
+
+/**
+ * Renders the board and hands the bitmap to [action], clearing the bitmap on
+ * every path - including the failure one, because a 16 MP bitmap held by a
+ * finished export is the largest thing this screen allocates.
+ *
+ * [CancellationException] is rethrown: the sheet's scope cancels when it closes,
+ * and swallowing that would leave a coroutine running after the UI is gone.
+ */
+private suspend fun exportTierListImage(
+    action: TierExportAction,
+    context: Context,
+    request: TierExportRequest
+): TierExportOutcome {
+    val bitmap = renderTierListImageSafely(context, request)
+        ?: return TierExportOutcome.RenderFailed
+    return try {
+        val delivered = when (action) {
+            TierExportAction.SHARE -> shareTierListImage(context, bitmap, request.listName)
+            TierExportAction.SAVE -> saveTierListImage(context, bitmap, request.listName)
+        }
+        if (delivered) action.success else action.failure
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (_: Exception) {
+        action.failure
+    } finally {
+        bitmap.recycle()
+    }
+}
+
 /**
  * Renders, turning every ordinary failure into "no image" for the sheet.
  *
@@ -245,19 +319,15 @@ internal fun TierExportSheet(
  */
 private suspend fun renderTierListImageSafely(
     context: Context,
-    listName: String,
-    tiers: List<TierDefinition>,
-    assignment: TierAssignment,
-    candidates: List<TierCandidate>,
-    display: TierDisplay
+    request: TierExportRequest
 ): Bitmap? = try {
     renderTierListImage(
         context = context,
-        listName = listName,
-        tiers = tiers,
-        assignment = assignment,
-        candidates = candidates,
-        display = display
+        listName = request.listName,
+        tiers = request.tiers,
+        assignment = request.assignment,
+        candidates = request.candidates,
+        display = request.display
     )
 } catch (cancellation: CancellationException) {
     throw cancellation
