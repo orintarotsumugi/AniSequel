@@ -184,9 +184,11 @@ data class StudioCredit(
  * edges is what makes the page able to say "Shaft made this, Kodansha published
  * it" instead of printing six names as if they were six studios of equal weight.
  *
- * `nodes` is still read as the fallback, because the list query and the bio
- * covers carry no edges at all and a title with no studios shown is worse than a
- * title whose credits are unranked.
+ * `nodes` is still read as the fallback: the bio covers carry no edges, and a
+ * list snapshot written before the query asked for them has only the flat list.
+ * A title with no studios shown is worse than a title whose credits are
+ * unranked, so the older shape stays readable instead of filtering as
+ * studio-less until the next fetch.
  */
 val MediaNode.studioCredits: List<StudioCredit>
     get() {
@@ -549,17 +551,22 @@ val MediaRelationEdge.metaLabel: String
             // a manga has chapters and (sometimes) volumes. Only reading
             // `episodes` here meant every manga relation card silently lost its
             // length, while an anime card beside it said "TV · 12 eps".
+            //
+            // Read into locals rather than `!!`-ed after the null check: the two
+            // reads are of the same nullable field, and the assertion was only as
+            // safe as nothing ever touching the node between them. A local cannot
+            // go stale.
+            val chapters = node.chapters
+            val volumes = node.volumes
+            val episodes = node.episodes
             val length = when {
-                node.isManga && (node.chapters ?: 0) > 0 -> {
-                    val chapters = node.chapters!!
+                node.isManga && (chapters ?: 0) > 0 -> {
                     if (chapters == 1) "1 ch" else "$chapters ch"
                 }
-                node.isManga && (node.volumes ?: 0) > 0 -> {
-                    val volumes = node.volumes!!
+                node.isManga && (volumes ?: 0) > 0 -> {
                     if (volumes == 1) "1 vol" else "$volumes vols"
                 }
-                (node.episodes ?: 0) > 0 -> {
-                    val episodes = node.episodes!!
+                (episodes ?: 0) > 0 -> {
                     if (episodes == 1) "1 ep" else "$episodes eps"
                 }
                 else -> null

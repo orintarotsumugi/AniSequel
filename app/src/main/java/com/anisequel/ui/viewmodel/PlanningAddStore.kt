@@ -103,10 +103,12 @@ class PlanningAddStore(
         }
 
         scope.launch {
-            val result = if (watching) {
-                repository.addToWatching(media.id)
-            } else {
-                repository.addToPlanning(media.id)
+            val result = repositoryResult {
+                if (watching) {
+                    repository.addToWatching(media.id)
+                } else {
+                    repository.addToPlanning(media.id)
+                }
             }
             result.fold(
                 onSuccess = {

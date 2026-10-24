@@ -483,8 +483,34 @@ object AniListMarkdownParser {
             .replace("<br />", "\n")
             .let(::decodeHtmlEntities)
             .trim()
-        return parseDecoded(clean).also { cacheParse(raw, it) }
+        // A parse that fails must not take the screen with it. This runs on the
+        // main thread during composition over text nobody in this app wrote -
+        // a stranger's comment, a synopsis, a bio - so an input this parser did
+        // not anticipate used to close the app on the screen that was drawing it.
+        // The fallback is the text the reader came for, as one plain paragraph:
+        // less pretty than the markup deserved, still readable, and never a
+        // force-stop. `StackOverflowError` is caught because the block walk
+        // recurses through nested `~~~center` blocks, and a pathological run of
+        // them can exhaust the stack rather than throw.
+        val nodes = try {
+            parseDecoded(clean)
+        } catch (failure: StackOverflowError) {
+            return plainFallback(clean)
+        } catch (failure: Exception) {
+            return plainFallback(clean)
+        }
+        return nodes.also { cacheParse(raw, it) }
     }
+
+    /**
+     * What a failed parse renders as: the text, unwrapped.
+     *
+     * Deliberately not cached as the *success* path is - this is a rare fallback,
+     * and a cache entry would keep a broken document's plain version for the rest
+     * of the session even after the bug behind it was fixed.
+     */
+    private fun plainFallback(text: String): List<MarkdownNode> =
+        if (text.isBlank()) emptyList() else listOf(MarkdownNode.Paragraph(listOf(InlineToken.Plain(text))))
 
     /**
      * The block loop, over text whose line endings and `<br>`s are already
@@ -495,8 +521,11 @@ object AniListMarkdownParser {
      * already. Calling [parse] from there decoded it a second time, so
      * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
      * happened to sit inside `~~~center`.
+     *
+     * [depth] counts nested centered blocks, the only re-entry point, and is
+     * capped at [MAX_BLOCK_DEPTH].
      */
-    private fun parseDecoded(clean: String): List<MarkdownNode> {
+    private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 
         val nodes = mutableListOf<MarkdownNode>()
@@ -547,7 +576,17 @@ object AniListMarkdownParser {
                 // `parseDecoded`, not `parse`: these lines came out of the
                 // already-decoded document, and decoding them again would make
                 // an escaped `&lt;` inside a centred block print as `<`.
-                val centerContent = parseDecoded(centerLines.joinToString("\n"))
+                //
+                // Bounded because this is the one block that re-enters the walk:
+                // a document of nested `~~~center` pairs would otherwise recurse
+                // once per pair. Past [MAX_BLOCK_DEPTH] the remainder is kept as
+                // plain text, which is what the reader can still read.
+                val centerText = centerLines.joinToString("\n")
+                val centerContent = if (depth >= MAX_BLOCK_DEPTH) {
+                    listOf(MarkdownNode.Paragraph(listOf(InlineToken.Plain(centerText))))
+                } else {
+                    parseDecoded(centerText, depth + 1)
+                }
                 nodes.add(MarkdownNode.CenteredBlock(centerContent))
                 continue
             }
@@ -1109,6 +1148,16 @@ object AniListMarkdownParser {
      * the token already carries.
      */
     private const val MAX_INLINE_DEPTH = 4
+
+    /**
+     * How deep nested centered blocks may nest before the rest is kept as text.
+     *
+     * `~~~center` is the only block that re-enters the block walk, and the walk is
+     * recursive, so a document that opens the marker thousands of times is a
+     * stack overflow rather than a render. Eight is far past anything a person
+     * writes and still nowhere near the stack's limit.
+     */
+    private const val MAX_BLOCK_DEPTH = 8
 
     private fun parseInlines(text: String, depth: Int): List<InlineToken> {
         if (text.isEmpty()) return emptyList()

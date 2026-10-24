@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,12 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.friendlyCopy
 import com.anisequel.ui.components.ApiStatusCard
@@ -70,6 +73,7 @@ fun ConnectionCheckDialog(
     onDismiss: () -> Unit
 ) {
     val status by probe.ui.collectAsState()
+    val context = LocalContext.current
     var seenProblem by remember { mutableStateOf(false) }
     var celebrating by remember { mutableStateOf(false) }
     var touchingGrass by remember { mutableStateOf(false) }
@@ -78,6 +82,35 @@ fun ConnectionCheckDialog(
     // before the check even starts, which reads as a failure that then fixes
     // itself - exactly the false alarm this dialog exists to avoid.
     var requested by remember { mutableStateOf(false) }
+
+    // A check that threw is the one failure the dialog cannot draw as a verdict:
+    // there is no latency, no reachability and no joke that is about AniList.
+    // It used to be indistinguishable from "the question has not been answered
+    // yet", so a broken probe looked exactly like a slow one and the reader
+    // tapped Check again with no idea anything had gone wrong. The toast says
+    // the check itself failed; the dialog stays up and stays usable, because the
+    // retry is `probe()` and nothing here is one-shot.
+    //
+    // Seeded with the count already on the clock so reopening the dialog after
+    // an old failure does not toast it a second time, and keyed on the *count*
+    // rather than the message because retrying the same broken check produces
+    // the same message - an effect keyed on an unchanged string would stay
+    // silent for exactly the tap the reader just made.
+    var toastedFailures by remember { mutableStateOf(status.failureCount) }
+    LaunchedEffect(status.failureCount) {
+        val failures = status.failureCount
+        if (failures <= toastedFailures) return@LaunchedEffect
+        toastedFailures = failures
+        // A joke rather than the raw exception: the message from a probe that
+        // threw is a socket or a parser talking, not something a reader can act
+        // on. The dialog itself carries the honest "no verdict" copy.
+        val quip = AniListErrorKind.UNKNOWN.friendlyCopy().quipFor("probe:$failures")
+        Toast.makeText(
+            context,
+            "The check didn't finish. $quip",
+            Toast.LENGTH_LONG
+        ).show()
+    }
 
     // Opening the dialog is asking for a fresh answer, not a cached one.
     LaunchedEffect(Unit) {
