@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,7 +93,59 @@ internal val JokeToastLift = 72.dp
  * preview button is the one exception: it is an explicit request, so it is shown
  * wherever the host is mounted.
  *
- * ## Why the wait is lifecycle-aware
+ * ## Why the scheduling lives in helpers
+ *
+ * The host owns the state a joke is shown from; [JokeAutoSchedule],
+ * [JokePreviewSchedule], [JokeArrivalHaptic] and [JokeToastPill] each own one
+ * reason it changes. Keeping the loop, the preview bus, the tick and the surface
+ * in one body made a composable with several effects and nested branches, which
+ * is hard to read and trips the project's complexity check for no benefit.
+ */
+@Composable
+fun JokeToastHost(
+    settings: JokeSettings,
+    active: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // The joke is remembered separately from visibility: the exit animation keeps
+    // drawing the card after `visible` flips, so the text cannot be derived from
+    // that flag without going blank halfway through the slide.
+    var joke by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+    // The shuffle bag: every line once before any line is repeated. A plain
+    // `mutableSetOf` rather than snapshot state because nothing reads it during
+    // composition - the only writers are the schedules' coroutines.
+    val seen = remember { mutableSetOf<String>() }
+
+    // One place for the bag's one subtle rule: the line just read stays in the
+    // set across the seam, so the first draw of a new cycle cannot repeat the
+    // last line of the old one.
+    val showNext: () -> Unit = {
+        if (seen.size >= AppJokes.lines.size) {
+            seen.clear()
+            if (joke.isNotEmpty()) seen += joke
+        }
+        val next = AppJokes.pickUnseen(seen)
+        seen += next
+        joke = next
+        visible = true
+    }
+    val hide: () -> Unit = { visible = false }
+
+    JokeAutoSchedule(settings = settings, active = active, onShow = showNext, onHide = hide)
+    JokePreviewSchedule(onShow = showNext, onHide = hide)
+    JokeArrivalHaptic(joke = joke, visible = visible)
+    JokeToastPill(
+        joke = joke,
+        visible = visible,
+        fromBottom = settings.position == JokePosition.BOTTOM,
+        onDismiss = hide,
+        modifier = modifier
+    )
+}
+
+/**
+ * The ambient wait.
  *
  * The wait runs only while the Activity is resumed, so a joke cannot come due
  * while the reader is in another app and be waiting for them when they return -
@@ -108,26 +161,19 @@ internal val JokeToastLift = 72.dp
  * few times never reached the first joke at all.
  */
 @Composable
-fun JokeToastHost(
+private fun JokeAutoSchedule(
     settings: JokeSettings,
     active: Boolean,
-    modifier: Modifier = Modifier
+    onShow: () -> Unit,
+    onHide: () -> Unit
 ) {
-    // The joke is remembered separately from visibility: the exit animation keeps
-    // drawing the card after `visible` flips, so the text cannot be derived from
-    // that flag without going blank halfway through the slide.
-    var joke by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
-    // The shuffle bag: every line once before any line is repeated. A plain
-    // `mutableSetOf` rather than snapshot state because nothing reads it during
-    // composition - the only writer is the effect's own coroutine.
-    val seen = remember { mutableSetOf<String>() }
     val resumed = rememberIsResumed()
     // Survives the effect's restarts, so coming back from the background does
     // not shorten the next wait to the first-run one. A local `var` inside the
     // effect reset with it, which is exactly the bug this hoisting fixes.
     var seenOne by remember { mutableStateOf(false) }
-    val haptics = LocalHapticFeedback.current
+    val currentShow by rememberUpdatedState(onShow)
+    val currentHide by rememberUpdatedState(onHide)
 
     LaunchedEffect(active, resumed, settings.autoJokesEnabled, settings.frequency) {
         if (!active || !resumed || !settings.autoJokesEnabled) return@LaunchedEffect
@@ -140,67 +186,82 @@ fun JokeToastHost(
                 }
                 delay(wait)
                 seenOne = true
-                // The line just read stays in the bag across the seam. Clearing
-                // to an empty set would let the first draw of the new cycle be the
-                // last line of the old one - a repeat on the one boundary the
-                // shuffle exists to hide.
-                if (seen.size >= AppJokes.lines.size) {
-                    seen.clear()
-                    if (joke.isNotEmpty()) seen += joke
-                }
-                val next = AppJokes.pickUnseen(seen)
-                seen += next
-                joke = next
-                visible = true
+                currentShow()
                 delay(JokeVisibleMillis)
-                visible = false
+                currentHide()
             }
         } finally {
             // Cancellation is the background case: whatever is up goes away with
             // the loop rather than staying on a screen nobody is looking at.
-            visible = false
+            currentHide()
         }
     }
+}
 
-    // The preview is an explicit request, so it is not gated on `active` or on
-    // the switch: a reader who has jokes off must still be able to see what the
-    // placement they are choosing looks like. The tick is initialised to whatever
-    // was already requested so opening Settings does not replay an old preview.
+/**
+ * The explicit "show me one" request from Settings.
+ *
+ * Not gated on [JokeAutoSchedule]'s switch or page rule: a reader who has jokes
+ * off must still be able to see what the placement they are choosing looks like.
+ * The tick starts at whatever was already requested so opening Settings does not
+ * replay an old preview.
+ */
+@Composable
+private fun JokePreviewSchedule(
+    onShow: () -> Unit,
+    onHide: () -> Unit
+) {
     val previewTick by JokePreviewBus.requests.collectAsState()
     var handledPreview by remember { mutableIntStateOf(previewTick) }
+    val currentShow by rememberUpdatedState(onShow)
+    val currentHide by rememberUpdatedState(onHide)
+
     LaunchedEffect(previewTick) {
         if (previewTick <= 0 || previewTick == handledPreview) return@LaunchedEffect
         handledPreview = previewTick
-        if (seen.size >= AppJokes.lines.size) seen.clear()
-        val next = AppJokes.pickUnseen(seen)
-        seen += next
-        joke = next
-        visible = true
+        currentShow()
         delay(JokeVisibleMillis)
-        visible = false
+        currentHide()
     }
+}
 
-    // One light tick when a line arrives. It is not a notification and nothing is
-    // expected of the reader, so it does not use the long-press or error buzz.
+/**
+ * One light tick when a line arrives.
+ *
+ * It is not a notification and nothing is expected of the reader, so it does not
+ * use the long-press or error buzz.
+ */
+@Composable
+private fun JokeArrivalHaptic(joke: String, visible: Boolean) {
+    val haptics = LocalHapticFeedback.current
     LaunchedEffect(joke, visible) {
         if (visible && joke.isNotEmpty()) {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
     }
+}
 
-    val fromBottom = settings.position == JokePosition.BOTTOM
-
+/**
+ * The pill itself.
+ *
+ * Spring tokens rather than a tween, like every other entrance in the app. The
+ * direction follows the chosen edge: a bottom toast starts below its resting
+ * place and rises, a top toast starts above and drops in, and both leave back
+ * the way they came (positive offsets are downward).
+ */
+@Composable
+private fun JokeToastPill(
+    joke: String,
+    visible: Boolean,
+    fromBottom: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     AnimatedVisibility(
         visible = visible,
-        // Spring tokens rather than a tween, like every other entrance in the
-        // app. The slide's spec is an `IntOffset` one - `slideInVertically` takes
+        // The slide's spec is an `IntOffset` one - `slideInVertically` takes
         // offsets, not floats - which is why this uses the offset token rather
         // than `FastSpatialInt`; the two are not interchangeable.
-        //
-        // The direction follows the chosen edge. A bottom toast starts below its
-        // resting place and rises; a top toast starts above and drops in, then
-        // leaves back the way it came. Positive offsets are downward, so the top
-        // arm is negative.
         enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
             slideInVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height ->
                 if (fromBottom) height / 2 else -height / 2
@@ -214,35 +275,27 @@ fun JokeToastHost(
         // The arrival's scale. `FastSpatial` and not `BouncySpatial`: this spring
         // has to settle *inside* the slide's window, because `AnimatedVisibility`
         // disposes the content when its own exit finishes and a slower scale would
-        // be cut off mid-collapse. `FastSpatial` is the quick press spring, so the
-        // pill arrives with a small overshoot and is at rest before the slide is.
+        // be cut off mid-collapse. The origin is the edge the toast is anchored to,
+        // so it grows out of that edge rather than out of its own middle.
         //
         // Read inside `graphicsLayer` rather than passed to it, so a frame of the
-        // scale invalidates the draw pass and not this composable. The origin is
-        // the edge the toast is anchored to, so it grows out of that edge rather
-        // than out of its own middle.
+        // scale invalidates the draw pass and not this composable.
         val scale by transition.animateFloat(
             transitionSpec = { ExpressiveMotion.FastSpatial },
             label = "joke_toast_scale"
-        // The lambda receives the `EnterExitState`, not a Boolean: this is the
-        // `AnimatedVisibility` transition, whose two states are Visible and the
-        // pre/post states either side of it. Reading it as a Boolean does not
-        // compile, and reading `targetState` alone would snap instead of
-        // animating the collapse.
         ) { state -> if (state == EnterExitState.Visible) 1f else 0.92f }
 
         Surface(
             // Tapping dismisses it early. No scrim and no modal: it is a remark,
             // not a decision, and the page underneath must stay usable.
-            onClick = { visible = false },
+            onClick = onDismiss,
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             // Higher than the 3dp it shipped with. The toast lands over a
             // scrolling list of poster artwork, and a `secondaryContainer` pill
             // with a faint tint on it is not reliably separable from a busy
-            // picture underneath. This is the elevation that reads as "above the
-            // page" on both the light and dark schemes.
+            // picture underneath.
             tonalElevation = 6.dp,
             // A hairline edge so the pill reads as a surface over artwork rather
             // than a patch of the poster done in a different colour.
@@ -264,53 +317,51 @@ fun JokeToastHost(
                 // sentence the reader is already hearing.
                 .semantics { liveRegion = LiveRegionMode.Polite }
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // The glyph gets its own tinted disc. It was an 18dp icon in the
-                // same colour as the sentence beside it, which read as a bullet
-                // point rather than as the app saying something.
-                Surface(
-                    shape = RoundedCornerShape(percent = 50),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            // `AnimeSparkle` and not `NewReleases`. The glyph this
-                            // used to wear is the app's "an update is available"
-                            // mark - it is on the update dialog and on the What's
-                            // new card in Settings - so an ambient joke about
-                            // backlogs was wearing the one icon in the set that
-                            // means "go and install something". The sparkle is the
-                            // app's own delight glyph and is already the empty
-                            // state's.
-                            imageVector = AppVectorIcons.AnimeSparkle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.size(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    // Named, not anonymous. A line that arrives by itself with no
-                    // attribution reads like a notification from nobody; Ani-chan
-                    // is the app's own voice and gives the toast a reason to be
-                    // there.
-                    Text(
-                        text = "Ani-chan",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.65f)
-                    )
-                    Text(
-                        text = joke,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+            JokeToastBody(joke = joke)
+        }
+    }
+}
+
+/**
+ * The named line: Ani-chan's sparkle, her name, and the joke.
+ *
+ * Named, not anonymous. A line that arrives by itself with no attribution reads
+ * like a notification from nobody; Ani-chan is the app's own voice and gives the
+ * toast a reason to be there. `AnimeSparkle` and not `NewReleases`: the update
+ * glyph means "go and install something", and this line is not that.
+ */
+@Composable
+private fun JokeToastBody(joke: String) {
+    Row(
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(percent = 50),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            modifier = Modifier.size(30.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = AppVectorIcons.AnimeSparkle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(17.dp)
+                )
             }
+        }
+        Spacer(modifier = Modifier.size(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Ani-chan",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.65f)
+            )
+            Text(
+                text = joke,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }

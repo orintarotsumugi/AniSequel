@@ -162,7 +162,7 @@ internal fun TierFilterSheet(
                 // `shingeki` both find the same poster.
                 text = if (filter.hasQuery) {
                     "$matches of ${candidates.size} " +
-                        (if (candidates.size == 1) "title matches" else "titles match")
+                        if (candidates.size == 1) "title matches" else "titles match"
                 } else {
                     "Search matches English, romaji and native titles. " +
                         "Every word you type has to match."
