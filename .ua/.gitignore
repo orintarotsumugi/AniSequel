@@ -1,0 +1,6 @@
+# Scratch space the /understand pipeline moves into .trash-<timestamp>/ for
+# delayed cleanup, plus the dashboard server log. Neither is analysis output,
+# and the trash dirs are large (several MB of per-batch JSON) — they are
+# deleted after 7 days by the next /understand run.
+.trash-*/
+viewer.log

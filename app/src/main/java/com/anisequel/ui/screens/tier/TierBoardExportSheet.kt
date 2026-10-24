@@ -3,7 +3,10 @@ package com.anisequel.ui.screens.tier
 import android.content.Context
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,9 +21,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,9 +37,12 @@ import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
+import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * "Export tier list": render the whole board, then share or save it.
@@ -109,6 +117,31 @@ internal fun TierExportSheet(
         assignment.tierIdByMediaId.keys.count { it in drawableIds }
     }
 
+    // Resolution is a choice for this export, not a stored preference. 4K is the
+    // default because the file usually ends up on a larger screen than the phone
+    // that made it; the exporter's memory guard lowers the effective scale on a
+    // board too tall for the heap, which is why the caption below is a measurement
+    // rather than the quality the person picked.
+    var quality by rememberSaveable { mutableStateOf(TierExportQuality.ULTRA) }
+    // Measured off the main thread: the layout pass is cheap but it is a full
+    // pass over the assignment, and the sheet is opening at the same time.
+    val sizeEstimate by produceState<TierExportSize?>(null, request, quality) {
+        value = if (titleCount == 0) {
+            null
+        } else {
+            withContext(Dispatchers.Default) {
+                estimateTierExportSize(
+                    listName = request.listName,
+                    tiers = request.tiers,
+                    assignment = request.assignment,
+                    candidates = request.candidates,
+                    display = request.display,
+                    targetWidth = quality.width
+                )
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = { if (!session.busy) onDismiss() },
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -140,6 +173,15 @@ internal fun TierExportSheet(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
+            if (titleCount > 0) {
+                Spacer(modifier = Modifier.height(18.dp))
+                TierExportQualityPicker(
+                    selected = quality,
+                    onSelect = { quality = it },
+                    estimate = sizeEstimate
+                )
+            }
+
             TierExportError(session.error)
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -148,14 +190,14 @@ internal fun TierExportSheet(
             } else {
                 ExpressivePrimaryButton(
                     text = "Share image",
-                    onClick = session::share,
+                    onClick = { session.share(quality.width) },
                     loading = session.busy,
                     enabled = !session.busy,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
-                    onClick = session::save,
+                    onClick = { session.save(quality.width) },
                     enabled = !session.busy,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -194,6 +236,66 @@ private fun TierExportEmptyHint(ranked: Int) {
                 "Clear one to include it in the image."
         },
         style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/**
+ * The export resolutions offered, in the order a phone's screen sizes them.
+ *
+ * The width is the only dial: the height follows the board's aspect ratio, and
+ * the exporter can still lower the scale when the whole bitmap would not fit the
+ * heap. Naming the numbers instead of calling them "High"/"Highest" is deliberate
+ * - a person choosing 4K is choosing a pixel count, and the caption underneath
+ * says what they will actually get.
+ */
+private enum class TierExportQuality(val width: Int, val label: String) {
+    STANDARD(TIER_EXPORT_WIDTH_STANDARD, "1080p"),
+    HIGH(TIER_EXPORT_WIDTH_HIGH, "2K"),
+    ULTRA(TIER_EXPORT_WIDTH_ULTRA, "4K")
+}
+
+/**
+ * The resolution chips, plus the measured output size.
+ *
+ * The caption is the honest half of the control: the chips say what was asked
+ * for, [estimate] says what the file will be after the heap guard. It is null for
+ * the first frame while the measurement runs, and the caption simply stays out of
+ * the way rather than showing a guessed number that then changes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TierExportQualityPicker(
+    selected: TierExportQuality,
+    onSelect: (TierExportQuality) -> Unit,
+    estimate: TierExportSize?
+) {
+    Text(
+        text = "Resolution",
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TierExportQuality.entries.forEach { option ->
+            ExpressiveStateChip(
+                label = option.label,
+                selected = option == selected,
+                onClick = { onSelect(option) },
+                modifier = Modifier.testTag("tier_export_quality_${option.width}"),
+                minTouchTargetHeight = 48.dp
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = estimate?.let { "${it.width} x ${it.height} px PNG" }
+            ?: "Measuring the board...",
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
@@ -254,16 +356,16 @@ private class TierExportSession(
     var error by mutableStateOf<String?>(null)
         private set
 
-    fun share() = start(TierExportAction.SHARE)
+    fun share(targetWidth: Int) = start(TierExportAction.SHARE, targetWidth)
 
-    fun save() = start(TierExportAction.SAVE)
+    fun save(targetWidth: Int) = start(TierExportAction.SAVE, targetWidth)
 
-    private fun start(action: TierExportAction) {
+    private fun start(action: TierExportAction, targetWidth: Int) {
         if (busy) return
         busy = true
         error = null
         scope.launch {
-            val outcome = exportTierListImage(action, context, request)
+            val outcome = exportTierListImage(action, context, request, targetWidth)
             busy = false
             when (outcome) {
                 TierExportOutcome.Shared -> onDismiss()
@@ -292,9 +394,10 @@ private class TierExportSession(
 private suspend fun exportTierListImage(
     action: TierExportAction,
     context: Context,
-    request: TierExportRequest
+    request: TierExportRequest,
+    targetWidth: Int
 ): TierExportOutcome {
-    val bitmap = renderTierListImageSafely(context, request)
+    val bitmap = renderTierListImageSafely(context, request, targetWidth)
         ?: return TierExportOutcome.RenderFailed
     return try {
         val delivered = when (action) {
@@ -319,7 +422,8 @@ private suspend fun exportTierListImage(
  */
 private suspend fun renderTierListImageSafely(
     context: Context,
-    request: TierExportRequest
+    request: TierExportRequest,
+    targetWidth: Int
 ): Bitmap? = try {
     renderTierListImage(
         context = context,
@@ -327,7 +431,8 @@ private suspend fun renderTierListImageSafely(
         tiers = request.tiers,
         assignment = request.assignment,
         candidates = request.candidates,
-        display = request.display
+        display = request.display,
+        targetWidth = targetWidth
     )
 } catch (cancellation: CancellationException) {
     throw cancellation

@@ -77,6 +77,7 @@ internal fun TierBoardHeader(
     total: Int,
     unranked: Int,
     undoLabel: String?,
+    editable: Boolean = true,
     onAddTitles: () -> Unit
 ) {
     val fraction = if (total > 0) (ranked.toFloat() / total).coerceIn(0f, 1f) else 0f
@@ -125,7 +126,7 @@ internal fun TierBoardHeader(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            AddTitlesPill(onClick = onAddTitles, enabled = total > 0)
+            AddTitlesPill(onClick = onAddTitles, enabled = total > 0 && editable)
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -503,7 +504,7 @@ internal fun TierEmptyState(
  * takes a title out of the list.
  */
 @Composable
-internal fun TierBoardLegend(dragLocked: Boolean = false) {
+internal fun TierBoardLegend(locked: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -514,24 +515,38 @@ internal fun TierBoardLegend(dragLocked: Boolean = false) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = AppVectorIcons.Trophy,
+            imageVector = if (locked) AppVectorIcons.Privacy else AppVectorIcons.Trophy,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = if (dragLocked) {
-                "Board locked: pinch to zoom and scroll without moving covers. " +
-                    "Unlock from the zoom controls to drag again."
-            } else {
-                "Hold a cover to move it, and drop it between two others to place " +
-                    "it exactly. Pinch to zoom. Release off the rows to take it out."
+        // Crossfaded rather than swapped in place: locking the board is a mode
+        // change, and the line under it changing between two frames reads as the
+        // legend flickering. `AnimatedContent` also animates its own height, so
+        // the shorter locked copy does not leave a gap.
+        AnimatedContent(
+            targetState = locked,
+            transitionSpec = {
+                fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                    fadeOut(ExpressiveMotion.FastEffects)
             },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
+            contentAlignment = Alignment.CenterStart,
+            modifier = Modifier.weight(1f),
+            label = "tier_legend"
+        ) { isLocked ->
+            Text(
+                text = if (isLocked) {
+                    "View only: scroll and pinch freely. Tap the lock to rank " +
+                        "titles again."
+                } else {
+                    "Hold a cover to move it, and drop it between two others to place " +
+                        "it exactly. Pinch to zoom. Release off the rows to take it out."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

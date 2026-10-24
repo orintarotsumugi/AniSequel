@@ -1,0 +1,2787 @@
+{
+  "scriptCompleted": true,
+  "projectName": "AniSequel",
+  "projectDescription": "Android app (Kotlin + Jetpack Compose, Material 3 Expressive) that traverses the AniList relation graph to recommend sequels, films, OVAs and spin-offs from a user's completed anime and manga, with one-tap Planning, a self-contained signed-APK updater and no Play Services.",
+  "readmeHead": "Your AniList history, read backwards. AniSequel walks the relation graph of every anime and manga you have finished and finds the sequels, films, OVAs and spin-offs you never got around to - then puts the good ones one tap from your Planning list.",
+  "languages": [
+    "kotlin",
+    "xml",
+    "markdown",
+    "yaml",
+    "json",
+    "toml",
+    "properties",
+    "proguard"
+  ],
+  "frameworks": [
+    "Android",
+    "Jetpack Compose",
+    "Material 3 Expressive",
+    "Kotlin Coroutines",
+    "KSP",
+    "Gradle"
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/android-release.yml",
+      "language": "yaml",
+      "sizeLines": 1027,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "AGENTS.md",
+      "language": "markdown",
+      "sizeLines": 222,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "language": "markdown",
+      "sizeLines": 551,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "BUILDING.md",
+      "language": "markdown",
+      "sizeLines": 439,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "IMPROVEMENTS-NEEDS-TO-BE-DONE.md",
+      "language": "markdown",
+      "sizeLines": 1440,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "NOTES.md",
+      "language": "markdown",
+      "sizeLines": 749,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 254,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "TO-DO.md",
+      "language": "markdown",
+      "sizeLines": 862,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "UPDATER.md",
+      "language": "markdown",
+      "sizeLines": 154,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/build.gradle.kts",
+      "language": "kotlin",
+      "sizeLines": 251,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/proguard-rules.pro",
+      "language": "pro",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/AndroidManifest.xml",
+      "language": "xml",
+      "sizeLines": 121,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/assets/changelog.json",
+      "language": "json",
+      "sizeLines": 1746,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/AniSequelApplication.kt",
+      "language": "kotlin",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/MainActivity.kt",
+      "language": "kotlin",
+      "sizeLines": 475,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/README.md",
+      "language": "markdown",
+      "sizeLines": 78,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/changelog/ChangelogRepository.kt",
+      "language": "kotlin",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/ActivityEngagement.kt",
+      "language": "kotlin",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/AiringCountdown.kt",
+      "language": "kotlin",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/AniListModels.kt",
+      "language": "kotlin",
+      "sizeLines": 831,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "language": "kotlin",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "language": "kotlin",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/MediaNodeDisplay.kt",
+      "language": "kotlin",
+      "sizeLines": 854,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "language": "kotlin",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/PersonProfile.kt",
+      "language": "kotlin",
+      "sizeLines": 615,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/ThemeSong.kt",
+      "language": "kotlin",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/UserFilterOptions.kt",
+      "language": "kotlin",
+      "sizeLines": 124,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/model/UserOverview.kt",
+      "language": "kotlin",
+      "sizeLines": 374,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/AniListApiService.kt",
+      "language": "kotlin",
+      "sizeLines": 212,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "language": "kotlin",
+      "sizeLines": 249,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/AniListOAuth.kt",
+      "language": "kotlin",
+      "sizeLines": 159,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/AnimeThemesApi.kt",
+      "language": "kotlin",
+      "sizeLines": 189,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/ApiStatus.kt",
+      "language": "kotlin",
+      "sizeLines": 445,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/AuthInterceptor.kt",
+      "language": "kotlin",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/FlexibleStringAdapter.kt",
+      "language": "kotlin",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/GraphQLQueries.kt",
+      "language": "kotlin",
+      "sizeLines": 1366,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/NetworkClient.kt",
+      "language": "kotlin",
+      "sizeLines": 267,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/RateLimitInterceptor.kt",
+      "language": "kotlin",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/RateLimitNotice.kt",
+      "language": "kotlin",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/network/RequestCoalescer.kt",
+      "language": "kotlin",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "language": "kotlin",
+      "sizeLines": 386,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/AniListRepositoryImpl.kt",
+      "language": "kotlin",
+      "sizeLines": 2039,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt",
+      "language": "kotlin",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/AuthRepositoryImpl.kt",
+      "language": "kotlin",
+      "sizeLines": 199,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/CoverColorRepository.kt",
+      "language": "kotlin",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/DemoDataProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 318,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/DemoProfileProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 468,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/HiddenSequelsPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/LibraryPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/QuickAddPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/SnapshotStore.kt",
+      "language": "kotlin",
+      "sizeLines": 330,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 342,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/ThemeSongsRepository.kt",
+      "language": "kotlin",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/repository/TierListPreferences.kt",
+      "language": "kotlin",
+      "sizeLines": 304,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/security/TokenCipher.kt",
+      "language": "kotlin",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/update/ApkDownloader.kt",
+      "language": "kotlin",
+      "sizeLines": 328,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/update/UpdateFormatting.kt",
+      "language": "kotlin",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/update/UpdateManager.kt",
+      "language": "kotlin",
+      "sizeLines": 508,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/data/update/UpdateManifest.kt",
+      "language": "kotlin",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/README.md",
+      "language": "markdown",
+      "sizeLines": 32,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/color/ArgbHex.kt",
+      "language": "kotlin",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/color/CoverColorQuantizer.kt",
+      "language": "kotlin",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/color/Hct.kt",
+      "language": "kotlin",
+      "sizeLines": 477,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/color/MaterialColorSchemes.kt",
+      "language": "kotlin",
+      "sizeLines": 342,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/motion/WaveGeometry.kt",
+      "language": "kotlin",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/studio/StudioYearShelf.kt",
+      "language": "kotlin",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/tier/TierList.kt",
+      "language": "kotlin",
+      "sizeLines": 531,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/tier/TierListCodec.kt",
+      "language": "kotlin",
+      "sizeLines": 372,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt",
+      "language": "kotlin",
+      "sizeLines": 217,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/tier/TierListLayout.kt",
+      "language": "kotlin",
+      "sizeLines": 236,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/tier/TierListSvg.kt",
+      "language": "kotlin",
+      "sizeLines": 205,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/BuildActivityCalendarUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/BuildListEntryInsightsUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 221,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/BuildListInsightsUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 257,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt",
+      "language": "kotlin",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/FindArrivingEntriesUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/FindMissedSequelsUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 280,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/GetViewerProfileUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/MutationCoalescer.kt",
+      "language": "kotlin",
+      "sizeLines": 197,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/SaveToPlanningUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/domain/usecase/SaveToWatchingUseCase.kt",
+      "language": "kotlin",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/README.md",
+      "language": "markdown",
+      "sizeLines": 44,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/AniTopAppBar.kt",
+      "language": "kotlin",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ApiFailureBody.kt",
+      "language": "kotlin",
+      "sizeLines": 334,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ApiRecoveryOverlay.kt",
+      "language": "kotlin",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ApiStatusCard.kt",
+      "language": "kotlin",
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/AppJokes.kt",
+      "language": "kotlin",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "language": "kotlin",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/EmptyStateView.kt",
+      "language": "kotlin",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/EngagementAction.kt",
+      "language": "kotlin",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/FilterSortSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 444,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/HeartbreakScene.kt",
+      "language": "kotlin",
+      "sizeLines": 376,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/HiddenSequelsSection.kt",
+      "language": "kotlin",
+      "sizeLines": 351,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/JokeToastHost.kt",
+      "language": "kotlin",
+      "sizeLines": 230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/OpenExternalUrl.kt",
+      "language": "kotlin",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/PannableBackdrop.kt",
+      "language": "kotlin",
+      "sizeLines": 396,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ProfileAvatarButton.kt",
+      "language": "kotlin",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/QuickFilterBar.kt",
+      "language": "kotlin",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/README.md",
+      "language": "markdown",
+      "sizeLines": 36,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/RedirectUrlHint.kt",
+      "language": "kotlin",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ResumedState.kt",
+      "language": "kotlin",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/SavedCopyPill.kt",
+      "language": "kotlin",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/ShimmerLoading.kt",
+      "language": "kotlin",
+      "sizeLines": 235,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/StatsBanner.kt",
+      "language": "kotlin",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/HoldAndSwipePlanningButton.kt",
+      "language": "kotlin",
+      "sizeLines": 520,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/ScoreBadge.kt",
+      "language": "kotlin",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelCard.kt",
+      "language": "kotlin",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelCardDetails.kt",
+      "language": "kotlin",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelPlanningButton.kt",
+      "language": "kotlin",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelPoster.kt",
+      "language": "kotlin",
+      "sizeLines": 191,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelRelationBanner.kt",
+      "language": "kotlin",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/cards/SequelStatusChip.kt",
+      "language": "kotlin",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "language": "kotlin",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/AnimeRankingsSection.kt",
+      "language": "kotlin",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/DetailActionRow.kt",
+      "language": "kotlin",
+      "sizeLines": 278,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/DetailEditControls.kt",
+      "language": "kotlin",
+      "sizeLines": 532,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/DetailEditTab.kt",
+      "language": "kotlin",
+      "sizeLines": 512,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt",
+      "language": "kotlin",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/EntryScore.kt",
+      "language": "kotlin",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt",
+      "language": "kotlin",
+      "sizeLines": 384,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/PersonProfileSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 606,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/PersonStaffCredits.kt",
+      "language": "kotlin",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/RepositoryEntryEditor.kt",
+      "language": "kotlin",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/SectionHeading.kt",
+      "language": "kotlin",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 396,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoAiring.kt",
+      "language": "kotlin",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoCards.kt",
+      "language": "kotlin",
+      "sizeLines": 645,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoCategoriesSection.kt",
+      "language": "kotlin",
+      "sizeLines": 329,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoEditorial.kt",
+      "language": "kotlin",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoExternalLinksSection.kt",
+      "language": "kotlin",
+      "sizeLines": 119,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoExtrasCard.kt",
+      "language": "kotlin",
+      "sizeLines": 242,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoHero.kt",
+      "language": "kotlin",
+      "sizeLines": 672,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoMetaRowsSection.kt",
+      "language": "kotlin",
+      "sizeLines": 392,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoMotion.kt",
+      "language": "kotlin",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoPage.kt",
+      "language": "kotlin",
+      "sizeLines": 352,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoPageItems.kt",
+      "language": "kotlin",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoTalent.kt",
+      "language": "kotlin",
+      "sizeLines": 552,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoThemeSongsSection.kt",
+      "language": "kotlin",
+      "sizeLines": 212,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/InfoWhereToWatch.kt",
+      "language": "kotlin",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/detail/info/WavyProgressBar.kt",
+      "language": "kotlin",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/AnimatedCounter.kt",
+      "language": "kotlin",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveButtons.kt",
+      "language": "kotlin",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveControls.kt",
+      "language": "kotlin",
+      "sizeLines": 433,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveIndicators.kt",
+      "language": "kotlin",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "language": "kotlin",
+      "sizeLines": 522,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt",
+      "language": "kotlin",
+      "sizeLines": 340,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "language": "kotlin",
+      "sizeLines": 200,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveVisuals.kt",
+      "language": "kotlin",
+      "sizeLines": 279,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/icons/AppCustomVectors.kt",
+      "language": "kotlin",
+      "sizeLines": 783,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/icons/AppExtraVectors.kt",
+      "language": "kotlin",
+      "sizeLines": 291,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownBlocks.kt",
+      "language": "kotlin",
+      "sizeLines": 580,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownInlines.kt",
+      "language": "kotlin",
+      "sizeLines": 379,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownModel.kt",
+      "language": "kotlin",
+      "sizeLines": 312,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParagraph.kt",
+      "language": "kotlin",
+      "sizeLines": 124,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "language": "kotlin",
+      "sizeLines": 1369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownTable.kt",
+      "language": "kotlin",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt",
+      "language": "kotlin",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/update/TransferRate.kt",
+      "language": "kotlin",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/update/UpdateController.kt",
+      "language": "kotlin",
+      "sizeLines": 338,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/update/UpdateDialogs.kt",
+      "language": "kotlin",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/update/UpdateInstallation.kt",
+      "language": "kotlin",
+      "sizeLines": 205,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/components/update/UpdateUiState.kt",
+      "language": "kotlin",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt",
+      "language": "kotlin",
+      "sizeLines": 976,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/navigation/MainTabs.kt",
+      "language": "kotlin",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/navigation/NavigationActions.kt",
+      "language": "kotlin",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/navigation/ProfileDestination.kt",
+      "language": "kotlin",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/navigation/StudioRoutes.kt",
+      "language": "kotlin",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/README.md",
+      "language": "markdown",
+      "sizeLines": 36,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/dashboard/ArrivingCard.kt",
+      "language": "kotlin",
+      "sizeLines": 225,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/dashboard/ArrivingSection.kt",
+      "language": "kotlin",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardHeader.kt",
+      "language": "kotlin",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 582,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardStateViews.kt",
+      "language": "kotlin",
+      "sizeLines": 146,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/library/LibraryScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/IconCarousel.kt",
+      "language": "kotlin",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/LoginDialogs.kt",
+      "language": "kotlin",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/LoginHero.kt",
+      "language": "kotlin",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/LoginScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/OAuthCard.kt",
+      "language": "kotlin",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/login/UsernameScanCard.kt",
+      "language": "kotlin",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCalendarCard.kt",
+      "language": "kotlin",
+      "sizeLines": 292,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCommentsSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 763,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ActivityLikersSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 225,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/CommentComposer.kt",
+      "language": "kotlin",
+      "sizeLines": 552,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/CommentDraftEdits.kt",
+      "language": "kotlin",
+      "sizeLines": 119,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/CommentManageDialog.kt",
+      "language": "kotlin",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/LibrarySelection.kt",
+      "language": "kotlin",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileAboutCard.kt",
+      "language": "kotlin",
+      "sizeLines": 220,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileActivityCard.kt",
+      "language": "kotlin",
+      "sizeLines": 399,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileActivityTab.kt",
+      "language": "kotlin",
+      "sizeLines": 369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileChartComponents.kt",
+      "language": "kotlin",
+      "sizeLines": 390,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileComponents.kt",
+      "language": "kotlin",
+      "sizeLines": 564,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileFormatters.kt",
+      "language": "kotlin",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileHeaderCard.kt",
+      "language": "kotlin",
+      "sizeLines": 474,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileHomeTab.kt",
+      "language": "kotlin",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileLibraryTab.kt",
+      "language": "kotlin",
+      "sizeLines": 1111,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileSocialTab.kt",
+      "language": "kotlin",
+      "sizeLines": 615,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStateViews.kt",
+      "language": "kotlin",
+      "sizeLines": 510,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsSections.kt",
+      "language": "kotlin",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsSummaryCard.kt",
+      "language": "kotlin",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsTab.kt",
+      "language": "kotlin",
+      "sizeLines": 409,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/profile/UserProfileScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 750,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/AccentColourSection.kt",
+      "language": "kotlin",
+      "sizeLines": 369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/AnimeColourSection.kt",
+      "language": "kotlin",
+      "sizeLines": 227,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/ConnectionCheckDialog.kt",
+      "language": "kotlin",
+      "sizeLines": 421,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/EditSettingsTab.kt",
+      "language": "kotlin",
+      "sizeLines": 441,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/InfoSettingsTab.kt",
+      "language": "kotlin",
+      "sizeLines": 323,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/ProfileCard.kt",
+      "language": "kotlin",
+      "sizeLines": 144,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/QuickAddSectionCard.kt",
+      "language": "kotlin",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/SettingsButton.kt",
+      "language": "kotlin",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/SettingsComponents.kt",
+      "language": "kotlin",
+      "sizeLines": 244,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/SettingsScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 194,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/ThemePreviewCard.kt",
+      "language": "kotlin",
+      "sizeLines": 340,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/ThemeTab.kt",
+      "language": "kotlin",
+      "sizeLines": 308,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/settings/UpdateSectionCard.kt",
+      "language": "kotlin",
+      "sizeLines": 230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/studio/StudioScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 351,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/studio/StudioSections.kt",
+      "language": "kotlin",
+      "sizeLines": 302,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/studio/StudioTitleCard.kt",
+      "language": "kotlin",
+      "sizeLines": 167,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoard.kt",
+      "language": "kotlin",
+      "sizeLines": 505,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardChrome.kt",
+      "language": "kotlin",
+      "sizeLines": 549,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardDrag.kt",
+      "language": "kotlin",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardExportSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 336,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardFilterSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 333,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardLogic.kt",
+      "language": "kotlin",
+      "sizeLines": 433,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 545,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardSheetHost.kt",
+      "language": "kotlin",
+      "sizeLines": 235,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardSheets.kt",
+      "language": "kotlin",
+      "sizeLines": 305,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardTiles.kt",
+      "language": "kotlin",
+      "sizeLines": 443,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardToolbar.kt",
+      "language": "kotlin",
+      "sizeLines": 219,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardZoomSheet.kt",
+      "language": "kotlin",
+      "sizeLines": 162,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierLibraryScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 495,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierListImageExporter.kt",
+      "language": "kotlin",
+      "sizeLines": 517,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierListScreen.kt",
+      "language": "kotlin",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierPlacementSheets.kt",
+      "language": "kotlin",
+      "sizeLines": 666,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/screens/tier/TierTray.kt",
+      "language": "kotlin",
+      "sizeLines": 468,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/security/AppLockGate.kt",
+      "language": "kotlin",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/AnimatedColorScheme.kt",
+      "language": "kotlin",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/Color.kt",
+      "language": "kotlin",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/CoverColors.kt",
+      "language": "kotlin",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt",
+      "language": "kotlin",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/ExpressiveTheme.kt",
+      "language": "kotlin",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/Theme.kt",
+      "language": "kotlin",
+      "sizeLines": 390,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/ThemePalettes.kt",
+      "language": "kotlin",
+      "sizeLines": 314,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/theme/Type.kt",
+      "language": "kotlin",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/ApiStatusProbe.kt",
+      "language": "kotlin",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 267,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/CommentThreadStore.kt",
+      "language": "kotlin",
+      "sizeLines": 423,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/DashboardUiState.kt",
+      "language": "kotlin",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/DashboardViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 1230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/ListFreshnessWatch.kt",
+      "language": "kotlin",
+      "sizeLines": 217,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt",
+      "language": "kotlin",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailStore.kt",
+      "language": "kotlin",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/PersonProfileHost.kt",
+      "language": "kotlin",
+      "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/PersonProfileStore.kt",
+      "language": "kotlin",
+      "sizeLines": 249,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/PlanningAddStore.kt",
+      "language": "kotlin",
+      "sizeLines": 199,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/RepositoryResults.kt",
+      "language": "kotlin",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/StudioViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 181,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/TierListViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 645,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 516,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt",
+      "language": "kotlin",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 561,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/viewmodel/UserSocialViewModel.kt",
+      "language": "kotlin",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/AniSequelWidgetData.kt",
+      "language": "kotlin",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/AniSequelWidgetProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/ArrivingSequelsWidgetProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/FeaturedSequelWidgetProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/MissedSequelsWidgetProvider.kt",
+      "language": "kotlin",
+      "sizeLines": 133,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/WidgetCover.kt",
+      "language": "kotlin",
+      "sizeLines": 307,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/WidgetImageBudget.kt",
+      "language": "kotlin",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/java/com/anisequel/ui/widget/WidgetUpdater.kt",
+      "language": "kotlin",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_launcher_background.xml",
+      "language": "xml",
+      "sizeLines": 56,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_launcher_foreground.xml",
+      "language": "xml",
+      "sizeLines": 84,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_launcher_monochrome.xml",
+      "language": "xml",
+      "sizeLines": 44,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/drawable/widget_background.xml",
+      "language": "xml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/drawable/widget_badge.xml",
+      "language": "xml",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/drawable/widget_cover_placeholder.xml",
+      "language": "xml",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_anisequel.xml",
+      "language": "xml",
+      "sizeLines": 97,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_anisequel_preview.xml",
+      "language": "xml",
+      "sizeLines": 85,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_arriving_sequels.xml",
+      "language": "xml",
+      "sizeLines": 87,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_arriving_sequels_preview.xml",
+      "language": "xml",
+      "sizeLines": 76,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_featured_sequel.xml",
+      "language": "xml",
+      "sizeLines": 106,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_featured_sequel_preview.xml",
+      "language": "xml",
+      "sizeLines": 89,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_missed_sequels.xml",
+      "language": "xml",
+      "sizeLines": 87,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/layout/widget_missed_sequels_preview.xml",
+      "language": "xml",
+      "sizeLines": 76,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "language": "xml",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "language": "xml",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/values/colors.xml",
+      "language": "xml",
+      "sizeLines": 27,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/values/strings.xml",
+      "language": "xml",
+      "sizeLines": 39,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/values/themes.xml",
+      "language": "xml",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/backup_rules.xml",
+      "language": "xml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/data_extraction_rules.xml",
+      "language": "xml",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/update_file_paths.xml",
+      "language": "xml",
+      "sizeLines": 43,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/widget_anisequel.xml",
+      "language": "xml",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/widget_arriving_sequels.xml",
+      "language": "xml",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/widget_featured_sequel.xml",
+      "language": "xml",
+      "sizeLines": 34,
+      "fileCategory": "config"
+    },
+    {
+      "path": "app/src/main/res/xml/widget_missed_sequels.xml",
+      "language": "xml",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "build.gradle.kts",
+      "language": "kotlin",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradle.properties",
+      "language": "properties",
+      "sizeLines": 134,
+      "fileCategory": "config"
+    },
+    {
+      "path": "gradle/libs.versions.toml",
+      "language": "toml",
+      "sizeLines": 152,
+      "fileCategory": "config"
+    },
+    {
+      "path": "gradle/wrapper/gradle-wrapper.jar",
+      "language": "jar",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradle/wrapper/gradle-wrapper.properties",
+      "language": "properties",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "gradlew",
+      "language": "unknown",
+      "sizeLines": 248,
+      "fileCategory": "code"
+    },
+    {
+      "path": "gradlew.bat",
+      "language": "batch",
+      "sizeLines": 93,
+      "fileCategory": "script"
+    },
+    {
+      "path": "metadata.json",
+      "language": "json",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "settings.gradle.kts",
+      "language": "kotlin",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "update.json",
+      "language": "json",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    }
+  ],
+  "totalFiles": 309,
+  "filteredByIgnore": 103,
+  "estimatedComplexity": "large",
+  "stats": {
+    "filesScanned": 309,
+    "byCategory": {
+      "infra": 1,
+      "docs": 13,
+      "code": 261,
+      "config": 33,
+      "script": 1
+    },
+    "byLanguage": {
+      "yaml": 1,
+      "markdown": 13,
+      "kotlin": 258,
+      "pro": 1,
+      "xml": 27,
+      "json": 3,
+      "properties": 2,
+      "toml": 1,
+      "jar": 1,
+      "unknown": 1,
+      "batch": 1
+    }
+  },
+  "importMap": {
+    ".github/workflows/android-release.yml": [],
+    "AGENTS.md": [],
+    "ARCHITECTURE.md": [],
+    "BUILDING.md": [],
+    "IMPROVEMENTS-NEEDS-TO-BE-DONE.md": [],
+    "NOTES.md": [],
+    "README.md": [],
+    "TO-DO.md": [],
+    "UPDATER.md": [],
+    "app/build.gradle.kts": [],
+    "app/proguard-rules.pro": [],
+    "app/src/main/AndroidManifest.xml": [],
+    "app/src/main/assets/changelog.json": [],
+    "app/src/main/java/com/anisequel/AniSequelApplication.kt": [
+      "app/src/main/java/com/anisequel/data/network/NetworkClient.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepositoryImpl.kt"
+    ],
+    "app/src/main/java/com/anisequel/MainActivity.kt": [
+      "app/src/main/java/com/anisequel/data/network/NetworkClient.kt",
+      "app/src/main/java/com/anisequel/data/network/RateLimitNotice.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepositoryImpl.kt",
+      "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/update/UpdateController.kt",
+      "app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt",
+      "app/src/main/java/com/anisequel/ui/security/AppLockGate.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/README.md": [],
+    "app/src/main/java/com/anisequel/data/changelog/ChangelogRepository.kt": [],
+    "app/src/main/java/com/anisequel/data/model/ActivityEngagement.kt": [],
+    "app/src/main/java/com/anisequel/data/model/AiringCountdown.kt": [],
+    "app/src/main/java/com/anisequel/data/model/AniListModels.kt": [],
+    "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt": [],
+    "app/src/main/java/com/anisequel/data/model/MediaCover.kt": [],
+    "app/src/main/java/com/anisequel/data/model/MediaNodeDisplay.kt": [],
+    "app/src/main/java/com/anisequel/data/model/MissedSequel.kt": [],
+    "app/src/main/java/com/anisequel/data/model/PersonProfile.kt": [],
+    "app/src/main/java/com/anisequel/data/model/ThemeSong.kt": [],
+    "app/src/main/java/com/anisequel/data/model/UserFilterOptions.kt": [],
+    "app/src/main/java/com/anisequel/data/model/UserOverview.kt": [],
+    "app/src/main/java/com/anisequel/data/network/AniListApiService.kt": [],
+    "app/src/main/java/com/anisequel/data/network/AniListException.kt": [],
+    "app/src/main/java/com/anisequel/data/network/AniListOAuth.kt": [],
+    "app/src/main/java/com/anisequel/data/network/AnimeThemesApi.kt": [
+      "app/src/main/java/com/anisequel/data/model/ThemeSong.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/network/ApiStatus.kt": [],
+    "app/src/main/java/com/anisequel/data/network/AuthInterceptor.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/network/FlexibleStringAdapter.kt": [],
+    "app/src/main/java/com/anisequel/data/network/GraphQLQueries.kt": [],
+    "app/src/main/java/com/anisequel/data/network/NetworkClient.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/network/RateLimitInterceptor.kt": [],
+    "app/src/main/java/com/anisequel/data/network/RateLimitNotice.kt": [],
+    "app/src/main/java/com/anisequel/data/network/RequestCoalescer.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/data/model/UserOverview.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/AniListRepositoryImpl.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/data/model/UserOverview.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListApiService.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/network/GraphQLQueries.kt",
+      "app/src/main/java/com/anisequel/data/network/RequestCoalescer.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/AuthRepositoryImpl.kt": [
+      "app/src/main/java/com/anisequel/data/security/TokenCipher.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/CoverColorRepository.kt": [
+      "app/src/main/java/com/anisequel/domain/color/CoverColorQuantizer.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/DemoDataProvider.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/DemoProfileProvider.kt": [
+      "app/src/main/java/com/anisequel/data/model/UserOverview.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/HiddenSequelsPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/LibraryPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/QuickAddPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/SnapshotStore.kt": [
+      "app/src/main/java/com/anisequel/data/network/NetworkClient.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt": [],
+    "app/src/main/java/com/anisequel/data/repository/ThemeSongsRepository.kt": [
+      "app/src/main/java/com/anisequel/data/model/ThemeSong.kt",
+      "app/src/main/java/com/anisequel/data/network/AnimeThemesApi.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/repository/TierListPreferences.kt": [
+      "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt"
+    ],
+    "app/src/main/java/com/anisequel/data/security/TokenCipher.kt": [],
+    "app/src/main/java/com/anisequel/data/update/ApkDownloader.kt": [],
+    "app/src/main/java/com/anisequel/data/update/UpdateFormatting.kt": [],
+    "app/src/main/java/com/anisequel/data/update/UpdateManager.kt": [],
+    "app/src/main/java/com/anisequel/data/update/UpdateManifest.kt": [],
+    "app/src/main/java/com/anisequel/domain/README.md": [],
+    "app/src/main/java/com/anisequel/domain/color/ArgbHex.kt": [],
+    "app/src/main/java/com/anisequel/domain/color/CoverColorQuantizer.kt": [],
+    "app/src/main/java/com/anisequel/domain/color/Hct.kt": [],
+    "app/src/main/java/com/anisequel/domain/color/MaterialColorSchemes.kt": [],
+    "app/src/main/java/com/anisequel/domain/motion/WaveGeometry.kt": [],
+    "app/src/main/java/com/anisequel/domain/studio/StudioYearShelf.kt": [],
+    "app/src/main/java/com/anisequel/domain/tier/TierList.kt": [],
+    "app/src/main/java/com/anisequel/domain/tier/TierListCodec.kt": [],
+    "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt": [],
+    "app/src/main/java/com/anisequel/domain/tier/TierListLayout.kt": [],
+    "app/src/main/java/com/anisequel/domain/tier/TierListSvg.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/BuildActivityCalendarUseCase.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/BuildListEntryInsightsUseCase.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/BuildListInsightsUseCase.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/FindArrivingEntriesUseCase.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt"
+    ],
+    "app/src/main/java/com/anisequel/domain/usecase/FindMissedSequelsUseCase.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/domain/usecase/GetViewerProfileUseCase.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/domain/usecase/MutationCoalescer.kt": [],
+    "app/src/main/java/com/anisequel/domain/usecase/SaveToPlanningUseCase.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/domain/usecase/SaveToWatchingUseCase.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/README.md": [],
+    "app/src/main/java/com/anisequel/ui/components/AniTopAppBar.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/ApiFailureBody.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/ApiRecoveryOverlay.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/ApiStatusCard.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/AppJokes.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt": [
+      "app/src/main/java/com/anisequel/ui/components/icons/AppCustomVectors.kt",
+      "app/src/main/java/com/anisequel/ui/components/icons/AppExtraVectors.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/EmptyStateView.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/EngagementAction.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/FilterSortSheet.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/HeartbreakScene.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/icons/AppCustomVectors.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/HiddenSequelsSection.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/JokeToastHost.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/OpenExternalUrl.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/PannableBackdrop.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/ProfileAvatarButton.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/QuickFilterBar.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/README.md": [],
+    "app/src/main/java/com/anisequel/ui/components/RedirectUrlHint.kt": [
+      "app/src/main/java/com/anisequel/data/network/AniListOAuth.kt",
+      "app/src/main/java/com/anisequel/ui/screens/settings/SettingsButton.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/ResumedState.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/SavedCopyPill.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/ShimmerLoading.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/StatsBanner.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/cards/HoldAndSwipePlanningButton.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/ScoreBadge.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelCard.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelCardDetails.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelPlanningButton.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelPoster.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelRelationBanner.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/cards/SequelStatusChip.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/AnimeRankingsSection.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/DetailActionRow.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/HoldAndSwipePlanningButton.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/DetailEditControls.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/DetailEditTab.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/detail/EntryScore.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/PersonProfileSheet.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/PersonStaffCredits.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/ScoreBadge.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/RepositoryEntryEditor.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/SectionHeading.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/data/repository/CoverColorRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/domain/color/ArgbHex.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt",
+      "app/src/main/java/com/anisequel/ui/theme/CoverColors.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoAiring.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoCards.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoCategoriesSection.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoEditorial.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoExternalLinksSection.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoExtrasCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoHero.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/theme/CoverColors.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoMetaRowsSection.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoMotion.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoPage.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/data/model/ThemeSong.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoPageItems.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/data/model/ThemeSong.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeRankingsSection.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/DetailActionRow.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoTalent.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/ScoreBadge.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/SectionHeading.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoThemeSongsSection.kt": [
+      "app/src/main/java/com/anisequel/data/model/ThemeSong.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/InfoWhereToWatch.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/detail/info/WavyProgressBar.kt": [
+      "app/src/main/java/com/anisequel/domain/motion/WaveGeometry.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/expressive/AnimatedCounter.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveButtons.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveControls.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveIndicators.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveVisuals.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/icons/AppCustomVectors.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/icons/AppExtraVectors.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownBlocks.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownInlines.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownModel.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParagraph.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownTable.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/update/TransferRate.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/update/UpdateController.kt": [
+      "app/src/main/java/com/anisequel/data/update/UpdateManager.kt",
+      "app/src/main/java/com/anisequel/data/update/UpdateManifest.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/components/update/UpdateDialogs.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/update/UpdateInstallation.kt": [],
+    "app/src/main/java/com/anisequel/ui/components/update/UpdateUiState.kt": [
+      "app/src/main/java/com/anisequel/data/update/UpdateManifest.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt": [
+      "app/src/main/java/com/anisequel/data/changelog/ChangelogRepository.kt",
+      "app/src/main/java/com/anisequel/data/network/NetworkClient.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepositoryImpl.kt",
+      "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/HiddenSequelsPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/TierListPreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/JokeToastHost.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/RepositoryEntryEditor.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardScreen.kt",
+      "app/src/main/java/com/anisequel/ui/screens/library/LibraryScreen.kt",
+      "app/src/main/java/com/anisequel/ui/screens/login/LoginScreen.kt",
+      "app/src/main/java/com/anisequel/ui/screens/settings/SettingsScreen.kt",
+      "app/src/main/java/com/anisequel/ui/screens/studio/StudioScreen.kt",
+      "app/src/main/java/com/anisequel/ui/screens/tier/TierListScreen.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/DashboardUiState.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/DashboardViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/StudioViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/TierListViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/navigation/MainTabs.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/navigation/NavigationActions.kt": [],
+    "app/src/main/java/com/anisequel/ui/navigation/ProfileDestination.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/RepositoryEntryEditor.kt",
+      "app/src/main/java/com/anisequel/ui/screens/profile/UserProfileScreen.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserSocialViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/navigation/StudioRoutes.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/README.md": [],
+    "app/src/main/java/com/anisequel/ui/screens/dashboard/ArrivingCard.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/SequelStatusChip.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/dashboard/ArrivingSection.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardHeader.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardScreen.kt": [
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/ui/components/AniTopAppBar.kt",
+      "app/src/main/java/com/anisequel/ui/components/ApiRecoveryOverlay.kt",
+      "app/src/main/java/com/anisequel/ui/components/EmptyStateView.kt",
+      "app/src/main/java/com/anisequel/ui/components/FilterSortSheet.kt",
+      "app/src/main/java/com/anisequel/ui/components/QuickFilterBar.kt",
+      "app/src/main/java/com/anisequel/ui/components/SavedCopyPill.kt",
+      "app/src/main/java/com/anisequel/ui/components/StatsBanner.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/SequelCard.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/screens/dashboard/ArrivingSection.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/DashboardUiState.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/DashboardViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/dashboard/DashboardStateViews.kt": [
+      "app/src/main/java/com/anisequel/ui/components/ApiFailureBody.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/DashboardUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/library/LibraryScreen.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/ProfileAvatarButton.kt",
+      "app/src/main/java/com/anisequel/ui/components/SavedCopyPill.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/screens/profile/ProfileLibraryTab.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/login/IconCarousel.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/login/LoginDialogs.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/login/LoginHero.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/login/LoginScreen.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/screens/login/LoginHero.kt",
+      "app/src/main/java/com/anisequel/ui/screens/login/OAuthCard.kt",
+      "app/src/main/java/com/anisequel/ui/screens/login/UsernameScanCard.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/login/OAuthCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/RedirectUrlHint.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/login/UsernameScanCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCalendarCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCommentsSheet.kt": [
+      "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/EngagementAction.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/CommentThreadStore.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ActivityLikersSheet.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/CommentComposer.kt": [
+      "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/CommentDraftEdits.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/profile/CommentManageDialog.kt": [
+      "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/CommentThreadStore.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/LibrarySelection.kt": [
+      "app/src/main/java/com/anisequel/data/repository/LibraryPreferences.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileAboutCard.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt",
+      "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownView.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileActivityCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/EngagementAction.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileActivityTab.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileChartComponents.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileComponents.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileFormatters.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileHeaderCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/PannableBackdrop.kt",
+      "app/src/main/java/com/anisequel/ui/components/SavedCopyPill.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileHomeTab.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileLibraryTab.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileSocialTab.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserSocialViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStateViews.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsSections.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsSummaryCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/ProfileStatsTab.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/profile/UserProfileScreen.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/UserSocialViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/AccentColourSection.kt": [
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/AnimeColourSection.kt": [
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/ConnectionCheckDialog.kt": [
+      "app/src/main/java/com/anisequel/ui/components/ApiStatusCard.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/HeartbreakScene.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/EditSettingsTab.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepositoryImpl.kt",
+      "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/RedirectUrlHint.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/InfoSettingsTab.kt": [
+      "app/src/main/java/com/anisequel/data/changelog/ChangelogRepository.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListOAuth.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/StatsBanner.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/ProfileCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/QuickAddSectionCard.kt": [
+      "app/src/main/java/com/anisequel/data/repository/QuickAddPreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/SettingsButton.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/settings/SettingsComponents.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/settings/SettingsScreen.kt": [
+      "app/src/main/java/com/anisequel/data/changelog/ChangelogRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/AppLockPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/screens/settings/EditSettingsTab.kt",
+      "app/src/main/java/com/anisequel/ui/screens/settings/InfoSettingsTab.kt",
+      "app/src/main/java/com/anisequel/ui/screens/settings/ThemeTab.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/ThemePreviewCard.kt": [
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/ThemeTab.kt": [
+      "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/settings/UpdateSectionCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/update/UpdateUiState.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/studio/StudioScreen.kt": [
+      "app/src/main/java/com/anisequel/domain/studio/StudioYearShelf.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/AnimeDetailSubject.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/StudioViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/studio/StudioSections.kt": [
+      "app/src/main/java/com/anisequel/domain/studio/StudioYearShelf.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt",
+      "app/src/main/java/com/anisequel/ui/viewmodel/StudioViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/studio/StudioTitleCard.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/cards/ScoreBadge.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoard.kt": [
+      "app/src/main/java/com/anisequel/domain/tier/TierListLayout.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardChrome.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardDrag.kt": [
+      "app/src/main/java/com/anisequel/domain/tier/TierListLayout.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardExportSheet.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardFilterSheet.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardLogic.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardScreen.kt": [
+      "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardSheetHost.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardSheets.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardTiles.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardToolbar.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierBoardZoomSheet.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierLibraryScreen.kt": [
+      "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt",
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierListImageExporter.kt": [],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierListScreen.kt": [
+      "app/src/main/java/com/anisequel/ui/viewmodel/TierListViewModel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierPlacementSheets.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/screens/tier/TierTray.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt",
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveShapes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/security/AppLockGate.kt": [
+      "app/src/main/java/com/anisequel/ui/components/AppVectorIcons.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/theme/AnimatedColorScheme.kt": [
+      "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveMotion.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/theme/Color.kt": [],
+    "app/src/main/java/com/anisequel/ui/theme/CoverColors.kt": [
+      "app/src/main/java/com/anisequel/domain/color/ArgbHex.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/theme/DynamicThemeBuilder.kt": [
+      "app/src/main/java/com/anisequel/domain/color/ArgbHex.kt",
+      "app/src/main/java/com/anisequel/domain/color/MaterialColorSchemes.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/theme/ExpressiveTheme.kt": [],
+    "app/src/main/java/com/anisequel/ui/theme/Theme.kt": [],
+    "app/src/main/java/com/anisequel/ui/theme/ThemePalettes.kt": [],
+    "app/src/main/java/com/anisequel/ui/theme/Type.kt": [],
+    "app/src/main/java/com/anisequel/ui/viewmodel/ApiStatusProbe.kt": [],
+    "app/src/main/java/com/anisequel/ui/viewmodel/AuthViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListOAuth.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/AuthRepositoryImpl.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/CommentThreadStore.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/ContentLimits.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/DashboardUiState.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/DashboardViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/model/ArrivingEntry.kt",
+      "app/src/main/java/com/anisequel/data/model/MissedSequel.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/ArrivingPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/HiddenSequelsPreferences.kt",
+      "app/src/main/java/com/anisequel/data/repository/RefreshIntervalPreferences.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/FindArrivingEntriesUseCase.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/FindMissedSequelsUseCase.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/GetViewerProfileUseCase.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/SaveToPlanningUseCase.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/EntryEditor.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/ListFreshnessWatch.kt": [],
+    "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailHost.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/MediaDetailStore.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/PersonProfileHost.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/ui/components/detail/PersonProfileSheet.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/PersonProfileStore.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/PlanningAddStore.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/RepositoryResults.kt": [],
+    "app/src/main/java/com/anisequel/ui/viewmodel/StudioViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/domain/studio/StudioYearShelf.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/TierListViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/data/repository/TierListPreferences.kt",
+      "app/src/main/java/com/anisequel/domain/tier/TierListDocument.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/UserActivityViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewUiState.kt": [],
+    "app/src/main/java/com/anisequel/ui/viewmodel/UserOverviewViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/model/MediaCover.kt",
+      "app/src/main/java/com/anisequel/data/model/UserOverview.kt",
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/BuildActivityCalendarUseCase.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/BuildListEntryInsightsUseCase.kt",
+      "app/src/main/java/com/anisequel/domain/usecase/BuildListInsightsUseCase.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/viewmodel/UserSocialViewModel.kt": [
+      "app/src/main/java/com/anisequel/data/network/AniListException.kt",
+      "app/src/main/java/com/anisequel/data/repository/AniListRepository.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/AniSequelWidgetData.kt": [
+      "app/src/main/java/com/anisequel/data/repository/DemoProfileProvider.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/AniSequelWidgetProvider.kt": [
+      "app/src/main/java/com/anisequel/MainActivity.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/ArrivingSequelsWidgetProvider.kt": [
+      "app/src/main/java/com/anisequel/MainActivity.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/FeaturedSequelWidgetProvider.kt": [
+      "app/src/main/java/com/anisequel/MainActivity.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/MissedSequelsWidgetProvider.kt": [
+      "app/src/main/java/com/anisequel/MainActivity.kt"
+    ],
+    "app/src/main/java/com/anisequel/ui/widget/WidgetCover.kt": [],
+    "app/src/main/java/com/anisequel/ui/widget/WidgetImageBudget.kt": [],
+    "app/src/main/java/com/anisequel/ui/widget/WidgetUpdater.kt": [],
+    "app/src/main/res/drawable/ic_launcher_background.xml": [],
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": [],
+    "app/src/main/res/drawable/ic_launcher_monochrome.xml": [],
+    "app/src/main/res/drawable/widget_background.xml": [],
+    "app/src/main/res/drawable/widget_badge.xml": [],
+    "app/src/main/res/drawable/widget_cover_placeholder.xml": [],
+    "app/src/main/res/layout/widget_anisequel.xml": [],
+    "app/src/main/res/layout/widget_anisequel_preview.xml": [],
+    "app/src/main/res/layout/widget_arriving_sequels.xml": [],
+    "app/src/main/res/layout/widget_arriving_sequels_preview.xml": [],
+    "app/src/main/res/layout/widget_featured_sequel.xml": [],
+    "app/src/main/res/layout/widget_featured_sequel_preview.xml": [],
+    "app/src/main/res/layout/widget_missed_sequels.xml": [],
+    "app/src/main/res/layout/widget_missed_sequels_preview.xml": [],
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": [],
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": [],
+    "app/src/main/res/values/colors.xml": [],
+    "app/src/main/res/values/strings.xml": [],
+    "app/src/main/res/values/themes.xml": [],
+    "app/src/main/res/xml/backup_rules.xml": [],
+    "app/src/main/res/xml/data_extraction_rules.xml": [],
+    "app/src/main/res/xml/update_file_paths.xml": [],
+    "app/src/main/res/xml/widget_anisequel.xml": [],
+    "app/src/main/res/xml/widget_arriving_sequels.xml": [],
+    "app/src/main/res/xml/widget_featured_sequel.xml": [],
+    "app/src/main/res/xml/widget_missed_sequels.xml": [],
+    "build.gradle.kts": [],
+    "gradle.properties": [],
+    "gradle/libs.versions.toml": [],
+    "gradle/wrapper/gradle-wrapper.jar": [],
+    "gradle/wrapper/gradle-wrapper.properties": [],
+    "gradlew": [],
+    "gradlew.bat": [],
+    "metadata.json": [],
+    "settings.gradle.kts": [],
+    "update.json": []
+  },
+  "contentDigest": "042fc71fadc5eeb51cd20ce28f07e66515acfea9875ab348444ced81a895cae9"
+}
