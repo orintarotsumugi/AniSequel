@@ -34,10 +34,15 @@ data class Joke(val text: String, val tone: JokeTone)
  * ## Why it is grouped by tone
  *
  * The reader can switch a tone off in Settings, so the pool has to be filterable
- * without a second copy of the text. Four lists of strings, one pass that tags
+ * without a second copy of the text. Five lists of strings, one pass that tags
  * them, and [poolFor] is the only place that knows how a tone becomes a draw.
  * The grouping is also what makes the balance reviewable: a tone that grows to
  * ten lines and one that grows to two hundred are visible in the file.
+ *
+ * "Mixed" in Settings is not a sixth list - it is every tone switched on at
+ * once, which is what the default has always been. A tone that was a copy of the
+ * other five would drift from them, and the shuffle bag would then count the same
+ * line twice.
  *
  * None of these are emoji: the app draws its own vectors, and a joke is carried
  * by the words rather than by a face.
@@ -45,8 +50,9 @@ data class Joke(val text: String, val tone: JokeTone)
 object AppJokes {
 
     // The words "feelings" and "backlog" are the reader's side of the hobby.
-    // Craft is the show's side. Meta is the app's own voice, and it is the only
-    // tone allowed to mention Ani-chan or this screen.
+    // Craft is the show's side. Dark is the side nobody puts on a poster. Meta is
+    // the app's own voice, and it is the only tone allowed to mention Ani-chan or
+    // this screen.
     private val feelings = listOf(
         "Every rewatch is a speedrun of your own feelings.",
         "The opening theme is skippable. The emotional damage is not.",
@@ -124,7 +130,26 @@ object AppJokes {
         "The end of a season leaves a shape in the week.",
         "You remember who introduced you to it.",
         "You said you were not attached. The playlist disagrees.",
-        "You mourned a show that finished, which is not the same as gone."
+        "You mourned a show that finished, which is not the same as gone.",
+        "You know the character dies. You watch anyway. Twice.",
+        "The show healed something and then broke something else.",
+        "You have a playlist for a show nobody in your life watched.",
+        "The last five minutes were silent and you have not recovered.",
+        "You made eye contact with your ceiling during the finale.",
+        "You skipped the funny episode to avoid the sad one after it.",
+        "Thirteen episodes and nine of them are about grief.",
+        "The comfort episode hurts now because of what came after it.",
+        "Your favourite scene is two people doing nothing in a room.",
+        "You have watched a funeral episode before breakfast. Bold.",
+        "A character got one line and rearranged your whole week.",
+        "You finished it at three in the morning and checked for a sequel that does not exist.",
+        "The show ended on a promise and the internet is still waiting.",
+        "You have a show you cannot rewatch because of one episode.",
+        "You looked up the cast to check they were fine. It helped.",
+        "The final line was four words and you own the poster.",
+        "You know the exact moment the tone shifts and you dread it.",
+        "The credits song came on during your commute and you stood still.",
+        "The episode you call your favourite is the one that hurt most."
     )
 
     private val backlog = listOf(
@@ -202,7 +227,27 @@ object AppJokes {
         "You made a rule about two episodes a day. The rule is gone.",
         "You have planned an evening around a show and cancelled the evening.",
         "The queue survives every attempt to tidy it.",
-        "You will recommend it before you finish it. Again."
+        "You will recommend it before you finish it. Again.",
+        "You have three hundred shows planned and watched two this month.",
+        "The list is sorted by how guilty each row makes you feel.",
+        "You opened the list to remove one show and added three.",
+        "The new season airs and you are still three seasons behind. Fine.",
+        "You finished a show to make the number go down. It went up.",
+        "You set a reminder for a release and slept through the reminder.",
+        "Twenty-four minutes is not long. The barrier is emotional.",
+        "You have a list for the shows you will watch after this list.",
+        "The watchlist grew on a day you described as productive.",
+        "You counted your unfinished shows and closed the app.",
+        "You are caught up on everything except what you want to watch.",
+        "You have forty minutes and picked a two-hour movie. Again.",
+        "You started a long runner as a joke and now it is a lifestyle.",
+        "A batch release is a gift and a threat at the same time.",
+        "You watched a whole show in two sittings and called it a slow week.",
+        "Your attention span has a season pass.",
+        "You will not watch the movie that concludes the story. You know why.",
+        "The pause between seasons is where your real life happens.",
+        "You have a plan for tonight and it is a lie you tell the queue.",
+        "The queue is shorter than last month and you do not believe it either."
     )
 
     private val craft = listOf(
@@ -337,7 +382,27 @@ object AppJokes {
         "The episode cuts on the beat and the fight becomes a song.",
         "The compositing is why the sky feels like a warning.",
         "The same shot returns in the finale and you have been waiting.",
-        "The recap was a chance to fix the pacing and it took it."
+        "The recap was a chance to fix the pacing and it took it.",
+        "The finale reuses the opening's storyboard and it lands like a punch.",
+        "The composer gave the villain and the hero the same four notes. On purpose.",
+        "The adaptation cut a monologue and found a better scene.",
+        "The director frames grief as an empty chair in three different shots.",
+        "The sound drops out before the line that matters.",
+        "The animation drops to five frames in the climax and it is braver than smooth.",
+        "The colour warms a degree every time the character lies.",
+        "The manga panel was one page. The episode gave it a minute of silence.",
+        "You can tell which episodes had two directors.",
+        "The opening is an entire thesis and the song carries it.",
+        "The fight ends in one cut and the fandom still argues about it.",
+        "The background artist put a cat in every shot of that town.",
+        "The ink lines thicken when the character is scared. Nobody told you.",
+        "The adaptation rewrote the ending and the author thanked them for it.",
+        "The comedy episode has the best lighting in the season.",
+        "The sequel kept the same composer and you can hear the continuity.",
+        "The dub cast the right voice and the subtitles lost nothing.",
+        "The title card lands after the cold open and it hurts.",
+        "The show holds one shot for eleven seconds and you did not blink.",
+        "A tiny studio made the last episode and it is a miracle."
     )
 
     private val meta = listOf(
@@ -383,21 +448,120 @@ object AppJokes {
         "The pill can be tapped away. No offence taken.",
         "This line was written before you changed the settings.",
         "Ani-chan draws from a bag so the repeats are not personal.",
-        "The app has a timer and no sense of occasion."
+        "The app has a timer and no sense of occasion.",
+        "You edited a score twice and the graph believed both of them.",
+        "The AniList API returned a server error. The queue forgave you.",
+        "You added a show from the dashboard and never opened its page.",
+        "Your activity feed is mostly three-word updates about a rewatch.",
+        "You have posted an activity about a show you were not watching.",
+        "The tier list is forty posters and one strong opinion.",
+        "You set a title to Rewatching to explain the second time.",
+        "You rated something a seven and the recommendations took notes.",
+        "The app refreshes your list and you watch the numbers land.",
+        "You missed a day on the heatmap and considered editing history.",
+        "You have a favourite filter and you use it to avoid your backlog.",
+        "The search bar knew what you meant. The filters were on anyway.",
+        "You have scrolled past the same title eleven times today.",
+        "AniList remembers your score. The app remembers the scrolling.",
+        "Your list has nine hundred entries and one reader.",
+        "The activity feed sorted a planning update from 2019 above this one.",
+        "You opened Settings to turn her off and left with a favourite line.",
+        "The dashboard counted your franchises and paused before answering.",
+        "Ani-chan is on the top edge now. She did not ask permission."
+    )
+
+    // Dark is the register the hobby earns: the cancelled sequel, the hiatus
+    // that outlived a console, the character whose whole arc is a funeral. It is
+    // a separate tone rather than META lines with a sad face because a reader can
+    // see the difference and can switch this off without losing the app's own
+    // voice. Everything here is about fiction and about the waiting; none of it
+    // is about a real person.
+    private val dark = listOf(
+        "The author is on hiatus. The author has been on hiatus since the last console.",
+        "The manga is still running. The anime is not. The fandom runs anyway.",
+        "Your favourite character died in a chapter the anime never adapted.",
+        "The show was cancelled on a cliffhanger. It is canon that way.",
+        "Every franchise ends the same way: a pachinko machine.",
+        "The light novel ended and the animation stopped nine volumes earlier.",
+        "The character you loved got one frame of screentime in the movie.",
+        "The show is about a world that ends, and it ends.",
+        "You have wished a fictional person well. They cannot hear you.",
+        "The grave got more screentime than the character did.",
+        "The anime-original ending killed everyone. The manga kept going.",
+        "The sequel was announced with a key visual and no date. That was 2019.",
+        "The show's message is that death is cheap and sacrifice is not.",
+        "The love interest dies to motivate somebody else. The genre is older than you.",
+        "The source material is on indefinite hiatus and so is your closure.",
+        "You remember the exact frame the music stops.",
+        "The reboot erased the ending you had made peace with.",
+        "The movie is a recap with a funeral at the end.",
+        "The body count is a running joke and you have a favourite.",
+        "The final episode has no dialogue and a very long list.",
+        "The opening is cheerful. The show is not.",
+        "The cute animal companion does not make it.",
+        "The character you relate to has a name and a short lifespan.",
+        "The show is a tragedy and says so in the title, in another language.",
+        "The fandom has a page for everyone who dies. It has footnotes.",
+        "You stopped watching before the arc where everyone dies. Lucky.",
+        "The show killed the cast and then went quiet for a decade.",
+        "The adaptation skipped the funeral and everybody noticed.",
+        "The protagonist is fourteen and the world is already ending.",
+        "The happy ending required an entire people to stop existing.",
+        "Your favourite show is a documentary about doomed people. It is fine.",
+        "The film trilogy never got its last act and never will.",
+        "The character returns in the epilogue and nobody warns you.",
+        "The anime made the villain's death beautiful and the hero's offscreen.",
+        "The last chapter dropped and the discourse outlived the author's patience.",
+        "The story is finished. The translation is not.",
+        "The anime skipped the panel where the main character says goodbye.",
+        "The world ended and the sequel is a slice of life.",
+        "The show asks you to grieve someone with four scenes of screentime.",
+        "You have cried at a deleted scene in the extras.",
+        "The anime spoils the manga and the movie spoils the anime.",
+        "The studio that animated your favourite show does not exist anymore.",
+        "The director died before the last episode. The staff finished it.",
+        "The franchise is worth more unfinished than finished and everyone knows.",
+        "The show is a memorial with a plot and a theme song.",
+        "The manga artist drew a memorial page for their own character.",
+        "The final shot is a grave and a season changing.",
+        "The fandom wrote more endings than the show ever will.",
+        "The afterlife arc is three episodes. The fandom's is infinite.",
+        "The hero's body count is treated as a personality.",
+        "The show declared everyone a ghost in episode nine and moved on.",
+        "You remembered a character's death before remembering their name.",
+        "The reboot is called Final and it is not.",
+        "The series finale ends with a monologue about unfinished things. Ironic.",
+        "The poster spoils the death it is marketing.",
+        "The most-quoted line in the show is somebody's last.",
+        "The adaptation aged the characters down and the deaths up.",
+        "Your list will outlive some of the servers that made it.",
+        "Your scores from 2014 are the only record of a person you used to be.",
+        "The genre peaks at funerals and you are along for the ride.",
+        "You have a favourite finale, which means a favourite ending, which means a favourite loss.",
+        "The fansub group dissolved before the last volume. Nobody finished it.",
+        "The final broadcast was a recap and a promise it could not keep.",
+        "The last chapter is titled after a season that never comes.",
+        "The grave got more design work than the wedding.",
+        "Everybody dies in episode ten and the fandom calls it a slow burn.",
+        "The show's warmest episode is the one right before the worst thing.",
+        "The epilogue is a photo on a desk and you know whose it is.",
+        "The sequel's first scene is a funeral and its last scene is a promise.",
+        "The character is dead in the opening credits and nobody notices for twelve episodes."
     )
 
     /**
      * Every line, in one list, tagged once.
      *
-     * Built from the four groups rather than written as `Joke("...", tone)`
-     * pairs: the pairs put the tone on every line and made a 300-line file read
-     * as a roll call, while the groups keep each register's voice together and
-     * make an accidental tone change visible in a diff.
+     * Built from the groups rather than written as `Joke("...", tone)`
+     * pairs: the pairs put the tone on every line and made the file read as a
+     * roll call, while the groups keep each register's voice together and make an
+     * accidental tone change visible in a diff.
      */
     val pool: List<Joke> = buildList {
         feelings.forEach { add(Joke(it, JokeTone.FEELINGS)) }
         backlog.forEach { add(Joke(it, JokeTone.BACKLOG)) }
         craft.forEach { add(Joke(it, JokeTone.CRAFT)) }
+        dark.forEach { add(Joke(it, JokeTone.DARK)) }
         meta.forEach { add(Joke(it, JokeTone.META)) }
     }
 

@@ -1,5 +1,7 @@
 package com.anisequel.data.update
 
+import java.util.Locale
+
 /**
  * Display formatters for the updater's numbers.
  *
@@ -18,13 +20,21 @@ package com.anisequel.data.update
  * long, and the split would not have bought it.
  */
 
-/** Human-readable size, for the "12.4 MB" line under the update button. */
+/**
+ * Human-readable size, for the "12.4 MB" line under the update button.
+ *
+ * `Locale.ROOT` on the format, not the platform default: a device set to a
+ * locale that writes decimals with a comma rendered "2,3 MB" beside an English
+ * sentence, and a download size is a number, not prose to be localised. The
+ * comma also read as a thousands separator at a glance - "2,3" looks like two
+ * to three.
+ */
 fun formatBytes(bytes: Long?): String {
     if (bytes == null || bytes < 0) return "unknown size"
     if (bytes < 1024) return "$bytes B"
     val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.0f KB", kb)
-    return String.format("%.1f MB", kb / 1024.0)
+    if (kb < 1024) return String.format(Locale.ROOT, "%.0f KB", kb)
+    return String.format(Locale.ROOT, "%.1f MB", kb / 1024.0)
 }
 
 /**

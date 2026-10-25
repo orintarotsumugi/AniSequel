@@ -334,7 +334,38 @@ data class ActivityFeedData(
 
 @JsonClass(generateAdapter = true)
 data class ActivityFeedPage(
+    val pageInfo: PageInfo? = null,
     val activities: List<ListActivity>? = null
+)
+
+/**
+ * AniList's own answer to "is there another page".
+ *
+ * The feed used to infer the end from the size of the page it got back: under a
+ * full page meant the last page. That is wrong here because the repository drops
+ * union members and list updates whose media is gone before the caller sees them,
+ * so a twenty-five-row response can arrive as twenty-four rows - and one deleted
+ * title could end a feed that had hundreds of entries left.
+ *
+ * AniList's pagination guide says `total` and `lastPage` may be inaccurate and
+ * names `hasNextPage` as the signal to follow, so that is what is asked for.
+ */
+@JsonClass(generateAdapter = true)
+data class PageInfo(
+    val hasNextPage: Boolean? = null
+)
+
+/**
+ * One page of somebody's list activity, with the pagination answer attached.
+ *
+ * The repository resolves [hasMore] at the wire boundary rather than leaving it
+ * to be guessed from [activities].size downstream: the filter that makes a page
+ * shorter than it really is also lives at that boundary, so this is the last
+ * place that can still tell.
+ */
+data class UserActivityPage(
+    val activities: List<ListActivity>,
+    val hasMore: Boolean
 )
 
 /** Payload of the followers query. */

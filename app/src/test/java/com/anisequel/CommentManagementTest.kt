@@ -1,5 +1,6 @@
 package com.anisequel
 
+import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ListActivity
@@ -8,10 +9,12 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.UserActivityViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -206,7 +209,7 @@ class CommentManagementTest {
         // No viewer id is the signed-out case: ownership cannot be decided, so the
         // safe half is no menu rather than a Delete AniList would refuse.
         val repository = FakeCommentRepository(replies = listOf(mineReply(id = 5, text = "mine")))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         openThread(viewModel)
 
         viewModel.openReplyActions(5)
@@ -342,14 +345,63 @@ class CommentManagementTest {
         assertFalse(state.isRefreshing)
     }
 
+    /**
+     * One heart's answer must not re-enable another heart's button.
+     *
+     * The completion used to write the pending set it had captured *before* the
+     * tap, so liking reply 2 while reply 1 was still in flight was forgotten the
+     * moment reply 1 answered: reply 2's heart re-enabled with its request still
+     * out, and a second tap could toggle the server twice for one visible change.
+     * Each completion now removes only its own id from the live set.
+     */
+    @Test
+    fun `a finished reply like leaves another reply's pending marker alone`() =
+        runTest(testDispatcher) {
+            val repository = FakeCommentRepository(
+                replies = listOf(
+                    mineReply(id = 1, text = "one", isLiked = false),
+                    mineReply(id = 2, text = "two", isLiked = false)
+                )
+            )
+            val viewModel = buildViewModel(repository)
+            openThread(viewModel)
+
+            val firstGate = CompletableDeferred<Unit>()
+            val secondGate = CompletableDeferred<Unit>()
+            repository.replyLikeGates[1] = firstGate
+            repository.replyLikeGates[2] = secondGate
+
+            viewModel.toggleReplyLike(1)
+            viewModel.toggleReplyLike(2)
+            advanceUntilIdle()
+
+            assertEquals(
+                "both requests are out, so both buttons are disabled",
+                setOf(1, 2),
+                viewModel.comments.value!!.pendingReplyLikes
+            )
+
+            // The first answer lands while the second request is still out.
+            firstGate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(
+                "the second heart is still waiting and must stay disabled",
+                setOf(2),
+                viewModel.comments.value!!.pendingReplyLikes
+            )
+
+            secondGate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(viewModel.comments.value!!.pendingReplyLikes.isEmpty())
+        }
+
     /** The id the manage tests sign in as; [mineReply] authors their comments. */
     private val viewerId = 7
 
     private fun buildViewModel(repository: AniListRepository) = UserActivityViewModel(
         repository,
         userId = 1,
-        viewerId = viewerId,
-        pageSize = 25
+        viewerId = viewerId
     )
 
     /** Loads the feed and opens the thread, which is what every case starts from. */
@@ -361,9 +413,16 @@ class CommentManagementTest {
     }
 
     /** A reply authored by the viewer these tests sign in as. */
-    private fun mineReply(id: Int, text: String) = ActivityReply(
+    private fun mineReply(
+        id: Int,
+        text: String,
+        isLiked: Boolean? = null,
+        likeCount: Int = 0
+    ) = ActivityReply(
         id = id,
         text = text,
+        isLiked = isLiked,
+        likeCount = likeCount,
         user = FollowUser(id = viewerId, name = "Me")
     )
 
@@ -394,6 +453,15 @@ class CommentManagementTest {
         var postReplyFetchCount = 0
         var editReplyFetchCount = 0
         var deleteReplyFetchCount = 0
+
+        /**
+         * Per-reply gates for the like request.
+         *
+         * A gate lets one like answer while another is still suspended, which is
+         * the only way to observe whether the two in-flight markers are really
+         * independent. A fake that answered immediately could never fail this.
+         */
+        val replyLikeGates = mutableMapOf<Int, CompletableDeferred<Unit>>()
 
         /** What the last edit and delete were actually called with. */
         var lastEditedReplyId: Int? = null
@@ -429,7 +497,15 @@ class CommentManagementTest {
             userId: Int,
             page: Int,
             forceRefresh: Boolean
-        ): Result<List<ListActivity>> = Result.success(if (page == 1) listOf(activity) else emptyList())
+        ): Result<UserActivityPage> = Result.success(
+            // One activity is the whole fixture, so page one is also the last. A
+            // repository fake that claimed otherwise would have the ViewModel
+            // paging for rows this test never wrote.
+            UserActivityPage(
+                activities = if (page == 1) listOf(activity) else emptyList(),
+                hasMore = false
+            )
+        )
 
         override suspend fun getUserFollowers(
             userId: Int,
@@ -440,6 +516,11 @@ class CommentManagementTest {
             userId: Int,
             forceRefresh: Boolean
         ): Result<List<FollowUser>> = Result.success(emptyList())
+
+        override suspend fun toggleActivityReplyLike(replyId: Int): Result<ActivityLikeState> {
+            replyLikeGates[replyId]?.await()
+            return Result.success(ActivityLikeState(isLiked = true, likeCount = 1))
+        }
 
         override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> {
             repliesFetchCount++

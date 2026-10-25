@@ -9,6 +9,7 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -49,6 +51,15 @@ class ProfileViewModelTest {
 
     private class FakeProfileRepository(
         var activityPages: Map<Int, List<ListActivity>> = emptyMap(),
+        /**
+         * The `pageInfo.hasNextPage` each page answers with.
+         *
+         * A page with no entry derives it from its size, which is what the API
+         * does in the common case - but the whole reason the ViewModel reads this
+         * field is that a page can arrive short and still have a successor, so the
+         * test that matters sets it explicitly.
+         */
+        var pageHasNext: Map<Int, Boolean> = emptyMap(),
         /** Pages this repository refuses, so a failure path can be exercised. */
         var failPages: Set<Int> = emptySet(),
         var followersResult: List<FollowUser> = emptyList(),
@@ -91,7 +102,7 @@ class ProfileViewModelTest {
             userId: Int,
             page: Int,
             forceRefresh: Boolean
-        ): Result<List<ListActivity>> {
+        ): Result<UserActivityPage> {
             activityFetchCount++
             // `failPages` is mutable so a test can fail a page and then clear it to
             // model a retry succeeding - the two halves of "the feed has to be
@@ -100,7 +111,12 @@ class ProfileViewModelTest {
                 return Result.failure(RuntimeException("AniList is rate limiting right now."))
             }
             val list = activityPages[page] ?: emptyList()
-            return Result.success(list)
+            return Result.success(
+                UserActivityPage(
+                    activities = list,
+                    hasMore = pageHasNext[page] ?: (list.size >= 25)
+                )
+            )
         }
 
         override suspend fun getUserFollowers(
@@ -143,13 +159,13 @@ class ProfileViewModelTest {
             activityPages = mapOf(1 to page1, 2 to page2)
         )
 
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
         val state1 = viewModel.state.value as UserActivityViewModel.ActivityState.Success
         assertEquals(25, state1.activities.size)
-        assertTrue("Page 1 had 25 items so hasMore must be true", state1.hasMore)
+        assertTrue("AniList reported a next page, so hasMore must be true", state1.hasMore)
         assertEquals(1, repository.activityFetchCount)
 
         // Calling loadNextPage should now fetch page 2
@@ -159,7 +175,7 @@ class ProfileViewModelTest {
         assertEquals("Page 2 fetch should have been invoked", 2, repository.activityFetchCount)
         val state2 = viewModel.state.value as UserActivityViewModel.ActivityState.Success
         assertEquals(35, state2.activities.size)
-        assertFalse("Page 2 had 10 items (< 25) so hasMore must be false", state2.hasMore)
+        assertFalse("AniList reported no next page, so hasMore must be false", state2.hasMore)
 
         // Calling loadNextPage again when hasMore is false should not fetch
         viewModel.loadNextPage()
@@ -213,7 +229,7 @@ class ProfileViewModelTest {
             activityPages = mapOf(1 to page1)
         )
 
-        val viewModel = UserActivityViewModel(repository, userId = null, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = null)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
@@ -253,7 +269,7 @@ class ProfileViewModelTest {
             ),
             failPages = setOf(2)
         )
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
 
         viewModel.loadFirstPage()
         advanceUntilIdle()
@@ -286,6 +302,71 @@ class ProfileViewModelTest {
         val recovered = viewModel.state.value as UserActivityViewModel.ActivityState.Success
         assertNull("a successful retry clears the failure", recovered.loadMoreError)
         assertEquals(50, recovered.activities.size)
+    }
+
+    /**
+     * A page shorter than the request is not the end of the feed.
+     *
+     * The feed drops union members and updates for media that no longer exists
+     * before the ViewModel sees a page, so a twenty-five-row server page can
+     * arrive as twenty-three rows. Deriving "no more pages" from that count ended
+     * the feed there, with hundreds of entries still behind it. `hasMore` must be
+     * AniList's answer, not the row count's.
+     */
+    @Test
+    fun `a short page that reports a next page keeps paging`() = runTest(testDispatcher) {
+        val page1 = List(23) { createActivity(it + 1) }
+        val page2 = List(4) { createActivity(it + 100) }
+        val repository = FakeProfileRepository(
+            activityPages = mapOf(1 to page1, 2 to page2),
+            pageHasNext = mapOf(1 to true)
+        )
+
+        val viewModel = UserActivityViewModel(repository, userId = 1)
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        val first = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(23, first.activities.size)
+        assertTrue(
+            "a filtered page is shorter than the one AniList sent, so its size cannot end the feed",
+            first.hasMore
+        )
+
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+
+        assertEquals(2, repository.activityFetchCount)
+        val second = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals(27, second.activities.size)
+        assertFalse("page two had no successor", second.hasMore)
+    }
+
+    /**
+     * A refresh that fails must not cost the reader the rows it was refreshing.
+     *
+     * It used to be indistinguishable from a first load, so the refresh replaced
+     * the feed with the loading skeleton and a failure then replaced it with the
+     * full-screen error - twenty-five readable cards lost to one dropped request.
+     * The rows stay and the failure becomes a retryable line above them.
+     */
+    @Test
+    fun `a failed refresh keeps the rows it was refreshing`() = runTest(testDispatcher) {
+        val page = List(3) { createActivity(it + 1) }
+        val repository = FakeProfileRepository(activityPages = mapOf(1 to page))
+        val viewModel = UserActivityViewModel(repository, userId = 1)
+
+        viewModel.loadFirstPage()
+        advanceUntilIdle()
+
+        repository.failPages = setOf(1)
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as UserActivityViewModel.ActivityState.Success
+        assertEquals("the rows already read must survive a failed refresh", 3, state.activities.size)
+        assertFalse("the refresh indicator must not stay up", state.isRefreshing)
+        assertNotNull("the failure must be retryable rather than silent", state.refreshError)
     }
 
     @Test
@@ -327,7 +408,7 @@ class ProfileViewModelTest {
     @Test
     fun `an activity feed is not fetched until the tab asks for it`() = runTest(testDispatcher) {
         val repository = FakeProfileRepository(activityPages = mapOf(1 to List(5) { createActivity(it + 1) }))
-        val viewModel = UserActivityViewModel(repository, userId = null, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = null)
 
         // Exactly what the profile screen does once the overview resolves.
         viewModel.updateUserId(1)
@@ -447,7 +528,7 @@ class ProfileViewModelTest {
             activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = false, likeCount = 0)))
         )
         repository.likeResult = Result.success(ActivityLikeState(isLiked = true, likeCount = 1))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
@@ -476,7 +557,7 @@ class ProfileViewModelTest {
             activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = false, likeCount = 3)))
         )
         repository.likeResult = Result.failure(RuntimeException("nope"))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
@@ -498,7 +579,7 @@ class ProfileViewModelTest {
         val repository = FakeProfileRepository(
             activityPages = mapOf(1 to listOf(createActivity(id = 1, isLiked = null, likeCount = 0)))
         )
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
@@ -512,7 +593,7 @@ class ProfileViewModelTest {
     fun `opening comments loads the thread`() = runTest(testDispatcher) {
         val repository = FakeProfileRepository(activityPages = mapOf(1 to listOf(createActivity(1))))
         repository.repliesResult = Result.success(listOf(ActivityReply(id = 5, text = "hi")))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
@@ -534,7 +615,7 @@ class ProfileViewModelTest {
             activityPages = mapOf(1 to listOf(createActivity(id = 1, replyCount = 2)))
         )
         repository.postReplyResult = Result.success(ActivityReply(id = 9, text = "mine"))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
         viewModel.openComments(1)
@@ -559,7 +640,7 @@ class ProfileViewModelTest {
     fun `a failed comment keeps the draft available`() = runTest(testDispatcher) {
         val repository = FakeProfileRepository(activityPages = mapOf(1 to listOf(createActivity(1))))
         repository.postReplyResult = Result.failure(RuntimeException("offline"))
-        val viewModel = UserActivityViewModel(repository, userId = 1, pageSize = 25)
+        val viewModel = UserActivityViewModel(repository, userId = 1)
         viewModel.loadFirstPage()
         advanceUntilIdle()
         viewModel.openComments(1)

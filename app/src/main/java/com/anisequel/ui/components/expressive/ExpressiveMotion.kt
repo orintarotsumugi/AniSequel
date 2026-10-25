@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,7 +94,7 @@ object ExpressiveMotion {
      * tokens above cannot be passed to it at all - which is why seven colour
      * animations had each grown their own bare `spring()` call.
      *
-     *Deliberately `NoBouncy`: a spring interpolates `Color` componentwise
+     * Deliberately `NoBouncy`: a spring interpolates `Color` componentwise
      * through `Ulerp`, and an overshooting spring drives individual channels past
      * their endpoints on the way down. A colour that overshoots is not a colour
      * on the way to another colour - it can render out of gamut. A two-state
@@ -205,7 +204,7 @@ object ExpressiveMotion {
             )
         }
 
-/**
+    /**
      * Item appearance and disappearance for lazy list items.
      *
      * `LazyItemScope.animateItem` takes `fadeInSpec`/`fadeOutSpec` parameters
@@ -415,11 +414,13 @@ fun Modifier.bouncyPress(
         //
         // A single spring has to treat the press and the release identically, so
         // the element squashed and then merely returned - which reads as a fade
-        // rather than as a button with weight. Compose's `bounce` parameter is the
-        // asymmetric half: it governs overshoot only on the way *back*, which a
-        // shared `dampingRatio` cannot express. So the way down is tight and
-        // cannot flicker below the pressed scale, and the way back overshoots
-        // slightly past rest and settles.
+        // rather than as a button with weight. The asymmetry has to come from two
+        // specs, because a shared `dampingRatio` cannot express "no overshoot
+        // down, a little overshoot back", and the `bounce` parameter that would
+        // have said it does not exist in the Compose version this project pins
+        // (see `PressSpatialOut`). So the way down is tight and cannot flicker
+        // below the pressed scale, and the way back overshoots slightly past rest
+        // and settles.
         animationSpec = if (isPressed) {
             ExpressiveMotion.PressSpatialIn
         } else {

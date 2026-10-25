@@ -374,9 +374,16 @@ fun UserProfileScreen(
                     // state the reader could not enter. The demo has nothing to
                     // re-fetch, so the control is left out there rather than
                     // drawn as a button that does nothing.
+                    //
+                    // The feed joins in only when its tab has been opened: this is
+                    // a page-level control, and fetching a feed nobody has looked at
+                    // is the lazy-loading rule the Activity tab is built around.
                     if ((uiState as? UserOverviewUiState.Success)?.isDemoMode == false) {
                         IconButton(
-                            onClick = { overviewViewModel.refresh() },
+                            onClick = {
+                                overviewViewModel.refresh()
+                                activityViewModel.refreshIfStarted()
+                            },
                             modifier = Modifier
                                 .testTag("profile_refresh_button")
                                 .bouncyPress(pressedScale = 0.9f)
@@ -685,6 +692,7 @@ private fun ProfileTabsContent(
                     onLoadFirstPage = { activityViewModel.loadFirstPage() },
                     onLoadNextPage = { activityViewModel.loadNextPage() },
                     onRetry = { activityViewModel.retry() },
+                    onRefresh = { activityViewModel.refresh() },
                     contentPadding = padding,
                     listState = activityListState,
                     calendar = state.activity,
