@@ -1607,7 +1607,7 @@ class AniListRepositoryImpl(
     private suspend fun followList(
         userId: Int,
         forceRefresh: Boolean,
-        cache: ConcurrentHashMap<String, CachedValue<List<FollowUser>>>
+        cache: ConcurrentHashMap<String, CachedValue<List<FollowUser>>>,
         which: String,
         fetch: suspend (GraphQLRequest) -> Result<List<FollowUser>>
     ): Result<List<FollowUser>> {
