@@ -67,6 +67,7 @@ internal object WidgetUpdater {
 
         val display = context.resources.displayMetrics
         WidgetCover.loadAsync(
+            context = context,
             url = coverUrl(),
             targetWidthPx = WidgetCover.dp(context, coverWidthDp),
             targetHeightPx = WidgetCover.dp(context, coverHeightDp),

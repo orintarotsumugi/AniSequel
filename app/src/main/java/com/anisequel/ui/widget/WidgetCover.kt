@@ -9,6 +9,8 @@ import android.graphics.Paint
 import android.util.LruCache
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -114,6 +116,20 @@ object WidgetCover {
     private const val PLACEHOLDER_CACHE_BYTES = 512 * 1024
 
     /**
+     * Where saved widget cover bytes live, and how many are kept.
+     *
+     * The directory is under `noBackupFilesDir` for the same reason Coil's is:
+     * a cover is kept until AniList changes it, and `cacheDir` is a directory
+     * the system is entitled to empty. Eight tiles' worth of URLs is enough for
+     * a reader with more than one widget plus the next season's artwork; older
+     * files are unreachable by construction, because a changed cover gets a new
+     * URL.
+     */
+    private const val SAVED_COVER_DIRECTORY = "widget_cover_cache"
+    private const val SAVED_COVER_MAX_FILES = 8
+    private const val HEX_DIGITS = "0123456789abcdef"
+
+    /**
      * Fetches [url] and hands the decoded bitmap (or null) to [onLoaded].
      *
      * The callback always runs on the shared background thread, including for a
@@ -122,6 +138,7 @@ object WidgetCover {
      * running a render on the caller's thread by surprise.
      */
     fun loadAsync(
+        context: Context,
         url: String?,
         targetWidthPx: Int,
         targetHeightPx: Int,
@@ -149,12 +166,37 @@ object WidgetCover {
             }
         }
 
+        val appContext = context.applicationContext
         executor.execute {
             val bitmap = if (url.isNullOrBlank()) {
                 null
             } else {
                 try {
-                    val decoded = download(url, targetWidthPx, targetHeightPx, maxPixels)
+                    // The saved bytes first, and the network only on a miss.
+                    //
+                    // A widget is refreshed on a timer and on every app start,
+                    // and the decoded `covers` cache above lives only as long as
+                    // the process. Without this every launcher refresh after the
+                    // process was killed downloaded the same four posters again,
+                    // which is exactly the "the cover keeps disappearing"
+                    // behaviour the app cache no longer has. URL-keyed, like
+                    // Coil's, so AniList replacing the artwork produces a new
+                    // URL and therefore a miss - a cover is never served stale.
+                    var bytes = readSavedCover(appContext, url)
+                    var decoded = bytes?.let {
+                        decodeScaled(it, targetWidthPx, targetHeightPx, maxPixels)
+                    }
+                    // A saved file that will not decode is not a cover. It is
+                    // overwritten rather than left to fail on every refresh -
+                    // the bytes may have been truncated by a device that lost
+                    // power mid-write before the rename above existed.
+                    if (decoded == null) {
+                        bytes = downloadBytes(url)
+                        if (bytes != null) {
+                            saveCover(appContext, url, bytes)
+                            decoded = decodeScaled(bytes, targetWidthPx, targetHeightPx, maxPixels)
+                        }
+                    }
                     decoded?.also { if (cacheKey != null) covers.put(cacheKey, it) }
                 } catch (t: Throwable) {
                     null
@@ -208,18 +250,87 @@ object WidgetCover {
     fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).roundToInt()
 
-    private fun download(
-        url: String,
-        targetWidthPx: Int,
-        targetHeightPx: Int,
-        maxPixels: Int
-    ): Bitmap? {
+    private fun downloadBytes(url: String): ByteArray? {
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
-            val bytes = response.body?.bytes() ?: return null
-            return decodeScaled(bytes, targetWidthPx, targetHeightPx, maxPixels)
+            return response.body?.bytes()
         }
+    }
+
+    /**
+     * The saved copy of [url]'s bytes, or null when this cover has never been
+     * fetched or the file is unreadable.
+     *
+     * Read failures are normal, not exceptional: `noBackupFilesDir` can be
+     * absent on a wiped profile, a file can be truncated by a device that lost
+     * power mid-write, and a hashed filename is not something a reader can fix.
+     * The caller downloads in every one of those cases.
+     */
+    private fun readSavedCover(context: Context, url: String): ByteArray? = try {
+        val file = savedCoverFile(context, url)
+        if (file.isFile && file.length() > 0) file.readBytes() else null
+    } catch (t: Throwable) {
+        null
+    }
+
+    /**
+     * Writes [bytes] for [url], best effort.
+     *
+     * The `.part` file and the rename are the whole point. A half-written cache
+     * file that still has the cover's name would be served on the next refresh
+     * and fail to decode - and because the URL has not changed, it would keep
+     * failing forever. Writing beside the target and renaming means a reader
+     * either gets the previous complete file or the new complete one.
+     */
+    private fun saveCover(context: Context, url: String, bytes: ByteArray) {
+        try {
+            val target = savedCoverFile(context, url)
+            target.parentFile?.mkdirs()
+            val temporary = File(target.parentFile, "${target.name}.part")
+            temporary.writeBytes(bytes)
+            if (!temporary.renameTo(target)) {
+                temporary.delete()
+                return
+            }
+            pruneSavedCovers(target.parentFile)
+        } catch (t: Throwable) {
+            // A full disk or a directory that cannot be created costs one
+            // download on the next refresh, never a broken tile.
+        }
+    }
+
+    /**
+     * Keeps the newest [SAVED_COVER_MAX_FILES] covers.
+     *
+     * AniList gives changed artwork a new URL, so old files are not overwritten
+     * - they become unreachable. Without a bound a reader who keeps up with new
+     * seasons would leave one file per cover they had ever seen in app storage.
+     * The working set is the handful of tiles on the home screen, so a small
+     * ceiling costs nothing a widget can notice.
+     */
+    private fun pruneSavedCovers(directory: File?) {
+        val files = directory
+            ?.listFiles { file -> file.isFile && !file.name.endsWith(".part") }
+            ?: return
+        if (files.size <= SAVED_COVER_MAX_FILES) return
+        files.sortedBy { it.lastModified() }
+            .take(files.size - SAVED_COVER_MAX_FILES)
+            .forEach { it.delete() }
+    }
+
+    /** A stable, filesystem-safe name for [url]: URL raw bytes are far too long. */
+    private fun savedCoverFile(context: Context, url: String): File {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(url.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte ->
+                val value = byte.toInt() and 0xFF
+                "${HEX_DIGITS[value ushr 4]}${HEX_DIGITS[value and 0x0F]}"
+            }
+        return File(
+            File(context.noBackupFilesDir, SAVED_COVER_DIRECTORY),
+            digest
+        )
     }
 
     /**

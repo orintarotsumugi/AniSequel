@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
@@ -50,7 +53,6 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.profile.ProfileErrorView
 import com.anisequel.ui.screens.profile.ProfileLibraryTab
-import com.anisequel.ui.screens.profile.ProfileLoadingView
 import com.anisequel.ui.screens.profile.RememberedLibraryView
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserOverviewUiState
@@ -164,6 +166,12 @@ fun LibraryScreen(
                                 // the anime list, which is the half this title
                                 // describes; the Manga chip carries its own.
                                 val titleCount = success.libraryAnime.size
+                                // The saved copy used to be appended to this
+                                // sentence. It is a sibling beside the name now,
+                                // like the one on Home, because at the end of a
+                                // single ellipsized line it was the first thing a
+                                // long username cut off - the one part of the
+                                // subtitle that has to survive.
                                 val subtitle = buildString {
                                     append('@').append(success.username)
                                     if (!success.isLibraryLoading && titleCount > 0) {
@@ -175,20 +183,32 @@ fun LibraryScreen(
                                 // because it comes with the list. A hard swap of a
                                 // line in the bar reads as a glitch; this is the
                                 // effects spring, so the number lands quietly.
-                                AnimatedContent(
-                                    targetState = subtitle,
-                                    transitionSpec = {
-                                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                                    },
-                                    label = "library_subtitle"
-                                ) { text ->
-                                    Text(
-                                        text = text,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedContent(
+                                        targetState = subtitle,
+                                        transitionSpec = {
+                                            fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                                                fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                        },
+                                        // `fill = false` so a short name does not
+                                        // stretch an empty gap across the bar; the
+                                        // weight still caps a long one so the pill
+                                        // beside it keeps its full label.
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        label = "library_subtitle"
+                                    ) { text ->
+                                        Text(
+                                            text = text,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (success.isCached) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        SavedCopyPill(visible = true)
+                                    }
                                 }
                             }
                         }
@@ -262,7 +282,7 @@ fun LibraryScreen(
             contentAlignment = Alignment.TopCenter
         ) {
             when (val state = uiState) {
-                is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
+                is UserOverviewUiState.Loading -> LibraryLoadingView(message = state.message)
                 is UserOverviewUiState.Error -> {
                     // Same calm view as the profile: this is a main-bar page, and a
                     // list that failed to reload gets a sentence and a button rather
@@ -286,42 +306,38 @@ fun LibraryScreen(
                         (state.favouriteAnime + state.favouriteManga)
                             .mapNotNullTo(mutableSetOf()) { it.id }
                     }
-                    // The pill is above the grid rather than inside it: the grid
-                    // scrolls, and a notice about the whole page should not leave
-                    // the screen with the first poster.
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        SavedCopyPill(
-                            visible = state.isCached,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                        ProfileLibraryTab(
-                            modifier = Modifier.weight(1f),
-                            animeEntries = state.libraryAnime,
-                            mangaEntries = mangaLibrary,
-                            favouriteIds = favouriteIds,
-                            isLoadingManga = isLoadingManga,
-                            // The list is only on the critical path of this page
-                            // and the profile's Stats tab, so the flag is threaded
-                            // here rather than baked into `libraryAnime` being
-                            // empty - an empty list is a real answer for an
-                            // account that tracks nothing.
-                            isAnimeLoading = state.isLibraryLoading,
-                            // A list that could not be read is not an empty one.
-                            libraryError = state.libraryError,
-                            onLoadManga = { overviewViewModel.loadMangaLibrary() },
-                            // This page's whole bottom clearance, including the
-                            // system navigation inset; see [mainBarClearance].
-                            contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
-                            onOpenDetail = { selectedMedia = it },
-                            gridState = gridState,
-                            remembered = remembered,
-                            // The pull gesture lives on the grid, the progress bar
-                            // on the profile header the route above draws - one
-                            // refresh, two places it is visible from.
-                            isRefreshing = state.isRefreshing,
-                            onRefresh = { overviewViewModel.refresh() }
-                        )
-                    }
+                    // The grid is the page. The saved-copy pill that used to sit
+                    // above it is now part of the bar's subtitle: a row here was
+                    // a layout change on the first frame and again when the live
+                    // list arrived, which is the one thing a scroll position
+                    // cannot absorb.
+                    ProfileLibraryTab(
+                        modifier = Modifier.fillMaxSize(),
+                        animeEntries = state.libraryAnime,
+                        mangaEntries = mangaLibrary,
+                        favouriteIds = favouriteIds,
+                        isLoadingManga = isLoadingManga,
+                        // The list is only on the critical path of this page
+                        // and the profile's Stats tab, so the flag is threaded
+                        // here rather than baked into `libraryAnime` being
+                        // empty - an empty list is a real answer for an
+                        // account that tracks nothing.
+                        isAnimeLoading = state.isLibraryLoading,
+                        // A list that could not be read is not an empty one.
+                        libraryError = state.libraryError,
+                        onLoadManga = { overviewViewModel.loadMangaLibrary() },
+                        // This page's whole bottom clearance, including the
+                        // system navigation inset; see [mainBarClearance].
+                        contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
+                        onOpenDetail = { selectedMedia = it },
+                        gridState = gridState,
+                        remembered = remembered,
+                        // The pull gesture lives on the grid, the progress bar
+                        // on the profile header the route above draws - one
+                        // refresh, two places it is visible from.
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { overviewViewModel.refresh() }
+                    )
                 }
             }
         }

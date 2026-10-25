@@ -335,15 +335,17 @@ is the shared one: the Library route's pre-`ViewModel` fallback, where the
 viewer query itself failed, uses it too.
 
 **A joke turns up above the bar, now and then.** `JokeToastHost` is mounted by
-`AppNavigation` next to `MainBar` and gated on the same `mainTabForRoute`, so it
-exists only on the three pages the bar owns — never over login, Settings or a
-title sheet. It waits a random 1.5–4 minutes for the first line and 4–15 for each
-one after, stays five seconds, and leaves on a tap. Its pool is `AppJokes`, a
-plain object with no Android imports so `AppJokesTest` can pin the things a
-review cannot see: that no line is duplicated, and that two in a row are never
-the same. The wait runs inside a `LifecycleResumeEffect`, so a joke cannot
-come due while the app is in the background and be waiting when the reader
-returns.
+`AppNavigation` next to `MainBar`, so it exists only on the pages the reader
+allowed — the bar's three pages by default, everything except login when they
+pick Everywhere — and never over the sign-in screen. Pace, dwell, edge, tones and
+the extra moments are the reader's, stored in `JokePreferences` and described in
+`JokeSettings`; the shipped defaults wait 1.5–4 minutes for the first line and
+4–15 for the rest, keep a line up for five seconds, and draw from every tone. Its
+pool is `AppJokes`, a plain object with no Android imports so `AppJokesTest` can
+pin the things a review cannot see: that no line is duplicated, that every tone
+has enough lines to stand alone, and that a tone filter only ever draws from its
+own list. The wait runs inside a resume gate, so a joke cannot come due while the
+app is in the background and be waiting when the reader returns.
 
 ---
 
@@ -443,9 +445,14 @@ feed and the thread are two state machines that happen to share a profile, and
 the one thing they exchange is the card's reply count, which the store reports
 through a callback. A posted comment scrolls itself into view, keyed on the id
 the store recorded rather than on the list growing — a thread that merely
-*loaded* must not jump to its last comment. The two engagement sheets, the
-activity feed and the Social tab draw a shimmering sketch of the rows that are
-coming instead of a spinner in an empty page (`ShimmerBox`,
+*loaded* must not jump to its last comment. Dismissing the sheet is one drag
+away from opening it, so the store keeps the thread it just closed and seeds the
+next open with it: `isLoading` is then false and `isRefreshing` true, the rows
+stay on screen while the fetch runs, and a failed fetch leaves them in place
+under a retry banner instead of replacing the conversation with an error. Only a
+thread with no rows at all gets the full-screen failure. The two engagement
+sheets, the activity feed and the Social tab draw a shimmering sketch of the rows
+that are coming instead of a spinner in an empty page (`ShimmerBox`,
 `ui/components/ShimmerLoading.kt`).
 
 **Stats is why a profile fetches the list at all.** AniList publishes no
@@ -799,6 +806,61 @@ error state provides.
 The store also bounds itself: past a per-kind byte budget the oldest entries go
 first, and the entry just written is never the one dropped.
 
+### Artwork is not scratch space
+
+The saved list and the picture on each row have the same problem, and the two
+image paths answered it differently: Coil's disk cache was in the wrong
+directory, and the widgets kept nothing on disk at all.
+
+Coil's disk cache was under `cacheDir/anilist_cover_cache`. That directory belongs
+to the system: Android empties it for space, "Clear cache" in Settings empties it
+on request, and either way the app then redrew every poster as a placeholder and
+downloaded the artwork again — on launches where nothing about the list had
+changed. It lives in `noBackupFilesDir/anilist_cover_cache` now, with a 256 MB
+ceiling, because a cover is page content rather than a disposable transform of it.
+`noBackupFilesDir` rather than `filesDir` on purpose: these files can all be
+fetched again, so a hundred megabytes of poster art must not be uploaded in a
+cloud backup or restored onto a new phone in place of the current artwork.
+
+The cache is keyed on the **image URL**, which is what makes "only change when
+AniList changes the artwork" true without any explicit invalidation: AniList puts a
+content hash in an artwork URL, so replaced art is a new URL and therefore a miss.
+There is no TTL to tune and no `respectCacheHeaders` to fight; a changed cover
+cannot be served from an old key.
+
+The home-screen widgets had the same bug a layer down. `WidgetCover`'s `LruCache`
+is decoded bitmaps and dies with the process, so every launcher refresh after the
+app was killed re-downloaded the same four posters. It now saves the raw bytes
+under `noBackupFilesDir/widget_cover_cache`, SHA-256 of the URL as the filename,
+written to a `.part` file and renamed — a half-written file that still carried the
+cover's name would fail to decode forever, because the URL has not changed either.
+Eight files are kept, pruned by modification time; a saved file that will not
+decode is replaced by the next successful download rather than trusted forever.
+
+### The waiting state has the shape of the page
+
+With a saved copy painted first, there are now two different waits and they used
+to look identical: "the list is on disk and the network is still answering" draws
+the list, while "there is nothing on disk yet" has to draw something. The second
+was a full-screen spinner in every case, which is wrong on the Library — that page
+is a three-column grid of 2:3 posters and looks the same for every account, so the
+first frame was one dot and the second was twelve posters plus a filter bar.
+
+`LibraryLoadingView` draws the grid that is coming under an expressive header that
+names the step ("Connecting to AniList to find your list", not "Loading your
+AniList profile"). `ProfileLoadingView` uses the same header shape, because the
+two pages are describing the same state. `RestoringPlaceholder` — the frame before
+the stored session is read, which is the app's first impression on a cold start —
+carries the app mark, the name and "Checking for a saved session…" so it cannot be
+mistaken for a screen that failed to load.
+
+The saved-copy notice followed the same rule. On Home it used to be an item in
+the list and on the Library a row in the page above the grid, so its appearance
+moved every row below it at exactly the moment the reader was looking at the first
+ones. It is part of the top bar's subtitle line now, where a second line is
+already reserved and the name ellipsizes before the pill; `SavedCopyPill` keeps
+its animated height only where it sits in a header the page is not scrolling.
+
 ---
 
 ## One destination, one copy
@@ -845,26 +907,68 @@ are scrollable columns, and animating the container's height while the outgoing
 page settles its own scroll is the crash shape that the tab version already
 documented. The fades and scales are draw-phase and stay.
 
+About & support was the exception the split missed: it kept the profile card, the
+demo prompt, the list snapshot, a connection check and a sign-out button, all of
+which the account page or the shelf's connection row already had — two controls
+calling one `logout()` is the version a reader notices. Since 1.5.9 those
+account-shaped cards live on `EditSettingsTab` beside the session, the connection
+card is gone because the shelf row opens the same dialog, and About is one subject
+per card: the build, privacy, updates, the newest release notes and the
+documentation link. The shelf's rows now take their title and subtitle from the
+`SettingsPage` they open rather than repeating the strings, after the Jokes row
+had already drifted to describing a page it no longer matched.
+
 ## Joke preferences are data, the host is policy
 
-The joke toast's four choices — on/off, frequency, edge and page scope — live in
-`domain/jokes/JokeSettings.kt` with no Android import, and are persisted by
-`data/repository/JokePreferences.kt`. The waits are properties of
-`JokeFrequency`, not constants in the host, because "Calm" and "Chatty" are only
-names for two pairs of numbers: a settings screen that owns the labels while the
-host owns the numbers can promise a pace it does not deliver.
+The joke toast's choices — on/off, pace, dwell, edge, page scope, arrival tick,
+tones and the extra moments — live in `domain/jokes/JokeSettings.kt` with no
+Android import, and are persisted by `data/repository/JokePreferences.kt`. The
+waits and the dwell are properties of `JokeFrequency` and `JokeDwell`, not
+constants in the host, because "Calm" and "Chatty" are only names for two pairs of
+numbers and "Until tapped" is a nullable duration: a settings screen that owns the
+labels while the host owns the numbers can promise a pace it does not deliver.
+
+The tone filter is the same argument one level down. `AppJokes` groups its lines
+by `JokeTone` and exposes `poolFor(tones)`, so the shuffle bag cycles the
+*selected* lines rather than cycling all 323 and showing the one in four the
+reader asked not to see. The last tone cannot be switched off — the repository
+refuses that write as well as the UI, because a stored flag is not a guarantee —
+and an empty stored tone set means every tone rather than an empty pool, which is
+what a cleared preference or a downgrade looks like.
+
+Saved lines are a second flow (`JokePreferences.favourites`) rather than a field
+of `JokeSettings`: they are content the reader created, they are not a switch, and
+"Reset joke settings" deliberately leaves them alone. The host reads the set only
+to draw the heart filled; the Settings card reads it to list and replay.
+
+Moments are announced, not owned. Only the dashboard knows a refresh was asked
+for, and only the navigation graph knows a tab changed, so those screens put a
+`JokeMoment` on `JokeMomentBus`; the host owns whether the reader enabled that
+moment, whether a line is already up, and whether the moment's quiet gap has
+passed. Announcing at the request rather than after a successful fetch is
+deliberate: the reader asked for the refresh, and the pill is not claiming the
+data arrived.
 
 This split is also what makes the behaviour testable without a device.
 `JokeSettingsTest` pins that Off never schedules, that the master switch wins
-over Chatty, that every wait falls inside its frequency's window, and that a
-value written by a newer build falls back to Normal rather than throwing on
-launch. It is the same reason `AppJokes` has no Compose imports.
+over Chatty, that every wait falls inside its frequency's window, that exactly
+one dwell arm waits for a tap, that an empty tone set means everything, and that
+a value written by a newer build falls back to a working default rather than
+throwing on launch. It is the same reason `AppJokes` has no Compose imports.
+
+`Until tapped` is the one arm the host waits on rather than times. It watches
+`visible` through `snapshotFlow` instead of holding a channel, because the flag is
+already the truth the surface draws from and a channel would need draining
+between lines. That is also why "show me one more" during a manual pill replaces
+the line instead of stacking a second one.
 
 The preview button does not mock the toast. It bumps a counter in
 `JokePreviewBus`, and the single host mounted by `AppNavigation` — which outlives
-the Settings page — draws the real pill at the chosen edge. That is the only way
-the preview can be honest about placement, and it is why the host is mounted even
-when jokes are off: an explicit request is not the ambient feature.
+the Settings page — draws the real pill at the chosen edge, for the chosen dwell,
+from the chosen tones. A saved line can be previewed as itself through the same
+bus, because the reader tapped that line rather than "a random one". That is the
+only way the preview can be honest about placement, and it is why the host is
+mounted even when jokes are off: an explicit request is not the ambient feature.
 
 The Settings-side AniList check no longer reads the failure copy's quip pool. It
 is a diagnostic the reader asked for, so every line is fixed copy; the random

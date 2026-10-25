@@ -1,6 +1,55 @@
 {
   "versions": [
     {
+      "version": "1.5.9",
+      "entries": [
+        {
+          "title": "Covers stay where they were",
+          "detail": "The cover cache lived in the app's cache directory, which Android may empty whenever it wants the space back - and \"Clear cache\" in system Settings does the same on request. So the app kept forgetting artwork it had already downloaded: every poster went back to a placeholder and came down the network again, sometimes on a cold start where nothing had changed. Covers now live in private storage that survives a restart, a cache wipe and an update, and the ceiling was raised to 256 MB, enough that a large list no longer reaches the point where old covers are dropped. The cache is keyed on the image address, and AniList changes that address when it changes a cover, so artwork is kept until it is genuinely replaced and the new picture is fetched the first time it is seen. Home-screen widget covers get the same treatment, saved as raw bytes beside the app cache rather than lost with the process."
+        },
+        {
+          "title": "Loading says what it is doing",
+          "detail": "The Library used to hand its first load to the profile's full-screen spinner, then jump from one dot to twelve posters and a filter bar in a single frame. It now draws the grid that is coming: an expressive header on a tinted surface, with the step's own sentence (\"Connecting to AniList to find your list\" is not the same as \"Loading your AniList profile\"), over three columns of shimmering 2:3 tiles. The same header shape is used by the profile's loader, and a cold start that is still reading the stored session now shows the app mark with \"Checking for a saved session\" instead of a bare dot that was indistinguishable from a screen that had failed."
+        },
+        {
+          "title": "Saved copy stops moving the page",
+          "detail": "The app paints your saved list before the network answers, which makes a cold start quick - but the notice that said so was a row in the page, so it appeared and disappeared above the first poster and moved everything below it, twice per launch. On Home and the Library it is now part of the top bar's subtitle line, where a second line already exists, so it costs no layout at all; names ellipsize before it rather than pushing it off. On the profile card the chip keeps its own animation but now gives its height back on a spring, so the header settles instead of being yanked, and it wears a quiet surface colour rather than a container that competed with the stats under it."
+        },
+        {
+          "title": "Signing in is one screen, not five",
+          "detail": "The sign-in card grew a keyboard inset it never had: tapping the username field used to leave it, and the Scan button, behind the keyboard with no way to submit but a key that did nothing. The field now offers Search as its action, hides the keyboard when it submits, and no longer capitalises or auto-corrects a name that has to match exactly. While AniList is being asked, the connect button is replaced in place by a card of exactly its height that says which wait it is - \"Waiting for AniList\" or \"Signed in - opening your list\" - so the helper row, the redirect hint and the error card no longer jump during a sign-in, and a reader who has just signed in is not shown the connect button again for a frame. The icon rail also stops advancing while the app is in the browser instead of ticking away behind another app."
+        },
+        {
+          "title": "Ani-chan stays as long as you like",
+          "detail": "The five-second pill was the one property of the toast you could not change. Beside the pace sits a dwell choice: Quick keeps a line up for 3 seconds, Standard 5, Relaxed 8 and Long 12, and Until tapped leaves it there until you tap it, with a small caption on the pill so that arm does not look stuck. The preview uses the dwell you picked, so the longest lines can be read before you commit to them."
+        },
+        {
+          "title": "You can keep a line you like",
+          "detail": "Every joke now carries a heart. Tapping it saves the line on the device; Settings has a Saved lines card that lists what you kept in pool order, replays one at the real edge with a tap, and removes or clears them. Saved lines survive Reset joke settings, because they are yours rather than a switch, and a line saved by a build whose pool has since changed is kept rather than silently dropped."
+        },
+        {
+          "title": "Pick what she talks about",
+          "detail": "The pool is grouped into four tones - Feelings, Backlog, Craft and Ani-chan & the app - and each can be switched off. At least one stays on, and the card tells you how many lines the current filter has. The shuffle bag cycles only the tones you kept, so switching Craft off does not spend eleven draws on lines you will never see. Every tone has at least 42 lines of its own."
+        },
+        {
+          "title": "Ani-chan can be invited, not just scheduled",
+          "detail": "Besides the timer, three moments can now earn a line: when you open the app, when you change tab, and after you refresh. All three are off by default, and each still waits for a quiet gap after the last line - one greeting per launch, six minutes between tab changes and three after a refresh - so a busy tab is not a drum roll. The sign-in screen stays quiet regardless."
+        },
+        {
+          "title": "A bigger pool, and a quieter arrival",
+          "detail": "The pool grew to 323 lines, with new material added to every tone rather than one. The arrival tick can now be switched off for a silent pill, the preview respects the dwell and the tone filter instead of only the edge, and the Settings row for Ani-chan is named for what the page now changes."
+        },
+        {
+          "title": "About is about the app again",
+          "detail": "About & support had become the second account page: it carried the profile card, the sign-in prompt, the list snapshot, a second connection check and a second sign-out button, while the account page was mostly a Client ID field. The profile, the demo note and the list snapshot now live on AniList account, beside the one sign-out button; the connection card is gone because the AniList connection row on the Settings shelf opens the same dialog. About is now five cards with one subject each - the build, privacy, updates, what's new and the documentation link - and the shelf rows take their titles and subtitles from the pages they open, so a row can no longer describe a different page than the one it opens."
+        },
+        {
+          "title": "Comments come back the way you left them",
+          "detail": "Reopening a thread you had just dismissed used to blank the conversation and redraw the skeleton, and a refresh that failed replaced the comments with an error line. The last thread you read is now kept for the next open: the comments appear at once while a newer copy loads, a failure over them becomes a small banner with its own Retry, and only a thread with nothing to show gets the full-screen explanation. The waiting skeleton now includes the like and reply row, the empty state says what to do instead of looking broken, and the composer opens with the keyboard up, reads Post Comment or Post Reply to match what you are writing, and gives the reply-target's clear button a 40dp target instead of a 28dp one."
+        }
+      ]
+    },
+    {
       "version": "1.5.8",
       "entries": [
         {

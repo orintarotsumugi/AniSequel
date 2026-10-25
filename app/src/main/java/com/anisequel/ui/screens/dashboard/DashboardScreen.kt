@@ -39,9 +39,11 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.ui.components.AniTopAppBar
 import com.anisequel.ui.components.EmptyStateView
 import com.anisequel.ui.components.FilterSortSheet
+import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.SequelDetailSheet
@@ -64,7 +66,6 @@ import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.ui.components.ApiRecoveryOverlay
-import com.anisequel.ui.components.SavedCopyPill
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
@@ -193,6 +194,16 @@ fun DashboardScreen(
     // it says so from inside `Success`.
     val canWrite = successState?.canWriteToAniList != false
 
+    // The joke toast's "after you refresh" moment. Announced here rather than in
+    // the ViewModel because the interval refresh also goes through the
+    // ViewModel, and an automatic poll is not something the reader asked for.
+    // The host owns whether the switch is on, whether a line is already up and
+    // whether a quiet gap has passed.
+    val requestRefresh = {
+        dashboardViewModel.refresh()
+        JokeMomentBus.announce(JokeMoment.REFRESH)
+    }
+
     // One-tap Planning for a title the sheet is showing that is not one of the
     // recommendation cards: an arriving row, or a relation walked to from either.
     val planningAdd = rememberPlanningAddHost(
@@ -290,11 +301,14 @@ fun DashboardScreen(
                 viewer = currentViewer,
                 missedCount = missedCount,
                 onOpenFilter = { showFilterSheet = true },
-                onRefresh = { dashboardViewModel.refresh() },
+                onRefresh = requestRefresh,
                 onOpenSettings = { onOpenSettings(currentViewer) },
                 onOpenProfile = { onOpenProfile(currentViewer) },
                 isRefreshing = successState?.isRefreshing == true,
                 hasActiveFilters = hasActiveFilters,
+                // The snapshot is the first frame of a cold start; the bar says
+                // so without moving the list underneath it. See [AniTopAppBar].
+                showingSavedCopy = successState?.isCached == true,
                 scrollBehavior = scrollBehavior
             )
         }
@@ -343,7 +357,7 @@ fun DashboardScreen(
                 is DashboardUiState.Success -> {
                     PullToRefreshBox(
                         isRefreshing = state.isRefreshing,
-                        onRefresh = { dashboardViewModel.refresh() },
+                        onRefresh = requestRefresh,
                         modifier = Modifier.fillMaxSize()
                     ) {
                         LazyColumn(
@@ -364,15 +378,11 @@ fun DashboardScreen(
                                 }
                             }
 
-                            // Only present when there is something to say. The
-                            // item is added and removed rather than animated in
-                            // place so the list does not reserve 14dp of spacing
-                            // for a pill nobody can see.
-                            if (state.isCached) {
-                                item(key = "saved_copy") {
-                                    SavedCopyPill(visible = true)
-                                }
-                            }
+                            // The saved-copy notice moved to the top app bar. It
+                            // used to be an item here, so it appeared and
+                            // disappeared above the stats card as the network
+                            // answered and moved every row below it by its
+                            // height. See [AniTopAppBar.showingSavedCopy].
 
                             item(key = "stats_banner") {
                                 StatsBanner(

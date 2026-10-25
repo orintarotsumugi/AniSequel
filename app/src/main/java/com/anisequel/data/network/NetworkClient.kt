@@ -172,6 +172,16 @@ object NetworkClient {
      * every one of hundreds of posters costs frames on the scroll that is the
      * screen's main job.
      *
+     * ## A saved cover stays saved
+     *
+     * The disk cache is keyed on the image URL, and AniList includes a content
+     * hash in an artwork URL - a title whose cover is replaced gets a new URL
+     * rather than new bytes behind the old one. So the cache does exactly what
+     * a reader expects: the artwork is kept until AniList changes it, and then
+     * the new URL is a miss and the new file is fetched. That is also why moving
+     * the directory to `noBackupFilesDir` below matters; a URL-keyed cache that
+     * Android empties is not a cache the reader can rely on.
+     *
      * `bitmapConfig` is left at the platform default, which is a hardware bitmap
      * on API 26+. Hardware bitmaps are uploaded to the GPU once and drawn as a
      * texture, so scrolling a wall of covers does not re-upload each frame -
@@ -185,8 +195,26 @@ object NetworkClient {
                     .build()
             }
             .diskCache {
+                // `noBackupFilesDir`, not `cacheDir`.
+                //
+                // This was `cacheDir/anilist_cover_cache`, and that was the cover
+                // bug: everything under `cacheDir` belongs to Android, which
+                // deletes it whenever it wants the space back - and "Clear
+                // cache" in the system Settings does the same on demand. So the
+                // app kept *forgetting* artwork it had already downloaded, and
+                // every poster on screen went back to its placeholder and came
+                // down the network again, including on a cold start where the
+                // reader had not changed anything. Covers are not disposable
+                // scratch data; they are the page.
+                //
+                // `noBackupFilesDir` is private app storage that survives a
+                // restart, a cache wipe and an update. It is deliberately not
+                // `filesDir`: a hundred megabytes of poster art has no business
+                // in a cloud backup, and every one of these files can be
+                // re-fetched, so it also must not be restored onto a new phone
+                // in place of the current artwork.
                 DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("anilist_cover_cache"))
+                    .directory(context.noBackupFilesDir.resolve("anilist_cover_cache"))
                     .maxSizeBytes(DISK_CACHE_BYTES)
                     .build()
             }
@@ -252,7 +280,18 @@ object NetworkClient {
             .build()
 
     private const val MEMORY_CACHE_PERCENT = 0.25
-    private const val DISK_CACHE_BYTES = 128L * 1024 * 1024
+
+    /**
+     * How much cover art is kept on disk.
+     *
+     * This is a ceiling, not a target: a title's bytes are only written the first
+     * time it is seen. 256 MB is roughly three to four thousand covers at the
+     * sizes AniList serves, which is several times a large account's list - so a
+     * reader's ordinary library never reaches the point where the LRU starts
+     * dropping a cover they have already seen. The previous 128 MB was already
+     * generous; it was just in a directory Android was allowed to empty.
+     */
+    private const val DISK_CACHE_BYTES = 256L * 1024 * 1024
 
     /**
      * How many covers may decode/fetch at once.
