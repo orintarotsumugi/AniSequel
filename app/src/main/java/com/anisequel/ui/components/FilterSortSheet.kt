@@ -30,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.RelationKind

@@ -25,7 +25,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ActivityCalendar
 import com.anisequel.domain.usecase.ActivityMonthLabel
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.flow.first
 
 private val CellSize = 13.dp
@@ -135,7 +133,7 @@ private fun CalendarGrid(calendar: ActivityCalendar) {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Row {
-            WeekdayGutter(labels = calendar.weekdayLabels)
+            WeekdayGutter()
             Spacer(modifier = Modifier.width(GutterGap))
             ActivityCellsCanvas(calendar = calendar)
         }
@@ -183,7 +181,7 @@ private fun MonthHeaderRow(
  * catch.
  */
 @Composable
-private fun WeekdayGutter(labels: List<String>) {
+private fun WeekdayGutter() {
     val lettersByRow = mapOf(1 to "M", 3 to "W", 5 to "F")
     Column(
         modifier = Modifier.width(GutterWidth),
@@ -229,13 +227,8 @@ private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
             column.days.forEachIndexed { rowIdx, day ->
                 val top = rowIdx * pitchPx
                 val target = if (day.inRange) day.intensity.coerceIn(0f, 1f) else 0f
-                val color = when {
-                    target <= 0f -> empty
-                    target >= 1f -> base
-                    else -> base.copy(alpha = 0.22f + target * 0.78f)
-                }
                 drawRoundRect(
-                    color = color,
+                    color = heatColour(target, base = base, empty = empty),
                     topLeft = Offset(left, top),
                     size = Size(cellSizePx, cellSizePx),
                     cornerRadius = cornerRadius
@@ -245,16 +238,27 @@ private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
     }
 }
 
-@Composable
-private fun colorFor(fraction: Float): Color {
-    val base = MaterialTheme.colorScheme.primary
-    val empty = MaterialTheme.colorScheme.surfaceContainerHighest
-    return when {
-        fraction <= 0f -> empty
-        fraction >= 1f -> base
-        else -> base.copy(alpha = 0.22f + fraction * 0.78f)
-    }
+/**
+ * The heat ramp, in one place.
+ *
+ * The legend used to interpolate its own copy of this, so the swatches under the
+ * grid could drift from the cells above it without either looking wrong in
+ * isolation - a legend that explains a ramp it does not draw is worse than no
+ * legend. `0.22 + 0.78 * fraction` is here rather than at two call sites for the
+ * same reason.
+ */
+private fun heatColour(fraction: Float, base: Color, empty: Color): Color = when {
+    fraction <= 0f -> empty
+    fraction >= 1f -> base
+    else -> base.copy(alpha = 0.22f + fraction * 0.78f)
 }
+
+@Composable
+private fun legendColourFor(fraction: Float): Color = heatColour(
+    fraction = fraction,
+    base = MaterialTheme.colorScheme.primary,
+    empty = MaterialTheme.colorScheme.surfaceContainerHighest
+)
 
 @Composable
 private fun CalendarLegend() {
@@ -271,7 +275,7 @@ private fun CalendarLegend() {
                     .padding(end = 4.dp)
                     .size(CellSize)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(colorFor(fraction))
+                    .background(legendColourFor(fraction))
             )
         }
         Spacer(modifier = Modifier.width(2.dp))

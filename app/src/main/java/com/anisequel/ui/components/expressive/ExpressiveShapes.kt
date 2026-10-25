@@ -8,16 +8,14 @@ import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Matrix
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Shape tokens and utilities for Material 3 Expressive surfaces.
@@ -138,64 +136,68 @@ object ExpressiveShapes {
 fun expressiveShape(polygon: RoundedPolygon) = polygon.toShape()
 
 /**
- * A [Shape] that interpolates between two [MaterialShapes] polygons over [progress].
+ * Writes [morph]'s outline at [progress] into [target], fitted to [size].
  *
  * Morphing is what makes the empty-state artwork "breathe" between two of
- * Material's 35 iconic shapes - two polygons whose outlines map vertex to
- * vertex, so the intermediate silhouettes stay simple. Doing this with a plain
- * alpha crossfade produces two translucent shapes overlapping; a morph produces
- * one shape that is between.
+ * Material's iconic shapes. Doing this with an alpha crossfade would produce two
+ * translucent shapes overlapping; a morph produces one shape that is between.
  *
- * The polygon that describes the outline is a [Morph]; its bounds scale/translate
- * to whatever size the caller hands it, which is why, like [expressiveShape],
- * this is only appropriate for a fixed square - a Morph is a unit polygon, and
- * stretching it across a wide/short box would produce the same generic-outline
- * surprise the pill token replaced.
+ * The result is centred and scaled to the *smaller* dimension, because a
+ * `RoundedPolygon` is authored on a square perimeter: stretching it across a
+ * wide/short box gives the ellipse surprise [ExpressiveShapes.pill] exists to
+ * keep out of the app. That is also why this is only used for the orb's fixed
+ * square.
  *
- * ## Why [progress] is a provider and not a `Float`
+ * ## Why this writes into a caller's [Path] instead of being a `Shape`
  *
- * It used to be a `Float` captured at construction, which forced the caller to
- * read the animated value while building the modifier chain - i.e. in
- * composition. A `Modifier.clip` applied to an animated `Shape` recomposes its
- * caller on every frame of the morph, which is what the empty-state orb did for
- * as long as it was on screen: one full recomposition per frame, on a screen
- * whose only other job is showing a message.
+ * It was a `Shape` (`MorphShape`), applied with `Modifier.clip(...)`, and that
+ * is the bug this replaces: the silhouette never actually morphed. `clip` builds
+ * a `graphicsLayer`, and a layer's outline is computed when the layer is
+ * configured - not per frame. A `Shape` whose only animated read happens inside
+ * `createOutline` therefore hands the layer one frozen outline, so the orb sat
+ * on an arbitrary shape from the first frame and only jumped when something
+ * else invalidated the layer. It looked like a torn, lopsided clover because it
+ * *was* one frame of the morph, kept forever.
  *
- * Taking a `() -> Float` moves the read into [createOutline], which the layer
- * calls while drawing. So the same animation now invalidates the draw pass alone
- * - the same distinction `Modifier.graphicsLayer { }` makes for scale, just for
- * an outline that has to change shape rather than size.
+ * Drawing the path from the draw phase instead makes the read happen where
+ * Compose expects an animation to be read: only the draw pass is invalidated,
+ * the silhouette is rebuilt every frame, and no shape instance has to guess
+ * when it changed. [target] is rewound and rewritten in place, so callers can
+ * remember one path and one matrix for the life of the composable - the same
+ * allocation-free pattern `RoundedPolygon.toShape()` uses internally.
+ *
+ * The caller must invoke this from a draw scope (`Modifier.drawBehind`), which
+ * is what makes reusing the path safe: the draw commands are recorded before
+ * the next call rewinds it.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-class MorphShape(
-    private val morph: Morph,
-    private val progress: () -> Float
-) : Shape {
-    private var path = Path()
-    private val matrix = Matrix()
+fun Morph.writeSilhouette(
+    progress: Float,
+    size: Size,
+    target: Path,
+    matrix: Matrix,
+    bounds: FloatArray = FloatArray(4)
+): Path {
+    target.rewind()
+    if (size.width <= 0f || size.height <= 0f) return target
 
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density
-    ): Outline {
-        if (size.width <= 0f || size.height <= 0f) {
-            return Outline.Rectangle(androidx.compose.ui.geometry.Rect.Zero)
-        }
-        path.rewind()
-        morph.toPath(progress(), path)
-        val b = morph.calculateBounds()
-        val boundsLeft = b[0]
-        val boundsTop = b[1]
-        val boundsWidth = (b[2] - b[0]).coerceAtLeast(0.0001f)
-        val boundsHeight = (b[3] - b[1]).coerceAtLeast(0.0001f)
-        val maxDimension = max(boundsWidth, boundsHeight)
-        val scale = kotlin.math.min(size.width, size.height) / maxDimension
-        matrix.reset()
-        matrix.translate(size.width / 2f, size.height / 2f)
-        matrix.scale(scale, scale)
-        matrix.translate(-(boundsLeft + boundsWidth / 2f), -(boundsTop + boundsHeight / 2f))
-        path.transform(matrix)
-        return Outline.Generic(path)
-    }
+    toPath(progress, target)
+
+    // The bounds cover both ends of the morph, not this frame, so the silhouette
+    // does not breathe in size while it changes shape. The buffer is a parameter
+    // rather than a local so a composable drawing this every frame can remember
+    // one instead of allocating four floats per frame.
+    calculateBounds(bounds)
+    val boundsLeft = bounds[0]
+    val boundsTop = bounds[1]
+    val boundsWidth = (bounds[2] - bounds[0]).coerceAtLeast(0.0001f)
+    val boundsHeight = (bounds[3] - bounds[1]).coerceAtLeast(0.0001f)
+    val scale = min(size.width, size.height) / max(boundsWidth, boundsHeight)
+
+    matrix.reset()
+    matrix.translate(size.width / 2f, size.height / 2f)
+    matrix.scale(scale, scale)
+    matrix.translate(-(boundsLeft + boundsWidth / 2f), -(boundsTop + boundsHeight / 2f))
+    target.transform(matrix)
+    return target
 }

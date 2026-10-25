@@ -293,28 +293,43 @@ class CommentThreadStore(
             likeCount = ((reply.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
         )
 
-        fun write(replacement: ActivityReply, pending: Set<Int>) {
+        /**
+         * Writes [replacement] and moves *this reply's* in-flight marker only.
+         *
+         * It used to replace the whole pending set with the snapshot taken before
+         * the tap. Two hearts tapped in quick succession therefore raced: the
+         * first answer was written with a set that predated the second tap, which
+         * cleared the second reply's marker while its request was still out - and
+         * a second tap on it was then accepted, toggling the server twice for one
+         * visible heart. Removing and adding one id, on the live state, is what
+         * makes the markers independent.
+         */
+        fun write(replacement: ActivityReply, pending: Boolean) {
             val live = _state.value ?: return
             val at = live.replies.indexOfFirst { it.id == replyId }
             if (at < 0) return
             _state.value = live.copy(
                 replies = live.replies.toMutableList().also { it[at] = replacement },
-                pendingReplyLikes = pending
+                pendingReplyLikes = if (pending) {
+                    live.pendingReplyLikes + replyId
+                } else {
+                    live.pendingReplyLikes - replyId
+                }
             )
         }
 
-        write(optimistic, current.pendingReplyLikes + replyId)
+        write(optimistic, pending = true)
 
         scope.launch {
             repositoryResult { repository.toggleActivityReplyLike(replyId) }.fold(
                 onSuccess = { result ->
                     write(
                         optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
-                        current.pendingReplyLikes
+                        pending = false
                     )
                 },
                 onFailure = {
-                    write(reply, current.pendingReplyLikes)
+                    write(reply, pending = false)
                 }
             )
         }

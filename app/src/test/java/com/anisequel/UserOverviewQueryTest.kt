@@ -177,6 +177,24 @@ class UserOverviewQueryTest {
         assertTrue(activity.contains("sort: [ID_DESC]"))
     }
 
+    /**
+     * The feed pages on AniList's answer, not on a row count.
+     *
+     * The repository drops activities whose media is gone before the ViewModel
+     * sees the page, so a full server page can arrive shorter than it was asked
+     * for. `Page.pageInfo.hasNextPage` is AniList's documented signal, and the
+     * local fallback only covers a response that omitted it.
+     */
+    @Test
+    fun `the activity feed asks for its own pagination answer`() {
+        val activity = GraphQLQueries.GET_USER_ACTIVITY
+
+        assertTrue(activity.contains("pageInfo { hasNextPage }"))
+        // `perPage` is a variable so the query and the repository cannot disagree
+        // about what a full page is.
+        assertTrue(activity.contains("perPage: \$perPage"))
+    }
+
     @Test
     fun `the feed asks for the viewer's like state and the activity's own url`() {
         val activity = GraphQLQueries.GET_USER_ACTIVITY

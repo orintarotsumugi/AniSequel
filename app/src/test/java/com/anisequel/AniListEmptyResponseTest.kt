@@ -21,6 +21,7 @@ import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
+import com.anisequel.data.model.PageInfo
 import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.model.ProfileAppearances
 import com.anisequel.data.model.SaveActivityReplyData
@@ -29,6 +30,7 @@ import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.StudioData
 import com.anisequel.data.model.ToggleLikeData
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserByNameData
 import com.anisequel.data.model.UserOverviewData
 import com.anisequel.data.model.ViewerData
@@ -160,17 +162,63 @@ class AniListEmptyResponseTest {
         val noPage = AniListRepositoryImpl(
             FakeService(feed = { GraphQLResponse(ActivityFeedData(page = null)) })
         )
-        assertEquals(Result.success(emptyList<ListActivity>()), noPage.getUserActivity(1))
+        assertEquals(
+            Result.success(UserActivityPage(emptyList(), hasMore = false)),
+            noPage.getUserActivity(1)
+        )
 
         val noConnection = AniListRepositoryImpl(
             FakeService(feed = { GraphQLResponse(ActivityFeedData(ActivityFeedPage(activities = null))) })
         )
-        assertEquals(Result.success(emptyList<ListActivity>()), noConnection.getUserActivity(1))
+        assertEquals(
+            Result.success(UserActivityPage(emptyList(), hasMore = false)),
+            noConnection.getUserActivity(1)
+        )
 
         val emptyConnection = AniListRepositoryImpl(
             FakeService(feed = { GraphQLResponse(ActivityFeedData(ActivityFeedPage(activities = emptyList()))) })
         )
-        assertEquals(Result.success(emptyList<ListActivity>()), emptyConnection.getUserActivity(1))
+        assertEquals(
+            Result.success(UserActivityPage(emptyList(), hasMore = false)),
+            emptyConnection.getUserActivity(1)
+        )
+    }
+
+    /**
+     * The feed's end is AniList's answer, not the number of rows that survived.
+     *
+     * A `ListActivity` whose media has since been removed is dropped at this
+     * boundary so no blank card is drawn. That makes the page shorter than the one
+     * the server sent, which is why "fewer rows than `perPage`" used to end the
+     * feed one page early - with the rest of the history behind it and nothing on
+     * screen to say so. `pageInfo.hasNextPage` is the documented signal and has to
+     * survive the filter.
+     */
+    @Test
+    fun `a filtered activity page keeps the next-page answer`() = runTest {
+        val removedMedia = ListActivity(id = 7, status = "completed", media = null)
+        val repository = AniListRepositoryImpl(
+            FakeService(
+                feed = {
+                    GraphQLResponse(
+                        ActivityFeedData(
+                            ActivityFeedPage(
+                                pageInfo = PageInfo(hasNextPage = true),
+                                activities = listOf(removedMedia)
+                            )
+                        )
+                    )
+                }
+            )
+        )
+
+        val page = repository.getUserActivity(1).getOrThrow()
+
+        assertTrue("an update whose media is gone cannot be drawn", page.activities.isEmpty())
+        assertTrue(
+            "the page was filtered, not emptied by AniList, and there is another one",
+            page.hasMore
+        )
     }
 
     /**
