@@ -465,6 +465,36 @@ needed, so it is fetched the first time somebody filters to it and then cached.
 
 ---
 
+## The activity feed
+
+AniList returns a person's activity as an `ActivityUnion`, and the feed asks only
+for the two list members (`type_in: [ANIME_LIST, MANGA_LIST]`, newest first). The
+repository then drops anything it cannot draw: a union member that slipped past
+the server-side filter, and a list update whose media has since been removed.
+That filter is right — a blank card is worse than no card — but it used to make
+the feed's *pagination* wrong. The ViewModel treated a page shorter than 25 rows
+as the last page, so one removed title could end a history that still had entries
+behind it, and the tab showed nothing to explain the stop.
+
+`GET_USER_ACTIVITY` now asks for `pageInfo { hasNextPage }`; `perPage` is a
+variable so the document and the repository's page size cannot disagree; and
+`UserActivityPage` carries AniList's own answer up to the ViewModel, which pages
+on that boolean and never on `activities.size`. A response without `pageInfo`
+falls back to the unfiltered row count — the best remaining guess — but the
+document makes that fallback unreachable in practice. `Page.pageInfo` is the
+signal AniList's pagination guide names, because `total` and `lastPage` are
+documented as unreliable.
+
+A refresh follows the same principle. When the feed already has rows, refreshing
+keeps them (`Success.isRefreshing`) and swaps the new page in when it lands; a
+failed refresh leaves the rows and puts a retry row above them
+(`Success.refreshError`). Only a first load may show the skeleton, and only a
+first load that fails may replace the tab with the error state. The profile's
+page-level refresh button calls `refreshIfStarted()`, so tapping it on Home does
+not spend a request on a feed nobody has opened.
+
+---
+
 ## The tier list
 
 `domain/tier/` holds the rules, the geometry, the storage format and the exporter
@@ -861,6 +891,26 @@ ones. It is part of the top bar's subtitle line now, where a second line is
 already reserved and the name ellipsizes before the pill; `SavedCopyPill` keeps
 its animated height only where it sits in a header the page is not scrolling.
 
+### The empty-state orb is drawn, not clipped
+
+Every empty state — no comments, an empty tier board, a filtered library — draws
+`ExpressiveEmptyOrb`: a silhouette that morphs between two `MaterialShapes` while
+the icon inside breathes. It shipped as a `Shape` (`MorphShape`) applied with
+`Modifier.clip(...)`, with the progress read inside `createOutline` so that the
+animation would invalidate only the draw pass. That reasoning is wrong in a way
+nothing in review can show: `clip` builds a `graphicsLayer`, and a layer asks its
+shape for an outline when the layer is *configured*, not once per frame. Nothing
+in the modifier chain read the animated value, so the layer was never invalidated,
+and every empty state kept the single frame of the morph it happened to be built
+on. The lopsided, torn-looking clover was one frame, frozen.
+
+`Morph.writeSilhouette` writes the outline into a caller-owned `Path` instead, and
+`MorphingEmptyOrb` calls it from `Modifier.drawBehind`. Reading the animation in
+the draw lambda is what invalidates the draw pass per frame, which is the same
+rule `Modifier.graphicsLayer { }` follows for scale. Do not turn this back into a
+`Shape`: a shape that looks like a pure function of its arguments is tempting, and
+the layer's outline cache is what makes it not one.
+
 ---
 
 ## One destination, one copy
@@ -930,11 +980,21 @@ labels while the host owns the numbers can promise a pace it does not deliver.
 
 The tone filter is the same argument one level down. `AppJokes` groups its lines
 by `JokeTone` and exposes `poolFor(tones)`, so the shuffle bag cycles the
-*selected* lines rather than cycling all 323 and showing the one in four the
+*selected* lines rather than cycling all 475 and showing the one in five the
 reader asked not to see. The last tone cannot be switched off — the repository
 refuses that write as well as the UI, because a stored flag is not a guarantee —
 and an empty stored tone set means every tone rather than an empty pool, which is
 what a cleared preference or a downgrade looks like.
+
+There are five tones since 1.6.0. `DARK` was split out of `META` because the
+reader who wants Ani-chan's voice is not necessarily the reader who wants a joke
+about a grave, and one switch for both would make the whole feature an all-or-
+nothing choice for them. "Mixed" is deliberately *not* a sixth tone or a sixth
+list: it is every tone switched on, which is what the default has always been. A
+sixth list would drift from the other five and would let the bag count the same
+line twice. Settings offers it as a preset that calls `JokePreferences.setTones`
+in one write — five `toggleTone` calls would emit five values, and the toast could
+draw from a half-restored filter in between, or lose one to a fast tap.
 
 Saved lines are a second flow (`JokePreferences.favourites`) rather than a field
 of `JokeSettings`: they are content the reader created, they are not a switch, and

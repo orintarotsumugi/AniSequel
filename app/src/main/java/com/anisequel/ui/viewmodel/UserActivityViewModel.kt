@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
@@ -32,6 +33,12 @@ import kotlinx.coroutines.launch
  * [loadNextPage] exists and the screen calls it as the list nears its end. It is
  * one page per call rather than a loop, because the alternative is a screen that
  * silently pulls twenty pages while nobody is watching.
+ *
+ * Whether there is another page is AniList's `pageInfo.hasNextPage`, carried up
+ * from the repository. It used to be derived here from "the last page had fewer
+ * rows than we asked for", which is wrong whenever the repository filters a row
+ * out - one list update for removed media could end a feed that still had
+ * entries behind it.
  */
 class UserActivityViewModel(
     private val aniListRepository: AniListRepository,
@@ -57,8 +64,7 @@ class UserActivityViewModel(
      * can only fail.
      */
     private val viewerId: Int? = null,
-    private val isDemo: Boolean = false,
-    private val pageSize: Int = 25
+    private val isDemo: Boolean = false
 ) : ViewModel() {
 
     sealed interface ActivityState {
@@ -68,7 +74,34 @@ class UserActivityViewModel(
         data class Success(
             val activities: List<ListActivity>,
             val isLoadingMore: Boolean = false,
+            /**
+             * Whether AniList said there is another page.
+             *
+             * Read from `Page.pageInfo.hasNextPage` in the repository and never
+             * inferred from a page's size: the feed drops union members and
+             * updates for removed media, so a full server page can arrive short.
+             */
             val hasMore: Boolean = false,
+            /**
+             * A refresh is in flight over rows that are already on screen.
+             *
+             * [refresh] keeps the feed visible while it fetches, so a list write
+             * that makes the viewer's own feed stale no longer blanks twenty-five
+             * cards into the loading skeleton and back. This flag is what tells
+             * the tab to say something is happening without taking the rows away.
+             */
+            val isRefreshing: Boolean = false,
+            /**
+             * Why the last refresh over existing rows failed, or null.
+             *
+             * Kept apart from [loadMoreError] because the two retries fetch
+             * different pages: retrying the footer appends the next page, while
+             * retrying this re-reads page one over rows that are still valid. The
+             * tab renders this as a compact row above the feed - a refresh that
+             * fails is not a reason to throw away rows the reader has already got,
+             * and not a reason to say nothing either.
+             */
+            val refreshError: String? = null,
             /**
              * Activity ids whose like request is still unanswered.
              *
@@ -263,8 +296,45 @@ class UserActivityViewModel(
 
     fun loadNextPage() {
         val current = _state.value as? ActivityState.Success ?: return
-        if (!current.hasMore || current.isLoadingMore) return
+        // Not while a refresh is running: [refresh] resets `nextPage` to one, so an
+        // append racing it would fetch page one again and file it under page two.
+        if (!current.hasMore || current.isLoadingMore || current.isRefreshing) return
         fetch(forceRefresh = false, appending = true)
+    }
+
+    /**
+     * Re-reads the first page over whatever is already on screen.
+     *
+     * The tab's refresh path, and the one the list-write signal needs. It used to
+     * go through [fetch]'s ordinary branch, which replaced the state with
+     * [ActivityState.Loading] - so adding a title from the dashboard while
+     * standing on the Activity tab dissolved twenty-five loaded cards into the
+     * skeleton, then rebuilt them. Keeping the rows and marking them as refreshing
+     * is both faster to look at and truthful: the old page is still valid until
+     * the new one lands.
+     */
+    fun refresh() {
+        if (!started) {
+            loadFirstPage()
+            return
+        }
+        nextPage = 1
+        fetch(forceRefresh = true)
+    }
+
+    /**
+     * Refreshes the feed only if its tab has been opened at least once.
+     *
+     * The profile's refresh button is a page-level control, and the Activity tab is
+     * deliberately not fetched until it is selected - see [loadFirstPage]. Wiring
+     * that button straight to [refresh] would break that rule: tapping Refresh on
+     * the Home tab would spend a feed request for a page nobody is looking at. This
+     * is the variant that button calls, and it does nothing on a feed that has
+     * never been started.
+     */
+    fun refreshIfStarted() {
+        if (!started) return
+        refresh()
     }
 
     fun retry() {
@@ -284,9 +354,22 @@ class UserActivityViewModel(
 
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
+            // Whether this fetch is a refresh *over rows*, rather than a first
+            // load. Decided before the state is touched, because that is the only
+            // moment the answer is still "what was on screen when it started".
+            val startedOverRows = !appending && _state.value is ActivityState.Success
             if (appending) {
                 (_state.value as? ActivityState.Success)?.let {
                     _state.value = it.copy(isLoadingMore = true)
+                }
+            } else if (startedOverRows) {
+                (_state.value as ActivityState.Success).let { current ->
+                    _state.value = current.copy(
+                        isRefreshing = true,
+                        refreshError = null,
+                        isLoadingMore = false,
+                        loadMoreError = null
+                    )
                 }
             } else {
                 _state.value = ActivityState.Loading()
@@ -294,7 +377,14 @@ class UserActivityViewModel(
 
             val page = nextPage
             val result = if (isDemo) {
-                Result.success(aniListRepository.getDemoUserActivity())
+                Result.success(
+                    UserActivityPage(
+                        activities = aniListRepository.getDemoUserActivity(),
+                        // The fixture is the whole feed. Claiming another page
+                        // existed would put a spinner under it that never fills.
+                        hasMore = false
+                    )
+                )
             } else {
                 repositoryResult {
                     aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
@@ -302,28 +392,28 @@ class UserActivityViewModel(
             }
 
             result.fold(
-                onSuccess = { activities ->
+                onSuccess = { feedPage ->
                     nextPage = page + 1
-                    val existing = (_state.value as? ActivityState.Success)?.activities.orEmpty()
+                    val previous = _state.value as? ActivityState.Success
+                    val existing = previous?.activities.orEmpty()
                     // De-duplicated on the id because pages overlap whenever a new
                     // update lands between two requests - the list is ordered by
                     // update time, so a row fetched on both pages appears twice and
                     // a `LazyColumn` keyed on it would throw.
-                    val combined = if (appending) existing + activities else activities
+                    val combined = if (appending) existing + feedPage.activities else feedPage.activities
                     _state.value = ActivityState.Success(
                         activities = combined.distinctBy { it.id },
                         isLoadingMore = false,
-                        // Cleared on success, so a retry that works does not leave
-                        // the failure row sitting under a feed that is growing.
-                        loadMoreError = null,
-                        // A short page means the end. One short page is the only
-                        // signal AniList gives here - `Page.pageInfo` is not asked
-                        // for, because for a union-typed field the parse cost is
-                        // not worth a boolean this derives more reliably.
-                        hasMore = activities.size >= pageSize,
+                        // AniList's own pagination answer. Never a page-size count:
+                        // a filtered page is shorter than the server's page without
+                        // being the last one.
+                        hasMore = feedPage.hasMore,
                         // Carried over so a page landing mid-like does not re-enable
                         // a button whose request is still in flight.
-                        pendingLikes = (_state.value as? ActivityState.Success)?.pendingLikes.orEmpty()
+                        pendingLikes = previous?.pendingLikes.orEmpty(),
+                        // Cleared on success, so a retry that works does not leave
+                        // the failure row sitting under a feed that is growing.
+                        loadMoreError = null
                     )
                 },
                 onFailure = { error ->
@@ -341,6 +431,17 @@ class UserActivityViewModel(
                                 isLoadingMore = false,
                                 loadMoreError = error.message
                                     ?: "Couldn't load more activity."
+                            )
+                        }
+                    } else if (startedOverRows) {
+                        // The refresh failed but the rows it was refreshing are
+                        // still the best copy of the feed the app has. Keep them,
+                        // and leave a retry the reader can see rather than
+                        // pretending the feed is empty or current.
+                        (_state.value as? ActivityState.Success)?.let { current ->
+                            _state.value = current.copy(
+                                isRefreshing = false,
+                                refreshError = error.message ?: "Couldn't refresh activity."
                             )
                         }
                     } else {

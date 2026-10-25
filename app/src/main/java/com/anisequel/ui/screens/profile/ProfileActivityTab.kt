@@ -1,10 +1,12 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,9 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,9 +42,12 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.UserActivityViewModel
+import java.time.Instant
+import kotlinx.coroutines.delay
 
 /**
  * The Activity tab: the person's activity heatmap and list history, newest first.
@@ -59,6 +66,15 @@ fun ProfileActivityTab(
     onLoadFirstPage: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetry: () -> Unit = onLoadFirstPage,
+    /**
+     * Re-reads the first page over the rows already on screen.
+     *
+     * The retry offered by a failed refresh. It is deliberately not [onRetry]:
+     * that path is allowed to show the loading skeleton because there is nothing
+     * to keep, whereas this one keeps the feed visible and swaps the rows in when
+     * the new page lands.
+     */
+    onRefresh: () -> Unit = onRetry,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     /**
@@ -102,6 +118,32 @@ fun ProfileActivityTab(
     }
     LaunchedEffect(shouldPage) {
         if (shouldPage) onLoadNextPage()
+    }
+
+    // A failed refresh over existing rows is kept apart from the feed's paging
+    // error: the retry below re-reads page one, where the footer's retry appends.
+    val refreshError = (activityState as? UserActivityViewModel.ActivityState.Success)?.refreshError
+
+    // The relative times are recomputed once a minute while this tab is composed.
+    //
+    // They used to be evaluated when the card was first composed and then frozen,
+    // so a feed left open went on saying "just now" an hour later - and a history
+    // whose whole point is *when* things happened was quietly wrong. One ticker for
+    // the tab, not one per card: a minute is the smallest unit the label prints, so
+    // anything faster would recompose for nothing. It is gated on
+    // `rememberIsResumed`, the same helper the toast and the orb use, so it is
+    // cancelled while the app is behind another one.
+    val nowEpochSecond = remember { mutableLongStateOf(Instant.now().epochSecond) }
+    val isResumed = rememberIsResumed()
+    LaunchedEffect(isResumed) {
+        if (!isResumed) return@LaunchedEffect
+        // The clock may have gone stale while the app was paused, so the first
+        // write happens on resume rather than a minute after it.
+        nowEpochSecond.longValue = Instant.now().epochSecond
+        while (true) {
+            delay(60_000)
+            nowEpochSecond.longValue = Instant.now().epochSecond
+        }
     }
 
     LazyColumn(
@@ -152,6 +194,17 @@ fun ProfileActivityTab(
             )
         }
 
+        // Under the heading it belongs to: a failed refresh is news about this
+        // feed, not about the calendar above it.
+        if (refreshError != null) {
+            item(key = "activity_refresh_error") {
+                ActivityRefreshFailure(
+                    message = refreshError,
+                    onRetry = onRefresh
+                )
+            }
+        }
+
         when (activityState) {
             is UserActivityViewModel.ActivityState.Idle,
             is UserActivityViewModel.ActivityState.Loading -> {
@@ -192,7 +245,8 @@ fun ProfileActivityTab(
                             onComments = { onOpenComments(activity.id) },
                             onOpenLikers = { onOpenLikers(activity.id) },
                             onOpenDetail = onOpenDetail,
-                            likePending = activity.id in activityState.pendingLikes
+                            likePending = activity.id in activityState.pendingLikes,
+                            nowEpochSecond = nowEpochSecond.longValue
                         )
                     }
 
@@ -214,6 +268,14 @@ fun ProfileActivityTab(
                     } else if (activityState.hasMore) {
                         item(key = "activity_more") {
                             ActivityPagingIndicator(loading = activityState.isLoadingMore)
+                        }
+                    } else if (activityState.activities.size >= PAGE_TRIGGER_ROWS) {
+                        // Only on a feed long enough to have been paged. Saying
+                        // "that's everything" under three rows is noise; under a
+                        // scrollback it is the difference between a feed that
+                        // ended and one that silently failed to load more.
+                        item(key = "activity_end") {
+                            ActivityFeedEnd()
                         }
                     }
                 }
@@ -305,6 +367,61 @@ private fun ActivityEmpty() {
             textAlign = TextAlign.Center
         )
     }
+}
+
+/**
+ * A refresh that failed over rows that are still on screen.
+ *
+ * Deliberately not the full-width error state: nothing was lost. It says what
+ * happened in the reader's terms and offers the one action that would fix it,
+ * and it sits above the feed so it is not read as commentary on the last row.
+ */
+@Composable
+private fun ActivityRefreshFailure(message: String, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .widthIn(max = ProfileMaxContentWidth)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(start = 14.dp, top = 6.dp, end = 4.dp, bottom = 6.dp)
+            .testTag("activity_refresh_error"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(
+            onClick = onRetry,
+            modifier = Modifier
+                .bouncyPress()
+                .testTag("activity_refresh_retry")
+        ) {
+            Text("Retry")
+        }
+    }
+}
+
+/** The end of a feed long enough to have been paged. */
+@Composable
+private fun ActivityFeedEnd() {
+    Text(
+        text = "You're all caught up",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+            .testTag("activity_feed_end")
+    )
 }
 
 @Composable

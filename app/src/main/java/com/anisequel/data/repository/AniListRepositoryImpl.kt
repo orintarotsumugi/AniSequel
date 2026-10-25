@@ -18,6 +18,7 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListApiService
@@ -97,6 +98,16 @@ private val MUTATION_PATTERN = Regex("""^\s*mutation\b""")
  * further batches.
  */
 internal const val MAX_COVER_BATCH_KEYS = 10
+
+/**
+ * Rows requested per activity page.
+ *
+ * Passed to the query as `$perPage` rather than written into the document, so
+ * the requested size and the fallback used when a response omits `pageInfo`
+ * cannot drift apart: a constant that quietly disagreed with the document would
+ * read a full page as short, or a short one as full.
+ */
+private const val ACTIVITY_PAGE_SIZE = 25
 
 /** Logcat tag for the cover batches. One line, warning level, never a UI message. */
 private const val COVER_LOG_TAG = "AniSequelCovers"
@@ -490,7 +501,7 @@ class AniListRepositoryImpl(
      * re-fetching fifty avatars because the bio was refetched would spend
      * AniList's budget for a list that cannot have changed in that window.
      */
-    private val activityCache = ConcurrentHashMap<String, CachedItems<ListActivity>>()
+    private val activityCache = ConcurrentHashMap<String, CachedItems<UserActivityPage>>()
     private val followersCache = ConcurrentHashMap<String, CachedItems<FollowUser>>()
     private val followingCache = ConcurrentHashMap<String, CachedItems<FollowUser>>()
 
@@ -1534,14 +1545,18 @@ class AniListRepositoryImpl(
         userId: Int,
         page: Int,
         forceRefresh: Boolean
-    ): Result<List<ListActivity>> {
+    ): Result<UserActivityPage> {
         val key = "user:$userId:page:$page"
         if (!forceRefresh) cachedItems(activityCache, key)?.let { return Result.success(it) }
 
         return execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_USER_ACTIVITY,
-                variables = mapOf("userId" to userId, "page" to page)
+                variables = mapOf(
+                    "userId" to userId,
+                    "page" to page,
+                    "perPage" to ACTIVITY_PAGE_SIZE
+                )
             ),
             apiService::getUserActivity
         ).map { data ->
@@ -1551,10 +1566,17 @@ class AniListRepositoryImpl(
             // guarantee, and a forum post arriving here would parse into an
             // activity with no media and no status. Dropping those here means a
             // blank card is never rendered; see `ListActivity.isUnrecognised`.
-            val activities = data.page?.activities.orEmpty()
-                .filterNot { it.isUnrecognised || it.media == null }
-            storeItems(activityCache, key, activities)
-            activities
+            val raw = data.page?.activities.orEmpty()
+            val activities = raw.filterNot { it.isUnrecognised || it.media == null }
+            // AniList's own answer first: the filtering above is exactly why a
+            // page's row count cannot be trusted as "is this the end". The
+            // fallback only exists for a response that did not carry pageInfo at
+            // all (an older fixture, or a server that omitted it), and it asks
+            // the unfiltered count so it stays as honest as it can be.
+            val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= ACTIVITY_PAGE_SIZE)
+            val feedPage = UserActivityPage(activities = activities, hasMore = hasMore)
+            storeItems(activityCache, key, feedPage)
+            feedPage
         }
     }
 

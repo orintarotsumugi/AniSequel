@@ -123,6 +123,26 @@ class JokePreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Switches every tone on at once - what the Mixed preset in Settings does.
+     *
+     * A single write rather than a loop of [toggleTone]: five read-modify-writes
+     * would emit five values, so the toast could draw from a half-restored filter
+     * between two of them, and a fast tone tap landing in the middle could lose
+     * one of the five.
+     *
+     * An empty set is upgraded to the full set rather than stored. Elsewhere an
+     * empty filter is read as "everything", so writing it would make the stored
+     * state say "nothing" while the toast behaved as "all" - and the next tone
+     * tap would compare against the wrong "before".
+     */
+    suspend fun setTones(tones: Set<JokeTone>) {
+        val next = tones.ifEmpty { JokeTone.entries.toSet() }
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.TONES] = next.map { tone -> tone.storageValue }.toSet()
+        }
+    }
+
     suspend fun toggleMoment(moment: JokeMoment) {
         context.jokeDataStore.edit { preferences ->
             val current = preferences[Keys.MOMENTS] ?: emptySet()

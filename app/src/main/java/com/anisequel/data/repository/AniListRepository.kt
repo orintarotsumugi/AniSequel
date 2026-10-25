@@ -13,6 +13,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.ApiReachability
@@ -235,12 +236,18 @@ interface AniListRepository {
      * [userId] only - the feed is not addressable by name, and the profile
      * screen always has the id it arrived with. [page] is 1-based, as everywhere
      * else on this API.
+     *
+     * The page carries AniList's own [UserActivityPage.hasMore] rather than a
+     * bare list. "Fewer rows than we asked for" is not the same as "the last
+     * page": this feed drops union members and updates for removed media before
+     * returning, so a full server page can arrive short. Callers must page on
+     * [UserActivityPage.hasMore].
      */
     suspend fun getUserActivity(
         userId: Int,
         page: Int = 1,
         forceRefresh: Boolean = false
-    ): Result<List<ListActivity>> = unsupported("getUserActivity")
+    ): Result<UserActivityPage> = unsupported("getUserActivity")
 
     /** The people who follow this account. Empty list means no followers. */
     suspend fun getUserFollowers(
