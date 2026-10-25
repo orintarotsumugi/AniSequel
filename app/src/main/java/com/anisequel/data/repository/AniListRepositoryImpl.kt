@@ -501,11 +501,21 @@ class AniListRepositoryImpl(
      * re-fetching fifty avatars because the bio was refetched would spend
      * AniList's budget for a list that cannot have changed in that window.
      */
-    private val activityCache = ConcurrentHashMap<String, CachedItems<UserActivityPage>>()
-    private val followersCache = ConcurrentHashMap<String, CachedItems<FollowUser>>()
-    private val followingCache = ConcurrentHashMap<String, CachedItems<FollowUser>>()
+    private val activityCache = ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
+    private val followersCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
+    private val followingCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
 
-    private class CachedItems<T>(val items: List<T>, val storedAtMillis: Long)
+    /**
+     * One cached answer, whatever its shape - a page, or a list of users.
+     *
+     * This held `List<T>` until 1.6.0, which is why the activity feed could not
+     * cache its own answer: a `UserActivityPage` is a page *and* AniList's
+     * `hasNextPage`, and caching only the rows threw the pagination answer away,
+     * so a cached page would have ended the feed wherever the cache happened to
+     * stop. Keeping `T` lets the page be cached whole and lets the follower lists
+     * stay lists, without two caches and two copies of the TTL rule.
+     */
+    private class CachedValue<T>(val value: T, val storedAtMillis: Long)
 
     /**
      * A cached read that is not a media list.
@@ -515,21 +525,21 @@ class AniListRepositoryImpl(
      * interval changed in Settings applies to the very next request rather than to
      * whatever was in force when this repository was built.
      */
-    private fun <T> cachedItems(cache: ConcurrentHashMap<String, CachedItems<T>>, key: String): List<T>? {
+    private fun <T> cachedValue(cache: ConcurrentHashMap<String, CachedValue<T>>, key: String): T? {
         val entry = cache[key] ?: return null
         if (nowMillis() - entry.storedAtMillis > listCacheTtlMillis()) {
             cache.remove(key)
             return null
         }
-        return entry.items
+        return entry.value
     }
 
-    private fun <T> storeItems(
-        cache: ConcurrentHashMap<String, CachedItems<T>>,
+    private fun <T> storeValue(
+        cache: ConcurrentHashMap<String, CachedValue<T>>,
         key: String,
-        items: List<T>
+        value: T
     ) {
-        cache[key] = CachedItems(items, nowMillis())
+        cache[key] = CachedValue(value, nowMillis())
     }
 
     private fun cachedOverview(key: String): UserOverview? {
@@ -1547,7 +1557,7 @@ class AniListRepositoryImpl(
         forceRefresh: Boolean
     ): Result<UserActivityPage> {
         val key = "user:$userId:page:$page"
-        if (!forceRefresh) cachedItems(activityCache, key)?.let { return Result.success(it) }
+        if (!forceRefresh) cachedValue(activityCache, key)?.let { return Result.success(it) }
 
         return execute(
             GraphQLRequest(
@@ -1575,7 +1585,7 @@ class AniListRepositoryImpl(
             // the unfiltered count so it stays as honest as it can be.
             val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= ACTIVITY_PAGE_SIZE)
             val feedPage = UserActivityPage(activities = activities, hasMore = hasMore)
-            storeItems(activityCache, key, feedPage)
+            storeValue(activityCache, key, feedPage)
             feedPage
         }
     }
@@ -1597,19 +1607,19 @@ class AniListRepositoryImpl(
     private suspend fun followList(
         userId: Int,
         forceRefresh: Boolean,
-        cache: ConcurrentHashMap<String, CachedItems<FollowUser>>,
+        cache: ConcurrentHashMap<String, CachedValue<List<FollowUser>>>
         which: String,
         fetch: suspend (GraphQLRequest) -> Result<List<FollowUser>>
     ): Result<List<FollowUser>> {
         val key = "user:$userId:$which"
-        if (!forceRefresh) cachedItems(cache, key)?.let { return Result.success(it) }
+        if (!forceRefresh) cachedValue(cache, key)?.let { return Result.success(it) }
 
         val query = when (which) {
             "followers" -> GraphQLQueries.GET_USER_FOLLOWERS
             else -> GraphQLQueries.GET_USER_FOLLOWING
         }
         return fetch(GraphQLRequest(query = query, variables = mapOf("userId" to userId)))
-            .onSuccess { storeItems(cache, key, it) }
+            .onSuccess { storeValue(cache, key, it) }
     }
 
     override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
