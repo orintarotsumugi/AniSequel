@@ -284,6 +284,64 @@ class CommentManagementTest {
         assertTrue(state.replies.isEmpty())
     }
 
+    /**
+     * Reopening a thread the sheet just closed draws its comments immediately.
+     *
+     * Dismissing the sheet with the drag handle is one gesture away from any tap
+     * that opens it, and the old `open` always started from an empty list: every
+     * reopen blanked the conversation and redrew the skeleton for a thread the
+     * app had fetched seconds earlier. The rows are the same rows; the fetch is
+     * now a refresh behind them.
+     */
+    @Test
+    fun `reopening a thread shows its comments while it refreshes`() = runTest(testDispatcher) {
+        val repository = FakeCommentRepository(
+            replies = listOf(mineReply(id = 5, text = "already read"))
+        )
+        val viewModel = buildViewModel(repository)
+        openThread(viewModel)
+        viewModel.closeComments()
+
+        viewModel.openComments(1)
+
+        val reopened = viewModel.comments.value!!
+        assertEquals(listOf("already read"), reopened.replies.map { it.text })
+        assertFalse("cached rows are on screen, so this is not the empty state", reopened.isLoading)
+        assertTrue("the fetch is still running behind them", reopened.isRefreshing)
+        assertNull(reopened.loadError)
+
+        advanceUntilIdle()
+        assertFalse(viewModel.comments.value!!.isRefreshing)
+        assertEquals(2, repository.repliesFetchCount)
+    }
+
+    /**
+     * A failed refresh keeps the comments the reader was already reading.
+     *
+     * Replacing a loaded thread with an error row was the old behaviour for every
+     * failure, including one on a reopen where the rows are still the answer to
+     * the question. The cached rows stay and the error moves to a banner with a
+     * retry - see `CommentsThread`.
+     */
+    @Test
+    fun `a failed refresh keeps the comments already on screen`() = runTest(testDispatcher) {
+        val repository = FakeCommentRepository(
+            replies = listOf(mineReply(id = 5, text = "already read"))
+        )
+        val viewModel = buildViewModel(repository)
+        openThread(viewModel)
+        viewModel.closeComments()
+
+        repository.throwOnLoad = true
+        viewModel.openComments(1)
+        advanceUntilIdle()
+
+        val state = viewModel.comments.value!!
+        assertEquals(listOf("already read"), state.replies.map { it.text })
+        assertEquals("the socket closed under us", state.loadError)
+        assertFalse(state.isRefreshing)
+    }
+
     /** The id the manage tests sign in as; [mineReply] authors their comments. */
     private val viewerId = 7
 
@@ -327,9 +385,10 @@ class CommentManagementTest {
          *
          * The repository is supposed to classify everything, so this is the case
          * the call site has to survive precisely because it is not supposed to
-         * happen.
+         * happen. Mutable so a test can let the first load succeed and the next
+         * refresh fail.
          */
-        private val throwOnLoad: Boolean = false
+        var throwOnLoad: Boolean = false
     ) : AniListRepository {
         var repliesFetchCount = 0
         var postReplyFetchCount = 0
