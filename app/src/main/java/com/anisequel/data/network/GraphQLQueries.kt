@@ -248,10 +248,18 @@ object GraphQLQueries {
      * medium: the response carries each item's own `media.type`, and the screen
      * can split on that afterwards. Two requests would also mean two chances to
      * hit AniList's rate limit on a screen the user opens to browse.
+     *
+     * `pageInfo.hasNextPage` is the documented pagination signal and the reason
+     * this document asks for it at all: the feed is filtered after it arrives
+     * (union members and updates for removed media are dropped), so a page can be
+     * shorter than `perPage` without being the last one. Counting rows used to
+     * end the feed early. `perPage` is a variable so the repository's page size
+     * and the query cannot drift apart.
      */
     val GET_USER_ACTIVITY = """
-        query GetUserActivity(${'$'}userId: Int, ${'$'}page: Int) {
-          Page(page: ${'$'}page, perPage: 25) {
+        query GetUserActivity(${'$'}userId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
             activities(userId: ${'$'}userId, type_in: [ANIME_LIST, MANGA_LIST], sort: [ID_DESC]) {
               ... on ListActivity {
                 id

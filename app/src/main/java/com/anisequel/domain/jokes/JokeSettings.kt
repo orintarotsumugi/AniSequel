@@ -117,13 +117,23 @@ enum class JokeScope(val storageValue: String, val displayName: String) {
 }
 
 /**
- * The four kinds of line in [com.anisequel.ui.components.AppJokes].
+ * The kinds of line in [com.anisequel.ui.components.AppJokes].
  *
  * A single pool meant the only way to dislike one register was to dislike the
  * feature: a reader who wants the backlog lines has no way to say "less of this,
  * please". The split is by *subject* rather than by mood because the reader can
  * see the subject in a line and cannot reliably see their own mood, and because
  * a line's subject is stable while its funniness is not.
+ *
+ * [DARK] is the one added after the fact, and it earns its own arm: the jokes
+ * about cancelled sequels, hiatuses and fictional deaths are the funniest lines
+ * in the pool to one reader and the reason to switch the feature off to another.
+ * Folding them into META would make "I want the app's voice" and "I want a joke
+ * about a grave" the same switch.
+ *
+ * "Mixed" is not a member. It is every tone at once - what the default has
+ * always been - and a member would be a copy of the other five that could drift
+ * from them. The Settings screen offers it as a shortcut that turns them all on.
  *
  * The constants live in the domain rather than beside the text pool so the
  * filter can be stored, tested and described without importing Compose.
@@ -147,6 +157,11 @@ enum class JokeTone(
         "craft",
         "Craft",
         "Openings, animation, composers and the manga."
+    ),
+    DARK(
+        "dark",
+        "Dark",
+        "Cancelled sequels, hiatuses and fictional deaths."
     ),
     META(
         "meta",
@@ -234,4 +249,15 @@ data class JokeSettings(
      */
     val activeTones: Set<JokeTone>
         get() = if (tones.isEmpty()) JokeTone.entries.toSet() else tones
+
+    /**
+     * Whether the reader is drawing from everything, which is what Settings calls
+     * "Mixed".
+     *
+     * Derived from [activeTones] rather than stored: it has to stay true when the
+     * five switches are turned on one at a time, and it has to go false the moment
+     * one is turned off. A stored flag would be a second answer to a question the
+     * tone set already answers, and the two would eventually disagree.
+     */
+    val isMixed: Boolean get() = activeTones.size == JokeTone.entries.size
 }

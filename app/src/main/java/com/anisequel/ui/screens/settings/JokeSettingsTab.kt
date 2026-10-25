@@ -241,6 +241,7 @@ private fun PlacementCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TonesCard(
     settings: JokeSettings,
@@ -255,6 +256,37 @@ private fun TonesCard(
         icon = AppVectorIcons.Tag,
         subtitle = "Switch off the kinds of line you would rather not read."
     ) {
+        // Mixed is a preset, not a sixth tone: it is every tone switched on at
+        // once, so it cannot open a separate pool that drifts from these five.
+        // It is shown selected and disabled while it applies for the same reason
+        // the last tone's switch is - the reader cannot unselect the entire pool.
+        SettingsFieldLabel(text = "Quick pick")
+        Spacer(modifier = Modifier.height(10.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.testTag("joke_tone_preset_row")
+        ) {
+            JokeChoiceChip(
+                label = "Mixed",
+                selected = settings.isMixed,
+                enabled = settings.enabled && !settings.isMixed,
+                onClick = {
+                    scope.launch { preferences.setTones(JokeTone.entries.toSet()) }
+                },
+                testTag = "joke_tone_mixed"
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Mixed turns every kind back on at once, so the bag holds the " +
+                "whole pool. Switch one off below to narrow it down again.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         JokeTone.entries.forEach { tone ->
             val on = tone in active
             SwitchRow(
@@ -272,7 +304,9 @@ private fun TonesCard(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "Drawing from $lineCount lines across ${active.size} of " +
-                "${JokeTone.entries.size} tones. At least one tone stays on.",
+                "${JokeTone.entries.size} tones" +
+                (if (settings.isMixed) ", mixed." else ".") +
+                " At least one tone stays on.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

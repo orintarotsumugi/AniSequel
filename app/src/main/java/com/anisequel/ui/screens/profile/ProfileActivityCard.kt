@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,7 @@ import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import java.time.Instant
 import java.util.Locale
 
 /** AniList covers are 2:3. */
@@ -95,14 +97,27 @@ fun ActivityCard(
     onComments: () -> Unit = {},
     onOpenLikers: () -> Unit = {},
     onOpenDetail: (MediaNode) -> Unit = {},
-    likePending: Boolean = false
+    likePending: Boolean = false,
+    /**
+     * The clock the relative time is read against, hoisted by the feed so all the
+     * cards share one tick and the label can actually go stale correctly.
+     *
+     * Null is "read the clock at composition", which is what a preview or a
+     * caller with one card wants.
+     */
+    nowEpochSecond: Long? = null
 ) {
     // Read before the early return below rather than after it: the card has nothing
     // to draw without a media node, and a `Local` read that only happens on some
     // paths is the kind of composition structure that is easy to get wrong later.
     val context = LocalContext.current
     val media = activity.media ?: return
-    val coverUrl = media.coverImage?.bestUrl ?: media.coverImage?.large
+    // `large` before `bestUrl`, deliberately: this row draws a 96dp poster and a
+    // backdrop decoded at [BACKDROP_DECODE_PX] pixels, so `extraLarge` (AniList
+    // serves roughly 460x690 there) is more than twice the pixels anything on the
+    // card can show - downloaded and decoded for every row that scrolls in. The
+    // fallback keeps the card working if a response omits the smaller size.
+    val coverUrl = media.coverImage?.large ?: media.coverImage?.extraLarge
     // `MANGA` is the value AniList sends, but the model documents `type` as the
     // discriminator the whole feed depends on, so a case difference must not be
     // what decides whether a manga row reads "Episode" or "Chapter".
@@ -209,7 +224,10 @@ fun ActivityCard(
                         }
                         if (activity.createdAt != null) {
                             Text(
-                                text = formatRelativeSeconds(activity.createdAt),
+                                text = formatRelativeSeconds(
+                                    timestamp = activity.createdAt,
+                                    now = Instant.ofEpochSecond(nowEpochSecond ?: Instant.now().epochSecond)
+                                ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -244,7 +262,7 @@ fun ActivityCard(
                     Column(modifier = Modifier.weight(1f)) {
                         ActivityStatusPill(
                             text = activity.displayStatusFor(isManga),
-                            accent = activity.status.equals("completed", ignoreCase = true)
+                            status = activity.status
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -372,26 +390,62 @@ private fun formatLabel(format: String?): String {
     }
 }
 
+/**
+ * The action the row reports ("Plans to watch", "Completed"), as a tinted pill.
+ *
+ * ## Why the status chooses the colour
+ *
+ * It used to be two cases - completed was tertiary, everything else primary - so
+ * a dropped title and a finished one were the same blue and a feed could only be
+ * skimmed by reading every pill. Six tones let the eye separate finished, in
+ * progress, planned, paused and dropped without reading them, which is the one
+ * thing a scrolling history is for.
+ *
+ * Each pair is a Material container with its matching `on` colour rather than a
+ * role colour drawn *on* a container. The old pill drew `primary` on
+ * `primaryContainer`, which happens to be legible with this theme's palette and
+ * is not guaranteed to be with a wallpaper-derived one or in the other theme - a
+ * relationship Material's `on*Container` roles exist to state.
+ */
 @Composable
-private fun ActivityStatusPill(text: String, accent: Boolean) {
+private fun ActivityStatusPill(text: String, status: String?) {
+    val scheme = MaterialTheme.colorScheme
+    val container: Color
+    val content: Color
+    when (status?.lowercase(Locale.ROOT)) {
+        "completed" -> {
+            container = scheme.tertiaryContainer
+            content = scheme.onTertiaryContainer
+        }
+        "current" -> {
+            container = scheme.primaryContainer
+            content = scheme.onPrimaryContainer
+        }
+        "repeating", "planning" -> {
+            container = scheme.secondaryContainer
+            content = scheme.onSecondaryContainer
+        }
+        "paused" -> {
+            container = scheme.surfaceContainerHighest
+            content = scheme.onSurfaceVariant
+        }
+        "dropped" -> {
+            container = scheme.errorContainer
+            content = scheme.onErrorContainer
+        }
+        else -> {
+            container = scheme.primaryContainer
+            content = scheme.onPrimaryContainer
+        }
+    }
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = if (accent) {
-            MaterialTheme.colorScheme.tertiary
-        } else {
-            MaterialTheme.colorScheme.primary
-        },
+        color = content,
         maxLines = 1,
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
-            .background(
-                if (accent) {
-                    MaterialTheme.colorScheme.tertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.primaryContainer
-                }
-            )
+            .background(container)
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .testTag("activity_status_pill")
     )

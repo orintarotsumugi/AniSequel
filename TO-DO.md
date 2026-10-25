@@ -183,8 +183,12 @@ Three of the four costs that used to be grouped under this entry are now gone:
 
 - The instant motion style no longer runs the clock at all - the orb branches to
   a static composable instead of animating a shape it then ignores.
-- The morph progress is read by `MorphShape` *while drawing* rather than in
-  composition, so a frame of the morph no longer recomposes the empty state.
+- The morph progress is read *while drawing* rather than in composition, so a
+  frame of the morph no longer recomposes the empty state. It used to be read
+  inside a `Shape.createOutline`, which turned out not to draw at all: a clipped
+  layer computes its outline once, so the orb froze mid-morph (that is what the
+  lopsided clover was). The silhouette is drawn with `Modifier.drawBehind` now -
+  see `Morph.writeSilhouette` in `ExpressiveShapes.kt`.
 - **A stopped Activity no longer animates it either.** The branch is gated on
   `rememberIsResumed`, so while the app is in the background the static composable
   is the only one composed and no clock is allocated to be paused. That is the

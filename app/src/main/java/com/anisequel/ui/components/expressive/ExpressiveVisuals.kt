@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -31,7 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -218,6 +220,14 @@ private fun StaticEmptyOrb(
 
 /**
  * The expressive orb: Cookie -> Flower while the icon breathes.
+ *
+ * The silhouette is drawn here rather than applied as a `Modifier.clip(shape)`.
+ * That is the fix for the "torn clover" the released orb showed: a clipped layer
+ * asks its `Shape` for an outline when the layer is configured, not once per
+ * frame, so a shape whose only animated value is read inside `createOutline`
+ * gives the layer one outline and keeps it. The orb froze on a single frame of
+ * the morph. `Modifier.drawBehind` reads [morphProgress] in the draw pass - the
+ * pass that is supposed to depend on it - so the outline is rebuilt every frame.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -252,16 +262,24 @@ private fun MorphingEmptyOrb(
         label = "orb_morph_progress"
     )
 
-    val morphShape = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.Flower) }
+    val morph = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.Flower) }
+    // One path, one matrix and one bounds buffer for the life of the orb;
+    // `writeSilhouette` rewinds and rewrites them in the draw pass instead of
+    // allocating three objects per frame.
+    val silhouette = remember { Path() }
+    val matrix = remember { Matrix() }
+    val bounds = remember { FloatArray(4) }
 
     Box(
         modifier = modifier
             .size(80.dp)
-            // `morphProgress` is read by `MorphShape` while the layer is drawn,
-            // not here while the modifier chain is built, so a frame of the
-            // morph invalidates the draw pass instead of this composable.
-            .clip(MorphShape(morphShape) { morphProgress })
-            .background(containerColor),
+            // `morphProgress` is read *inside* the draw lambda, so a frame of the
+            // morph invalidates the draw pass alone - not this composable, and
+            // not a graphics layer that would then cache the outline.
+            .drawBehind {
+                morph.writeSilhouette(morphProgress, size, silhouette, matrix, bounds)
+                drawPath(silhouette, containerColor)
+            },
         contentAlignment = Alignment.Center
     ) {
         Icon(

@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.6.0",
+      "entries": [
+        {
+          "title": "The empty-state clover moves again",
+          "detail": "Every empty state in the app - no comments, an empty tier board, a studio with no credits, a filtered library - was drawing the same frozen shape. It was meant to morph between two Material shapes, and the progress was read inside the shape's own outline callback. A clipped layer asks for that outline once, when the layer is set up, so the app captured a single frame of the morph and kept it forever: the lopsided, torn-looking clover. The silhouette is drawn in the draw pass now, so it is rebuilt every frame and actually breathes, and one path and one matrix are reused instead of allocated per frame. The same component covers all ten places the orb appears."
+        },
+        {
+          "title": "A darker tone, and a bigger pool",
+          "detail": "The joke pool grew from 323 lines to 475. A fifth tone - Dark - holds 70 new lines about cancelled sequels, indefinite hiatuses, adaptations that stop short of the ending and the fictional deaths the hobby is built on, so a reader who wants Ani-chan's voice without the graves can switch that arm off on its own. The other four tones gained 82 lines between them, every tone still has at least 40 of its own, and the shuffle bag cycles the larger filter instead of re-drawing the same handful."
+        },
+        {
+          "title": "Mixed, in one tap",
+          "detail": "Settings > Jokes > What she talks about now opens with a Mixed preset. It is not a sixth pool: it switches all five tones back on in a single write, so the bag holds the whole pool again without five taps, and it dims the moment one tone is switched off. Because it is one write rather than five, the toast cannot draw from a half-restored filter and a fast tap cannot lose a tone to a race. The card still says how many lines and tones the current mix is drawing from."
+        },
+        {
+          "title": "The activity feed no longer stops early",
+          "detail": "AniList tells a paged list whether another page exists, and the feed used to ignore that answer and guess from the size of the page it received. The guess is wrong whenever the app drops a row it cannot draw - a list update whose title has since been removed, or a union member that is not a list change - so one filtered row could end a history with hundreds of entries still behind it, with nothing on screen to say why. The feed now pages on AniList's own answer, asks for its page size in one place rather than two, and ends with a quiet \"You're all caught up\" instead of an unexplained full stop."
+        },
+        {
+          "title": "Refreshing keeps the feed on screen",
+          "detail": "A refresh over rows that were already loaded replaced all of them with the loading skeleton - and a refresh that failed replaced them with the full-page error. Planning a title from the dashboard while standing on the Activity tab could therefore clear the feed you were reading. A refresh now leaves the rows where they are and swaps in the new page when it lands; a failed one becomes a small Retry row above the feed rather than an error screen, and the profile's refresh button now refreshes an opened Activity tab too, without starting a feed that nobody has looked at."
+        },
+        {
+          "title": "Activity cards are easier to skim",
+          "detail": "Every status used to be one of two blues, so a dropped title and a finished one looked the same. Completed, watching, planning, rewatching, paused and dropped each have their own tinted pill now, drawn with Material's matching container and on-container colours so the label stays readable under a wallpaper-derived palette. The card also stops downloading the extra-large cover for a 96dp poster - the smaller size is everything the row can show - and the heatmap's legend reads its colours from the same ramp as the grid instead of a copy that could drift from it. Relative times in a feed left open now advance once a minute instead of freezing at the moment the card was drawn."
+        },
+        {
+          "title": "Smaller fixes",
+          "detail": "Download sizes were formatted with the device's decimal separator, so a phone set to a comma locale showed \"2,3 MB\" beside an English sentence and read like a thousands separator; they now use a fixed locale. The quick-add button was carrying seven imports it had stopped using, and a set of other screens had accumulated unused imports during earlier passes; those are gone, so a reader chasing a reference no longer lands on a line that does nothing. A finished like on one comment no longer re-enables another comment's heart while its request is still in the air."
+        }
+      ]
+    },
+    {
       "version": "1.5.9",
       "entries": [
         {
