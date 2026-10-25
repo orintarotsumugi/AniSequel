@@ -2,6 +2,7 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -66,14 +68,36 @@ fun ProfileLoadingView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(44.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        // The loader sits in an expressive container rather than floating on the
+        // page. A 44dp morphing dot alone at the centre of a full screen reads as
+        // a stuck splash; the tinted shape gives it a top and a bottom and makes
+        // the wait look composed. `primaryContainer` is the same surface the
+        // Library's waiting header uses, so the two pages describe one state the
+        // same way.
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(68.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                ExpressiveLoadingIndicator(
+                    modifier = Modifier.size(34.dp),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(18.dp))
         Text(
             text = message,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "This usually takes a moment.",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
@@ -405,11 +429,13 @@ private const val COMMENT_SKELETON_ROWS = 3
 /**
  * The comment sheet's waiting state, shaped like the rows that are coming.
  *
- * A comment row is an avatar, a name, a body and a heart, and the sheet draws
- * the same three rows every time it opens; a spinner in their place was the one
- * screen in the app where the layout was knowable and thrown away. The widths
- * vary a little row to row so the stack reads as text arriving rather than as a
- * table of grey rectangles.
+ * A comment row is an avatar, a name, a body and a row of controls, and the
+ * sheet draws the same three rows every time it opens; a spinner in their place
+ * was the one screen in the app where the layout was knowable and thrown away.
+ * The widths vary a little row to row so the stack reads as text arriving rather
+ * than as a table of grey rectangles, and the action row is drawn because the
+ * real row reserves its height - omitting it made the skeleton jump upward by a
+ * heart's worth of space when the comments landed.
  */
 @Composable
 internal fun CommentRowsSkeleton(
@@ -456,6 +482,31 @@ internal fun CommentRowsSkeleton(
                             .height(12.dp),
                         phase = phase
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.height(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ShimmerBox(
+                            modifier = Modifier.size(16.dp),
+                            shape = CircleShape,
+                            phase = phase
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        ShimmerBox(
+                            modifier = Modifier
+                                .width(12.dp)
+                                .height(10.dp),
+                            phase = phase
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        ShimmerBox(
+                            modifier = Modifier
+                                .width(34.dp)
+                                .height(10.dp),
+                            phase = phase
+                        )
+                    }
                 }
             }
         }

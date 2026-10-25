@@ -159,7 +159,7 @@ class ReplyLikeQueryTest {
         ).readText()
         val comments = File(
             findProjectRoot(),
-            "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCommentsSheet.kt"
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
         ).readText()
 
         assertTrue("the shared control is public:", shared.contains("fun EngagementAction("))
@@ -187,7 +187,7 @@ class ReplyLikeQueryTest {
     fun `the reply heart is disabled when AniList did not say whether it is liked`() {
         val comments = File(
             findProjectRoot(),
-            "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCommentsSheet.kt"
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
         ).readText()
 
         assertTrue(

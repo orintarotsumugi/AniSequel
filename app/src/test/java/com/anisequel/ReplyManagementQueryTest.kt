@@ -195,9 +195,15 @@ class ReplyManagementQueryTest {
      */
     @Test
     fun `the manage control is offered only on the viewer's own comments`() {
+        // The row lives in `CommentThread.kt` since the sheet was split by
+        // responsibility; read it together with the sheet so the assertion is
+        // about the behaviour rather than about which file currently draws it.
         val sheet = File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/ActivityCommentsSheet.kt"
+        ).readText() + File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
         ).readText()
         val store = File(
             findProjectRoot(),

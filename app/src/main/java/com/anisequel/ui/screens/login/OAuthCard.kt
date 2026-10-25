@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -128,15 +130,24 @@ fun OAuthCard(
             }
         }
 
-        if (authState is AuthUiState.Loading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                ExpressiveLoadingIndicator(modifier = Modifier.size(32.dp))
-            }
+        // One branch, and the controls under it stay exactly where they are.
+        //
+        // This used to branch on `Loading` alone: the button became a bare 52dp
+        // spinner and the Paste Token / Client ID row and the redirect hint
+        // below it disappeared with it, so the card changed height twice during
+        // a single sign-in. Worse, `Authenticated` fell into the same branch as
+        // `Unauthenticated`, so for the frame or two between the token being
+        // stored and the navigation that leaves this screen, a reader who had
+        // *just* signed in was shown "Connect AniList Account" again. Both
+        // in-flight states now draw the same card, at the button's own height,
+        // and nothing below it moves.
+        val isSigningIn = authState is AuthUiState.Loading ||
+            authState is AuthUiState.Authenticated
+
+        if (isSigningIn) {
+            AuthProgressCard(
+                authenticated = authState is AuthUiState.Authenticated
+            )
         } else {
             Button(
                 onClick = {
@@ -174,42 +185,107 @@ fun OAuthCard(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            TextButton(
+                onClick = onShowManualToken,
+                modifier = Modifier
+                    .testTag("paste_token_button")
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = pasteTokenSource),
+                interactionSource = pasteTokenSource
             ) {
-                TextButton(
-                    onClick = onShowManualToken,
-                    modifier = Modifier
-                        .testTag("paste_token_button")
-                        .bouncyPress(pressedScale = 0.94f, interactionSource = pasteTokenSource),
-                    interactionSource = pasteTokenSource
-                ) {
-                    Text("Paste Token")
-                }
-                Text(
-                    text = "•",
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(
-                    onClick = onShowClientId,
-                    modifier = Modifier
-                        .testTag("custom_client_id_button")
-                        .bouncyPress(pressedScale = 0.94f, interactionSource = clientIdSource),
-                    interactionSource = clientIdSource
-                ) {
-                    Text("Client ID")
-                }
+                Text("Paste Token")
             }
+            Text(
+                text = "•",
+                modifier = Modifier.padding(horizontal = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(
+                onClick = onShowClientId,
+                modifier = Modifier
+                    .testTag("custom_client_id_button")
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = clientIdSource),
+                interactionSource = clientIdSource
+            ) {
+                Text("Client ID")
+            }
+        }
 
-            Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-            RedirectUrlHint(modifier = Modifier.fillMaxWidth())
+        RedirectUrlHint(modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * What sits in the sign-in button's place while a sign-in is in flight.
+ *
+ * It is exactly as tall and as wide as the button it replaces, which is the
+ * whole point: the two states swap in place, so the error card, the helper row
+ * and the redirect hint under it never move, and a reader cannot press anything
+ * while the app is asking AniList on their behalf.
+ *
+ * Two labels rather than one, because they describe different waits. `Loading`
+ * is the browser round trip; `Authenticated` means the token is already stored
+ * and only navigation is left. The second is short-lived - it ends the moment
+ * the dashboard composes - but it is the state that used to flash the connect
+ * button back at someone who had just finished signing in.
+ */
+@Composable
+private fun AuthProgressCard(authenticated: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (authenticated) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .testTag("auth_progress_card")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ExpressiveLoadingIndicator(
+                modifier = Modifier.size(22.dp),
+                color = if (authenticated) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = if (authenticated) {
+                    "Signed in - opening your list\u2026"
+                } else {
+                    "Waiting for AniList\u2026"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                // The card is the button's exact height, so the label has to fit
+                // one line; at the largest font scales it ellipsizes rather than
+                // being clipped by the fixed height.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (authenticated) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
         }
     }
 }

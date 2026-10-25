@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,8 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -47,6 +53,23 @@ fun UsernameScanCard(
     // button visibly squashed. The button's own `clickable` cancels the press as
     // soon as the gesture is claimed as a scroll.
     val scanButtonSource = remember { MutableInteractionSource() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // One submit path for the button and the keyboard.
+    //
+    // The keyboard's Search key did nothing before: the field was a plain single
+    // line, so Enter inserted no newline and committed nothing, and the only way
+    // to start the scan was to find the button under the keyboard. Hiding the
+    // keyboard on submit is the other half: the scan navigates to the account it
+    // found, and a keyboard left open follows it there and covers the top of a
+    // page the reader has not seen yet.
+    val submitScan: () -> Unit = {
+        if (username.isNotBlank()) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            keyboard?.hide()
+            onScanUsername(username.trim())
+        }
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -76,18 +99,24 @@ fun UsernameScanCard(
                 placeholder = { Text("e.g. MyAnimeList") },
                 singleLine = true,
                 shape = MaterialTheme.shapes.small,
+                // An AniList name is an identifier, not prose: capitalising the
+                // first letter and "correcting" it both produce a name that does
+                // not exist. Search as the IME action means the key that says
+                // "done" actually starts the scan.
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(onSearch = { submitScan() }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("username_scan_input")
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
-                onClick = {
-                    if (username.isNotBlank()) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onScanUsername(username.trim())
-                    }
-                },
+                onClick = submitScan,
                 enabled = username.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
