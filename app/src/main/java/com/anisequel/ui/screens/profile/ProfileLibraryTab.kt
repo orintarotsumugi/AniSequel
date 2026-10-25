@@ -45,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
@@ -940,13 +939,7 @@ private fun LibraryPoster(
     modifier: Modifier = Modifier
 ) {
     val media = entry.media
-    val isManga = media.isManga
     val interactionSource = remember { MutableInteractionSource() }
-    val placeholder = if (isManga) {
-        AppVectorIcons.FavouriteManga
-    } else {
-        AppVectorIcons.FavouriteAnime
-    }
 
     Column(
         modifier = modifier
@@ -969,10 +962,7 @@ private fun LibraryPoster(
                 // one accessible name for this cell.
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = rememberVectorPainter(placeholder),
-                error = rememberVectorPainter(placeholder),
-                fallback = rememberVectorPainter(placeholder)
+                contentScale = ContentScale.Crop
             )
 
             libraryProgressLabel(entry)?.let { label ->

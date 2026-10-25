@@ -38,6 +38,18 @@ fun AniTopAppBar(
     onOpenProfile: () -> Unit,
     isRefreshing: Boolean = false,
     hasActiveFilters: Boolean = false,
+    /**
+     * True while the list on screen is the device's saved copy rather than a
+     * live AniList answer.
+     *
+     * Drawn in the subtitle line, beside the account name, instead of as a pill
+     * between the bar and the list. In the content it was a LazyColumn item that
+     * was added and removed as the network answered, so every item below it moved
+     * by its height at the exact moment the reader's eye was on the first rows -
+     * and on a cold start that happened on every launch. The bar already reserves
+     * a second line for the name, so the notice costs no layout.
+     */
+    showingSavedCopy: Boolean = false,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
     modifier: Modifier = Modifier
 ) {
@@ -79,13 +91,24 @@ fun AniTopAppBar(
                         maxLines = 1
                     )
                     if (viewer != null) {
-                        Text(
-                            text = "@${viewer.name}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "@${viewer.name}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                // The pill keeps its full label; the name is the
+                                // half that can afford an ellipsis.
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (showingSavedCopy) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                SavedCopyPill(visible = true)
+                            }
+                        }
+                    } else if (showingSavedCopy) {
+                        SavedCopyPill(visible = true)
                     }
                 }
             }

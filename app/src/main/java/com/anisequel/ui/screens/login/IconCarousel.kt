@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberIsResumed
 import kotlinx.coroutines.delay
 
 /**
@@ -65,8 +66,16 @@ import kotlinx.coroutines.delay
  * current index, so the delay loop is *not* restarted by its own tick -
  * restarting it every step is how a naive auto-advance turns into a stutter
  * under load. [delay] is cancellable, so when the composable leaves (the user
- * taps Sign In) the coroutine is cancelled with it and nothing keeps ticking in
- * the background.
+ * taps Sign In) the coroutine is cancelled with it.
+ *
+ * It is also keyed on [rememberIsResumed]. Leaving the screen was not the only
+ * way this kept running: the OAuth flow hands the app to a browser for as long
+ * as the reader takes on AniList's consent page, and for that whole time the
+ * loop went on advancing this composition's `index` once every 2.6 seconds
+ * behind another app. Nothing drew it, so it cost only the recompositions of a
+ * hidden screen - but the reader came back to an icon chosen by a timer that
+ * had been racing their absence, and a decorative rail is not worth waking the
+ * frame clock for while the screen is not in front of anybody.
  */
 @Composable
 fun IconCarousel(
@@ -84,8 +93,14 @@ fun IconCarousel(
     }
 
     var index by remember { mutableIntStateOf(0) }
+    val resumed = rememberIsResumed()
 
-    LaunchedEffect(icons.size, intervalMillis) {
+    LaunchedEffect(resumed, icons.size, intervalMillis) {
+        // Not `if` around the effect but inside it: returning from the body
+        // ends the coroutine, which is what stops the delay; a conditional
+        // `LaunchedEffect` outside the composition would just leave the old
+        // one running when the key changed.
+        if (!resumed) return@LaunchedEffect
         while (true) {
             delay(intervalMillis)
             index = (index + 1) % icons.size

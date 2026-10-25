@@ -30,20 +30,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.ui.components.AppVectorIcons
@@ -94,6 +99,25 @@ internal fun CommentComposer(
 
     fun apply(edit: DraftEdit) = onDraftChange(draft.withDraftEdit(edit))
 
+    // Opening the editor is the reader saying "I am writing", so the field takes
+    // focus and the keyboard comes with it. Without this the first tap needed to
+    // find the field again inside a pane that had just replaced the list - the
+    // tap that opened the editor only opened the editor.
+    //
+    // Replayed when Preview goes back to Write, because that disposes the field
+    // and composes a new one with no focus. One frame is awaited first: on the
+    // frame the pane appears the field is composed but not yet placed, and a
+    // focus request against a node with no coordinates is dropped silently.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(previewing) {
+        if (previewing) return@LaunchedEffect
+        withFrameNanos { }
+        // The pane can be dismissed in the same frame the request is made (a
+        // fast Cancel, or the sheet closing on a back gesture), and requesting
+        // focus from an unattached node throws.
+        runCatching { focusRequester.requestFocus() }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         ComposerHeader(
             replyToName = replyToName,
@@ -109,7 +133,8 @@ internal fun CommentComposer(
             draft = draft,
             isPosting = isPosting,
             onDraftChange = onDraftChange,
-            onClearReplyTo = onClearReplyTo
+            onClearReplyTo = onClearReplyTo,
+            focusRequester = focusRequester
         )
 
         ComposerBottomBar(
@@ -118,6 +143,7 @@ internal fun CommentComposer(
             canSend = canSend,
             isPosting = isPosting,
             postError = postError,
+            replyToName = replyToName,
             onEdit = { apply(it) },
             onAttach = { attaching = true },
             onSubmit = onSubmit
@@ -191,7 +217,8 @@ private fun ColumnScope.ComposerBody(
     draft: TextFieldValue,
     isPosting: Boolean,
     onDraftChange: (TextFieldValue) -> Unit,
-    onClearReplyTo: () -> Unit
+    onClearReplyTo: () -> Unit,
+    focusRequester: FocusRequester
 ) {
     if (replyToName != null) {
         ReplyTargetChip(name = replyToName, onClear = onClearReplyTo)
@@ -226,6 +253,7 @@ private fun ColumnScope.ComposerBody(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
+                .focusRequester(focusRequester)
                 .testTag("activity_comment_field"),
             placeholder = {
                 Text(if (replyToName != null) "Write a reply..." else "Add a comment")
@@ -253,6 +281,7 @@ private fun ComposerBottomBar(
     canSend: Boolean,
     isPosting: Boolean,
     postError: String?,
+    replyToName: String?,
     onEdit: (DraftEdit) -> Unit,
     onAttach: () -> Unit,
     onSubmit: () -> Unit
@@ -382,7 +411,16 @@ private fun ComposerBottomBar(
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(if (isPosting) "Posting..." else "Post Reply")
+                Text(
+                    text = when {
+                        isPosting -> "Posting..."
+                        // The same word the header uses. A new comment used to read
+                        // "Post Reply" here, which named a reply that was not being
+                        // written.
+                        replyToName != null -> "Post Reply"
+                        else -> "Post Comment"
+                    }
+                )
             }
         }
     }
@@ -420,17 +458,25 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(percent = 50))
             .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "Replying to $name",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
+        Spacer(modifier = Modifier.width(4.dp))
+        // 40dp, not the 28dp box that was sized to the glyph. Clearing the target
+        // is the chip's only action, and it was the smallest target in the
+        // composer - smaller than the format bar's 48dp controls despite deciding
+        // who the comment is addressed to. The glyph inside stays 14dp.
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .clickable(onClick = onClear)
                 .testTag("activity_reply_target_clear"),
@@ -440,7 +486,7 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
                 imageVector = AppVectorIcons.Close,
                 contentDescription = "Stop replying to $name",
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }

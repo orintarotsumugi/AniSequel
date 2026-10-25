@@ -1,63 +1,27 @@
 package com.anisequel.ui.screens.profile
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.anisequel.data.model.ActivityReply
 import com.anisequel.domain.usecase.ContentLimits
-import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.EngagementAction
-import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
-import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.CommentThreadStore
 
 /**
@@ -109,6 +73,15 @@ import com.anisequel.ui.viewmodel.CommentThreadStore
  * Posting is gated by [canPost]: reading a thread needs no session (AniList
  * serves replies to anyone), but `SaveActivityReply` does, so a signed-out
  * reader gets the thread and a note instead of an editor that will fail.
+ *
+ * ## The thread itself lives in `CommentThread.kt`
+ *
+ * This file used to be 763 lines and carried the list, the rows, the skeleton,
+ * the empty state and the manage dialog's launcher alongside the draft and the
+ * two effects. The split is by responsibility: this keeps what is true of the
+ * sheet as a whole - which pane is showing, the draft both panes share, and what
+ * happens when the post lands - and the list keeps everything about drawing a
+ * conversation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,7 +102,7 @@ fun ActivityCommentsSheet(
      * every other comment on the site was simply never drawn.
      *
      * Defaults to a no-op so the sheet still renders in a caller that has not wired it,
-     * which would be a heart that does nothing - see [EngagementAction]'s note on the
+     * which would be a heart that does nothing - see `EngagementAction`'s note on the
      * disabled state, and why the callers pass `isLiked != null` rather than `true`.
      */
     onLikeReply: (Int) -> Unit = {},
@@ -147,7 +120,6 @@ fun ActivityCommentsSheet(
     onDismissReplyAction: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
-    val shimmerPhase = rememberShimmerPhase()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // The editor's whole state. Held here rather than in the composer because a
@@ -195,8 +167,11 @@ fun ActivityCommentsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 // The editor is taller than the thread, exactly as AniList's is:
-                // a paragraph needs the room, and the field grows into it.
-                .fillMaxHeight(if (composing) 0.92f else 0.78f)
+                // a paragraph needs the room, and the field grows into it. The
+                // thread keeps a little more than it used to: the header, three
+                // comments and the write bar is the common case, and 78% cut the
+                // last one off.
+                .fillMaxHeight(if (composing) 0.92f else 0.82f)
                 .imePadding()
                 .testTag("activity_comments_sheet")
         ) {
@@ -225,7 +200,6 @@ fun ActivityCommentsSheet(
                     viewerId = viewerId,
                     canPost = canPost,
                     listState = listState,
-                    shimmerPhase = shimmerPhase,
                     onRetry = onRetry,
                     onStartCompose = { composing = true },
                     // The mention is an edit like any toolbar's: it must not push
@@ -357,407 +331,5 @@ private fun ReplyActionPane(
             onSubmitDelete = onSubmitDelete,
             onDismiss = onDismiss
         )
-    }
-}
-
-/**
- * The thread side of [ActivityCommentsSheet]: the header, the list, and the bar
- * that opens the editor.
- *
- * Its own composable because the sheet's two modes are genuinely different
- * screens sharing one draft - the editor is not the last row of the list - and
- * because the list's waiting, failed and empty branches each describe a whole
- * screen rather than a row. Keeping them here leaves [ActivityCommentsSheet]
- * with the draft, the two effects, and the mode switch, which is all it owns.
- */
-@Composable
-private fun ColumnScope.CommentsThread(
-    state: CommentThreadStore.CommentsState,
-    viewerId: Int?,
-    canPost: Boolean,
-    listState: LazyListState,
-    shimmerPhase: State<Float>,
-    onRetry: () -> Unit,
-    onStartCompose: () -> Unit,
-    onReply: (String) -> Unit,
-    onLikeReply: (Int) -> Unit,
-    onManageReply: (Int) -> Unit
-) {
-    CommentsHeader(count = state.replies.size)
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
-        // The list is keyed by reply id, and a repeated key is a
-        // hard `IllegalArgumentException` in Compose. The store
-        // guarantees one entry per id; see `CommentsState.replies`.
-        state = listState,
-        contentPadding = PaddingValues(bottom = 8.dp)
-    ) {
-        when {
-            state.isLoading -> item(key = "loading") {
-                // The rows that are coming, at the sizes they will
-                // have. A spinner here was the one waiting state in
-                // the app whose shape was already known and thrown away.
-                CommentRowsSkeleton(phase = shimmerPhase)
-            }
-
-            state.loadError != null -> item(key = "load_error") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = state.loadError,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(onClick = onRetry) {
-                        Text("Try again")
-                    }
-                }
-            }
-
-            state.replies.isEmpty() -> item(key = "empty") {
-                Text(
-                    text = "No comments yet. Be the first.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                )
-            }
-
-            else -> items(
-                items = state.replies,
-                key = { it.id },
-                contentType = { "reply" }
-            ) { reply ->
-                CommentRow(
-                    reply = reply,
-                    likePending = reply.id in state.pendingReplyLikes,
-                    canManage = viewerId != null && reply.user?.id == viewerId,
-                    // A reply is addressed by a leading `@name`, so
-                    // without an author name there is nothing to
-                    // insert, even for a signed-in reader.
-                    canReply = canPost && !reply.user?.name.isNullOrBlank(),
-                    onLike = { onLikeReply(reply.id) },
-                    onReply = onReply,
-                    onManage = { onManageReply(reply.id) }
-                )
-            }
-        }
-    }
-
-    CommentEntryBar(
-        canPost = canPost,
-        onClick = onStartCompose
-    )
-}
-
-@Composable
-private fun CommentsHeader(count: Int) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.ActivityReplies,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Comments",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (count > 0) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    }
-}
-
-/**
- * The bar under the thread that opens the editor.
- *
- * A bar rather than a floating button so it reads as the next thing to do in a
- * conversation, and it is what AniList's thread screen has. Signed out it becomes
- * the explanation instead, because a field that cannot send is a worse answer
- * than a sentence saying why.
- */
-@Composable
-private fun CommentEntryBar(canPost: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        // The two states are separate composables rather than an early return in
-        // one: a `remember` after an early return is a conditional composable
-        // call, and signing in while the sheet is open would then land the bar's
-        // state in the slot the sentence used.
-        if (canPost) {
-            WriteCommentBar(onClick = onClick)
-        } else {
-            Text(
-                text = "Sign in to AniList to join the conversation.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun WriteCommentBar(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(percent = 50))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClickLabel = "Write a comment",
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .testTag("activity_comment_bar"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityReplies,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "Write a comment...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun CommentRow(
-    reply: ActivityReply,
-    likePending: Boolean,
-    canManage: Boolean,
-    canReply: Boolean,
-    onLike: () -> Unit,
-    onReply: (String) -> Unit,
-    onManage: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        CommentAvatar(
-            url = reply.user?.avatar?.large ?: reply.user?.avatar?.medium,
-            name = reply.user?.name.orEmpty()
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = reply.user?.name.orEmpty(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (reply.createdAt != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = formatRelativeSeconds(reply.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            ReplyBody(text = reply.text)
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // The same control the activity card draws, shared rather than
-                // re-declared here - `EngagementAction`. Left-aligned and below
-                // the body rather than beside the name so a reply's own markdown
-                // (which can be a multi-line quote or an image) is not squeezed
-                // to make room for it.
-                EngagementAction(
-                    icon = if (reply.isLiked == true) {
-                        AppVectorIcons.ActivityLiked
-                    } else {
-                        AppVectorIcons.ActivityNotLiked
-                    },
-                    count = reply.likeCount ?: 0,
-                    active = reply.isLiked == true,
-                    // Null `isLiked` means AniList did not answer, which is what a
-                    // signed-out reader gets. Disabled rather than drawn-as-unliked,
-                    // so the control is never something that looks live and does
-                    // nothing.
-                    enabled = reply.isLiked != null && !likePending,
-                    contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
-                    onClick = onLike,
-                    modifier = Modifier.testTag("activity_reply_like_button")
-                )
-                if (canReply) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    ReplyActionButton(
-                        name = reply.user?.name.orEmpty(),
-                        onClick = { onReply(reply.user?.name.orEmpty()) }
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (canManage) {
-                    CommentManageButton(onClick = onManage)
-                }
-            }
-        }
-    }
-}
-
-/**
- * "Reply", next to the heart.
- *
- * A labelled control rather than a second icon: on this row the heart is a bare
- * icon with a count, and a bare arrow beside it would be another glyph to guess.
- * The label is also what makes the row's two taps distinguishable to a screen
- * reader without a description that says "reply to Bild's comment" on every row.
- */
-@Composable
-private fun ReplyActionButton(name: String, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(MaterialTheme.shapes.small)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClickLabel = "Reply to $name",
-                onClick = onClick
-            )
-            .padding(horizontal = 6.dp, vertical = 4.dp)
-            .testTag("activity_reply_reply_button"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityReplies,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = "Reply",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * The overflow that opens the manage dialog, on the viewer's own comment.
- *
- * A tap target of its own rather than a long press on the row. A hold is invisible
- * - the sheet's only hold gesture elsewhere (the heart) opens likers, and nothing
- * about a comment's body says "hold me to edit this" - so the control is a thing
- * the reader can see. It sits at the end of the comment's action row, the same
- * place AniList's own app puts it, rather than on the name line where it read as
- * part of the byline.
- *
- * 48dp, the platform's minimum touch target, rather than the 36dp box that was
- * sized to its glyph. Manage is the one control in the row that changes somebody's
- * comment, and it was also the hardest to hit - the 18dp icon is unchanged, only
- * the area around it grew.
- */
-@Composable
-private fun CommentManageButton(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
-            .testTag("activity_reply_manage_button"),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityManage,
-            contentDescription = "Comment options",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
-    }
-}
-
-@Composable
-private fun ReplyBody(text: String?) {
-    // A child composable rather than an early return in this one: `remember`
-    // after a return is a conditional composable call, and a reply whose text
-    // AniList omitted would then occupy the slot the parser state wants.
-    if (!text.isNullOrBlank()) MarkdownBody(text)
-}
-
-@Composable
-private fun MarkdownBody(text: String) {
-    // Parsed once per reply; a comment thread is exactly the kind of list that
-    // recomposes on every scroll, and reparsing markdown per frame is the cost
-    // this `remember` removes.
-    val nodes = remember(text) { AniListMarkdownParser.parse(text) }
-    AniListMarkdownView(nodes = nodes)
-}
-
-@Composable
-private fun CommentAvatar(url: String?, name: String) {
-    val shape = CircleShape
-    val base = Modifier
-        .size(34.dp)
-        .clip(shape)
-    if (url != null) {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            modifier = base.background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = base.background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = name.trim().take(1).uppercase(),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
     }
 }

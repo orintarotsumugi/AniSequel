@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
@@ -53,7 +54,7 @@ import com.anisequel.ui.viewmodel.rememberApiStatusProbe
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
     APPEARANCE("Appearance", "Colour, background and motion"),
-    JOKES("Jokes", "Ani-chan's timing and placement"),
+    JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
     LIBRARY("Library & dashboard", "Refresh, arriving rows and quick add"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
     ABOUT("About & support", "Release notes, updates and privacy")
@@ -113,9 +114,11 @@ fun SettingsScreen(
 ) {
     var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
-    // One probe for the row's dialog. The Info page owns a separate probe for its
-    // own check button; the two are independent requests, and sharing one would
-    // make a check on one page spin the other.
+    // One probe, for the one place that checks: the shelf's "AniList connection"
+    // row and the dialog it opens share it, so a Check tap cannot disagree with
+    // the row that opened it. The About page used to raise a second, independent
+    // probe for its own check button; that card is gone because the row here
+    // already opens the same dialog.
     val apiProbe = rememberApiStatusProbe(checkApiReachability)
 
     BackHandler {
@@ -180,7 +183,6 @@ fun SettingsScreen(
                                 arrivingPreferences = arrivingPreferences,
                                 quickAddPreferences = quickAddPreferences,
                                 changelogRepository = changelogRepository,
-                                checkApiReachability = checkApiReachability,
                                 viewer = viewer,
                                 onNavigateToLogin = onNavigateToLogin,
                                 totalWatchedCount = totalWatchedCount,
@@ -230,30 +232,27 @@ private fun SettingsRoot(
 
             SettingsSectionLabel("Personalization")
             SettingsRows {
-                SettingsHubRow(
+                SettingsRow(
+                    page = SettingsPage.APPEARANCE,
                     icon = AppVectorIcons.SectionAppearance,
-                    title = "Appearance",
-                    subtitle = "Colour, background and motion",
-                    onClick = { onOpen(SettingsPage.APPEARANCE) },
-                    testTag = "settings_row_appearance"
+                    testTag = "settings_row_appearance",
+                    onOpen = onOpen
                 )
-                SettingsHubRow(
+                SettingsRow(
+                    page = SettingsPage.JOKES,
                     icon = AppVectorIcons.AnimeSparkle,
-                    title = "Jokes",
-                    subtitle = "Ani-chan's timing and placement",
-                    onClick = { onOpen(SettingsPage.JOKES) },
-                    testTag = "settings_row_jokes"
+                    testTag = "settings_row_jokes",
+                    onOpen = onOpen
                 )
             }
 
             SettingsSectionLabel("Library")
             SettingsRows {
-                SettingsHubRow(
+                SettingsRow(
+                    page = SettingsPage.LIBRARY,
                     icon = AppVectorIcons.Tune,
-                    title = "Library & dashboard",
-                    subtitle = "Refresh, arriving rows and quick add",
-                    onClick = { onOpen(SettingsPage.LIBRARY) },
-                    testTag = "settings_row_library"
+                    testTag = "settings_row_library",
+                    onOpen = onOpen
                 )
             }
 
@@ -270,23 +269,21 @@ private fun SettingsRoot(
 
             SettingsSectionLabel("Accounts")
             SettingsRows {
-                SettingsHubRow(
+                SettingsRow(
+                    page = SettingsPage.ACCOUNT,
                     icon = AppVectorIcons.SectionAniList,
-                    title = "AniList account",
-                    subtitle = "Client ID, session and app lock",
-                    onClick = { onOpen(SettingsPage.ACCOUNT) },
-                    testTag = "settings_row_account"
+                    testTag = "settings_row_account",
+                    onOpen = onOpen
                 )
             }
 
             SettingsSectionLabel("About & Support")
             SettingsRows {
-                SettingsHubRow(
+                SettingsRow(
+                    page = SettingsPage.ABOUT,
                     icon = AppVectorIcons.SectionAbout,
-                    title = "About & support",
-                    subtitle = "Release notes, updates and privacy",
-                    onClick = { onOpen(SettingsPage.ABOUT) },
-                    testTag = "settings_row_about"
+                    testTag = "settings_row_about",
+                    onOpen = onOpen
                 )
             }
 
@@ -313,6 +310,31 @@ private fun SettingsRows(content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * A shelf row built from the [SettingsPage] it opens.
+ *
+ * The row and the page header used to spell the title and the subtitle out twice,
+ * and they had already drifted: the Jokes row promised "timing and placement"
+ * while the page it opened said "timing, tone and saved lines". A row that
+ * describes a different page than the one it opens is a small lie on the way in.
+ * Deriving both from the enum makes the drift impossible rather than unlikely.
+ */
+@Composable
+private fun SettingsRow(
+    page: SettingsPage,
+    icon: ImageVector,
+    testTag: String,
+    onOpen: (SettingsPage) -> Unit
+) {
+    SettingsHubRow(
+        icon = icon,
+        title = page.title,
+        subtitle = page.subtitle,
+        onClick = { onOpen(page) },
+        testTag = testTag
+    )
+}
+
 /** The body of a hub page, with every control the old tabs had. */
 @Composable
 private fun SettingsPageContent(
@@ -325,7 +347,6 @@ private fun SettingsPageContent(
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
     changelogRepository: ChangelogRepository,
-    checkApiReachability: suspend () -> ApiStatusSnapshot,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -342,16 +363,11 @@ private fun SettingsPageContent(
         SettingsPage.ACCOUNT -> EditSettingsTab(
             authViewModel = authViewModel,
             appLockPreferences = appLockPreferences,
-            onNavigateToLogin = onNavigateToLogin
-        )
-        SettingsPage.ABOUT -> InfoSettingsTab(
-            viewer = viewer,
             onNavigateToLogin = onNavigateToLogin,
-            onSignOut = authViewModel::logout,
+            viewer = viewer,
             totalWatchedCount = totalWatchedCount,
-            totalMissedCount = totalMissedCount,
-            changelogRepository = changelogRepository,
-            checkApiReachability = checkApiReachability
+            totalMissedCount = totalMissedCount
         )
+        SettingsPage.ABOUT -> InfoSettingsTab(changelogRepository = changelogRepository)
     }
 }
