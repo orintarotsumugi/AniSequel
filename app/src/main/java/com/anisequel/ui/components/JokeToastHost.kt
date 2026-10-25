@@ -2,12 +2,14 @@ package com.anisequel.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,26 +31,33 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.domain.jokes.JokeDwell
+import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.domain.jokes.JokePosition
 import com.anisequel.domain.jokes.JokeSettings
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.bouncyPress
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlin.random.Random
-
-/** How long a joke stays up before it dismisses itself. */
-private const val JokeVisibleMillis = 5_000L
 
 /**
  * How far the toast is parked above the bar's top edge, on top of the bar's own
@@ -75,13 +84,14 @@ internal val JokeToastLift = 72.dp
  *
  * ## What the reader controls
  *
- * [settings] decides all four questions the Settings card asks: whether jokes
- * run at all, how long the waits are, which edge the pill uses, and whether it
- * may appear over pages pushed from the bar. The host used to hard-code every
- * one of those - a bottom edge, a first wait of 45 seconds and a repeat wait of
- * four to fifteen minutes - so the settings screen would have been describing a
- * feature it did not own. The timing rules live in
- * [com.anisequel.domain.jokes.JokeFrequency] and are pinned by a JVM test.
+ * [settings] decides every question the Settings screen asks: whether jokes run,
+ * how long the waits are, which edge the pill uses, which pages it may appear
+ * over, how long a line stays up, whether it hums on arrival, which tones it may
+ * draw from, and which extra moments invite one. The host used to hard-code all
+ * of those - a bottom edge, a first wait of 45 seconds, a repeat wait of four to
+ * fifteen minutes and a five-second dwell - so Settings would have been
+ * describing a feature it did not own. The rules live in
+ * [com.anisequel.domain.jokes.JokeSettings] and are pinned by a JVM test.
  *
  * ## Why it only runs where [active] allows
  *
@@ -96,49 +106,105 @@ internal val JokeToastLift = 72.dp
  * ## Why the scheduling lives in helpers
  *
  * The host owns the state a joke is shown from; [JokeAutoSchedule],
- * [JokePreviewSchedule], [JokeArrivalHaptic] and [JokeToastPill] each own one
- * reason it changes. Keeping the loop, the preview bus, the tick and the surface
- * in one body made a composable with several effects and nested branches, which
- * is hard to read and trips the project's complexity check for no benefit.
+ * [JokeMomentSchedule], [JokePreviewSchedule], [JokeArrivalHaptic] and
+ * [JokeToastPill] each own one reason it changes. Keeping the loops, the tick and
+ * the surface in one body made a composable with several effects and nested
+ * branches, which is hard to read and trips the project's complexity check for no
+ * benefit.
  */
 @Composable
 fun JokeToastHost(
     settings: JokeSettings,
     active: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    favouriteLines: Set<String> = emptySet(),
+    onToggleFavourite: (String) -> Unit = {}
 ) {
     // The joke is remembered separately from visibility: the exit animation keeps
     // drawing the card after `visible` flips, so the text cannot be derived from
     // that flag without going blank halfway through the slide.
     var joke by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
-    // The shuffle bag: every line once before any line is repeated. A plain
-    // `mutableSetOf` rather than snapshot state because nothing reads it during
-    // composition - the only writers are the schedules' coroutines.
+    // The shuffle bag: every line in the current tone filter once before any is
+    // repeated. A plain `mutableSetOf` rather than snapshot state because nothing
+    // reads it during composition - the only writers are the effects' coroutines.
     val seen = remember { mutableSetOf<String>() }
+    // Wall-clock time of the last line shown, by any trigger. Moment gaps are
+    // measured from here rather than from the previous moment, so a timer joke
+    // three seconds ago also keeps a tab-change joke quiet.
+    var lastShownAt by remember { mutableStateOf(0L) }
+    // Read inside the lambdas below rather than captured per recomposition, so a
+    // settings change reaches an effect that is already waiting without restarting
+    // the wait.
+    val settingsNow by rememberUpdatedState(settings)
 
-    // One place for the bag's one subtle rule: the line just read stays in the
-    // set across the seam, so the first draw of a new cycle cannot repeat the
-    // last line of the old one.
+    val showLine: (String) -> Unit = { line ->
+        seen += line
+        joke = line
+        visible = true
+        lastShownAt = System.currentTimeMillis()
+    }
+
+    // One place for the bag's one subtle rule: when the current filter is spent,
+    // clear it but keep the line just read, so the first draw of a new cycle
+    // cannot repeat the last line of the old one. `poolFor` rather than `lines`:
+    // a tone the reader switched off must not spend a whole cycle of "unseen".
     val showNext: () -> Unit = {
-        if (seen.size >= AppJokes.lines.size) {
+        val tones = settingsNow.activeTones
+        if (AppJokes.poolFor(tones).all { it.text in seen }) {
             seen.clear()
             if (joke.isNotEmpty()) seen += joke
         }
-        val next = AppJokes.pickUnseen(seen)
-        seen += next
-        joke = next
-        visible = true
+        showLine(AppJokes.pickUnseen(seen, tones))
     }
+
     val hide: () -> Unit = { visible = false }
 
-    JokeAutoSchedule(settings = settings, active = active, onShow = showNext, onHide = hide)
-    JokePreviewSchedule(onShow = showNext, onHide = hide)
-    JokeArrivalHaptic(joke = joke, visible = visible)
+    // How an effect waits for a line to be done with the screen: a timer in every
+    // arm except "until tapped", where it waits for the reader. `snapshotFlow`
+    // rather than a channel because the state is already the truth and a channel
+    // would need draining between lines.
+    val waitForDwell: suspend () -> Unit = {
+        val millis = settingsNow.dwell.visibleMillis
+        if (millis != null) delay(millis) else snapshotFlow { visible }.first { !it }
+    }
+
+    // A moment is an *invitation*: it still has to respect the switch and the
+    // gap the reader's chosen moment declares.
+    val mayShowMoment: (JokeMoment) -> Boolean = { moment ->
+        !visible && System.currentTimeMillis() - lastShownAt >= moment.minGapMillis
+    }
+
+    JokeAutoSchedule(
+        settings = settings,
+        active = active,
+        visible = { visible },
+        onShow = showNext,
+        onSettle = waitForDwell,
+        onHide = hide
+    )
+    JokeMomentSchedule(
+        settings = settings,
+        active = active,
+        mayShow = mayShowMoment,
+        onShow = showNext,
+        onSettle = waitForDwell,
+        onHide = hide
+    )
+    JokePreviewSchedule(
+        onShowNext = showNext,
+        onShowLine = showLine,
+        onSettle = waitForDwell,
+        onHide = hide
+    )
+    JokeArrivalHaptic(joke = joke, visible = visible, enabled = settings.haptics)
     JokeToastPill(
         joke = joke,
         visible = visible,
         fromBottom = settings.position == JokePosition.BOTTOM,
+        dwell = settings.dwell,
+        isFavourite = joke in favouriteLines,
+        onToggleFavourite = { onToggleFavourite(joke) },
         onDismiss = hide,
         modifier = modifier
     )
@@ -164,7 +230,9 @@ fun JokeToastHost(
 private fun JokeAutoSchedule(
     settings: JokeSettings,
     active: Boolean,
+    visible: () -> Boolean,
     onShow: () -> Unit,
+    onSettle: suspend () -> Unit,
     onHide: () -> Unit
 ) {
     val resumed = rememberIsResumed()
@@ -172,7 +240,9 @@ private fun JokeAutoSchedule(
     // not shorten the next wait to the first-run one. A local `var` inside the
     // effect reset with it, which is exactly the bug this hoisting fixes.
     var seenOne by remember { mutableStateOf(false) }
+    val currentVisible by rememberUpdatedState(visible)
     val currentShow by rememberUpdatedState(onShow)
+    val currentSettle by rememberUpdatedState(onSettle)
     val currentHide by rememberUpdatedState(onHide)
 
     LaunchedEffect(active, resumed, settings.autoJokesEnabled, settings.frequency) {
@@ -186,13 +256,69 @@ private fun JokeAutoSchedule(
                 }
                 delay(wait)
                 seenOne = true
+                // A moment or a preview got there first. Skip this turn instead of
+                // stacking a second pill on top of the one already up.
+                if (currentVisible()) continue
                 currentShow()
-                delay(JokeVisibleMillis)
+                currentSettle()
                 currentHide()
             }
         } finally {
             // Cancellation is the background case: whatever is up goes away with
             // the loop rather than staying on a screen nobody is looking at.
+            currentHide()
+        }
+    }
+}
+
+/**
+ * The three moments that are not the timer.
+ *
+ * The screen that knows something happened announces it on [JokeMomentBus];
+ * this effect is the one place that decides whether the reader asked for that
+ * moment and whether a line is due. The switch is part of the key because a
+ * reader who turns jokes off should not leave a collector running that will
+ * spring to life if they turn them back on in another window.
+ *
+ * "When you open the app" is once per host lifetime rather than once per resume:
+ * `openShown` is composable state, so backgrounding and returning does not earn
+ * a second greeting. A greeting on every return is not a greeting.
+ */
+@Composable
+private fun JokeMomentSchedule(
+    settings: JokeSettings,
+    active: Boolean,
+    mayShow: (JokeMoment) -> Boolean,
+    onShow: () -> Unit,
+    onSettle: suspend () -> Unit,
+    onHide: () -> Unit
+) {
+    val resumed = rememberIsResumed()
+    var openShown by remember { mutableStateOf(false) }
+    val settingsNow by rememberUpdatedState(settings)
+    val currentMayShow by rememberUpdatedState(mayShow)
+    val currentShow by rememberUpdatedState(onShow)
+    val currentSettle by rememberUpdatedState(onSettle)
+    val currentHide by rememberUpdatedState(onHide)
+
+    LaunchedEffect(active, resumed, settings.autoJokesEnabled, settings.moments) {
+        if (!active || !resumed || !settings.autoJokesEnabled) return@LaunchedEffect
+
+        if (JokeMoment.OPEN in settings.moments && !openShown) {
+            openShown = true
+            if (currentMayShow(JokeMoment.OPEN)) {
+                currentShow()
+                currentSettle()
+                currentHide()
+            }
+        }
+
+        JokeMomentBus.moments.collect { moment ->
+            if (moment == JokeMoment.OPEN) return@collect
+            if (moment !in settingsNow.moments) return@collect
+            if (!currentMayShow(moment)) return@collect
+            currentShow()
+            currentSettle()
             currentHide()
         }
     }
@@ -205,22 +331,31 @@ private fun JokeAutoSchedule(
  * off must still be able to see what the placement they are choosing looks like.
  * The tick starts at whatever was already requested so opening Settings does not
  * replay an old preview.
+ *
+ * A request may name a line - a saved favourite - in which case it is shown as
+ * itself rather than as another random draw. The reader tapped that line because
+ * they wanted that line.
  */
 @Composable
 private fun JokePreviewSchedule(
-    onShow: () -> Unit,
+    onShowNext: () -> Unit,
+    onShowLine: (String) -> Unit,
+    onSettle: suspend () -> Unit,
     onHide: () -> Unit
 ) {
-    val previewTick by JokePreviewBus.requests.collectAsState()
-    var handledPreview by remember { mutableIntStateOf(previewTick) }
-    val currentShow by rememberUpdatedState(onShow)
+    val request by JokePreviewBus.requests.collectAsState()
+    var handledTick by remember { mutableIntStateOf(request.tick) }
+    val currentShowNext by rememberUpdatedState(onShowNext)
+    val currentShowLine by rememberUpdatedState(onShowLine)
+    val currentSettle by rememberUpdatedState(onSettle)
     val currentHide by rememberUpdatedState(onHide)
 
-    LaunchedEffect(previewTick) {
-        if (previewTick <= 0 || previewTick == handledPreview) return@LaunchedEffect
-        handledPreview = previewTick
-        currentShow()
-        delay(JokeVisibleMillis)
+    LaunchedEffect(request) {
+        if (request.tick <= 0 || request.tick == handledTick) return@LaunchedEffect
+        handledTick = request.tick
+        val line = request.line
+        if (line.isNullOrBlank()) currentShowNext() else currentShowLine(line)
+        currentSettle()
         currentHide()
     }
 }
@@ -229,13 +364,14 @@ private fun JokePreviewSchedule(
  * One light tick when a line arrives.
  *
  * It is not a notification and nothing is expected of the reader, so it does not
- * use the long-press or error buzz.
+ * use the long-press or error buzz. [enabled] is the reader's own switch: a pill
+ * that is already unrequested speech is allowed to be silent in the hand too.
  */
 @Composable
-private fun JokeArrivalHaptic(joke: String, visible: Boolean) {
+private fun JokeArrivalHaptic(joke: String, visible: Boolean, enabled: Boolean) {
     val haptics = LocalHapticFeedback.current
-    LaunchedEffect(joke, visible) {
-        if (visible && joke.isNotEmpty()) {
+    LaunchedEffect(joke, visible, enabled) {
+        if (enabled && visible && joke.isNotEmpty()) {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
     }
@@ -248,12 +384,18 @@ private fun JokeArrivalHaptic(joke: String, visible: Boolean) {
  * direction follows the chosen edge: a bottom toast starts below its resting
  * place and rises, a top toast starts above and drops in, and both leave back
  * the way they came (positive offsets are downward).
+ *
+ * [dwell] is passed only so the draw's semantics can describe the arm; the timing
+ * itself belongs to the schedule that owns the wait.
  */
 @Composable
 private fun JokeToastPill(
     joke: String,
     visible: Boolean,
     fromBottom: Boolean,
+    dwell: JokeDwell,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -317,23 +459,37 @@ private fun JokeToastPill(
                 // sentence the reader is already hearing.
                 .semantics { liveRegion = LiveRegionMode.Polite }
         ) {
-            JokeToastBody(joke = joke)
+            JokeToastBody(
+                joke = joke,
+                isFavourite = isFavourite,
+                onToggleFavourite = onToggleFavourite,
+                staysUntilDismissed = dwell.staysUntilDismissed
+            )
         }
     }
 }
 
 /**
- * The named line: Ani-chan's sparkle, her name, and the joke.
+ * The named line: Ani-chan's sparkle, her name, the joke and a way to keep it.
  *
  * Named, not anonymous. A line that arrives by itself with no attribution reads
  * like a notification from nobody; Ani-chan is the app's own voice and gives the
  * toast a reason to be there. `AnimeSparkle` and not `NewReleases`: the update
  * glyph means "go and install something", and this line is not that.
+ *
+ * The heart is the one control in the pill. It sits inside the Surface's tap
+ * target, so its own clickable has to consume the tap - which is what stops
+ * "save this line" from also meaning "dismiss the pill I am reading".
  */
 @Composable
-private fun JokeToastBody(joke: String) {
+private fun JokeToastBody(
+    joke: String,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
+    staysUntilDismissed: Boolean
+) {
     Row(
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+        modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
@@ -362,6 +518,66 @@ private fun JokeToastBody(joke: String) {
                 text = joke,
                 style = MaterialTheme.typography.bodyMedium
             )
+            // "Until tapped" is the one arm where the pill will not leave on its
+            // own, so it says so. Every other arm has a timer, and a caption
+            // explaining that would be noise on every line.
+            if (staysUntilDismissed) {
+                Text(
+                    text = "Tap to dismiss",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f)
+                )
+            }
         }
+        Spacer(modifier = Modifier.size(6.dp))
+        JokeFavouriteButton(isFavourite = isFavourite, onToggle = onToggleFavourite)
+    }
+}
+
+/**
+ * Save or unsave the line currently on screen.
+ *
+ * Capsule-shaped and drawn from the app's own vectors, like every other icon.
+ * The colour rides the effects spring and the press the bouncy one - colour is
+ * not geometry and must not overshoot, which is the same division the Settings
+ * chips use.
+ */
+@Composable
+private fun JokeFavouriteButton(isFavourite: Boolean, onToggle: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    val tint by animateColorAsState(
+        targetValue = if (isFavourite) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "joke_favourite_tint"
+    )
+    val label = if (isFavourite) "Remove from favourites" else "Save this joke"
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .bouncyPress(pressedScale = 0.86f)
+            .clickable(onClickLabel = label, role = Role.Button) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onToggle()
+            }
+            .semantics { contentDescription = label }
+            .testTag("joke_favourite"),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isFavourite) {
+                AppVectorIcons.ActivityLiked
+            } else {
+                AppVectorIcons.ActivityNotLiked
+            },
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

@@ -98,6 +98,19 @@ class CommentThreadStore(
         val activityId: Int,
         val isLoading: Boolean = false,
         /**
+         * True while a thread that already has comments on screen is being
+         * fetched again.
+         *
+         * Kept apart from [isLoading] because the two states are the difference
+         * between "there is nothing yet" and "what you were reading is still
+         * here". Reopening a thread used to blank the list and redraw the
+         * skeleton, so every accidental dismiss-and-reopen cost a second of a
+         * conversation the app had already fetched - and a failed refresh left
+         * the reader with an error where their comments used to be. The store
+         * keeps the last closed thread (see [close]) and seeds it here.
+         */
+        val isRefreshing: Boolean = false,
+        /**
          * The thread, at most one entry per reply id.
          *
          * The sheet keys its `LazyColumn` by id, and Compose treats a repeated key
@@ -135,9 +148,37 @@ class CommentThreadStore(
     private val _state = MutableStateFlow<CommentsState?>(null)
     val state: StateFlow<CommentsState?> = _state.asStateFlow()
 
-    /** Opens the comment thread for [activityId] and loads it. */
+    /**
+     * The thread most recently closed, and the activity it belongs to.
+     *
+     * One entry, deliberately: this is the "I dismissed the sheet by accident"
+     * case, not an offline cache. Keeping every thread would grow for as long as
+     * the app is open and would need an eviction rule that nothing else here
+     * wants; keeping the last one costs one list and makes the reopen instant.
+     * The activity id is stored rather than inferred, because the next thread
+     * the reader opens is usually a different one and must not be shown somebody
+     * else's comments for a frame.
+     */
+    private var cachedActivityId: Int? = null
+    private var cachedReplies: List<ActivityReply> = emptyList()
+
+    /**
+     * Opens the comment thread for [activityId] and loads it.
+     *
+     * If this is the thread that was just closed, its comments are drawn
+     * immediately and the fetch becomes a refresh: [CommentsState.isLoading]
+     * stays false, [CommentsState.isRefreshing] is true, and a failure leaves
+     * the rows where they are with [CommentsState.loadError] set. See
+     * [CommentsState.isRefreshing] for the problem that fixed.
+     */
     fun open(activityId: Int) {
-        _state.value = CommentsState(activityId = activityId, isLoading = true)
+        val cached = if (cachedActivityId == activityId) cachedReplies else emptyList()
+        _state.value = CommentsState(
+            activityId = activityId,
+            isLoading = cached.isEmpty(),
+            isRefreshing = cached.isNotEmpty(),
+            replies = cached
+        )
         scope.launch {
             val result = if (isDemo) {
                 Result.success(emptyList())
@@ -155,6 +196,7 @@ class CommentThreadStore(
                 onSuccess = { replies ->
                     _state.value = current.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         // First occurrence wins: the sheet draws one row per id, and
                         // the server's order is the conversation's order - see the
                         // unique-key note on [CommentsState.replies].
@@ -165,6 +207,10 @@ class CommentThreadStore(
                 onFailure = { error ->
                     _state.value = current.copy(
                         isLoading = false,
+                        isRefreshing = false,
+                        // The seeded rows stay: an error banner over a thread the
+                        // reader can still read is better than replacing it with
+                        // the error - and the retry is the banner's own button.
                         loadError = error.message ?: "Couldn't load comments."
                     )
                 }
@@ -173,6 +219,13 @@ class CommentThreadStore(
     }
 
     fun close() {
+        val current = _state.value ?: return
+        // Snapshot before the state is nulled. Replies, not the whole state: the
+        // error, the draft and the manage dialog all describe a request or a
+        // choice that has no meaning once the sheet is gone, and carrying them
+        // into the next open is how a stale error appears under a fresh thread.
+        cachedActivityId = current.activityId
+        cachedReplies = current.replies
         _state.value = null
     }
 

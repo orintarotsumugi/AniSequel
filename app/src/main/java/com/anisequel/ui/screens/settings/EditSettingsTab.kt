@@ -7,10 +7,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,11 +28,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.RedirectUrlHint
+import com.anisequel.ui.components.StatsBanner
+import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
@@ -41,17 +49,47 @@ import kotlinx.coroutines.launch
  * who this app is signed in as, and who is allowed to open it. The Client ID and
  * the sign-out button are two ends of the same session, and the app lock sits
  * with them because it is the same question asked about the device.
+ *
+ * ## Why the profile card and the list snapshot are here
+ *
+ * Both were on the About page, which is why About had two sign-out buttons, a
+ * sign-in prompt and a second copy of the connection check: it had become the
+ * place where "account" and "about the app" overlapped. The account page is the
+ * page whose whole subject is the session, so the avatar, the demo prompt and
+ * the snapshot taken from that session belong here. About keeps only what is
+ * true of the build regardless of who is signed in.
  */
 @Composable
 fun EditSettingsTab(
     authViewModel: AuthViewModel,
     appLockPreferences: AppLockPreferences,
     onNavigateToLogin: () -> Unit,
+    viewer: ViewerProfile? = null,
+    totalWatchedCount: Int? = null,
+    totalMissedCount: Int? = null,
     modifier: Modifier = Modifier
 ) {
     val authState by authViewModel.uiState.collectAsState()
     val currentClientId by authViewModel.clientId.collectAsState()
+    val context = LocalContext.current
     SettingsScrollColumn(modifier) {
+        if (viewer != null) {
+            ProfileCard(
+                viewer = viewer,
+                // AniList's own profile page, not a Settings route: this is the one
+                // place the app can show the account as AniList sees it.
+                onOpenProfile = {
+                    openExternalUrl(context, "https://anilist.co/user/${viewer.name}")
+                }
+            )
+        } else {
+            // Text only. The sign-in action is the button at the foot of this
+            // page, and a second one here is exactly the kind of duplicate this
+            // rework removed from About - two controls, one logout(), and no way
+            // to tell whether they differed.
+            DemoIdentityCard()
+        }
+
         SectionCard(
             title = "AniList",
             icon = AppVectorIcons.SectionAniList,
@@ -64,6 +102,14 @@ fun EditSettingsTab(
 
             Spacer(modifier = Modifier.height(16.dp))
             RedirectUrlHint()
+        }
+
+        if (totalWatchedCount != null && totalMissedCount != null) {
+            ListSnapshotCard(
+                totalWatchedCount = totalWatchedCount,
+                totalMissedCount = totalMissedCount,
+                isSignedIn = viewer != null
+            )
         }
 
         AppLockCard(appLockPreferences)
@@ -96,6 +142,77 @@ fun EditSettingsTab(
 }
 
 /**
+ * What the app is while nobody is signed in.
+ *
+ * Demo mode is not an error state - the dashboard still works against the demo
+ * list - so this says what is available rather than what is missing. It used to
+ * carry its own "Sign in with AniList" button next to the sign-out button that
+ * switched to "Sign in"; both did the same thing.
+ */
+@Composable
+private fun DemoIdentityCard() {
+    SectionCard(
+        title = "Demo mode",
+        icon = AppVectorIcons.Login,
+        subtitle = "Read-only until you sign in",
+        badge = {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.tertiaryContainer
+            ) {
+                Text(
+                    text = "DEMO",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+        }
+    ) {
+        Text(
+            text = "You are browsing a built-in sample list. Sign in with your AniList " +
+                "account to scan your own completed list, follow franchise trees, and add " +
+                "sequels to Planning in one tap.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Sign in with the button below.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** The scan the dashboard is currently showing, in one card. */
+@Composable
+private fun ListSnapshotCard(
+    totalWatchedCount: Int,
+    totalMissedCount: Int,
+    isSignedIn: Boolean
+) {
+    SectionCard(
+        title = "Your list",
+        icon = AppVectorIcons.List,
+        subtitle = "Snapshot of the current scan"
+    ) {
+        StatsBanner(
+            totalWatched = totalWatchedCount,
+            missedCount = totalMissedCount
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(10.dp))
+        InfoRow(
+            label = "Planning sync",
+            value = if (isSignedIn) "Write-enabled" else "Read-only on public profiles"
+        )
+    }
+}
+
+/**
  * The optional app lock.
  *
  * The switch is disabled, with the reason in its subtitle, when the device has
@@ -113,9 +230,9 @@ private fun AppLockCard(appLockPreferences: AppLockPreferences) {
     }
 
     SectionCard(
-        title = "Privacy",
+        title = "App lock",
         icon = AppVectorIcons.Privacy,
-        subtitle = "Who can see your list."
+        subtitle = "Who can open AniSequel"
     ) {
         SwitchRow(
             title = "Lock AniSequel",
