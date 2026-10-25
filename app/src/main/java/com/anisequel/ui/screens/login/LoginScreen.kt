@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -104,6 +106,18 @@ fun LoginScreen(
                     )
                 )
                 .padding(paddingValues)
+                // The keyboard is the reason the Scan tab is usable at all, and
+                // this column was laid out behind it: with no IME inset the field
+                // the user just tapped stayed at its old y, the keyboard covered
+                // it, and the Scan button underneath it fell off the scrollable
+                // area's bottom - so tapping the field and typing left nothing to
+                // submit with but the keyboard's own Enter key, which did
+                // nothing. Applied after `paddingValues` rather than before so the
+                // gradient still paints behind the status bar, and the already
+                // paid navigation inset is consumed first so the IME does not add
+                // its height on top of it.
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
         ) {
             Column(
                 modifier = Modifier

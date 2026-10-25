@@ -88,20 +88,14 @@ fun SequelPoster(
         // scrolling wall of 96dp covers notices. A single solid colour, tinted
         // from AniList's dominant cover colour when it is known, is one draw and
         // reads the same behind a not-yet-loaded poster.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Movie,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.size(28.dp)
-            )
-        }
+        //
+        // No glyph on top. A movie icon on every unloaded tile turned a grid of
+        // eight posters into a grid of eight identical icons for as long as the
+        // network took, which is louder than the artwork it was standing in for.
+        // The poster's own background colour already says "art is coming", and
+        // with the image cache now living in `noBackupFilesDir` (see
+        // `NetworkClient.createImageLoader`) this state is rare rather than the
+        // first thing every cold start shows.
 
         // Cover artwork
         if (sequel.sequelCoverUrl != null) {
