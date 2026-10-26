@@ -477,7 +477,7 @@ fun AppNavigation(
             startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
             modifier = Modifier.fillMaxSize(),
             enterTransition = {
-                (slideIntoContainer(
+                slideIntoContainer(
                     AnimatedContentTransitionScope.SlideDirection.Left,
                     animationSpec = RouteSlideSpring,
                     // The incoming page starts a quarter of a page to the right
@@ -489,10 +489,10 @@ fun AppNavigation(
                 ) + fadeIn(RouteFadeEffect) + scaleIn(
                     initialScale = 0.94f,
                     animationSpec = ExpressiveMotion.BouncySpatial
-                ))
+                )
             },
             exitTransition = {
-                (slideOutOfContainer(
+                slideOutOfContainer(
                     AnimatedContentTransitionScope.SlideDirection.Left,
                     animationSpec = RouteSlideSpring,
                     // The page being covered barely moves: it is the fixed
@@ -501,27 +501,27 @@ fun AppNavigation(
                 ) + fadeOut(RouteFadeEffect) + scaleOut(
                     targetScale = 0.98f,
                     animationSpec = ExpressiveMotion.FastSpatial
-                ))
+                )
             },
             popEnterTransition = {
-                (slideIntoContainer(
+                slideIntoContainer(
                     AnimatedContentTransitionScope.SlideDirection.Right,
                     animationSpec = RouteSlideSpring,
                     initialOffset = { fullWidth -> fullWidth / 4 }
                 ) + fadeIn(RouteFadeEffect) + scaleIn(
                     initialScale = 0.94f,
                     animationSpec = ExpressiveMotion.BouncySpatial
-                ))
+                )
             },
             popExitTransition = {
-                (slideOutOfContainer(
+                slideOutOfContainer(
                     AnimatedContentTransitionScope.SlideDirection.Right,
                     animationSpec = RouteSlideSpring,
                     targetOffset = { fullWidth -> fullWidth / 12 }
                 ) + fadeOut(RouteFadeEffect) + scaleOut(
                     targetScale = 0.98f,
                     animationSpec = ExpressiveMotion.FastSpatial
-                ))
+                )
             }
         ) {
             composable(AppRoutes.LOGIN) {
