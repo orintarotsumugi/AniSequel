@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import com.anisequel.data.model.ActivityReply
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.ui.viewmodel.CommentThreadStore
 
@@ -297,13 +298,39 @@ private fun ScrollToPostedReply(
     LaunchedEffect(state.postedReplyId, composing) {
         if (composing) return@LaunchedEffect
         val posted = state.postedReplyId ?: return@LaunchedEffect
-        val index = state.replies.indexOfFirst { it.id == posted }
-        if (index < 0) return@LaunchedEffect
-        // The reply's own position: the count lives above the list, not in it.
+        val row = postedReplyRow(
+            replies = state.replies,
+            postedReplyId = posted,
+            hasRefreshBanner = state.loadError != null
+        )
+        if (row < 0) return@LaunchedEffect
         // An index past the end is clamped by `animateScrollToItem`, so a thread
         // that changed under us cannot throw here.
-        listState.animateScrollToItem(index)
+        listState.animateScrollToItem(row)
     }
+}
+
+/**
+ * The row a posted reply occupies in the thread's `LazyColumn`, or -1 when it is
+ * not in the list.
+ *
+ * The list is not the same thing as `replies`: a failed refresh puts a retry
+ * banner above them (see `CommentsThread`), and the skeleton and empty states
+ * replace the rows entirely. Reading `indexOfFirst` straight into
+ * `animateScrollToItem` was one row short whenever that banner was up, so the
+ * scroll stopped on the comment above the one just posted and left the reader's
+ * own reply below the fold. Pulled out of the effect so that arithmetic is
+ * checkable without a Compose runtime - the failure was invisible on screen
+ * unless a refresh happened to fail at the same time as a post.
+ */
+internal fun postedReplyRow(
+    replies: List<ActivityReply>,
+    postedReplyId: Int,
+    hasRefreshBanner: Boolean
+): Int {
+    val index = replies.indexOfFirst { it.id == postedReplyId }
+    if (index < 0) return -1
+    return index + if (hasRefreshBanner) 1 else 0
 }
 
 /**

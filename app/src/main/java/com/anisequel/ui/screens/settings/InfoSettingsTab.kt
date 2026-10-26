@@ -1,5 +1,8 @@
 package com.anisequel.ui.screens.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,28 +10,43 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.changelog.ChangelogVersion
+import com.anisequel.data.diagnostics.CrashReports
 import com.anisequel.data.network.AniListOAuth
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
+import kotlinx.coroutines.delay
 
 /**
  * The About & support page: what this build is, and what it does with your data.
@@ -65,6 +83,7 @@ fun InfoSettingsTab(
 
     SettingsScrollColumn(modifier) {
         BuildCard()
+        CrashReportCard()
         PrivacyCard()
         UpdateSectionCard()
         ChangelogSectionCard(changelog = changelog)
@@ -104,6 +123,156 @@ private fun BuildCard() {
         Spacer(modifier = Modifier.height(10.dp))
         InfoRow(label = "Data source", value = "AniList GraphQL API")
     }
+}
+
+/**
+ * The last force-stop, offered rather than hidden.
+ *
+ * ## Why this is in the app at all
+ *
+ * The app has no crash backend - that is deliberate, and the Privacy card above
+ * promises it. But a crash with no trace is a bug nobody can fix, and the comment
+ * sheet proved it: the report was "it closes when loading the comments", which is
+ * true and unfixable, because reading the source can only rule a line out and never
+ * confirm it. This card is the smallest thing that closes that gap: the trace is
+ * captured on the device, stays on the device, and is one tap from the clipboard
+ * when the reader is willing to send it.
+ *
+ * ## Why the card is absent when there is nothing to show
+ *
+ * A permanently empty "Diagnostics" section is noise on a page about the build, and
+ * it invites the question "is it broken?" from every reader who has never crashed.
+ * The card appears after the crash, which is the only moment it has anything to say.
+ *
+ * ## Why "Copy" confirms in the button rather than a toast
+ *
+ * Android only draws its own "Copied" toast from API 33, and this app's floor is 31
+ * - the same reason the title page's copy row confirms in place. See `CopyLinkRow`.
+ */
+@Composable
+private fun CrashReportCard() {
+    val context = LocalContext.current
+    // Read once per entry to the page: the file only changes when the process dies,
+    // which is not a thing that happens while this screen is on top.
+    var report by remember { mutableStateOf(CrashReports.read(context)) }
+    var showing by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (!copied) return@LaunchedEffect
+        delay(COPY_CONFIRMATION_MILLIS)
+        copied = false
+    }
+
+    // Every `remember` above this line, so the two halves of the screen are not
+    // conditionally composed in different slots - the rule `CommentEntryBar` states
+    // for its own pair of states.
+    val current = report ?: return
+
+    SectionCard(
+        title = "Diagnostics",
+        icon = AppVectorIcons.Warning,
+        subtitle = "The last time AniSequel closed unexpectedly"
+    ) {
+        Text(
+            text = "This build keeps the last crash on this device so it can be " +
+                "reported. It holds the error and your Android version, nothing " +
+                "about your account, and it is never sent anywhere on its own.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        // The exception itself, which is the one line that says whether this is a
+        // network failure, an out-of-memory, or something in the UI - the question
+        // the whole card exists to answer.
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = CrashReports.headline(current),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(12.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        SettingsButton(
+            text = if (copied) "Report copied" else "Copy crash report",
+            onClick = {
+                copyToClipboard(context, current)
+                copied = true
+            },
+            icon = if (copied) AppVectorIcons.CheckCircle else AppVectorIcons.CopyLink,
+            variant = SettingsButtonVariant.Filled,
+            fillWidth = true,
+            testTag = "crash_report_copy"
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsButton(
+            text = "Show the whole report",
+            onClick = { showing = true },
+            variant = SettingsButtonVariant.Text,
+            fillWidth = true,
+            testTag = "crash_report_show"
+        )
+        SettingsButton(
+            text = "Clear it",
+            onClick = {
+                // The card disappears with the report: `report` is the state the
+                // early return above reads, so clearing it and forgetting the file
+                // are the same act.
+                CrashReports.clear(context)
+                report = null
+            },
+            variant = SettingsButtonVariant.Text,
+            fillWidth = true,
+            testTag = "crash_report_clear"
+        )
+    }
+
+    if (showing) {
+        AlertDialog(
+            onDismissRequest = { showing = false },
+            title = { Text("Last crash report") },
+            text = {
+                // Selectable as well as copyable: a reader who would rather send the
+                // two frames that matter than the whole trace can take them.
+                SelectionContainer {
+                    Text(
+                        text = current,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState())
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showing = false }) { Text("Close") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        copyToClipboard(context, current)
+                        copied = true
+                        showing = false
+                    }
+                ) { Text("Copy") }
+            }
+        )
+    }
+}
+
+/** The platform clipboard, `as?` because a device can in principle not publish one. */
+private fun copyToClipboard(context: Context, report: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("AniSequel crash report", report))
 }
 
 /**

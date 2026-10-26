@@ -26,6 +26,7 @@ That is this file. Read the section for the screen before you change it.
 - [The tier list](#the-tier-list)
 - [Home-screen widgets](#home-screen-widgets)
 - [Release notes](#release-notes)
+- [Crashes you cannot see](#crashes-you-cannot-see)
 - [Deliberate non-goals](#deliberate-non-goals)
 - [Keeping the list fresh](#keeping-the-list-fresh)
 - [What survives closing the app](#what-survives-closing-the-app)
@@ -708,6 +709,46 @@ and take the Settings screen down with it.
 Shipping changes without adding a block is a broken build, not an oversight —
 [AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
 together, and `ChangelogTest` and `VersionBaselineTest` enforce it.
+
+---
+
+## Crashes you cannot see
+
+The app has no crash backend and no analytics, and that is a promise the Privacy
+card makes on the About page rather than an oversight. The cost of it is that a
+force-stop is invisible: the system dialog says the app stopped, `logcat` on a
+device nobody is tethered to is gone, and by the time a report reaches the author
+the only information left is the sentence the reader can write down. "It
+force-closes while loading the comments" is a true report and an unfixable one —
+reading the source can rule a line out, it cannot see the line the device died
+on.
+
+`data/diagnostics/CrashReports.kt` closes that gap without a server. It chains
+the platform's uncaught-exception handler, writes the exception, its stack, the
+build and the device model to `files/diagnostics/last-crash.txt`, and then calls
+the handler it replaced, so the app still stops — leaving a note is the only
+difference. Settings → Info grows a Diagnostics card that appears only when that
+file exists, showing the exception on one line with Copy and Show for the whole
+report. Nothing leaves the device unless the reader taps Copy.
+
+Four decisions in it are deliberate:
+
+- **Chained, not replaced.** Android's own handler is what reports the crash and
+  ends the process. Swallowing it would leave the app running in the state that
+  just threw, which is worse than the force-stop.
+- **One file, not a rotating set.** The interesting crash is the most recent one,
+  and five traces would mean five dialogs or a picker nobody wants.
+- **The head of a trace, not the tail.** The exception type and the first frames
+  identify the bug; the bottom is framework plumbing every crash shares. The
+  report is cut at 24k characters and says how much was dropped.
+- **Installed in `Application.onCreate`, not in an Activity.** A background
+  repository call or a widget update runs without one, and a handler installed by
+  the first Activity would miss exactly the failures that happen before it exists.
+
+The format and the file round trip are pinned by `CrashReportsTest`, which is a
+plain JVM test: the half of the object worth testing takes a header string and a
+`File` instead of a `Context`, so the thing that has to be right when the app is
+dying can be checked without crashing it.
 
 ---
 
