@@ -723,15 +723,23 @@ force-closes while loading the comments" is a true report and an unfixable one �
 reading the source can rule a line out, it cannot see the line the device died
 on.
 
-`data/diagnostics/CrashReports.kt` closes that gap without a server. It chains
+`data/diagnostics/CrashReports.kt` closes that gap without a server, and
+`data/repository/DiagnosticsPreferences.kt` decides whether it runs. It chains
 the platform's uncaught-exception handler, writes the exception, its stack, the
 build and the device model to `files/diagnostics/last-crash.txt`, and then calls
 the handler it replaced, so the app still stops — leaving a note is the only
-difference. Settings → Info grows a Diagnostics card that appears only when that
-file exists, showing the exception on one line with Copy and Show for the whole
-report. Nothing leaves the device unless the reader taps Copy.
+difference. Settings → Info → Diagnostics holds the switch, shows the exception
+on one line when there is a report, and offers Copy and Show for the whole thing.
+Nothing leaves the device unless the reader taps Copy.
 
-Four decisions in it are deliberate:
+**It is off until the reader turns it on.** The About page promises there is no
+telemetry, and a build that quietly started writing its own failures to disk
+would be a quiet reversal of that promise — the kind nobody notices, because the
+file is one nobody looks at until something goes wrong. Turning the switch off
+also deletes what was stored: "stop keeping this" is not "keep the one you
+already have".
+
+Five decisions in it are deliberate:
 
 - **Chained, not replaced.** Android's own handler is what reports the crash and
   ends the process. Swallowing it would leave the app running in the state that
@@ -744,11 +752,19 @@ Four decisions in it are deliberate:
 - **Installed in `Application.onCreate`, not in an Activity.** A background
   repository call or a widget update runs without one, and a handler installed by
   the first Activity would miss exactly the failures that happen before it exists.
+- **`SharedPreferences` for the switch, `DataStore` everywhere else.** The flag is
+  read from the handler, on the thread that is already throwing, in a process that
+  is dying; a DataStore read is a suspend call that may never be scheduled. The
+  instance is created at startup so the read is a map lookup, and `install` takes
+  the value as a lambda so a flip in Settings applies to the next crash without a
+  restart.
 
 The format and the file round trip are pinned by `CrashReportsTest`, which is a
 plain JVM test: the half of the object worth testing takes a header string and a
 `File` instead of a `Context`, so the thing that has to be right when the app is
-dying can be checked without crashing it.
+dying can be checked without crashing it. The default is pinned by
+`DiagnosticsPreferencesTest`, because "off" is the consent model rather than a
+preference.
 
 ---
 

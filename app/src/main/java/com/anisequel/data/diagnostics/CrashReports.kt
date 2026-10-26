@@ -39,6 +39,10 @@ import java.util.Locale
  * app's own private storage (`files/diagnostics/`), so nothing leaves the device
  * unless the reader taps Copy and pastes it somewhere.
  *
+ * And only when the reader asked for it: reports are **off by default**, turned
+ * on in Settings > Info > Diagnostics. An app that promises no telemetry does not
+ * get to start writing its own failures to disk because the code found it useful.
+ *
  * ## Why the handler is chained rather than replaced
  *
  * Android installs its own handler (`KillApplicationHandler`), and it is what
@@ -86,15 +90,28 @@ object CrashReports {
      *
      * Deliberately not gated on a debug build: the crashes worth capturing are the
      * ones that happen on the release build the reader installed.
+     *
+     * [enabled] is a provider rather than a `Boolean` because the setting is read
+     * at crash time, not at install time: turning reports off in Settings has to
+     * take effect for the next crash without a restart, and turning them on again
+     * has to work in the same process. The provider must not suspend - it is
+     * called on the thread that is already throwing, and a coroutine dispatched
+     * from a dying process may never run. See `DiagnosticsPreferences`, which
+     * answers from an already-loaded `SharedPreferences` for that reason.
      */
-    fun install(context: Context) {
+    fun install(context: Context, enabled: () -> Boolean) {
         if (installed) return
         installed = true
 
         val app = context.applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            runCatching { record(app, thread.name, throwable) }
+            // A provider that throws reads as "off" - the reader's choice is the
+            // safe default, and this is the one place where guessing "on" would
+            // write to disk against a setting that says not to.
+            if (runCatching(enabled).getOrDefault(false)) {
+                runCatching { record(app, thread.name, throwable) }
+            }
             // A null previous handler is not a state Android produces - the
             // runtime installs `KillApplicationHandler` before `Application` is
             // created - but a `?.` costs nothing and a crash handler is the one

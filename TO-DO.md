@@ -27,11 +27,11 @@ throw, the composer's selection maths is clamped, and the sheet's
 `fillMaxHeight` is a bounded `ModalBottomSheet` height - `ActivityLikersSheet`
 proves that one by working.
 
-What the first step is: **reproduce once on 1.6.2 or later, then read
-Settings > Info > Diagnostics.** That card appears only after a crash and shows
-the exception on one line, with Copy and Show for the whole report; the file is
-`files/diagnostics/last-crash.txt` and the format is pinned by
-`CrashReportsTest`. The exception line names the failing path - an
+What the first step is: **turn on Settings > Info > Diagnostics > "Keep the last
+crash report"** (it is off by default), reproduce once, then come back to that
+card - it shows the exception on one line, with Copy and Show for the whole
+report. The file is `files/diagnostics/last-crash.txt` and the format is pinned
+by `CrashReportsTest`. The exception line names the failing path - an
 `OutOfMemoryError` under `Modifier.blur` on a long feed (see §5.1) is a different
 bug from an `IllegalStateException` in the sheet's composition - and the frames
 say which file to open. Do not guess at a fix before that line exists: a rewrite
