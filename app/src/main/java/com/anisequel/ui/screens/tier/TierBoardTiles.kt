@@ -3,7 +3,6 @@ package com.anisequel.ui.screens.tier
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -459,11 +458,18 @@ internal fun TierDragGhost(
     travel: State<Offset>,
     scrollShift: () -> Float
 ) {
-    val lift by animateFloatAsState(
-        targetValue = 1.08f,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "tier_drag_lift"
-    )
+    // A lift, not a size change: the ghost grows a little as it is picked up,
+    // which is what separates "carrying this" from "the tile is still there".
+    //
+    // This was `animateFloatAsState(targetValue = 1.08f)`, which is a no-op: an
+    // animation whose target never changes is *created* at that target on the
+    // first composition, so the ghost appeared already grown and did not pop at
+    // all. An `Animatable` has a starting value to animate *from*, so the lift
+    // runs once when the ghost enters the composition.
+    val lift = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        lift.animateTo(1.08f, ExpressiveMotion.BouncySpatial)
+    }
     // The same corner the tile it came from draws. A fixed radius here would keep
     // the shadow round while the artwork inside it has become a square, which
     // shows up as a pale halo at the corners of a zoomed-out ghost.
@@ -493,8 +499,8 @@ internal fun TierDragGhost(
             .graphicsLayer {
                 translationX = travel.value.x
                 translationY = travel.value.y + scrollShift()
-                scaleX = lift
-                scaleY = lift
+                scaleX = lift.value
+                scaleY = lift.value
                 shadowElevation = 18f
                 shape = ghostShape
             }

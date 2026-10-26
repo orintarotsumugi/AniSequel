@@ -355,7 +355,13 @@ private fun ActivityEmpty() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ExpressiveEmptyOrb(
-            icon = AppVectorIcons.ProfileActivity,
+            // The same list glyph the Library's empty state uses. These two
+            // screens sit beside each other in the profile's tab bar, and a
+            // comment bubble here beside the Library's timer (or its magnifier,
+            // once a search came back empty) made the same fact - "this list has
+            // nothing in it" - look like three different states. Search is for a
+            // search that came back empty; an unfiltered list is just a list.
+            icon = AppVectorIcons.List,
             containerColor = AniSequelTheme.statusColors.infoContainer,
             iconTint = AniSequelTheme.statusColors.info
         )

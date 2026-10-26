@@ -50,10 +50,17 @@ internal fun JokeChoiceChip(
     testTag: String
 ) {
     val haptics = LocalHapticFeedback.current
+    // `selected` is checked before `enabled`, because the two overlap on purpose:
+    // "Mixed" is the active quick-pick and is deliberately not clickable, and the
+    // last tone that is still on cannot be switched off. Enabled-first meant the
+    // one chip that describes the current state was drawn in the disabled grey,
+    // so the most informative pill in the card looked like the least available
+    // one. A selected-and-locked chip now reads as selected; only the tap is
+    // withheld.
     val container by animateColorAsState(
         targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.surfaceContainer
             selected -> MaterialTheme.colorScheme.primaryContainer
+            !enabled -> MaterialTheme.colorScheme.surfaceContainer
             else -> MaterialTheme.colorScheme.surfaceContainerHigh
         },
         animationSpec = ExpressiveMotion.FastColorEffects,
@@ -61,8 +68,11 @@ internal fun JokeChoiceChip(
     )
     val content by animateColorAsState(
         targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             selected -> MaterialTheme.colorScheme.onPrimaryContainer
+            // 0.62 rather than 0.5: this is still a readable label, not a
+            // decorative ghost, and half-alpha `onSurfaceVariant` measured under
+            // 4.5:1 on `surfaceContainer`.
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         animationSpec = ExpressiveMotion.FastColorEffects,
@@ -74,10 +84,10 @@ internal fun JokeChoiceChip(
         label = "joke_chip_border_width"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.outlineVariant
+        targetValue = when {
+            selected -> MaterialTheme.colorScheme.primary
+            !enabled -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            else -> MaterialTheme.colorScheme.outlineVariant
         },
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "joke_chip_border_colour"

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,6 +126,21 @@ private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
  * underneath content reads as the background rather than as replaced content
  * while the slide is moving. The fade is the effects token, not the spatial one,
  * for the same reason colour transitions are: it must not overshoot.
+ *
+ * ## The page expands as it arrives
+ *
+ * The transition is asymmetric, and deliberately so. The incoming page travels
+ * only a quarter of a screen and springs up from 94%, while the page it covers
+ * shifts a twelfth and settles back to 98%. A symmetric pair - both sliding a
+ * full width, both fading - reads as two cards swapping places. This reads as the
+ * new page growing out from over the old one, which is the same "expanding"
+ * language the app's lists, sheets and counters already use.
+ *
+ * Both spatial values are shared tokens: the scale uses [ExpressiveMotion.BouncySpatial]
+ * so the arrival gets a little overshoot, and the departure uses
+ * [ExpressiveMotion.FastSpatial] so it does not wobble while it is being covered.
+ * `MotionStyle.INSTANT` turns both into `snap()` inside those tokens, and
+ * `SMOOTH` removes the overshoot without changing the shape.
  */
 private val RouteSlideSpring get() = ExpressiveMotion.DefaultSpatialOffset
 private val RouteFadeEffect get() = ExpressiveMotion.DefaultEffects
@@ -460,28 +477,51 @@ fun AppNavigation(
             startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
             modifier = Modifier.fillMaxSize(),
             enterTransition = {
-                (slideIntoContainer(
+                slideIntoContainer(
                     AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = RouteSlideSpring
-                ) + fadeIn(RouteFadeEffect))
+                    animationSpec = RouteSlideSpring,
+                    // The incoming page starts a quarter of a page to the right
+                    // instead of a full width. A full-width slide is a card
+                    // being turned over; a shorter travel with a growing page
+                    // reads as this screen expanding out of the one before it,
+                    // and it keeps both surfaces on screen while they cross.
+                    initialOffset = { fullWidth -> fullWidth / 4 }
+                ) + fadeIn(RouteFadeEffect) + scaleIn(
+                    initialScale = 0.94f,
+                    animationSpec = ExpressiveMotion.BouncySpatial
+                )
             },
             exitTransition = {
-                (slideOutOfContainer(
+                slideOutOfContainer(
                     AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = RouteSlideSpring
-                ) + fadeOut(RouteFadeEffect))
+                    animationSpec = RouteSlideSpring,
+                    // The page being covered barely moves: it is the fixed
+                    // surface the new one grows over, not a card sliding away.
+                    targetOffset = { fullWidth -> fullWidth / 12 }
+                ) + fadeOut(RouteFadeEffect) + scaleOut(
+                    targetScale = 0.98f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                )
             },
             popEnterTransition = {
-                (slideIntoContainer(
+                slideIntoContainer(
                     AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = RouteSlideSpring
-                ) + fadeIn(RouteFadeEffect))
+                    animationSpec = RouteSlideSpring,
+                    initialOffset = { fullWidth -> fullWidth / 4 }
+                ) + fadeIn(RouteFadeEffect) + scaleIn(
+                    initialScale = 0.94f,
+                    animationSpec = ExpressiveMotion.BouncySpatial
+                )
             },
             popExitTransition = {
-                (slideOutOfContainer(
+                slideOutOfContainer(
                     AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = RouteSlideSpring
-                ) + fadeOut(RouteFadeEffect))
+                    animationSpec = RouteSlideSpring,
+                    targetOffset = { fullWidth -> fullWidth / 12 }
+                ) + fadeOut(RouteFadeEffect) + scaleOut(
+                    targetScale = 0.98f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                )
             }
         ) {
             composable(AppRoutes.LOGIN) {

@@ -703,7 +703,11 @@ fun ProfileLibraryTab(
                     } else {
                         null
                     },
-                    query = query
+                    query = query,
+                    // A status or favourites chip narrows the list even when the
+                    // search box is empty, so the empty state has to say that
+                    // rather than claiming the whole list is empty.
+                    isFiltered = filter != LibraryFilter.ALL
                 )
             }
         } else {
@@ -1055,7 +1059,9 @@ private fun LibraryEmpty(
     isLoading: Boolean,
     query: String,
     /** Why the list could not be read, or null when it was. Never both empty and failed. */
-    failedMessage: String? = null
+    failedMessage: String? = null,
+    /** True when a status/favourite chip is excluding entries as well as (or instead of) text. */
+    isFiltered: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -1071,11 +1077,17 @@ private fun LibraryEmpty(
             return@Column
         }
         val failed = failedMessage != null
+        val searched = query.isNotBlank()
+        val narrowed = searched || isFiltered
         ExpressiveEmptyOrb(
             icon = when {
                 failed -> AppVectorIcons.Info
-                query.isBlank() -> AppVectorIcons.StatEpisodeCount
-                else -> AppVectorIcons.Search
+                // A plain empty list is a list; a search or a filter that
+                // matched nothing is a search. The two used to share this orb
+                // with the Activity tab's comment bubble, so "empty list" looked
+                // like three different states across one screen.
+                narrowed -> AppVectorIcons.Search
+                else -> AppVectorIcons.List
             },
             containerColor = AniSequelTheme.statusColors.infoContainer,
             iconTint = AniSequelTheme.statusColors.info
@@ -1087,8 +1099,9 @@ private fun LibraryEmpty(
             // so they are different sentences.
             text = when {
                 failed -> failedMessage
-                query.isBlank() -> "Nothing in this list yet"
-                else -> "No matches for \"$query\""
+                searched -> "No matches for \"$query\""
+                isFiltered -> "No titles match these filters"
+                else -> "Nothing in this list yet"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

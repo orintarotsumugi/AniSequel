@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -512,6 +513,14 @@ internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifi
     val shape = remember {
         RoundedCornerShape(tierTileCornerRadius(TIER_TRAY_ITEM_WIDTH.value).dp)
     }
+    // The board's ghost pops as it is lifted; this one used to be born at its
+    // final scale, so the same gesture produced a tile that grew under the finger
+    // on the board and a tray poster that merely appeared. One motion, both
+    // places: an `Animatable` to grow from 1, read in the draw phase.
+    val lift = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        lift.animateTo(1.12f, ExpressiveMotion.BouncySpatial)
+    }
 
     Box(
         modifier = modifier
@@ -520,8 +529,8 @@ internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifi
             // Transformed in the draw phase, so the lift costs a repaint rather
             // than a recomposition - the rule AGENTS.md section 3 asks for.
             .graphicsLayer {
-                scaleX = 1.12f
-                scaleY = 1.12f
+                scaleX = lift.value
+                scaleY = lift.value
                 shadowElevation = 16f
                 this.shape = shape
             }

@@ -1,11 +1,20 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.TierListViewModel
 
 /**
@@ -74,45 +83,86 @@ fun TierListScreen(
         if (document == null) onNavigateBack() else viewModel.closeList()
     }
 
-    if (document == null) {
-        TierLibraryScreen(
-            documents = library.documents,
-            recent = recent,
-            librarySize = candidates.size,
-            onOpen = viewModel::openList,
-            onCreate = viewModel::createList,
-            onRename = viewModel::renameList,
-            onDelete = viewModel::deleteList,
-            onNavigateBack = onNavigateBack,
-            modifier = modifier
-        )
-    } else {
-        TierBoardScreen(
-            document = document,
-            assignment = assignment,
-            candidates = candidates,
-            filter = filter,
-            orphaned = orphaned,
-            isSeeding = isSeeding,
-            notice = notice,
-            undoLabel = undoLabel,
-            redoLabel = redoLabel,
-            onSeed = viewModel::seedFromScores,
-            onMove = viewModel::moveTo,
-            onClearPlacements = viewModel::clearPlacements,
-            onUndo = viewModel::undo,
-            onRedo = viewModel::redo,
-            onRenameTier = viewModel::renameTier,
-            onAddTier = viewModel::addTier,
-            onRemoveTier = viewModel::removeTier,
-            onTierColor = viewModel::setTierColor,
-            onTierScoreFloor = viewModel::setTierScoreFloor,
-            onFilterChange = viewModel::setFilter,
-            onDisplayChange = viewModel::setDisplay,
-            onZoomChange = viewModel::setZoom,
-            onDismissNotice = viewModel::dismissNotice,
-            onLeave = viewModel::closeList,
-            modifier = modifier
-        )
+    // The switch between the shelf of lists and an open board is a state change
+    // inside one route, so the route transition never sees it: without this it
+    // was a hard cut in the middle of the destination. `contentKey` is the list
+    // id, not the document, because the document is replaced on every edit - a
+    // drag, a rename, an undo - and animating those would re-open the screen
+    // under the finger.
+    AnimatedContent(
+        targetState = document,
+        modifier = modifier.fillMaxSize(),
+        contentKey = { it?.id },
+        transitionSpec = {
+            val opening = targetState != null
+            // Opening moves towards the left, closing towards the right: the same
+            // direction language as a route push and pop, so the gesture reads
+            // the same wherever the person is.
+            val direction = if (opening) {
+                AnimatedContentTransitionScope.SlideDirection.Left
+            } else {
+                AnimatedContentTransitionScope.SlideDirection.Right
+            }
+            (slideIntoContainer(
+                direction,
+                animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                // A short travel rather than a whole page: the list expands out
+                // of the shelf it was tapped on, and the shelf recedes under it.
+                initialOffset = { fullWidth -> fullWidth / 6 }
+            ) + fadeIn(ExpressiveMotion.DefaultEffects) + scaleIn(
+                initialScale = 0.96f,
+                animationSpec = ExpressiveMotion.BouncySpatial
+            )) togetherWith (slideOutOfContainer(
+                direction,
+                animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                targetOffset = { fullWidth -> fullWidth / 12 }
+            ) + fadeOut(ExpressiveMotion.DefaultEffects) + scaleOut(
+                targetScale = 0.98f,
+                animationSpec = ExpressiveMotion.FastSpatial
+            ))
+        },
+        label = "tier_library_board"
+    ) { openDocument ->
+        if (openDocument == null) {
+            TierLibraryScreen(
+                documents = library.documents,
+                recent = recent,
+                librarySize = candidates.size,
+                onOpen = viewModel::openList,
+                onCreate = viewModel::createList,
+                onRename = viewModel::renameList,
+                onDelete = viewModel::deleteList,
+                onNavigateBack = onNavigateBack,
+                modifier = Modifier
+            )
+        } else {
+            TierBoardScreen(
+                document = openDocument,
+                assignment = assignment,
+                candidates = candidates,
+                filter = filter,
+                orphaned = orphaned,
+                isSeeding = isSeeding,
+                notice = notice,
+                undoLabel = undoLabel,
+                redoLabel = redoLabel,
+                onSeed = viewModel::seedFromScores,
+                onMove = viewModel::moveTo,
+                onClearPlacements = viewModel::clearPlacements,
+                onUndo = viewModel::undo,
+                onRedo = viewModel::redo,
+                onRenameTier = viewModel::renameTier,
+                onAddTier = viewModel::addTier,
+                onRemoveTier = viewModel::removeTier,
+                onTierColor = viewModel::setTierColor,
+                onTierScoreFloor = viewModel::setTierScoreFloor,
+                onFilterChange = viewModel::setFilter,
+                onDisplayChange = viewModel::setDisplay,
+                onZoomChange = viewModel::setZoom,
+                onDismissNotice = viewModel::dismissNotice,
+                onLeave = viewModel::closeList,
+                modifier = Modifier
+            )
+        }
     }
 }

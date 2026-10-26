@@ -109,7 +109,32 @@ private fun writeExportFile(context: Context, bitmap: Bitmap, listName: String):
             throw IOException("PNG encoding failed")
         }
     }
+    pruneOldExports(directory, keep = file)
     return file
+}
+
+/**
+ * Deletes all but the newest few exports, keeping [keep].
+ *
+ * The cache is not a promise to clean up after the app: Android evicts it under
+ * storage pressure, but a phone with room keeps everything written to it, and a
+ * 4K board is tens of megabytes. Sharing the same list five times used to leave
+ * five full-size PNGs in the cache for no reason, and they are duplicates of a
+ * file the person already sent.
+ *
+ * Two older files are kept rather than none because the share chooser may still
+ * be reading the file it was handed when the next export is written - deleting
+ * the one being read turns a second share into a broken first one.
+ */
+private fun pruneOldExports(directory: File, keep: File) {
+    val exports = directory.listFiles()
+        ?.filter { it.isFile && it.extension == "png" }
+        ?: return
+    exports.asSequence()
+        .filter { it != keep }
+        .sortedByDescending { it.lastModified() }
+        .drop(2)
+        .forEach { it.delete() }
 }
 
 /**
