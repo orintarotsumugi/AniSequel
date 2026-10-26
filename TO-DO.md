@@ -11,11 +11,34 @@ problem and should jump the queue.
 
 ## 0. Correctness
 
-**Nothing open.** This queue is for correctness and security problems and should
-jump everything below it. It held one entry — a tier-list key that was written and
-never read — which is now deleted rather than wired up; see [Closed](#closed).
+### 0.1 The comment sheet force-stops while loading a thread — OPEN, needs a trace
 
-The section is kept rather than renumbered away so that the `§N.M` references
+What is actually wrong: opening the comment sheet on an activity closes the app.
+The report is exact and useless — "it force-closes when loading the comments" —
+and there is no stack trace, because a force-stop leaves nothing on the device
+once the system dialog is dismissed and the app has no crash backend by design.
+
+What is *not* wrong, and has already been ruled out by reading the code and by
+two hardening rounds: every repository call on that path is wrapped in
+`repositoryResult` (an API or JSON failure becomes an error message, not a
+throw), the markdown parser catches `Exception` and `StackOverflowError`, the
+`LazyColumn` keys are deduped in `CommentThreadStore` so a repeated id cannot
+throw, the composer's selection maths is clamped, and the sheet's
+`fillMaxHeight` is a bounded `ModalBottomSheet` height - `ActivityLikersSheet`
+proves that one by working.
+
+What the first step is: **turn on Settings > Info > Diagnostics > "Keep the last
+crash report"** (it is off by default), reproduce once, then come back to that
+card - it shows the exception on one line, with Copy and Show for the whole
+report. The file is `files/diagnostics/last-crash.txt` and the format is pinned
+by `CrashReportsTest`. The exception line names the failing path - an
+`OutOfMemoryError` under `Modifier.blur` on a long feed (see §5.1) is a different
+bug from an `IllegalStateException` in the sheet's composition - and the frames
+say which file to open. Do not guess at a fix before that line exists: a rewrite
+of a 1,900-line surface that cannot be verified locally is how a working screen
+is replaced by a differently broken one.
+
+The section numbering is kept rather than shifted so that the `§N.M` references
 throughout this file, and in the code comments that point at it, keep pointing at
 the right thing. If you add something here, it goes above `## 1`.
 

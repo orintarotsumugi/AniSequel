@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.6.2",
+      "entries": [
+        {
+          "title": "Crash reports, and they are off until you say otherwise",
+          "detail": "The comment sheet has been force-closing while it loads a thread, and the report that comes back is the sentence \"it closes when loading the comments\" - which is true and unfixable, because a force-stop leaves nothing behind once the system dialog is dismissed and reading the source can only rule a line out. So the next crash can now leave a note: the exception, its stack, the app version and the device model, written to the app's own private storage. It is off by default. Settings > Info > Diagnostics has the switch, the last report when there is one, and Copy / Show / Clear; nothing is ever uploaded, and turning the switch off deletes whatever was stored. If you are reporting a bug, turn it on, reproduce the crash, then come back to that card."
+        },
+        {
+          "title": "The app says where it comes from",
+          "detail": "AniSequel is installed from GitHub rather than a store, so Settings > Info > Help & links now carries the repository - the download page, the source and the release notes for the build in your hand - with the GitHub mark next to it, and a Report a problem row that opens the issue tracker. That is also where a copied crash report is meant to go."
+        },
+        {
+          "title": "A posted reply scrolls to the right row",
+          "detail": "Posting a reply scrolls the sheet to it, and the scroll was one row short whenever the refresh above the list had failed: the list's first item is an error row in that case, not a reply, so the target index landed on the comment above the new one and left your own reply just off screen. The offset accounts for the error row now."
+        }
+      ]
+    },
+    {
       "version": "1.6.1",
       "entries": [
         {

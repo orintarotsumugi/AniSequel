@@ -118,6 +118,11 @@ object AppVectorIcons {
     val CopyLink = Icons.Default.Link
     val Visibility = Icons.Default.Visibility
 
+    // GitHub's own mark, for the link to this app's source. The one glyph here
+    // that is a brand rather than a drawing of an idea: a link to GitHub wearing
+    // a generic "code" or "link" icon is a link the reader has to read.
+    val GitHub = AppExtraVectors.GitHub
+
     // The connection status strip's two faces. SignalOn is the same glyph the
     // system Wi-Fi picker uses, so "can I reach AniList" reads without a label.
     val SignalOn = Icons.Default.Wifi
