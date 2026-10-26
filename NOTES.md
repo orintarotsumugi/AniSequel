@@ -911,6 +911,26 @@ rule `Modifier.graphicsLayer { }` follows for scale. Do not turn this back into 
 `Shape`: a shape that looks like a pure function of its arguments is tempting, and
 the layer's outline cache is what makes it not one.
 
+Drawing it unlocked a second bug that the frozen frame had hidden. The morph's two
+endpoints were a nine-lobed cookie and an eight-petal flower, and `Morph` matches
+curves by feature proximity rather than by vertex index. Those two outlines have no
+stable correspondence, so the frames in the middle folded through themselves — the
+torn clover again, this time moving. The pair is the adjacent cookie/soft-burst
+entry from Material's own loading-indicator sequence now, whose curves are authored
+to interpolate. Both the silhouette and the icon read one `ExpressiveMotion.OrbMorph`
+clock, which rests on each shape before travelling, so the orb breathes instead of
+spinning. `writeSilhouette` takes a `scaleFraction` because the fill is held back
+from the box edge to leave room for the aura drawn behind it.
+
+The icon inside the orb also stopped being a per-screen decision. The profile's
+Activity and Library tabs sit beside each other and were showing a comment bubble
+on one and a timer on the other for the same state — an ordinary empty list — with
+a magnifier on top of that once the Library's search matched nothing. All three
+now say "empty list" with the list glyph. The magnifier is reserved for a search
+or a filter that actually narrowed the list, which is also why `LibraryEmpty`
+takes `isFiltered` and says "No titles match these filters" rather than "Nothing
+in this list yet" when a status chip is on.
+
 ---
 
 ## One destination, one copy
@@ -980,11 +1000,20 @@ labels while the host owns the numbers can promise a pace it does not deliver.
 
 The tone filter is the same argument one level down. `AppJokes` groups its lines
 by `JokeTone` and exposes `poolFor(tones)`, so the shuffle bag cycles the
-*selected* lines rather than cycling all 475 and showing the one in five the
-reader asked not to see. The last tone cannot be switched off — the repository
+*selected* lines rather than cycling the whole pool and showing the one in five
+the reader asked not to see. The last tone cannot be switched off — the repository
 refuses that write as well as the UI, because a stored flag is not a guarantee —
 and an empty stored tone set means every tone rather than an empty pool, which is
 what a cleared preference or a downgrade looks like.
+
+The lines themselves are in `JokeLinesReader` (feelings, backlog, the app's own
+voice) and `JokeLinesShow` (craft and dark), and `AppJokes` is only the index and
+the draw. Splitting the text out is what kept the object under the file ceiling
+without splitting it by line count: the two files are the reader's side of the
+hobby and the shows' side, so a line that moves between them is a line whose
+subject changed, which is worth seeing in a diff. The selection API did not move
+with the text, which is why `AppJokesTest` still pins the pool without knowing
+which file a line came from.
 
 There are five tones since 1.6.0. `DARK` was split out of `META` because the
 reader who wants Ani-chan's voice is not necessarily the reader who wants a joke
@@ -1021,6 +1050,16 @@ throwing on launch. It is the same reason `AppJokes` has no Compose imports.
 already the truth the surface draws from and a channel would need draining
 between lines. That is also why "show me one more" during a manual pill replaces
 the line instead of stacking a second one.
+
+A line belongs to the effect that showed it, not to the screen. Every show bumps
+a counter and returns the value, and the effect hands that token back when it
+hides the pill; a hide carrying a token that is no longer current does nothing.
+Before that, every trigger ended its turn by hiding "the pill", which meant
+whatever happened to be up: a preview tapped two seconds into a timer joke was cut
+off when that joke's dwell expired, and a preview could hide a newer timer line
+the same way. The token also matters on cancellation, where a hide written after
+the suspending dwell never runs at all — a moment line cancelled by navigating
+away used to stay on screen with nothing left to take it down.
 
 The preview button does not mock the toast. It bumps a counter in
 `JokePreviewBus`, and the single host mounted by `AppNavigation` — which outlives

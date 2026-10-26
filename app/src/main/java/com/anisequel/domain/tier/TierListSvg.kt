@@ -78,22 +78,40 @@ object TierListSvg {
         append("height=\"").append(num(layout.height)).append("\" ")
         append("viewBox=\"0 0 ").append(num(layout.width)).append(' ').append(num(layout.height)).append("\">\n")
 
-        append("  <rect width=\"100%\" height=\"100%\" fill=\"").append(hex(palette.background)).append("\"/>\n")
+        append("  <rect width=\"100%\" height=\"100%\"").color("fill", palette.background).append("/>\n")
 
-        // Heading. The title is the one text in the document that can be long
-        // enough to run past the right edge, so it is clipped rather than allowed
-        // to widen the page.
-        append("  <text x=\"").append(num(PADDING)).append("\" y=\"").append(num(PADDING + 34f))
+        // Heading. The title is the one text in the document whose length nobody
+        // chose, so it is clipped to the page rather than allowed to widen it.
+        // The comment here always claimed this; the writer then emitted the raw
+        // string with no clip at all, so a long list name ran off the right edge
+        // and was cut by the viewport instead of by the document.
+        //
+        // A clip rather than an ellipsis because this layer has no text metrics:
+        // measuring a string is an Android API, and this file is deliberately
+        // free of Android imports. A clip is also what a vector document should
+        // do - the full title is still in the file for a search or a screen
+        // reader, and a viewer that wants to reflow it can.
+        append("  <defs>\n")
+        append("    <clipPath id=\"heading-clip\">\n")
+        append("      <rect x=\"").append(num(PADDING)).append("\" y=\"").append(num(PADDING - 12f))
+            .append("\" width=\"").append(num((layout.width - PADDING * 2f).coerceAtLeast(1f)))
+            .append("\" height=\"84\"/>\n")
+        append("    </clipPath>\n")
+        append("  </defs>\n")
+        append("  <g clip-path=\"url(#heading-clip)\">\n")
+
+        append("    <text x=\"").append(num(PADDING)).append("\" y=\"").append(num(PADDING + 34f))
             .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
-            .append("font-size=\"26\" font-weight=\"700\" fill=\"").append(hex(palette.headingText))
-            .append("\" xml:space=\"preserve\">").append(escape(layout.title)).append("</text>\n")
+            .append("font-size=\"26\" font-weight=\"700\"").color("fill", palette.headingText)
+            .append(" xml:space=\"preserve\">").append(escape(layout.title)).append("</text>\n")
 
         layout.subtitle?.let { subtitle ->
-            append("  <text x=\"").append(num(PADDING)).append("\" y=\"").append(num(PADDING + 58f))
+            append("    <text x=\"").append(num(PADDING)).append("\" y=\"").append(num(PADDING + 58f))
                 .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
-                .append("font-size=\"14\" fill=\"").append(hex(palette.subheadingText))
-                .append("\">").append(escape(subtitle)).append("</text>\n")
+                .append("font-size=\"14\"").color("fill", palette.subheadingText)
+                .append(">").append(escape(subtitle)).append("</text>\n")
         }
+        append("  </g>\n")
 
         val tierById = tiers.associateBy { it.id }
         // One map rather than `firstOrNull` per tile: a 300-title board did
@@ -101,7 +119,7 @@ object TierListSvg {
         // otherwise linear.
         val candidateById = candidates.associateBy { it.mediaId }
 
-        layout.rows.forEach { row ->
+        layout.rows.forEachIndexed { index, row ->
             if (tierById[row.tierId] == null) {
                 // A row whose tier has been deleted since the layout was computed.
                 // Drawing it anyway would resurrect a tier the person removed a
@@ -111,17 +129,63 @@ object TierListSvg {
             append("  <g>\n")
             append("    <rect x=\"").append(num(row.x)).append("\" y=\"").append(num(row.y))
                 .append("\" width=\"").append(num(row.width)).append("\" height=\"").append(num(row.height))
-                .append("\" rx=\"10\" fill=\"").append(hex(row.colorArgb)).append("\" fill-opacity=\"0.92\"/>\n")
+                .append("\" rx=\"10\"").color("fill", row.colorArgb, alpha = 0.92f).append("/>\n")
+
+            // The number the row holds, under its label - the same pair the board
+            // and the PNG exporter draw. It was missing here, so the one export
+            // that is supposed to be the lossless copy of the screen was also the
+            // one with no answer to "how many are in S".
+            //
+            // Counted geometrically, from the layout, rather than from the
+            // assignment: the caller may have handed over a filtered assignment,
+            // and the layout is the only thing that knows what is actually in the
+            // document being written - the same rule `drawRows` uses for the PNG.
+            val count = layout.items.count { it.y >= row.y && it.bottom <= row.bottom }
+
+            // The label is clipped to its gutter for the same reason the title is
+            // clipped to the page: a tier can be renamed to 24 characters, which
+            // does not fit an 84-unit gutter at 20pt. The PNG exporter ellipsizes
+            // against the gutter; this renderer cannot measure, so it cuts at the
+            // same edge instead of letting the name spill over the posters.
+            //
+            // Keyed by row position, not by tier id: an id round-tripped from
+            // storage is arbitrary text and need not be a legal XML id, while the
+            // index is unique and always numeric-safe.
+            val labelClip = "row-$index"
+            append("    <clipPath id=\"").append(labelClip).append("\">\n")
+            append("      <rect x=\"").append(num(row.x + LABEL_INSET))
+                .append("\" y=\"").append(num(row.y))
+                .append("\" width=\"").append(num(LABEL_GUTTER - LABEL_INSET * 2f))
+                .append("\" height=\"").append(num(row.height)).append("\"/>\n")
+            append("    </clipPath>\n")
+            append("    <g clip-path=\"url(#").append(labelClip).append(")\">\n")
 
             // The label sits in the gutter and is vertically centred on the row,
             // which is what makes a short row and a tall row read as the same
-            // control.
-            val labelY = row.y + row.height / 2f + LABEL_FONT_SIZE * 0.36f
-            append("    <text x=\"").append(num(row.x + LABEL_GUTTER / 2f)).append("\" y=\"").append(num(labelY))
+            // control. With a count under it the pair is centred together; a
+            // single baseline for both cases would leave the label high in an
+            // empty row and the count half outside a full one.
+            //
+            // The two offsets are the PNG exporter's own: `drawRows` puts the
+            // label at `centreY - 2` with a count and `centreY + 7` without, so
+            // the same list exported either way does not shift its letters by a
+            // couple of units when the formats are compared side by side.
+            val centerY = row.y + row.height / 2f
+            val labelY = centerY + if (count > 0) LABEL_WITH_COUNT_SHIFT else LABEL_WITHOUT_COUNT_SHIFT
+            append("      <text x=\"").append(num(row.x + LABEL_GUTTER / 2f)).append("\" y=\"").append(num(labelY))
                 .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
                 .append("font-size=\"").append(LABEL_FONT_SIZE).append("\" font-weight=\"700\" ")
-                .append("text-anchor=\"middle\" fill=\"").append(hex(palette.labelText))
-                .append("\">").append(escape(row.label)).append("</text>\n")
+                .append("text-anchor=\"middle\"").color("fill", palette.labelText)
+                .append(">").append(escape(row.label)).append("</text>\n")
+            if (count > 0) {
+                append("      <text x=\"").append(num(row.x + LABEL_GUTTER / 2f))
+                    .append("\" y=\"").append(num(labelY + LABEL_COUNT_LINE_HEIGHT))
+                    .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
+                    .append("font-size=\"11\" text-anchor=\"middle\"")
+                    .color("fill", palette.labelText, alpha = 0.82f)
+                    .append(">").append(count).append("</text>\n")
+            }
+            append("    </g>\n")
             append("  </g>\n")
         }
 
@@ -149,7 +213,8 @@ object TierListSvg {
             append("    </clipPath>\n")
             append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
                 .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
-                .append("\" rx=\"").append(num(corner)).append("\" fill=\"").append(hex(palette.tileFill)).append("\"/>\n")
+                .append("\" rx=\"").append(num(corner)).append("\"")
+                .color("fill", palette.tileFill).append("/>\n")
 
             embeddedPosters[box.mediaId]?.let { dataUri ->
                 // `<image>` has no corner radius, so the artwork used to cover the
@@ -163,6 +228,15 @@ object TierListSvg {
                     .append("href=\"").append(escape(dataUri)).append("\"/>\n")
             }
 
+            // A hairline over the artwork edge, drawn after the image exactly as
+            // the PNG exporter draws it. Without it a poster that happens to be
+            // the same value as the tile fill dissolves into the board, and every
+            // cover loses the defined edge the screen gives it.
+            append("    <rect x=\"").append(num(box.x)).append("\" y=\"").append(num(box.y))
+                .append("\" width=\"").append(num(box.width)).append("\" height=\"").append(num(posterHeightForBox))
+                .append("\" rx=\"").append(num(corner)).append("\" fill=\"none\" stroke-width=\"1\"")
+                .color("stroke", palette.tileStroke).append("/>\n")
+
             if (display.showTitles && candidate != null) {
                 val caption = escape(tierCaption(candidate.title, display.titleLength))
                 when (display.titlePosition) {
@@ -170,8 +244,9 @@ object TierListSvg {
                         append("    <text x=\"").append(num(box.x + box.width / 2f))
                             .append("\" y=\"").append(num(box.y + posterHeightForBox + 18f))
                             .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
-                            .append("font-size=\"11\" fill=\"").append(hex(palette.captionText))
-                            .append("\" text-anchor=\"middle\">").append(caption).append("</text>\n")
+                            .append("font-size=\"11\" text-anchor=\"middle\"")
+                            .color("fill", palette.captionText)
+                            .append(">").append(caption).append("</text>\n")
                     }
                     TierTitlePosition.ON_COVER -> {
                         // A scrim rather than a solid band, matching the board's
@@ -184,8 +259,9 @@ object TierListSvg {
                         append("    <text x=\"").append(num(box.x + box.width / 2f))
                             .append("\" y=\"").append(num(box.y + 15f))
                             .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
-                            .append("font-size=\"11\" fill=\"").append(hex(palette.labelText))
-                            .append("\" text-anchor=\"middle\">").append(caption).append("</text>\n")
+                            .append("font-size=\"11\" text-anchor=\"middle\"")
+                            .color("fill", palette.labelText)
+                            .append(">").append(caption).append("</text>\n")
                     }
                 }
             }
@@ -198,6 +274,24 @@ object TierListSvg {
     private const val PADDING = 24f
     private const val LABEL_GUTTER = 84f
     private const val LABEL_FONT_SIZE = 20
+
+    /** How far the label moves up when a count sits under it. */
+    private const val LABEL_WITH_COUNT_SHIFT = -2f
+
+    /** The label's baseline when it is alone in the gutter, matching the PNG. */
+    private const val LABEL_WITHOUT_COUNT_SHIFT = 7f
+
+    /**
+     * The count's baseline, relative to the label's.
+     *
+     * 17 rather than the PNG's `centreY + 15` because the label above it already
+     * moved up by 2; the two renderers agree on where the count lands, which is
+     * the number a reader compares.
+     */
+    private const val LABEL_COUNT_LINE_HEIGHT = 17f
+
+    /** Breathing room between the label text and the gutter's own edges. */
+    private const val LABEL_INSET = 2f
 
     /**
      * Escapes text for XML character data and attribute values.
@@ -237,15 +331,40 @@ object TierListSvg {
             String.format(java.util.Locale.ROOT, "%.2f", value).trimEnd('0').trimEnd('.')
         }
 
-    /** `#RRGGBB`, or `#AARRGGBB` when the colour is not opaque. */
-    private fun hex(argb: Long): String {
-        val a = (argb ushr 24) and 0xFF
-        val rgb = argb and 0xFFFFFF
-        return if (a == 0xFFL) {
-            String.format(java.util.Locale.ROOT, "#%06X", rgb)
-        } else {
-            String.format(java.util.Locale.ROOT, "#%02X%06X", a, rgb)
+    /**
+     * Appends `property="#RRGGBB"`, plus a matching `-opacity` when [argb] is not
+     * opaque.
+     *
+     * ## The byte order was wrong, and it was silent
+     *
+     * This used to emit Android's layout - `#AARRGGBB` - for any translucent
+     * colour. SVG 2 and CSS Color 4 read eight hex digits as `#RRGGBBAA`, so the
+     * alpha byte landed in the red channel: `0xB3FFFFFF` (white at 70%) became
+     * `#B3FFFFFF`, which every renderer reads as opaque pale cyan. The subtitle,
+     * the captions and the tile stroke all came out mint instead of white, and
+     * no renderer could call it malformed because the string itself was valid.
+     *
+     * Splitting the alpha into the property's own `-opacity` attribute avoids
+     * depending on 8-digit hex support at all - older SVG 1.1 viewers accepted
+     * `fill-opacity` long before they accepted `#RRGGBBAA`. [alpha] multiplies
+     * the colour's own alpha, which is how a row keeps its 0.92 wash even when
+     * its tier colour is itself translucent.
+     */
+    private fun StringBuilder.color(
+        property: String,
+        argb: Long,
+        alpha: Float = 1f
+    ): StringBuilder {
+        append(' ').append(property).append("=\"")
+            .append(String.format(java.util.Locale.ROOT, "#%06X", argb and 0xFFFFFF))
+            .append('"')
+        val opacity = ((argb ushr 24) and 0xFF).toFloat() / 255f * alpha
+        if (opacity < 0.999f) {
+            append(' ').append(property).append("-opacity=\"")
+                .append(num(opacity.coerceIn(0f, 1f)))
+                .append('"')
         }
+        return this
     }
 
 }

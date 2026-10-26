@@ -5,6 +5,7 @@ import com.anisequel.ui.components.AppJokes
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +115,54 @@ class AppJokesTest {
         val next = AppJokes.pickUnseen(AppJokes.lines.toSet())
 
         assertTrue("the bag returned a line that is not in the pool", next in AppJokes.lines)
+    }
+
+    @Test
+    fun `the bag never repeats the line at the seam`() {
+        // The rule that used to live in the host as a comment. A bag that clears
+        // *including* the line currently on screen passes every other test in this
+        // file and still tells the same joke twice in a row at the seam - which is
+        // the one repeat a shuffle bag exists to prevent.
+        val tones = setOf(JokeTone.META)
+        val lines = AppJokes.poolFor(tones).map { it.text }
+        val seen = mutableSetOf<String>()
+        var last = ""
+        val drawn = mutableListOf<String>()
+
+        repeat(lines.size * 3) { index ->
+            last = AppJokes.draw(seen, last, tones, Random(index))
+            drawn += last
+        }
+
+        drawn.zipWithNext().forEach { (previous, next) ->
+            assertNotEquals("the toast repeated a line across the seam", previous, next)
+        }
+        assertEquals(
+            "the first cycle is not the whole filter, so the bag is not a bag",
+            lines.toSet(),
+            drawn.take(lines.size).toSet()
+        )
+        assertEquals(
+            "a cycle drew a line twice, which means the bag kept it after showing it",
+            lines.size,
+            drawn.take(lines.size).distinct().size
+        )
+    }
+
+    @Test
+    fun `an empty last line does not occupy a place in the bag`() {
+        // The first draw of a session passes "", and treating it as a line would
+        // shrink the first cycle by one and make the last line arrive twice.
+        val tones = setOf(JokeTone.DARK)
+        val lines = AppJokes.poolFor(tones).map { it.text }
+        val seen = mutableSetOf<String>()
+        var last = ""
+
+        repeat(lines.size) { index ->
+            last = AppJokes.draw(seen, last, tones, Random(index))
+        }
+
+        assertEquals(lines.toSet(), seen)
     }
 
     @Test

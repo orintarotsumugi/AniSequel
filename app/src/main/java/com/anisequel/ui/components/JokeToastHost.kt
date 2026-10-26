@@ -133,32 +133,45 @@ fun JokeToastHost(
     // measured from here rather than from the previous moment, so a timer joke
     // three seconds ago also keeps a tab-change joke quiet.
     var lastShownAt by remember { mutableStateOf(0L) }
+    // Which line owns the screen, as a counter rather than a boolean. Three
+    // effects can put a line up, and each one ends its turn by hiding "the pill" -
+    // which used to mean whichever pill was up when its own timer expired. So a
+    // preview tapped two seconds into a timer joke was cut off when that joke's
+    // dwell ended, and a preview that had already replaced a line could hide a
+    // *newer* timer joke the same way. Each show increments this and hands the
+    // value to its hide; a hide whose value is stale is a pill that is no longer
+    // its business.
+    var lineShown by remember { mutableIntStateOf(0) }
     // Read inside the lambdas below rather than captured per recomposition, so a
     // settings change reaches an effect that is already waiting without restarting
     // the wait.
     val settingsNow by rememberUpdatedState(settings)
 
-    val showLine: (String) -> Unit = { line ->
+    val showLine: (String) -> Int = { line ->
+        lineShown += 1
         seen += line
         joke = line
         visible = true
         lastShownAt = System.currentTimeMillis()
+        lineShown
     }
 
-    // One place for the bag's one subtle rule: when the current filter is spent,
-    // clear it but keep the line just read, so the first draw of a new cycle
-    // cannot repeat the last line of the old one. `poolFor` rather than `lines`:
-    // a tone the reader switched off must not spend a whole cycle of "unseen".
-    val showNext: () -> Unit = {
-        val tones = settingsNow.activeTones
-        if (AppJokes.poolFor(tones).all { it.text in seen }) {
-            seen.clear()
-            if (joke.isNotEmpty()) seen += joke
-        }
-        showLine(AppJokes.pickUnseen(seen, tones))
+    // One place for the bag's one subtle rule - the seam - and it is
+    // `AppJokes.draw` rather than this lambda, because a pure function of the bag
+    // is the only version of that rule a JVM test can break.
+    val showNext: () -> Int = {
+        showLine(AppJokes.draw(seen, joke, settingsNow.activeTones))
     }
 
     val hide: () -> Unit = { visible = false }
+
+    // The guard above, in one line: only the effect that put the current line up
+    // may take it down. Cancellation goes through this too, with the token that
+    // effect was holding, so leaving a page hides the line the timer put there and
+    // not the preview the reader asked for a second later.
+    val hideIfCurrent: (Int) -> Unit = { shown ->
+        if (shown == lineShown) visible = false
+    }
 
     // How an effect waits for a line to be done with the screen: a timer in every
     // arm except "until tapped", where it waits for the reader. `snapshotFlow`
@@ -181,7 +194,7 @@ fun JokeToastHost(
         visible = { visible },
         onShow = showNext,
         onSettle = waitForDwell,
-        onHide = hide
+        onHide = hideIfCurrent
     )
     JokeMomentSchedule(
         settings = settings,
@@ -189,13 +202,13 @@ fun JokeToastHost(
         mayShow = mayShowMoment,
         onShow = showNext,
         onSettle = waitForDwell,
-        onHide = hide
+        onHide = hideIfCurrent
     )
     JokePreviewSchedule(
         onShowNext = showNext,
         onShowLine = showLine,
         onSettle = waitForDwell,
-        onHide = hide
+        onHide = hideIfCurrent
     )
     JokeArrivalHaptic(joke = joke, visible = visible, enabled = settings.haptics)
     JokeToastPill(
@@ -231,9 +244,9 @@ private fun JokeAutoSchedule(
     settings: JokeSettings,
     active: Boolean,
     visible: () -> Boolean,
-    onShow: () -> Unit,
+    onShow: () -> Int,
     onSettle: suspend () -> Unit,
-    onHide: () -> Unit
+    onHide: (Int) -> Unit
 ) {
     val resumed = rememberIsResumed()
     // Survives the effect's restarts, so coming back from the background does
@@ -247,6 +260,9 @@ private fun JokeAutoSchedule(
 
     LaunchedEffect(active, resumed, settings.autoJokesEnabled, settings.frequency) {
         if (!active || !resumed || !settings.autoJokesEnabled) return@LaunchedEffect
+        // The line this effect is currently showing, so cancellation can take
+        // back its own pill without taking down one that replaced it.
+        var owned: Int? = null
         try {
             while (true) {
                 val wait = if (seenOne) {
@@ -259,14 +275,18 @@ private fun JokeAutoSchedule(
                 // A moment or a preview got there first. Skip this turn instead of
                 // stacking a second pill on top of the one already up.
                 if (currentVisible()) continue
-                currentShow()
+                val shown = currentShow()
+                owned = shown
                 currentSettle()
-                currentHide()
+                currentHide(shown)
+                owned = null
             }
         } finally {
-            // Cancellation is the background case: whatever is up goes away with
-            // the loop rather than staying on a screen nobody is looking at.
-            currentHide()
+            // Cancellation is the background case: whatever this effect put up
+            // goes away with the loop rather than staying on a screen nobody is
+            // looking at. The token is what makes that *its* pill and not the
+            // preview the reader asked for two seconds ago.
+            owned?.let { currentHide(it) }
         }
     }
 }
@@ -289,9 +309,9 @@ private fun JokeMomentSchedule(
     settings: JokeSettings,
     active: Boolean,
     mayShow: (JokeMoment) -> Boolean,
-    onShow: () -> Unit,
+    onShow: () -> Int,
     onSettle: suspend () -> Unit,
-    onHide: () -> Unit
+    onHide: (Int) -> Unit
 ) {
     val resumed = rememberIsResumed()
     var openShown by remember { mutableStateOf(false) }
@@ -304,22 +324,36 @@ private fun JokeMomentSchedule(
     LaunchedEffect(active, resumed, settings.autoJokesEnabled, settings.moments) {
         if (!active || !resumed || !settings.autoJokesEnabled) return@LaunchedEffect
 
-        if (JokeMoment.OPEN in settings.moments && !openShown) {
-            openShown = true
-            if (currentMayShow(JokeMoment.OPEN)) {
-                currentShow()
-                currentSettle()
-                currentHide()
+        // `owned` is the line this effect is showing. It is not decoration: a
+        // moment line cancelled mid-dwell (navigating away, or switching a moment
+        // off) used to stay up with nothing left to hide it, because the hide
+        // lived after the suspending wait and cancellation skipped it. The token
+        // means the cleanup hides this effect's line and not a preview's.
+        var owned: Int? = null
+        try {
+            if (JokeMoment.OPEN in settings.moments && !openShown) {
+                openShown = true
+                if (currentMayShow(JokeMoment.OPEN)) {
+                    val shown = currentShow()
+                    owned = shown
+                    currentSettle()
+                    currentHide(shown)
+                    owned = null
+                }
             }
-        }
 
-        JokeMomentBus.moments.collect { moment ->
-            if (moment == JokeMoment.OPEN) return@collect
-            if (moment !in settingsNow.moments) return@collect
-            if (!currentMayShow(moment)) return@collect
-            currentShow()
-            currentSettle()
-            currentHide()
+            JokeMomentBus.moments.collect { moment ->
+                if (moment == JokeMoment.OPEN) return@collect
+                if (moment !in settingsNow.moments) return@collect
+                if (!currentMayShow(moment)) return@collect
+                val shown = currentShow()
+                owned = shown
+                currentSettle()
+                currentHide(shown)
+                owned = null
+            }
+        } finally {
+            owned?.let { currentHide(it) }
         }
     }
 }
@@ -338,10 +372,10 @@ private fun JokeMomentSchedule(
  */
 @Composable
 private fun JokePreviewSchedule(
-    onShowNext: () -> Unit,
-    onShowLine: (String) -> Unit,
+    onShowNext: () -> Int,
+    onShowLine: (String) -> Int,
     onSettle: suspend () -> Unit,
-    onHide: () -> Unit
+    onHide: (Int) -> Unit
 ) {
     val request by JokePreviewBus.requests.collectAsState()
     var handledTick by remember { mutableIntStateOf(request.tick) }
@@ -354,9 +388,12 @@ private fun JokePreviewSchedule(
         if (request.tick <= 0 || request.tick == handledTick) return@LaunchedEffect
         handledTick = request.tick
         val line = request.line
-        if (line.isNullOrBlank()) currentShowNext() else currentShowLine(line)
+        val shown = if (line.isNullOrBlank()) currentShowNext() else currentShowLine(line)
         currentSettle()
-        currentHide()
+        // A preview replaces whatever was up, including a timer joke whose own
+        // dwell is still counting. Without the token that joke's timer would hide
+        // this line early - which is the one case the preview button is used in.
+        currentHide(shown)
     }
 }
 
@@ -508,11 +545,17 @@ private fun JokeToastBody(
         }
         Spacer(modifier = Modifier.size(10.dp))
         Column(modifier = Modifier.weight(1f)) {
+            // These two used to be `onSecondaryContainer` at 0.65 and 0.55 alpha.
+            // That is not a style choice, it is a contrast bug: blended over the
+            // container the name measured ~4.0:1 in the default dark scheme and
+            // "Tap to dismiss" ~3.3:1, both under 4.5:1 for 11sp text. The label
+            // and the caption are the two pieces of the pill a reader needs in
+            // order to know who is talking and how to get rid of her.
             Text(
                 text = "Ani-chan",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.65f)
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.86f)
             )
             Text(
                 text = joke,
@@ -525,7 +568,7 @@ private fun JokeToastBody(
                 Text(
                     text = "Tap to dismiss",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f)
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
                 )
             }
         }
@@ -549,7 +592,10 @@ private fun JokeFavouriteButton(isFavourite: Boolean, onToggle: () -> Unit) {
         targetValue = if (isFavourite) {
             MaterialTheme.colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+            // 0.6 was under the 3:1 non-text minimum against the container in the
+            // darker palettes, which made the unsaved heart look disabled rather
+            // than available.
+            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.74f)
         },
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "joke_favourite_tint"

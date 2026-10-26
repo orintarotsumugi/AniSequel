@@ -142,11 +142,22 @@ fun expressiveShape(polygon: RoundedPolygon) = polygon.toShape()
  * Material's iconic shapes. Doing this with an alpha crossfade would produce two
  * translucent shapes overlapping; a morph produces one shape that is between.
  *
+ * The two endpoints are deliberately from Material's own loading-indicator
+ * sequence (a soft burst and the nine-sided cookie) rather than any two shapes
+ * with a pleasing silhouette. `Morph` matches curves by feature proximity, and
+ * a 9-lobed cookie paired with an 8-petal flower made the intermediate frames
+ * fold through themselves - the "torn clover" was not only the frozen frame the
+ * old implementation shipped, it was also a pair whose vertices had no stable
+ * correspondence. Adjacent shapes from the library's sequence are the pair the
+ * Material team already animates between, and their curves map one to one.
+ *
  * The result is centred and scaled to the *smaller* dimension, because a
  * `RoundedPolygon` is authored on a square perimeter: stretching it across a
  * wide/short box gives the ellipse surprise [ExpressiveShapes.pill] exists to
  * keep out of the app. That is also why this is only used for the orb's fixed
- * square.
+ * square. [scaleFraction] leaves a margin when the caller wants to draw a halo
+ * behind the silhouette; without it the halo would be clipped by the orb's
+ * bounds.
  *
  * ## Why this writes into a caller's [Path] instead of being a `Shape`
  *
@@ -176,7 +187,8 @@ fun Morph.writeSilhouette(
     size: Size,
     target: Path,
     matrix: Matrix,
-    bounds: FloatArray = FloatArray(4)
+    bounds: FloatArray = FloatArray(4),
+    scaleFraction: Float = 1f
 ): Path {
     target.rewind()
     if (size.width <= 0f || size.height <= 0f) return target
@@ -192,7 +204,8 @@ fun Morph.writeSilhouette(
     val boundsTop = bounds[1]
     val boundsWidth = (bounds[2] - bounds[0]).coerceAtLeast(0.0001f)
     val boundsHeight = (bounds[3] - bounds[1]).coerceAtLeast(0.0001f)
-    val scale = min(size.width, size.height) / max(boundsWidth, boundsHeight)
+    val scale = min(size.width, size.height) / max(boundsWidth, boundsHeight) *
+        scaleFraction.coerceIn(0f, 1f)
 
     matrix.reset()
     matrix.translate(size.width / 2f, size.height / 2f)

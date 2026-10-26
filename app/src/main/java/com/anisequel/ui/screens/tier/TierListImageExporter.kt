@@ -2,11 +2,12 @@ package com.anisequel.ui.screens.tier
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -454,23 +455,24 @@ private fun drawTile(
 
     canvas.drawRoundRect(poster, corner, corner, tilePaint)
     if (bitmap != null && bitmap.width > 0 && bitmap.height > 0) {
-        // Pixel-aligned destination: `drawBitmap` with a fractional Rect rounds
-        // its own edges, and a half-pixel seam under the stroke is the sort of
-        // thing that only shows up at 4K.
-        canvas.save()
-        canvas.clipPath(path)
-        canvas.drawBitmap(
+        // A bitmap shader fills the rounded path, rather than `clipPath` plus
+        // `drawBitmap`. `Canvas.clipPath` is documented as *not* anti-aliased, so
+        // the artwork's corners were stair-stepped at every export scale and most
+        // visible at 4K - where the corner is about 30px and the jagged edge sits
+        // immediately inside a smooth, anti-aliased stroke. A path fill is
+        // anti-aliased, so the cover's own corners are now as clean as its
+        // outline.
+        imagePaint.shader = BitmapShader(
             bitmap,
-            centerCropSource(bitmap, poster),
-            Rect(
-                poster.left.roundToInt(),
-                poster.top.roundToInt(),
-                poster.right.roundToInt(),
-                poster.bottom.roundToInt()
-            ),
-            imagePaint
-        )
-        canvas.restore()
+            Shader.TileMode.CLAMP,
+            Shader.TileMode.CLAMP
+        ).apply {
+            setLocalMatrix(centerCropMatrix(bitmap, poster))
+        }
+        canvas.drawPath(path, imagePaint)
+        // The shader holds the batch's bitmap. Clearing it before the batch is
+        // recycled keeps the paint from outliving the pixels it samples.
+        imagePaint.shader = null
     }
 
     // The board moves the badge to the opposite corner when the name is across
@@ -566,26 +568,29 @@ private fun drawScoreBadge(
 }
 
 /**
- * The source rectangle for a center-cropped poster.
+ * The transform that center-crops a poster into a tile.
  *
  * `ContentScale.Crop` on the board cuts the longer axis rather than squeezing the
  * cover, and an export that stretched every 2:3 cover into a slightly different
  * tile would show artwork the board never showed.
+ *
+ * A `Matrix` rather than a source `Rect` because the caller fills a rounded path
+ * with a [BitmapShader] instead of clipping and blitting a rectangle: the shader
+ * needs the same crop expressed as a bitmap-to-canvas transform. The translation
+ * centres the overflowing axis, so the visible middle of the cover is the middle
+ * the board showed.
  */
-private fun centerCropSource(bitmap: Bitmap, destination: RectF): Rect {
+private fun centerCropMatrix(bitmap: Bitmap, destination: RectF): Matrix {
     val bitmapWidth = bitmap.width.toFloat()
     val bitmapHeight = bitmap.height.toFloat()
     val scale = max(destination.width() / bitmapWidth, destination.height() / bitmapHeight)
-    val sourceWidth = destination.width() / scale
-    val sourceHeight = destination.height() / scale
-    val left = (bitmapWidth - sourceWidth) / 2f
-    val top = (bitmapHeight - sourceHeight) / 2f
-    return Rect(
-        left.roundToInt(),
-        top.roundToInt(),
-        (left + sourceWidth).roundToInt(),
-        (top + sourceHeight).roundToInt()
-    )
+    return Matrix().apply {
+        setScale(scale, scale)
+        postTranslate(
+            destination.left - (bitmapWidth * scale - destination.width()) / 2f,
+            destination.top - (bitmapHeight * scale - destination.height()) / 2f
+        )
+    }
 }
 
 /**

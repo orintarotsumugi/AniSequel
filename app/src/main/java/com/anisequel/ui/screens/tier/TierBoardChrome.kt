@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -144,8 +146,18 @@ internal fun TierBoardHeader(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress)
+                    .fillMaxWidth()
                     .fillMaxHeight()
+                    .graphicsLayer {
+                        // Read in the draw phase: `fillMaxWidth(progress)` was a
+                        // layout-affecting read, so every frame of the bar's
+                        // arrival re-measured and re-placed the child. Scaling a
+                        // full-width capsule from the leading edge draws the same
+                        // pixels without a layout pass, which is the rule every
+                        // other transform in the app follows.
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        scaleX = progress.coerceIn(0f, 1f)
+                    }
                     .clip(ExpressiveShapes.pill)
                     .background(MaterialTheme.colorScheme.primary)
             )
@@ -482,10 +494,16 @@ internal fun TierEmptyState(
         )
         Spacer(modifier = Modifier.height(10.dp))
         ExpressiveStateChip(
-            label = if (unrankedCount == 0) {
-                "No titles left to place"
-            } else {
-                "Place them yourself ($unrankedCount)"
+            // Three states, not two, and the middle one is what the old copy got
+            // wrong: with no library loaded `unrankedCount` is 0 because there are
+            // no titles at all, and the chip offered "No titles left to place" on
+            // a list that had never had a title to begin with - while its tap
+            // opened the sheet for adding one. The count is only an answer once
+            // there is a library to count.
+            label = when {
+                candidates.isEmpty() -> "Add titles to rank"
+                unrankedCount == 0 -> "No titles left to place"
+                else -> "Place them yourself ($unrankedCount)"
             },
             selected = false,
             onClick = onAddTitles,

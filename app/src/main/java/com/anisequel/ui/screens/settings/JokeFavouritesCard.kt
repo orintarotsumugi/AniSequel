@@ -37,10 +37,10 @@ import com.anisequel.ui.components.expressive.bouncyPress
  * that exact line at the chosen edge, the same way the section's Preview button
  * asks for a random one.
  *
- * The list is deliberately not paginated or truncated. The pool is 323 lines and
- * the card sits in a scrolling column, so the worst case is a long page the
- * reader built themselves - and hiding their own saved lines behind "show more"
- * would be the one place the app second-guesses them.
+ * The list is deliberately not paginated or truncated. The pool is hundreds of
+ * lines and the card sits in a scrolling column, so the worst case is a long page
+ * the reader built themselves - and hiding their own saved lines behind "show
+ * more" would be the one place the app second-guesses them.
  */
 @Composable
 internal fun JokeFavouritesCard(

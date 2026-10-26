@@ -2,10 +2,13 @@ package com.anisequel.ui.screens.tier
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -228,12 +232,31 @@ internal fun TierBoardScreen(
     // tray is empty. The board reserves that whole strip as bottom padding: the
     // legend is the last thing in the scrolling column, and chrome floating over
     // the one row that explains the gestures is worse than a little empty space.
-    val controlsBottom = if (unranked.isEmpty()) {
-        16.dp
-    } else {
+    val trayVisible = unranked.isNotEmpty()
+    val controlsBottom = if (trayVisible) {
         TIER_TRAY_HEIGHT + TIER_CONTROLS_GAP
+    } else {
+        CONTROLS_RESTING_GAP
     }
     val boardBottomInset = controlsBottom + TIER_CONTROLS_HEIGHT + 8.dp
+
+    // The tray expands when the pool becomes non-empty, so the buttons above it
+    // cannot keep a `bottom` padding that flips with the boolean: that is a
+    // layout pass on every frame of the expansion, and the buttons would jump a
+    // tray's height in one frame while the tray was still growing under them.
+    // They are laid out in the resting position and lifted in the draw phase by
+    // however much of the tray is showing.
+    val trayLiftPx = with(LocalDensity.current) {
+        (TIER_TRAY_HEIGHT + TIER_CONTROLS_GAP - CONTROLS_RESTING_GAP).toPx()
+    }
+    val trayPresence by animateFloatAsState(
+        targetValue = if (trayVisible) 1f else 0f,
+        // The same physics the tray's own expansion uses, so the buttons and the
+        // surface they sit on settle at the same moment rather than one chasing
+        // the other.
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "tier_tray_presence"
+    )
 
     Scaffold(
         modifier = modifier
@@ -482,8 +505,13 @@ internal fun TierBoardScreen(
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
-                        bottom = controlsBottom
+                        bottom = CONTROLS_RESTING_GAP
                     )
+                    .graphicsLayer {
+                        // Translation, not padding: the buttons ride the tray up
+                        // as it opens, and riding it costs a repaint.
+                        translationY = -trayLiftPx * trayPresence
+                    }
                     .testTag("tier_board_controls"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -509,7 +537,24 @@ internal fun TierBoardScreen(
             // drags. Both are siblings of the scrolling column on purpose: the tray
             // has to stay put while the board scrolls under it, and the ghost has to
             // be able to leave it.
-            if (unranked.isNotEmpty()) {
+            //
+            // The tray expands rather than appearing, because it arrives in the
+            // middle of an edit: undoing a placement, or opening a list with
+            // unranked titles. `TierTray` draws nothing for an empty pool, so the
+            // exit has nothing to shrink - the controls settling back down is what
+            // carries "the pool is empty now".
+            AnimatedVisibility(
+                visible = trayVisible,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = expandVertically(
+                    animationSpec = ExpressiveMotion.FastSpatialSize,
+                    expandFrom = Alignment.Bottom
+                ) + fadeIn(ExpressiveMotion.FastEffects),
+                exit = shrinkVertically(
+                    animationSpec = ExpressiveMotion.FastSpatialSize,
+                    shrinkTowards = Alignment.Bottom
+                ) + fadeOut(ExpressiveMotion.FastEffects)
+            ) {
                 TierTray(
                     candidates = unranked,
                     drag = trayDrag,
@@ -532,28 +577,31 @@ internal fun TierBoardScreen(
                     onItemTap = { mediaId ->
                         whenEditable { sheets.placingMediaId = mediaId }
                     },
-                    onBrowse = { whenEditable { sheets.addingTitles = true } },
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    onBrowse = { whenEditable { sheets.addingTitles = true } }
                 )
+            }
 
-                val draggingId = trayDrag.mediaId
-                val ghostCandidate = unranked.firstOrNull { it.mediaId == draggingId }
-                if (ghostCandidate != null) {
-                    TierTrayGhost(
-                        candidate = ghostCandidate,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .graphicsLayer {
-                                // The drag tracks the finger in *window* pixels and
-                                // this box is laid out from the viewport's own top-left,
-                                // so the difference between the two is the whole
-                                // translation. Read in the draw phase, so moving the
-                                // ghost costs a repaint rather than a recomposition.
-                                translationX = trayDrag.posterX - viewport.viewportLeft
-                                translationY = trayDrag.liftedY - viewport.viewportTop
-                            }
-                    )
-                }
+            // Outside the visibility container: the tray's expansion clips its
+            // children, and a ghost clipped to a shrinking tray would be cut off
+            // mid-gesture. The ghost is only non-null while a drag is live, so
+            // this costs nothing when the pool is empty.
+            val draggingId = trayDrag.mediaId
+            val ghostCandidate = unranked.firstOrNull { it.mediaId == draggingId }
+            if (ghostCandidate != null) {
+                TierTrayGhost(
+                    candidate = ghostCandidate,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .graphicsLayer {
+                            // The drag tracks the finger in *window* pixels and
+                            // this box is laid out from the viewport's own top-left,
+                            // so the difference between the two is the whole
+                            // translation. Read in the draw phase, so moving the
+                            // ghost costs a repaint rather than a recomposition.
+                            translationX = trayDrag.posterX - viewport.viewportLeft
+                            translationY = trayDrag.liftedY - viewport.viewportTop
+                        }
+                )
             }
         }
     }
@@ -655,6 +703,14 @@ private fun TierBoardLockBanner(
         }
     }
 }
+
+/**
+ * How far the floating controls sit from the bottom edge when the tray is away.
+ *
+ * A named value because the drawer's lift is the difference between this and the
+ * tray's own height: two literals that had to agree, in two files, would drift.
+ */
+private val CONTROLS_RESTING_GAP = 16.dp
 
 /** How long a pinch has to be still before its zoom is written to the store. */
 private const val ZOOM_WRITE_DELAY_MS = 600L

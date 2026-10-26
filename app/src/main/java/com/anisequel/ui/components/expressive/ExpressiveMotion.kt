@@ -1,8 +1,13 @@
 package com.anisequel.ui.components.expressive
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.InfiniteRepeatableSpec
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -292,6 +297,35 @@ object ExpressiveMotion {
             )
         }
 
+    /**
+     * The empty-state orb's slow morph loop.
+     *
+     * This is the one spec in the file that is not a spring, for a mechanical
+     * reason rather than a stylistic one. `infiniteRepeatable` takes a
+     * *duration-based* spec - `tween`, `keyframes` - and a spring is not one: it
+     * has no duration, it ends when the motion settles, and a repeat needs a
+     * length. Extrapolating a spring would also overshoot past the morph's
+     * endpoints, where the outline is no longer either shape. So the cycle is
+     * keyframes with a rest at each end: the orb holds its clover, deforms into
+     * the soft burst, holds that, and comes back. The rests are the part that
+     * makes it read as breathing rather than as a loading spinner that never
+     * lands.
+     *
+     * `MotionStyle.INSTANT` never reaches this spec: [ExpressiveEmptyOrb]
+     * composes the static orb instead. `SMOOTH` and `CHILL` share the cycle,
+     * because this is ambient artwork nobody is touching - the styles differ in
+     * the interactions, not in a shape that is already at rest.
+     */
+    val OrbMorph: InfiniteRepeatableSpec<Float> get() = infiniteRepeatable(
+        animation = keyframes {
+            durationMillis = OrbMorphRestMillis + OrbMorphTravelMillis
+            0f at 0
+            0f at OrbMorphRestMillis
+            1f at OrbMorphRestMillis + OrbMorphTravelMillis using FastOutSlowInEasing
+        },
+        repeatMode = RepeatMode.Reverse
+    )
+
     private fun spatial(
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
         expressiveStiffness: Float = Spring.StiffnessMedium
@@ -341,6 +375,14 @@ object ExpressiveMotion {
             )
         }
 }
+
+/**
+ * How long the orb rests on each silhouette before the next morph. Kept beside
+ * [ExpressiveMotion.OrbMorph] rather than inline so the cycle can be tuned as
+ * one pair instead of two numbers that have to add up in someone's head.
+ */
+private const val OrbMorphRestMillis = 650
+private const val OrbMorphTravelMillis = 2650
 
 /**
  * Modifier that applies a tactile bouncy spring press animation in the Draw phase.

@@ -1,6 +1,47 @@
 {
   "versions": [
     {
+      "version": "1.6.1",
+      "entries": [
+        {
+          "title": "The empty-state orb breathes instead of tearing",
+          "detail": "The orb morphs between a nine-lobed cookie and a soft burst now - the adjacent pair from Material's own loading-indicator sequence. The old pair was the nine-sided cookie and an eight-petal flower, and that is not a morph: the two outlines have no stable curve-to-curve correspondence, so the middle of the animation folded through itself and read as a moving version of the torn clover. The icon and the silhouette also share one clock, so the glyph grows through the deformation instead of pulsing on an unrelated 1.6s loop."
+        },
+        {
+          "title": "One icon for an empty list",
+          "detail": "Profile > Activity and Profile > Library were drawing the same fact - a list with nothing in it - three ways: a comment bubble on Activity, a timer on Library, and a magnifier once the Library's search matched nothing. Both use the list glyph for an ordinary empty list now. The magnifier is kept for a search or a filter that actually narrowed a list, and a filtered Library says \"No titles match these filters\" instead of claiming the whole list is empty."
+        },
+        {
+          "title": "A calmer, more expressive orb",
+          "detail": "The morph rests on each silhouette before deforming, then breathes through the change with the icon rather than oscillating without a pause. A soft aura behind the silhouette gives the flat container colour some depth, and the container and glyph colours cross-fade when the empty state changes meaning instead of snapping in one frame. The whole loop is one named motion token, so its rest and travel are tuned together."
+        },
+        {
+          "title": "The tier board expands instead of cutting",
+          "detail": "Opening a tier list, leaving one, and switching profile tabs share one motion language now: the incoming page travels a short distance, springs up from slightly smaller, and the page underneath recedes rather than sliding away. The switch between the shelf of lists and an open board was a hard cut in the middle of the route - it animates too, keyed on the list's id so a drag or a rename does not replay it. The unranked tray grows up from the bottom edge when a pool appears, the floating buttons ride it instead of jumping a tray's height, and a carried poster springs up as it is picked up. The board's progress bar is drawn by scaling a full-width capsule rather than re-measuring on every frame."
+        },
+        {
+          "title": "Tier exports are sharper, and complete",
+          "detail": "PNG posters are filled into their rounded tiles with a bitmap shader instead of being clipped and blitted, because Android's path clipping is not anti-aliased - at 4K every cover had a stair-stepped corner sitting inside a smooth outline. The SVG export's translucent colours were written in Android's #AARRGGBB order, which SVG reads as #RRGGBBAA, so white subtitles, captions and the tile hairline all came out mint; they use fill-opacity and stroke-opacity now. The SVG also draws each tier's member count and the poster hairline, clips covers to the same rounded rectangle, and clips a long title or tier name to the page instead of letting it run off. Shared images are pruned from the cache, so sharing a board repeatedly no longer leaves every 4K copy behind."
+        },
+        {
+          "title": "Ani-chan has ninety-two more things to say",
+          "detail": "The joke pool grew from 475 lines to 567, and every tone gained rather than one. The new material is about the app itself - exporting a board, the widget counting shows while nobody is looking, the heatmap's missing day, the changelog you are reading - and about individual shows: the cut that lands on the drum, the ending theme whose first frame is the finale's last shot, the sequel that exists only in a press release. Three lines were rewritten rather than added because they claimed a placement or a screen the reader might not be on, and two more because they were the weakest in their tone: a joke about the app is only funny while it is true."
+        },
+        {
+          "title": "A preview is no longer cut short",
+          "detail": "Each trigger now owns the line it put on screen. Before, every effect ended its turn by hiding whatever pill was up, so tapping Preview two seconds into a timed joke had its replacement dismissed the moment the old joke's five seconds expired - and a preview could in turn hide a newer timed line. The worse case was a moment line cancelled by leaving the page: its hide was written after the waiting dwell, so cancellation skipped it and the pill stayed up with nothing left to remove it. A show now carries a token, and only the token that is still current may hide the pill."
+        },
+        {
+          "title": "Readable pills, readable choices",
+          "detail": "Ani-chan's name and the \"Tap to dismiss\" caption were drawn at 0.65 and 0.55 alpha over the pill's container, which measured about 4.0:1 and 3.3:1 in the default dark theme - under the 4.5:1 a small label needs, and the unsaved heart was under the 3:1 a control needs. They are raised, and the heart with them. On the Jokes page, the Mixed quick-pick was drawn in the disabled grey while it was the selected state, because the chip tested \"disabled\" before \"selected\"; a selected-and-locked chip now reads as selected with only the tap withheld, and a genuinely disabled chip's label is no longer half-transparent."
+        },
+        {
+          "title": "Smaller tier-list fixes",
+          "detail": "An empty board whose library is still loading no longer offers \"No titles left to place\" - it says to add titles, which is what its tap actually does. A dragged poster's lift is a real animation now: it was an animation whose target never changed, so the ghost was created already grown and never popped."
+        }
+      ]
+    },
+    {
       "version": "1.6.0",
       "entries": [
         {
