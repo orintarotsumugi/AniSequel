@@ -124,7 +124,7 @@ object TierListSvg {
                 // A row whose tier has been deleted since the layout was computed.
                 // Drawing it anyway would resurrect a tier the person removed a
                 // second ago.
-                return@forEach
+                return@forEachIndexed
             }
             append("  <g>\n")
             append("    <rect x=\"").append(num(row.x)).append("\" y=\"").append(num(row.y))
