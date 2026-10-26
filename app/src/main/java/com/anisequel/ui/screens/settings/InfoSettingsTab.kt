@@ -285,9 +285,8 @@ private fun CrashReportCard() {
         }
     }
 
-    // Read once, then smart-cast: the dialog and the card must draw the same string,
-    // and the report can only change here by the reader clearing it.
-    val current = report
+    // `current` is the function-scope read above: the dialog and the card draw the
+    // same string, and it only changes here by the reader clearing it.
     if (showing && current != null) {
         AlertDialog(
             onDismissRequest = { showing = false },
