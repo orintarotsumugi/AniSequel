@@ -72,10 +72,16 @@ fun RenderParagraph(
             textAlign = if (paragraph.centered) TextAlign.Center else TextAlign.Start,
             maxLines = maxLines,
             overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
-            onTextLayout = if (onOverflow != null && maxLines < Int.MAX_VALUE) {
-                { result -> onOverflow(result.hasVisualOverflow) }
-            } else {
-                null
+            // A non-null lambda even when nothing is listening. The overload for an
+            // `AnnotatedString` takes `onTextLayout` as a non-null parameter, so
+            // handing it a conditional that can be `null` makes Kotlin reject the
+            // call outright - it resolves to the `String` overload instead and
+            // reports "actual type is AnnotatedString, but String was expected".
+            // The guard lives inside the lambda.
+            onTextLayout = { result ->
+                if (onOverflow != null && maxLines < Int.MAX_VALUE) {
+                    onOverflow(result.hasVisualOverflow)
+                }
             },
             modifier = if (paragraph.centered) Modifier.fillMaxWidth() else Modifier
         )
