@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaEntryEdit
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
@@ -326,6 +327,9 @@ class DashboardViewModel(
 
     /** The node fetched for the entry a sheet is showing, keyed by media id. */
     val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
+
+    /** Followed users' entries for the entry a sheet is showing, keyed by media id. */
+    val friends: StateFlow<Map<Int, List<MediaFriend>>> get() = detailStore.friends
 
     /**
      * The completed count for [cachedCollection], and the collection it was
@@ -829,6 +833,16 @@ class DashboardViewModel(
      */
     fun loadDetail(mediaId: Int, mediaType: String? = null) {
         detailStore.load(mediaId, mediaType)
+    }
+
+    /**
+     * Fetches the followed users who have this title on their list.
+     *
+     * Separate from [loadDetail] because it is a separate request with a separate
+     * failure mode - see [MediaDetailStore.loadFriends].
+     */
+    fun loadFriends(mediaId: Int, mediaType: String? = null) {
+        detailStore.loadFriends(mediaId, mediaType)
     }
 
     /**

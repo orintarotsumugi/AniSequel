@@ -52,7 +52,7 @@ internal fun JokeFavouritesCard(
     SectionCard(
         title = "Saved lines",
         icon = AppVectorIcons.BookmarkDone,
-        subtitle = "Jokes you kept, stored on this device."
+        subtitle = "Jokes you kept, stored on this device"
     ) {
         if (lines.isEmpty()) {
             Text(

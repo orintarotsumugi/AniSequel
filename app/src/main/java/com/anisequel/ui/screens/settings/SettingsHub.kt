@@ -166,7 +166,7 @@ fun SettingsSectionLabel(text: String, modifier: Modifier = Modifier) {
             .padding(start = 28.dp, top = 26.dp, bottom = 10.dp)
             // The labels are the only landmarks in a long shelf; without the
             // heading role a screen reader reads one undifferentiated list of
-            // rows and cannot jump between Personalization and Accounts.
+            // rows and cannot jump between Personalisation and About.
             .semantics { heading() }
     )
 }

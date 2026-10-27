@@ -8,6 +8,7 @@ import com.anisequel.data.model.ListActivity
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaEntryEdit
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -260,6 +261,24 @@ interface AniListRepository {
         userId: Int,
         forceRefresh: Boolean = false
     ): Result<List<FollowUser>> = unsupported("getUserFollowing")
+
+    /**
+     * The followed users who have this title on their list, best rating first.
+     *
+     * Takes the media's AniList type as well as its id for the reason
+     * [getMediaDetail] does: ids are unique per namespace, not globally, so a
+     * filter on the number alone can answer with the other namespace's entries.
+     *
+     * Defaulted rather than abstract because the demo and test repositories have
+     * no session to ask with. Their answer is an empty list - "nobody you follow
+     * has watched this" - which is the truth for a repository that cannot know,
+     * and it draws nothing rather than an error the page cannot act on.
+     */
+    suspend fun getMediaFriends(
+        mediaId: Int,
+        mediaType: String? = null,
+        forceRefresh: Boolean = false
+    ): Result<List<MediaFriend>> = unsupported("getMediaFriends")
 
     /**
      * One activity's comment thread, oldest first as AniList returns them.

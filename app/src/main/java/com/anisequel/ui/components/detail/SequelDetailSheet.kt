@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
@@ -75,7 +76,25 @@ fun SequelDetailSheet(
      * number - and the sheet is reachable from a manga list as well as an anime one.
      */
     onLoadDetail: (Int, String?) -> Unit,
+    /**
+     * Fetches the followed users' entries for the opened title.
+     *
+     * Separate from [onLoadDetail] because it is a separate request with its own
+     * failure mode: a signed-out session or a spent request budget must not stop
+     * the detail page from drawing. See
+     * [com.anisequel.ui.viewmodel.MediaDetailStore.loadFriends].
+     */
+    onLoadFriends: (Int, String?) -> Unit = { _, _ -> },
     isDetailLoading: Boolean,
+    /**
+     * The followed users who have this title on their list, best rating first.
+     *
+     * Already filtered and sorted by the repository - see
+     * [com.anisequel.data.model.MediaFriend]. Empty draws no card at all rather
+     * than an empty one, and it is empty for the ordinary reason as well: a
+     * viewer who follows nobody, or a title nobody they follow has opened.
+     */
+    friends: List<MediaFriend> = emptyList(),
     canWriteToAniList: Boolean,
     modifier: Modifier = Modifier,
     onAddToWatching: (MissedSequel) -> Unit = {},
@@ -176,15 +195,23 @@ fun SequelDetailSheet(
     // middle of a page they had never seen. `key` rather than putting the id in a
     // `remember` key, because `rememberLazyListState` takes no keys and the state has
     // to be *discarded*, not re-read.
-    val infoListState = key(subject.mediaId) { rememberLazyListState() }
+    //
+    // The **type** is part of every key here, not just the id. AniList numbers
+    // `anime/` and `manga/` independently, so a relation from one namespace to the
+    // other can arrive carrying the same number: keyed on the id alone, the new
+    // title inherited the old one's scroll, its half-typed draft and its saved
+    // destination - and the entry tab then saved the *old* title's progress under
+    // the new title's id.
+    val infoListState = key(subject.mediaId, subject.media.type) { rememberLazyListState() }
 
-    val editState = remember(subject.mediaId) { EntryEditState() }
-    LaunchedEffect(subject.mediaId, entryEditor) {
+    val editState = remember(subject.mediaId, subject.media.type) { EntryEditState() }
+    LaunchedEffect(subject.mediaId, subject.media.type, entryEditor) {
         if (entryEditor != null) editState.load(entryEditor, subject.mediaId)
     }
 
     LaunchedEffect(subject.mediaId, subject.media.type) {
         onLoadDetail(subject.mediaId, subject.media.type)
+        onLoadFriends(subject.mediaId, subject.media.type)
     }
 
     // The colour comes from the pixels, and the effect waits for the stored
@@ -278,7 +305,9 @@ fun SequelDetailSheet(
     ) {
         // The page is destination zero and stays at index zero, so a saved tab index
         // cannot reopen the sheet on a destination that is not there any more.
-        var destination by rememberSaveable(subject.mediaId) { mutableIntStateOf(0) }
+        var destination by rememberSaveable(subject.mediaId, subject.media.type) {
+            mutableIntStateOf(0)
+        }
         val destinations = buildList {
             add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
             if (entryEditor != null) {
@@ -342,6 +371,7 @@ fun SequelDetailSheet(
                         onAddToWatching = onAddToWatching,
                         quickAddStatus = quickAddStatuses[subject.mediaId]
                             ?: QuickAddStatus(),
+                        friends = friends,
                         onAddMediaToPlanning = onAddMediaToPlanning,
                         onAddMediaToWatching = onAddMediaToWatching,
                         onClose = handleDismiss,

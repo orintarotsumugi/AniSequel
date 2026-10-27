@@ -33,11 +33,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.pageUrl
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -72,12 +74,17 @@ fun InfoExtrasCard(
         title = "Extras",
         icon = AppVectorIcons.Star
     ) {
-        InfoExtraRow(
-            icon = AppVectorIcons.FullscreenExpand,
-            title = "Full artwork",
-            subtitle = "The key visual, on its own",
-            onClick = onOpenCover
-        )
+        // Only when there is artwork to open. The row used to be drawn
+        // unconditionally, so a title AniList has no cover for offered "The key
+        // visual, on its own" and then opened an empty viewer.
+        if (media.posterUrl != null) {
+            InfoExtraRow(
+                icon = AppVectorIcons.FullscreenExpand,
+                title = "Full artwork",
+                subtitle = "The key visual, on its own",
+                onClick = onOpenCover
+            )
+        }
 
         if (trailerUrl != null) {
             InfoExtraRow(
@@ -198,7 +205,7 @@ private fun InfoExtraRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .bouncyPress(pressedScale = 0.98f)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically

@@ -94,7 +94,7 @@ private fun AniChanCard(settings: JokeSettings, onEnabledChange: (Boolean) -> Un
     SectionCard(
         title = "Ani-chan",
         icon = AppVectorIcons.AnimeSparkle,
-        subtitle = "A line about anime, now and then."
+        subtitle = "A line about anime, now and then"
     ) {
         SwitchRow(
             title = "Jokes on their own",
@@ -116,7 +116,7 @@ private fun PaceCard(
     SectionCard(
         title = "Pace and dwell",
         icon = AppVectorIcons.Schedule,
-        subtitle = "How often she speaks, and how long a line stays."
+        subtitle = "How often she speaks, and how long a line stays"
     ) {
         Text(
             text = "The first line arrives sooner than the rest, so a session is not " +
@@ -165,7 +165,7 @@ private fun PaceCard(
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = "Quick stays 3 seconds, Standard 5, Relaxed 8 and Long 12. Until " +
-                "tapped waits for you, which is the right arm for the longest lines.",
+                "tapped waits for you instead, which suits the longest lines.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -182,7 +182,7 @@ private fun PlacementCard(
     SectionCard(
         title = "Where she appears",
         icon = AppVectorIcons.Tune,
-        subtitle = "The edge of the screen, the pages, and the arrival tick."
+        subtitle = "The edge of the screen, the pages, and the arrival tick"
     ) {
         SettingsFieldLabel(text = "Edge of the screen")
         Spacer(modifier = Modifier.height(10.dp))
@@ -254,7 +254,7 @@ private fun TonesCard(
     SectionCard(
         title = "What she talks about",
         icon = AppVectorIcons.Tag,
-        subtitle = "Switch off the kinds of line you would rather not read."
+        subtitle = "Switch off the kinds of line you would rather not read"
     ) {
         // Mixed is a preset, not a sixth tone: it is every tone switched on at
         // once, so it cannot open a separate pool that drifts from these five.
@@ -322,7 +322,7 @@ private fun MomentsCard(
     SectionCard(
         title = "When she appears",
         icon = AppVectorIcons.Refresh,
-        subtitle = "The timer is the baseline. These are extra invitations."
+        subtitle = "The timer is the baseline. These are extra invitations"
     ) {
         JokeMoment.entries.forEach { moment ->
             SwitchRow(

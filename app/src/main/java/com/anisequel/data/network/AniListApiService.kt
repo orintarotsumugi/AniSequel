@@ -11,6 +11,7 @@ import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaCoverPage
+import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
@@ -137,6 +138,19 @@ interface AniListApiService {
     suspend fun getUserFollowing(
         @Body request: GraphQLRequest
     ): GraphQLResponse<FollowingData>
+
+    /**
+     * The followed users' list entries for one title.
+     *
+     * Its own method rather than a parameter on the follower calls: it is a
+     * different `Page` field, with different arguments, answering a different
+     * question. See [GraphQLQueries.getMediaFriendsQuery].
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getMediaFriends(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MediaFriendsData>
 
     /** One activity and its replies. Opened with the comments sheet. */
     @POST("/")

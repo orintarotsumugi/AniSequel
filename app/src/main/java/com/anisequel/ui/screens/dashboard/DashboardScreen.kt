@@ -138,6 +138,7 @@ fun DashboardScreen(
     var selectedArrivingId by remember { mutableStateOf<Int?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
     val detailNodes by dashboardViewModel.detailNodes.collectAsState()
+    val detailFriends by dashboardViewModel.friends.collectAsState()
     val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
     val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
     val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
@@ -539,6 +540,8 @@ fun DashboardScreen(
             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
+            onLoadFriends = { id, type -> dashboardViewModel.loadFriends(id, type) },
+            friends = detailFriends[selectedSubject.mediaId].orEmpty(),
             onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,

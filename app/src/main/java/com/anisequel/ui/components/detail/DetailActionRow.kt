@@ -140,7 +140,10 @@ fun DetailActionRow(
                     .then(
                         if (showSequelAction || showMediaAction) Modifier.weight(1f) else Modifier
                     )
-                    .height(44.dp)
+                    // 48dp, the platform minimum. 44 was the Material 2 button
+                    // height, and on the one row a reader reaches for at the bottom
+                    // of the sheet the shortfall was felt rather than merely linted.
+                    .height(48.dp)
                     .bouncyPress(pressedScale = 0.96f),
                 shape = MaterialTheme.shapes.small
             ) {
@@ -262,7 +265,8 @@ private fun RowScope.SignInToAddButton(
         onClick = onClick,
         modifier = Modifier
             .weight(1.3f)
-            .height(44.dp)
+            // Matches the AniList button beside it; see the note there.
+            .height(48.dp)
             .bouncyPress(pressedScale = 0.96f)
             .testTag("sheet_sign_in_to_add_button"),
         shape = MaterialTheme.shapes.small

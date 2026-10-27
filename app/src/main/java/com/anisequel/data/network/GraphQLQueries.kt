@@ -328,6 +328,69 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The followed users who have one title on their list.
+     *
+     * ## Why `Page.mediaList` and not the following list
+     *
+     * `isFollowing: true` filters the connection to the *authenticated* viewer's
+     * follows, so one request answers "which of my friends have seen this". The
+     * other shape - fetch everyone I follow, then ask for each person's entry -
+     * is N+1 requests for a card that is a footnote on the page.
+     *
+     * ## Why `type` is in the document at all
+     *
+     * `mediaId` is only unique *within* a namespace: `anime/1` and `manga/1` are
+     * different titles sharing a number, so a filter on the id alone can match
+     * entries for both. The connection has a `type` argument and it is passed as a
+     * variable for the same reason [getMediaDetailQuery] does it - the caller
+     * that already knows the namespace decides, rather than this document
+     * hardcoding the one it was written against.
+     *
+     * The untyped document exists for a summary node that never carried a `type`
+     * (an activity row, a widget fixture). It is the old behaviour rather than a
+     * failure: an untyped title can still answer with friends, it just cannot
+     * exclude the other namespace's entries.
+     *
+     * ## Why the score carries a format
+     *
+     * `score(format: POINT_10_DECIMAL)` normalises every friend's rating onto one
+     * scale. The bare `score` field is in each user's own chosen format, so one
+     * friend's 85 and another's 8.5 would be drawn as the same kind of number in
+     * the same row.
+     *
+     * `perPage: 50` is the connection's documented maximum. There is no
+     * `pageInfo` here because nothing pages: see [MediaFriendsData] for why a
+     * second round trip is not worth it for this card.
+     */
+    fun getMediaFriendsQuery(mediaType: String?): String {
+        val typed = mediaType != null
+        val queryName = if (typed) "GetMediaFriendsTyped" else "GetMediaFriends"
+        val variables = if (typed) "\$mediaId: Int, \$type: MediaType" else "\$mediaId: Int"
+        val arguments = if (typed) {
+            "mediaId: \$mediaId, type: \$type, isFollowing: true"
+        } else {
+            "mediaId: \$mediaId, isFollowing: true"
+        }
+        return """
+            query $queryName($variables) {
+              Page(perPage: 50) {
+                mediaList($arguments) {
+                  status
+                  score(format: POINT_10_DECIMAL)
+                  progress
+                  progressVolumes
+                  user {
+                    id
+                    name
+                    avatar { medium large }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+    }
+
+    /**
      * Fields for a related node, rendered in the card list and on the title page.
      *
      * **Shared by both queries that carry relations**, deliberately. The detail

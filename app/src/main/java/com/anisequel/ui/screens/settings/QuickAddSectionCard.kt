@@ -1,8 +1,6 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -16,13 +14,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveTabBar
+import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
+import com.anisequel.ui.components.expressive.SegmentedOption
 import kotlinx.coroutines.launch
 
 /**
- * Settings section card for configuring quick add actions:
- *  - Hold duration (3 seconds vs 5 seconds) to switch to Currently Watching
- *  - Enabling or disabling horizontal swipe to watch gesture
+ * The quick-add gestures: how long a press has to be, and whether a sideways
+ * swipe skips the hold.
+ *
+ * ## Why the segmented bar rather than `ExpressiveTabBar`
+ *
+ * It was a tab bar, which is the control for *switching between pages* - it draws
+ * two capsules that spring and change colour, and it pads itself 16dp horizontally
+ * because it expects to be a bar at the edge of a screen. Inside a card that
+ * already has 18dp of padding it made this one control sit 34dp in from the card's
+ * edge while the switch below it sat at 18dp, and it overrode the `testTag` the
+ * caller passed with its own. `ExpressivePolygonSegmentedBar` is what the Theme
+ * page uses for exactly this kind of two-value choice, so the card now matches the
+ * rest of Settings and the tag survives.
  */
 @Composable
 fun QuickAddSectionCard(
@@ -35,52 +44,53 @@ fun QuickAddSectionCard(
     )
 
     SectionCard(
-        title = "Quick Add Gestures",
+        title = "Quick add gestures",
         icon = AppVectorIcons.Play,
-        subtitle = "Hold or swipe to add to Currently Watching.",
+        subtitle = "Hold or swipe to add to Currently Watching",
         modifier = modifier.testTag("quick_add_settings_card")
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            SettingsFieldLabel(text = "Hold duration to switch to Watching")
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Hold the button on any anime card to automatically switch from Planning to Currently Watching.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        SettingsFieldLabel(text = "Hold duration")
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Hold the button on any anime card to move it from Planning to " +
+                "Currently Watching without opening it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-            Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-            val holdOptions = listOf("3 seconds", "5 seconds")
-            val selectedIndex = if (settings.holdDurationSeconds == 5) 1 else 0
+        // `QuickAddPreferences` coerces anything that is not 5 back to 3, so the
+        // index is a two-way question rather than a lookup.
+        val holdOptions = listOf("3 seconds", "5 seconds")
+        val selectedIndex = if (settings.holdDurationSeconds == 5) 1 else 0
 
-            ExpressiveTabBar(
-                tabs = holdOptions,
-                selectedIndex = selectedIndex,
-                onSelect = { index ->
-                    val chosen = if (index == 1) 5 else 3
-                    coroutineScope.launch {
-                        quickAddPreferences.setHoldDuration(chosen)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().testTag("hold_duration_selector")
-            )
+        ExpressivePolygonSegmentedBar(
+            options = holdOptions.map { SegmentedOption(label = it) },
+            selectedIndex = selectedIndex,
+            onSelect = { index ->
+                val chosen = if (index == 1) 5 else 3
+                coroutineScope.launch {
+                    quickAddPreferences.setHoldDuration(chosen)
+                }
+            },
+            modifier = Modifier.testTag("hold_duration_selector")
+        )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
 
-            SwitchRow(
-                title = "Swipe to Watch",
-                subtitle = "Swipe the card's button horizontally to confirm Currently Watching immediately.",
-                checked = settings.swipeEnabled,
-                onCheckedChange = { enabled ->
-                    coroutineScope.launch {
-                        quickAddPreferences.setSwipeEnabled(enabled)
-                    }
-                },
-                modifier = Modifier.testTag("swipe_to_watch_switch")
-            )
-        }
+        SwitchRow(
+            title = "Swipe to watch",
+            subtitle = "Swipe the card's button sideways to set Currently Watching immediately.",
+            checked = settings.swipeEnabled,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch {
+                    quickAddPreferences.setSwipeEnabled(enabled)
+                }
+            },
+            modifier = Modifier.testTag("swipe_to_watch_switch")
+        )
     }
 }

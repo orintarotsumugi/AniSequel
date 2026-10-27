@@ -59,7 +59,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
  *
  * ## The spoiler tags are not simply filtered out
  *
- * [com.anisequel.data.model.weightedTags] drops them, which is right for a row
+ * The obvious version of this section filters them away, which is right for a row
  * that is always on screen - but it also made the *count* on the page wrong: the
  * card said "Tags 20" over fourteen chips. They are a real part of the category
  * list and AniList has already marked them, so they get their own collapsible
@@ -85,9 +85,11 @@ fun InfoCategoriesSection(
 
     // `rememberSaveable` keyed on the title: this section is a `LazyColumn` item,
     // so scrolling past it disposes it, and a plain `remember` would reopen the
-    // list collapsed on the way back up.
-    var expanded by rememberSaveable(media.id) { mutableStateOf(false) }
-    var spoilersShown by rememberSaveable(media.id) { mutableStateOf(false) }
+    // list collapsed on the way back up. The **type** is part of the key as well
+    // as the id - a relation can cross from `anime/` to `manga/`, and the two
+    // namespaces number independently.
+    var expanded by rememberSaveable(media.id, media.type) { mutableStateOf(false) }
+    var spoilersShown by rememberSaveable(media.id, media.type) { mutableStateOf(false) }
 
     Column(
         modifier = modifier

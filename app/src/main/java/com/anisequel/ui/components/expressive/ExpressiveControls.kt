@@ -63,10 +63,14 @@ fun ExpressiveTabBar(
     icons: List<ImageVector?> = List(tabs.size) { null }
 ) {
     Row(
+        // No container tag: `modifier` comes first in the chain, and a second
+        // `testTag` applied after it makes which tag wins a question about
+        // semantics-merge order rather than something a call site can rely on.
+        // The caller names its own bar; the items below are tagged here because
+        // they are this component's.
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .testTag("${EXPRESSIVE_TAG}tab_bar"),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         tabs.forEachIndexed { index, label ->
@@ -183,12 +187,14 @@ fun ExpressivePolygonSegmentedBar(
     // same feedback.
     val haptics = LocalHapticFeedback.current
     Row(
+        // Same reason as `ExpressiveTabBar`: no tag of its own, so the call site's
+        // `theme_mode_row` / `motion_style_row` is the only tag on the node rather
+        // than one of two competing for it.
         modifier = modifier
             .fillMaxWidth()
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(4.dp)
-            .testTag("${EXPRESSIVE_TAG}polygon_segmented_bar"),
+            .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEachIndexed { index, option ->

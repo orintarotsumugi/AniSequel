@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -23,13 +22,30 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRanking
 import com.anisequel.data.model.rankingList
-import com.anisequel.data.model.topRankingLabel
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.info.InfoCard
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 /**
- * Community & all-time AniList rankings section.
- * Renders prominent ranking badges with trophy iconography and expressive pill geometry.
+ * Community & all-time AniList rankings, as pills.
+ *
+ * ## Why this is a card now
+ *
+ * It used to be a bare `Column` of pills dropped into a `cardItem` slot, which
+ * padded and staggered it but drew no surface: the rankings appeared as loose
+ * capsules floating on the page background, between two cards, with no heading.
+ * Every other section on the page is a card with a title, so this one read as a
+ * rendering accident rather than a section. The heading is also what gives
+ * TalkBack a landmark - `InfoCard` marks its title as one.
+ *
+ * ## The dead branch that used to be here
+ *
+ * A `topRankFallback` branch drew a single full-width pill from
+ * `MediaNode.topRankingLabel` when no ranking had a rank. That branch could never
+ * run: `topRankingLabel` is itself "the first ranking whose rank is not null", so
+ * the only way it was non-null was with a rank present, which the first branch
+ * had already taken. It was deleted rather than kept as a fallback for a case
+ * that cannot exist.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -37,51 +53,23 @@ fun AnimeRankingsSection(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
+    // A ranking with no rank has nothing to print, and `hasRankings` on the page
+    // applies the same filter before adding this item.
     val allRankings = media.rankingList.filter { it.rank != null }
-    val topRankFallback = media.topRankingLabel
+    if (allRankings.isEmpty()) return
 
-    if (allRankings.isEmpty() && topRankFallback == null) return
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("spec_rankings_section"),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+    InfoCard(
+        modifier = modifier.testTag("info_rankings_card"),
+        title = "Rankings",
+        icon = AppVectorIcons.Trophy
     ) {
-        if (allRankings.isNotEmpty()) {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                allRankings.take(4).forEach { ranking ->
-                    RankingPillBadge(ranking = ranking)
-                }
-            }
-        } else if (topRankFallback != null) {
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Trophy,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = topRankFallback,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            allRankings.take(4).forEach { ranking ->
+                RankingPillBadge(ranking = ranking)
             }
         }
     }
@@ -92,7 +80,11 @@ private fun RankingPillBadge(
     ranking: MediaRanking,
     modifier: Modifier = Modifier
 ) {
-    val rankText = "#${ranking.rank} ${ranking.context ?: "Ranked"}"
+    // A blank `context` used to print "#12 " with a trailing space and nothing
+    // after it. "Ranked" is what AniList's own page says for a ranking with no
+    // context.
+    val context = ranking.context?.takeIf { it.isNotBlank() } ?: "Ranked"
+    val rankText = "#${ranking.rank} $context"
     val isTopTier = (ranking.rank ?: 100) <= 10
 
     Surface(

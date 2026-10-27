@@ -38,7 +38,25 @@ import com.anisequel.ui.components.openExternalUrlOrCopy
  * unbounded, gets the flow.
  */
 @Composable
-fun RenderParagraph(paragraph: MarkdownNode.Paragraph, maxLines: Int) {
+fun RenderParagraph(
+    paragraph: MarkdownNode.Paragraph,
+    maxLines: Int,
+    /**
+     * Called from layout with whether this paragraph's text was clipped.
+     *
+     * The clamp is `maxLines`, and until this existed the only way a caller could
+     * tell that anything had been cut was to guess from the character count - which
+     * is wrong in both directions: at a 200% font scale a 200-character synopsis
+     * overflows five lines and the guess said it did not, and on a tablet a
+     * 300-character one fits and the guess offered a "Read more" that revealed
+     * nothing. `hasVisualOverflow` is the layout answering the question directly.
+     *
+     * Only the clamped path reports. An unbounded paragraph cannot overflow, and
+     * an `onTextLayout` that never fires is what keeps a caller's sticky flag from
+     * being reset by the expanded render.
+     */
+    onOverflow: ((Boolean) -> Unit)? = null
+) {
     val context = LocalContext.current
     val hasImage = paragraph.inlines.any { it is InlineToken.Image }
 
@@ -54,6 +72,11 @@ fun RenderParagraph(paragraph: MarkdownNode.Paragraph, maxLines: Int) {
             textAlign = if (paragraph.centered) TextAlign.Center else TextAlign.Start,
             maxLines = maxLines,
             overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
+            onTextLayout = if (onOverflow != null && maxLines < Int.MAX_VALUE) {
+                { result -> onOverflow(result.hasVisualOverflow) }
+            } else {
+                null
+            },
             modifier = if (paragraph.centered) Modifier.fillMaxWidth() else Modifier
         )
         return

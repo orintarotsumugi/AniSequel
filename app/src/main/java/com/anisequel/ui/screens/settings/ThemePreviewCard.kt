@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.settings
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.ThemePalette
@@ -126,7 +126,7 @@ fun ThemePreviewCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Live Theme Preview",
+                                text = "Live theme preview",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

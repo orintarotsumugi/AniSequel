@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -159,7 +165,11 @@ fun InfoHero(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(HERO_HEIGHT)
+            // `heightIn`, not `height`: the hero is a fixed 340dp of artwork on a
+            // phone, but a reader at a 200% font scale needs the lockup to grow
+            // past it rather than have its title clipped. The artwork is a
+            // background, so letting the box grow with the text is free.
+            .heightIn(min = HERO_HEIGHT)
             .background(coverColor)
     ) {
         if (backdrop != null) {
@@ -282,11 +292,27 @@ fun InfoHero(
                     .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
                     .background(coverColor)
                     .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
+                    // The hold gesture is a raw `pointerInput`, which TalkBack
+                    // cannot reach at all: the poster was the only way to open the
+                    // full artwork and it was invisible to a screen reader. The
+                    // button role and the click action give it the two things a
+                    // pointer gives it - it is a control, and tapping it opens
+                    // something.
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = media.displayName
+                        onClick(label = "View full artwork") {
+                            onOpenCover()
+                            true
+                        }
+                    }
                     .testTag("detail_hero_poster")
             ) {
                 AsyncImage(
                     model = media.posterUrl,
-                    contentDescription = media.displayName,
+                    // The box above carries the title as its description; a
+                    // description here too would announce the poster twice.
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize()
                 )
@@ -372,10 +398,16 @@ fun InfoHero(
                     media.averageScore?.let { score ->
                         HeroChip(icon = AppVectorIcons.Star, label = "$score%")
                     }
-                    HeroChip(
-                        icon = AppVectorIcons.Info,
-                        label = media.statusLabel.uppercase()
-                    )
+                    // Gated on a real status. `statusLabel` answers "Unknown" for a
+                    // null, which is honest on the Details grid but reads as a fact
+                    // in a chip: "UNKNOWN" beside the score says the app looked and
+                    // found nothing, when the truth is that AniList did not send it.
+                    if (media.status != null) {
+                        HeroChip(
+                            icon = AppVectorIcons.Info,
+                            label = media.statusLabel.uppercase()
+                        )
+                    }
                     HeroChip(
                         icon = when {
                             media.isManga -> AppVectorIcons.SourceBook
@@ -469,12 +501,21 @@ fun InfoFloatingBar(
                 shadowElevation = 6.dp,
                 modifier = Modifier
                     .weight(1f, fill = false)
+                    // The pill's content is a 22dp icon and two 8dp paddings, so it
+                    // measured about 38dp - under the 48dp minimum on the one
+                    // control a reader reaches for one-handed at the top of a
+                    // fourteen-section page.
+                    .heightIn(min = 48.dp)
                     .clip(pill)
                     // `onClickLabel` rather than a `contentDescription` on the icon:
                     // the pill's own text is what should be announced, and the action
                     // is what a screen reader needs said after it. Overwriting the
                     // description with "Scroll to top" would replace the title.
-                    .clickable(onClickLabel = "Scroll to top", onClick = onScrollToTop)
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Scroll to top",
+                        onClick = onScrollToTop
+                    )
                     .testTag("info_bar_title")
             ) {
                 Box {
@@ -564,7 +605,7 @@ private fun HeroIconButton(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -609,7 +650,7 @@ private fun HeroChip(
             // facts beside it.
             Modifier
                 .bouncyPress(pressedScale = 0.94f)
-                .clickable(onClick = onClick)
+                .clickable(role = Role.Button, onClick = onClick)
         } else {
             Modifier
         }
@@ -645,18 +686,6 @@ private val PARALLAX_TRAVEL = 64.dp
 
 /** How much the backdrop grows by the time the hero is out of the way. */
 private const val PARALLAX_ZOOM = 0.16f
-
-/**
- * Heavy enough that no letterform in the artwork competes with the title, light
- * enough that the show's palette still reads. See the contrast note on
- * `ProfileActivityCard.COVER_BLUR_RADIUS` - this is the same trade at hero scale.
- *
- * Not applied. The hero shows its artwork sharp now, so the blur is gone and the
- * legibility it bought is done by the scrim instead - see the note on that gradient.
- * The reasoning is kept here rather than deleted silently, because the blur was a
- * deliberate answer to sharp artwork competing with the title, and the next person
- * to weaken that scrim will be re-solving the same problem.
- */
 
 /**
  * How much of the backdrop is gone once the hero has fully collapsed.

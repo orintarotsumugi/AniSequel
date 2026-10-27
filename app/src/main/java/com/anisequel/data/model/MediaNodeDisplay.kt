@@ -149,15 +149,45 @@ val MediaNode.statusLabel: String get() = when (status?.uppercase(Locale.ROOT)) 
     else -> status
 }
 val MediaNode.episodesLabel: String get() = if (isManga) {
-    chapters?.let { "$it chs" } ?: "Chapters TBA"
+    chaptersLabel ?: "Chapters TBA"
 } else {
-    episodes?.let { "$it eps" } ?: "Episodes TBA"
+    // "1 eps" is the kind of detail that makes a whole row look machine-generated,
+    // and a film - the common single-episode title - is exactly the case that
+    // printed it. `metaLabel` already singularised its own copy; these helpers are
+    // the other half of that fix.
+    episodes?.takeIf { it > 0 }?.let { if (it == 1) "1 ep" else "$it eps" }
+        ?: "Episodes TBA"
 }
-val MediaNode.chaptersLabel: String? get() = chapters?.let { "$it chs" }
-val MediaNode.volumesLabel: String? get() = volumes?.let { "$it vols" }
+val MediaNode.chaptersLabel: String?
+    get() = chapters?.takeIf { it > 0 }?.let { if (it == 1) "1 ch" else "$it chs" }
 val MediaNode.scoreLabel: String get() = averageScore?.let { "$it%" } ?: "N/A"
 val MediaNode.meanScoreLabel: String? get() = meanScore?.let { "$it%" }
 val MediaNode.releaseLabel: String get() = startDate?.formatted ?: "TBA"
+
+/**
+ * A count in the space a card has for it: "14.4K", "187.5K", "1.2M".
+ *
+ * Lived in the Info page's talent row as a private helper until the Details grid
+ * needed the same thing for popularity, and a second copy is how the two spellings
+ * drift. Two bugs went with it:
+ *
+ * - the old `else` branch divided by a million for *everything* at or above
+ *   100,000, so a popularity of 150,000 printed "0.1M" - a number that is not
+ *   the popularity of anything;
+ * - the doc claimed 99,999 renders as "100K" while the format string produced
+ *   "100.0K".
+ *
+ * One decimal below 100K because 14,370 reads as "14.4K"; above it the decimal is
+ * noise on a count nobody compares precisely, so it is dropped rather than rounded
+ * to a tenth that would still say "100.0K".
+ */
+fun compactCount(value: Int): String = when {
+    value < 1_000 -> value.toString()
+    value < 100_000 -> String.format(Locale.ROOT, "%.1fK", value / 1_000.0)
+    value < 1_000_000 -> String.format(Locale.ROOT, "%.0fK", value / 1_000.0)
+    else -> String.format(Locale.ROOT, "%.1fM", value / 1_000_000.0)
+}
+
 val MediaNode.genreList: List<String> get() = genres ?: emptyList()
 
 /**
@@ -236,7 +266,9 @@ val MediaNode.sourceLabel: String?
     get() = source?.replace('_', ' ')?.lowercase(Locale.ROOT)?.split(' ')
         ?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase(Locale.ROOT) } }
 
-val MediaNode.durationLabel: String? get() = duration?.let { "$it mins / ep" }
+val MediaNode.durationLabel: String?
+    get() = duration?.takeIf { it > 0 }
+        ?.let { if (it == 1) "1 min / ep" else "$it mins / ep" }
 val MediaNode.trailerYoutubeUrl: String? get() = trailer?.youtubeUrl
 
 /**
@@ -259,7 +291,7 @@ val MediaNode.streamingLinks: List<MediaExternalLink>
         .distinctBy { it.site?.lowercase(Locale.ROOT) }
 
 /** AniList's `ExternalLinkType` member that means "a place to watch this". */
-private const val STREAMING_LINK_TYPE = "STREAMING"
+internal const val STREAMING_LINK_TYPE = "STREAMING"
 
 val MediaNode.synonymList: List<String> get() = synonyms?.filter { it.isNotBlank() } ?: emptyList()
 
@@ -301,28 +333,6 @@ val MediaNode.descriptionBody: String?
         ?.replace(SOURCE_ATTRIBUTION, "")
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
-
-/**
- * Every non-spoiler tag AniList returned, highest ranked first, with the rank kept.
- *
- * [rankedTags] strips the rank and caps the list at eight because a list card has
- * room for eight chips; the Info page wants the whole distribution and the
- * percentage, so it reads this instead. The two exist side by side on purpose: a
- * card that showed thirty tags would drown the artwork it sits under.
- */
-val MediaNode.weightedTags: List<MediaTag>
-    get() = tags
-        ?.filter { it.isMediaSpoiler != true && !it.name.isNullOrBlank() }
-        ?.sortedByDescending { it.rank ?: 0 }
-        ?: emptyList()
-
-/**
- * AniList's tag `rank`, which is the share of viewers who applied the tag.
- *
- * "Urban Fantasy" at rank 96 is not a score - it means 96% of the people who
- * tagged this title tagged it that - which is why it is rendered as a percentage.
- */
-fun MediaTag.weightLabel(): String? = rank?.let { "$name $it%" }
 
 /** The cast, each entry with the actor who plays them. */
 val MediaNode.characterList: List<MediaCharacterEdge> get() = characters?.edges ?: emptyList()

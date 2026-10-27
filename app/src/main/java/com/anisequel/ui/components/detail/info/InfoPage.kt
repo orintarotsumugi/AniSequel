@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ThemeSong
@@ -98,6 +99,13 @@ fun AnimeInfoPage(
     quickAddStatus: QuickAddStatus = QuickAddStatus(),
     onAddMediaToPlanning: (MediaNode) -> Unit = {},
     onAddMediaToWatching: (MediaNode) -> Unit = {},
+    /**
+     * The followed users who have this title on their list, best rating first.
+     *
+     * Defaulted so the page still draws for a host with no friends request; see
+     * `SequelDetailSheet`. Empty means the card is not added at all.
+     */
+    friends: List<MediaFriend> = emptyList(),
     onClose: () -> Unit,
     /**
      * Opens a related title in place of this one.
@@ -157,7 +165,7 @@ fun AnimeInfoPage(
     // work the sheet was doing while it was still animating.
     val sections = remember(media) { infoSectionsFor(media) }
 
-    var showCover by remember(media.id) { mutableStateOf(false) }
+    var showCover by remember(media.id, media.type) { mutableStateOf(false) }
     if (showCover) {
         FullScreenCoverViewer(media = media, onDismiss = { showCover = false })
     }
@@ -200,6 +208,7 @@ fun AnimeInfoPage(
                 quickAddStatus = quickAddStatus,
                 onAddMediaToPlanning = onAddMediaToPlanning,
                 onAddMediaToWatching = onAddMediaToWatching,
+                friends = friends,
                 onAddToPlanning = onAddToPlanning,
                 onAddToWatching = onAddToWatching,
                 onOpenMedia = onOpenMedia,

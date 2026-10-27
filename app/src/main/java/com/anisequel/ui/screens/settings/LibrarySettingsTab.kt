@@ -99,7 +99,7 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
     SectionCard(
         title = "List refresh",
         icon = AppVectorIcons.Schedule,
-        subtitle = "How fresh your scan stays."
+        subtitle = "How fresh your scan stays"
     ) {
         Text(
             text = "AniSequel re-reads your list when you come back to the app if it is " +
@@ -142,7 +142,10 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
             Column {
                 Spacer(modifier = Modifier.height(16.dp))
                 SettingsButton(
-                    text = "Use AniSequel's default",
+                    // Named from the enum rather than typed: "Use AniSequel's
+                    // default" made the reader go and find out what the default was,
+                    // and it appeared right under the chip that already said it.
+                    text = "Reset to ${RefreshInterval.DEFAULT.displayName}",
                     onClick = { scope.launch { refreshIntervalPreferences.reset() } },
                     icon = AppVectorIcons.Restore,
                     variant = SettingsButtonVariant.Text,
@@ -171,9 +174,13 @@ private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
     )
 
     SectionCard(
-        title = "Dashboard",
+        // "Dashboard" was the name of the page these rows live on, not of the
+        // setting: the card only holds the arriving section, and a title that names
+        // the whole screen under a switch called "Currently arriving" reads as if
+        // the switch turned the dashboard off.
+        title = "Arriving rows",
         icon = AppVectorIcons.Tv,
-        subtitle = "The Currently arriving rows."
+        subtitle = "The airing and upcoming rows above search"
     ) {
         SwitchRow(
             title = "Currently arriving",

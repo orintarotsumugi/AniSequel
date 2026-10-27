@@ -233,7 +233,7 @@ private fun CheckingContent() {
     )
     Spacer(modifier = Modifier.height(16.dp))
     Text(
-        text = "Calling AniList...",
+        text = "Calling AniList…",
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold
     )

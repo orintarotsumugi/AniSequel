@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -48,7 +50,11 @@ fun ProfileCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        // 18dp, the padding `SectionCard` uses. This card is the one hand-built
+        // card on the page - it has a hero row rather than a title and a body - and
+        // at 16dp it sat 2dp out of line with every card above and below it, which
+        // reads as a rendering mistake rather than as a deliberate difference.
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val avatar = viewer.avatar?.large
                 if (avatar != null) {
@@ -90,7 +96,11 @@ fun ProfileCard(
                     Text(
                         text = viewer.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        // The card has no title row, so the name is its heading -
+                        // without the role a screen-reader user scrolling the account
+                        // page has no landmark above the Client ID and app lock cards.
+                        modifier = Modifier.semantics { heading() }
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Surface(

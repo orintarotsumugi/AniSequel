@@ -257,6 +257,7 @@ fun UserProfileScreen(
     val context = LocalContext.current
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
+    val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // `rememberSaveable` keys its registry entry on the *composition slot*, not on
@@ -521,6 +522,8 @@ fun UserProfileScreen(
             onAddMediaToPlanning = planningAdd.onAddToPlanning,
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
+            onLoadFriends = detailHost.onLoadFriends,
+            friends = detailFriends[subject.mediaId].orEmpty(),
             isDetailLoading = detailLoading,
             // Same sheet, same access as every other host: the tab follows the
             // editor, and with no session the page is exactly what it was.
