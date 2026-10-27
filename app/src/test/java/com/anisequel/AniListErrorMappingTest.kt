@@ -8,6 +8,7 @@ import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
+import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.SaveMediaListEntryData
@@ -114,6 +115,10 @@ class AniListErrorMappingTest {
         override suspend fun getUserFollowing(
             request: GraphQLRequest
         ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
+
+        override suspend fun getMediaFriends(
+            request: GraphQLRequest
+        ): GraphQLResponse<MediaFriendsData> = notServed("getMediaFriends")
 
         override suspend fun getActivityReplies(
             request: GraphQLRequest
@@ -376,6 +381,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun getUserFollowing(
             request: GraphQLRequest
         ): GraphQLResponse<FollowingData> = notServed("getUserFollowing")
+
+        override suspend fun getMediaFriends(
+            request: GraphQLRequest
+        ): GraphQLResponse<MediaFriendsData> = notServed("getMediaFriends")
 
         override suspend fun getActivityReplies(
             request: GraphQLRequest
