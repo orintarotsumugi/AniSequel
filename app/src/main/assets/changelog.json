@@ -1,7 +1,7 @@
 {
   "versions": [
     {
-      "version": "1.6.4",
+      "version": "1.6.3",
       "entries": [
         {
           "title": "Friends who watched this",
@@ -22,12 +22,7 @@
         {
           "title": "Controls you can hit, and hear",
           "detail": "The action row's buttons were 44dp and are 48; the docked bar's title pill measured about 38dp and is now at least 48. The hero poster was a raw pointer gesture that a screen reader could not reach at all, and it is now a button that announces the title and says what tapping it does. Portraits on the cast, crew and relations rows were describing themselves with the same name printed underneath them, so every card was read out twice; the duplicate descriptions are gone. The play glyph on a theme song is only drawn when there is a video behind it, the chevron that promised a destination over a row that only scrolls sideways is gone, and a studio credit AniList gave no id for is a plain capsule rather than a disabled button."
-        }
-      ]
-    },
-    {
-      "version": "1.6.3",
-      "entries": [
+        },
         {
           "title": "Settings, read top to bottom",
           "detail": "The shelf in Settings had a \"Network\" heading for one row and an \"Accounts\" heading for another, so the AniList account and the connection check - two questions about the same service - sat in separate sections. They share one section now, under AniList, and every label describes the page behind it. Each card is titled for the setting it holds rather than the page it lives on: \"Dashboard\" is \"Arriving rows\", \"AniList\" on the account page is \"AniList Client ID\" with a line saying the default works. The About page reads build, updates, what's new, diagnostics, privacy, links in that order, and the quick-add hold picker is the same segmented control the Theme page uses instead of a tab bar padded for the edge of a screen."
