@@ -53,11 +53,14 @@ import com.anisequel.ui.viewmodel.rememberApiStatusProbe
  * navigation contract.
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
-    APPEARANCE("Appearance", "Colour, background and motion"),
+    APPEARANCE("Appearance", "Theme, background, accent and motion"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
     LIBRARY("Library & dashboard", "Refresh, arriving rows and quick add"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
-    ABOUT("About & support", "Release notes, updates and privacy")
+    // "and links" is not padding: the page carries the repository and the issue
+    // tracker, which is where a bug report actually goes. A subtitle that stops at
+    // "privacy" describes four of its six cards.
+    ABOUT("About & support", "Build, updates, privacy and links")
 }
 
 /**
@@ -230,7 +233,7 @@ private fun SettingsRoot(
         ) {
             SettingsHubHeader(onClose = onClose)
 
-            SettingsSectionLabel("Personalization")
+            SettingsSectionLabel("Personalisation")
             SettingsRows {
                 SettingsRow(
                     page = SettingsPage.APPEARANCE,
@@ -256,18 +259,11 @@ private fun SettingsRoot(
                 )
             }
 
-            SettingsSectionLabel("Network")
-            SettingsRows {
-                SettingsHubRow(
-                    icon = AppVectorIcons.BrokenHeart,
-                    title = "AniList connection",
-                    subtitle = "Ask AniList whether it is awake",
-                    onClick = onCheckConnection,
-                    testTag = "settings_row_connection"
-                )
-            }
-
-            SettingsSectionLabel("Accounts")
+            // The connection check used to sit under a "Network" label of its own,
+            // which is a whole section heading for one row - and a heading that
+            // names the transport rather than the thing being checked. It is the
+            // same AniList the account row is about, so it lives here, second.
+            SettingsSectionLabel("AniList")
             SettingsRows {
                 SettingsRow(
                     page = SettingsPage.ACCOUNT,
@@ -275,9 +271,19 @@ private fun SettingsRoot(
                     testTag = "settings_row_account",
                     onOpen = onOpen
                 )
+                SettingsHubRow(
+                    // `SignalOn`, not `BrokenHeart`: this row asks a question. A
+                    // broken heart beside "connection" claims the answer before the
+                    // check has run, on a screen where the answer is usually fine.
+                    icon = AppVectorIcons.SignalOn,
+                    title = "Connection check",
+                    subtitle = "Ask AniList whether it is reachable",
+                    onClick = onCheckConnection,
+                    testTag = "settings_row_connection"
+                )
             }
 
-            SettingsSectionLabel("About & Support")
+            SettingsSectionLabel("About")
             SettingsRows {
                 SettingsRow(
                     page = SettingsPage.ABOUT,

@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.settings
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import kotlinx.coroutines.CoroutineScope
@@ -61,7 +61,7 @@ internal fun AnimeColourSection(
     SectionCard(
         title = "Anime colour match",
         icon = AppVectorIcons.AnimeSparkle,
-        subtitle = "Borrow the cover art's colour for the whole app.",
+        subtitle = "Borrow the cover art's colour for the whole app",
         iconContainer = MaterialTheme.colorScheme.primaryContainer,
         iconContent = MaterialTheme.colorScheme.onPrimaryContainer
     ) {
@@ -126,7 +126,7 @@ internal fun AnimeColourSection(
         }
 
         SwitchRow(
-            title = "Anime Dynamic Theme",
+            title = "Anime dynamic theme",
             subtitle = "Recolour the whole app while a detail sheet is open.",
             checked = settings.animeThemeActive,
             onCheckedChange = { active ->
@@ -146,7 +146,7 @@ internal fun AnimeColourSection(
         )
         Spacer(modifier = Modifier.height(10.dp))
         SwitchRow(
-            title = "Retain Anime Color",
+            title = "Retain anime colour",
             subtitle = "Keep that colour as the app's accent after the sheet.",
             checked = settings.animeThemeRetainColor,
             onCheckedChange = { retain ->
@@ -180,19 +180,14 @@ internal fun AnimeColourSection(
         )
 
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Revert after closing the anime",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        SettingsFieldLabel(text = "Revert after closing the anime")
         Spacer(modifier = Modifier.height(6.dp))
-        val revertOptions = listOf("Immediately", "5 Minutes", "10 Minutes")
+        val revertOptions = listOf("Immediately", "5 minutes", "10 minutes")
         val revertValues = listOf(0, 300, 600)
-        // An unknown stored value falls back to "5 Minutes", but a real 0
+        // An unknown stored value falls back to "5 minutes", but a real 0
         // must survive: the previous `.coerceAtLeast(1)` clamped 0 up to 1, so
         // "Immediately" could never be shown, and picking it snapped straight
-        // back to "5 Minutes". Index -1 (a value not in the list) is the only
+        // back to "5 minutes". Index -1 (a value not in the list) is the only
         // case the fallback is for.
         val storedRevertIndex = revertValues.indexOf(settings.animeThemeRevertDuration)
         val currentRevertIndex = if (storedRevertIndex >= 0) storedRevertIndex else 1
@@ -200,7 +195,10 @@ internal fun AnimeColourSection(
         // so the picker is shown dimmed rather than silently ignored.
         val revertEnabled = !settings.animeThemeRetainColor
         ExpressivePolygonSegmentedBar(
-            options = revertOptions.map { SegmentedOption(label = it, icon = AppVectorIcons.Restore) },
+            // No icons: the same `Restore` glyph three times over is three
+            // identical pictures next to three different answers, so it decorated
+            // the choice instead of helping it.
+            options = revertOptions.map { SegmentedOption(label = it) },
             selectedIndex = currentRevertIndex,
             onSelect = { index ->
                 if (revertEnabled) {

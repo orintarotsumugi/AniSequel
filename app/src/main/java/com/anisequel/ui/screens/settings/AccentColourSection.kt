@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.settings
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -33,12 +32,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.ThemePalette
@@ -68,7 +73,7 @@ internal fun AccentColourSection(
     SectionCard(
         title = "Accent colour",
         icon = AppVectorIcons.SectionAppearance,
-        subtitle = "Wallpaper, a palette, or a custom hue - the last one you pick wins.",
+        subtitle = "Wallpaper, a palette, or a custom hue - the last pick wins",
         iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
         iconContent = MaterialTheme.colorScheme.onTertiaryContainer
     ) {
@@ -120,12 +125,7 @@ internal fun AccentColourSection(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Palette",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        SettingsFieldLabel(text = "Palette")
         Spacer(modifier = Modifier.height(10.dp))
 
         FlowRow(
@@ -163,12 +163,7 @@ internal fun AccentColourSection(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Custom hue",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        SettingsFieldLabel(text = "Custom hue")
         Spacer(modifier = Modifier.height(10.dp))
 
         FlowRow(
@@ -208,7 +203,11 @@ internal fun AccentColourSection(
                 // is not drawing.
                 settings.useDynamicColor ->
                     "Your wallpaper is providing the accent. Pick a palette or a hue to switch to it."
-                settings.customColorHex != null -> "Selected: ${settings.customColorHex}"
+                // The hue chips toggle, and nothing on the chip says so. Naming the
+                // way back is cheaper than a second "None" chip that would be the
+                // only uncoloured circle in the row.
+                settings.customColorHex != null ->
+                    "Custom hue: ${settings.customColorHex}. Tap it again to go back to the palette."
                 else -> "A custom hue refines the accent above any palette."
             },
             style = MaterialTheme.typography.bodySmall,
@@ -242,6 +241,16 @@ private fun PaletteCard(
             .clip(cardShape)
             .bouncyPress(pressedScale = 0.94f)
             .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                // The name is the one drawn under the swatch, and `clickable`
+                // already merges that in - so this adds what the card could not
+                // say before: which one is chosen. The check mark used to carry a
+                // `contentDescription` equal to that same visible name, which the
+                // merge then read out twice once a palette was selected ("Kitsu
+                // Kitsu"); the description is gone and the state is a property.
+                this.selected = selected
+                role = Role.RadioButton
+            }
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -270,7 +279,10 @@ private fun PaletteCard(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = AppVectorIcons.CheckCircle,
-                            contentDescription = palette.displayName,
+                            // The merged semantics above already name the card, and
+                            // the name is drawn below it: a description here would
+                            // make a screen reader say it twice.
+                            contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(15.dp)
                         )
@@ -320,12 +332,21 @@ private fun HueChip(
             .size(44.dp)
             .bouncyPress(pressedScale = 0.88f)
             .clickable(onClick = onClick)
+            // The chip is a colour and nothing else, so the name has to be spoken:
+            // it used to hang off the check mark, which only exists once the chip is
+            // selected, leaving every other hue as an unlabelled circle.
+            .semantics {
+                contentDescription = name
+                this.selected = isSelected
+                role = Role.RadioButton
+            }
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (isSelected) {
                 Icon(
                     imageVector = AppVectorIcons.CheckCircle,
-                    contentDescription = name,
+                    // Named on the chip above, not here.
+                    contentDescription = null,
                     tint = checkColor,
                     modifier = Modifier.size(20.dp)
                 )

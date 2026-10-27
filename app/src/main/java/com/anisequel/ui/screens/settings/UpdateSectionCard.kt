@@ -62,7 +62,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                             "You're on v${state.installedVersion}, the latest release."
 
                         is UpdateUiState.Available ->
-                            "AniSequel v${state.manifest.version} is available!"
+                            "AniSequel v${state.manifest.version} is available."
 
                         is UpdateUiState.ReadyToInstall ->
                             "Downloaded. Ready to install."
@@ -192,7 +192,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsButton(
-                    text = if (state.sentToSettings) "Open settings again" else "Open Settings",
+                    text = if (state.sentToSettings) "Open settings again" else "Open settings",
                     onClick = { controller.requestInstallPermission() },
                     icon = AppVectorIcons.Settings,
                     fillWidth = true,
@@ -221,7 +221,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "AniSequel checks github.com/orintarotsumugi/AniSequel for new releases without sending personal data.",
+            text = "AniSequel asks GitHub for the latest release. Nothing about you is sent.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

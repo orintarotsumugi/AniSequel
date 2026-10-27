@@ -102,6 +102,12 @@ fun ThemeTab(
             themeSettings.trueBlack ||
             themeSettings.customColorHex != null ||
             themeSettings.animeThemeActive ||
+            // Retain and revert are cleared by `reset()` like everything else here,
+            // so leaving them out meant a reader who changed only those two had
+            // something to reset and no button offering to reset it. Retention
+            // defaults to on, which is why the test is negated.
+            !themeSettings.animeThemeRetainColor ||
+            themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
             themeSettings.appBackgroundColor != null
 
         if (appearanceChanged) {
@@ -129,7 +135,7 @@ private fun AppearanceSection(
     SectionCard(
         title = "Appearance",
         icon = AppVectorIcons.ThemeDark,
-        subtitle = "Light, dark, or follow the device."
+        subtitle = "Light, dark, or follow the device"
     ) {
         ExpressivePolygonSegmentedBar(
             options = ThemeMode.entries.map { mode ->
@@ -143,7 +149,7 @@ private fun AppearanceSection(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "System follows your phone's own light/dark setting.",
+            text = "System follows your phone's light or dark setting.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -159,9 +165,7 @@ private fun BackgroundSection(
     SectionCard(
         title = "Background",
         icon = AppVectorIcons.SectionBackground,
-        subtitle = "How dark the app is in dark mode.",
-        iconContainer = MaterialTheme.colorScheme.secondaryContainer,
-        iconContent = MaterialTheme.colorScheme.onSecondaryContainer
+        subtitle = "How dark the app is in dark mode"
     ) {
         SwitchRow(
             title = "True black",
@@ -174,12 +178,11 @@ private fun BackgroundSection(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Canvas colour",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        // `SettingsFieldLabel`, not a hand-rolled bold `labelMedium`: this caption
+        // and the ones on the Accent and Jokes cards do the same job, and three
+        // private copies is how one of them ends up 12sp bold while the others are
+        // 14sp medium.
+        SettingsFieldLabel(text = "Canvas colour")
         Spacer(modifier = Modifier.height(10.dp))
 
         FlowRow(
@@ -273,7 +276,7 @@ private fun MotionSection(
     SectionCard(
         title = "Motion",
         icon = AppVectorIcons.SectionMotion,
-        subtitle = "How the app animates.",
+        subtitle = "How much the app animates",
         iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
         iconContent = MaterialTheme.colorScheme.onTertiaryContainer
     ) {
@@ -288,8 +291,12 @@ private fun MotionSection(
             modifier = Modifier.testTag("motion_style_row")
         )
         Spacer(modifier = Modifier.height(8.dp))
+        // Three clauses rather than one long sentence with three "=" signs: the
+        // equals read as a table that had been flattened into prose, and the line
+        // ran to two full widths on a phone.
         Text(
-            text = "Instant = no motion at all. Smooth = calm fades with no overshoot. Chill = full expressive physics.",
+            text = "Instant turns motion off. Smooth fades without overshooting. " +
+                "Chill is the full expressive physics.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -305,3 +312,15 @@ private val backgroundColors = listOf(
     "#1C1410" to "Warm Espresso",
     "#101820" to "Slate Navy"
 )
+
+/**
+ * Five minutes, which is the default `ThemePreferences.ThemeSettings` stores for
+ * the anime revert timer.
+ *
+ * Repeated here rather than read from the repository because the question this
+ * answers is only "has the reader changed anything worth resetting", and the
+ * alternative - a public constant on the preferences class - would be a public
+ * API for one comparison. `AnimeColourSection` offers the same three values, so
+ * if the default moves, both files move with it.
+ */
+private const val DEFAULT_ANIME_REVERT_SECONDS = 300

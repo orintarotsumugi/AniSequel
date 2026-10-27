@@ -1,6 +1,47 @@
 {
   "versions": [
     {
+      "version": "1.6.3",
+      "entries": [
+        {
+          "title": "Friends who watched this",
+          "detail": "The title page now says whether anyone you follow has seen the show: a row of faces, each with their rating and how far they got - episodes watched for anime, chapters read for manga. It is one request, it is sorted best rating first with unrated friends after, and it draws nothing at all when nobody you follow has the title, rather than an empty card saying so."
+        },
+        {
+          "title": "A manga no longer opens with the anime's page state",
+          "detail": "AniList numbers anime and manga independently, so a relation from one to the other can carry the same number. The sheet keyed its scroll position, its half-typed entry draft and its selected tab on that number alone, so crossing namespaces could drop you into the middle of a page you had never seen and save one title's progress under the other's id. All of it is keyed by the media's type as well now."
+        },
+        {
+          "title": "The Details grid says only what it knows",
+          "detail": "A manga with no published chapter count printed \"Chapters 0\" as though the series were empty, \"Volumes 0\" beside it, and a one-minute short read \"1m\". Values arrived in two typographic conventions in one card - \"WINTER 2019\" over \"Original\" - and the score, status and format appeared again eight lines under the chips that already state them. Lengths now say TBA rather than zero, units are singular where they should be, popularity is abbreviated so it fits its cell, an unreleased title says \"Starts\" instead of \"Started\", and the duplicates are gone. Rankings, which used to float as loose pills between two cards, are a card with a heading like everything else."
+        },
+        {
+          "title": "Read more appears when there is more to read",
+          "detail": "The synopsis toggle decided whether to offer itself by counting characters, which was wrong in both directions: at a large font size a 200-character synopsis ran past five lines and the button never appeared, while on a tablet a longer one fitted and the button revealed nothing. It now asks the text whether it was clipped, so the control appears exactly when something is hidden."
+        },
+        {
+          "title": "Controls you can hit, and hear",
+          "detail": "The action row's buttons were 44dp and are 48; the docked bar's title pill measured about 38dp and is now at least 48. The hero poster was a raw pointer gesture that a screen reader could not reach at all, and it is now a button that announces the title and says what tapping it does. Portraits on the cast, crew and relations rows were describing themselves with the same name printed underneath them, so every card was read out twice; the duplicate descriptions are gone. The play glyph on a theme song is only drawn when there is a video behind it, the chevron that promised a destination over a row that only scrolls sideways is gone, and a studio credit AniList gave no id for is a plain capsule rather than a disabled button."
+        },
+        {
+          "title": "Settings, read top to bottom",
+          "detail": "The shelf in Settings had a \"Network\" heading for one row and an \"Accounts\" heading for another, so the AniList account and the connection check - two questions about the same service - sat in separate sections. They share one section now, under AniList, and every label describes the page behind it. Each card is titled for the setting it holds rather than the page it lives on: \"Dashboard\" is \"Arriving rows\", \"AniList\" on the account page is \"AniList Client ID\" with a line saying the default works. The About page reads build, updates, what's new, diagnostics, privacy, links in that order, and the quick-add hold picker is the same segmented control the Theme page uses instead of a tab bar padded for the edge of a screen."
+        },
+        {
+          "title": "The palette and hue pickers say what they are",
+          "detail": "In Appearance, the palette cards never told a screen reader which one was selected, and the check mark carried the palette's own name as a description on top of the name drawn under the swatch - so the selected card was read out twice and the other three said nothing about being the alternative. Both report their state now. The custom hue dots are a colour and no text at all, so they were anonymous until picked; they name themselves now, and the row says that tapping the selected hue again goes back to the palette. The Motion description was rewritten while I was in there: Instant, Smooth and Chill are three sentences instead of three equals signs."
+        },
+        {
+          "title": "Reset appears when there is something to reset",
+          "detail": "The Appearance page offers \"Reset appearance\" when anything on it differs from the default, and it was not counting the anime retain/revert pair - both of which the reset clears. A reader who had turned retention off, or moved the revert timer to ten minutes, had something to reset and no button offering it. On the Library page the refresh card's reset says \"Reset to 30 min\" now instead of \"Use AniSequel's default\", which made you go and find out what the default was."
+        },
+        {
+          "title": "Diagnostics reads its report off the main thread",
+          "detail": "The Diagnostics card in About read the last crash report from disk while it was being drawn. It is one small file and usually absent, so the cost was a frame here and there rather than a hang, but a disk read has no business in composition. The card also stops putting a warning triangle over \"Crash reports are off\", and its Clear button is \"Delete report\", which is what it does."
+        }
+      ]
+    },
+    {
       "version": "1.6.2",
       "entries": [
         {

@@ -1,6 +1,7 @@
 package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.MediaCoverKey
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.repository.AniListRepository
 import java.util.Locale
@@ -133,6 +134,78 @@ class MediaDetailStore(
     val loading: StateFlow<Set<Int>> = _loading.asStateFlow()
 
     /**
+     * Followed users' entries per title, fetched separately from the detail.
+     *
+     * ## Why it is not part of [load]
+     *
+     * A detail that is already cached returns early, and friends are not part of
+     * the detail: the detail query is public, `Page.mediaList(isFollowing:)` is
+     * viewer-scoped and can fail on its own (signed out, or the request budget
+     * spent). Folding the two together would mean a cached title never asks for
+     * friends again, and a failed friends call throwing away a detail that
+     * arrived.
+     *
+     * ## Why the fetch cache is namespaced and the published map is not
+     *
+     * Same split as [cache] and [published], for the same reason: the fetch cache
+     * must never serve `manga/1` out of `anime/1`, but the sheet looks its title
+     * up by the id its own node carries, and a screen only ever holds one title.
+     * Re-opening a title re-publishes its list synchronously from the fetch cache,
+     * so the only wrong state is the frame before that happens - which is exactly
+     * what [details] already accepts.
+     */
+    private val friendsCache = object : LinkedHashMap<MediaCoverKey, List<MediaFriend>>(64, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<MediaCoverKey, List<MediaFriend>>?
+        ): Boolean = size > MAX_ENTRIES
+    }
+
+    private val friendsInFlight = mutableSetOf<MediaCoverKey>()
+
+    private val _friends = MutableStateFlow<Map<Int, List<MediaFriend>>>(emptyMap())
+
+    /** Friends' entries the screens read, keyed by media id. See [friendsCache]. */
+    val friends: StateFlow<Map<Int, List<MediaFriend>>> = _friends.asStateFlow()
+
+    private fun publishFriends(mediaId: Int, friends: List<MediaFriend>) {
+        if (_friends.value[mediaId] !== friends) {
+            _friends.value = _friends.value + (mediaId to friends)
+        }
+    }
+
+    /**
+     * Fetches the followed users who have this title on their list.
+     *
+     * Called alongside [load] rather than by it - see [friends]. A failure is
+     * swallowed for the same reason a detail failure is: the page is already
+     * complete without this card, and an error over "nobody you follow has seen
+     * this" would be a lie about which of the two happened.
+     */
+    fun loadFriends(mediaId: Int, mediaType: String? = null) {
+        val key = cacheKey(mediaId, mediaType)
+        friendsCache[key]?.let { known ->
+            publishFriends(mediaId, known)
+            return
+        }
+        if (isDemo || key in friendsInFlight) return
+
+        friendsInFlight += key
+        scope.launch {
+            try {
+                repositoryResult {
+                    repository.getMediaFriends(mediaId, mediaType)
+                }.onSuccess { list ->
+                    friendsCache[key] = list
+                    publishFriends(mediaId, list)
+                }
+                // A failed friends load draws no card: see above.
+            } finally {
+                friendsInFlight -= key
+            }
+        }
+    }
+
+    /**
      * The node already fetched for this title, if any, without starting a request.
      *
      * Namespaced for the same reason [load] is - see [cache]. A card reading this
@@ -227,6 +300,9 @@ class MediaDetailStore(
         published.clear()
         _details.value = emptyMap()
         _loading.value = emptySet()
+        friendsCache.clear()
+        friendsInFlight.clear()
+        _friends.value = emptyMap()
     }
 
     /**

@@ -7,12 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,17 +76,12 @@ fun InfoThemeSongsSection(
             .testTag("info_theme_songs_section"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // No trailing chevron. It used to draw `SequelArrow` - the "go to the
+        // next thing" glyph from the relations row - over a row that only scrolls
+        // sideways, so it promised a destination that does not exist.
         InfoAccentHeading(
             title = "Openings & Endings",
-            subtitle = themes.themeSongsSummary(),
-            trailing = {
-                Icon(
-                    imageVector = AppVectorIcons.SequelArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            subtitle = themes.themeSongsSummary()
         )
 
         LazyRow(
@@ -131,11 +125,18 @@ private fun ThemeSongCard(theme: ThemeSong) {
             .then(if (playable) Modifier.bouncyPress(pressedScale = 0.96f) else Modifier)
             .then(
                 if (playable) {
-                    Modifier.clickable(role = Role.Button, onClick = open)
+                    Modifier.clickable(
+                        role = Role.Button,
+                        onClickLabel = "Play",
+                        onClick = open
+                    )
                 } else {
                     Modifier
                 }
             )
+            // One stop per card: without this, a card that cannot be played is
+            // read as two separate nodes - the `OP1` badge and the song title.
+            .semantics(mergeDescendants = true) {}
             .testTag("theme_song_${theme.label}")
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -171,22 +172,27 @@ private fun ThemeSongCard(theme: ThemeSong) {
                 )
             }
 
-            Surface(
-                shape = CircleShape,
-                color = Color.White.copy(alpha = if (playable) 0.92f else 0.4f),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(38.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppVectorIcons.Play,
-                        // The card's one spoken label: the badge above is
-                        // decoration, the song is what the row is about.
-                        contentDescription = theme.title ?: theme.label,
-                        tint = Color.Black.copy(alpha = 0.85f),
-                        modifier = Modifier.size(22.dp)
-                    )
+            // Only when there is something to play. A play glyph at 40% opacity
+            // over a theme with no video is still a play button to a reader - it
+            // was the one control on the page that looked live and did nothing.
+            if (playable) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.92f),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = AppVectorIcons.Play,
+                            // The card's label and title are both `Text`s below;
+                            // a description here announced the song twice.
+                            contentDescription = null,
+                            tint = Color.Black.copy(alpha = 0.85f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 
@@ -197,7 +203,6 @@ private fun ThemeSongCard(theme: ThemeSong) {
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = title,
                         style = MaterialTheme.typography.labelSmall,

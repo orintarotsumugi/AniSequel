@@ -33,6 +33,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,17 +45,16 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StudioCredit
 import com.anisequel.data.model.airingEpisodeNumber
+import com.anisequel.data.model.compactCount
 import com.anisequel.data.model.descriptionBody
-import com.anisequel.data.model.formatLabel
+import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.releaseLabel
 import com.anisequel.data.model.seasonLabel
 import com.anisequel.data.model.sourceLabel
-import com.anisequel.data.model.statusLabel
 import com.anisequel.data.model.studioCredits
-import com.anisequel.data.model.synopsis
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -106,7 +108,12 @@ fun InfoCard(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
+                        // A page of a dozen cards is exactly what heading
+                        // navigation is for: without this, every card title is
+                        // one more stop in a linear read rather than a landmark.
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { heading() }
                     )
                     trailing?.invoke()
                 }
@@ -212,7 +219,6 @@ fun InfoSynopsisCard(
     val nodes = remember(raw) {
         raw?.takeIf { it.isNotBlank() }?.let { AniListMarkdownParser.parse(it) } ?: emptyList()
     }
-    val plain = media.synopsis
 
     // `rememberSaveable`, not `remember`, and that is the whole point: this card is a
     // `LazyColumn` item, so scrolling past it disposes it. A plain `remember` meant
@@ -220,7 +226,21 @@ fun InfoSynopsisCard(
     // collapsed - the card silently undid the one control it has. The `LazyColumn`
     // keeps a disposed item's saved state under its key, so the choice survives the
     // round trip the same way the entrance animation's "already played" flag does.
-    var isExpanded by rememberSaveable(media.id) { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(media.id, media.type) { mutableStateOf(false) }
+
+    // Whether the *collapsed* render cut the text, reported by layout.
+    //
+    // Sticky rather than mirrored: once the reader expands, every paragraph is
+    // unbounded and `hasVisualOverflow` is false - assigning instead of OR-ing
+    // would make "Show less" disappear the moment it was pressed, which is exactly
+    // the trap this comment exists to stop the next reader from falling into.
+    //
+    // `rememberSaveable` for the same reason `isExpanded` is: the two have to
+    // survive together. A plain `remember` here meant that expanding a synopsis,
+    // scrolling past it and coming back up restored `isExpanded = true` beside
+    // `clampedByLines = false` - the expanded text with no "Show less" under it,
+    // a card that could only be collapsed by leaving the sheet.
+    var clampedByLines by rememberSaveable(media.id, media.type) { mutableStateOf(false) }
 
     InfoCard(
         modifier = modifier
@@ -256,20 +276,23 @@ fun InfoSynopsisCard(
             else -> {
                 AniListMarkdownView(
                     nodes = nodes,
-                    maxLines = if (isExpanded) Int.MAX_VALUE else COLLAPSED_SYNOPSIS_LINES
+                    maxLines = if (isExpanded) Int.MAX_VALUE else COLLAPSED_SYNOPSIS_LINES,
+                    onOverflowChange = { overflowed -> if (overflowed) clampedByLines = true }
                 )
 
-                // The toggle is gated on the same thing the view clamps, and the view
-                // clamps two different ways: `AniListMarkdownView` drops whole blocks
-                // past MARKDOWN_COLLAPSED_BLOCK_LIMIT, *and* clamps each remaining
-                // paragraph to `maxLines`. Gating on character count alone - which is
-                // all this used to check - missed the block case: a description of six
-                // short paragraphs totalling 200 characters was cut to four blocks and
-                // offered no way to read the other two, because 200 is under the
-                // threshold. Text the reader cannot reach is worse than a card that
-                // grew a line.
-                val isClamped = nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT ||
-                    (plain?.length ?: 0) > SYNOPSIS_EXPAND_THRESHOLD
+                // The toggle is gated on the same two things the view clamps on, and
+                // the view clamps two different ways: `AniListMarkdownView` drops
+                // whole blocks past MARKDOWN_COLLAPSED_BLOCK_LIMIT, *and* clamps each
+                // remaining paragraph to `maxLines`.
+                //
+                // The block case is countable here. The line case is not - it was
+                // guessed from a character count, which was wrong in both
+                // directions: at a 200% font scale 200 characters overflow five
+                // lines and the guess said they did not (text the reader could not
+                // reach), while on a tablet 300 characters fit and the guess offered
+                // a "Read more" that revealed nothing. `clampedByLines` is the layout
+                // answering directly, via `RenderParagraph`'s `hasVisualOverflow`.
+                val isClamped = nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT || clampedByLines
 
                 if (isClamped) {
                     TextButton(
@@ -293,7 +316,11 @@ fun InfoSynopsisCard(
                 Text(
                     text = "Source: AniList",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    // Was 0.6f, which put this line below the contrast floor on
+                    // the card's translucent surface - a credit nobody can read is
+                    // the same as no credit. `onSurfaceVariant` is already the
+                    // muted role; dimming it further was the mistake.
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag("info_synopsis_source")
                 )
             }
@@ -359,27 +386,50 @@ fun InfoSpecsCard(
 
     val facts = buildList {
         if (media.isManga) {
-            add("Chapters" to (media.chapters?.toString() ?: "TBA"))
-            media.volumes?.let { add("Volumes" to it.toString()) }
+            // A zero from AniList means "not known yet", not "none": an ongoing
+            // manga reports 0 chapters until a count is published, and the card
+            // used to print "Chapters 0" as though the series were empty. The
+            // volume row is omitted rather than shown as 0 for the same reason -
+            // "Volumes 0" beside "Chapters TBA" read as a contradiction.
+            add("Chapters" to (media.chapters?.takeIf { it > 0 }?.toString() ?: "TBA"))
+            media.volumes?.takeIf { it > 0 }?.let { add("Volumes" to it.toString()) }
         } else {
-            add("Episodes" to (media.episodes?.toString() ?: "TBA"))
+            add("Episodes" to (media.episodes?.takeIf { it > 0 }?.toString() ?: "TBA"))
         }
-        media.duration?.let { add("Duration" to "${it}m") }
-        media.seasonLabel?.let { add("Season" to it.uppercase()) }
-        add("Status" to media.statusLabel.uppercase())
+        media.duration?.takeIf { it > 0 }?.let { minutes ->
+            add("Duration" to if (minutes == 1) "1 min" else "${minutes}m")
+        }
+        // The values are printed as their own helpers spell them. This grid used
+        // to uppercase some of them ("WINTER 2019", "FINISHED") and not others
+        // ("TV", "Original"), so one card mixed two typographic conventions -
+        // and `InfoFact` already uppercases the *label*, which is where the
+        // distinction belongs.
+        media.seasonLabel?.let { add("Season" to it) }
+        // Score, status and format are deliberately absent: the hero's chips
+        // already state all three, and printing them again eight lines down made
+        // the page look like it had two sources that disagreed about the title.
+        //
+        // Only anime carry `nextAiringEpisode`, so this is "Next episode" and not
+        // a manga branch that could never run.
         untrackedAiring?.let { countdown ->
             add(
-                (if (media.isManga) "Next chapter" else "Next episode") to
+                "Next episode" to
                     listOfNotNull(media.airingEpisodeNumber?.toString(), countdown)
                         .joinToString(" · ")
             )
         }
-        add("Format" to media.formatLabel)
         media.sourceLabel?.let { add("Source" to it) }
-        media.averageScore?.let { add("Score" to "$it%") }
         media.meanScore?.let { add("Mean score" to "$it%") }
-        media.popularity?.let { add("Popularity" to it.toString()) }
-        media.releaseLabel.takeIf { it != "TBA" }?.let { add("Started" to it.uppercase()) }
+        media.popularity?.takeIf { it > 0 }?.let {
+            // A six-digit popularity was printed in full and wrapped the cell onto
+            // a second line; "187.5K" is the same fact in the space it has.
+            add("Popularity" to compactCount(it))
+        }
+        media.releaseLabel.takeIf { it != "TBA" }?.let {
+            // "Started 2027-04-05" is a tense the date does not have. AniList
+            // reports a start date for unreleased titles too.
+            add((if (media.hasNotAired) "Starts" else "Started") to it)
+        }
     }
 
     InfoCard(
@@ -597,10 +647,22 @@ private fun StudioCreditChip(
         shape = ExpressiveShapes.pill,
         color = container,
         modifier = Modifier
-            .then(if (openable) Modifier.bouncyPress(pressedScale = 0.94f) else Modifier)
-            .clickable(enabled = openable) {
-                credit.id?.let { id -> onOpenStudio(id, credit.name) }
-            }
+            // The `clickable` was applied unconditionally with `enabled =
+            // openable`, which still publishes button semantics - so a credit
+            // AniList gave no id for announced itself as a *disabled button*. The
+            // comment above promises a plain capsule for that case, and this is
+            // what makes it one.
+            .then(
+                if (openable) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.94f)
+                        .clickable(role = Role.Button) {
+                            credit.id?.let { id -> onOpenStudio(id, credit.name) }
+                        }
+                } else {
+                    Modifier
+                }
+            )
             .testTag("info_studio_${credit.name}")
     ) {
         Row(
@@ -628,9 +690,6 @@ private fun StudioCreditChip(
 
 /** How many lines of synopsis show before "Read more". */
 private const val COLLAPSED_SYNOPSIS_LINES = 5
-
-/** Below this, the whole synopsis is already on screen and the toggle is noise. */
-private const val SYNOPSIS_EXPAND_THRESHOLD = 260
 
 /**
  * The page's left and right inset, shared by the cards and by the three sections

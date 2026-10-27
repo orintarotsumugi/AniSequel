@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -25,11 +26,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.clickable
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.STREAMING_LINK_TYPE
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.openExternalUrlOrCopy
 import java.util.Locale
 
 /**
@@ -55,7 +56,7 @@ fun InfoExternalLinksSection(
 ) {
     val links = media.externalLinks.orEmpty()
         .filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
-        .filterNot { it.type.equals(STREAMING, ignoreCase = true) }
+        .filterNot { it.type.equals(STREAMING_LINK_TYPE, ignoreCase = true) }
         .distinctBy { (it.site + it.url).lowercase(Locale.ROOT) }
     if (links.isEmpty()) return
 
@@ -90,7 +91,7 @@ fun InfoExternalLinksSection(
                 ) {
                     Row(
                         modifier = Modifier
-                            .heightIn(min = 44.dp)
+                            .heightIn(min = 48.dp)
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -114,6 +115,3 @@ fun InfoExternalLinksSection(
         }
     }
 }
-
-/** AniList's `ExternalLinkType` value that means "a place to watch this". */
-private const val STREAMING = "STREAMING"

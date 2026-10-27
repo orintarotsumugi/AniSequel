@@ -154,6 +154,37 @@ and the card's score badge read. The cost is bounded the way it is there on
 purpose: this runs once per *open* over at most twelve nodes, never per entry of
 a list.
 
+**Friends who watched it are one request, not one per friend.**
+`Page.mediaList(mediaId:, type:, isFollowing: true)` answers "which of the people
+I follow have this title on their list" in a single query, with
+`score(format: POINT_10_DECIMAL)` normalising every rating onto one scale — the
+bare `score` field is in each user's own chosen format, so four friends would
+otherwise be four incompatible numbers in one row. The alternative shape, fetch
+the following list and then ask for each person's entry, is N+1 requests against
+a budget of 30 a minute for a card that is a footnote on the page. It is fetched
+by `MediaDetailStore.loadFriends` rather than by `load`, because a cached detail
+returns early and a viewer-scoped query can fail on its own; a failure draws no
+card instead of an error over "nobody you follow has seen this". The card is
+added only when the list is non-empty, `PLANNING` entries are dropped (a plan is
+the answer "no, not yet"), and the ordering — rating, then progress, then name —
+is applied in the repository so the same title cannot come back in two orders.
+
+**Every piece of sheet state is keyed by namespace, not by number.** AniList
+numbers `anime/` and `manga/` independently, so `anime/1` and `manga/1` are
+different titles. The scroll position, the half-typed entry draft and the saved
+tab were keyed on the id alone, which meant a relation crossing namespaces could
+open mid-page with the previous title's state — and the entry tab could save one
+title's progress under the other's id. All of it carries `media.type` in the key
+now, as does the detail cache that feeds it.
+
+**"Read more" asks the text whether it was cut.** The synopsis toggle used to
+decide by counting characters, which is wrong in both directions: at a 200% font
+scale 200 characters overflow five lines and the button never appeared, while on
+a tablet 300 characters fit and the button revealed nothing. `RenderParagraph`
+now reports `hasVisualOverflow` from layout, and the flag is sticky — once
+expanded every paragraph is unbounded, so a mirrored flag would make "Show less"
+vanish the moment it was pressed.
+
 ---
 
 ## Studio pages

@@ -14,6 +14,7 @@ import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaEntryEdit
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -21,6 +22,8 @@ import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.model.sortedForDisplay
+import com.anisequel.data.model.toMediaFriend
 import com.anisequel.data.network.AniListApiService
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
@@ -504,6 +507,18 @@ class AniListRepositoryImpl(
     private val activityCache = ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
     private val followersCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
     private val followingCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
+
+    /**
+     * Followed users' entries per title, keyed by namespace and id.
+     *
+     * Namespaced for the same reason [detailCache] is: `anime/1` and `manga/1` are
+     * different titles sharing a number, so a key of `media:1:friends` would serve
+     * a manga's readers out of the anime's entries. The window is the same
+     * `listCacheTtlMillis` as every other cached read - a friend's progress moves
+     * slowly, and re-asking on every open of the same title is a request the
+     * budget cannot afford.
+     */
+    private val friendsCache = ConcurrentHashMap<String, CachedValue<List<MediaFriend>>>()
 
     /**
      * One cached answer, whatever its shape - a page, or a list of users.
@@ -1620,6 +1635,34 @@ class AniListRepositoryImpl(
         }
         return fetch(GraphQLRequest(query = query, variables = mapOf("userId" to userId)))
             .onSuccess { storeValue(cache, key, it) }
+    }
+
+    override suspend fun getMediaFriends(
+        mediaId: Int,
+        mediaType: String?,
+        forceRefresh: Boolean
+    ): Result<List<MediaFriend>> {
+        val type = mediaType?.uppercase(Locale.ROOT)
+        val key = "media:${type ?: UNSPECIFIED_MEDIA_TYPE}:$mediaId:friends"
+        if (!forceRefresh) cachedValue(friendsCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.getMediaFriendsQuery(type),
+                variables = buildMap {
+                    put("mediaId", mediaId)
+                    type?.let { put("type", it) }
+                }
+            ),
+            apiService::getMediaFriends
+        ).map { data ->
+            // Filtered, mapped and sorted here rather than in the card: the same
+            // title opened twice must come back in the same order, and the cached
+            // answer is the one the second open reads.
+            data.page?.mediaList.orEmpty()
+                .mapNotNull { it.toMediaFriend() }
+                .sortedForDisplay()
+        }.onSuccess { storeValue(friendsCache, key, it) }
     }
 
     override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =

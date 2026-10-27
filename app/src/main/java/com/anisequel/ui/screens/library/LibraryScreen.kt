@@ -122,6 +122,7 @@ fun LibraryScreen(
     val isLoadingManga by overviewViewModel.isLoadingManga.collectAsStateWithLifecycle()
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
+    val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // One-tap Planning for a title the sheet shows. The host writes through the
@@ -371,6 +372,8 @@ fun LibraryScreen(
             onAddMediaToPlanning = planningAdd.onAddToPlanning,
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
+            onLoadFriends = detailHost.onLoadFriends,
+            friends = detailFriends[subject.mediaId].orEmpty(),
             isDetailLoading = detailLoading,
             // The sheet is the same one the dashboard opens, so it gets the same
             // access: null here still draws the whole Info page, minus the one

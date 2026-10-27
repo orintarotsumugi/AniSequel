@@ -47,7 +47,9 @@ import com.anisequel.data.repository.DiagnosticsPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * The About & support page: what this build is, and what it does with your data.
@@ -66,8 +68,14 @@ import kotlinx.coroutines.delay
  *
  * Everything account-shaped now lives on [EditSettingsTab], where the session
  * already was, and the connection check lives on the shelf row that opens it.
- * What is left is one subject per card: the build, the privacy promise, the
- * updater, the notes, and the one external link the app needs.
+ *
+ * ## The order the cards are in
+ *
+ * Identity, currency, change, trouble, trust, help: what this build is, whether
+ * it is the newest one, what changed, the crash report if there is one, what
+ * leaves the device, and where to go with a problem. Diagnostics stays above
+ * Privacy because Privacy points at it - "off unless you turn them on in
+ * Diagnostics above" is only true in this order.
  */
 @Composable
 fun InfoSettingsTab(
@@ -84,10 +92,10 @@ fun InfoSettingsTab(
 
     SettingsScrollColumn(modifier) {
         BuildCard()
-        CrashReportCard()
-        PrivacyCard()
         UpdateSectionCard()
         ChangelogSectionCard(changelog = changelog)
+        CrashReportCard()
+        PrivacyCard()
         HelpLinksCard()
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -131,7 +139,7 @@ private fun BuildCard() {
  *
  * ## Why this is in the app at all
  *
- * The app has no crash backend - that is deliberate, and the Privacy card above
+ * The app has no crash backend - that is deliberate, and the Privacy card below
  * promises it. But a crash with no trace is a bug nobody can fix, and the comment
  * sheet proved it: the report was "it closes when loading the comments", which is
  * true and unfixable, because reading the source can only rule a line out and never
@@ -159,7 +167,7 @@ private fun BuildCard() {
  *
  * "Stop keeping this" and "keep the one you already have" are different requests,
  * and the second one is not what the switch says. Turning it off clears the file
- * so the setting means what a reader would assume it means; the Clear button stays
+ * so the setting means what a reader would assume it means; the Delete button stays
  * for the reader who has copied it and wants the file gone without changing the
  * setting.
  *
@@ -173,11 +181,20 @@ private fun CrashReportCard() {
     val context = LocalContext.current
     val preferences = remember(context) { DiagnosticsPreferences(context) }
     var enabled by remember { mutableStateOf(preferences.crashReportsEnabled) }
-    // Read once per entry to the page: the file only changes when the process dies,
-    // which is not a thing that happens while this screen is on top.
-    var report by remember { mutableStateOf(CrashReports.read(context)) }
+    // Read once per entry to the page, off the main thread: the file only changes
+    // when the process dies, which is not a thing that happens while this screen is
+    // on top, but `CrashReports.read` is a `File` read and this composable used to
+    // call it straight from composition - a disk access in the frame that draws the
+    // page. Null until the read lands, which is the same thing the card draws when
+    // there is no report, so the only visible difference is that the block appears
+    // a frame later on a page that has one.
+    var report by remember { mutableStateOf<String?>(null) }
     var showing by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        report = withContext(Dispatchers.IO) { CrashReports.read(context) }
+    }
 
     LaunchedEffect(copied) {
         if (!copied) return@LaunchedEffect
@@ -191,26 +208,18 @@ private fun CrashReportCard() {
 
     SectionCard(
         title = "Diagnostics",
-        icon = AppVectorIcons.Warning,
+        // The icon says what the card is, not what happened: a warning triangle
+        // on a card whose subtitle reads "Crash reports are off" is a warning
+        // about nothing, and it is the first thing a reader sees on this page.
+        // Once there is a report to look at, the warning is accurate.
+        icon = if (enabled && current != null) AppVectorIcons.Warning else AppVectorIcons.Info,
         subtitle = if (enabled) {
             "The last crash, kept on this device"
         } else {
             "Crash reports are off"
         }
     ) {
-        Text(
-            text = if (enabled) {
-                "The next time AniSequel closes unexpectedly, the error and your " +
-                    "Android version are saved here. Nothing about your account, " +
-                    "and nothing is sent anywhere on its own."
-            } else {
-                "AniSequel keeps no record of a crash. Turn this on before " +
-                    "reproducing a bug you want to report, then come back here to " +
-                    "copy it out."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        CrashReportPromise(enabled = enabled)
         Spacer(modifier = Modifier.height(10.dp))
         SwitchRow(
             title = "Keep the last crash report",
@@ -231,56 +240,21 @@ private fun CrashReportCard() {
         // permanent part; this appears only when there is something to show.
         if (enabled && current != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            // The exception itself, which is the one line that says whether this is
-            // a network failure, an out-of-memory, or something in the UI - the
-            // question the whole card exists to answer.
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = CrashReports.headline(current),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsButton(
-                text = if (copied) "Report copied" else "Copy crash report",
-                onClick = {
+            CrashReportActions(
+                report = current,
+                copied = copied,
+                onCopy = {
                     copyToClipboard(context, current)
                     copied = true
                 },
-                icon = if (copied) AppVectorIcons.CheckCircle else AppVectorIcons.CopyLink,
-                variant = SettingsButtonVariant.Filled,
-                fillWidth = true,
-                testTag = "crash_report_copy"
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            SettingsButton(
-                text = "Show the whole report",
-                onClick = { showing = true },
-                variant = SettingsButtonVariant.Text,
-                fillWidth = true,
-                testTag = "crash_report_show"
-            )
-            SettingsButton(
-                text = "Clear it",
-                onClick = {
+                onShow = { showing = true },
+                onDelete = {
                     // The block disappears with the report: `report` is the state
                     // read above, so clearing it and forgetting the file are the
                     // same act.
                     CrashReports.clear(context)
                     report = null
-                },
-                variant = SettingsButtonVariant.Text,
-                fillWidth = true,
-                testTag = "crash_report_clear"
+                }
             )
         }
     }
@@ -288,37 +262,136 @@ private fun CrashReportCard() {
     // `current` is the function-scope read above: the dialog and the card draw the
     // same string, and it only changes here by the reader clearing it.
     if (showing && current != null) {
-        AlertDialog(
-            onDismissRequest = { showing = false },
-            title = { Text("Last crash report") },
-            text = {
-                // Selectable as well as copyable: a reader who would rather send the
-                // two frames that matter than the whole trace can take them.
-                SelectionContainer {
-                    Text(
-                        text = current,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .heightIn(max = 360.dp)
-                            .verticalScroll(rememberScrollState())
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showing = false }) { Text("Close") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        copyToClipboard(context, current)
-                        copied = true
-                        showing = false
-                    }
-                ) { Text("Copy") }
+        CrashReportDialog(
+            report = current,
+            onDismiss = { showing = false },
+            onCopy = {
+                copyToClipboard(context, current)
+                copied = true
+                showing = false
             }
         )
     }
+}
+
+/**
+ * What the card promises, in the tense the switch is in.
+ *
+ * Its own composable rather than two `if` branches inside [CrashReportCard]:
+ * the card is state, a switch and an optional report, and the paragraphs were
+ * three of the decision points that made the whole thing read as one long
+ * conditional.
+ */
+@Composable
+private fun CrashReportPromise(enabled: Boolean) {
+    Text(
+        text = if (enabled) {
+            "The next time AniSequel closes unexpectedly, the error and your " +
+                "Android version are saved here. Nothing about your account, " +
+                "and nothing is sent anywhere on its own."
+        } else {
+            "AniSequel keeps no record of a crash. Turn this on before " +
+                "reproducing a bug you want to report, then come back here to " +
+                "copy it out."
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/**
+ * The report itself: its first line, then copy / show / delete.
+ *
+ * Split out because it only exists when there is a report, and because the
+ * `copied` flag is read twice here (the label and the icon) - inline, both reads
+ * sat inside the stateful composable and doubled its branch count.
+ */
+@Composable
+private fun CrashReportActions(
+    report: String,
+    copied: Boolean,
+    onCopy: () -> Unit,
+    onShow: () -> Unit,
+    onDelete: () -> Unit
+) {
+    // The exception itself, which is the one line that says whether this is a
+    // network failure, an out-of-memory, or something in the UI - the question the
+    // whole card exists to answer.
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = CrashReports.headline(report),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(12.dp)
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    SettingsButton(
+        text = if (copied) "Report copied" else "Copy crash report",
+        onClick = onCopy,
+        icon = if (copied) AppVectorIcons.CheckCircle else AppVectorIcons.CopyLink,
+        variant = SettingsButtonVariant.Filled,
+        fillWidth = true,
+        testTag = "crash_report_copy"
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsButton(
+        text = "Show the whole report",
+        onClick = onShow,
+        variant = SettingsButtonVariant.Text,
+        fillWidth = true,
+        testTag = "crash_report_show"
+    )
+    SettingsButton(
+        text = "Delete report",
+        onClick = onDelete,
+        variant = SettingsButtonVariant.Text,
+        fillWidth = true,
+        testTag = "crash_report_clear"
+    )
+}
+
+/**
+ * The whole trace, scrollable and selectable.
+ *
+ * Selectable as well as copyable: a reader who would rather send the two frames
+ * that matter than the whole trace can take them.
+ */
+@Composable
+private fun CrashReportDialog(
+    report: String,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Last crash report") },
+        text = {
+            SelectionContainer {
+                Text(
+                    text = report,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCopy) { Text("Copy") }
+        }
+    )
 }
 
 /** The platform clipboard, `as?` because a device can in principle not publish one. */
@@ -459,8 +532,11 @@ private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
     SectionCard(
         title = "What's new",
         icon = AppVectorIcons.NewReleases,
-        subtitle = changelog?.version?.let { "Release notes for $it" }
-            ?: BuildConfig.VERSION_NAME
+        // A bare version number is not a subtitle - it is the answer to a question
+        // nobody asked, under a heading that already says these are release notes.
+        // The version is only worth naming when it is the version these notes are
+        // for, and the fallback says what the card is instead.
+        subtitle = changelog?.version?.let { "Release notes for $it" } ?: "Release notes"
     ) {
         if (entries.isEmpty()) {
             Text(

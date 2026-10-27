@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaStaffEdge
 import com.anisequel.data.model.characterList
+import com.anisequel.data.model.compactCount
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.metaLabel
@@ -46,7 +48,6 @@ import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.roleLabel
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabelFor
-import java.util.Locale
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -135,7 +136,7 @@ private fun CharacterCard(
                 if (id != null && onOpen != null) {
                     Modifier
                         .bouncyPress(pressedScale = 0.98f)
-                        .clickable { onOpen(id) }
+                        .clickable(role = Role.Button) { onOpen(id) }
                 } else {
                     Modifier
                 }
@@ -147,7 +148,9 @@ private fun CharacterCard(
         ) {
             AsyncImage(
                 model = character?.image?.bestUrl,
-                contentDescription = character?.name?.full,
+                // The name is a `Text` a few dp below; describing the portrait
+                // with the same string made TalkBack say it twice per card.
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(64.dp)
@@ -268,19 +271,6 @@ private fun CharacterCard(
 }
 
 /**
- * "14.4K", so a five-digit favourites count fits the corner beside a portrait.
- *
- * One decimal under 100K because 14370 reads as "14.4K" and 99999 as "100K", and
- * both still say what the number is; above that the decimals are noise on a count
- * nobody is comparing precisely.
- */
-private fun compactCount(value: Int): String = when {
-    value < 1_000 -> value.toString()
-    value < 100_000 -> String.format(Locale.ROOT, "%.1fK", value / 1000.0)
-    else -> String.format(Locale.ROOT, "%.1fM", value / 1_000_000.0)
-}
-
-/**
  * The crew: portraits with the position they held.
  *
  * AniList orders staff by relevance, which puts the original creator and the
@@ -333,7 +323,7 @@ private fun StaffCard(edge: MediaStaffEdge, onOpen: ((Int) -> Unit)?) {
                 if (id != null && onOpen != null) {
                     Modifier
                         .bouncyPress(pressedScale = 0.97f)
-                        .clickable { onOpen(id) }
+                        .clickable(role = Role.Button) { onOpen(id) }
                 } else {
                     Modifier
                 }
@@ -460,13 +450,15 @@ private fun RelationCard(
                     node.posterColor.toCoverColorOrNull()
                         ?: MaterialTheme.colorScheme.surfaceContainerHighest
                 )
-                .clickable(onClick = { onOpen(node) })
+                .clickable(role = Role.Button, onClick = { onOpen(node) })
                 .bouncyPress(pressedScale = 0.97f)
                 .testTag("info_relation_${node.id}")
         ) {
             AsyncImage(
                 model = node.posterUrl,
-                contentDescription = node.displayName,
+                // The relation's name is the `Text` under the poster; a
+                // description here announced every title twice.
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize()
             )

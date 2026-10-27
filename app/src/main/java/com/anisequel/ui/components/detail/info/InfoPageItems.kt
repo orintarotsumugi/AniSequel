@@ -6,8 +6,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.anisequel.data.model.MediaExternalLink
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.STREAMING_LINK_TYPE
 import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.alternativeTitleRows
 import com.anisequel.data.model.characterList
@@ -71,6 +73,7 @@ internal fun LazyListScope.infoPageItems(
     swipeEnabled: Boolean,
     context: Context,
     quickAddStatus: QuickAddStatus,
+    friends: List<MediaFriend>,
     onAddMediaToPlanning: (MediaNode) -> Unit,
     onAddMediaToWatching: (MediaNode) -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
@@ -114,17 +117,27 @@ internal fun LazyListScope.infoPageItems(
         visible = sections.hasProgressCard
     ) { InfoProgressCard(media = media, modifier = it) }
 
+    // Right after the viewer's own progress: "has anyone I follow seen this" is
+    // the same question the progress card answers about the viewer, and it is
+    // worth more before the synopsis than after the credits. Hidden entirely when
+    // empty - see [InfoFriendsCard].
+    cardItem(
+        key = "friends",
+        index = 4,
+        visible = friends.isNotEmpty()
+    ) { InfoFriendsCard(friends = friends, media = media, modifier = it) }
+
     cardItem(
         key = "streaming",
-        index = 4,
+        index = 5,
         visible = sections.streamingLinks.isNotEmpty()
     ) { InfoWhereToWatchCard(links = sections.streamingLinks, modifier = it) }
 
-    cardItem(key = "synopsis", index = 5) {
+    cardItem(key = "synopsis", index = 6) {
         InfoSynopsisCard(media = media, isDetailLoading = isDetailLoading, modifier = it)
     }
 
-    cardItem(key = "specs", index = 6) {
+    cardItem(key = "specs", index = 7) {
         InfoSpecsCard(
             media = media,
             isDetailLoading = isDetailLoading,
@@ -138,7 +151,7 @@ internal fun LazyListScope.infoPageItems(
     // genres and tags used to be.
     cardItem(
         key = "categories",
-        index = 7,
+        index = 8,
         visible = sections.hasCategories
     ) { InfoCategoriesSection(media = media, modifier = it) }
 
@@ -146,7 +159,7 @@ internal fun LazyListScope.infoPageItems(
     // AniList files for the title.
     cardItem(
         key = "external_links",
-        index = 8,
+        index = 9,
         visible = sections.hasExternalLinks
     ) { InfoExternalLinksSection(media = media, modifier = it) }
 
@@ -155,7 +168,7 @@ internal fun LazyListScope.infoPageItems(
     // on the first pass.
     rowItem(
         key = "theme_songs",
-        index = 9,
+        index = 10,
         visible = themeSongs.isNotEmpty()
     ) { InfoThemeSongsSection(themes = themeSongs, modifier = it) }
 
@@ -164,7 +177,7 @@ internal fun LazyListScope.infoPageItems(
     // what keeps six producers and fifteen synonyms from doubling the page's length.
     cardItem(
         key = "meta_rows",
-        index = 10,
+        index = 11,
         visible = sections.hasMetaRows
     ) { InfoMetaRowsSection(media = media, modifier = it) }
 
@@ -173,7 +186,7 @@ internal fun LazyListScope.infoPageItems(
     // else on the page can state.
     cardItem(
         key = "rankings",
-        index = 11,
+        index = 12,
         visible = sections.hasRankings
     ) { AnimeRankingsSection(media = media, modifier = it) }
 
@@ -183,23 +196,23 @@ internal fun LazyListScope.infoPageItems(
     // double it. See `InfoTalent.kt`.
     rowItem(
         key = "cast",
-        index = 12,
+        index = 13,
         visible = sections.hasCast
     ) { InfoCharactersSection(media = media, onOpenCharacter = onOpenCharacter, modifier = it) }
 
     rowItem(
         key = "relations",
-        index = 13,
+        index = 14,
         visible = sections.hasRelations
     ) { InfoRelationsSection(media = media, onOpen = onOpenMedia, modifier = it) }
 
     rowItem(
         key = "staff",
-        index = 14,
+        index = 15,
         visible = sections.hasStaff
     ) { InfoStaffSection(media = media, onOpenStaff = onOpenStaff, modifier = it) }
 
-    cardItem(key = "extras", index = 15) {
+    cardItem(key = "extras", index = 16) {
         InfoExtrasCard(media = media, onOpenCover = onOpenCover, modifier = it)
     }
 }
@@ -296,16 +309,21 @@ internal fun infoSectionsFor(media: MediaNode): InfoSections = InfoSections(
         media.studioCredits.any { !it.isMain },
     streamingLinks = media.streamingLinks,
     // Genres and AniList's tag list share one section now, and either is enough to
-    // draw it. The tags are read from `media.tags`, not from `weightedTags`: the
-    // spoiler tags are part of the section's own collapsible strip, so a title
+    // draw it. The tags are read from `media.tags`, not from a pre-filtered list:
+    // the spoiler tags are part of the section's own collapsible strip, so a title
     // whose only tags are spoilers still has a Categories section worth showing.
-    hasCategories = media.genreList.isNotEmpty() || !media.tags.isNullOrEmpty(),
+    //
+    // A tag with no name is filtered here for the same reason the section filters
+    // it: `!tags.isNullOrEmpty()` counted a payload of nameless tags as a reason
+    // to add an item the section then refused to draw, which is a 14dp hole.
+    hasCategories = media.genreList.isNotEmpty() ||
+        media.tags.orEmpty().any { !it.name.isNullOrBlank() },
     // Streaming links have their own card; this is every *other* link AniList
     // files for the title.
     hasExternalLinks = media.externalLinks.orEmpty().any {
         !it.site.isNullOrBlank() &&
             !it.url.isNullOrBlank() &&
-            !it.type.equals("STREAMING", ignoreCase = true)
+            !it.type.equals(STREAMING_LINK_TYPE, ignoreCase = true)
     },
     hasProgressCard = media.hasProgressCard,
     hasRankings = media.hasRankings,

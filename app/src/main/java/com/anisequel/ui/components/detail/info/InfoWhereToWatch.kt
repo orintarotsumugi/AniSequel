@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 
 /**
@@ -80,6 +81,10 @@ fun InfoWhereToWatchCard(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
+                        // Every other chip on this page that opens something
+                        // springs under the finger; these were the only ones that
+                        // gave no press feedback at all.
+                        .bouncyPress(pressedScale = 0.95f)
                         .clickable(role = Role.Button) {
                             openExternalUrlOrCopy(context, link.url.orEmpty())
                         }

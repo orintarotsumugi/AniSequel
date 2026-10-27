@@ -175,7 +175,12 @@ fun SettingsButton(
             interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.primary
+                contentColor = MaterialTheme.colorScheme.primary,
+                // The other three variants name their disabled colours; this one
+                // did not, so a disabled text button fell back to M3's 38% alpha
+                // while its neighbours used `onSurfaceVariant` - the same control
+                // family reading as two different kinds of dead.
+                disabledContentColor = disabledContent
             ),
             content = label
         )

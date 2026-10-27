@@ -3,6 +3,7 @@ package com.anisequel.ui.viewmodel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.CoroutineScope
@@ -62,11 +63,17 @@ class MediaDetailHost internal constructor(
     /** The nodes fetched so far, keyed by media id. See [MediaDetailStore.details]. */
     val details: StateFlow<Map<Int, MediaNode>> get() = store.details
 
+    /** Followed users' entries per title, keyed by media id. See [MediaDetailStore.friends]. */
+    val friends: StateFlow<Map<Int, List<MediaFriend>>> get() = store.friends
+
     /** Which media ids are still on the wire, for the sheet's spinner. */
     val loading: StateFlow<Set<Int>> get() = store.loading
 
     /** What `SequelDetailSheet` calls when the reader opens a title. */
     val onLoadDetail: (Int, String?) -> Unit = store::load
+
+    /** What the same sheet calls for the friends card, separately from the detail. */
+    val onLoadFriends: (Int, String?) -> Unit = store::loadFriends
 }
 
 /**

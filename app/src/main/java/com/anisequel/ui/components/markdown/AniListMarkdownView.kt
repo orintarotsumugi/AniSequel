@@ -47,7 +47,16 @@ fun AniListMarkdownView(
     nodes: List<MarkdownNode>,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
-    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
+    /**
+     * Reports whether the *collapsed* render actually hid something.
+     *
+     * Two different things hide text here - the block limit above, and the
+     * per-paragraph `maxLines` clamp - and a caller offering a "Read more" control
+     * has to know about both. It can count the blocks for itself; it cannot see
+     * the line clamp, which is why this callback exists. See `RenderParagraph`.
+     */
+    onOverflowChange: ((Boolean) -> Unit)? = null
 ) {
     Column(
         modifier = modifier.testTag("anilist_markdown_view"),
@@ -61,7 +70,7 @@ fun AniListMarkdownView(
         displayNodes.forEach { node ->
             when (node) {
                 is MarkdownNode.Header -> RenderHeader(node)
-                is MarkdownNode.Paragraph -> RenderParagraph(node, maxLines)
+                is MarkdownNode.Paragraph -> RenderParagraph(node, maxLines, onOverflowChange)
                 is MarkdownNode.Blockquote -> RenderBlockquote(node)
                 is MarkdownNode.CodeBlock -> RenderCodeBlock(node)
                 is MarkdownNode.ListBlock -> RenderList(node)
@@ -76,7 +85,12 @@ fun AniListMarkdownView(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AniListMarkdownView(nodes = node.children, maxLines = maxLines, mediaCovers = mediaCovers)
+                        AniListMarkdownView(
+                            nodes = node.children,
+                            maxLines = maxLines,
+                            mediaCovers = mediaCovers,
+                            onOverflowChange = onOverflowChange
+                        )
                     }
                 }
                 is MarkdownNode.AniListPreviewBlock -> RenderAniListPreview(

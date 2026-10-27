@@ -134,6 +134,7 @@ fun StudioScreen(
     val profiles = rememberPersonProfileHost(repository)
     val detailNodes by detailHost.details.collectAsState()
     val loadingDetailIds by detailHost.loading.collectAsState()
+    val detailFriends by detailHost.friends.collectAsState()
 
     // One-tap Planning for a studio's title. A studio page carries no session of
     // its own, so the host is gated on the editor the navigation passed - the
@@ -326,6 +327,8 @@ fun StudioScreen(
             onAddMediaToPlanning = planningAdd.onAddToPlanning,
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
+            onLoadFriends = detailHost.onLoadFriends,
+            friends = detailFriends[summary.id].orEmpty(),
             isDetailLoading = summary.id in loadingDetailIds,
             // Same sheet, same access: the tab follows the editor, and an
             // unauthenticated reader gets exactly the page they always got.

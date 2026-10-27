@@ -90,11 +90,26 @@ fun EditSettingsTab(
             DemoIdentityCard()
         }
 
+        if (totalWatchedCount != null && totalMissedCount != null) {
+            ListSnapshotCard(
+                totalWatchedCount = totalWatchedCount,
+                totalMissedCount = totalMissedCount,
+                isSignedIn = viewer != null
+            )
+        }
+
         SectionCard(
-            title = "AniList",
+            title = "AniList Client ID",
             icon = AppVectorIcons.SectionAniList,
-            subtitle = "Your AniList Client ID."
+            subtitle = "The app identity AniList signs you in with"
         ) {
+            Text(
+                text = "The default works. Change it only if you registered your own " +
+                    "AniList client and want AniSequel to use that one.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(14.dp))
             ClientIdEditor(
                 currentClientId = currentClientId,
                 onSave = { authViewModel.updateClientId(it) }
@@ -102,14 +117,6 @@ fun EditSettingsTab(
 
             Spacer(modifier = Modifier.height(16.dp))
             RedirectUrlHint()
-        }
-
-        if (totalWatchedCount != null && totalMissedCount != null) {
-            ListSnapshotCard(
-                totalWatchedCount = totalWatchedCount,
-                totalMissedCount = totalMissedCount,
-                isSignedIn = viewer != null
-            )
         }
 
         AppLockCard(appLockPreferences)
