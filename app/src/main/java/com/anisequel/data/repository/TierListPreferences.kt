@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierListDocument
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.decodeDocumentIds
 import com.anisequel.domain.tier.decodeTierListDocument
 import com.anisequel.domain.tier.encodeDocumentIds
@@ -201,7 +202,8 @@ class TierListPreferences(private val context: Context) {
      */
     suspend fun createEmpty(
         name: String,
-        tiers: List<TierDefinition> = StandardTiers
+        tiers: List<TierDefinition> = StandardTiers,
+        mediaType: TierMediaType = TierMediaType.ANIME
     ): String {
         var created = ""
         context.tierListDataStore.edit { prefs ->
@@ -210,6 +212,7 @@ class TierListPreferences(private val context: Context) {
             val document = TierListDocument(
                 id = id,
                 name = name,
+                mediaType = mediaType,
                 tiers = tiers,
                 updatedAt = System.currentTimeMillis()
             )

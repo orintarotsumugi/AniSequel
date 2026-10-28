@@ -18,17 +18,19 @@ package com.anisequel.domain.tier
  *
  * Not JSON, not a serialization library. A list is one line of
  * `label|colour|id|floor` fields for the tiers and one line of `mediaId:tierId`
- * pairs for the placements, and a document is five of those lines. Every reader
+ * pairs for the placements, and a document is six of those lines. Every reader
  * here skips what it cannot parse and keeps what it can, because the failure mode
  * of a strict parse is not a crash: it is a *successful load of an empty list*,
  * which looks exactly like the person's work having been deleted, with nothing on
  * screen that says why.
  *
  * The fourth tier field and the fifth document line were added by the board
- * redesign (editable rating bands, title placement, zoom). Both readers accept
- * the older, shorter form: a tier with no floor decodes with `scoreFloor = null`,
- * and a document with no display line gets [TierDisplay]'s defaults. That is what
- * lets an install upgrade without its list changing shape.
+ * redesign (editable rating bands, title placement, zoom). The sixth names the
+ * media type now that a list can rank manga. Every reader accepts the older,
+ * shorter form: a tier with no floor decodes with `scoreFloor = null`, a document
+ * with no display line gets [TierDisplay]'s defaults, and one with no media type
+ * is an anime list. That is what lets an install upgrade without its list changing
+ * shape.
  *
  * ## Why the tiers' text is escaped and the placements' is not
  *
@@ -197,23 +199,40 @@ fun decodeDisplay(raw: String?): TierDisplay {
 }
 
 /**
- * One saved list as five lines: name, last write, tiers, placements, display.
+ * The media type [encodeTierListDocument] wrote, or anime when the line is absent.
+ *
+ * Case-insensitive because the token is written by `name` and read by a build that
+ * may spell it differently; an unrecognised value is anime rather than null because
+ * a document that cannot name its pool is still somebody's ranking, and the only
+ * pool that existed when this line was optional is anime.
+ */
+fun decodeMediaType(raw: String?): TierMediaType {
+    val token = raw?.trim()?.uppercase() ?: return TierMediaType.ANIME
+    return TierMediaType.entries.firstOrNull { it.name == token } ?: TierMediaType.ANIME
+}
+
+/**
+ * One saved list as six lines: name, last write, tiers, placements, display,
+ * media type.
  *
  * The id is not in there. It is the *key* the document is stored under, and a value
  * that appears both in a key and in the value is a value that can disagree with
  * itself - which is exactly what makes a document unopenable rather than merely
  * misnamed.
  *
- * The display line is last so that a reader written before it existed sees exactly
- * the four lines it knew, and a reader from this build sees the fifth when it is
- * there.
+ * The display line and the media type are last, in that order, so that a reader
+ * written before they existed sees exactly the lines it knew and a reader from
+ * this build sees the extra one when it is there. A five-line document is an
+ * anime list: manga rankings did not exist when five was the whole format, and a
+ * missing line must not make somebody's anime board unopenable.
  */
 fun encodeTierListDocument(document: TierListDocument): String = listOf(
     escape(document.name.trim()),
     document.updatedAt.toString(),
     encodeTiers(document.tiers),
     encodeAssignment(document.assignment),
-    encodeDisplay(document.display)
+    encodeDisplay(document.display),
+    document.mediaType.name
 ).joinToString(DOCUMENT_LINE_SEPARATOR.toString())
 
 /**
@@ -237,6 +256,11 @@ fun decodeTierListDocument(id: String, raw: String?): TierListDocument? {
         // Absent on a document written before display options existed, which is
         // exactly the state whose defaults reproduce that board.
         display = decodeDisplay(lines.getOrNull(4)),
+        // Absent on every document written before the tier list ranked manga, and
+        // those are all anime lists by definition. An unknown token is treated the
+        // same way rather than failing the parse: a build that learns a third media
+        // type must not make this one read its documents as empty.
+        mediaType = decodeMediaType(lines.getOrNull(5)),
         // A document from a build that wrote fewer lines than this one reads keeps
         // its content and reads as never-written, which sorts it to the bottom of
         // an "updated" sort rather than claiming it was touched now.

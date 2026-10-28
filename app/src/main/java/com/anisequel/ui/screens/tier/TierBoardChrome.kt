@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TierCandidate
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.unseedableCount
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
@@ -79,6 +80,7 @@ internal fun TierBoardHeader(
     total: Int,
     unranked: Int,
     undoLabel: String?,
+    mediaType: TierMediaType = TierMediaType.ANIME,
     editable: Boolean = true,
     onAddTitles: () -> Unit
 ) {
@@ -117,7 +119,7 @@ internal fun TierBoardHeader(
                     // strip of chrome that pushed the first tier off screen.
                     text = when {
                         undoLabel != null -> "Last: $undoLabel"
-                        total == 0 -> "Your library has not loaded"
+                        total == 0 -> "Your ${mediaType.libraryLabel} has not loaded"
                         unranked == 0 -> "Every title has a tier"
                         unranked == 1 -> "1 title still unranked"
                         else -> "$unranked titles still unranked"
@@ -423,7 +425,8 @@ internal fun TierEmptyState(
     unrankedCount: Int,
     isSeeding: Boolean,
     onSeed: () -> Unit,
-    onAddTitles: () -> Unit
+    onAddTitles: () -> Unit,
+    mediaType: TierMediaType = TierMediaType.ANIME
 ) {
     val unscored = remember(candidates) { unseedableCount(candidates) }
 
@@ -447,8 +450,12 @@ internal fun TierEmptyState(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
+            // Named per media type: a manga board whose list is still arriving
+            // must not claim the anime library - the one that did load - is the
+            // thing that has not.
             text = if (candidates.isEmpty()) {
-                "Your library has not loaded, so there is nothing to rank yet."
+                "Your ${mediaType.libraryLabel} has not loaded, so there is nothing " +
+                    "to rank yet."
             } else {
                 "Rank ${candidates.size} titles by their AniList score, or place them yourself."
             },

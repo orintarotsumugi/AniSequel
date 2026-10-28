@@ -385,6 +385,7 @@ internal fun TierBoardScreen(
                     ranked = ranked,
                     total = candidates.size,
                     unranked = unranked.size,
+                    mediaType = document.mediaType,
                     undoLabel = undoLabel,
                     editable = !boardLocked,
                     onAddTitles = { sheets.addingTitles = true }
@@ -408,6 +409,7 @@ internal fun TierBoardScreen(
                             candidates = visibleCandidates,
                             unrankedCount = unranked.size,
                             isSeeding = isSeeding,
+                            mediaType = document.mediaType,
                             onSeed = onSeed,
                             onAddTitles = { sheets.addingTitles = true }
                         )
@@ -421,7 +423,13 @@ internal fun TierBoardScreen(
                             hiddenCount = if (assignment.isEmpty) hiddenTotal else hiddenRanked,
                             onOpenFilters = { sheets.filtering = true },
                             onShowAll = {
-                                onFilterChange(TierFilter.ShowEverything)
+                                // The reset has to keep the board's pool: a bare
+                                // `ShowEverything` is an anime filter, and on a
+                                // manga board it would empty the board instead of
+                                // clearing the statuses.
+                                onFilterChange(
+                                    TierFilter.ShowEverything.forMediaType(document.mediaType)
+                                )
                             }
                         )
                     }
@@ -610,6 +618,7 @@ internal fun TierBoardScreen(
         state = sheets,
         data = TierBoardSheetData(
             listName = document.name,
+            mediaType = document.mediaType,
             tiers = tiers,
             assignment = assignment,
             candidates = candidates,

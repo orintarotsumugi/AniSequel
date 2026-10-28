@@ -3,8 +3,6 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.anisequel.data.model.MediaListEntryItem
-import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.StoredTierLibrary
 import com.anisequel.data.repository.TierListPreferences
@@ -16,6 +14,7 @@ import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierFilter
 import com.anisequel.domain.tier.TierListDocument
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.TierUndoEntry
 import com.anisequel.domain.tier.TierUndoStack
 import com.anisequel.domain.tier.defaultTierListName
@@ -160,8 +159,35 @@ class TierListViewModel(
     private val _filter = MutableStateFlow(TierFilter.Default)
     val filter: StateFlow<TierFilter> = _filter.asStateFlow()
 
-    private val _candidates = MutableStateFlow<List<TierCandidate>>(emptyList())
-    val candidates: StateFlow<List<TierCandidate>> = _candidates.asStateFlow()
+    /**
+     * The two pools of rankable titles, and the flags describing their arrival.
+     *
+     * A separate type because the ViewModel's own job is the saved lists, not where
+     * their titles come from; see [TierLibraryPools].
+     */
+    private val pools = TierLibraryPools(aniListRepository, viewModelScope, userId, isDemo)
+
+    val animeCandidates: StateFlow<List<TierCandidate>?> = pools.anime
+
+    val mangaCandidates: StateFlow<List<TierCandidate>?> = pools.manga
+
+    /**
+     * The pool for whichever list is open, or the anime pool while the library is
+     * showing.
+     *
+     * The two pools are never concatenated. AniList numbers anime and manga
+     * independently, so mixing them would key anime 1 and manga 1 under one media
+     * id and one of the two titles would inherit the other's placement. This is
+     * the one place the screen's pool is chosen, and `TierFilter` refuses the
+     * other type as a second line of defence.
+     */
+    val candidates: StateFlow<List<TierCandidate>> =
+        combine(pools.anime, pools.manga, opened) { anime, manga, document ->
+            when (document?.mediaType ?: TierMediaType.ANIME) {
+                TierMediaType.ANIME -> anime.orEmpty()
+                TierMediaType.MANGA -> manga.orEmpty()
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     private val _isSeeding = MutableStateFlow(false)
     val isSeeding: StateFlow<Boolean> = _isSeeding.asStateFlow()
@@ -169,90 +195,28 @@ class TierListViewModel(
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
-    /**
-     * Reads the viewer's own list, then hands it to [setLibrary].
-     *
-     * The repository caches the list under `user:<id>`, so this is a **cache hit**
-     * for anyone who has already opened their profile in this session and costs no
-     * request at all. Fetching it again anyway would spend one of AniList's
-     * 30-a-minute budget to re-read a list the app is already looking at.
-     *
-     * The candidates are the *library*, not a list: they are shared by every tier
-     * list the person makes, so this runs once per visit rather than per list.
-     */
-    fun loadLibrary() {
-        viewModelScope.launch {
-            // Before anything reads the library: a list written by a build that
-            // predates lists becomes a list here, so the screen never shows an
-            // empty library over the top of somebody's ranking.
-            preferences.migrateLegacyList()
-        }
-        val id = userId
-        if (id == null && !isDemo) return
-        if (_candidates.value.isNotEmpty()) return
-        viewModelScope.launch {
-            val result = if (isDemo) {
-                Result.success(aniListRepository.getDemoAnimeList())
-            } else {
-                aniListRepository.getUserAnimeList(id!!, forceRefresh = false)
-            }
-            result.onSuccess { collection ->
-                setLibrary(
-                    collection.lists.orEmpty().flatMap { it.entries.orEmpty() }
-                )
-            }
-        }
-    }
+    /** Whether this account has a manga list to rank at all. See [TierLibraryPools]. */
+    val canLoadManga: Boolean get() = pools.canLoadManga
+
+    val isLoadingManga: StateFlow<Boolean> = pools.isLoadingManga
+
+    val mangaLoadFailed: StateFlow<Boolean> = pools.mangaLoadFailed
 
     /**
-     * Hands the ViewModel the person's library to rank.
+     * Migrates the pre-library list, then reads the viewer's anime list.
      *
-     * Called with the entries the repository already holds rather than reading for
-     * them here: re-reading the list would spend one of AniList's 30-a-minute
-     * requests to obtain data the app is already looking at.
+     * The migration runs first so the screen never shows an empty library over the
+     * top of somebody's ranking. The read itself is a **cache hit** for anyone who
+     * has already opened their profile this session, and manga is deliberately not
+     * fetched here - see [TierLibraryPools.loadManga].
      */
-    fun setLibrary(entries: List<MediaListEntryItem>) {
-        _candidates.value = entries.mapNotNull { entry ->
-            val media = entry.media
-            val title = media.title?.displayTitle?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            TierCandidate(
-                mediaId = media.id,
-                title = title,
-                coverUrl = media.coverImage?.bestUrl,
-                averageScore = media.averageScore,
-                // Two different statuses on purpose: `entry.status` is where the
-                // viewer put it, `media.status` is whether it is still airing.
-                // The filter asks about both and they are not interchangeable.
-                listStatus = entry.status,
-                airingStatus = media.status,
-                // Empty rather than null on both: a list snapshot written before
-                // the query asked for these fields has neither, and the filter is
-                // the reader that must not crash on an older cache.
-                genres = media.genres.orEmpty()
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .distinct(),
-                // Main animation studios only. `studioCredits` already falls back
-                // to the flat `nodes` shape for payloads that carry no edges, and
-                // marks those main, which is what keeps an old list response
-                // filterable instead of silently studio-less.
-                studios = media.studioCredits
-                    .filter { it.isMain }
-                    .map { it.name.trim() }
-                    .filter { it.isNotEmpty() }
-                    .distinct(),
-                // Every name AniList has for the title, so the name filter finds
-                // "Attack on Titan" from `shingeki` and the reverse. The caption
-                // is still `title` alone; these exist only to be searched, which
-                // is what keeps a poster from growing a second line of aliases.
-                alternativeTitles = listOfNotNull(
-                    media.title?.romaji,
-                    media.title?.english,
-                    media.title?.native
-                )
-            )
-        }
+    fun loadLibrary() {
+        viewModelScope.launch { preferences.migrateLegacyList() }
+        pools.loadAnime()
     }
+
+    /** Reads the viewer's manga list once, the first time its shelf is opened. */
+    fun loadMangaLibrary() = pools.loadManga()
 
     // -----------------------------------------------------------------------
     // The library
@@ -260,8 +224,13 @@ class TierListViewModel(
 
     /** Opens [listId] on the board. Does nothing when there is no such list. */
     fun openList(listId: String) {
-        if (library.value.document(listId) == null) return
+        val document = library.value.document(listId) ?: return
         _openedId.value = listId
+        // The filter asks about a pool, and the pool changed. Only the media type
+        // moves: the statuses, genres, search and the studio selection are the
+        // reader's question and stay where they were, so opening a manga list does
+        // not silently clear the anime studio filter they set a minute ago.
+        _filter.value = _filter.value.forMediaType(document.mediaType)
         // The stack describes edits to the list that *was* open. Carrying it across
         // a switch would offer to undo somebody else's list under this one's name.
         undoStack.clear()
@@ -281,18 +250,24 @@ class TierListViewModel(
     }
 
     /**
-     * Makes a new empty list and opens it.
+     * Makes a new empty list of [mediaType] and opens it.
      *
      * Named from the lists that already exist, so the third list is "Tier list 3"
      * rather than three lists all called "Tier list" - the name is the only thing
      * distinguishing them in the library, and a screen of identical cards is a
      * screen you cannot navigate.
+     *
+     * The type is the section the person pressed "New tier list" in. A list cannot
+     * change its type afterwards: the pool it ranks is what the ranking is of, and
+     * an anime board relabelled as manga would keep placements for ids that mean
+     * different titles in the other namespace.
      */
-    fun createList() {
+    fun createList(mediaType: TierMediaType = TierMediaType.ANIME) {
         viewModelScope.launch {
             val name = defaultTierListName(library.value.documents.map { it.name })
-            val id = preferences.createEmpty(name)
+            val id = preferences.createEmpty(name, mediaType = mediaType)
             _openedId.value = id
+            _filter.value = _filter.value.forMediaType(mediaType)
             undoStack.clear()
             _undoLabel.value = null
             redoStack.clear()
@@ -400,13 +375,16 @@ class TierListViewModel(
     fun seedFromScores() {
         if (_isSeeding.value) return
         val listId = _openedId.value ?: return
+        val current = library.value.document(listId) ?: return
         // Seed what the board is showing, not everything the viewer has ever
         // listed. With planning hidden by default this is the difference between
         // ranking the titles they have an opinion about and sweeping in a hundred
-        // unwatched ones.
-        val pool = _candidates.value.filter(_filter.value::allows)
+        // unwatched ones. The pool is narrowed to the list's own media type first:
+        // an anime score must never be filed into a manga ranking, and the two
+        // namespaces share ids.
+        val pool = pools.poolFor(current.mediaType)
+            .filter(_filter.value.forMediaType(current.mediaType)::allows)
         if (pool.isEmpty()) return
-        val current = library.value.document(listId) ?: return
         if (!current.isEmpty) return
 
         _isSeeding.value = true

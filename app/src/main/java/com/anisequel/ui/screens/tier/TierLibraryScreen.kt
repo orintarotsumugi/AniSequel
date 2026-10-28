@@ -50,13 +50,39 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TIER_LIST_NAME_MAX_LENGTH
 import com.anisequel.domain.tier.TierListDocument
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
+import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import kotlin.math.max
+
+/**
+ * One shelf of the tier library, as the screen needs to draw it.
+ *
+ * The counts are per section because the pools are separate: a manga shelf that
+ * showed the anime library's size would promise titles it cannot rank. The three
+ * flags are the honest states an unloaded pool can be in - still arriving, not
+ * available on this account, or asked for and failed - and they are distinct
+ * because they need different copy and only the last one is a retry.
+ *
+ * [isLoaded] is separate from [librarySize] because "asked and there is none" is
+ * not "not asked yet". Both have a size of zero, and telling somebody with an
+ * empty manga list that it "has not loaded yet" is a promise that it is still
+ * coming.
+ */
+internal data class TierLibrarySection(
+    val mediaType: TierMediaType,
+    val librarySize: Int,
+    val isLoaded: Boolean,
+    val isLoading: Boolean,
+    val isUnavailable: Boolean,
+    val loadFailed: Boolean
+)
 
 /**
  * The tier lists themselves: the screen the trophy opens.
@@ -83,15 +109,23 @@ import kotlin.math.max
  * or place them by hand - but making the list is now the first step, so starting
  * empty is simply the state a new list is in. Nothing needs to be explained before
  * the person is allowed to look around.
+ *
+ * ## The shelf is chosen above the list of lists
+ *
+ * Anime and manga are two libraries, not one library with a filter: their ids
+ * collide and their lists cannot rank each other's titles. The switch is above the
+ * "New list" button because that button creates a list *of the selected shelf*.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TierLibraryScreen(
     documents: List<TierListDocument>,
     recent: TierListDocument?,
-    librarySize: Int,
+    section: TierLibrarySection,
+    onSelectMediaType: (TierMediaType) -> Unit,
+    onRetryLoad: () -> Unit,
     onOpen: (String) -> Unit,
-    onCreate: () -> Unit,
+    onCreate: (TierMediaType) -> Unit,
     onRename: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     onNavigateBack: () -> Unit,
@@ -130,18 +164,30 @@ internal fun TierLibraryScreen(
                 .padding(scaffoldPadding),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
+            item(key = "sections") {
+                TierLibrarySectionBar(
+                    selected = section.mediaType,
+                    onSelect = onSelectMediaType,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                )
+            }
+
             item(key = "new") {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                     ExpressivePrimaryButton(
-                        text = "New tier list",
-                        onClick = onCreate,
+                        text = "New ${section.mediaType.label.lowercase()} tier list",
+                        onClick = { onCreate(section.mediaType) },
                         icon = AppVectorIcons.NewList,
+                        // Nothing to rank on a shelf this account does not have.
+                        // The empty state below says why rather than leaving a
+                        // button that opens a board with no pool behind it.
+                        enabled = !section.isUnavailable,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "A new list starts empty: rank it from your AniList scores, " +
-                            "or drag the titles in yourself.",
+                        text = "A new list starts empty: rank it from your AniList " +
+                            "scores, or drag the titles in yourself.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -150,7 +196,10 @@ internal fun TierLibraryScreen(
 
             if (documents.isEmpty()) {
                 item(key = "empty") {
-                    TierLibraryEmptyState(librarySize = librarySize)
+                    TierLibraryEmptyState(
+                        section = section,
+                        onRetry = onRetryLoad
+                    )
                 }
             } else {
                 recent?.let { list ->
@@ -358,9 +407,50 @@ private fun TierListRow(
     }
 }
 
-/** The state before there is anything to show: one button, honestly framed. */
+/**
+ * The Anime | Manga switch over the shelf.
+ *
+ * The two pools are separate, so this is a switch between two libraries rather
+ * than a filter over one. It sits above the "New list" button because the button
+ * creates a list *of the selected shelf*, and a control that changes what a button
+ * below it means has to be above it.
+ */
 @Composable
-private fun TierLibraryEmptyState(librarySize: Int) {
+private fun TierLibrarySectionBar(
+    selected: TierMediaType,
+    onSelect: (TierMediaType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val options = TierMediaType.entries
+    ExpressivePolygonSegmentedBar(
+        options = options.map { type ->
+            SegmentedOption(
+                label = type.label,
+                icon = when (type) {
+                    TierMediaType.ANIME -> AppVectorIcons.FavouriteAnime
+                    TierMediaType.MANGA -> AppVectorIcons.FavouriteManga
+                }
+            )
+        },
+        selectedIndex = options.indexOf(selected).coerceAtLeast(0),
+        onSelect = { index -> onSelect(options[index]) },
+        modifier = modifier.testTag("tier_library_sections")
+    )
+}
+
+/**
+ * The state before there is anything to show on this shelf.
+ *
+ * Four different empty shelves, because "no lists yet" is only one of them. A
+ * manga shelf whose list is still arriving, one this account cannot have (the
+ * demo), and one whose fetch failed all look the same if the copy assumes the
+ * first - and only the last one can be fixed by a tap.
+ */
+@Composable
+private fun TierLibraryEmptyState(
+    section: TierLibrarySection,
+    onRetry: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -374,23 +464,58 @@ private fun TierLibraryEmptyState(librarySize: Int) {
             iconTint = AniSequelTheme.statusColors.info
         )
         Text(
-            text = "No tier lists yet",
+            text = when {
+                section.isUnavailable -> "No ${section.mediaType.label.lowercase()} list to rank"
+                section.isLoading -> "Loading your ${section.mediaType.label.lowercase()} list"
+                section.loadFailed -> "Your ${section.mediaType.libraryLabel} did not load"
+                else -> "No tier lists yet"
+            },
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
         )
         Text(
-            text = if (librarySize == 0) {
-                "Your library has not loaded yet, so there is nothing to rank. You can " +
-                    "still make an empty list and fill it in from your library once it " +
-                    "arrives."
-            } else {
-                "Make one to rank the $librarySize titles in your library. Rank them all " +
-                    "from their AniList scores in one tap, or place them by hand."
+            text = when {
+                // Demo mode has an anime list and nothing else, because there is
+                // no account behind it to have a manga list. Saying so is the
+                // honest empty state; inventing manga titles would be the app
+                // ranking somebody else's books as if they were the reader's.
+                section.isUnavailable ->
+                    "The demo account has no ${section.mediaType.label.lowercase()} list. " +
+                        "Sign in to rank your own."
+
+                section.isLoading ->
+                    "The list is on its way. You can still make an empty list and fill " +
+                        "it in when it arrives."
+
+                section.loadFailed ->
+                    "AniList did not answer. Nothing is lost - try again, or make an " +
+                        "empty list in the meantime."
+
+                section.librarySize == 0 && !section.isLoaded ->
+                    "Your ${section.mediaType.libraryLabel} has not loaded yet, so there " +
+                        "is nothing to rank. You can still make an empty list and fill it " +
+                        "in once it arrives."
+
+                section.librarySize == 0 ->
+                    "There is nothing on your ${section.mediaType.libraryLabel} to rank " +
+                        "yet. You can still make an empty list and fill it in later."
+
+                else ->
+                    "Make one to rank the ${section.librarySize} titles in your " +
+                        "${section.mediaType.libraryLabel}. Rank them all from their " +
+                        "AniList scores in one tap, or place them by hand."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+
+        if (section.loadFailed) {
+            TextButton(onClick = onRetry, modifier = Modifier.testTag("tier_library_retry")) {
+                Text("Try again")
+            }
+        }
     }
 }
 

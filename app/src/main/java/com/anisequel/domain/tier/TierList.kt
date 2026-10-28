@@ -148,7 +148,17 @@ data class TierCandidate(
      * typing `shingeki`. They are never drawn: [title] is the one caption, and a
      * second name under a poster would be a second spelling of the same thing.
      */
-    val alternativeTitles: List<String> = emptyList()
+    val alternativeTitles: List<String> = emptyList(),
+    /**
+     * Which half of AniList this title belongs to.
+     *
+     * Defaulted to [TierMediaType.ANIME] so a cached list from before the tier
+     * list ranked manga - and every three-field literal in the tests - keeps the
+     * meaning it had. A candidate with the wrong type is never drawn on a board:
+     * [TierFilter.allows] rejects it, and the ViewModel narrows the pool before
+     * it gets this far.
+     */
+    val mediaType: TierMediaType = TierMediaType.ANIME
 ) {
     /**
      * The lowercased haystack the name filter searches, built once per title.
@@ -214,27 +224,11 @@ fun TierAssignment.onlyFor(visibleIds: Set<Int>, keepIds: Set<Int> = emptySet())
 /**
  * One list status a filter can hide, with the label the sheet draws.
  *
- * Anime-only labels because the tier list is fed by `getUserAnimeList`; a manga
- * list would need "Reading" and that is a different query, not a different filter.
+ * The labels are per media type now - "Reading" is not "Watching" - and live on
+ * [TierMediaType], which is the only thing that knows which list a status came
+ * from. This type is just the value/label pair.
  */
 data class TierStatusOption(val value: String, val label: String)
-
-val TierListStatusOptions: List<TierStatusOption> = listOf(
-    TierStatusOption("CURRENT", "Watching"),
-    TierStatusOption("REPEATING", "Rewatching"),
-    TierStatusOption("COMPLETED", "Completed"),
-    TierStatusOption("PAUSED", "Paused"),
-    TierStatusOption("DROPPED", "Dropped"),
-    TierStatusOption("PLANNING", "Planning")
-)
-
-val TierAiringStatusOptions: List<TierStatusOption> = listOf(
-    TierStatusOption("RELEASING", "Releasing"),
-    TierStatusOption("FINISHED", "Finished"),
-    TierStatusOption("NOT_YET_RELEASED", "Not yet aired"),
-    TierStatusOption("HIATUS", "Hiatus"),
-    TierStatusOption("CANCELLED", "Cancelled")
-)
 
 /**
  * Which candidates a tier list is currently showing.
@@ -290,7 +284,21 @@ data class TierFilter(
      * second word, because the space between the two disappeared before the next
      * letter arrived. [allows] normalises it once per filter value instead.
      */
-    val query: String = ""
+    val query: String = "",
+    /**
+     * Which pool this filter is asking about.
+     *
+     * Part of the filter rather than a parameter on [allows] so there is one
+     * answer to "what is this board showing" and no call site can ask a manga
+     * question with an anime filter. It also makes the two pools impossible to
+     * mix: a candidate of the other type is rejected even if it reaches [allows].
+     *
+     * [forMediaType] changes only this field. The studio selection is kept while
+     * a manga board is open - it is simply not applied - so going back to an
+     * anime list restores the filter the reader left there instead of silently
+     * clearing it because they looked at a manga ranking.
+     */
+    val mediaType: TierMediaType = TierMediaType.ANIME
 ) {
     /**
      * The query as the matcher reads it: lowercased, split on whitespace.
@@ -309,12 +317,26 @@ data class TierFilter(
     /** True when the name search is doing anything at all. */
     val hasQuery: Boolean get() = queryTokens.isNotEmpty()
 
+    /**
+     * Whether the studio section is narrowing the board.
+     *
+     * AniList files animation studios, publishers and magazines under the same
+     * `studios` connection, and manga carry the latter. Applying an anime studio
+     * filter to a manga board would hide every manga whose publisher is not one of
+     * the animation studios - which is all of them - so the dimension is ignored
+     * for manga while the selection itself is kept for the anime board it belongs
+     * to.
+     */
+    val studioFilterActive: Boolean
+        get() = mediaType == TierMediaType.ANIME && studiosEnabled && studios.isNotEmpty()
+
     /** True when [candidate] passes every dimension. */
     fun allows(candidate: TierCandidate): Boolean =
-        (candidate.listStatus == null || candidate.listStatus !in hiddenListStatuses) &&
+        candidate.mediaType == mediaType &&
+            (candidate.listStatus == null || candidate.listStatus !in hiddenListStatuses) &&
             (candidate.airingStatus == null || candidate.airingStatus !in hiddenAiringStatuses) &&
             (genres.isEmpty() || candidate.genres.any { it in genres }) &&
-            (!studiosEnabled || studios.isEmpty() || candidate.studios.any { it in studios }) &&
+            (!studioFilterActive || candidate.studios.any { it in studios }) &&
             (queryTokens.isEmpty() || queryTokens.all { it in candidate.searchKey })
 
     fun withListStatusHidden(status: String, hidden: Boolean): TierFilter = copy(
@@ -344,6 +366,16 @@ data class TierFilter(
     fun withStudiosEnabled(enabled: Boolean): TierFilter = copy(studiosEnabled = enabled)
 
     /**
+     * The same filter, asking about [mediaType]'s pool.
+     *
+     * Only the media type changes: the statuses, genres, search and the studio
+     * selection carry over because they are the reader's question, and the one
+     * dimension that does not apply to the other type ([studioFilterActive])
+     * decides for itself whether to narrow anything. See [mediaType].
+     */
+    fun forMediaType(mediaType: TierMediaType): TierFilter = copy(mediaType = mediaType)
+
+    /**
      * Replaces the name search.
      *
      * Capped here rather than in the sheet so every path - a pasted string, a
@@ -355,16 +387,18 @@ data class TierFilter(
     /**
      * True when nothing is actually being filtered.
      *
-     * Studio selections are ignored while [studiosEnabled] is off: the set is
-     * kept so switching the section back on restores it, but a kept selection
-     * that is not filtering anything must not light the filter dot on the app
-     * bar. The dot is a claim about the board, not about the sheet's memory.
+     * Studio selections are ignored while [studiosEnabled] is off, and on a manga
+     * board where the dimension does not apply: the set is kept so switching the
+     * section back on - or going back to an anime list - restores it, but a kept
+     * selection that is not filtering anything must not light the filter dot on
+     * the app bar. The dot is a claim about the board, not about the sheet's
+     * memory.
      */
     val isDefault: Boolean
         get() = hiddenListStatuses == Default.hiddenListStatuses &&
             hiddenAiringStatuses == Default.hiddenAiringStatuses &&
             genres.isEmpty() &&
-            (!studiosEnabled || studios.isEmpty()) &&
+            !studioFilterActive &&
             !hasQuery
 
     companion object {

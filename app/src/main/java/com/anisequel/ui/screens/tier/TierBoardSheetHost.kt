@@ -12,6 +12,7 @@ import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierFilter
+import com.anisequel.domain.tier.TierMediaType
 
 /**
  * Which modal the board has open, if any.
@@ -70,6 +71,8 @@ internal fun rememberTierBoardSheetState(): TierBoardSheetState =
 /** The data every sheet reads, kept together so the host has three arguments. */
 internal data class TierBoardSheetData(
     val listName: String,
+    /** Which pool this board ranks; the filter sheet labels itself from it. */
+    val mediaType: TierMediaType,
     val tiers: List<TierDefinition>,
     val assignment: TierAssignment,
     val candidates: List<TierCandidate>,
@@ -168,6 +171,7 @@ internal fun TierBoardSheetsHost(
     if (state.filtering) {
         TierFilterSheet(
             filter = data.filter,
+            mediaType = data.mediaType,
             candidates = data.candidates,
             onFilterChange = actions.onFilterChange,
             onDismiss = { state.filtering = false }
