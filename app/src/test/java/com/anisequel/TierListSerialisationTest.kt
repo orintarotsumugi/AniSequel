@@ -5,6 +5,7 @@ import com.anisequel.domain.tier.TIER_LIST_BASE_NAME
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierListDocument
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.decodeAssignment
 import com.anisequel.domain.tier.decodeDocumentIds
 import com.anisequel.domain.tier.decodeTierListDocument
@@ -241,6 +242,11 @@ class TierListSerialisationTest {
         assertEquals("Old list", decoded?.name)
         assertEquals(mapOf<Int, String>(), decoded?.assignment?.tierIdByMediaId)
         assertEquals(0L, decoded?.updatedAt)
+        // Manga rankings did not exist when five lines were the whole format, so a
+        // document without the media-type line is an anime list by definition. An
+        // unknown token is treated the same way: a build that learns a third type
+        // must not read every older document as empty or unopenable.
+        assertEquals(TierMediaType.ANIME, decoded?.mediaType)
     }
 
     @Test

@@ -86,12 +86,16 @@ class TierListPreferencesTest {
             TierMediaType.MANGA,
             preferences().snapshot().document(id)?.mediaType
         )
+        // Created before the read, not inside it. `document(...)`'s receiver is
+        // evaluated first, so an inline `snapshot().document(createEmpty(...))`
+        // reads the library *before* the list exists and looks the new id up in a
+        // snapshot that cannot contain it - which fails as a null media type, and
+        // reads like the default being broken when it is the test that is early.
+        val animeId = preferences().createEmpty("Anime ranking")
         assertEquals(
             "a list made without a pool is an anime list, as every older one was",
             TierMediaType.ANIME,
-            preferences().snapshot().document(
-                preferences().createEmpty("Anime ranking")
-            )?.mediaType
+            preferences().snapshot().document(animeId)?.mediaType
         )
     }
 
