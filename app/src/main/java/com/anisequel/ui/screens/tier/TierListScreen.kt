@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ import com.anisequel.ui.viewmodel.TierListViewModel
 fun TierListScreen(
     tierListViewModel: TierListViewModel,
     onNavigateBack: () -> Unit,
+    onBoardOpenChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel = tierListViewModel
@@ -98,6 +100,16 @@ fun TierListScreen(
     val mangaLoadFailed by viewModel.mangaLoadFailed.collectAsStateWithLifecycle()
 
     val document = opened
+
+    // The bar over this route is the library's, not an open board's - see
+    // `showsMainBar`. The host draws the bar and cannot see this screen's state, so
+    // the state is reported rather than inferred from the route: the route is the
+    // same for both screens. `DisposableEffect` covers the leaving half, because a
+    // tab switch disposes this composition without recomposing it again.
+    LaunchedEffect(document != null) { onBoardOpenChange(document != null) }
+    DisposableEffect(Unit) {
+        onDispose { onBoardOpenChange(false) }
+    }
 
     // The manga list is fetched the first time its shelf is opened, and again if a
     // manga board is restored directly without the shelf being touched. Guarded in

@@ -114,10 +114,11 @@ private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppear
                 .height(APPEARANCE_POSTER_HEIGHT)
                 // A cover, not a capsule. This was `ExpressiveShapes.pill`, which on a
                 // 112x158 box is an ellipse: every poster on the row had its corners
-                // rounded away and read as a placeholder, while the same titles on the
-                // dashboard are `MaterialTheme.shapes.medium`. One cover shape for the
-                // app's artwork.
-                .clip(MaterialTheme.shapes.medium)
+                // rounded away and read as a placeholder. The corner is now
+                // `extraSmall` (10dp) rather than `medium` (20dp): on artwork this
+                // narrow, 20dp rounds away nearly a fifth of the width and the poster
+                // reads as a lozenge. Every poster on this sheet uses this corner.
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
@@ -238,9 +239,11 @@ private fun AppearanceYearRow(
             modifier = Modifier
                 .width(YEAR_ROW_POSTER_WIDTH)
                 .height(YEAR_ROW_POSTER_HEIGHT)
-                // The same cover shape as every other poster in the app. See the
-                // note on the horizontal card: a pill on a rectangle is an ellipse.
-                .clip(MaterialTheme.shapes.medium)
+                // The same cover corner as every other poster in the app - and at
+                // 54dp wide it is the one that shows `medium` at its worst: 20dp of
+                // radius on a 54dp poster is a lozenge, not a cover. See the note on
+                // the horizontal card above.
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
@@ -383,10 +386,10 @@ private fun VoicedCharacterCard(
             modifier = Modifier
                 .width(APPEARANCE_CARD_WIDTH)
                 .height(APPEARANCE_POSTER_HEIGHT)
-                // The same cover shape as the appearance posters beside it, for the
+                // The same cover corner as the appearance posters beside it, for the
                 // same reason: a portrait is a rectangle, and a pill drawn around one
                 // takes the corners off the art.
-                .clip(MaterialTheme.shapes.medium)
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(

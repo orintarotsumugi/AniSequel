@@ -120,7 +120,7 @@ internal fun mainTabDestinations(
  * they are the same page; which one a tap navigates to is decided by the caller,
  * from the session state rather than from this mapping.
  *
- * The tier list answers TIERS even though the bar is not drawn there - see
+ * The tier list answers TIERS even though it can hide the bar - see
  * [showsMainBar]. It is still one of the bar's pages, and the answer is what makes
  * a joke's "main pages" rule, a tab-change announcement and a Back out of the
  * board all agree with the tab the reader tapped to get there.
@@ -140,14 +140,24 @@ internal fun mainTabForRoute(route: String?): MainTab? = when (route) {
 /**
  * Whether [MainBar] is drawn over a page that belongs to [tab].
  *
- * The tier list is the one page of the bar that draws no bar. A board is dragged
- * with the finger and its tray is pinned over the bottom edge - that tray is the
- * page's own control, and a floating capsule underneath it would be a second set
- * of controls in the same strip of screen. So the bar steps aside while the list is
- * open and comes back when the reader leaves, which the host animates rather than
- * snaps.
+ * Every one of the bar's pages draws it, with one exception that is a state rather
+ * than a route: an **open** tier board.
+ *
+ * The tier list's library is one of the bar's pages and keeps the bar - a reader
+ * choosing a list, or leaving for another tab, is doing exactly what the bar is for.
+ * A board is different: it is dragged with the finger and its tray is pinned over
+ * the bottom edge. That tray is the page's own control, and a floating capsule
+ * underneath it would be a second set of controls in the same strip of screen. So
+ * the bar steps aside only while [tierBoardOpen], and comes back when the reader
+ * closes the board - which the host animates rather than snaps.
+ *
+ * This used to be `tab != MainTab.TIERS` with no second argument, which hid the bar
+ * over the library as well. That left the tier list's list of lists as the only page
+ * in the app you could not leave by the bar, which read as the app having lost its
+ * navigation rather than as the board owning the screen.
  */
-internal fun showsMainBar(tab: MainTab?): Boolean = tab != null && tab != MainTab.TIERS
+internal fun showsMainBar(tab: MainTab?, tierBoardOpen: Boolean): Boolean =
+    tab != null && !(tab == MainTab.TIERS && tierBoardOpen)
 
 /**
  * How much room a main page's scrolling content leaves for [MainBar], *below the

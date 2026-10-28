@@ -9,7 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -54,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** One destination of [ExpressiveNavigationBar]. */
 data class NavigationDestination(
@@ -142,13 +145,31 @@ data class NavigationDestination(
 private const val SELECTED_WEIGHT = 2.3f
 
 /**
+ * How long the bar has to be held before a drag starts switching tabs.
+ *
+ * Short on purpose: the hold is an acknowledgement, not a decision - the finger
+ * has already landed on the bar, and half a second of nothing reads as a missed
+ * tap. 220ms is long enough that a tap (well under the 100ms a deliberate press
+ * lasts) never turns into a swipe, and short enough that the bar lifts while the
+ * finger is still on it. Not a `ViewConfiguration` value because the platform's
+ * long-press timeout is the one this gesture exists to be quicker than.
+ */
+private const val HOLD_TO_SWIPE_MILLIS = 220L
+
+/**
  * ## Holding the bar and swiping
  *
- * A long press on the bar lifts it, and from then on the finger drags the
- * selection: one destination per destination-width of travel, with a tick each
- * time it moves. Tapping is untouched - the drag only starts after the long-press
- * timeout, and while it is running the items' clicks are disabled so releasing the
- * finger after a swipe cannot also fire the tap that was under it.
+ * A hold on the bar lifts it, and from then on the finger drags the selection: one
+ * destination per destination-width of travel, with a tick each time it moves.
+ * Tapping is untouched - the drag only starts after [HOLD_TO_SWIPE_MILLIS], and
+ * while it is running the items' clicks are disabled so releasing the finger after
+ * a swipe cannot also fire the tap that was under it.
+ *
+ * The hold is hand-rolled rather than `detectDragGesturesAfterLongPress`, which
+ * waits out the platform's `longPressTimeoutMillis` - 500ms on every device this
+ * app supports. On a bar 52dp tall that is long enough for the finger to feel like
+ * the gesture did not register, and it was reported as exactly that. The platform
+ * timeout is not ours to change, so the timer here is.
  *
  * The direction is the one a strip of pages has rather than the one a list has:
  * dragging to the right pulls the pages right, so the selection moves *left* to the
@@ -237,42 +258,79 @@ fun ExpressiveNavigationBar(
                         selectTab(next)
                     }
 
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = {
-                            // Re-sync: the bar may have been switched by a tap
-                            // between the long press being detected and this
-                            // callback running.
-                            index = currentIndex
-                            travel = 0f
-                            holding = true
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        onDragEnd = { holding = false },
-                        onDragCancel = {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+
+                        // Wait out the hold, watching for the two things that
+                        // cancel it: the finger lifting (a tap) and the finger
+                        // travelling past touch slop (a drag that never asked to
+                        // swipe). `null` means the timeout won - the hold.
+                        val abandoned = withTimeoutOrNull(HOLD_TO_SWIPE_MILLIS) {
+                            var change = down
+                            while (
+                                change.pressed &&
+                                (change.position - down.position).getDistance() <=
+                                viewConfiguration.touchSlop
+                            ) {
+                                change = awaitPointerEvent()
+                                    .changes
+                                    .firstOrNull { it.id == down.id }
+                                    ?: return@withTimeoutOrNull true
+                            }
+                            true
+                        }
+                        if (abandoned != null) return@awaitEachGesture
+
+                        // Re-sync: the bar may have been switched by a tap while
+                        // the hold was running.
+                        index = currentIndex
+                        travel = 0f
+                        holding = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                        try {
+                            while (true) {
+                                val change = awaitPointerEvent()
+                                    .changes
+                                    .firstOrNull { it.id == down.id }
+                                    ?: break
+                                if (!change.pressed) {
+                                    // Consumed as well as the moves: the item under
+                                    // the finger was pressed when the hold began,
+                                    // and a release it is allowed to see would fire
+                                    // the tap the swipe replaced.
+                                    change.consume()
+                                    break
+                                }
+                                change.consume()
+                                travel += change.positionChange().x
+
+                                // Positive travel is a drag to the right, which
+                                // pulls the previous destination in from the left.
+                                while (travel >= stepPx && index > 0) {
+                                    travel -= stepPx
+                                    moveTo(index - 1)
+                                }
+                                while (travel <= -stepPx && index < lastIndex) {
+                                    travel += stepPx
+                                    moveTo(index + 1)
+                                }
+                                // Do not bank travel against an end that cannot
+                                // move: a long drag at the first tab would
+                                // otherwise turn around and jump two tabs back on
+                                // the way home.
+                                if (index == 0 && travel > 0f) travel = 0f
+                                if (index == lastIndex && travel < 0f) travel = 0f
+                            }
+                        } finally {
+                            // `finally`, not after the loop: a key change (the
+                            // tier tab being switched off while the bar is held)
+                            // cancels this coroutine, and a `holding` left true
+                            // would leave every item disabled.
                             holding = false
                             travel = 0f
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            travel += dragAmount.x
-
-                            // Positive travel is a drag to the right, which pulls
-                            // the previous destination in from the left.
-                            while (travel >= stepPx && index > 0) {
-                                travel -= stepPx
-                                moveTo(index - 1)
-                            }
-                            while (travel <= -stepPx && index < lastIndex) {
-                                travel += stepPx
-                                moveTo(index + 1)
-                            }
-                            // Do not bank travel against an end that cannot move:
-                            // a long drag at the first tab would otherwise turn
-                            // around and jump two tabs back on the way home.
-                            if (index == 0 && travel > 0f) travel = 0f
-                            if (index == lastIndex && travel < 0f) travel = 0f
                         }
-                    )
+                    }
                 },
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically

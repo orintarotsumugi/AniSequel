@@ -25,8 +25,12 @@ private val Context.mainTabsDataStore: DataStore<Preferences> by preferencesData
  * never meets a tab for it, and a reader who ranks everything gets one without a
  * trip through the Library.
  *
- * On by default. A feature nobody can find is a feature that does not exist, and
- * the cost of the extra tab is one 48dp slot on a bar that already has four.
+ * Off by default. The tab was on by default for one release, on the argument that
+ * a feature nobody can find is a feature that does not exist. That argument holds
+ * for the feature and not for the tab: the trophy in the Library and the row in the
+ * profile are two visible doors into the same page, and the bar is the app's most
+ * contended strip of screen. A reader who ranks nothing gets four tabs instead of
+ * five and can turn the fifth on in Settings > Library > Bottom bar.
  *
  * Read through a [Flow] rather than a stored value so a flip in Settings reaches
  * the bar in the same session, without the app's root being rebuilt - the bar is
@@ -56,7 +60,7 @@ class MainTabPreferences(private val context: Context) {
         }
     }
 
-    /** Back to the shipped default, which is "show it". */
+    /** Back to the shipped default, which is "hidden". */
     suspend fun reset() {
         context.mainTabsDataStore.edit { preferences ->
             preferences.remove(Keys.TIER_LIST_TAB)
@@ -64,6 +68,6 @@ class MainTabPreferences(private val context: Context) {
     }
 
     companion object {
-        const val DEFAULT_TIER_LIST_TAB = true
+        const val DEFAULT_TIER_LIST_TAB = false
     }
 }

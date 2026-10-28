@@ -86,6 +86,9 @@ fun LibrarySettingsTab(
  * not disable tier lists - the trophy in the Library and the row in the profile open
  * the same page either way. A switch called "Tier lists" that left the feature
  * working would be read as a broken switch.
+ *
+ * Off out of the box, so the switch's subtitle leads with what turning it on buys
+ * rather than assuming the reader knows what "Tiers" would be a tab for.
  */
 @Composable
 private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
@@ -101,8 +104,8 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     ) {
         SwitchRow(
             title = "Tier lists tab",
-            subtitle = "Put Tiers between Library and Profile. The trophy in your " +
-                "library opens the same page either way.",
+            subtitle = "Add Tiers between Library and Profile, so your lists are one " +
+                "tap away. The trophy in your library opens the same page either way.",
             checked = tierListTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setTierListTab(enabled) }
