@@ -281,8 +281,17 @@ and one store serve both kinds; the two payloads stay apart in the state (see
   name on the artwork. It used to be an 84dp face clipped to a pill sitting on
   the sheet's container colour, and the "Appears in" posters were 112×158 pills —
   a stretched pill is an *ellipse*, and an ellipse is not a cover. A portrait is
-  a rectangle, and `MaterialTheme.shapes.medium` is what every other cover in the
-  app is drawn with.
+  a rectangle. The corner is `extraSmall` (10dp), not `medium` (20dp): on a
+  54dp-wide poster `medium` rounds away more than a third of the artwork and the
+  cover reads as a lozenge, which is what 1.6.4 shipped and 1.6.5 corrected. The
+  bio's entity cards use `small` (14dp) for the same reason.
+- **A creator's page opens on their description; a character's does not.** The
+  biography sat below the works on both, because a long bio measured first pushed
+  the row the page exists for below the sheet's viewport. That is the right answer
+  for a character — the tap asks who voiced them — and backwards for a creator,
+  whose page *is* the description. The staff sheet draws it directly under the
+  facts, before the filmography; the character sheet keeps it last, above "Open
+  on AniList".
 - **"Voiced by" needed a second look at the schema.** AniList hangs the
   performers on each media edge, per language, and the field **answers `null`
   when it is asked without one** — checked against the live API before the query
@@ -325,15 +334,22 @@ The bar's pages come from `MainTab`'s declaration order, filtered by one setting
 `enabledMainTabs(tierListTab)` in `ui/navigation/MainTabs.kt`. The order *is* the
 enum's order, so the tier list sits between Library and Profile by being declared
 there rather than by being spliced into a second hand-written list. The switch
-lives on Settings → Library & dashboard, defaults to on, and only takes the tab
-off the bar: the trophy in the Library and the row in the profile open the same
-page either way.
+lives on Settings → Library > Bottom bar, defaults to **off**, and only takes the
+tab off the bar: the trophy in the Library and the row in the profile open the
+same page either way. It shipped on by default for one release on the argument
+that a feature nobody can find does not exist; that argument holds for the
+feature and not for the tab, because the two other doors are visible and the bar
+is the most contended strip of screen in the app.
 
 Which routes get the bar is `mainTabForRoute`, and which of those *draw* it is
-`showsMainBar`. Two functions because the tier list is the exception: it is one
-of the bar's pages — the joke scope, the tab-change announcement and Back all
-treat it as one — and it draws no bar, because its own tray is pinned over the
-same bottom edge. A route that maps to nothing gets the screen to itself:
+`showsMainBar(tab, tierBoardOpen)`. Two functions because the tier list is the
+exception, and it is a state rather than a route: the library of lists is one of
+the bar's pages and draws it, while an open board does not, because the board's
+own tray is pinned over the same bottom edge. The flag is reported by
+`TierListScreen` (which knows `opened`) and held by the host (which draws the
+bar), and it is reset when the route changes so a board left open cannot hide the
+bar on the page that comes next. A route that maps to nothing gets the screen to
+itself:
 Settings, a studio page, a scanned dashboard and somebody else's profile are
 pushed *from* a page, and a bar drawn over them would claim the reader is
 somewhere they are not — with a selected tab they never chose. The one that looks
@@ -355,11 +371,16 @@ all three of its doors, so Back out of a board opened from the Library goes Home
 rather than Library — the alternative was the same page behaving differently
 depending on which door the reader used.
 
-**Holding the bar and swiping it.** A long press on the capsule lifts it and lets
-the finger drag the selection: one destination per destination-width of travel,
-with a tick each time it moves. Tapping is untouched — the drag only starts after
-the long-press timeout, and while it is running the items' clicks are disabled so
-the finger-up that ends a swipe cannot also fire the tap underneath it. The
+**Holding the bar and swiping it.** A hold on the capsule lifts it and lets the
+finger drag the selection: one destination per destination-width of travel, with
+a tick each time it moves. Tapping is untouched — the drag only starts after the
+hold, and while it is running the items' clicks are disabled so the finger-up
+that ends a swipe cannot also fire the tap underneath it. The hold is hand-timed
+at 220ms (`HOLD_TO_SWIPE_MILLIS`) rather than taken from
+`detectDragGesturesAfterLongPress`, whose timeout is the platform's 500ms: on a
+52dp bar that reads as the gesture having missed, which is what readers reported.
+The timer is cancelled by a finger-up (a tap) or by travel past touch slop (a drag
+that never asked to swipe), so a tap still never becomes a swipe. The
 travel is measured against the *measured* bar divided by the destination count,
 not against a fixed dp, because the selected pill is wider than the others and a
 fixed threshold would move two tabs in one gesture on a phone. The current index
@@ -368,10 +389,10 @@ selection is a route change, so two steps inside one frame would otherwise both
 compute the same "next" tab. Dragging right pulls the previous tab in, the way a
 horizontal pager does.
 
-**The bar leaves downwards for the tier list.** It is drawn by the host inside an
-`AnimatedVisibility`, and the tier list arrives from the bottom edge at the same
-moment, so the two read as one move instead of the app losing its navigation on
-the tap and finding it again on Back. The page the board rises over fades and
+**The bar leaves downwards for an open tier board.** It is drawn by the host
+inside an `AnimatedVisibility`, and the board rises from the bottom edge at the
+same moment, so the two read as one move instead of the app losing its navigation
+on the tap and finding it again on Back. The page the board rises over fades and
 settles back rather than sliding sideways: the board is already moving vertically
 and the bar is leaving through the same edge, so a third direction in the same
 frame would read as two moves fighting. Tab-to-tab moves also have a direction
@@ -390,7 +411,9 @@ assumed, so a gesture bar, a three-button bar and a cutout each get their own
 answer. The profile reserves it only where the bar is really drawn: on the
 viewer's own profile. A scanned or followed profile is a pushed screen with no
 bar and reserves the system inset alone, which is why the flag travels as a
-`CompositionLocal` rather than through four tab signatures.
+`CompositionLocal` rather than through four tab signatures. The tier list's
+library reserves it too, now that the bar is drawn there; without it the last row
+of lists ended underneath the capsule.
 
 **The Library moved out of the profile for it.** The list was the fourth tab of
 every profile, including a stranger's, which made the thing a reader consults
@@ -606,7 +629,7 @@ the signed-in account, so it means nothing on somebody else's, which is why the
 control is hidden off your own rather than shown and re-explained. The Library's
 card and the bar's own Tiers tab open the same route; see
 [The main bar](#the-main-bar) for why all three doors go through
-`navigateToMainTab` and why this is the one tab that draws no bar.
+`navigateToMainTab` and why the bar hides only over an open board.
 
 ### Two shelves, because the ids collide
 

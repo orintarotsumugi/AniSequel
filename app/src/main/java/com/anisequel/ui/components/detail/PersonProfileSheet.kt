@@ -267,11 +267,21 @@ private fun LoadedPersonProfile(
                 ProfileFacts(facts = state.facts)
             }
 
-            // The works come before the biography on purpose. A long biography is
-            // measured first, and on the old order it pushed the one row this page
-            // exists for - the titles the person is on - below the sheet's viewport.
-            // A reader who tapped a creator to see their other work had to scroll
-            // past an essay to find it, which read as the row never having loaded.
+            // The biography leads on a creator's page and follows the works on a
+            // character's.
+            //
+            // It used to be last on both, because a long biography measured first
+            // and pushed the one row those pages exist for - who voiced this
+            // character, what this creator worked on - below the sheet's viewport.
+            // That is still the right answer for a character: the tap asks who
+            // voiced them, and the works row is that answer. A creator's page is
+            // the opposite question. The biography is who the person is, it is
+            // what the reader came to read, and leaving it under a year-by-year
+            // filmography buried it behind the longest section on the page.
+            if (state.kind == PersonKind.STAFF) {
+                ProfileBiography(description = state.description)
+            }
+
             if (state.voiceActors.isNotEmpty()) {
                 ProfileVoiceActors(credits = state.voiceActors, onOpenStaff = onOpenStaff)
             }
@@ -306,7 +316,9 @@ private fun LoadedPersonProfile(
                 )
             }
 
-            ProfileBiography(description = state.description)
+            if (state.kind != PersonKind.STAFF) {
+                ProfileBiography(description = state.description)
+            }
 
             // The escape hatch every in-app page carries. The sheet answers what AniList
             // knows; AniList's own page still has the comment thread and the edit history
@@ -336,6 +348,11 @@ private val PROFILE_SHEET_MAX_HEIGHT = 620.dp
  * the key visual (see `InfoHero` for why it is the poster and not the banner, and why
  * it is sharp), the scrim does the legibility, and the cover itself is a rounded
  * rectangle - the shape every other cover in the app is.
+ *
+ * The corner is `extraSmall` (10dp), not `medium` (20dp). On a portrait this narrow
+ * 20dp is more than a third of its width rounded away on each side, which stops
+ * reading as a cover and starts reading as a lozenge; the same correction was made to
+ * every poster on this sheet. See `PersonStaffCredits`.
  *
  * This replaces a header that was one 84dp face clipped to a pill, on the sheet's
  * container colour: a portrait is a rectangle, and a pill drawn around one takes the
@@ -393,12 +410,12 @@ private fun ProfileHero(state: PersonProfileState.Loaded) {
                     .height(PORTRAIT_HEIGHT)
                     .shadow(
                         elevation = 16.dp,
-                        shape = MaterialTheme.shapes.medium,
+                        shape = MaterialTheme.shapes.extraSmall,
                         ambientColor = Color.Black,
                         spotColor = Color.Black
                     )
-                    .clip(MaterialTheme.shapes.medium)
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.extraSmall)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     .testTag("profile_portrait")
             ) {

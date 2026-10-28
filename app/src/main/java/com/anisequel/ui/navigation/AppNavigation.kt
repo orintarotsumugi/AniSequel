@@ -204,6 +204,15 @@ fun AppNavigation(
     // recompositions; it is an index table for `MainBar`, not state.
     val mainTabs = remember(tierListTab) { enabledMainTabs(tierListTab) }
 
+    // Whether the tier list has a board open, which is the one thing that hides the
+    // bar on a page that is otherwise one of its own. It lives here because the bar
+    // is drawn here and the board is inside a destination: the screen reports the
+    // change, the host owns the answer. Not `rememberSaveable` - a board is
+    // restored from the ViewModel, which reports itself open again on the first
+    // composition, and a stale `true` surviving process death would hide the bar
+    // over the library.
+    var tierBoardOpen by remember { mutableStateOf(false) }
+
     // The disk tier under the repository's caches. Process-wide rather than
     // per-screen because the auth ViewModel's repository writes and clears the
     // same files - see [AniListSnapshots] - and it lives in the cache directory
@@ -728,6 +737,7 @@ fun AppNavigation(
                     // a second one stacked on top of the tier list's own header.
                     TierListScreen(
                         tierListViewModel = tierListViewModel,
+                        onBoardOpenChange = { tierBoardOpen = it },
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }
@@ -885,9 +895,8 @@ fun AppNavigation(
             // inside a route: a screen cannot draw chrome that outlives it, and the pages
             // the bar switches between should not each have to remember to draw it.
             // `showsMainBar` is the whole visibility rule - null means this is a screen
-            // pushed from a tab (Settings, a studio, somebody else's profile), and the
-            // tier list is a tab that deliberately draws no bar because its own tray is
-            // pinned over the same edge.
+            // pushed from a tab (Settings, a studio, somebody else's profile), and an
+            // open tier board owns the bottom edge with its own tray.
             //
             // Animated rather than conditional, because the tier list is a *tab*: a bar
             // that vanished on the tap and reappeared on Back would read as the app
@@ -900,8 +909,17 @@ fun AppNavigation(
             // move and the edge looks busy at the exact moment it should look empty.
             val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
             val currentTab = mainTabForRoute(currentRoute)
+
+            // A board that is open when the route is left - a pop from somewhere the
+            // screen's own dispose did not run first - must not hide the bar on
+            // whatever page comes next. The screen also reports false when it goes,
+            // but the host is the only place that knows the route changed.
+            LaunchedEffect(currentRoute) {
+                if (currentRoute != AppRoutes.TIER_LIST) tierBoardOpen = false
+            }
+
             AnimatedVisibility(
-                visible = showsMainBar(currentTab),
+                visible = showsMainBar(currentTab, tierBoardOpen),
                 enter = slideInVertically(
                     animationSpec = RouteTabSlideSpring,
                     initialOffsetY = { height -> height }
@@ -913,10 +931,10 @@ fun AppNavigation(
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 MainBar(
-                    // The tier list never draws a bar, but the bar is still composed
-                    // while it animates out of a page that was one: `MainBar` coerces
-                    // an unknown selection to the first tab for that one frame rather
-                    // than crashing on an index of -1.
+                    // An open board hides the bar, but it is still composed while it
+                    // animates out: `MainBar` coerces an unknown selection to the
+                    // first tab for that one frame rather than crashing on an index
+                    // of -1.
                     selected = currentTab ?: MainTab.HOME,
                     tabs = mainTabs,
                     // The largest the viewer's avatar has; the bar falls back to a glyph
@@ -932,8 +950,8 @@ fun AppNavigation(
             //
             // `active` is the page rule, not the switch: the host owns the switch,
             // frequency and timing. Main-pages means the pages the bar owns - the tier
-            // list included, since it is one of them even though it draws no bar;
-            // Everywhere adds the pages pushed from them. Login is excluded from both
+            // list included, since it is one of them even while an open board hides
+            // the bar; Everywhere adds the pages pushed from them. Login is excluded from both
             // arms - a joke over the sign-in screen is an interruption at the one
             // moment the reader is deciding something.
             val jokesAllowedHere = if (jokeSettings.scope == JokeScope.EVERYWHERE) {

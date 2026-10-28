@@ -58,6 +58,7 @@ import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.theme.AniSequelTheme
 import kotlin.math.max
 
@@ -162,7 +163,10 @@ internal fun TierLibraryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(scaffoldPadding),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            // The bar floats over this page - it is the library's, not an open
+            // board's, so it is drawn here - and the last row of lists has to be
+            // able to scroll clear of it rather than ending underneath it.
+            contentPadding = PaddingValues(bottom = 24.dp + mainBarClearance())
         ) {
             item(key = "sections") {
                 TierLibrarySectionBar(

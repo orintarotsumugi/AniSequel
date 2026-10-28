@@ -479,7 +479,11 @@ fun RenderAniListPreview(
     val title = cover?.title?.takeIf { it.isNotBlank() } ?: preview.title
 
     Surface(
-        shape = MaterialTheme.shapes.medium,
+        // `small` (14dp), not `medium` (20dp): this card is mostly a 56dp poster
+        // with a caption beside it, and at `medium` the card's own corner outran
+        // the poster's and made a row of links look like a stack of lozenges. The
+        // poster inside is `extraSmall`.
+        shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier

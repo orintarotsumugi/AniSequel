@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.6.5",
+      "entries": [
+        {
+          "title": "A creator's description comes first",
+          "detail": "The biography now sits at the top of a creator's page, under their facts, instead of below a year-by-year filmography. On a creator page the description is what says who the person is; on a character page the works still come first, because there the tap was asking who voiced them."
+        },
+        {
+          "title": "Covers are rectangles again",
+          "detail": "The posters and the portrait on a creator's page were rounded at 20dp, which on a 54dp-wide cover takes more than a third of the artwork off each corner and reads as a lozenge rather than a poster. Every cover on that sheet now uses a 10dp corner, and the link cards inside a bio use 14dp so their corner no longer outruns the poster inside them."
+        },
+        {
+          "title": "The tier list tab is opt-in",
+          "detail": "Tiers is off the bottom bar until you turn it on in Settings > Library > Bottom bar. The tier list itself is unchanged and still opens from the trophy in your library and the row in your profile, so nothing is lost if you never rank anything - the bar just starts with four tabs instead of five."
+        },
+        {
+          "title": "The bar stays on your tier lists",
+          "detail": "The bottom bar used to disappear for the whole tier list page. It now stays while you are choosing or creating a list and hides only inside an open board, where the board's own tray owns the bottom edge - so you can leave for another tab from the list of lists instead of backing out first. The last row of the library scrolls clear of the bar."
+        },
+        {
+          "title": "Holding the bar responds sooner",
+          "detail": "Hold the bottom bar and it lifts after 220ms instead of the platform's half-second long-press timeout, then keep dragging to move between tabs. A tap is still a tap; the hold just no longer feels like the gesture missed."
+        }
+      ]
+    },
+    {
       "version": "1.6.4",
       "entries": [
         {

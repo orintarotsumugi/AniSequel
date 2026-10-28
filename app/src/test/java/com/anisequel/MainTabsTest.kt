@@ -27,8 +27,9 @@ import org.junit.Test
  *    selected tab the reader never chose) over somebody else's dashboard or a
  *    Settings page.
  *  - **Which of those pages draw the bar.** `showsMainBar` is the exception the
- *    tier list needs: it is one of the bar's pages, and it deliberately draws no
- *    bar because its own tray is pinned over the same edge.
+ *    tier list needs, and it is a *state* rather than a route: the library of
+ *    lists keeps the bar, and only an open board hides it because its own tray is
+ *    pinned over the same edge.
  *  - **The order of the destinations matches the list `MainBar` indexes.** `MainBar`
  *    passes `selectedIndex = tabs.indexOf(selected)` and turns the bar's index back
  *    into a `MainTab` with `tabs[index]`; the two only agree while the destination
@@ -91,12 +92,17 @@ class MainTabsTest {
     }
 
     @Test
-    fun `the tier list is a tab that draws no bar`() {
+    fun `the tier library draws the bar and an open board does not`() {
         assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
+        assertTrue(
+            "the library of lists is one of the bar's pages; without the bar it " +
+                "was the only page in the app you could not leave by the bar",
+            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST), tierBoardOpen = false)
+        )
         assertFalse(
             "the board's tray is pinned over the bottom edge; a floating bar " +
                 "under it would be a second set of controls in the same strip",
-            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST))
+            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST), tierBoardOpen = true)
         )
     }
 
@@ -104,10 +110,21 @@ class MainTabsTest {
     fun `every other page of the bar draws it`() {
         listOf(AppRoutes.DASHBOARD, AppRoutes.LIBRARY, ProfileRoutes.OWN_ROUTE)
             .forEach { route ->
-                assertTrue("$route must draw the bar", showsMainBar(mainTabForRoute(route)))
+                assertTrue(
+                    "$route must draw the bar",
+                    showsMainBar(mainTabForRoute(route), tierBoardOpen = false)
+                )
             }
-        assertFalse("a pushed screen draws no bar", showsMainBar(mainTabForRoute(AppRoutes.SETTINGS)))
-        assertFalse(showsMainBar(null))
+        assertFalse(
+            "a pushed screen draws no bar",
+            showsMainBar(mainTabForRoute(AppRoutes.SETTINGS), tierBoardOpen = false)
+        )
+        assertFalse(showsMainBar(null, tierBoardOpen = false))
+        assertTrue(
+            "a board left open while the route changed must not hide the bar on " +
+                "whatever page comes next - the flag only means anything on TIERS",
+            showsMainBar(MainTab.LIBRARY, tierBoardOpen = true)
+        )
     }
 
     @Test
