@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ArrivingPreferences
+import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshInterval
 import com.anisequel.data.repository.RefreshIntervalPreferences
@@ -46,26 +47,68 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import kotlinx.coroutines.launch
 
 /**
- * How the saved list is read and how the dashboard presents it.
+ * How the saved list is read, how the dashboard presents it, and which pages the
+ * bottom bar offers.
  *
- * These three cards used to share a tab with the AniList Client ID, the app lock
- * and the sign-out button, under the heading "Edit" - a name that describes the
- * source file rather than anything a reader is trying to do. They share a page
- * now because they are one question: how fresh the list is and what the
- * dashboard does with it.
+ * These cards used to share a tab with the AniList Client ID, the app lock and the
+ * sign-out button, under the heading "Edit" - a name that describes the source file
+ * rather than anything a reader is trying to do. They share a page now because they
+ * are one question: how fresh the list is, what the dashboard does with it, and
+ * where it can be reached from.
  */
 @Composable
 fun LibrarySettingsTab(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    mainTabPreferences: MainTabPreferences,
     modifier: Modifier = Modifier
 ) {
     SettingsScrollColumn(modifier) {
         ListRefreshCard(refreshIntervalPreferences)
         ArrivingSectionCard(arrivingPreferences)
         QuickAddSectionCard(quickAddPreferences)
+        BottomBarSectionCard(mainTabPreferences)
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * The tier list's place on the bottom bar.
+ *
+ * A switch rather than a decision because the two kinds of reader are both real: the
+ * tier list is the only page in the app that owns the whole screen, so a reader who
+ * never ranks anything pays a tab's width for a page they will not open, while a
+ * reader who ranks everything should not have to reach it through the Library every
+ * time.
+ *
+ * The copy says what the switch does *not* do. It takes the tab off the bar; it does
+ * not disable tier lists - the trophy in the Library and the row in the profile open
+ * the same page either way. A switch called "Tier lists" that left the feature
+ * working would be read as a broken switch.
+ */
+@Composable
+private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
+    val scope = rememberCoroutineScope()
+    val tierListTab by mainTabPreferences.tierListTab.collectAsState(
+        initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
+    )
+
+    SectionCard(
+        title = "Bottom bar",
+        icon = AppVectorIcons.Trophy,
+        subtitle = "Which pages the bar switches between"
+    ) {
+        SwitchRow(
+            title = "Tier lists tab",
+            subtitle = "Put Tiers between Library and Profile. The trophy in your " +
+                "library opens the same page either way.",
+            checked = tierListTab,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setTierListTab(enabled) }
+            },
+            modifier = Modifier.testTag("tier_list_tab_switch")
+        )
     }
 }
 

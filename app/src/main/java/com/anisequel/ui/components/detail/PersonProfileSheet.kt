@@ -54,7 +54,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 
 /**
@@ -277,12 +277,23 @@ private fun LoadedPersonProfile(
             }
 
             if (state.appearances.isNotEmpty()) {
-                ProfileAppearancesRow(
-                    appearances = state.appearances,
-                    heading = if (state.kind == PersonKind.STAFF) "Worked on" else "Appears in",
-                    listState = appearancesState,
-                    onOpen = onOpenAppearance
-                )
+                if (state.kind == PersonKind.STAFF) {
+                    // A creator's page exists for this list, and it is read by
+                    // year: AniList answers the connection by popularity, so the
+                    // row it used to be jumped between decades with nothing
+                    // saying which title came first. See `ProfileAppearancesByYear`.
+                    ProfileAppearancesByYear(
+                        appearances = state.appearances,
+                        onOpen = onOpenAppearance
+                    )
+                } else {
+                    ProfileAppearancesRow(
+                        appearances = state.appearances,
+                        heading = "Appears in",
+                        listState = appearancesState,
+                        onOpen = onOpenAppearance
+                    )
+                }
             }
 
             // The staff page's mirror of "Voiced by": the characters this person
@@ -500,7 +511,12 @@ private fun ProfileBiography(description: String?) {
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         SectionHeading(title = "About", icon = AppVectorIcons.ProfileAbout)
-        AniListMarkdownView(nodes = nodes)
+        // The cover-aware renderer, not the bare one: an AniList bio is full of
+        // links to titles, and this surface was the one markdown renderer nobody
+        // had given a cover loader to - so every card drew the badge and no poster
+        // while the profile's About card beside it drew them correctly. The loader
+        // comes from `LocalMediaCoverLoader`, provided by whoever draws the sheet.
+        AniListMarkdownWithCovers(nodes = nodes)
     }
 }
 

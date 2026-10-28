@@ -153,7 +153,22 @@ internal object JokeLinesReader {
         "The show's worst day is somehow your comfort watch.",
         "You recommended the sad one and apologised afterwards.",
         "The final shot held too long and you let it.",
-        "You have a show that ended years ago and still owes you an explanation."
+        "You have a show that ended years ago and still owes you an explanation.",
+        "You have watched the same finale four times and it lands every time.",
+        "The scene you rewind is the one nobody else mentions.",
+        "Your heart has a preferred episode and it is not the good one.",
+        "You know exactly which episode to skip and you watch it anyway.",
+        "The quiet episode is the one you think about at work.",
+        "You have a show you cannot rewatch because of one scene.",
+        "The ending song comes on and you are somewhere else entirely.",
+        "You have defended a fictional decision in a group chat.",
+        "Your favourite moment has no dialogue in it.",
+        "You remember the weather in a scene that never showed the sky.",
+        "The character you miss had nine episodes and a good coat.",
+        "The rewatch hurts in the exact place it did the first time.",
+        "You save the sad episode for when you have the time to feel it.",
+        "Some shows are a place you visit, not a story you finish.",
+        "You keep the soundtrack for the walk home."
     )
 
     /** Watchlists, one more episode and the sleep schedule. */
@@ -293,7 +308,22 @@ internal object JokeLinesReader {
         "You watched two episodes back to back and rewarded yourself with a third.",
         "The show with ninety episodes is a commitment and you are not ready.",
         "You have a browser tab from a recommendation you cannot remember.",
-        "You keep the watchlist open in case it finishes itself."
+        "You keep the watchlist open in case it finishes itself.",
+        "Your watchlist is sorted by hope, not by length.",
+        "The show you started in 2019 is still on episode two.",
+        "You added three shows today and watched none of them.",
+        "Your queue grows faster than any season airs.",
+        "The next episode is queued. The next free hour is not.",
+        "You have a plan for the weekend. The plan is twelve episodes.",
+        "The dropped list is longer than the finished one, and that is normal.",
+        "You will finish it after the next arc. The next arc is forty episodes.",
+        "There is a show on your list you cannot remember adding.",
+        "Your backlog has a mood and the mood is later.",
+        "The three-episode rule has cost you several hundred hours.",
+        "You started a long runner and the long runner started you.",
+        "Your watching section is the most optimistic part of the app.",
+        "Every season adds four shows and removes your evenings.",
+        "You are one free weekend away from the whole backlog. Probably."
     )
 
     /** The app's own voice: Ani-chan, the pill, the tier list, the settings. */
@@ -408,6 +438,21 @@ internal object JokeLinesReader {
         "The motion settings change how the pill moves and nothing else.",
         "This pill has a heart on it. The heart is a bookmark, not a feeling.",
         "The app remembers the tone you picked and the list you abandoned.",
-        "Your device holds the list, the lines and the ranking. The server holds the rest."
+        "Your device holds the list, the lines and the ranking. The server holds the rest.",
+        "The bar lifts when you hold it. That is not a metaphor.",
+        "You can drag the pill instead of tapping it. Go on.",
+        "Ani-chan has a tab now and is very proud of it.",
+        "The tier list moved to the bottom bar and took the trophy with it.",
+        "This line was written after the bar learned to be dragged.",
+        "The app hides its own bar on the tier list. It is shy.",
+        "You are holding the app's navigation. Gently.",
+        "The pill has four stops and you have visited three.",
+        "A swipe is just a tap with commitment.",
+        "The tab you skipped is doing fine without you.",
+        "The bottom bar leaves the screen when the tier list arrives.",
+        "Ani-chan watched you swipe and said nothing.",
+        "The settings page has a switch for this tab. It is on.",
+        "You can turn the tier tab off and the trophy stays.",
+        "The app animates the tab change because a cut felt rude."
     )
 }

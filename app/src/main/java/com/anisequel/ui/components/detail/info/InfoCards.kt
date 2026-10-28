@@ -63,7 +63,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.theme.AniSequelTheme
 
@@ -274,7 +274,7 @@ fun InfoSynopsisCard(
             )
 
             else -> {
-                AniListMarkdownView(
+                AniListMarkdownWithCovers(
                     nodes = nodes,
                     maxLines = if (isExpanded) Int.MAX_VALUE else COLLAPSED_SYNOPSIS_LINES,
                     onOverflowChange = { overflowed -> if (overflowed) clampedByLines = true }

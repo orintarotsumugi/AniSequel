@@ -1326,6 +1326,7 @@ object GraphQLQueries {
                 status
                 averageScore
                 siteUrl
+                startDate { year }
                 coverImage { extraLarge large }
     """
 

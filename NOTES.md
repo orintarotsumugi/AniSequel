@@ -297,39 +297,92 @@ and one store serve both kinds; the two payloads stay apart in the state (see
   the same answer back a frame later. `PersonProfileStore` remembers what it has
   loaded (bounded, cleared wholesale past the cap) and answers a re-open
   synchronously, before the sheet can draw a spinner.
+- **A creator's work is read by year, a character's by face.** `staffMedia`
+  answers by popularity, so a horizontal row put a 2019 series beside a 1998 one
+  with nothing saying which came first — and a creator's page exists for that
+  list. It is a vertical list grouped by the title's `startDate.year`, newest
+  first and undated last, with the role and the score on each row; a character's
+  "Appears in" stays a row, because a handful of covers is something a reader
+  scans by face. `ProfileAppearanceYearsTest` pins the grouping, and the queries
+  ask for `startDate { year }` — without it every group collapses into "Year
+  unknown", which is a regression that compiles.
 
 ---
 
 ## The main bar
 
-Home, Library and the reader's own profile are the app's three pages, switched
-from a floating capsule at the bottom of the screen — the same
+Home, Library, the tier list and the reader's own profile are the app's pages,
+switched from a floating capsule at the bottom of the screen — the same
 `ExpressiveNavigationBar` the title page uses for its read/edit switch, springs
 and all. Home is the dashboard (the signed-in one, or the demo — to a reader
-without a session they are the same page), Library is the viewer's own list, and
-Profile is drawn as the viewer's own AniList avatar, falling back to a glyph
-while the avatar is still on its way. The viewer's face is also the way in from
-the top-left of the dashboard and of the Library page, and all three go through
-the same tap.
+without a session they are the same page), Library is the viewer's own list,
+Tiers is the tier list, and Profile is drawn as the viewer's own AniList avatar,
+falling back to a glyph while the avatar is still on its way. The viewer's face
+is also the way in from the top-left of the dashboard and of the Library page,
+and all three go through the same tap.
 
-The bar's whole visibility rule is one function, `mainTabForRoute` in
-`ui/navigation/MainTabs.kt`: a route that maps to a tab gets the bar, everything
-else gets the screen to itself. Settings, the tier list, a studio page, a scanned
-dashboard and somebody else's profile are pushed *from* a page, and a bar drawn
-over them would claim the reader is somewhere they are not — with a selected tab
-they never chose. The one that looks like a literal and is not is the profile:
-`NavDestination` reports the registered *pattern* (`profile?tab={tab}`), so the
-mapping matches the pattern. `MainTabsTest` pins the mapping, the order of the
-destinations (the bar turns its index back into a `MainTab` with
-`MainTab.entries[index]`) and that only the Profile tab carries the avatar.
+The bar's pages come from `MainTab`'s declaration order, filtered by one setting:
+`enabledMainTabs(tierListTab)` in `ui/navigation/MainTabs.kt`. The order *is* the
+enum's order, so the tier list sits between Library and Profile by being declared
+there rather than by being spliced into a second hand-written list. The switch
+lives on Settings → Library & dashboard, defaults to on, and only takes the tab
+off the bar: the trophy in the Library and the row in the profile open the same
+page either way.
+
+Which routes get the bar is `mainTabForRoute`, and which of those *draw* it is
+`showsMainBar`. Two functions because the tier list is the exception: it is one
+of the bar's pages — the joke scope, the tab-change announcement and Back all
+treat it as one — and it draws no bar, because its own tray is pinned over the
+same bottom edge. A route that maps to nothing gets the screen to itself:
+Settings, a studio page, a scanned dashboard and somebody else's profile are
+pushed *from* a page, and a bar drawn over them would claim the reader is
+somewhere they are not — with a selected tab they never chose. The one that looks
+like a literal and is not is the profile: `NavDestination` reports the registered
+*pattern* (`profile?tab={tab}`), so the mapping matches the pattern.
+`MainTabsTest` pins the mapping, the order of the destinations (the bar turns its
+index back into a `MainTab` with `tabs[index]`, never `MainTab.entries[index]` —
+the tier tab can be off, and an ordinal would then point one slot too far right)
+and that only the Profile tab carries the avatar.
 
 A tab tap replaces rather than pushes: `navigateToMainTab` pops back to Home with
 `saveState` and restores a tab's saved state on the way in, so Back from any of
-the three lands on Home instead of walking back through every tab visited, and
+them lands on Home instead of walking back through every tab visited, and
 returning to a page restores what it was showing. A repeat tap on the tab already
 on screen is a no-op (`launchSingleTop`, the same guard every other hop in the
 app uses). The demo profile keeps the rule its avatar always had: it replaces the
-demo dashboard rather than stacking on it.
+demo dashboard rather than stacking on it. The tier list takes this same path from
+all three of its doors, so Back out of a board opened from the Library goes Home
+rather than Library — the alternative was the same page behaving differently
+depending on which door the reader used.
+
+**Holding the bar and swiping it.** A long press on the capsule lifts it and lets
+the finger drag the selection: one destination per destination-width of travel,
+with a tick each time it moves. Tapping is untouched — the drag only starts after
+the long-press timeout, and while it is running the items' clicks are disabled so
+the finger-up that ends a swipe cannot also fire the tap underneath it. The
+travel is measured against the *measured* bar divided by the destination count,
+not against a fixed dp, because the selected pill is wider than the others and a
+fixed threshold would move two tabs in one gesture on a phone. The current index
+is mirrored inside the pointer handler as well as read from the parameter: the
+selection is a route change, so two steps inside one frame would otherwise both
+compute the same "next" tab. Dragging right pulls the previous tab in, the way a
+horizontal pager does.
+
+**The bar leaves downwards for the tier list.** It is drawn by the host inside an
+`AnimatedVisibility`, and the tier list arrives from the bottom edge at the same
+moment, so the two read as one move instead of the app losing its navigation on
+the tap and finding it again on Back. The page the board rises over fades and
+settles back rather than sliding sideways: the board is already moving vertically
+and the bar is leaving through the same edge, so a third direction in the same
+frame would read as two moves fighting. Tab-to-tab moves also have a direction
+now: the transition asks `tabDirection`, which compares the two tabs' positions in
+`MainTab`, so Library → Home travels right and Home → Library travels left
+instead of both sliding the same way. A pop is the same rule read the other way,
+because the pair is (popped, revealed). A tab move slides on
+`FastSpatialOffset` rather than the route token: it is a control the reader can
+chain faster than any animation — hold, swipe twice — and on the calm spring the
+first slide is still travelling when the second starts, which reads as a stutter
+rather than a switch.
 
 The rows the bar floats over leave it room with `mainBarClearance()` — the bar's
 96dp plus the device's own navigation inset, read at draw time rather than
@@ -368,7 +421,7 @@ viewer query itself failed, uses it too.
 
 **A joke turns up above the bar, now and then.** `JokeToastHost` is mounted by
 `AppNavigation` next to `MainBar`, so it exists only on the pages the reader
-allowed — the bar's three pages by default, everything except login when they
+allowed — the bar's pages by default, everything except login when they
 pick Everywhere — and never over the sign-in screen. Pace, dwell, edge, tones and
 the extra moments are the reader's, stored in `JokePreferences` and described in
 `JokeSettings`; the shipped defaults wait 1.5–4 minutes for the first line and
@@ -463,6 +516,22 @@ tables and `(video)`-style embeds are only partly AniList-documented, so they ar
 parsed conservatively, and underline has no working AniList syntax (`<u>` is
 accepted anyway rather than dropped, since dropping it would print the tag).
 
+**One provider, every markdown surface.** A cover card is only half a card
+without its poster, and the poster is a *request*: the document is parsed, the
+media links are collected, and the repository is asked for all of them at once.
+That plumbing used to be per-caller, and the surface nobody had wired was the one
+that needed it most — a person's biography drew every AniList link as a badge in
+an empty frame while the profile's About card beside it drew posters, because
+only the latter had been given a loader. It is one `CompositionLocal` now:
+`ProvideMediaCovers` is called once, at the app's composition root, and
+`AniListMarkdownWithCovers` is the only call a renderer needs — it collects the
+keys, asks once, and draws. `LocalMediaCoverLoader` is null when there is no
+repository (a demo), and a null loader is a real answer: the cards fall back to
+the badge rather than pretending a request succeeded. The fetch is keyed on the
+*keys* and the loader, not on the parsed nodes — an edit that only changes the
+prose around the same links must neither re-request the posters nor clear the
+ones already drawn, which is exactly what keying the state on the nodes did.
+
 **The comment thread is a place you can manage, not just read.** Replies hang off
 an activity and are fetched when the sheet is opened, with the composer in the
 same list. A comment can be liked, and the viewer's *own* comments can be
@@ -534,7 +603,10 @@ as pure Kotlin with no Android or Compose imports, so the whole arrangement is
 testable without a device. The profile's top bar opens it from a small trophy
 beside the name — and **only on your own profile**: the ranking is stored against
 the signed-in account, so it means nothing on somebody else's, which is why the
-control is hidden off your own rather than shown and re-explained.
+control is hidden off your own rather than shown and re-explained. The Library's
+card and the bar's own Tiers tab open the same route; see
+[The main bar](#the-main-bar) for why all three doors go through
+`navigateToMainTab` and why this is the one tab that draws no bar.
 
 ### Two shelves, because the ids collide
 

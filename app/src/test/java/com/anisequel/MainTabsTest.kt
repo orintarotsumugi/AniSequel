@@ -4,9 +4,12 @@ import com.anisequel.ui.navigation.AppRoutes
 import com.anisequel.ui.navigation.MainTab
 import com.anisequel.ui.navigation.ProfileRoutes
 import com.anisequel.ui.navigation.StudioRoutes
+import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.navigation.mainTabForRoute
+import com.anisequel.ui.navigation.showsMainBar
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,19 +17,25 @@ import org.junit.Test
 /**
  * The contract the main bottom bar rests on.
  *
- * Two things are pure facts here, and both fail silently at runtime if they drift:
+ * Three things are pure facts here, and all of them fail silently at runtime if
+ * they drift:
  *
  *  - **Which routes are the bar's pages.** `mainTabForRoute` is the whole
- *    visibility rule - a route that answers `null` gets no bar - so a new
- *    top-level page that forgets to answer hides the bar on itself, and a pushed
- *    screen that answers wrongly draws the bar (with a selected tab the reader
- *    never chose) over somebody else's dashboard or a Settings page.
- *  - **The order of the destinations matches the enum.** `MainBar` passes
- *    `selectedIndex = selected.ordinal` and turns the bar's index back into a
- *    `MainTab` with `MainTab.entries[index]`; the two only agree while the
- *    destination list is derived from the enum in order. A hand-written list that
- *    reorders two entries would not compile wrong anywhere - it would just select
- *    the wrong tab.
+ *    visibility rule for everything *pushed* from a tab - a route that answers
+ *    `null` gets no bar - so a new top-level page that forgets to answer hides the
+ *    bar on itself, and a pushed screen that answers wrongly draws the bar (with a
+ *    selected tab the reader never chose) over somebody else's dashboard or a
+ *    Settings page.
+ *  - **Which of those pages draw the bar.** `showsMainBar` is the exception the
+ *    tier list needs: it is one of the bar's pages, and it deliberately draws no
+ *    bar because its own tray is pinned over the same edge.
+ *  - **The order of the destinations matches the list `MainBar` indexes.** `MainBar`
+ *    passes `selectedIndex = tabs.indexOf(selected)` and turns the bar's index back
+ *    into a `MainTab` with `tabs[index]`; the two only agree while the destination
+ *    list is derived from the same list. A hand-written list that reordered two
+ *    entries would not compile wrong anywhere - it would just select the wrong tab.
+ *    This is also why the index cannot come from `MainTab.ordinal`: the tier tab can
+ *    be switched off, and an ordinal would then point one slot too far right.
  *
  * The profile case is named rather than left to the general rule because it is the
  * one that looks like a literal and is not: `NavDestination.route` reports the
@@ -42,6 +51,7 @@ class MainTabsTest {
         // The demo runs without a session; to the reader it is the same page.
         assertEquals(MainTab.HOME, mainTabForRoute(AppRoutes.DASHBOARD_DEMO))
         assertEquals(MainTab.LIBRARY, mainTabForRoute(AppRoutes.LIBRARY))
+        assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
         assertEquals(MainTab.PROFILE, mainTabForRoute(ProfileRoutes.OWN_ROUTE))
     }
 
@@ -50,7 +60,6 @@ class MainTabsTest {
         val pushed = listOf(
             AppRoutes.LOGIN,
             AppRoutes.SETTINGS,
-            AppRoutes.TIER_LIST,
             // Somebody else's dashboard, reached by scanning a name - not the
             // viewer's Home.
             AppRoutes.DASHBOARD_USER,
@@ -82,29 +91,91 @@ class MainTabsTest {
     }
 
     @Test
-    fun `the bar reads Home, Library, Profile, once each`() {
-        val destinations = mainTabDestinations(profileAvatarUrl = null)
+    fun `the tier list is a tab that draws no bar`() {
+        assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
+        assertFalse(
+            "the board's tray is pinned over the bottom edge; a floating bar " +
+                "under it would be a second set of controls in the same strip",
+            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST))
+        )
+    }
 
-        // The order is the requirement the bar was built to - Home, then the
-        // viewer's own list, then the viewer - and it is also the enum's order,
+    @Test
+    fun `every other page of the bar draws it`() {
+        listOf(AppRoutes.DASHBOARD, AppRoutes.LIBRARY, ProfileRoutes.OWN_ROUTE)
+            .forEach { route ->
+                assertTrue("$route must draw the bar", showsMainBar(mainTabForRoute(route)))
+            }
+        assertFalse("a pushed screen draws no bar", showsMainBar(mainTabForRoute(AppRoutes.SETTINGS)))
+        assertFalse(showsMainBar(null))
+    }
+
+    @Test
+    fun `the bar reads Home, Library, Tiers, Profile, once each`() {
+        val destinations = mainTabDestinations(
+            tabs = enabledMainTabs(tierListTab = true),
+            profileAvatarUrl = null
+        )
+
+        // The order is the requirement the bar was built to - Home, the viewer's
+        // own list, the ranking, then the viewer - and it is also the enum's order,
         // which is what `MainBar` indexes by. A reorder fails here rather than
         // selecting a tab nobody chose.
         assertEquals(
-            listOf("Home", "Library", "Profile"),
+            listOf("Home", "Library", "Tiers", "Profile"),
             destinations.map { it.label }
         )
         assertEquals(
-            listOf("main_tab_home", "main_tab_library", "main_tab_profile"),
+            listOf(
+                "main_tab_home",
+                "main_tab_library",
+                "main_tab_tiers",
+                "main_tab_profile"
+            ),
             destinations.map { it.testTag }
         )
         assertEquals(MainTab.entries.size, destinations.size)
     }
 
     @Test
+    fun `turning the tier tab off removes one slot and nothing else`() {
+        val tabs = enabledMainTabs(tierListTab = false)
+
+        assertEquals(listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.PROFILE), tabs)
+        assertEquals(
+            "the bar's index is an index into this list, so the Profile tab must " +
+                "move from 3 to 2 rather than pointing at nothing",
+            2,
+            tabs.indexOf(MainTab.PROFILE)
+        )
+        assertEquals(
+            "the setting only takes the tab off the bar; the page is still one of " +
+                "the bar's pages for the joke scope and for Back",
+            MainTab.TIERS,
+            mainTabForRoute(AppRoutes.TIER_LIST)
+        )
+    }
+
+    @Test
+    fun `the tier tab is between the library and the profile`() {
+        val tabs = enabledMainTabs(tierListTab = true)
+
+        assertEquals(
+            "the order is the enum's order, and the tier list was asked for " +
+                "between Library and Profile",
+            listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.TIERS, MainTab.PROFILE),
+            tabs
+        )
+    }
+
+    @Test
     fun `only the profile tab carries the avatar, and it keeps a glyph without one`() {
         val avatar = "https://s4.anilist.co/file/avatar.png"
 
-        mainTabDestinations(profileAvatarUrl = avatar).forEach { destination ->
+        mainTabDestinations(
+            tabs = enabledMainTabs(tierListTab = true),
+            profileAvatarUrl = avatar
+        ).forEach { destination ->
             val isProfile = destination.testTag == "main_tab_profile"
             assertEquals(
                 "the avatar is the Profile tab's identity; drawing it on any other " +
@@ -114,8 +185,10 @@ class MainTabsTest {
             )
         }
 
-        val withoutAvatar = mainTabDestinations(profileAvatarUrl = null)
-            .first { it.testTag == "main_tab_profile" }
+        val withoutAvatar = mainTabDestinations(
+            tabs = enabledMainTabs(tierListTab = true),
+            profileAvatarUrl = null
+        ).first { it.testTag == "main_tab_profile" }
         assertTrue(
             "the bar is drawn while the viewer's avatar is still loading, and a tab " +
                 "with no icon and no image is a hole in the bar",

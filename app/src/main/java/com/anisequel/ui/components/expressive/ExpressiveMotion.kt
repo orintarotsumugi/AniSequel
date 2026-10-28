@@ -210,6 +210,35 @@ object ExpressiveMotion {
         }
 
     /**
+     * The [FastSpatial] counterpart for `IntOffset`-based slides.
+     *
+     * `slideIntoContainer`, `slideOutOfContainer`, `slideInVertically` and
+     * `slideOutVertically` all take a `FiniteAnimationSpec<IntOffset>`, so the
+     * `Float` tokens cannot be passed to them and the routes had only
+     * [DefaultSpatialOffset] to reach for. That token is the calm one on purpose
+     * - it is the spring a list item settles into place with - and a whole page
+     * moving on it is still travelling when the next tap lands. Two quick tab
+     * taps then put two half-finished slides on screen at once and the second
+     * reads as a stutter rather than as a switch.
+     *
+     * Same physics as [FastSpatial]: a page should arrive as quickly as a press
+     * resolves. Pushes and pops keep [DefaultSpatialOffset]; this is for moves
+     * the reader can chain faster than the animation.
+     */
+    val FastSpatialOffset: FiniteAnimationSpec<IntOffset> get() =
+        when (speed) {
+            com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
+            com.anisequel.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        }
+
+    /**
      * Item appearance and disappearance for lazy list items.
      *
      * `LazyItemScope.animateItem` takes `fadeInSpec`/`fadeOutSpec` parameters

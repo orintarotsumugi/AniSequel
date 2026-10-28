@@ -53,8 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
 /**
  * The comment editor, lifted out of the thread sheet.
@@ -239,10 +238,10 @@ private fun ColumnScope.ComposerBody(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                // The same parser the posted comment goes through, so Preview
-                // shows what readers will get rather than an approximation.
-                val nodes = remember(draft.text) { AniListMarkdownParser.parse(draft.text) }
-                AniListMarkdownView(nodes = nodes)
+                // The same renderer the posted comment goes through, so Preview
+                // shows what readers will get rather than an approximation -
+                // including the poster on an AniList title the draft links.
+                AniListMarkdownWithCovers(markdown = draft.text)
             }
         }
     } else {

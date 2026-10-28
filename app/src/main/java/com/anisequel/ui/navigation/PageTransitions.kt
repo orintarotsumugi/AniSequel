@@ -1,0 +1,225 @@
+package com.anisequel.ui.navigation
+
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.unit.IntOffset
+import androidx.navigation.NavBackStackEntry
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+
+/**
+ * How one page gives way to the next.
+ *
+ * Split out of `AppNavigation.kt` because it changes for a different reason: that
+ * file is the destination table - which routes exist, what each one is handed -
+ * and this one is motion. The two only meet at `NavHost`'s transition lambdas, so
+ * keeping the springs and the direction rules here means a change to how pages
+ * move does not have to be read through twelve `composable()` registrations.
+ *
+ * Every function takes the two routes it is moving between rather than a state
+ * object, because a transition lambda has nothing else to give it.
+ */
+
+/**
+ * The route transitions use the app's shared motion tokens rather than their own
+ * copies.
+ *
+ * These two were private re-declarations, forty lines apart, of the springs
+ * [ExpressiveMotion] already publishes:
+ *
+ *  - The slide was `ExpressiveMotion.DefaultSpatialOffset` exactly - the same
+ *    `INSTANT`/`SMOOTH`/`CHILL` branches, the same `NoBouncy`/`MediumLow` in
+ *    `SMOOTH`, the same `0.65f` in `CHILL`. A change to how the app slides would
+ *    have moved every list and press and left the pages on the old physics, with
+ *    nothing to notice it but the eye.
+ *  - The fade was `ExpressiveMotion.DefaultEffects` *except* that its `SMOOTH`
+ *    branch was pinned to `StiffnessMediumLow` while the shared effects token uses
+ *    `StiffnessMedium`. That was not a decision anyone made - it was the copy
+ *    drifting - so the routes now fade at the same speed as every other fade in
+ *    the app. The difference is one spring stiffness on a ~200ms fade; it is not
+ *    a motion redesign, and it is the point of having one token.
+ *
+ * A pure slide crosses one surface over the other; the slide plus a short fade
+ * gives the incoming surface something to compose against - without it, the
+ * underneath content reads as the background rather than as replaced content
+ * while the slide is moving. The fade is the effects token, not the spatial one,
+ * for the same reason colour transitions are: it must not overshoot.
+ *
+ * ## The page expands as it arrives
+ *
+ * The transition is asymmetric, and deliberately so. The incoming page travels
+ * only a quarter of a screen and springs up from 94%, while the page it covers
+ * shifts a twelfth and settles back to 98%. A symmetric pair - both sliding a
+ * full width, both fading - reads as two cards swapping places. This reads as the
+ * new page growing out from over the old one, which is the same "expanding"
+ * language the app's lists, sheets and counters already use.
+ *
+ * Both spatial values are shared tokens: the scale uses [ExpressiveMotion.BouncySpatial]
+ * so the arrival gets a little overshoot, and the departure uses
+ * [ExpressiveMotion.FastSpatial] so it does not wobble while it is being covered.
+ * `MotionStyle.INSTANT` turns both into `snap()` inside those tokens, and
+ * `SMOOTH` removes the overshoot without changing the shape.
+ */
+internal val RouteSlideSpring get() = ExpressiveMotion.DefaultSpatialOffset
+internal val RouteFadeEffect get() = ExpressiveMotion.DefaultEffects
+
+/**
+ * The slide spring for a move *between two of the bar's pages*.
+ *
+ * A tab switch is not a push: it is a control the reader can chain faster than
+ * any animation - hold, swipe twice, and two slides are requested in a few
+ * frames. On [RouteSlideSpring] the first is still moving when the second
+ * starts, so the reader sees a stutter instead of a switch. This is the fast
+ * token for exactly that case; Settings, a studio and somebody else's profile
+ * keep the calm one, because those are pushes the reader is not racing.
+ */
+internal val RouteTabSlideSpring get() = ExpressiveMotion.FastSpatialOffset
+
+/**
+ * The spring a page move should slide on, chosen by what kind of move it is.
+ *
+ * Both branches are typed `FiniteAnimationSpec<IntOffset>`, so this can be
+ * passed straight to `slideIntoContainer`/`slideOutOfContainer` without a cast.
+ */
+internal fun pageSlideSpring(
+    from: String?,
+    to: String?
+): FiniteAnimationSpec<IntOffset> =
+    if (tabDirection(from, to) != null) RouteTabSlideSpring else RouteSlideSpring
+
+/**
+ * Which way a move between two of the bar's pages travels, or null when the move
+ * is not one - a Settings page, a studio, somebody else's profile.
+ *
+ * The bar's order is the direction: moving to a tab further right travels left (the
+ * new page comes from the right, the old one leaves to the left), and moving back
+ * travels right. Before this, every forward move slid left and every pop slid right,
+ * so Library → Home - a move *backwards* along the bar - looked exactly like Home →
+ * Library. The direction now comes from [MainTab]'s declaration order, which is the
+ * same order the bar is built from, so a tab added in the middle is placed
+ * correctly without touching the transition.
+ *
+ * A pop is the same rule read the other way: the pair is (popped, revealed), so
+ * Library → Home is already `Right` and needs no special case.
+ */
+internal fun tabDirection(
+    from: String?,
+    to: String?
+): AnimatedContentTransitionScope.SlideDirection? {
+    val fromTab = mainTabForRoute(from) ?: return null
+    val toTab = mainTabForRoute(to) ?: return null
+    if (fromTab == toTab) return null
+    return if (toTab.ordinal > fromTab.ordinal) {
+        AnimatedContentTransitionScope.SlideDirection.Left
+    } else {
+        AnimatedContentTransitionScope.SlideDirection.Right
+    }
+}
+
+/**
+ * The tier list arrives from below rather than from the side.
+ *
+ * It is a tab, but it is not a page laid out like its neighbours: a board is a
+ * surface the reader drags, and the bar steps aside for it. Rising from the bottom
+ * edge is what says "this is a different kind of screen" before the reader has read
+ * a single word of it, and it matches the bar leaving downwards at the same moment.
+ */
+internal fun isTierList(route: String?): Boolean = route == AppRoutes.TIER_LIST
+
+/** A page arriving over the one before it. */
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
+    from: String?,
+    to: String?
+): EnterTransition = if (isTierList(to)) {
+    slideInVertically(
+        animationSpec = RouteSlideSpring,
+        // A third of the page rather than all of it: enough travel to read as a
+        // rise, short enough that the board's own header is not still arriving
+        // when the finger gets there.
+        initialOffsetY = { fullHeight -> fullHeight / 3 }
+    ) + fadeIn(RouteFadeEffect) + scaleIn(
+        initialScale = 0.96f,
+        animationSpec = ExpressiveMotion.BouncySpatial
+    )
+} else {
+    val direction = tabDirection(from, to)
+        ?: AnimatedContentTransitionScope.SlideDirection.Left
+    slideIntoContainer(
+        direction,
+        animationSpec = pageSlideSpring(from, to),
+        // The incoming page starts a quarter of a page to the right instead of a
+        // full width. A full-width slide is a card being turned over; a shorter
+        // travel with a growing page reads as this screen expanding out of the one
+        // before it, and it keeps both surfaces on screen while they cross.
+        initialOffset = { fullWidth -> fullWidth / 4 }
+    ) + fadeIn(RouteFadeEffect) + scaleIn(
+        initialScale = 0.94f,
+        animationSpec = ExpressiveMotion.BouncySpatial
+    )
+}
+
+/** A page being covered, or being popped away. */
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.exitPage(
+    from: String?,
+    to: String?,
+    popped: Boolean
+): ExitTransition = when {
+    // The board is leaving: it falls back down the way it came.
+    isTierList(from) -> slideOutVertically(
+        animationSpec = RouteSlideSpring,
+        targetOffsetY = { fullHeight -> fullHeight / 3 }
+    ) + fadeOut(RouteFadeEffect)
+    // The board is arriving over this page. It fades and settles back rather than
+    // sliding sideways: the board is rising from the bottom edge and the bar is
+    // leaving through it, so a third horizontal movement would give the same frame
+    // two directions to read. This is the mirror of `popEnterPage`'s fade, which is
+    // what the reader sees on the way back.
+    isTierList(to) -> fadeOut(RouteFadeEffect) + scaleOut(
+        targetScale = 0.98f,
+        animationSpec = ExpressiveMotion.FastSpatial
+    )
+    else -> {
+        val direction = tabDirection(from, to)
+            ?: if (popped) {
+                AnimatedContentTransitionScope.SlideDirection.Right
+            } else {
+                AnimatedContentTransitionScope.SlideDirection.Left
+            }
+        slideOutOfContainer(
+            direction,
+            animationSpec = pageSlideSpring(from, to),
+            // The page being covered barely moves: it is the fixed surface the new
+            // one grows over, not a card sliding away.
+            targetOffset = { fullWidth -> fullWidth / 12 }
+        ) + fadeOut(RouteFadeEffect) + scaleOut(
+            targetScale = 0.98f,
+            animationSpec = ExpressiveMotion.FastSpatial
+        )
+    }
+}
+
+/**
+ * The page a pop reveals.
+ *
+ * Coming back from the tier list is a fade rather than a slide: the tier list is
+ * travelling downwards, and a second horizontal slide underneath it would make the
+ * two movements fight over the same frame.
+ */
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnterPage(
+    from: String?,
+    to: String?
+): EnterTransition = if (isTierList(from)) {
+    fadeIn(RouteFadeEffect) + scaleIn(
+        initialScale = 0.98f,
+        animationSpec = ExpressiveMotion.FastSpatial
+    )
+} else {
+    enterPage(from = from, to = to)
+}

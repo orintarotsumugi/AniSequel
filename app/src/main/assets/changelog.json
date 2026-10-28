@@ -4,6 +4,14 @@
       "version": "1.6.4",
       "entries": [
         {
+          "title": "The tier list is a tab",
+          "detail": "It used to be a page pushed from the Library and from your profile, which meant two doors in and a Back that depended on which one you used. Tiers now sits on the bottom bar between Library and Profile, and the trophy in your library and the row in your profile take the same route, so Back out of a board always lands on Home. The bar steps aside while the list is open - a board is dragged, and its tray is pinned over the same bottom edge - and slides back when you leave. If you never rank anything, Settings > Library & dashboard has a switch that takes the tab off the bar; the tier list itself is untouched and still opens from the trophy."
+        },
+        {
+          "title": "Hold the bar and swipe between tabs",
+          "detail": "Press and hold the bottom bar and it lifts; keep dragging and the selection follows your finger, one tab per tab-width of travel, with a tick each time it moves. Let go and you are on that page. Dragging right pulls the previous tab in, the way a horizontal pager does, and a plain tap works exactly as it did before. Moving between tabs also has a direction now - going right along the bar travels one way and coming back travels the other - and the tier list rises from the bottom edge as the bar leaves downwards, so the two read as one move instead of the app losing its navigation and finding it again."
+        },
+        {
           "title": "Tier lists have an anime shelf and a manga shelf",
           "detail": "Ranking manga used to mean ranking it against your anime: the tier list only ever read the anime half of your AniList account, and AniList numbers the two namespaces independently, so an anime and a manga can share a media id. The library now opens on Anime with a Manga section beside it, every list remembers which half it ranks, and neither pool can draw the other's titles - not in the board, not in the filters, not in the seeding pass and not in the exports. Your manga list is fetched the first time you open that section rather than at launch, because it is a second request against AniList's rate limit that half of all visits never need."
         },
@@ -13,7 +21,7 @@
         },
         {
           "title": "More jokes in every tone",
-          "detail": "Twenty-five new lines in each of the five tones - feelings, backlog, meta, craft and dark - so a reader who leaves only one tone switched on still has a shuffle bag that lasts a session. That is 692 lines in total, none of them repeated, which is the whole point of a random toast: it has to be able to surprise you for longer than an evening."
+          "detail": "Forty new lines in each of the five tones - feelings, backlog, meta, craft and dark - so a reader who leaves only one tone switched on still has a shuffle bag that lasts a session. That is 767 lines in total, none of them repeated, which is the whole point of a random toast: it has to be able to surprise you for longer than an evening."
         },
         {
           "title": "The update prompt shows what changed",
@@ -22,6 +30,10 @@
         {
           "title": "An empty shelf says why it is empty",
           "detail": "The tier library had one empty state for four different situations. A manga list that is still arriving, a section this account cannot have (the demo has no manga list), and a fetch AniList refused now say so, and only the last one offers a retry. A library that loaded and turned out to be empty says so instead of claiming it is still on its way, and a shelf with nothing on it yet still offers to make a list, because an empty list is a place to start rather than a failure."
+        },
+        {
+          "title": "A creator's page is a career, not a row",
+          "detail": "The Creator page drew a horizontal strip of posters in whatever order AniList answered - by popularity - so a 2019 series sat beside a 1998 one with nothing saying which came first. Their work is now a vertical list grouped by the year each title began, newest first and undated last, with the role they held and the score beside each cover. The biography's AniList link cards also show their posters now: that page was the one markdown surface nobody had given a cover loader, so it drew every card as a badge in an empty frame while the profile's About card beside it drew them correctly. The bio, a comment, the composer's preview and a title's synopsis now resolve their covers through one provider at the app root, instead of each one plumbing its own request."
         },
         {
           "title": "Small fixes found on the way",

@@ -212,7 +212,22 @@ internal object JokeLinesShow {
         "The episode title is a spoiler written by someone with taste.",
         "The recap uses the same shot with new meaning. That is editing.",
         "The finale reprises the first episode's theme in a minor key.",
-        "The animation director fixed a face in one frame and saved the scene."
+        "The animation director fixed a face in one frame and saved the scene.",
+        "The animation budget shows up in one fight and leaves.",
+        "The colour script does more acting than the lead does.",
+        "The framing said more in one shot than the monologue did.",
+        "The sound design is why that scene works. Watch it muted.",
+        "The storyboard put the camera where your eye already was.",
+        "The adaptation cut the one chapter that explained everything.",
+        "The sakuga episode is three minutes and a whole reputation.",
+        "The background art is doing the worldbuilding alone.",
+        "The edit holds a beat too long and that is the joke.",
+        "The composer reused one motif and made it mean something.",
+        "The character design changes shape when the tone does.",
+        "The episode's best scene is a conversation in a doorway.",
+        "The opening spoils the twist in a cut nobody catches.",
+        "The subtitle timing is an art form and it is running late.",
+        "The adaptation is faithful and that is the problem."
     )
 
     /** Cancelled sequels, hiatuses and fictional deaths. */
@@ -327,6 +342,21 @@ internal object JokeLinesShow {
         "The remake is prettier and has none of the original's timing.",
         "The season was split in two so the wait could be sold twice.",
         "The character you loved was written out between seasons.",
-        "The anime caught up to the manga and started inventing."
+        "The anime caught up to the manga and started inventing.",
+        "The anime ended. The merchandise did not.",
+        "The sequel exists as a pachinko machine and a tweet.",
+        "The studio that made it closed and the rights moved somewhere quiet.",
+        "The final volume came out in a language you do not read.",
+        "The author's health update is the only release this year.",
+        "The show's best character is a spoiler, so nobody talks about them.",
+        "The movie retconned the only ending you had accepted.",
+        "The fandom wiki has a section called Unresolved.",
+        "The last episode aired during a real disaster and got buried.",
+        "The series was cancelled and a tie-in game explains the ending.",
+        "The remaster sharpened the lines and kept the missing episodes.",
+        "The final arc was rushed because the manga was not finished.",
+        "The character's name lives on in a mobile game nobody plays.",
+        "The last chapter is a summary written by the editor.",
+        "The show is remembered for the opening and nothing else."
     )
 }

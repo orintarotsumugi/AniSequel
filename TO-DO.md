@@ -178,19 +178,21 @@ small batches is how one of them ships broken.
 
 ### 1.4 `AppNavigation.kt` keeps every destination in one function — low effort
 
-The file is ~870 lines and twelve `composable()` registrations, past the
+The file is ~1,130 lines and a dozen `composable()` registrations, past the
 700-line ceiling. Unlike §1.1 and §1.2 this is not shared state: it is a list of
 independent registrations, which is why it has been allowed to grow. What it
 costs is the ceiling itself — the number stops meaning "this file is doing two
 things" and starts being a rule everyone bends.
 
-The first split has already happened: `MainTabs.kt` holds the tab enum, the bar
-and the tap navigation, so the file no longer owns the app's navigation model,
-only its destination table. The next step is a `NavGraphBuilder` extension per
-destination group — studio first, because it needs the repository and the
-`NavController` and nothing else — with the captured locals (preferences,
-`authState`, `signedInViewer`) passed as parameters rather than closed over.
-Do it a group at a time; the registrations do not call each other.
+Two splits have already happened: `MainTabs.kt` holds the tab enum, the bar and
+the tap navigation, so the file no longer owns the app's navigation model, only
+its destination table; and `PageTransitions.kt` holds the route springs and the
+direction rules, which change for motion reasons rather than for destination
+reasons. The next step is a `NavGraphBuilder` extension per destination group —
+studio first, because it needs the repository and the `NavController` and nothing
+else — with the captured locals (preferences, `authState`, `signedInViewer`)
+passed as parameters rather than closed over. Do it a group at a time; the
+registrations do not call each other.
 
 ---
 

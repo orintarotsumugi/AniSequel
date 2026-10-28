@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +41,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -135,6 +141,28 @@ data class NavigationDestination(
  */
 private const val SELECTED_WEIGHT = 2.3f
 
+/**
+ * ## Holding the bar and swiping
+ *
+ * A long press on the bar lifts it, and from then on the finger drags the
+ * selection: one destination per destination-width of travel, with a tick each
+ * time it moves. Tapping is untouched - the drag only starts after the long-press
+ * timeout, and while it is running the items' clicks are disabled so releasing the
+ * finger after a swipe cannot also fire the tap that was under it.
+ *
+ * The direction is the one a strip of pages has rather than the one a list has:
+ * dragging to the right pulls the pages right, so the selection moves *left* to the
+ * previous tab. That is the same direction as a horizontal pager, which is the
+ * gesture people will have used before this one.
+ *
+ * The travel is measured in pixels against one destination's share of the measured
+ * bar, not against a fixed dp: the selected pill is wider than the others, so a
+ * fixed threshold would move two tabs in one gesture on a phone and feel stuck on a
+ * tablet. The accumulator lives inside the pointer handler and the current index is
+ * mirrored there too, because the selection is a route change: reading the
+ * parameter would spend a frame per step and two steps inside one frame would both
+ * compute the same "next" tab.
+ */
 @Composable
 fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
@@ -143,6 +171,35 @@ fun ExpressiveNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+
+    // The bar's measured width, which the swipe's step is derived from. Zero until
+    // the first layout; a gesture cannot start before then anyway.
+    var barWidth by remember { mutableStateOf(0) }
+    var holding by remember { mutableStateOf(false) }
+
+    // Read inside the pointer handler rather than captured: the handler is keyed on
+    // the destination count, and a key change mid-gesture would cancel it. These
+    // are the values that legitimately change while a finger is down.
+    val currentIndex by rememberUpdatedState(selectedIndex)
+    val selectTab by rememberUpdatedState(onSelect)
+    val stepPx by rememberUpdatedState(
+        // Never zero: the step is the divisor of the travel accumulator, and a
+        // bar measured at zero width (before its first layout) would make the
+        // swipe loop below spin forever.
+        if (destinations.isEmpty()) 1f
+        else (barWidth / destinations.size).toFloat().coerceAtLeast(1f)
+    )
+    val lastIndex = destinations.lastIndex
+
+    // Lifting the bar is the hold's whole visual: the finger is on the bar and the
+    // bar acknowledges it before anything has moved. It is a draw-phase scale, so
+    // holding does not relayout the page underneath.
+    val holdScale by animateFloatAsState(
+        targetValue = if (holding) 1.035f else 1f,
+        animationSpec = if (holding) ExpressiveMotion.PressSpatialOut
+        else ExpressiveMotion.PressSpatialIn,
+        label = "nav_bar_hold_scale"
+    )
 
     Box(
         modifier = modifier
@@ -163,7 +220,60 @@ fun ExpressiveNavigationBar(
                 .shadow(elevation = 8.dp, shape = ExpressiveShapes.pill, clip = false)
                 .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(5.dp),
+                .padding(5.dp)
+                .onSizeChanged { barWidth = it.width }
+                .graphicsLayer {
+                    scaleX = holdScale
+                    scaleY = holdScale
+                }
+                .pointerInput(destinations.size) {
+                    var travel = 0f
+                    var index = currentIndex
+
+                    fun moveTo(next: Int) {
+                        if (next == index) return
+                        index = next
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectTab(next)
+                    }
+
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            // Re-sync: the bar may have been switched by a tap
+                            // between the long press being detected and this
+                            // callback running.
+                            index = currentIndex
+                            travel = 0f
+                            holding = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDragEnd = { holding = false },
+                        onDragCancel = {
+                            holding = false
+                            travel = 0f
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            travel += dragAmount.x
+
+                            // Positive travel is a drag to the right, which pulls
+                            // the previous destination in from the left.
+                            while (travel >= stepPx && index > 0) {
+                                travel -= stepPx
+                                moveTo(index - 1)
+                            }
+                            while (travel <= -stepPx && index < lastIndex) {
+                                travel += stepPx
+                                moveTo(index + 1)
+                            }
+                            // Do not bank travel against an end that cannot move:
+                            // a long drag at the first tab would otherwise turn
+                            // around and jump two tabs back on the way home.
+                            if (index == 0 && travel > 0f) travel = 0f
+                            if (index == lastIndex && travel < 0f) travel = 0f
+                        }
+                    )
+                },
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -172,6 +282,11 @@ fun ExpressiveNavigationBar(
                 NavigationItem(
                     destination = destination,
                     selected = selected,
+                    // A tap is ignored while the bar is being held: the long press
+                    // and the tap end on the same finger-up, so without this a
+                    // swipe that ends on a destination would also tap it and put
+                    // the selection back where the gesture started.
+                    enabled = !holding,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
@@ -226,6 +341,7 @@ private fun animatedItemWeight(selected: Boolean): Float {
 private fun NavigationItem(
     destination: NavigationDestination,
     selected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -277,6 +393,7 @@ private fun NavigationItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             )
             // An icon-only item is otherwise 22dp wide plus 10dp of padding, which
