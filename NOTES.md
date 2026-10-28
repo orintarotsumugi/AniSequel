@@ -536,6 +536,35 @@ beside the name — and **only on your own profile**: the ranking is stored agai
 the signed-in account, so it means nothing on somebody else's, which is why the
 control is hidden off your own rather than shown and re-explained.
 
+### Two shelves, because the ids collide
+
+AniList numbers anime and manga independently, so media id 1 is both *Cowboy
+Bebop* and *Monster*. A board that ranked both at once would key two titles under
+one number: the second placement would overwrite the first, and an export would
+draw one title's poster under the other's name. So the pool is a property of the
+list rather than of the screen. `TierMediaType` lives on `TierListDocument`
+(encoded as a sixth codec line, defaulting to anime so every five-line document
+written before manga was rankable still opens), `TierCandidate` carries its own
+type, and `TierFilter.mediaType` rejects the other pool inside `allows` - which
+means the board, the tray, the filter sheet's match count and the seeding pass all
+ask the same question.
+
+The library's Anime | Manga switch chooses which shelf is showing. `TierLibraryPools`
+keeps two nullable pools and never concatenates them; null is "not asked yet" and
+an empty list is "asked, and there is none", which is what lets the manga half be
+fetched the first time its shelf is opened rather than at launch - it is a second
+request against AniList's 30-a-minute budget that half of all visits never need.
+The pools are their own type rather than fields on the ViewModel because the two
+answer different questions ("what can be ranked" versus "what is open"), and
+`TierListViewModel.candidates` is the single place that picks one by the open
+document's type.
+
+The studio filter is anime-only for the same kind of reason: AniList files
+animation studios, publishers and magazines under one `studios` connection, so an
+anime studio selection applied to a manga board would hide every manga in it. The
+selection is kept on the filter and simply not applied, so going back to an anime
+list restores what the reader left there.
+
 ### Lists are saved projects, and the screen opens on them
 
 The trophy opens a **library**: the lists you have, with the one you opened last
@@ -736,6 +765,26 @@ means new *notes* rather than "whatever is at the top of the file".
 Every field is nullable and a malformed file degrades to an empty card, because
 this is a hand-edited file read by code that must not throw over a missing comma
 and take the Settings screen down with it.
+
+**The update prompt draws the same notes, not a link to them.** The workflow
+writes `update.json`'s `notes` from this file — one `- Title: detail` line per
+entry — and `parseReleaseNotes` turns that back into the same `ReleaseNote`
+values the Settings card renders. One composable (`ui/components/ReleaseNotes.kt`)
+draws both, so the dialog somebody decides in and the page they read afterwards
+cannot disagree. The prompt bounds the list and scrolls it internally; Settings
+leaves scrolling to the page, because a second scrollable region inside a
+`LazyColumn` makes the gesture ambiguous about which one is moving.
+
+The prompt used to skip the field and offer the release page, because `notes` had
+once held the GitHub release body — the same paragraph about the app in every
+release. The parser is deliberately lenient about the format it now reads: only
+`- ` lines become entries, the `Build N from sha.` footer is ignored, and a final
+line cut in half by the workflow's byte cap is kept rather than dropped. A
+manifest that parses to nothing falls back to the release page instead of drawing
+an empty box. That cap is now a size sanity bound (6000 bytes) rather than the
+1200 that was chosen to fit the old fixed-height dialog — at 1200 a six-entry
+release was cut off in the middle of its third entry, so the prompt showed less
+than the settings page did.
 
 Shipping changes without adding a block is a broken build, not an oversight —
 [AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
