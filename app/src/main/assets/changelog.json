@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.6.6",
+      "entries": [
+        {
+          "title": "The comment sheet stays the size it opened",
+          "detail": "Writing a comment no longer makes the sheet collapse and jump as the keyboard arrives. The sheet used to leave its height to Material's window insets, so every frame of the keyboard animation re-measured it between two anchors; it keeps one fixed height now and the keyboard moves inside it. The tray of people who liked an activity also opens fully expanded instead of stopping halfway up the faces it was opened to show."
+        },
+        {
+          "title": "The engagement trays stop bouncing",
+          "detail": "A fast flick at the bottom of the comments or likes sheet used to hand its leftover momentum to the sheet, which is already as far open as it goes - so it rocked up and down until you touched it. The list now spends that last bit of velocity itself."
+        },
+        {
+          "title": "Who liked it is listed once",
+          "detail": "Nothing de-duplicated the people who liked an activity: the fetch maps AniList's likes list straight through, and a repeated account is a fatal duplicate key in a lazy list - the same failure AniList's favourites connection has already produced for favourites. The tray collapses repeated ids before it draws, so a duplicated account can no longer crash it and the count matches the faces below it."
+        },
+        {
+          "title": "A like no longer redraws the feed",
+          "detail": "Liking a comment, posting one, or opening a page of likers used to invalidate the whole Activity feed behind the sheet - every card, cover and the tab bar - for a change that was only visible in the sheet. The sheets read their own state now. The likes tray's shimmer also stops its clock once the list has loaded, instead of animating a skeleton that is no longer on screen."
+        },
+        {
+          "title": "Profile tabs switch without re-measuring",
+          "detail": "The four tabs no longer use the default size transform, which re-measured both lazy lists on every frame of a switch. The height snaps while the slide and the fade stay, on the faster spring the bottom bar already uses, so a second tap while the first page is still sliding reads as one move instead of a stutter."
+        },
+        {
+          "title": "A card under a scrolling finger lets go",
+          "detail": "Images, videos and AniList link cards in a bio or a comment ran a fallback pointer watcher beside their click: an extra pointer-input node per card, a pressed state held for a whole fling, and a press that could be swallowed. They now share one interaction source between the spring and the click, which cancels the spring the moment the gesture becomes a scroll. The manage button on your own comment also stops drawing a ripple inside a circle that is already scaling."
+        }
+      ]
+    },
+    {
       "version": "1.6.5",
       "entries": [
         {

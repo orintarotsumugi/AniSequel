@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,10 +21,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +52,10 @@ import com.anisequel.ui.viewmodel.UserActivityViewModel
  * comments sheet, so the two engagement sheets read as one family. The counts
  * are not paginated by AniList - `likes` is a plain list - so there is no paging
  * footer to get wrong.
+ *
+ * The sheet skips the partially-expanded state. A tray that opens halfway up a
+ * list of faces it was opened to show is a second gesture the reader did not ask
+ * for, and the comments sheet has opened fully expanded since it was written.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,34 +72,38 @@ fun ActivityLikersSheet(
      */
     onRetry: () -> Unit = {}
 ) {
-    val phase = rememberShimmerPhase()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Nothing de-duplicates a likes list on the way here: `getActivityLikes` maps
+    // `activity.likes` straight through, and AniList's favourites connection has
+    // already been captured returning six copies of one entry. A repeated id is a
+    // fatal duplicate key in the `LazyColumn` below, so the list is collapsed here
+    // - this is the boundary that actually lays rows out, and a viewer listed twice
+    // is the wrong answer regardless.
+    val likers = remember(state.likers) { state.likers.distinctBy { it.id } }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                // No `navigationBarsPadding`: the sheet's default
+                // `contentWindowInsets` already pads its content for the system
+                // bars, and applying both drew the last row a nav bar's height
+                // above the edge for no reason.
+                .nestedScroll(rememberSheetFlingGuard(sheetState))
                 .testTag("activity_likers_sheet"),
             contentPadding = PaddingValues(bottom = 20.dp)
         ) {
             item(key = "header") {
-                LikersHeader(count = state.likers.size, isLoading = state.isLoading)
+                LikersHeader(count = likers.size, isLoading = state.isLoading)
             }
 
             when {
-                state.isLoading -> item(key = "loading") {
-                    // The rows that are coming: a face and a name, five times. A
-                    // spinner in their place was the one screen in the app whose
-                    // shape was already known and thrown away.
-                    PersonRowsSkeleton(
-                        phase = phase,
-                        avatarSize = 34.dp,
-                        avatarShape = CircleShape,
-                        horizontalPadding = 20.dp
-                    )
-                }
+                state.isLoading -> item(key = "loading") { LikersLoading() }
 
                 state.loadError != null -> item(key = "load_error") {
                     Column(
@@ -118,7 +128,7 @@ fun ActivityLikersSheet(
                     }
                 }
 
-                state.likers.isEmpty() -> item(key = "empty") {
+                likers.isEmpty() -> item(key = "empty") {
                     Text(
                         text = "No likes yet.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -128,7 +138,7 @@ fun ActivityLikersSheet(
                 }
 
                 else -> items(
-                    items = state.likers,
+                    items = likers,
                     key = { it.id },
                     contentType = { "liker" }
                 ) { liker ->
@@ -137,6 +147,25 @@ fun ActivityLikersSheet(
             }
         }
     }
+}
+
+/**
+ * The waiting rows, and the shimmer clock that draws them.
+ *
+ * The clock used to be remembered at the top of the sheet, so its infinite
+ * transition was composed for the whole time the tray was open - including after
+ * the list had loaded, driving a skeleton that was no longer drawn. Scoped to the
+ * loading item it exists only while there is a skeleton to sweep, which is the
+ * same rule the thread's skeleton follows.
+ */
+@Composable
+private fun LikersLoading() {
+    PersonRowsSkeleton(
+        phase = rememberShimmerPhase(),
+        avatarSize = 34.dp,
+        avatarShape = CircleShape,
+        horizontalPadding = 20.dp
+    )
 }
 
 @Composable
