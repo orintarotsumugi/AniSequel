@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.changelog.Changelog
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.update.UpdateManifest
+import com.anisequel.data.update.parseReleaseNotes
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -177,6 +178,23 @@ class ChangelogTest {
                 "generated from assets/changelog.json by the release workflow, so " +
                 "regenerate them rather than writing new ones by hand.",
             parsed.notes!!.contains(firstTitle!!)
+        )
+
+        // The update prompt does not draw the field, it parses it. A notes string
+        // that mentions the title but does not parse - the old markdown body, a
+        // format the workflow changed - would leave the prompt showing a link and
+        // no notes, which is indistinguishable from a release that has none.
+        val rendered = parseReleaseNotes(parsed.notes)
+        assertTrue(
+            "update.json's notes do not parse into any entries; the update prompt " +
+                "would fall back to the release page instead of showing what changed",
+            rendered.isNotEmpty()
+        )
+        assertTrue(
+            "update.json's notes parse, but not into the newest changelog's first " +
+                "entry (\"$firstTitle\"). The dialog would show notes for something " +
+                "other than this release.",
+            rendered.any { it.title == firstTitle }
         )
     }
 
