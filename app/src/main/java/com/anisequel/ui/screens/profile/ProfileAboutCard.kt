@@ -94,6 +94,18 @@ fun AboutCard(
      * Fetched by the ViewModel as one batch and threaded down, because a bio can
      * carry a dozen AniList links and a request per card would spend a dozen of
      * AniList's 30-a-minute budget before the reader had scrolled.
+     *
+     * ## Why this one surface does not use `AniListMarkdownWithCovers`
+     *
+     * Every other markdown renderer resolves its covers through
+     * `LocalMediaCoverLoader`, provided once at the navigation root. This card
+     * keeps its own map because the fetch is deliberately started by the
+     * *ViewModel*, the moment the overview arrives, rather than when this card
+     * first composes: the bio's posters are already on their way while the
+     * profile's list is still downloading, which is what
+     * `UserOverviewLoadOrderTest` pins. Rendering it through the local loader
+     * would move the request into composition and tie it to whether this card is
+     * the one being drawn.
      */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {

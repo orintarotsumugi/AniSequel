@@ -6,6 +6,7 @@ import com.anisequel.data.repository.StoredTierLibrary
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierDefinition
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.withPlacement
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -71,6 +72,31 @@ class TierListPreferencesTest {
         val id = preferences().createEmpty("Custom tiers", tiers)
 
         assertEquals(tiers, preferences().snapshot().document(id)?.tiers)
+    }
+
+    @Test
+    fun `a list remembers which pool it ranks`() = runTest {
+        // The pool is a property of the document, not of the screen that opened it:
+        // the board is rebuilt from this value on the next launch, and an anime
+        // board relabelled as manga would keep placements for ids that mean
+        // different titles in the other namespace.
+        val id = preferences().createEmpty("Manga ranking", mediaType = TierMediaType.MANGA)
+
+        assertEquals(
+            TierMediaType.MANGA,
+            preferences().snapshot().document(id)?.mediaType
+        )
+        // Created before the read, not inside it. `document(...)`'s receiver is
+        // evaluated first, so an inline `snapshot().document(createEmpty(...))`
+        // reads the library *before* the list exists and looks the new id up in a
+        // snapshot that cannot contain it - which fails as a null media type, and
+        // reads like the default being broken when it is the test that is early.
+        val animeId = preferences().createEmpty("Anime ranking")
+        assertEquals(
+            "a list made without a pool is an anime list, as every older one was",
+            TierMediaType.ANIME,
+            preferences().snapshot().document(animeId)?.mediaType
+        )
     }
 
     @Test

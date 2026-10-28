@@ -36,6 +36,7 @@ import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
@@ -55,7 +56,7 @@ import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 private enum class SettingsPage(val title: String, val subtitle: String) {
     APPEARANCE("Appearance", "Theme, background, accent and motion"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
-    LIBRARY("Library & dashboard", "Refresh, arriving rows and quick add"),
+    LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
     // "and links" is not padding: the page carries the repository and the issue
     // tracker, which is where a bug report actually goes. A subtitle that stops at
@@ -96,6 +97,14 @@ fun SettingsScreen(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    /**
+     * Which pages the bottom bar offers.
+     *
+     * Settings owns the switch and the host owns the bar, so the same instance is
+     * handed to both - two readers of one DataStore, so the switch cannot describe
+     * a bar the app is not drawing.
+     */
+    mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
     /**
      * The repository's reachability probe, passed as a function so Settings does
@@ -185,6 +194,7 @@ fun SettingsScreen(
                                 refreshIntervalPreferences = refreshIntervalPreferences,
                                 arrivingPreferences = arrivingPreferences,
                                 quickAddPreferences = quickAddPreferences,
+                                mainTabPreferences = mainTabPreferences,
                                 changelogRepository = changelogRepository,
                                 viewer = viewer,
                                 onNavigateToLogin = onNavigateToLogin,
@@ -352,6 +362,7 @@ private fun SettingsPageContent(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
@@ -364,7 +375,8 @@ private fun SettingsPageContent(
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,
-            quickAddPreferences = quickAddPreferences
+            quickAddPreferences = quickAddPreferences,
+            mainTabPreferences = mainTabPreferences
         )
         SettingsPage.ACCOUNT -> EditSettingsTab(
             authViewModel = authViewModel,

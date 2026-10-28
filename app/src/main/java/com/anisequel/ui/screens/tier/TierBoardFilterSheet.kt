@@ -35,11 +35,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.anisequel.domain.tier.TierAiringStatusOptions
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierFacetOption
 import com.anisequel.domain.tier.TierFilter
-import com.anisequel.domain.tier.TierListStatusOptions
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.TierStatusOption
 import com.anisequel.domain.tier.genreFacetOptions
 import com.anisequel.domain.tier.studioFacetOptions
@@ -62,17 +61,33 @@ import com.anisequel.ui.components.expressive.ExpressiveStateChip
  * on. Studios are far more numerous than genres and putting a hundred chips over
  * the board for a filter most boards never need would bury the three sections
  * that are always in use.
+ *
+ * ## A manga board has no studio section
+ *
+ * AniList files animation studios, publishers and magazines under the same
+ * `studios` connection, so the dimension *exists* for manga - but it is a list of
+ * publishers, not the animation studios a person picked. Applying their anime
+ * selection to a manga board would hide every manga in it. The section is hidden
+ * rather than disabled because a switch that cannot do anything is a control that
+ * lies about what the screen can do; the selection is still kept on the filter, so
+ * going back to an anime list restores it. See `TierFilter.studioFilterActive`.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun TierFilterSheet(
     filter: TierFilter,
+    mediaType: TierMediaType,
     candidates: List<TierCandidate>,
     onFilterChange: (TierFilter) -> Unit,
     onDismiss: () -> Unit
 ) {
     val genres = remember(candidates) { genreFacetOptions(candidates) }
-    val studios = remember(candidates) { studioFacetOptions(candidates) }
+    // Not even computed for a manga board: the section is not drawn, and
+    // collecting a hundred publishers to throw them away is work whose only
+    // evidence is a slower sheet.
+    val studios = remember(candidates, mediaType) {
+        if (mediaType == TierMediaType.ANIME) studioFacetOptions(candidates) else emptyList()
+    }
     // The count is the answer to "did my search find anything", which is the
     // question a search box otherwise leaves to a wall of empty rows. It reads
     // the same `allows` the board does, so the number cannot disagree with what
@@ -104,9 +119,15 @@ internal fun TierFilterSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Unselected statuses are left out of the board and the unranked " +
-                    "shelf. Genres, studios and a name search narrow the board further. " +
-                    "Nothing is removed from your list.",
+                text = if (mediaType == TierMediaType.MANGA) {
+                    "Unselected statuses are left out of the board and the unranked " +
+                        "shelf. Genres and a name search narrow the board further. " +
+                        "Nothing is removed from your list."
+                } else {
+                    "Unselected statuses are left out of the board and the unranked " +
+                        "shelf. Genres, studios and a name search narrow the board " +
+                        "further. Nothing is removed from your list."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -174,7 +195,7 @@ internal fun TierFilterSheet(
             Spacer(modifier = Modifier.height(18.dp))
             TierFilterGroup(
                 title = "On your list",
-                options = TierListStatusOptions,
+                options = mediaType.listStatusOptions,
                 hidden = filter.hiddenListStatuses,
                 onToggle = { value, hide ->
                     onFilterChange(filter.withListStatusHidden(value, hide))
@@ -183,8 +204,10 @@ internal fun TierFilterSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
             TierFilterGroup(
-                title = "Airing",
-                options = TierAiringStatusOptions,
+                // "Airing" for anime, "Publishing" for manga: `RELEASING` is one
+                // AniList token and two English words.
+                title = mediaType.releaseSectionTitle,
+                options = mediaType.airingStatusOptions,
                 hidden = filter.hiddenAiringStatuses,
                 onToggle = { value, hide ->
                     onFilterChange(filter.withAiringStatusHidden(value, hide))
@@ -206,52 +229,58 @@ internal fun TierFilterSheet(
                 }
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Studios",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Off by default. Sorted by how many titles in your " +
-                            "list each studio made.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            // AniList's `studios` connection also holds publishers and magazines
+            // for manga, so the dimension is not "the same thing with different
+            // names" - it is a different list. Hidden for manga; the selection is
+            // kept on the filter for the anime board that made it.
+            if (mediaType == TierMediaType.ANIME) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Studios",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Off by default. Sorted by how many titles in your " +
+                                "list each studio made.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = filter.studiosEnabled,
+                        onCheckedChange = { enabled ->
+                            onFilterChange(filter.withStudiosEnabled(enabled))
+                        },
+                        modifier = Modifier.testTag("tier_studio_switch")
                     )
                 }
-                Switch(
-                    checked = filter.studiosEnabled,
-                    onCheckedChange = { enabled ->
-                        onFilterChange(filter.withStudiosEnabled(enabled))
-                    },
-                    modifier = Modifier.testTag("tier_studio_switch")
-                )
-            }
 
-            if (filter.studiosEnabled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                TierFacetChips(
-                    options = studios,
-                    selected = filter.studios,
-                    emptyText = "No animation studios were returned for this list.",
-                    onToggle = { value, selectedNow ->
-                        onFilterChange(filter.withStudio(value, selectedNow))
-                    }
-                )
-                if (filter.studios.isNotEmpty()) {
-                    TextButton(
-                        onClick = {
-                            onFilterChange(filter.copy(studios = emptySet()))
-                        },
-                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                    ) {
-                        Text("Clear studios")
+                if (filter.studiosEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TierFacetChips(
+                        options = studios,
+                        selected = filter.studios,
+                        emptyText = "No animation studios were returned for this list.",
+                        onToggle = { value, selectedNow ->
+                            onFilterChange(filter.withStudio(value, selectedNow))
+                        }
+                    )
+                    if (filter.studios.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                onFilterChange(filter.copy(studios = emptySet()))
+                            },
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                        ) {
+                            Text("Clear studios")
+                        }
                     }
                 }
             }
@@ -262,14 +291,22 @@ internal fun TierFilterSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(
-                    onClick = { onFilterChange(TierFilter.Default) },
+                    // Both resets are anime filters as constants, so both have to
+                    // be re-typed for the board they are pressed on. A bare
+                    // `ShowEverything` on a manga board is an anime filter that
+                    // empties it - the reset would look like "hide everything".
+                    onClick = {
+                        onFilterChange(TierFilter.Default.forMediaType(mediaType))
+                    },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
                     Text("Default")
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 TextButton(
-                    onClick = { onFilterChange(TierFilter.ShowEverything) },
+                    onClick = {
+                        onFilterChange(TierFilter.ShowEverything.forMediaType(mediaType))
+                    },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
                     Text("Show everything", fontWeight = FontWeight.Bold)

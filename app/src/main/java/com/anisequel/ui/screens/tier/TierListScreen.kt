@@ -12,8 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.TierListViewModel
 
@@ -28,6 +32,15 @@ import com.anisequel.ui.viewmodel.TierListViewModel
  * restored back stack and the app's own back gesture to disagree about where they
  * are. Back inside a list returns to the lists because that is one state change
  * ([TierListViewModel.closeList]) rather than a pop of something that was pushed.
+ *
+ * ## The library has two shelves
+ *
+ * Anime and manga are separate pools with separate lists. The section lives here,
+ * in the screen, because it is a way of looking at the library rather than a
+ * property of any list: a list already knows its own type, and opening one switches
+ * the shelf to match it. The manga half of the library is fetched the first time
+ * that shelf is opened - AniList numbers the two namespaces independently and the
+ * ids collide, so neither pool can be used to answer for the other.
  *
  * ## This file was 1,587 lines and is now a host
  *
@@ -53,6 +66,12 @@ fun TierListScreen(
 ) {
     val viewModel = tierListViewModel
 
+    // Which shelf of the library is showing. Saved across rotation because a
+    // person who was looking at their manga lists should not come back to anime
+    // after turning the phone; not stored because it is not a fact about the
+    // lists, and a new visit may reasonably start on the first shelf.
+    var section by rememberSaveable { mutableStateOf(TierMediaType.ANIME) }
+
     // This route is its own screen, so there is no profile screen to hand the
     // library over from - the ViewModel reads it itself, which is a cache hit
     // for anyone who has already opened their profile and costs no request.
@@ -67,14 +86,27 @@ fun TierListScreen(
     val recent by viewModel.recent.collectAsStateWithLifecycle()
     val assignment by viewModel.liveAssignment.collectAsStateWithLifecycle()
     val orphaned by viewModel.orphanedCount.collectAsStateWithLifecycle()
+    val animeCandidates by viewModel.animeCandidates.collectAsStateWithLifecycle()
+    val mangaCandidates by viewModel.mangaCandidates.collectAsStateWithLifecycle()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val isSeeding by viewModel.isSeeding.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val undoLabel by viewModel.undoLabel.collectAsStateWithLifecycle()
     val redoLabel by viewModel.redoLabel.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val isLoadingManga by viewModel.isLoadingManga.collectAsStateWithLifecycle()
+    val mangaLoadFailed by viewModel.mangaLoadFailed.collectAsStateWithLifecycle()
 
     val document = opened
+
+    // The manga list is fetched the first time its shelf is opened, and again if a
+    // manga board is restored directly without the shelf being touched. Guarded in
+    // the ViewModel, so this is safe to call on every recomposition of the effect.
+    LaunchedEffect(section, document?.mediaType) {
+        if (section == TierMediaType.MANGA || document?.mediaType == TierMediaType.MANGA) {
+            viewModel.loadMangaLibrary()
+        }
+    }
 
     // The system back gesture has to reach the same place as the bar's arrow, or
     // the feature is reachable two ways and leaves one of them. Inside a list that
@@ -124,12 +156,33 @@ fun TierListScreen(
         label = "tier_library_board"
     ) { openDocument ->
         if (openDocument == null) {
+            val sectionCandidates = when (section) {
+                TierMediaType.ANIME -> animeCandidates
+                TierMediaType.MANGA -> mangaCandidates
+            }
             TierLibraryScreen(
-                documents = library.documents,
-                recent = recent,
-                librarySize = candidates.size,
-                onOpen = viewModel::openList,
-                onCreate = viewModel::createList,
+                documents = library.documents.filter { it.mediaType == section },
+                recent = recent?.takeIf { it.mediaType == section },
+                section = TierLibrarySection(
+                    mediaType = section,
+                    librarySize = sectionCandidates.orEmpty().size,
+                    isLoaded = sectionCandidates != null,
+                    isLoading = section == TierMediaType.MANGA && isLoadingManga,
+                    isUnavailable = section == TierMediaType.MANGA && !viewModel.canLoadManga,
+                    loadFailed = section == TierMediaType.MANGA && mangaLoadFailed
+                ),
+                onSelectMediaType = { section = it },
+                onRetryLoad = viewModel::loadMangaLibrary,
+                onOpen = { listId ->
+                    library.documents.firstOrNull { it.id == listId }?.let {
+                        section = it.mediaType
+                    }
+                    viewModel.openList(listId)
+                },
+                onCreate = { mediaType ->
+                    section = mediaType
+                    viewModel.createList(mediaType)
+                },
                 onRename = viewModel::renameList,
                 onDelete = viewModel::deleteList,
                 onNavigateBack = onNavigateBack,

@@ -925,12 +925,18 @@ jobs:
                    "build or when the baseline trailed; otherwise the notes may" \
                    "describe an older release than the one being published."
             fi
-            # Capped: this lands in a dialog on a phone, and an unbounded list
-            # would push the first item off the screen.
+            # Capped only as a sanity bound on the manifest's size, not to fit a
+            # dialog. It used to be 1200 bytes because the notes landed in a
+            # fixed-height prompt and an unbounded list pushed the buttons off a
+            # phone; the prompt now renders them in a scrolling box, so the old
+            # cap cut a six-entry release off in the middle of its third entry -
+            # the reader deciding whether to update saw less than the settings
+            # page showed them afterwards. The release page has never been
+            # capped, so the two disagreed about the same release.
             NOTES=$(printf '%s' "${CHANGELOG_NOTES}" \
               | tr '\r' ' ' \
               | sed -e 's/[[:space:]]*$//' -e '/./,$!d' \
-              | head -c 1200)
+              | head -c 6000)
             NOTES="${NOTES}
 
           Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA::8}."

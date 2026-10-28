@@ -44,8 +44,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
+import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.CommentThreadStore
 
@@ -581,11 +580,11 @@ private fun ReplyBody(text: String?) {
 
 @Composable
 private fun MarkdownBody(text: String) {
-    // Parsed once per reply; a comment thread is exactly the kind of list that
-    // recomposes on every scroll, and reparsing markdown per frame is the cost
-    // this `remember` removes.
-    val nodes = remember(text) { AniListMarkdownParser.parse(text) }
-    AniListMarkdownView(nodes = nodes)
+    // The cover-aware renderer: a comment can link an AniList title, and the card
+    // that link becomes draws a poster only if a loader is in scope. The loader
+    // comes from `LocalMediaCoverLoader`, provided by the sheet's host, and the
+    // document is parsed once inside this call rather than per frame.
+    AniListMarkdownWithCovers(markdown = text)
 }
 
 @Composable

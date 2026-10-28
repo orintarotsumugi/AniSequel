@@ -476,6 +476,21 @@ data class ProfileAppearance(
      * for it.
      */
     val staffRole: String? = null,
+    /**
+     * When the title began, as AniList records it.
+     *
+     * Carried because a creator's page lists their work by year, and the year is
+     * not derivable from anything else on the node: a popularity-ordered
+     * connection jumps between decades, so without this the list reads as a
+     * jumble rather than as a career. `year` is the only component asked for -
+     * the month and day of a release are trivia on a filmography, and asking for
+     * them would be three fields to ignore.
+     *
+     * Null for a title AniList has not dated yet, and for any response written
+     * before the query asked for it. Both draw under "Year unknown" rather than
+     * being dropped.
+     */
+    val startDate: FuzzyDate? = null,
     val coverImage: ProfileCover? = null
 ) {
     /**

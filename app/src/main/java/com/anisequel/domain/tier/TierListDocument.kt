@@ -108,6 +108,16 @@ data class TierListDocument(
     /** Stable identity, and the key the store writes it under. Never shown. */
     val id: String,
     val name: String,
+    /**
+     * Which pool this list ranks: anime or manga.
+     *
+     * A property of the ranking, not of the screen that opens it. AniList numbers
+     * the two namespaces independently, so a board that did not know which one it
+     * was would key anime 1 and manga 1 under the same media id - one placement
+     * for two titles. The default is [TierMediaType.ANIME] because every list
+     * written before manga existed was one.
+     */
+    val mediaType: TierMediaType = TierMediaType.ANIME,
     val tiers: List<TierDefinition> = StandardTiers,
     val assignment: TierAssignment = TierAssignment(),
     /**

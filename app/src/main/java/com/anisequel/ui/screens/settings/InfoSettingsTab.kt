@@ -35,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
@@ -44,7 +43,9 @@ import com.anisequel.data.changelog.ChangelogVersion
 import com.anisequel.data.diagnostics.CrashReports
 import com.anisequel.data.network.AniListOAuth
 import com.anisequel.data.repository.DiagnosticsPreferences
+import com.anisequel.data.update.ReleaseNote
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ReleaseNotes
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
 import kotlinx.coroutines.Dispatchers
@@ -545,44 +546,12 @@ private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            entries.forEachIndexed { index, entry ->
-                if (index > 0) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 6.dp, end = 10.dp)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                        Column {
-                            Text(
-                                text = entry.title.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            entry.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = detail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            // The same renderer the update prompt uses: the workflow writes that
+            // manifest's notes from this file, so the two are the same sentences
+            // and had no business looking different.
+            ReleaseNotes(
+                notes = entries.map { ReleaseNote(title = it.title.orEmpty(), detail = it.detail) }
+            )
         }
     }
 }

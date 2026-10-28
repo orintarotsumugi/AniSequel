@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,13 +35,22 @@ import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
- * The two horizontal credit rows on a person's profile, and the cards they draw.
+ * The credit rows on a person's profile, and the cards they draw.
  *
  * Split out of [PersonProfileSheet] because the rows share a reason to change that
  * the sheet's chrome, hero, facts and biography do not: the card layout, the cover
  * sizes and the tap targets. The sheet was at the 700-line ceiling, and a change to
  * a poster card should not require reading the sheet's scroll accounting to find the
  * row worth touching.
+ *
+ * ## The creator's work is a vertical list, the character's is a row
+ *
+ * "Appears in" on a character is a handful of titles a reader scans by face, so it
+ * stays a `LazyRow`. A creator's filmography is not that: it is the one thing their
+ * page is *for*, it spans decades, and AniList orders it by popularity rather than
+ * by time - so a row of posters showed a 2019 series beside a 1998 one with nothing
+ * saying which was which. It is a vertical list grouped by the year each title
+ * began, newest first, with the undated ones last. Same cards, read as a career.
  *
  * ## The credit rides on the appearance card
  *
@@ -159,6 +170,164 @@ private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppear
 }
 
 /**
+ * A creator's work, grouped by the year each title began.
+ *
+ * The counterpart to [ProfileAppearancesRow] for the staff page. The grouping is
+ * the point: AniList answers a creator's `staffMedia` by popularity, so a list read
+ * in that order jumps between decades, and the question a reader has on this page -
+ * "what were they doing in 2011?" - cannot be answered by scanning it.
+ *
+ * Years descend and the undated group comes last: a career reads from the newest
+ * work back, and a title AniList has not dated is not a year, so it must not sort as
+ * one. Inside a year the connection's own order is kept, which is the popularity
+ * order a reader is most likely to recognise.
+ *
+ * Not a `LazyColumn`: this sits inside the sheet's own `verticalScroll`, and a
+ * nested lazy list would fight it for the same gesture. The connection is bounded
+ * at twenty-five edges, so the whole filmography is a column of rows, not a list
+ * that needs recycling.
+ */
+@Composable
+fun ProfileAppearancesByYear(
+    appearances: List<ProfileAppearance>,
+    heading: String = "Worked on",
+    onOpen: (ProfileAppearance) -> Unit
+) {
+    val years = remember(appearances) { appearancesByYear(appearances) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("profile_appearances_by_year")
+    ) {
+        SectionHeading(title = heading, icon = AppVectorIcons.List)
+        years.forEach { year ->
+            Text(
+                text = year.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 12.dp, bottom = 4.dp)
+                    .testTag("profile_appearance_year_${year.label}")
+            )
+            year.appearances.forEach { appearance ->
+                AppearanceYearRow(appearance = appearance, onOpen = onOpen)
+            }
+        }
+    }
+}
+
+/** One title in the by-year list: the poster, what it is, and what they did on it. */
+@Composable
+private fun AppearanceYearRow(
+    appearance: ProfileAppearance,
+    onOpen: (ProfileAppearance) -> Unit
+) {
+    val title = appearance.title?.displayTitle ?: "Unknown"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.98f)
+            .clickable { onOpen(appearance) }
+            .padding(vertical = 5.dp)
+            .testTag("profile_year_appearance_${appearance.type}_${appearance.id}"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(YEAR_ROW_POSTER_WIDTH)
+                .height(YEAR_ROW_POSTER_HEIGHT)
+                // The same cover shape as every other poster in the app. See the
+                // note on the horizontal card: a pill on a rectangle is an ellipse.
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        ) {
+            AsyncImage(
+                model = appearance.coverImage?.bestUrl,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            // The role first, because it is why this person is on this page; the
+            // format is the title's own fact and comes second. Both are hidden
+            // individually when AniList answered neither, rather than printed as a
+            // separator with nothing on either side of it.
+            val meta = listOfNotNull(
+                appearance.staffRole?.takeIf { it.isNotBlank() },
+                appearance.formatLabel.takeIf { it.isNotBlank() }
+            ).joinToString(" · ")
+            if (meta.isNotEmpty()) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        appearance.averageScore?.let { score ->
+            ScoreBadge(score = score, modifier = Modifier.padding(start = 10.dp))
+        }
+    }
+}
+
+/**
+ * The years of a creator's work, newest first, undated last.
+ *
+ * A pure function rather than logic inside the list, because it is the one part of
+ * the by-year view that can be wrong in a way a screenshot does not show: a year
+ * silently dropped, two groups swapped, or an undated title sorted as year zero.
+ *
+ * The key is the year as an `Int`, not the label string: `"1000"` sorts above
+ * `"999"` as text, and a career list that puts a 1979 series above a 2010 one is
+ * the exact thing the grouping exists to prevent.
+ */
+internal fun appearancesByYear(appearances: List<ProfileAppearance>): List<AppearanceYear> {
+    val dated = LinkedHashMap<Int, MutableList<ProfileAppearance>>()
+    val undated = mutableListOf<ProfileAppearance>()
+
+    appearances.forEach { appearance ->
+        val year = appearance.startDate?.year
+        if (year == null) {
+            undated += appearance
+        } else {
+            dated.getOrPut(year) { mutableListOf() } += appearance
+        }
+    }
+
+    val years = dated.entries
+        .sortedByDescending { it.key }
+        .map { (year, titles) -> AppearanceYear(label = year.toString(), appearances = titles) }
+
+    return if (undated.isEmpty()) {
+        years
+    } else {
+        years + AppearanceYear(label = UNKNOWN_YEAR_LABEL, appearances = undated)
+    }
+}
+
+/** One year's group in [appearancesByYear]. */
+internal data class AppearanceYear(
+    val label: String,
+    val appearances: List<ProfileAppearance>
+)
+
+/** What a title AniList has not dated is filed under. */
+internal const val UNKNOWN_YEAR_LABEL = "Year unknown"
+
+/**
  * The characters this person voiced, as a row of covers.
  *
  * Only a staff page has one, and only when the connection answered - the caller
@@ -251,3 +420,13 @@ private fun VoicedCharacterCard(
 
 private val APPEARANCE_CARD_WIDTH = 112.dp
 private val APPEARANCE_POSTER_HEIGHT = 158.dp
+
+/**
+ * The by-year row's poster.
+ *
+ * Smaller than the horizontal card's: a vertical list has no width to spend, and
+ * the year heading above it is what identifies the entry, so the poster is a
+ * reminder of which title this is rather than the thing being scanned.
+ */
+private val YEAR_ROW_POSTER_WIDTH = 54.dp
+private val YEAR_ROW_POSTER_HEIGHT = 76.dp

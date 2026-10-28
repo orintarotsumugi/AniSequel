@@ -1,9 +1,13 @@
 package com.anisequel.ui.components.update
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material3.AlertDialog
@@ -13,11 +17,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.update.formatBytes
 import com.anisequel.data.update.formatRate
+import com.anisequel.data.update.parseReleaseNotes
+import com.anisequel.ui.components.ReleaseNotes
 
 /**
  * The startup prompt.
@@ -85,6 +93,46 @@ fun UpdatePromptHost(controller: UpdateController) {
                     )
                 }
 
+                // The real release notes, not a link to them.
+                //
+                // This used to skip the manifest's `notes` and offer the release
+                // page instead, because `notes` once held the GitHub release body -
+                // "## AniSequel / Find the anime sequels you finished..." - which
+                // was identical in every release and said nothing about what had
+                // changed. The workflow now writes that field from
+                // `assets/changelog.json`, the same file Settings > What's new
+                // renders, so the one moment somebody decides whether to update
+                // shows the same sentences as the page they would read afterwards.
+                //
+                // A manifest that predates that change (or was truncated to
+                // nothing) parses to no entries, and the link below is still the
+                // honest fallback for it.
+                val notes = remember(manifest.notes) { parseReleaseNotes(manifest.notes) }
+                if (notes.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "What's new",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    // Bounded and scrollable: a dialog cannot grow, and a release
+                    // with six entries would push the buttons off a phone if it
+                    // were drawn at its natural height. The workflow's own cap is
+                    // only a size sanity bound (6000 bytes) - it is not what
+                    // decides this height.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 240.dp)
+                            .verticalScroll(rememberScrollState())
+                            .testTag("update_prompt_notes")
+                    ) {
+                        ReleaseNotes(notes = notes)
+                    }
+                }
+
                 if (state is UpdateUiState.Downloading) {
                     Spacer(modifier = Modifier.height(12.dp))
                     DownloadProgress(state = state)
@@ -104,16 +152,12 @@ fun UpdatePromptHost(controller: UpdateController) {
                     )
                 }
 
-                // Not the manifest's `notes`: that field is a build number and
-                // a commit hash, which tells somebody deciding whether to update
-                // nothing. The release page the workflow writes proper notes to
-                // is one tap away, so offer the link instead of the log.
                 manifest.releaseUrl?.let { releaseUrl ->
                     Spacer(modifier = Modifier.height(4.dp))
                     TextButton(
                         onClick = { controller.installation.openReleasePage(releaseUrl) },
-                        modifier = Modifier.testTag("update_prompt_notes")
-                    ) { Text("What's new") }
+                        modifier = Modifier.testTag("update_prompt_release_page")
+                    ) { Text("Open the release page") }
                 }
             }
         },

@@ -214,7 +214,14 @@ fun ProfileDestination(
                 RepositoryEntryEditor(repository = repository, viewerId = it)
             }
         },
-        onOpenTierList = { navController.navigateSingle(AppRoutes.TIER_LIST) },
+        // The tier list is one of the bar's pages now, so the trophy takes the
+        // same hop the bar's tier tab takes: `popUpTo` Home with the state saved,
+        // rather than a push. A push left Back pointing at this profile while the
+        // bar's own tab left it pointing at Home - the same page, two behaviours,
+        // decided by which door the reader used.
+        onOpenTierList = {
+            navController.navigateToMainTab(MainTab.TIERS, signedIn = !isDemo)
+        },
         // The reader is on a title that credits a studio; the studio page is a place
         // like any other, so it is pushed with the same single-top rule as every
         // other hop in the app.
