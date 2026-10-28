@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -355,9 +354,12 @@ private fun RefreshErrorBanner(message: String, onRetry: () -> Unit) {
 @Composable
 private fun CommentEntryBar(canPost: Boolean, onClick: () -> Unit) {
     Column(
+        // No navigation-bar padding: the sheet's fixed-height column already pads
+        // for `ime union navigationBars` once. A second copy here lifted the bar a
+        // nav bar's height off the edge, and a nav bar above the keyboard when the
+        // editor was open.
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         // The two states are separate composables rather than an early return in
@@ -557,7 +559,14 @@ private fun CommentManageButton(onClick: () -> Unit) {
             .size(48.dp)
             .clip(CircleShape)
             .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                // The spring is the feedback. A ripple inside a 48dp circle that is
+                // already scaling reads as a second, competing animation - the same
+                // call the format bar and the reply control make.
+                indication = null,
+                onClick = onClick
+            )
             .testTag("activity_reply_manage_button"),
         contentAlignment = Alignment.Center
     ) {

@@ -177,10 +177,18 @@ fun RenderCheckList(checklist: MarkdownNode.CheckListBlock) {
 @Composable
 fun RenderImage(image: MarkdownNode.ImageBlock) {
     val context = LocalContext.current
+    // One source for the spring and the click, not two pointer handlers. Without it
+    // `bouncyPress` installs its fallback loop on the same element as `clickable`,
+    // and the two compete for the tap - the failure `SpoilerChip` documents, which
+    // made that control stop responding. A comment can carry an image, so this is on
+    // the thread's tap path, not only on a bio's.
+    val interactionSource = remember { MutableInteractionSource() }
     val clickableModifier = if (image.targetUrl != null) {
         Modifier
-            .bouncyPress()
-            .clickable { openExternalUrlOrCopy(context, image.targetUrl) }
+            .bouncyPress(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource) {
+                openExternalUrlOrCopy(context, image.targetUrl)
+            }
     } else {
         Modifier
     }
@@ -234,14 +242,18 @@ private fun imageWidthModifier(width: String?): Modifier {
 @Composable
 fun RenderVideo(video: MarkdownNode.VideoBlock) {
     val context = LocalContext.current
+    // One press source for the spring and the click; see [RenderImage].
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
-            .bouncyPress()
-            .clickable { openExternalUrlOrCopy(context, video.url) }
+            .bouncyPress(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource) {
+                openExternalUrlOrCopy(context, video.url)
+            }
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -477,6 +489,8 @@ fun RenderAniListPreview(
     // the whole point of fetching the cover in the first place is that AniList
     // told us what this media is actually called.
     val title = cover?.title?.takeIf { it.isNotBlank() } ?: preview.title
+    // One press source for the spring and the click; see [RenderImage].
+    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         // `small` (14dp), not `medium` (20dp): this card is mostly a 56dp poster
@@ -488,8 +502,10 @@ fun RenderAniListPreview(
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
-            .bouncyPress()
-            .clickable { openExternalUrlOrCopy(context, preview.url) }
+            .bouncyPress(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource) {
+                openExternalUrlOrCopy(context, preview.url)
+            }
     ) {
         Row(
             modifier = Modifier.padding(10.dp),

@@ -1,9 +1,13 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -53,6 +58,24 @@ import com.anisequel.ui.viewmodel.CommentThreadStore
  * list takes what is left after the header and the bar, and cannot push the
  * composer off-screen. `fillMaxHeight` states that height explicitly rather than
  * relying on the sheet's wrap-content measurement to decide it.
+ *
+ * ## The sheet owns its insets, not just its height
+ *
+ * `contentWindowInsets` is zeroed and this composable pads for the keyboard and
+ * the navigation bar itself, once. Material's default is to apply the system
+ * bars *inside* the sheet's measured surface, which means the sheet's own height
+ * changes as the keyboard animates in - the anchored draggable re-measures
+ * against a moving `Expanded` anchor on every frame. The composer opens with the
+ * keyboard, so that is exactly when the sheet collapsed and jumped under the
+ * reader. With the insets moved inside this fixed-height column, the sheet's
+ * outline stays still and only its contents make room for the keyboard.
+ *
+ * It is one padding of `ime union navigationBars`, not `imePadding` followed by
+ * `navigationBarsPadding`: the IME inset on gesture navigation already covers the
+ * nav bar's height, so adding both left a nav bar's worth of empty surface
+ * between the composer and the keyboard. Because the padding is applied here, the
+ * entry bar and the composer's bottom bar do not pad for the navigation bar
+ * themselves - they did, and that was the second copy.
  *
  * ## What happens when a comment lands
  *
@@ -162,6 +185,10 @@ fun ActivityCommentsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // The sheet's own window-inset padding would resize the sheet as the
+        // keyboard moves; see the file KDoc. Zero it and let the content below
+        // own the IME and navigation-bar insets.
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -173,7 +200,10 @@ fun ActivityCommentsSheet(
                 // comments and the write bar is the common case, and 78% cut the
                 // last one off.
                 .fillMaxHeight(if (composing) 0.92f else 0.82f)
-                .imePadding()
+                // Above the list's own scroll, so leftover upward fling velocity
+                // is spent here instead of bouncing the already-expanded sheet.
+                .nestedScroll(rememberSheetFlingGuard(sheetState))
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                 .testTag("activity_comments_sheet")
         ) {
             if (composing) {

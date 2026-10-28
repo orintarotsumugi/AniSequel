@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -286,9 +285,10 @@ private fun ComposerBottomBar(
     onSubmit: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
+        // The sheet pads for `ime union navigationBars` once, above this pane.
+        // Padding here again put a nav bar's height between the controls and the
+        // keyboard while typing - a gap directly under the Post button.
+        modifier = Modifier.fillMaxWidth()
     ) {
         // The reason, not just a greyed button. A disabled control with no
         // sentence next to it is indistinguishable from one that is broken.

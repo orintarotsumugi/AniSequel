@@ -248,8 +248,6 @@ fun UserProfileScreen(
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
 
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
-    val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
-    val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     // Covers for the bio's AniList links. Arrive after the profile does, so the
     // bio renders immediately and posters fill in underneath the reader.
@@ -551,15 +549,46 @@ fun UserProfileScreen(
     // window of its own - so one drawn from inside a tab is torn down with it. Open a
     // thread, tap another tab, and the sheet went with it - draft included.
     //
-    // The likers sheet had been hoisted here for exactly that reason and carried a
-    // note saying so; the comments sheet was left behind, which left the two sheets on
-    // this screen with opposite lifetimes and nothing to explain why.
+    // They are also drawn by their own composable, which is where their state is
+    // collected. Both flows used to be read here, at the top of the screen, so every
+    // comment like and every liker that arrived invalidated the screen - the header,
+    // the tab bar and the whole activity feed behind the sheet - to redraw a sheet
+    // that was already on top of them. The subscription is still active for as long
+    // as this screen is, because the child is composed unconditionally.
+    ActivityEngagementSheets(
+        activityViewModel = activityViewModel,
+        viewerId = viewerId,
+        // A comment is a write, and a demo profile has no session to write with.
+        // Same gate as the like: see [UserActivityViewModel.postComment].
+        canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true
+    )
+}
+
+/**
+ * The activity feed's two engagement sheets, and only they.
+ *
+ * It exists to give the sheet states a composition boundary. `comments` and
+ * `likers` are read here rather than in [UserProfileScreen], so a reply like, a
+ * page of likers or a post settling recomposes this and not the profile's feed - a
+ * feed that is a paged `LazyColumn` of blurred covers and is the most expensive
+ * thing on the screen.
+ *
+ * The sheets themselves are siblings of the tab content, not children of a tab: a
+ * `ModalBottomSheet` is a window of its own, so one drawn from inside the tab
+ * `AnimatedContent` disposes is torn down with the tab - mid-sentence, draft
+ * included.
+ */
+@Composable
+private fun ActivityEngagementSheets(
+    activityViewModel: UserActivityViewModel,
+    viewerId: Int?,
+    canPost: Boolean
+) {
+    val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     commentsState?.let { comments ->
         ActivityCommentsSheet(
             state = comments,
-            // A comment is a write, and a demo profile has no session to write with.
-            // Same gate as the like: see [UserActivityViewModel.postComment].
-            canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true,
+            canPost = canPost,
             viewerId = viewerId,
             onDismiss = { activityViewModel.closeComments() },
             onRetry = { activityViewModel.openComments(comments.activityId) },
@@ -574,7 +603,7 @@ fun UserProfileScreen(
         )
     }
 
-    // The heart's long-press sheet, same reasoning and same place.
+    val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
     likersState?.let { likers ->
         ActivityLikersSheet(
             state = likers,
@@ -673,17 +702,30 @@ private fun ProfileTabsContent(
             targetState = selectedTab,
             transitionSpec = {
                 val forward = targetState > initialState
+                // The trailing `using null` drops the default `SizeTransform`. Every
+                // tab here is a `LazyColumn`, and the default transform springs the
+                // container's height between the outgoing and incoming page - which
+                // re-measures both lists on every frame of the switch, under a reader
+                // who may already be scrolling the one that is arriving. Settings and
+                // the detail sheet carry the same note: the height snaps, while the
+                // slide and the fade are draw-phase and stay.
+                //
+                // `FastSpatialOffset`, not `DefaultSpatialOffset`: the tab capsule is
+                // a control the reader can tap faster than a page settles, and the
+                // main bar's own pages use the fast token for exactly that reason. On
+                // the calm spring a second tap lands while the first slide is still
+                // travelling, and the two half-finished pages read as a stutter.
                 (
                     fadeIn(animationSpec = ExpressiveMotion.FastEffects) + slideInHorizontally(
-                        animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                        animationSpec = ExpressiveMotion.FastSpatialOffset,
                         initialOffsetX = { fullWidth -> if (forward) fullWidth / 8 else -fullWidth / 8 }
                     )
                 ) togetherWith (
                     fadeOut(animationSpec = ExpressiveMotion.FastEffects) + slideOutHorizontally(
-                        animationSpec = ExpressiveMotion.DefaultSpatialOffset,
+                        animationSpec = ExpressiveMotion.FastSpatialOffset,
                         targetOffsetX = { fullWidth -> if (forward) -fullWidth / 8 else fullWidth / 8 }
                     )
-                )
+                ) using null
             },
             label = "profile_tab_transition",
             modifier = Modifier.fillMaxSize()
