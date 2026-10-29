@@ -2,6 +2,7 @@ package com.anisequel.domain.usecase
 
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaListEntryItem
+import com.anisequel.data.model.countryName
 
 /**
  * The Stats tab's three charts that AniList's aggregate statistics do not cover.
@@ -47,7 +48,7 @@ class BuildListEntryInsightsUseCase {
 
         val countries = buckets(
             entries.mapNotNull { entry ->
-                entry.media.countryOfOrigin?.let { BucketTally(it.toCountryLabel(), 1, 0f) }
+                entry.media.countryOfOrigin?.let { BucketTally(countryName(it), 1, 0f) }
             },
             countBy = { it.label }
         )
@@ -203,20 +204,5 @@ class BuildListEntryInsightsUseCase {
 
         /** What [yearLabel] puts in front of a two-digit year. */
         const val YEAR_PREFIX = "'"
-
-        /**
-         * Country codes as the countries, not the codes.
-         *
-         * AniList's values are two-letter codes and "Jp" on a chart is a database
-         * leaking. A code this app does not recognise is passed through rather than
-         * hidden - a new country should be visible, just not invented.
-         */
-        fun String.toCountryLabel(): String = when (this) {
-            "JP" -> "Japan"
-            "KR" -> "South Korea"
-            "CN" -> "China"
-            "US" -> "United States"
-            else -> uppercase()
-        }
     }
 }

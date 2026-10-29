@@ -46,6 +46,7 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StudioCredit
 import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.compactCount
+import com.anisequel.data.model.countryLabel
 import com.anisequel.data.model.descriptionBody
 import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.hasProgressCard
@@ -395,9 +396,14 @@ fun InfoSpecsCard(
             media.volumes?.takeIf { it > 0 }?.let { add("Volumes" to it.toString()) }
         } else {
             add("Episodes" to (media.episodes?.takeIf { it > 0 }?.toString() ?: "TBA"))
-        }
-        media.duration?.takeIf { it > 0 }?.let { minutes ->
-            add("Duration" to if (minutes == 1) "1 min" else "${minutes}m")
+            // AniList's `duration` is the length of *one episode*, not of the
+            // series. The row was labelled "Duration", which read as the whole
+            // runtime - a twelve-episode show said "24m" as though it were
+            // twenty-four minutes long. Manga carry no episode length, so the
+            // row only exists on the anime side of this branch.
+            media.duration?.takeIf { it > 0 }?.let { minutes ->
+                add("Episode length" to if (minutes == 1) "1 min" else "${minutes}m")
+            }
         }
         // The values are printed as their own helpers spell them. This grid used
         // to uppercase some of them ("WINTER 2019", "FINISHED") and not others
@@ -405,6 +411,9 @@ fun InfoSpecsCard(
         // and `InfoFact` already uppercases the *label*, which is where the
         // distinction belongs.
         media.seasonLabel?.let { add("Season" to it) }
+        // The detail query has always carried `countryOfOrigin`; the grid never
+        // read it. A raw "JP" is a database leaking, so the model spells it.
+        media.countryLabel?.let { add("Country" to it) }
         // Score, status and format are deliberately absent: the hero's chips
         // already state all three, and printing them again eight lines down made
         // the page look like it had two sources that disagreed about the title.
@@ -426,9 +435,21 @@ fun InfoSpecsCard(
             add("Popularity" to compactCount(it))
         }
         media.releaseLabel.takeIf { it != "TBA" }?.let {
-            // "Started 2027-04-05" is a tense the date does not have. AniList
+            // "Started Apr 5, 2027" is a tense the date does not have. AniList
             // reports a start date for unreleased titles too.
             add((if (media.hasNotAired) "Starts" else "Started") to it)
+        }
+        // When it finished, which the card could not say at all: the start date
+        // was the only date in the response the grid read. The label follows the
+        // status rather than the date, because "Ends" on a finished show is as
+        // wrong as "Finished" on one still airing.
+        media.endDate?.takeIf { it.year != null }?.let { end ->
+            val label = when {
+                media.status.equals("FINISHED", ignoreCase = true) -> "Finished"
+                media.status.equals("RELEASING", ignoreCase = true) -> "Ends"
+                else -> "Ended"
+            }
+            add(label to end.formatted)
         }
     }
 
