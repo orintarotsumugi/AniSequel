@@ -467,6 +467,14 @@ fun ProfileLibraryTab(
      * that nothing established.
      */
     libraryError: String? = null,
+    /**
+     * Why the manga half could not be read, or null when it was.
+     *
+     * The on-demand twin of [libraryError]. It is shown only while the Manga
+     * filter is selected: the other scopes draw anime entries, and a failure to
+     * load a list the reader has not asked for is not their answer.
+     */
+    mangaError: String? = null,
     onLoadManga: () -> Unit,
     /**
      * The grid's own padding, computed by the caller.
@@ -569,6 +577,10 @@ fun ProfileLibraryTab(
     // is waiting on its own, separate request, and a spinner for the wrong one
     // would be a second, quieter version of the same lie as the zeroes.
     val awaitingAnime = isAnimeLoading && type != LibraryType.MANGA
+    // The failure that belongs to whichever half is on screen. An anime-only
+    // failure must not be reported over a manga grid, and vice versa - each
+    // half is fetched by a different request at a different time.
+    val scopedError = if (type == LibraryType.MANGA) mangaError else libraryError
     val visible = remember(scoped, type, filter, favouriteIds, query, sort, sortAscending) {
         sortLibrary(
             filterLibrary(scoped, type, filter, favouriteIds, query),
@@ -681,10 +693,10 @@ fun ProfileLibraryTab(
         // "Nothing in this list yet" and chips reading (0), which is the app
         // asserting the one thing it has the least evidence for. The counts below
         // are still zeroes for the same reason and are not faked here.
-        if (libraryError != null && !awaitingAnime) {
+        if (scopedError != null && !awaitingAnime) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_error") {
                 PendingDataNote(
-                    "Couldn't load this list - $libraryError. Your bio, " +
+                    "Couldn't load this list - $scopedError. Your bio, " +
                         "favourites and stats are still here."
                 )
             }
@@ -698,8 +710,8 @@ fun ProfileLibraryTab(
                     // A failed fetch is not an empty list. Saying "nothing here"
                     // when the truth is "we could not read it" is the false answer
                     // this whole path exists to stop.
-                    failedMessage = if (libraryError != null && !awaitingAnime) {
-                        "Couldn't load this list - $libraryError"
+                    failedMessage = if (scopedError != null && !awaitingAnime) {
+                        "Couldn't load this list - $scopedError"
                     } else {
                         null
                     },

@@ -45,6 +45,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.SavedCopyPill
+import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
@@ -120,6 +121,7 @@ fun LibraryScreen(
     // an answer that is already on the wire.
     val mangaLibrary by overviewViewModel.mangaLibrary.collectAsStateWithLifecycle()
     val isLoadingManga by overviewViewModel.isLoadingManga.collectAsStateWithLifecycle()
+    val mangaError by overviewViewModel.mangaError.collectAsStateWithLifecycle()
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
@@ -282,63 +284,70 @@ fun LibraryScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {
-            when (val state = uiState) {
-                is UserOverviewUiState.Loading -> LibraryLoadingView(message = state.message)
-                is UserOverviewUiState.Error -> {
-                    // Same calm view as the profile: this is a main-bar page, and a
-                    // list that failed to reload gets a sentence and a button rather
-                    // than the dashboard's heartbreak. See [ProfileErrorView].
-                    ProfileErrorView(
-                        message = state.message,
-                        kind = state.kind,
-                        canRetry = state.canRetry,
-                        isAuthError = state.isAuthError,
-                        onRetry = { overviewViewModel.load() },
-                        onSignInAgain = onSignInAgain
-                    )
-                }
-                is UserOverviewUiState.Success -> {
-                    // Favourites are their own connection in AniList rather than a
-                    // list status, so the Favourites filter tests membership of
-                    // these ids instead of matching a status string. Taken from the
-                    // same overview the profile's Home tab renders, so pinning and
-                    // favouriting can never disagree.
-                    val favouriteIds = remember(state.favouriteAnime, state.favouriteManga) {
-                        (state.favouriteAnime + state.favouriteManga)
-                            .mapNotNullTo(mutableSetOf()) { it.id }
+            StateCrossfade(
+                targetState = uiState,
+                modifier = Modifier.fillMaxSize(),
+                label = "library_state",
+            ) { state ->
+                when (state) {
+                    is UserOverviewUiState.Loading -> LibraryLoadingView(message = state.message)
+                    is UserOverviewUiState.Error -> {
+                        // Same calm view as the profile: this is a main-bar page, and a
+                        // list that failed to reload gets a sentence and a button rather
+                        // than the dashboard's heartbreak. See [ProfileErrorView].
+                        ProfileErrorView(
+                            message = state.message,
+                            kind = state.kind,
+                            canRetry = state.canRetry,
+                            isAuthError = state.isAuthError,
+                            onRetry = { overviewViewModel.load() },
+                            onSignInAgain = onSignInAgain
+                        )
                     }
-                    // The grid is the page. The saved-copy pill that used to sit
-                    // above it is now part of the bar's subtitle: a row here was
-                    // a layout change on the first frame and again when the live
-                    // list arrived, which is the one thing a scroll position
-                    // cannot absorb.
-                    ProfileLibraryTab(
-                        modifier = Modifier.fillMaxSize(),
-                        animeEntries = state.libraryAnime,
-                        mangaEntries = mangaLibrary,
-                        favouriteIds = favouriteIds,
-                        isLoadingManga = isLoadingManga,
-                        // The list is only on the critical path of this page
-                        // and the profile's Stats tab, so the flag is threaded
-                        // here rather than baked into `libraryAnime` being
-                        // empty - an empty list is a real answer for an
-                        // account that tracks nothing.
-                        isAnimeLoading = state.isLibraryLoading,
-                        // A list that could not be read is not an empty one.
-                        libraryError = state.libraryError,
-                        onLoadManga = { overviewViewModel.loadMangaLibrary() },
-                        // This page's whole bottom clearance, including the
-                        // system navigation inset; see [mainBarClearance].
-                        contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
-                        onOpenDetail = { selectedMedia = it },
-                        gridState = gridState,
-                        remembered = remembered,
-                        // The pull gesture lives on the grid, the progress bar
-                        // on the profile header the route above draws - one
-                        // refresh, two places it is visible from.
-                        isRefreshing = state.isRefreshing,
-                        onRefresh = { overviewViewModel.refresh() }
-                    )
+                    is UserOverviewUiState.Success -> {
+                        // Favourites are their own connection in AniList rather than a
+                        // list status, so the Favourites filter tests membership of
+                        // these ids instead of matching a status string. Taken from the
+                        // same overview the profile's Home tab renders, so pinning and
+                        // favouriting can never disagree.
+                        val favouriteIds = remember(state.favouriteAnime, state.favouriteManga) {
+                            (state.favouriteAnime + state.favouriteManga)
+                                .mapNotNullTo(mutableSetOf()) { it.id }
+                        }
+                        // The grid is the page. The saved-copy pill that used to sit
+                        // above it is now part of the bar's subtitle: a row here was
+                        // a layout change on the first frame and again when the live
+                        // list arrived, which is the one thing a scroll position
+                        // cannot absorb.
+                        ProfileLibraryTab(
+                            modifier = Modifier.fillMaxSize(),
+                            animeEntries = state.libraryAnime,
+                            mangaEntries = mangaLibrary,
+                            favouriteIds = favouriteIds,
+                            isLoadingManga = isLoadingManga,
+                            // The list is only on the critical path of this page
+                            // and the profile's Stats tab, so the flag is threaded
+                            // here rather than baked into `libraryAnime` being
+                            // empty - an empty list is a real answer for an
+                            // account that tracks nothing.
+                            isAnimeLoading = state.isLibraryLoading,
+                            // A list that could not be read is not an empty one.
+                            libraryError = state.libraryError,
+                            mangaError = mangaError,
+                            onLoadManga = { overviewViewModel.loadMangaLibrary() },
+                            // This page's whole bottom clearance, including the
+                            // system navigation inset; see [mainBarClearance].
+                            contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),
+                            onOpenDetail = { selectedMedia = it },
+                            gridState = gridState,
+                            remembered = remembered,
+                            // The pull gesture lives on the grid, the progress bar
+                            // on the profile header the route above draws - one
+                            // refresh, two places it is visible from.
+                            isRefreshing = state.isRefreshing,
+                            onRefresh = { overviewViewModel.refresh() }
+                        )
+                    }
                 }
             }
         }

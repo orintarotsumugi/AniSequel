@@ -40,9 +40,16 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
  * as the app being stuck. The mark is drawn in the same primary container the
  * sign-in hero uses, so the two screens feel like one app even though one is
  * Compose and the other is this placeholder.
+ *
+ * The same frame covers the stored-theme read in `MainActivity`, which used to
+ * return an empty `Surface` and leave the first frame blank. [message] is a
+ * parameter for that second wait; both are "the app is reading what it saved".
  */
 @Composable
-internal fun RestoringPlaceholder(modifier: Modifier = Modifier) {
+internal fun RestoringPlaceholder(
+    modifier: Modifier = Modifier,
+    message: String = "Checking for a saved session\u2026"
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -75,7 +82,7 @@ internal fun RestoringPlaceholder(modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Checking for a saved session\u2026",
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

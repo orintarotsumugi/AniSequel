@@ -63,6 +63,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.MediaDetailHost
@@ -442,50 +443,56 @@ fun UserProfileScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {
-            when (val state = uiState) {
-                is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
-                is UserOverviewUiState.Error -> {
-                    // The calm view, not the dashboard's failure theatre: this is a
-                    // tab of the app's main bar, not a screen the reader opened to
-                    // find out why nothing loaded. See [ProfileErrorView].
-                    ProfileErrorView(
-                        message = state.message,
-                        kind = state.kind,
-                        canRetry = state.canRetry,
-                        isAuthError = state.isAuthError,
-                        onRetry = { overviewViewModel.load() },
-                        onSignInAgain = onSignInAgain
-                    )
-                }
-                is UserOverviewUiState.Success -> {
-                    LaunchedEffect(state.userId) {
-                        if (state.userId > 0) {
-                            activityViewModel.updateUserId(state.userId)
-                            socialViewModel.updateUserId(state.userId)
-                        }
-                    }
-                    // The flag the tabs' list padding reads. Provided here rather
-                    // than threaded through, because only this route is drawn over
-                    // by the app's main bar; see [LocalMainBarOverProfile].
-                    CompositionLocalProvider(LocalMainBarOverProfile provides isOwnProfile) {
-                        ProfileTabsContent(
-                            state = state,
-                            selectedTab = selectedTab,
-                            onSelectTab = { selectedTab = it },
-                            activityState = activityState,
-                            activityViewModel = activityViewModel,
-                            socialState = socialState,
-                            socialViewModel = socialViewModel,
-                            mediaCovers = mediaCovers,
-                            onOpenUser = onOpenUser,
-                            onOpenDetail = { selectedMedia = it },
-                            onOpenStudio = onOpenStudio,
-                            // The pinned people rows open the same in-app profile
-                            // sheet the cast rows do; null falls back to the
-                            // AniList page.
-                            onOpenCharacter = profiles.onOpenCharacter,
-                            onOpenStaff = profiles.onOpenStaff
+            StateCrossfade(
+                targetState = uiState,
+                modifier = Modifier.fillMaxSize(),
+                label = "profile_state",
+            ) { state ->
+                when (state) {
+                    is UserOverviewUiState.Loading -> ProfileLoadingView(message = state.message)
+                    is UserOverviewUiState.Error -> {
+                        // The calm view, not the dashboard's failure theatre: this is a
+                        // tab of the app's main bar, not a screen the reader opened to
+                        // find out why nothing loaded. See [ProfileErrorView].
+                        ProfileErrorView(
+                            message = state.message,
+                            kind = state.kind,
+                            canRetry = state.canRetry,
+                            isAuthError = state.isAuthError,
+                            onRetry = { overviewViewModel.load() },
+                            onSignInAgain = onSignInAgain
                         )
+                    }
+                    is UserOverviewUiState.Success -> {
+                        LaunchedEffect(state.userId) {
+                            if (state.userId > 0) {
+                                activityViewModel.updateUserId(state.userId)
+                                socialViewModel.updateUserId(state.userId)
+                            }
+                        }
+                        // The flag the tabs' list padding reads. Provided here rather
+                        // than threaded through, because only this route is drawn over
+                        // by the app's main bar; see [LocalMainBarOverProfile].
+                        CompositionLocalProvider(LocalMainBarOverProfile provides isOwnProfile) {
+                            ProfileTabsContent(
+                                state = state,
+                                selectedTab = selectedTab,
+                                onSelectTab = { selectedTab = it },
+                                activityState = activityState,
+                                activityViewModel = activityViewModel,
+                                socialState = socialState,
+                                socialViewModel = socialViewModel,
+                                mediaCovers = mediaCovers,
+                                onOpenUser = onOpenUser,
+                                onOpenDetail = { selectedMedia = it },
+                                onOpenStudio = onOpenStudio,
+                                // The pinned people rows open the same in-app profile
+                                // sheet the cast rows do; null falls back to the
+                                // AniList page.
+                                onOpenCharacter = profiles.onOpenCharacter,
+                                onOpenStaff = profiles.onOpenStaff
+                            )
+                        }
                     }
                 }
             }
