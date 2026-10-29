@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +34,9 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.RelationKind
 import com.anisequel.data.model.SequelSortOption
 import com.anisequel.data.model.StatusFilter
+import com.anisequel.data.model.animeGenreOptions
+import com.anisequel.data.model.filterFormatOptions
+import com.anisequel.data.model.filterScoreOptions
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -57,6 +59,16 @@ fun FilterSortSheet(
     onToggleParentCompletedThisYear: (Boolean) -> Unit = {},
     onToggleCurrentlyWatching: (Boolean) -> Unit = {},
     onToggleInList: (Boolean) -> Unit = {},
+    onToggleGenre: (String) -> Unit = {},
+    onSelectMinScore: (Int?) -> Unit = {},
+    /**
+     * Puts every filter back to its default in place, without closing the
+     * sheet. The quick bar's clear button is behind the sheet while it is open,
+     * so the one action that undoes a stack of toggles used to require closing
+     * the sheet, finding the clear button, and reopening the sheet to see the
+     * result.
+     */
+    onResetFilters: () -> Unit = {},
     /**
      * The entries the user chose to stop being reminded about, and the two ways
      * back out. Empty until the ViewModel has split its candidates, which is
@@ -97,11 +109,24 @@ fun FilterSortSheet(
                         fontWeight = FontWeight.Bold
                     )
                 )
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.testTag("done_filter_button")
-                ) {
-                    Text("Done")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Only when there is something to reset: a Reset button on
+                    // a sheet that already matches the defaults is a control
+                    // promising to do nothing.
+                    if (filterCriteria.isNarrowing) {
+                        TextButton(
+                            onClick = onResetFilters,
+                            modifier = Modifier.testTag("reset_filters_in_sheet")
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.testTag("done_filter_button")
+                    ) {
+                        Text("Done")
+                    }
                 }
             }
 
@@ -121,24 +146,10 @@ fun FilterSortSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 SequelSortOption.entries.forEach { option ->
-                    val isSelected = filterCriteria.sortOption == option
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onSortSelected(option) },
-                        label = { Text(option.displayName) },
-                        leadingIcon = if (isSelected) {
-                            {
-                                Icon(
-                                    imageVector = AppVectorIcons.Done,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        } else null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    FilterOptionChip(
+                        label = option.displayName,
+                        selected = filterCriteria.sortOption == option,
+                        onClick = { onSortSelected(option) }
                     )
                 }
             }
@@ -161,20 +172,10 @@ fun FilterSortSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 StatusFilter.entries.forEach { status ->
-                    val isSelected = filterCriteria.statusFilter == status
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onStatusSelected(status) },
-                        label = { Text(status.displayName) },
-                        leadingIcon = if (isSelected) {
-                            {
-                                Icon(
-                                    imageVector = AppVectorIcons.Done,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        } else null
+                    FilterOptionChip(
+                        label = status.displayName,
+                        selected = filterCriteria.statusFilter == status,
+                        onClick = { onStatusSelected(status) }
                     )
                 }
             }
@@ -192,35 +193,91 @@ fun FilterSortSheet(
                 )
             )
             Spacer(modifier = Modifier.height(8.dp))
-            val formats = listOf(
-                    "All" to null,
-                    // Labelled the same way the quick filter bar labels it, so
-                    // the same choice does not read as two different ones.
-                    "TV series" to "TV",
-                    "Movies" to "MOVIE",
-                    "OVA" to "OVA",
-                    "ONA" to "ONA",
-                    "Special" to "SPECIAL"
-                )
+            // The shared list, so the quick filter bar can name every choice
+            // this row offers - see [filterFormatOptions].
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                formats.forEach { (label, formatKey) ->
-                    val isSelected = filterCriteria.selectedFormat == formatKey
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onFormatSelected(formatKey) },
-                        label = { Text(label) },
-                        leadingIcon = if (isSelected) {
-                            {
-                                Icon(
-                                    imageVector = AppVectorIcons.Done,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        } else null
+                filterFormatOptions.forEach { (formatKey, label) ->
+                    FilterOptionChip(
+                        label = label,
+                        selected = filterCriteria.selectedFormat == formatKey,
+                        onClick = { onFormatSelected(formatKey) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Genre, multi-select. OR semantics, stated in the subtitle
+            // because "Action + Comedy" is ambiguous otherwise.
+            Text(
+                text = "Genre",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Show sequels in any of the genres you pick.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                animeGenreOptions.forEach { genre ->
+                    FilterOptionChip(
+                        label = genre,
+                        selected = filterCriteria.selectedGenres.any {
+                            it.equals(genre, ignoreCase = true)
+                        },
+                        onClick = { onToggleGenre(genre) },
+                        testTag = "genre_chip_${genre.lowercase().replace(' ', '_')}"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Minimum rating. A lower bound rather than a band, and unrated
+            // titles drop out - both stated, because "80+" could plausibly
+            // mean either "80 to 100" or "at least 80", and a reader whose
+            // one unrated favourite vanished deserves to know why.
+            Text(
+                text = "Minimum rating",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Only sequels AniList rates at least this high. Unrated titles drop out while a minimum is set.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                filterScoreOptions.forEach { (score, label) ->
+                    FilterOptionChip(
+                        label = label,
+                        selected = filterCriteria.minScore == score,
+                        onClick = { onSelectMinScore(score) },
+                        testTag = "score_chip_${score ?: "any"}"
                     )
                 }
             }
@@ -406,21 +463,11 @@ fun FilterSortSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 RelationKind.entries.forEach { relation ->
-                    val selected = relation in filterCriteria.includedRelations
-                    FilterChip(
-                        selected = selected,
+                    FilterOptionChip(
+                        label = relation.displayName,
+                        selected = relation in filterCriteria.includedRelations,
                         onClick = { onToggleRelation(relation) },
-                        label = { Text(relation.displayName) },
-                        leadingIcon = if (selected) {
-                            {
-                                Icon(
-                                    imageVector = AppVectorIcons.Done,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        } else null,
-                        modifier = Modifier.testTag("relation_chip_${relation.name}")
+                        testTag = "relation_chip_${relation.name}"
                     )
                 }
             }
@@ -440,4 +487,37 @@ fun FilterSortSheet(
             )
         }
     }
+}
+
+/**
+ * One selectable choice in the sheet.
+ *
+ * Built once because the sheet draws six sections of them, and six copies of
+ * the same `leadingIcon` lambda is how one section ends up without a checkmark.
+ * The check appears only when selected - the M3 filter-chip convention - and
+ * the chip animates its own container itself, so no extra motion is layered on
+ * top.
+ */
+@Composable
+private fun FilterOptionChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    testTag: String? = null
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = AppVectorIcons.Done,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else null,
+        modifier = if (testTag == null) Modifier else Modifier.testTag(testTag)
+    )
 }

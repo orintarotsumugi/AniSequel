@@ -20,7 +20,11 @@ import com.anisequel.ui.theme.AniSequelTheme
 
 @Composable
 fun EmptyStateView(
-    isSearching: Boolean,
+    // Named for what actually decides the copy. It was `isSearching`, while
+    // its only caller passed `filterCriteria.isNarrowing` - so a list emptied
+    // by the sheet's switches told the reader to try a different search term
+    // they had never typed.
+    filtersActive: Boolean,
     onResetFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -35,14 +39,14 @@ fun EmptyStateView(
         // moment the screen has nothing to show, so it is the one place a
         // non-circular silhouette earns its keep.
         ExpressiveEmptyOrb(
-            icon = if (isSearching) AppVectorIcons.Search else AppVectorIcons.AnimeSparkle,
+            icon = if (filtersActive) AppVectorIcons.Search else AppVectorIcons.AnimeSparkle,
             modifier = Modifier,
-            containerColor = if (isSearching) {
+            containerColor = if (filtersActive) {
                 MaterialTheme.colorScheme.surfaceContainerHigh
             } else {
                 AniSequelTheme.statusColors.successContainer
             },
-            iconTint = if (isSearching) {
+            iconTint = if (filtersActive) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             } else {
                 AniSequelTheme.statusColors.success
@@ -52,7 +56,7 @@ fun EmptyStateView(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (isSearching) "Nothing matches those filters" else "All caught up!",
+            text = if (filtersActive) "Nothing matches those filters" else "All caught up!",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
@@ -61,8 +65,8 @@ fun EmptyStateView(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = if (isSearching) {
-                "Try a different search term, or reset the filters to see everything you are missing."
+            text = if (filtersActive) {
+                "Adjust the search or the filters, or reset them to see everything you are missing."
             } else {
                 "None of your completed anime has a missed sequel. You are completely caught up across all franchises!"
             },
@@ -71,7 +75,7 @@ fun EmptyStateView(
             textAlign = TextAlign.Center
         )
 
-        if (isSearching) {
+        if (filtersActive) {
             Spacer(modifier = Modifier.height(20.dp))
             ExpressivePrimaryButton(
                 text = "Reset filters",

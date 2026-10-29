@@ -959,6 +959,21 @@ class DashboardViewModel(
         requestRecompute()
     }
 
+    /** Adds or removes one genre from the OR-ed genre selection. */
+    fun toggleGenre(genre: String) {
+        val current = _filterCriteria.value.selectedGenres
+        _filterCriteria.value = _filterCriteria.value.copy(
+            selectedGenres = if (genre in current) current - genre else current + genre
+        )
+        requestRecompute()
+    }
+
+    /** Sets the minimum average score, or null for no minimum. */
+    fun selectMinScore(score: Int?) {
+        _filterCriteria.value = _filterCriteria.value.copy(minScore = score)
+        requestRecompute()
+    }
+
     /**
      * Narrows the list to sequels releasing in the current calendar year.
      *

@@ -455,7 +455,7 @@ fun DashboardScreen(
                                             // with no filter active has nothing to
                                             // reset, and an empty list with one
                                             // active has a way out.
-                                            isSearching = filterCriteria.isNarrowing,
+                                            filtersActive = filterCriteria.isNarrowing,
                                             onResetFilters = { dashboardViewModel.resetFilters() }
                                         )
                                     }
@@ -513,6 +513,9 @@ fun DashboardScreen(
             onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
             onToggleCurrentlyWatching = { dashboardViewModel.toggleIncludeCurrentlyWatching(it) },
             onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
+            onToggleGenre = { dashboardViewModel.toggleGenre(it) },
+            onSelectMinScore = { dashboardViewModel.selectMinScore(it) },
+            onResetFilters = { dashboardViewModel.resetFilters() },
             hiddenSequels = hiddenSequels,
             onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
             onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },
