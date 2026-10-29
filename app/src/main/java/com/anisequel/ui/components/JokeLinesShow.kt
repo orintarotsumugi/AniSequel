@@ -227,7 +227,22 @@ internal object JokeLinesShow {
         "The episode's best scene is a conversation in a doorway.",
         "The opening spoils the twist in a cut nobody catches.",
         "The subtitle timing is an art form and it is running late.",
-        "The adaptation is faithful and that is the problem."
+        "The adaptation is faithful and that is the problem.",
+        "The storyboard is the show you did not see.",
+        "A cut on the beat is a cheap trick that never gets old.",
+        "The background artist built a street the plot will never visit.",
+        "The colour script tells you the ending before the plot does.",
+        "The composer wrote the theme before the first frame existed.",
+        "The animation director fixed one expression and rescued the whole episode.",
+        "The in-between artist is credited last and carries the motion.",
+        "The sound designer made silence do the work.",
+        "The key animator's cut is the one you rewind.",
+        "The episode director spent the budget on a hallway.",
+        "The lighting says dusk and the schedule says Tuesday.",
+        "The voice actor found the line in a take nobody planned.",
+        "The adaptation kept the panel and lost the pacing.",
+        "The opening is a music video with a show attached.",
+        "The finale's best shot is a still frame and a held breath."
     )
 
     /** Cancelled sequels, hiatuses and fictional deaths. */
@@ -357,6 +372,21 @@ internal object JokeLinesShow {
         "The final arc was rushed because the manga was not finished.",
         "The character's name lives on in a mobile game nobody plays.",
         "The last chapter is a summary written by the editor.",
-        "The show is remembered for the opening and nothing else."
+        "The show is remembered for the opening and nothing else.",
+        "The sequel was announced, funded, and quietly removed from the schedule.",
+        "The studio's last project is a trailer for a show that never aired.",
+        "The rights are held by a company that does not make anime.",
+        "The final episode is a clip show because the budget ran out.",
+        "The author's estate approved a continuation nobody asked for.",
+        "The show was popular enough to cancel and not enough to save.",
+        "The movie adaptation cut the ending and called it a new timeline.",
+        "The voice cast was replaced for the second season and nobody said why.",
+        "The final volume shipped with a placeholder chapter.",
+        "The streaming service removed the show and kept the thumbnail.",
+        "The anniversary project is a cafe menu.",
+        "The director's name is misspelled in the credits and the obituary.",
+        "The season finale leaked early and the studio thanked the leaker.",
+        "The manga resumed after a hiatus and forgot its own timeline.",
+        "The merchandise outlived the animation studio by a decade."
     )
 }

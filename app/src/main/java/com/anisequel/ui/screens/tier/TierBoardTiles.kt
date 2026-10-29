@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierRowBox
@@ -53,6 +56,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import kotlin.math.roundToInt
 
 /**
  * The things the board draws: a tier's row, a poster, the drop caret and the
@@ -298,6 +302,28 @@ internal fun TierPosterTile(
     val shape = remember(width) {
         RoundedCornerShape(tierTileCornerRadius(width).dp)
     }
+    // The decode size, not the drawn size. See [tierCoverDecodePx]: the tile grows
+    // every frame of a pinch, and a request that followed it frame for frame was
+    // cancelled before it could finish, leaving the previous - smaller - bitmap
+    // stretched over the new tile for the whole gesture.
+    //
+    // Remembered on the *pixel* pair rather than on `width`: the ladder is what
+    // makes the request stable, and keying this on the continuous dp value would
+    // rebuild an equal request every frame for no change in what is asked for.
+    val density = LocalDensity.current.density
+    val decodeWidth = remember(width, density) { tierCoverDecodePx((width * density).roundToInt()) }
+    val decodeHeight = remember(posterHeight, density) {
+        tierCoverDecodePx((posterHeight * density).roundToInt())
+    }
+    val context = LocalContext.current
+    val coverRequest = remember(candidate?.coverUrl, context, decodeWidth, decodeHeight) {
+        candidate?.coverUrl?.let { url ->
+            ImageRequest.Builder(context)
+                .data(url)
+                .size(decodeWidth, decodeHeight)
+                .build()
+        }
+    }
     val titleOnCover = showTitle && titlePosition == TierTitlePosition.ON_COVER
     val titleUnderCover = showTitle && titlePosition == TierTitlePosition.UNDER_COVER
     // The floor is 25dp a tile, and text does not scale with the board. A
@@ -335,7 +361,7 @@ internal fun TierPosterTile(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             AsyncImage(
-                model = candidate?.coverUrl,
+                model = coverRequest,
                 contentDescription = candidate?.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,

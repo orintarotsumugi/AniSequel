@@ -168,6 +168,15 @@ private const val HOLD_TO_SWIPE_MILLIS = 220L
  * while it is running the items' clicks are disabled so releasing the finger after
  * a swipe cannot also fire the tap that was under it.
  *
+ * The drag moves a **preview**, and the page changes once, when the finger lifts.
+ * It used to call the route change on every step, which meant a swipe across three
+ * tabs popped and pushed the graph three times: three page transitions played under
+ * one finger, and the two tabs that were only passed through still composed and
+ * started loading their data before being replaced. The bar is the thing the finger
+ * is touching, so the bar is what follows it; the page underneath waits for the
+ * destination to be chosen. Releasing on the tab the swipe started from is not a
+ * route change at all.
+ *
  * The hold is hand-rolled rather than `detectDragGesturesAfterLongPress`, which
  * waits out the platform's `longPressTimeoutMillis` - 500ms on every device this
  * app supports. On a bar 52dp tall that is long enough for the finger to feel like
@@ -182,10 +191,10 @@ private const val HOLD_TO_SWIPE_MILLIS = 220L
  * The travel is measured in pixels against one destination's share of the measured
  * bar, not against a fixed dp: the selected pill is wider than the others, so a
  * fixed threshold would move two tabs in one gesture on a phone and feel stuck on a
- * tablet. The accumulator lives inside the pointer handler and the current index is
- * mirrored there too, because the selection is a route change: reading the
- * parameter would spend a frame per step and two steps inside one frame would both
- * compute the same "next" tab.
+ * tablet. The accumulator and the previewed index both live inside the pointer
+ * handler. The preview is written back so the pill can follow the finger, but the
+ * handler must not read it back: two steps inside one frame would then both start
+ * from the same index and move one destination instead of two.
  */
 @Composable
 fun ExpressiveNavigationBar(
@@ -199,7 +208,15 @@ fun ExpressiveNavigationBar(
     // The bar's measured width, which the swipe's step is derived from. Zero until
     // the first layout; a gesture cannot start before then anyway.
     var barWidth by remember { mutableStateOf(0) }
-    var holding by remember { mutableStateOf(false) }
+
+    // The destination the held finger is over, or null when no gesture is running.
+    // Null rather than a sentinel index so "holding" and "the previewed tab" cannot
+    // disagree: the bar is holding exactly when there is a preview.
+    var previewIndex by remember { mutableStateOf<Int?>(null) }
+    val holding = previewIndex != null
+    // While the finger is down the bar shows where it would go; the page underneath
+    // does not move until it lifts. See the hold-and-swipe note above.
+    val shownIndex = previewIndex ?: selectedIndex
 
     // Read inside the pointer handler rather than captured: the handler is keyed on
     // the destination count, and a key change mid-gesture would cancel it. These
@@ -257,7 +274,7 @@ fun ExpressiveNavigationBar(
                             lastIndex = lastIndex,
                             stepPx = stepPx,
                             haptic = haptic,
-                            onHolding = { holding = it },
+                            onPreview = { previewIndex = it },
                             onSwitch = selectTab
                         )
                     }
@@ -266,7 +283,7 @@ fun ExpressiveNavigationBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             destinations.forEachIndexed { index, destination ->
-                val selected = index == selectedIndex
+                val selected = index == shownIndex
                 NavigationItem(
                     destination = destination,
                     selected = selected,
@@ -315,22 +332,30 @@ fun ExpressiveNavigationBar(
  * The two cancels are the reason this is not `detectDragGesturesAfterLongPress`:
  * the finger lifting is a tap and travel past touch slop is a drag that never
  * asked to swipe, and both have to abandon the hold *before* the timer expires.
+ *
+ * [onSwitch] is called once, on release, with the previewed destination - not once
+ * per step. A cancellation (the tier tab being switched off while the bar is held,
+ * or the screen leaving) commits nothing and only clears the preview, so an
+ * interrupted gesture cannot navigate somewhere the finger never settled on.
  */
 private suspend fun AwaitPointerEventScope.holdThenSwipe(
     startIndex: () -> Int,
     lastIndex: Int,
     stepPx: Float,
     haptic: HapticFeedback,
-    onHolding: (Boolean) -> Unit,
+    onPreview: (Int?) -> Unit,
     onSwitch: (Int) -> Unit
 ) {
     val down = awaitFirstDown(requireUnconsumed = false)
     if (!awaitHold(down)) return
 
-    onHolding(true)
+    // The preview opens on the tab the hold began on, which is the route's own
+    // selection: a hold with no movement must not change anything.
+    onPreview(startIndex())
     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    var settled: Int? = null
     try {
-        swipeSelection(
+        settled = swipeSelection(
             down = down,
             // Read now, not before the hold: the bar can be switched by a tap
             // while the timer runs, and the swipe has to start from where the
@@ -339,13 +364,19 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
             lastIndex = lastIndex,
             stepPx = stepPx,
             haptic = haptic,
-            onSwitch = onSwitch
+            onPreview = onPreview
         )
     } finally {
         // `finally`, not after the call: a key change (the tier tab being switched
-        // off while the bar is held) cancels this coroutine, and a `holding` left
-        // true would leave every item disabled.
-        onHolding(false)
+        // off while the bar is held) cancels this coroutine, and a preview left
+        // open would leave every item disabled and the pill on a page that is not
+        // showing.
+        //
+        // The commit happens *before* the preview closes so the bar never flashes
+        // the tab the swipe started from between the two writes.
+        val destination = settled
+        if (destination != null) onSwitch(destination)
+        onPreview(null)
     }
 }
 
@@ -375,7 +406,11 @@ private suspend fun AwaitPointerEventScope.awaitHold(down: PointerInputChange): 
 }
 
 /**
- * Drags the selection while the held finger moves, one destination per [stepPx].
+ * Drags the previewed destination while the held finger moves, one per [stepPx].
+ *
+ * Returns the destination under the finger when it lifts, or `null` when the
+ * pointer disappeared without a release - which is a cancelled gesture, and one
+ * that must not navigate.
  *
  * The release is consumed as well as the moves: the item under the finger was
  * pressed when the hold began, and a release it is allowed to see would fire the
@@ -387,8 +422,8 @@ private suspend fun AwaitPointerEventScope.swipeSelection(
     lastIndex: Int,
     stepPx: Float,
     haptic: HapticFeedback,
-    onSwitch: (Int) -> Unit
-) {
+    onPreview: (Int) -> Unit
+): Int? {
     var index = startIndex()
     var travel = 0f
 
@@ -396,13 +431,13 @@ private suspend fun AwaitPointerEventScope.swipeSelection(
         if (next == index) return
         index = next
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        onSwitch(next)
+        onPreview(next)
     }
 
     while (true) {
-        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return null
         change.consume()
-        if (!change.pressed) return
+        if (!change.pressed) return index
 
         travel += change.positionChange().x
 

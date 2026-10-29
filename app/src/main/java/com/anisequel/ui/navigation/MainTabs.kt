@@ -240,6 +240,32 @@ internal fun MainBar(
 }
 
 /**
+ * The route a tab opens, and the page it keeps underneath itself.
+ *
+ * Split out of [navigateToMainTab] so the pair is a pure fact a JVM test can
+ * pin: the bar's whole Back behaviour rests on the second value, and the demo's
+ * used to be missing.
+ */
+internal data class MainTabTarget(val route: String, val homeRoute: String)
+
+/**
+ * Where [tab] goes, given whether there is a session.
+ *
+ * Home is two routes because the demo has no session: which one is "Home" is
+ * decided from [signedIn] rather than from the route the reader is on.
+ */
+internal fun mainTabTarget(tab: MainTab, signedIn: Boolean): MainTabTarget {
+    val homeRoute = if (signedIn) AppRoutes.DASHBOARD else AppRoutes.DASHBOARD_DEMO
+    val route = when (tab) {
+        MainTab.HOME -> homeRoute
+        MainTab.LIBRARY -> AppRoutes.LIBRARY
+        MainTab.TIERS -> AppRoutes.TIER_LIST
+        MainTab.PROFILE -> ProfileRoutes.OWN_DEFAULT
+    }
+    return MainTabTarget(route = route, homeRoute = homeRoute)
+}
+
+/**
  * A tap on the main bar: switch to [tab] instead of pushing it.
  *
  * The bar's pages are alternatives, not a stack: the previous page is dropped
@@ -256,30 +282,22 @@ internal fun MainBar(
  * Library while Back from one opened in the bar would have gone to Home: the same
  * page with two different Back behaviours depending on how the reader arrived.
  *
- * Home is two routes because the demo has no session: which one is "Home" is
- * decided here from [signedIn] rather than from the route the reader is on.
+ * ## The demo is not a second navigation model
  *
- * The demo profile keeps the rule its avatar already had: a demo profile is not
- * on AniList, so it replaces the demo dashboard instead of stacking on it.
+ * Home is the demo dashboard and every other page is reached from it exactly as
+ * it is when signed in. The profile used to be special-cased to *replace* the
+ * demo dashboard, on the theory that a demo profile is not on AniList and should
+ * not stack on it. What that actually did was pop Home out of the back stack:
+ * the profile's own back arrow then had nothing to return to, and a Home/Profile
+ * round trip pushed a duplicate profile each time, so Back walked through copies
+ * of the same page. A tab is a tab in both sessions.
  */
 internal fun NavHostController.navigateToMainTab(tab: MainTab, signedIn: Boolean) {
     if (mainTabForRoute(currentDestination?.route) == tab) return
 
-    val homeRoute = if (signedIn) AppRoutes.DASHBOARD else AppRoutes.DASHBOARD_DEMO
-    val route = when (tab) {
-        MainTab.HOME -> homeRoute
-        MainTab.LIBRARY -> AppRoutes.LIBRARY
-        MainTab.TIERS -> AppRoutes.TIER_LIST
-        MainTab.PROFILE -> ProfileRoutes.OWN_DEFAULT
-    }
-
-    if (tab == MainTab.PROFILE && !signedIn) {
-        navigate(route) { popUpTo(AppRoutes.DASHBOARD_DEMO) { inclusive = true } }
-        return
-    }
-
-    navigate(route) {
-        popUpTo(homeRoute) { saveState = true }
+    val target = mainTabTarget(tab, signedIn)
+    navigate(target.route) {
+        popUpTo(target.homeRoute) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }

@@ -168,7 +168,22 @@ internal object JokeLinesReader {
         "The rewatch hurts in the exact place it did the first time.",
         "You save the sad episode for when you have the time to feel it.",
         "Some shows are a place you visit, not a story you finish.",
-        "You keep the soundtrack for the walk home."
+        "You keep the soundtrack for the walk home.",
+        "The credits rolled and you sat there reviewing your own life choices.",
+        "You paused the finale to prepare. It was the right call.",
+        "The quiet episode with no plot is the one you remember.",
+        "You can name the episode that changed your mind about the show.",
+        "A character said one line and you have been thinking about it for a year.",
+        "The show ended and your group chat kept going for a week.",
+        "The ending theme is still in your rotation years later.",
+        "The sad episode is queued and you are negotiating with yourself.",
+        "Your comfort show has a fan wiki and a hole where the fandom was.",
+        "The opening still gives you a feeling you cannot name.",
+        "The side characters are the reason you kept watching.",
+        "There is a scene you rewind to prove it was that good.",
+        "You are not crying. The room is just emotionally humid.",
+        "The show is over and you are already planning the funeral rewatch.",
+        "The final scene ended and you did not reach for your phone."
     )
 
     /** Watchlists, one more episode and the sleep schedule. */
@@ -323,7 +338,22 @@ internal object JokeLinesReader {
         "You started a long runner and the long runner started you.",
         "Your watching section is the most optimistic part of the app.",
         "Every season adds four shows and removes your evenings.",
-        "You are one free weekend away from the whole backlog. Probably."
+        "You are one free weekend away from the whole backlog. Probably.",
+        "The backlog is a personality you maintain by accident.",
+        "Three new shows went straight to the list and straight to sleep.",
+        "The list is sorted by intention, not by time.",
+        "You will start it after the current one. You said that four shows ago.",
+        "One title has been on the list so long it feels like furniture.",
+        "Your plan-to-watch is a shrine to future you.",
+        "You opened the app to tidy the list and made it longer.",
+        "The sequel is waiting and you are not emotionally ready.",
+        "You have a list for the list you are not watching.",
+        "One episode left and it has been one episode left for a month.",
+        "The backlog does not expire. It just gets more expensive.",
+        "You reorganised your list instead of watching it.",
+        "The show you forgot you added is still there, judging.",
+        "You are one click from starting it and one click from not.",
+        "Your watchlist has a watchlist and no witnesses."
     )
 
     /** The app's own voice: Ani-chan, the pill, the tier list, the settings. */
@@ -453,6 +483,21 @@ internal object JokeLinesReader {
         "Ani-chan watched you swipe and said nothing.",
         "The settings page has a switch for this tab. It is on.",
         "You can turn the tier tab off and the trophy stays.",
-        "The app animates the tab change because a cut felt rude."
+        "The app animates the tab change because a cut felt rude.",
+        "This app has no ads and no plans to acquire any.",
+        "The loading spinner is doing its best and knows it.",
+        "Your data lives on your device and in your heart.",
+        "Ani-chan has never seen an anime and refuses to comment.",
+        "The app counts your episodes so you do not have to.",
+        "Turning the jokes off is allowed. Ani-chan is taking notes.",
+        "The settings screen is the app's quiet room.",
+        "This app was made by someone who also has a backlog.",
+        "The refresh button is a small act of hope.",
+        "Your session token is not a personality, but it tries.",
+        "The app has a dark theme because you asked nicely.",
+        "Ani-chan writes the release notes and takes no credit.",
+        "The update manifest is a promise with a version number.",
+        "This toast has a favourite button and a fragile ego.",
+        "The app is offline-friendly and socially anxious."
     )
 }

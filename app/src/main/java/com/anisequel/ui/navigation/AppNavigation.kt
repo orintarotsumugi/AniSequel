@@ -1,11 +1,6 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,7 +20,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,21 +33,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anisequel.data.changelog.ChangelogRepository
-import com.anisequel.domain.jokes.JokeMoment
-import com.anisequel.domain.jokes.JokePosition
-import com.anisequel.domain.jokes.JokeScope
 import com.anisequel.domain.jokes.JokeSettings
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.JokeMomentBus
-import com.anisequel.ui.components.JokeToastHost
-import com.anisequel.ui.components.JokeToastLift
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.markdown.ProvideMediaCovers
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
@@ -87,7 +72,6 @@ import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 
 object AppRoutes {
     const val LOGIN = "login"
@@ -136,10 +120,6 @@ fun AppNavigation(
     // being torn down. Without this the dashboards are built with a null store
     // and "Not interested" silently does nothing.
     val context = LocalContext.current
-    // The joke pill's heart writes a DataStore preference, which is a suspend
-    // call. One scope for the whole graph: the host outlives every screen, so a
-    // saved line must not be cancelled when the page that showed it is popped.
-    val scope = rememberCoroutineScope()
     val hiddenSequelsPreferences = remember(context) {
         HiddenSequelsPreferences(context.applicationContext)
     }
@@ -561,7 +541,9 @@ fun AppNavigation(
                         onOpenStudio = { studioId, studioName ->
                             navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
                         },
-                        // The demo profile replaces the demo dashboard; see `navigateToMainTab`.
+                        // The profile is a tab in the demo too: it stacks on the
+                        // demo dashboard so its back arrow returns Home. See
+                        // `navigateToMainTab`.
                         onOpenProfile = {
                             navController.navigateToMainTab(MainTab.PROFILE, signedIn = false)
                         }
@@ -891,117 +873,33 @@ fun AppNavigation(
                 }
             }
 
-            // The bar floats over whichever main page is on screen rather than living
-            // inside a route: a screen cannot draw chrome that outlives it, and the pages
-            // the bar switches between should not each have to remember to draw it.
-            // `showsMainBar` is the whole visibility rule - null means this is a screen
-            // pushed from a tab (Settings, a studio, somebody else's profile), and an
-            // open tier board owns the bottom edge with its own tray.
+            // The bar and the joke toast float over whichever page is on screen
+            // rather than living inside a route: a screen cannot draw chrome that
+            // outlives it, and the pages the bar switches between should not each
+            // have to remember to draw it.
             //
-            // Animated rather than conditional, because the tier list is a *tab*: a bar
-            // that vanished on the tap and reappeared on Back would read as the app
-            // losing its navigation and then finding it again. It leaves downwards, which
-            // is the direction the tier list arrives from, so the two read as one move.
-            //
-            // The fast slide token, not the route one: the bar only has to clear its own
-            // height, and it has to be gone before the tier board's tray finishes rising
-            // into the same edge. On the calm spring the two overlap for most of the
-            // move and the edge looks busy at the exact moment it should look empty.
-            val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-            val currentTab = mainTabForRoute(currentRoute)
+            // Both hosts read the current route themselves instead of being handed
+            // it from here. Reading it in this scope - the same one that calls
+            // `NavHost` - meant every push, pop and tab switch invalidated the call
+            // site of the graph and re-ran its destination table, to move two
+            // overlays that were the only things on screen which actually changed.
+            // The reads now live one scope down, in `MainChrome.kt`.
+            MainBarHost(
+                navController = navController,
+                tabs = mainTabs,
+                // The largest the viewer's avatar has; the bar falls back to a glyph
+                // while it is still unknown.
+                profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
+                signedIn = authenticated != null,
+                tierBoardOpen = tierBoardOpen,
+                onTierBoardOpenChange = { tierBoardOpen = it }
+            )
 
-            // A board that is open when the route is left - a pop from somewhere the
-            // screen's own dispose did not run first - must not hide the bar on
-            // whatever page comes next. The screen also reports false when it goes,
-            // but the host is the only place that knows the route changed.
-            LaunchedEffect(currentRoute) {
-                if (currentRoute != AppRoutes.TIER_LIST) tierBoardOpen = false
-            }
-
-            AnimatedVisibility(
-                visible = showsMainBar(currentTab, tierBoardOpen),
-                enter = slideInVertically(
-                    animationSpec = RouteTabSlideSpring,
-                    initialOffsetY = { height -> height }
-                ) + fadeIn(ExpressiveMotion.FastEffects),
-                exit = slideOutVertically(
-                    animationSpec = RouteTabSlideSpring,
-                    targetOffsetY = { height -> height }
-                ) + fadeOut(ExpressiveMotion.FastEffects),
-                modifier = Modifier.align(Alignment.BottomCenter)
-            ) {
-                MainBar(
-                    // An open board hides the bar, but it is still composed while it
-                    // animates out: `MainBar` coerces an unknown selection to the
-                    // first tab for that one frame rather than crashing on an index
-                    // of -1.
-                    selected = currentTab ?: MainTab.HOME,
-                    tabs = mainTabs,
-                    // The largest the viewer's avatar has; the bar falls back to a glyph
-                    // while it is still unknown.
-                    profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
-                    onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = authenticated != null) }
-                )
-            }
-
-            // A joke, now and then, at the edge the reader chose. Mounted by the host
-            // for the same reason the bar is: only the host knows which page is on
-            // screen, and a screen cannot draw a toast that outlives it.
-            //
-            // `active` is the page rule, not the switch: the host owns the switch,
-            // frequency and timing. Main-pages means the pages the bar owns - the tier
-            // list included, since it is one of them even while an open board hides
-            // the bar; Everywhere adds the pages pushed from them. Login is excluded from both
-            // arms - a joke over the sign-in screen is an interruption at the one
-            // moment the reader is deciding something.
-            val jokesAllowedHere = if (jokeSettings.scope == JokeScope.EVERYWHERE) {
-                currentRoute != null && currentRoute != AppRoutes.LOGIN
-            } else {
-                currentTab != null
-            }
-
-            // The navigation graph is the only place that knows a tab changed, but the
-            // host is the only place that knows whether the reader asked for a line at
-            // that moment. So this announces and the host decides. Keyed on the tab
-            // and skipping the first value: launching the app is not a tab change.
-            var previousTab by remember { mutableStateOf<MainTab?>(null) }
-            LaunchedEffect(currentTab) {
-                val tab = currentTab
-                if (tab != null && previousTab != null && previousTab != tab) {
-                    JokeMomentBus.announce(JokeMoment.TAB_CHANGE)
-                }
-                previousTab = tab
-            }
-
-            val jokeAtTop = jokeSettings.position == JokePosition.TOP
-            JokeToastHost(
+            JokeHost(
+                navController = navController,
+                preferences = jokePreferences,
                 settings = jokeSettings,
-                active = jokesAllowedHere,
-                favouriteLines = jokeFavourites,
-                onToggleFavourite = { line ->
-                    scope.launch { jokePreferences.toggleFavourite(line) }
-                },
-                modifier = Modifier
-                    .align(if (jokeAtTop) Alignment.TopCenter else Alignment.BottomCenter)
-                    .then(
-                        if (jokeAtTop) {
-                            Modifier
-                                .statusBarsPadding()
-                                .padding(horizontal = 16.dp)
-                                .padding(top = 12.dp)
-                        } else {
-                            // Above the bar, and above the dashboard's snackbar rather
-                            // than on top of it: the dashboard anchors that host at
-                            // `MainBarClearance`, so a joke parked just clear of the bar
-                            // would occasionally be drawn through an "Added to
-                            // Planning" confirmation. The clearance already includes
-                            // the device's navigation inset, and the extra lift is the
-                            // toast's own constant so the two cannot drift.
-                            Modifier
-                                .padding(horizontal = 16.dp)
-                                .padding(bottom = mainBarClearance() + JokeToastLift)
-                        }
-                    )
+                favourites = jokeFavourites
             )
         }
     }
