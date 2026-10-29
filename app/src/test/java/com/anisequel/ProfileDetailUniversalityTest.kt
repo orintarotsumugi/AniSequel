@@ -57,6 +57,19 @@ class ProfileDetailUniversalityTest {
     private val profileScreen = source("com/anisequel/ui/screens/profile/UserProfileScreen.kt")
     private val homeTab = source("com/anisequel/ui/screens/profile/ProfileHomeTab.kt")
 
+    /**
+     * The route call sites, read from every `*NavGraph.kt` builder rather than
+     * `AppNavigation.kt` alone: that file was split into per-destination graph
+     * files, and a test that names one file fails on the move instead of on a
+     * route losing the shared host - which is what it is here to catch.
+     */
+    private val navigationRoutes: String = run {
+        val dir = File(findProjectRoot(), "app/src/main/java/com/anisequel/ui/navigation")
+        val files = dir.listFiles { file -> file.isFile && file.name.endsWith("NavGraph.kt") }.orEmpty()
+        assertTrue("could not read the navigation graphs at ${dir.path}", files.isNotEmpty())
+        files.sortedBy { it.name }.joinToString("\n") { it.readText() }
+    }
+
     @Test
     fun `one detail host serves every non-dashboard route`() {
         // Counted rather than merely present: a second `rememberMediaDetailHost` in a
@@ -71,7 +84,7 @@ class ProfileDetailUniversalityTest {
         )
 
         listOf("LibraryScreen(", "ProfileDestination(", "StudioScreen(").forEach { route ->
-            val call = navigation.substringAfter(route, missingDelimiterValue = "").take(700)
+            val call = navigationRoutes.substringAfter(route, missingDelimiterValue = "").take(700)
             assertTrue(
                 "$route is not handed the shared detail host; without it the route " +
                     "falls back to a store of its own and the same title opens as a " +
