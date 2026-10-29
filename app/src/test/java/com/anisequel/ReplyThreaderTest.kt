@@ -79,10 +79,15 @@ class ReplyThreaderTest {
 
     @Test
     fun `a reply does not become its own parent`() {
+        // The lookup happens before the author is recorded, so a comment that
+        // opens by mentioning *itself* has no earlier comment to answer and stays
+        // at root; store first and it would find itself as its own parent and
+        // indent one level against its own text. A later comment by the same
+        // person is a different comment, so it does thread.
         val depths = ReplyThreader.depths(
             listOf(
                 Reply(1, "kai", "@kai to myself"),
-                Reply(2, "kai", "still @kai")
+                Reply(2, "kai", "@kai again")
             )
         )
         assertEquals(0, depths.getValue(1))
@@ -94,7 +99,9 @@ class ReplyThreaderTest {
         val depths = ReplyThreader.depths(
             listOf(
                 Reply(1, "Kai", "root"),
-                Reply(2, "rin", "\n@kai after a newline"),
+                // Same person as reply 1 under a different case, so the author map
+                // has to fold it; a leading newline is still an answer.
+                Reply(2, "kai", "\n@kai after a newline"),
                 // `@KAI` now resolves to reply 2, the most recent comment by Kai,
                 // so it threads one deeper than the mention that matched by case.
                 Reply(3, "ana", "@KAI after a different case"),

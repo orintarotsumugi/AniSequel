@@ -12,6 +12,8 @@ import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.SocialList
 import com.anisequel.ui.viewmodel.UserActivityViewModel
@@ -134,6 +136,7 @@ class ProfileViewModelTest {
             forceRefresh: Boolean
         ): Result<List<FollowUser>> {
             followersFetchCount++
+            if (followersFail) return Result.failure(AniListException(AniListErrorKind.SERVER, "followers unavailable"))
             return Result.success(followersResult)
         }
 
@@ -142,6 +145,7 @@ class ProfileViewModelTest {
             forceRefresh: Boolean
         ): Result<List<FollowUser>> {
             followingFetchCount++
+            if (followingFail) return Result.failure(AniListException(AniListErrorKind.SERVER, "following unavailable"))
             return Result.success(followingResult)
         }
 
