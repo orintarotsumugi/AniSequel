@@ -126,7 +126,7 @@ internal fun entityPreviewKeysIn(nodes: List<MarkdownNode>): List<EntityPreviewK
  * answered once. A second copy is how the two would drift the day a node type
  * gains a `children` field.
  */
-private inline fun <K> previewKeysIn(
+private fun <K> previewKeysIn(
     nodes: List<MarkdownNode>,
     keyOf: (MarkdownNode.AniListPreviewBlock) -> K?
 ): List<K> {

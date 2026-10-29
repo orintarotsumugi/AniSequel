@@ -75,6 +75,7 @@ import com.anisequel.data.model.romajiName
 import com.anisequel.data.model.statusLabel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
