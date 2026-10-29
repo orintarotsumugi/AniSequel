@@ -89,16 +89,13 @@ import com.anisequel.ui.components.expressive.bouncyPress
 //
 // The tray sits below a scrolling column and the board scrolls inside it, so the
 // two have different origins and neither is the one a drop should be resolved
-// against. The board publishes where its rows *are* - in window pixels - and the
-// tray tests against that. Nothing here converts between coordinate spaces, and a
-// drop cannot land in the wrong place because two origins disagreed about zero.
+// against. The board publishes the only window-to-drop mapping it has -
+// `TierBoardViewport.dropResolver`, derived from the same layout its own drag
+// resolves against - and the tray calls it at release. Nothing here converts
+// between coordinate spaces, and a drop cannot land in the wrong place because
+// two origins disagreed about zero - nor can it land at the end of a row when
+// the finger was over the seam between two posters.
 // ---------------------------------------------------------------------------
-
-/** How close to a row's edge still counts as "on" it, in window pixels. */
-internal const val TIER_TRAY_SNAP_SLOP = 24f
-
-/** A tier row's top and bottom in window pixels, published by the board. */
-internal data class TierRowBand(val tierId: String, val top: Float, val bottom: Float)
 
 /**
  * The in-flight tray drag, hoisted so the ghost can be drawn over the board.
@@ -134,50 +131,7 @@ internal class TierTrayDrag {
     val posterX: Float get() = windowX - grabOffsetX
 }
 
-/**
- * Which tier row a release at this window position lands in, or null for "none".
- *
- * The same two-step resolution as the board's own `tierDropTarget`, for the same
- * reason and with the same consequence: a null answer means *un-file the title*,
- * which is a real instruction here rather than an error - dropping a poster back
- * into the tray is how a mis-drop is undone without opening anything.
- *
- * Written against the published bands rather than reusing the board's layout-space
- * function because this one is handed a pointer the board has never seen.
- * Converting the tray's pointer into the board's coordinate space to reuse that
- * function would mean trusting two origins to agree about a scroll offset; testing
- * the bands directly cannot be wrong in that way.
- */
-internal fun tierRowAt(
-    bands: List<TierRowBand>,
-    windowX: Float,
-    windowY: Float,
-    leftEdge: Float,
-    rightEdge: Float,
-    slop: Float = TIER_TRAY_SNAP_SLOP
-): String? {
-    if (bands.isEmpty()) return null
-    if (windowX < leftEdge || windowX > rightEdge) return null
-
-    bands.firstOrNull { windowY >= it.top && windowY <= it.bottom }?.let { return it.tierId }
-
-    // In a gap between two rows the nearest edge wins, because a near miss has one
-    // obvious answer and refusing it would make the drag feel broken. Far from every
-    // row is a deliberate miss - over the tray itself, or over the heading - and
-    // guessing there would file a title under a judgement nobody made.
-    val nearest = bands.minByOrNull { edgeDistance(windowY, it) } ?: return null
-    return if (edgeDistance(windowY, nearest) <= slop) nearest.tierId else null
-}
-
-/** How far [y] is from the nearest edge of [band]; zero when it is inside. */
-private fun edgeDistance(y: Float, band: TierRowBand): Float = when {
-    y < band.top -> band.top - y
-    y > band.bottom -> y - band.bottom
-    else -> 0f
-}
-
-/**
- * Height the tray occupies at the bottom of the screen.
+/** Height the tray occupies at the bottom of the screen.
  *
  * The screen reserves this plus the floating toolbar as the board's bottom
  * padding. The three parts have to add up exactly:
@@ -208,10 +162,11 @@ private val TRAY_PADDING = 12.dp
  * reserve exactly that much padding under the board, so the last tier row can
  * always be scrolled clear of it instead of being covered by it.
  *
- * [resolveTier] is handed window coordinates and answers the tier a release there
- * would file into. It is a callback rather than the bands themselves because the
- * board is what knows where its rows ended up; this file has no business knowing
- * that, and a second copy of the answer here is how the two would drift.
+ * [onDrop] is handed the release point in *window* coordinates rather than a tier
+ * id: the board owns the only window-to-placement mapping, and the release has to
+ * be resolved when it happens - not from whatever the last recomposition saw - so
+ * the screen asks the board with the tray's live position. See
+ * `TierBoardViewport.dropResolver`.
  *
  * The header is a full-width tap target that opens the picker. The tray is a
  * sideways row, so the two-hundredth unranked title is a lot of swiping away; the
@@ -228,8 +183,7 @@ private val TRAY_PADDING = 12.dp
 internal fun TierTray(
     candidates: List<TierCandidate>,
     drag: TierTrayDrag,
-    resolveTier: (windowX: Float, windowY: Float) -> String?,
-    onDrop: (mediaId: Int, tierId: String?) -> Unit,
+    onDrop: (mediaId: Int, windowX: Float, windowY: Float) -> Unit,
     onItemTap: (Int) -> Unit,
     onBrowse: () -> Unit,
     enabled: Boolean = true,
@@ -322,12 +276,12 @@ internal fun TierTray(
                     onDragEnd = {
                         val mediaId = drag.mediaId
                         if (mediaId != null) {
-                            // Read the live drag position rather than whatever the
-                            // last composition saw: the final pointer move is not
+                            // The live drag position rather than whatever the last
+                            // composition saw: the final pointer move is not
                             // required to have recomposed anything, and a drop that
                             // lands a frame behind the finger is a drop into the
                             // wrong row.
-                            onDrop(mediaId, resolveTier(drag.windowX, drag.windowY))
+                            onDrop(mediaId, drag.windowX, drag.windowY)
                         }
                         drag.mediaId = null
                     },

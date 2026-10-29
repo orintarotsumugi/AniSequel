@@ -3,7 +3,6 @@ package com.anisequel.ui.screens.tier
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.anisequel.domain.tier.TierDefinition
@@ -445,20 +444,22 @@ internal class TierBoardViewport {
     var boardWidth by mutableFloatStateOf(0f)
 
     /**
-     * Where each tier row actually is, in window pixels.
+     * Answers "what would a release at this *window* position file into?".
      *
      * Published by the board rather than recomputed by the tray because the board
-     * is the only thing that knows the answer: the rows come from `layoutTierList`
-     * in layout dp, then get scaled by the zoom, then offset by wherever the board
-     * has been scrolled to. A tray that worked it out for itself would be holding a
-     * third opinion about the same geometry, and the two would disagree the moment
-     * a gap or a zoom step changed in one of them - which is exactly the class of
-     * bug the shared layout exists to prevent.
+     * is the only thing that knows the answer: the drop comes from
+     * `layoutTierList` in layout dp, then gets scaled by the zoom and offset by
+     * wherever the board has been scrolled to, and a tray that worked it out for
+     * itself would be holding a second opinion about the same geometry - which is
+     * exactly the class of bug the shared layout exists to prevent. It used to be
+     * a list of row bands, and that second opinion could name a row but not a
+     * *seam*: a tray drop always appended to the end of the row it landed on,
+     * while the board's own drag could place between two posters.
      *
-     * Empty until the board has composed, so a drop in that first frame resolves to
+     * Null until the board has composed, so a drop in that first frame resolves to
      * no tier and un-files rather than filing under a guess.
      */
-    var rowBands by mutableStateOf<List<TierRowBand>>(emptyList())
+    var dropResolver: ((windowX: Float, windowY: Float) -> TierDrop)? = null
 
     val viewportBottom: Float get() = viewportTop + viewportHeight
 }

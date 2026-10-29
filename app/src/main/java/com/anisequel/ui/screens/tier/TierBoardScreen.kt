@@ -36,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -199,6 +200,33 @@ internal fun TierBoardScreen(
     // than a child of the tray, because the tray's own surface clips its content -
     // and a ghost clipped to the tray is invisible for the whole gesture.
     val trayDrag = remember { TierTrayDrag() }
+
+    // The pool's drag scrolls the board exactly like the board's own. It used not
+    // to: auto-scroll ran only for drags that started on the board, so carrying a
+    // pool poster towards a row that was off-screen scrolled nothing - the one
+    // gesture the auto-scroll exists for could not be completed from where most
+    // titles start.
+    TierEdgeAutoScroll(
+        active = trayDrag.mediaId != null,
+        pointerY = { trayDrag.windowY },
+        viewport = viewport,
+        scrollState = scrollState,
+        density = LocalDensity.current.density
+    )
+
+    // What a release at the pool poster's current position would file into, used
+    // for the row highlight, the caret and the hint while it is in the air. The
+    // release itself asks the resolver again with the live pointer; this is only
+    // the preview, and both come from the board's own layout so they agree.
+    val trayDrop = remember(trayDrag, viewport) {
+        derivedStateOf {
+            if (trayDrag.mediaId == null) {
+                null
+            } else {
+                viewport.dropResolver?.invoke(trayDrag.windowX, trayDrag.windowY)
+            }
+        }
+    }
 
     val ranked = assignment.tierIdByMediaId.size
     val visibleCandidates = remember(candidates, filter) {
@@ -451,7 +479,12 @@ internal fun TierBoardScreen(
                             onItemTap = { mediaId ->
                                 whenEditable { sheets.placingMediaId = mediaId }
                             },
-                            onDragHintChanged = { hint -> dragHint = hint }
+                            onDragHintChanged = { hint -> dragHint = hint },
+                            // Through the provider so the screen is not rebuilt
+                            // every time the drop moves between two seams; only
+                            // the board reads it, and only the board redraws.
+                            externalDragging = trayDrag.mediaId != null,
+                            externalDrop = { trayDrop.value }
                         )
                         TierBoardLegend(locked = boardLocked)
                     }
@@ -567,20 +600,16 @@ internal fun TierBoardScreen(
                     candidates = unranked,
                     drag = trayDrag,
                     enabled = !boardLocked,
-                    resolveTier = { windowX, windowY ->
-                        tierRowAt(
-                            bands = viewport.rowBands,
-                            windowX = windowX,
-                            windowY = windowY,
-                            leftEdge = viewport.boardLeft,
-                            rightEdge = viewport.boardLeft + viewport.boardWidth
-                        )
-                    },
-                    // A null tier id is the instruction to un-file, and dropping a
-                    // poster back into the pool is exactly that - so a mis-drop is
-                    // undone by dropping it where it started.
-                    onDrop = { mediaId, tierId ->
-                        whenEditable { onMove(mediaId, tierId, null) }
+                    // Resolved at the release, with the live pointer, through the
+                    // board's own window-space layout - the same answer that drew
+                    // the caret. A null tier id is the instruction to un-file, and
+                    // dropping a poster back into the pool is exactly that, so a
+                    // mis-drop is undone by dropping it where it started.
+                    onDrop = { mediaId, windowX, windowY ->
+                        whenEditable {
+                            val target = viewport.dropResolver?.invoke(windowX, windowY)
+                            onMove(mediaId, target?.tierId, target?.beforeMediaId)
+                        }
                     },
                     onItemTap = { mediaId ->
                         whenEditable { sheets.placingMediaId = mediaId }

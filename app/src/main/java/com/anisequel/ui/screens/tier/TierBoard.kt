@@ -12,12 +12,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -61,7 +62,19 @@ internal fun TierBoardHost(
     editable: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
-    onDragHintChanged: (String?) -> Unit
+    onDragHintChanged: (String?) -> Unit,
+    /**
+     * Whether the tray holds a drag, and where that drag currently points.
+     *
+     * A tray drop is the board's drop as much as its own is: the row it will land
+     * in is highlighted, the caret shows the seam, and the hint pill names the
+     * tier - all computed from the same resolver the release uses. The provider is
+     * a lambda rather than a value so only the board's own composition scope is
+     * invalidated when the drop moves between rows; the screen above it is not
+     * rebuilt on every seam the finger crosses.
+     */
+    externalDragging: Boolean = false,
+    externalDrop: (() -> TierDrop?)? = null
 ) {
     var widthPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
@@ -91,7 +104,9 @@ internal fun TierBoardHost(
                 editable = editable,
                 onMove = onMove,
                 onItemTap = onItemTap,
-                onDragHintChanged = onDragHintChanged
+                onDragHintChanged = onDragHintChanged,
+                externalDragging = externalDragging,
+                externalDrop = externalDrop
             )
         }
     }
@@ -147,7 +162,9 @@ private fun TierBoard(
     editable: Boolean,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onItemTap: (Int) -> Unit,
-    onDragHintChanged: (String?) -> Unit
+    onDragHintChanged: (String?) -> Unit,
+    externalDragging: Boolean,
+    externalDrop: (() -> TierDrop?)?
 ) {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -181,15 +198,32 @@ private fun TierBoard(
     // Row positions for the tray's drag, the auto-scroll while dragging and the
     // hint pill are three side effects with three lifetimes; they live in the
     // helper composables below so this one stays about composition.
-    TierRowBandPublisher(
-        arrangement = arrangement,
-        zoom = zoom,
-        density = density.density,
-        scrollState = scrollState,
-        viewport = viewport
-    )
-    TierDragAutoScroll(
-        drag = drag,
+    //
+    // The resolver is the board's own window-space answer to "where would a tray
+    // drop land". It replaces a published list of row bands - a second, tray-side
+    // hit test that knew which row a pointer was over but not where inside it, so
+    // every tray drop appended to the row while a board drag could place between
+    // two posters. Both drags now resolve against one layout. It is cleared on
+    // dispose so a tray drop made while the board is replaced by an empty state
+    // resolves to no tier rather than to bands that are no longer drawn.
+    DisposableEffect(viewport, arrangement, zoom, density) {
+        viewport.dropResolver = { windowX, windowY ->
+            tierDropAtWindow(
+                rows = arrangement.rows,
+                items = arrangement.items,
+                windowX = windowX,
+                windowY = windowY,
+                boardLeft = viewport.boardLeft,
+                boardTop = viewport.boardTop,
+                density = density.density,
+                zoom = zoom
+            )
+        }
+        onDispose { viewport.dropResolver = null }
+    }
+    TierEdgeAutoScroll(
+        active = drag.mediaId != null,
+        pointerY = { viewport.boardTop + drag.origin.y + drag.travel.value.y },
         viewport = viewport,
         scrollState = scrollState,
         density = density.density
@@ -202,13 +236,32 @@ private fun TierBoard(
     // row is a draw invalidation (the ghost's `graphicsLayer` already reads the
     // travel in the draw phase) instead of a full recomposition of every row and
     // poster.
+    //
+    // The shift is read here as well as in the ghost's draw phase, because a
+    // board that auto-scrolled under a stationary finger has moved its rows past
+    // the pointer without a single pointer event to say so. The ghost used to
+    // compensate and the drop did not, so the marker and the release stayed on
+    // the row the tile was picked up from while the poster hung over another -
+    // visible as a drop that files a title into the wrong tier after a scroll.
     val drop = remember(drag.mediaId, arrangement, zoom, density) {
-        derivedStateOf { drag.drop(arrangement, zoom, density.density) }
+        derivedStateOf {
+            drag.drop(
+                arrangement = arrangement,
+                zoom = zoom,
+                density = density.density,
+                scrollShift = drag.boardTop - viewport.boardTop
+            )
+        }
     }
-    val dropTarget = drop.value
-    val caret = remember(dropTarget, arrangement, options, drag.mediaId) {
+    val boardDragging = drag.mediaId != null
+    // The tray's drag points through the same resolver the release uses, so the
+    // highlight, the caret and the drop cannot disagree by a pixel.
+    val external = if (boardDragging) null else externalDrop?.invoke()
+    val activeDrop = if (boardDragging) drop.value else external
+    val hoveredTierId = activeDrop?.tierId
+    val caret = remember(activeDrop, arrangement, options, drag.mediaId) {
         tierDropCaret(
-            drop = dropTarget,
+            drop = activeDrop ?: TierDrop(tierId = null, beforeMediaId = null),
             rows = arrangement.rows,
             items = arrangement.items,
             options = options,
@@ -218,12 +271,25 @@ private fun TierBoard(
         )
     }
 
+    // A light tick when the carried poster crosses into another row. The
+    // highlight sits under the finger that is covering it, so without this the
+    // only confirmation that the target changed is a colour the hand cannot see.
+    var lastHoveredTierId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(hoveredTierId) {
+        if (hoveredTierId != null && lastHoveredTierId != null &&
+            hoveredTierId != lastHoveredTierId
+        ) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        lastHoveredTierId = hoveredTierId
+    }
+
     // The hint lives on the screen above the board, not inside it: the board
     // scrolls during a drag, and a pill drawn at the board's top edge scrolls away
     // with it - precisely while auto-scrolling, which is when it is being read.
     TierDragHint(
-        draggingId = drag.mediaId,
-        hoveredTierId = dropTarget.tierId,
+        dragging = boardDragging || externalDragging,
+        hoveredTierId = hoveredTierId,
         tiers = tiers,
         onDragHintChanged = onDragHintChanged
     )
@@ -324,7 +390,7 @@ private fun TierBoard(
             display = display,
             showTitles = tileTitles,
             candidateById = candidateById,
-            hoveredTierId = dropTarget.tierId,
+            hoveredTierId = hoveredTierId,
             dropCaret = caret,
             skipMediaId = drag.mediaId,
             editable = editable,
@@ -360,55 +426,6 @@ private fun tierBoardOptions(
         0f
     }
 )
-
-/**
- * Publishes where each row actually is, in window px, for the tray's drag to
- * resolve against - and un-publishes it when this board leaves the composition.
- *
- * `boardTop` is read inside `snapshotFlow`, never as a composition key. It used
- * to be a `LaunchedEffect` key, and `boardTop` is a `mutableFloatStateOf` - so
- * every frame the board moved, *reading* it invalidated the whole `TierBoard`
- * recompose scope: a coroutine relaunch, a fresh band list, and every
- * `TierRowStrip` and `TierPosterTile` re-executing, each with its own
- * `animateColorAsState` and `AsyncImage`. On a fling, and on every frame of the
- * drag auto-scroll loop, which is precisely the frame-rate-sensitive path.
- * `snapshotFlow` observes the same state from a coroutine, which is not a
- * composition, so the board keeps moving without recomposing anything.
- *
- * The disposal matters for a different reason: `viewport` is remembered by the
- * *screen*, so it outlives the board, and the board is not always composed -
- * "Empty every tier" replaces it with an empty state while the pool stays. The
- * bands were the one piece of state with no writer on that path, so a tray drop
- * resolved against rows that were no longer drawn, at window positions that no
- * longer lined up with anything: the title was filed under a tier id nobody
- * could see and the board came back with a poster in it, placed by a phantom.
- */
-@Composable
-private fun TierRowBandPublisher(
-    arrangement: TierListLayout,
-    zoom: Float,
-    density: Float,
-    scrollState: ScrollState,
-    viewport: TierBoardViewport
-) {
-    LaunchedEffect(arrangement, zoom, density, scrollState) {
-        val pxPerDp = density
-        snapshotFlow { scrollState.value to viewport.boardTop }.collect {
-            val boardTop = viewport.boardTop
-            viewport.rowBands = arrangement.rows.map { row ->
-                TierRowBand(
-                    tierId = row.tierId,
-                    top = boardTop + row.y * zoom * pxPerDp,
-                    bottom = boardTop + row.bottom * zoom * pxPerDp
-                )
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { viewport.rowBands = emptyList() }
-    }
-}
 
 /**
  * Places the rows, the tiles and the drop caret at the boxes [layoutTierList]
