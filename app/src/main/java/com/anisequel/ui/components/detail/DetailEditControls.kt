@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -221,20 +222,23 @@ internal class EntryEditState {
     private var confirmed by mutableStateOf<EntryDraft?>(null)
 
     /**
-     * The editable copy of the entry, and the two things that hang off it changing.
+     * The editable copy of the entry, and the one thing that hangs off it changing.
      *
-     * The setter clears [statusMessage] because a message describes the *entry* as it
-     * was when the message was written. It used to survive the next edit, so a form
-     * whose score had already been dragged to a new value still read "Saved to your
-     * AniList list" until the next save - the one line of feedback on the form was
-     * describing a state that was no longer on it. The save and delete paths set
-     * their message *after* the draft, so their own line still lands.
+     * The setter clears [statusMessage] on *any* change, because a message describes
+     * the *entry* as it was when the message was written. It used to survive the next
+     * edit, so a form whose score had already been dragged to a new value still read
+     * "Saved to your AniList list" until the next save. It also survived a *revert* -
+     * the comparison was against [confirmed], so dragging a score back to where it
+     * started kept "Couldn't save your changes." on screen above a form with nothing
+     * left to save. The save and delete paths set their message *after* the draft,
+     * so their own line still lands.
      */
     var draft: EntryDraft?
         get() = draftState
         set(value) {
+            val changed = value != draftState
             draftState = value
-            if (value != confirmed) statusMessage = null
+            if (changed) statusMessage = null
         }
 
     /** Whether the form holds anything AniList has not been told about yet. */
@@ -254,10 +258,14 @@ internal class EntryEditState {
      *
      * A no-op when a draft is already loaded, so a recomposition - or a second
      * `LaunchedEffect` firing on the same media - cannot turn into a second
-     * request.
+     * request. The error is cleared before the request rather than only on
+     * success: the tab reads "no draft and no error" as loading, so a retry
+     * shows the spinner instead of the failed first attempt's message while the
+     * second one is on the wire.
      */
     suspend fun load(editor: EntryEditor, mediaId: Int) {
         if (draft != null) return
+        loadError = null
         editor.load(mediaId).fold(
             onSuccess = {
                 val loaded = it.toDraft()
@@ -273,9 +281,9 @@ internal class EntryEditState {
      * Records a save: AniList's answer is both what the form shows and the new
      * baseline, so the Save button goes quiet until the next edit.
      *
-     * Baseline first, deliberately: the `draft` setter treats an unequal value as an
-     * edit and clears the message, and this call is not an edit - the "Saved"
-     * message the caller sets afterwards is the whole point of the pair.
+     * The caller writes its "Saved" line *after* this call: assigning the draft
+     * clears whatever message was there, and that line describes the entry this
+     * call has just recorded.
      */
     fun markSaved(saved: EntryDraft) {
         confirmed = saved
@@ -320,6 +328,15 @@ internal fun statusLabel(status: String?, isManga: Boolean): String {
 }
 
 /**
+ * How much of a row's colour survives while it is disabled.
+ *
+ * Not M3's 0.38 content alpha: a row dimmed that far stops being readable, and
+ * the point of dimming during a save is to say "not now", not to hide the values
+ * the reader is about to send.
+ */
+private const val DISABLED_ROW_ALPHA = 0.65f
+
+/**
  * One labelled control row, with an optional body underneath.
  *
  * The row is the shape the whole tab is built from, so a new field cannot invent
@@ -332,15 +349,29 @@ internal fun EditorCard(
     subtitle: String,
     testTag: String,
     onClick: (() -> Unit)? = null,
+    /**
+     * Whether the row takes input.
+     *
+     * Dead while a save is on the wire, because the save response *replaces* the
+     * draft with AniList's answer - so a drag that happened during the request
+     * was silently thrown away when the answer landed. The form dimmed as a whole
+     * is the honest signal that nothing typed into it would be kept.
+     */
+    enabled: Boolean = true,
     content: (@Composable () -> Unit)? = null
 ) {
-    val clickable = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+    val clickable = if (onClick != null) {
+        Modifier.clickable(enabled = enabled, onClick = onClick)
+    } else {
+        Modifier
+    }
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else DISABLED_ROW_ALPHA)
             .then(clickable)
             .testTag(testTag)
     ) {
@@ -397,7 +428,8 @@ internal fun DateRow(
     value: FuzzyDate?,
     testTag: String,
     onPick: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    enabled: Boolean = true
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -405,7 +437,8 @@ internal fun DateRow(
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPick)
+            .alpha(if (enabled) 1f else DISABLED_ROW_ALPHA)
+            .clickable(enabled = enabled, onClick = onPick)
             .testTag(testTag)
     ) {
         Row(
@@ -450,7 +483,7 @@ internal fun DateRow(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clickable(onClick = onClear)
+                        .clickable(enabled = enabled, onClick = onClear)
                         .testTag("${testTag}_clear"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -486,14 +519,16 @@ internal fun StepButton(
     icon: ImageVector,
     contentDescription: String,
     testTag: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = Modifier
             .size(48.dp)
-            .clickable(onClick = onClick)
+            .alpha(if (enabled) 1f else DISABLED_ROW_ALPHA)
+            .clickable(enabled = enabled, onClick = onClick)
             .testTag(testTag)
     ) {
         Box(contentAlignment = Alignment.Center) {

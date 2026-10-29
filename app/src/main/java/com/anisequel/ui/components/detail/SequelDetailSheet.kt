@@ -358,7 +358,14 @@ fun SequelDetailSheet(
                             .padding(horizontal = 20.dp)
                             .padding(top = 8.dp, bottom = navClearance)
                     ) {
-                        DetailEditTab(media = media, editor = entryEditor, state = editState)
+                        DetailEditTab(
+                            media = media,
+                            editor = entryEditor,
+                            state = editState,
+                            // The sheet's scope, which outlives the tab switch -
+                            // see the parameter's doc.
+                            scope = scope
+                        )
                     }
                 } else {
                     AnimeInfoPage(
