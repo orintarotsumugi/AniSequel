@@ -7,7 +7,6 @@ import com.anisequel.domain.tier.TierListDocument
 import com.anisequel.domain.tier.TierListLayout
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.ui.screens.tier.ScreenTierOptions
-import com.anisequel.ui.screens.tier.TIER_DRAG_EDGE_DP
 import com.anisequel.ui.screens.tier.TIER_DROP_SNAP_SLOP
 import com.anisequel.ui.screens.tier.TIER_MAX_ZOOM
 import com.anisequel.ui.screens.tier.TIER_MIN_ZOOM
@@ -15,8 +14,6 @@ import com.anisequel.ui.screens.tier.TierDrop
 import com.anisequel.ui.screens.tier.clampTierZoom
 import com.anisequel.ui.screens.tier.relativeTimeLabel
 import com.anisequel.ui.screens.tier.tierCoverDecodePx
-import com.anisequel.ui.screens.tier.tierDragHint
-import com.anisequel.ui.screens.tier.tierDragScrollStrength
 import com.anisequel.ui.screens.tier.tierDropCaret
 import com.anisequel.ui.screens.tier.tierDropPlacement
 import com.anisequel.ui.screens.tier.tierDropTarget
@@ -56,8 +53,8 @@ import org.junit.Test
  *    why unrated titles are not auto-filed under F either.
  *  - [tierDropPlacement] decides where *inside* the row it goes, which is the
  *    difference between "put it in S" and "put it here".
- *  - [tierDragScrollStrength] is what lets a drag reach a row that is off the
- *    screen, and is the reason a list of fifty titles can be arranged at all.
+ *  - The edge auto-scroll and the drag hint live in `TierDragLogicTest`: they
+ *    are about the gesture rather than about where a tile sits.
  *  - [clampTierZoom] keeps a pinch inside the range the board can render at, and
  *    swallows the NaN that a coincident two-pointer pinch produces. `coerceIn`
  *    passes NaN straight through, and every offset downstream of a NaN scale is a
@@ -474,68 +471,6 @@ class TierScreenLogicTest {
         // against a NaN-derived width that arrived as zero.
         assertEquals(64, tierCoverDecodePx(0))
         assertEquals(64, tierCoverDecodePx(-10))
-    }
-
-    // ---- Dragging near an edge --------------------------------------------
-
-    @Test
-    fun `a drag in the middle of the screen does not scroll`() {
-        assertEquals(
-            0f,
-            tierDragScrollStrength(
-                pointerY = 500f,
-                viewportTop = 100f,
-                viewportBottom = 900f,
-                edge = TIER_DRAG_EDGE_DP
-            ),
-            0f
-        )
-    }
-
-    @Test
-    fun `a drag at an edge scrolls, faster the closer it gets`() {
-        val nearTop = tierDragScrollStrength(136f, 100f, 900f, TIER_DRAG_EDGE_DP)
-        val atTop = tierDragScrollStrength(100f, 100f, 900f, TIER_DRAG_EDGE_DP)
-        val atBottom = tierDragScrollStrength(900f, 100f, 900f, TIER_DRAG_EDGE_DP)
-
-        // Signed, so negative is up: the caller applies it to the scroll directly.
-        assertEquals(-0.5f, nearTop, 0.001f)
-        assertEquals(-1f, atTop, 0.001f)
-        assertEquals(1f, atBottom, 0.001f)
-    }
-
-    @Test
-    fun `a finger dragged off the screen keeps scrolling at full speed`() {
-        // Which happens constantly: a finger near the edge is usually over the app
-        // bar or the navigation bar, and a strength that went *down* there - or
-        // flipped sign - would stall the drag at the moment it was working.
-        assertEquals(-1f, tierDragScrollStrength(40f, 100f, 900f, TIER_DRAG_EDGE_DP), 0f)
-        assertEquals(1f, tierDragScrollStrength(1010f, 100f, 900f, TIER_DRAG_EDGE_DP), 0f)
-    }
-
-    @Test
-    fun `a viewport with no height cannot divide by zero`() {
-        // The first frame, before the column has been measured.
-        assertEquals(0f, tierDragScrollStrength(0f, 0f, 0f, TIER_DRAG_EDGE_DP), 0f)
-        assertEquals(0f, tierDragScrollStrength(10f, 100f, 900f, edge = 0f), 0f)
-    }
-
-    // ---- The hint ----------------------------------------------------------
-
-    @Test
-    fun `the hint names the tier the release would file into`() {
-        assertEquals("Release to file under A", tierDragHint(tiers, "a"))
-        assertEquals(
-            "Release here to take it out of the list",
-            tierDragHint(tiers, null)
-        )
-    }
-
-    @Test
-    fun `a tier id with no definition still names something`() {
-        // Defensive: the tiers and the drop are read from two different values,
-        // and an id with no label would otherwise print as an empty pill.
-        assertEquals("Release to file under gone", tierDragHint(tiers, "gone"))
     }
 
     // ---- Hit testing -------------------------------------------------------

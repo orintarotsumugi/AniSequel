@@ -143,6 +143,26 @@ class TierWindowDropTest {
     }
 
     @Test
+    fun `a release under the tray names no row`() {
+        // Geometry alone files this into B: y 266 is inside its band. The tray
+        // covers everything from 250 down, and a row nobody can see is not a
+        // target somebody aimed at.
+        assertEquals("b", dropAt(windowX = 120f, windowY = 266f).tierId)
+        val underTray = tierDropAtWindow(
+            rows = rows,
+            items = items,
+            windowX = 120f,
+            windowY = 266f,
+            boardLeft = 0f,
+            boardTop = 0f,
+            density = 1f,
+            zoom = 1f,
+            bottomLimitY = 250f
+        )
+        assertNull(underTray.tierId)
+    }
+
+    @Test
     fun `no rows means no drop`() {
         val drop = tierDropAtWindow(
             rows = emptyList(),

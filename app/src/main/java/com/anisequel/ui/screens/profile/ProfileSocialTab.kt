@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.items
@@ -35,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 import java.util.Locale
 
 /**
@@ -124,16 +123,7 @@ fun ProfileSocialTab(
     var asGrid by rememberSaveable { mutableStateOf(true) }
 
     val successState = socialState as? UserSocialViewModel.SocialState.Success
-    // Which chip is highlighted comes from the state that is actually on screen.
-    // Only `Success` used to be consulted, so tapping Following - and then waiting
-    // for it, or failing to load it - left Followers lit while the content under
-    // the switch was the other list's spinner or error.
-    val currentSelected = when (socialState) {
-        is UserSocialViewModel.SocialState.Success -> socialState.selected
-        is UserSocialViewModel.SocialState.Loading -> socialState.list
-        is UserSocialViewModel.SocialState.Error -> socialState.list
-        UserSocialViewModel.SocialState.Idle -> SocialList.FOLLOWERS
-    }
+    val currentSelected = socialState.selectedList()
     // The tab's entry trigger, keyed on what it actually loads rather than on
     // `Unit`.
     //
@@ -266,108 +256,179 @@ fun ProfileSocialTab(
             }
         }
 
-        when (socialState) {
-            is UserSocialViewModel.SocialState.Loading,
-            UserSocialViewModel.SocialState.Idle -> {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SocialLoading()
-                }
-            }
+        socialStateItems(
+            socialState = socialState,
+            currentSelected = currentSelected,
+            rawPeople = rawPeople,
+            filteredPeople = filteredPeople,
+            asGrid = asGrid,
+            searchQuery = searchQuery,
+            onLoad = onLoad,
+            onOpenUser = onOpenUser
+        )
+    }
+}
 
-            is UserSocialViewModel.SocialState.Error -> {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SocialError(
-                        message = socialState.message,
-                        onRetry = { onLoad(socialState.list) }
-                    )
-                }
-            }
+// Which chip is highlighted comes from the state that is actually on screen.
+// Only `Success` used to be consulted, so tapping Following - and then waiting
+// for it, or failing to load it - left Followers lit while the content under
+// the switch was the other list's spinner or error.
+private fun UserSocialViewModel.SocialState.selectedList(): SocialList = when (this) {
+    is UserSocialViewModel.SocialState.Success -> selected
+    is UserSocialViewModel.SocialState.Loading -> list
+    is UserSocialViewModel.SocialState.Error -> list
+    UserSocialViewModel.SocialState.Idle -> SocialList.FOLLOWERS
+}
 
-            is UserSocialViewModel.SocialState.Success -> {
-                if (rawPeople.isEmpty()) {
-                    // Three different things look identical here - nothing on screen -
-                    // and only one of them is a sentence about this person.
-                    //
-                    // A re-fetch of a list that has no rows yet is still fetching, and
-                    // the two outcomes of that are not yet known. The half that
-                    // *failed* is not the half that is empty: saying "nobody follows
-                    // this account" because one request was refused states a fact about
-                    // that person that nothing has evidence for, so it keeps the reason
-                    // and the re-ask instead. Only a list that came back with nobody in
-                    // it gets the empty message.
-                    val shownFailed = socialState.failedList == currentSelected
-                    when {
-                        socialState.isRefreshing ->
-                            item(span = { GridItemSpan(maxLineSpan) }) { SocialLoading() }
-
-                        shownFailed && socialState.failureMessage != null ->
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                SocialError(
-                                    message = socialState.failureMessage,
-                                    // The deliberate re-ask, which is also what a tap
-                                    // on the failed chip does.
-                                    onRetry = { onLoad(currentSelected) }
-                                )
-                            }
-
-                        else ->
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                SocialEmpty(selected = socialState.selected)
-                            }
-                    }
-                } else if (filteredPeople.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = "No matches for \"$searchQuery\"",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 32.dp)
-                        )
-                    }
-                } else if (asGrid) {
-                    items(
-                        items = filteredPeople,
-                        // Scoped by list, because the grid is showing one list at a
-                        // time but both are in the same `LazyVerticalGrid`. Following
-                        // somebody who also follows you puts their id in *both* lists,
-                        // and a bare `id` key then matches the same slot twice on the
-                        // switch - so the grid tries to animate one person into a
-                        // different person instead of replacing the list.
-                        //
-                        // The view mode is part of the key for the same reason: a
-                        // face card and a name row are not two states of one item,
-                        // they are different items, and sharing a key would make the
-                        // Lazy layout reuse one slot's state for the other.
-                        key = { "${currentSelected}_g_${it.id}" },
-                        contentType = { "follower_grid" }
-                    ) { person ->
-                        FollowerCard(
-                            person = person,
-                            onClick = { onOpenUser(person) }
-                        )
-                    }
-                } else {
-                    items(
-                        items = filteredPeople,
-                        key = { "${currentSelected}_l_${it.id}" },
-                        // One per line, which is what makes the name readable
-                        // rather than truncated: the row is the grid's own
-                        // full-span slot, so both modes stay in one `LazyVerticalGrid`
-                        // and the scroll position and the search field above them
-                        // are not rebuilt when the mode changes.
-                        span = { GridItemSpan(maxLineSpan) },
-                        contentType = { "follower_row" }
-                    ) { person ->
-                        FollowerRow(
-                            person = person,
-                            onClick = { onOpenUser(person) }
-                        )
-                    }
-                }
+/**
+ * The grid's body for whichever state the tab is in.
+ *
+ * Out of [ProfileSocialTab] because the nesting - a `when` over states, a second
+ * `when` inside `Success`, and the grid-mode branch - put the whole answer to
+ * "what is on screen right now" in one composable, and the four cases were
+ * impossible to read as separate things.
+ */
+private fun LazyGridScope.socialStateItems(
+    socialState: UserSocialViewModel.SocialState,
+    currentSelected: SocialList,
+    rawPeople: List<FollowUser>,
+    filteredPeople: List<FollowUser>,
+    asGrid: Boolean,
+    searchQuery: String,
+    onLoad: (SocialList) -> Unit,
+    onOpenUser: (FollowUser) -> Unit
+) {
+    when (socialState) {
+        is UserSocialViewModel.SocialState.Loading,
+        UserSocialViewModel.SocialState.Idle -> {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialLoading()
             }
         }
+
+        is UserSocialViewModel.SocialState.Error -> {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialError(
+                    message = socialState.message,
+                    onRetry = { onLoad(socialState.list) }
+                )
+            }
+        }
+
+        is UserSocialViewModel.SocialState.Success -> successStateItems(
+            state = socialState,
+            currentSelected = currentSelected,
+            rawPeople = rawPeople,
+            filteredPeople = filteredPeople,
+            asGrid = asGrid,
+            searchQuery = searchQuery,
+            onLoad = onLoad,
+            onOpenUser = onOpenUser
+        )
+    }
+}
+
+private fun LazyGridScope.successStateItems(
+    state: UserSocialViewModel.SocialState.Success,
+    currentSelected: SocialList,
+    rawPeople: List<FollowUser>,
+    filteredPeople: List<FollowUser>,
+    asGrid: Boolean,
+    searchQuery: String,
+    onLoad: (SocialList) -> Unit,
+    onOpenUser: (FollowUser) -> Unit
+) {
+    if (rawPeople.isEmpty()) {
+        emptyStateItems(state = state, currentSelected = currentSelected, onLoad = onLoad)
+    } else if (filteredPeople.isEmpty()) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                text = "No matches for \"$searchQuery\"",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp)
+            )
+        }
+    } else if (asGrid) {
+        items(
+            items = filteredPeople,
+            // Scoped by list, because the grid is showing one list at a time but
+            // both are in the same `LazyVerticalGrid`. Following somebody who also
+            // follows you puts their id in *both* lists, and a bare `id` key then
+            // matches the same slot twice on the switch - so the grid tries to
+            // animate one person into a different person instead of replacing the
+            // list.
+            //
+            // The view mode is part of the key for the same reason: a face card
+            // and a name row are not two states of one item, they are different
+            // items, and sharing a key would make the Lazy layout reuse one slot's
+            // state for the other.
+            key = { "${currentSelected}_g_${it.id}" },
+            contentType = { "follower_grid" }
+        ) { person ->
+            FollowerCard(
+                person = person,
+                onClick = { onOpenUser(person) }
+            )
+        }
+    } else {
+        items(
+            items = filteredPeople,
+            key = { "${currentSelected}_l_${it.id}" },
+            // One per line, which is what makes the name readable rather than
+            // truncated: the row is the grid's own full-span slot, so both modes
+            // stay in one `LazyVerticalGrid` and the scroll position and the
+            // search field above them are not rebuilt when the mode changes.
+            span = { GridItemSpan(maxLineSpan) },
+            contentType = { "follower_row" }
+        ) { person ->
+            FollowerRow(
+                person = person,
+                onClick = { onOpenUser(person) }
+            )
+        }
+    }
+}
+
+/**
+ * A `Success` state with no rows.
+ *
+ * Three different things look identical here - nothing on screen - and only one
+ * of them is a sentence about this person.
+ *
+ * A re-fetch of a list that has no rows yet is still fetching, and the two
+ * outcomes of that are not yet known. The half that *failed* is not the half
+ * that is empty: saying "nobody follows this account" because one request was
+ * refused states a fact about that person that nothing has evidence for, so it
+ * keeps the reason and the re-ask instead. Only a list that came back with
+ * nobody in it gets the empty message.
+ */
+private fun LazyGridScope.emptyStateItems(
+    state: UserSocialViewModel.SocialState.Success,
+    currentSelected: SocialList,
+    onLoad: (SocialList) -> Unit
+) {
+    val shownFailed = state.failedList == currentSelected
+    when {
+        state.isRefreshing ->
+            item(span = { GridItemSpan(maxLineSpan) }) { SocialLoading() }
+
+        shownFailed && state.failureMessage != null ->
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialError(
+                    message = state.failureMessage,
+                    // The deliberate re-ask, which is also what a tap on the
+                    // failed chip does.
+                    onRetry = { onLoad(currentSelected) }
+                )
+            }
+
+        else ->
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialEmpty(selected = state.selected)
+            }
     }
 }

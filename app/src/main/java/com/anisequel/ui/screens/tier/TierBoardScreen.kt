@@ -22,20 +22,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -65,7 +59,6 @@ import com.anisequel.domain.tier.onlyFor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import kotlinx.coroutines.delay
 
 /**
  * The open list: its rows, its posters, and the edits to both.
@@ -142,12 +135,20 @@ internal fun TierBoardScreen(
 
     // The board's zoom is a *local* value between gestures so a pinch does not
     // write to DataStore on every frame; the stored value is the starting point
-    // and the debounce below is the only writer. `rememberSaveable` keyed on the
-    // list id means switching lists starts from that list's own zoom rather than
-    // carrying the previous one across.
+    // and [TierBoardZoomPersistence] owns the mirroring, the debounced write and
+    // the flush on the way out. `rememberSaveable` keyed on the list id means
+    // switching lists starts from that list's own zoom rather than carrying the
+    // previous one across.
     var zoom by rememberSaveable(document.id) {
         mutableFloatStateOf(clampTierZoom(display.zoom))
     }
+    TierBoardZoomPersistence(
+        documentId = document.id,
+        zoom = zoom,
+        storedZoom = display.zoom,
+        onLocalZoomChanged = { zoom = it },
+        onZoomChange = onZoomChange
+    )
 
     // Whether the board is in view-only mode. Remembered across rotation, but
     // never written to the store: it exists for the length of one look at the
@@ -174,25 +175,6 @@ internal fun TierBoardScreen(
     // to be forgotten.
     val whenEditable: (() -> Unit) -> Unit = { action ->
         if (!boardLocked) action()
-    }
-
-    // A change made elsewhere - "Reset zoom" in the display sheet - has to reach
-    // the board. Comparing first stops this from fighting the local value on the
-    // composition where the debounced write lands.
-    LaunchedEffect(display.zoom) {
-        val stored = clampTierZoom(display.zoom)
-        if (stored != zoom) zoom = stored
-    }
-
-    // Debounced rather than written on every pinch frame. A `delay` inside a
-    // `LaunchedEffect` keyed on the zoom is the whole debounce: a new value
-    // cancels the pending write, so the store sees the value the gesture settled
-    // on and nothing in between.
-    LaunchedEffect(zoom) {
-        if (zoom != clampTierZoom(display.zoom)) {
-            delay(ZOOM_WRITE_DELAY_MS)
-            onZoomChange(zoom)
-        }
     }
 
     // The pool's drag, hoisted above both the tray that writes it and the overlay
@@ -261,6 +243,16 @@ internal fun TierBoardScreen(
     // legend is the last thing in the scrolling column, and chrome floating over
     // the one row that explains the gestures is worse than a little empty space.
     val trayVisible = unranked.isNotEmpty()
+    // The tray floats over the bottom of the viewport and the board scrolls
+    // behind it. That strip is drawn but not visible, so it cannot honestly
+    // receive a drop - the board and the tray's own drag both stop at this line
+    // instead of filing a poster into a row trapped under the shelf. Published
+    // through `SideEffect` because the drop resolver in a pointer coroutine reads
+    // it after layout, and composition must not write state its siblings read.
+    val trayHeightPx = with(LocalDensity.current) { TIER_TRAY_HEIGHT.toPx() }
+    SideEffect {
+        viewport.bottomOcclusionPx = if (trayVisible) trayHeightPx else 0f
+    }
     val controlsBottom = if (trayVisible) {
         TIER_TRAY_HEIGHT + TIER_CONTROLS_GAP
     } else {
@@ -291,90 +283,14 @@ internal fun TierBoardScreen(
             .fillMaxSize()
             .testTag("tier_list_screen"),
         topBar = {
-            TopAppBar(
-                // The list's own name, not the feature's. Which list you are in is
-                // the one thing a bar over a board full of posters cannot tell you
-                // by looking at it.
-                title = {
-                    Text(
-                        text = document.name,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onLeave,
-                        modifier = Modifier.testTag("tier_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Your tier lists"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { sheets.zooming = true },
-                        modifier = Modifier.testTag("tier_zoom_button")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.Search,
-                            contentDescription = "Zoom"
-                        )
-                    }
-                    Box {
-                        IconButton(
-                            onClick = { sheets.filtering = true },
-                            modifier = Modifier.testTag("tier_filter_button")
-                        ) {
-                            Icon(
-                                imageVector = AppVectorIcons.Filter,
-                                contentDescription = "Filters"
-                            )
-                        }
-                        // A dot rather than a count: the number of hidden statuses
-                        // is not a number anybody acts on, but "a filter is on" is
-                        // the thing that explains a short board.
-                        if (!filter.isDefault) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 10.dp, end = 10.dp)
-                                    .size(8.dp)
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { sheets.displaying = true },
-                        modifier = Modifier.testTag("tier_display_button")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.SectionAppearance,
-                            contentDescription = "Display options"
-                        )
-                    }
-                    // An icon rather than a "Tiers" text button. Four actions and
-                    // a back arrow have to fit a 360dp bar; the word cost ~92dp
-                    // and left the list's own name with about a hundred, which is
-                    // not enough for the one piece of text that says which list
-                    // is open.
-                    IconButton(
-                        onClick = { sheets.managingTiers = true },
-                        modifier = Modifier.testTag("tier_manage_button")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.Tune,
-                            contentDescription = "Manage tiers"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            TierBoardTopBar(
+                title = document.name,
+                filterActive = !filter.isDefault,
+                onLeave = onLeave,
+                onZoom = { sheets.zooming = true },
+                onFilter = { sheets.filtering = true },
+                onDisplay = { sheets.displaying = true },
+                onManage = { sheets.managingTiers = true }
             )
         }
     ) { scaffoldPadding ->
@@ -749,6 +665,3 @@ private fun TierBoardLockBanner(
  * tray's own height: two literals that had to agree, in two files, would drift.
  */
 private val CONTROLS_RESTING_GAP = 16.dp
-
-/** How long a pinch has to be still before its zoom is written to the store. */
-private const val ZOOM_WRITE_DELAY_MS = 600L

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -205,85 +206,18 @@ fun ProfileActivityTab(
             }
         }
 
-        when (activityState) {
-            is UserActivityViewModel.ActivityState.Idle,
-            is UserActivityViewModel.ActivityState.Loading -> {
-                item(key = "activity_loading") {
-                    ActivityLoading()
-                }
-            }
-
-            is UserActivityViewModel.ActivityState.Error -> {
-                item(key = "activity_error") {
-                    ActivityError(
-                        message = activityState.message,
-                        onRetry = onRetry
-                    )
-                }
-            }
-
-            is UserActivityViewModel.ActivityState.Success -> {
-                if (activityState.activities.isEmpty()) {
-                    item(key = "activity_empty") {
-                        ActivityEmpty()
-                    }
-                } else {
-                    items(
-                        items = activityState.activities,
-                        key = { it.id },
-                        // Two card shapes now share this list; telling LazyColumn
-                        // which is which keeps its reuse slots from mixing a
-                        // poster row with a post row's composition.
-                        contentType = { if (it.isTextPost) "post" else "list" }
-                    ) { activity ->
-                        ActivityCard(
-                            activity = activity,
-                            userName = userName,
-                            userAvatar = userAvatar,
-                            modifier = Modifier
-                                .widthIn(max = ProfileMaxContentWidth)
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            onLike = { onLike(activity.id) },
-                            onComments = { onOpenComments(activity.id) },
-                            onOpenLikers = { onOpenLikers(activity.id) },
-                            onOpenDetail = onOpenDetail,
-                            likePending = activity.id in activityState.pendingLikes,
-                            nowEpochSecond = nowEpochSecond.longValue
-                        )
-                    }
-
-                    if (activityState.loadMoreError != null) {
-                        // Drawn instead of the spinner, and *before* the
-                        // `hasMore` check: `hasMore` is still true after a failed
-                        // page, so a plain spinner here would sit under a feed
-                        // that has stopped growing with nothing to indicate why.
-                        //
-                        // A tap, rather than relying on the reader to scroll away
-                        // from the end and back to re-trigger `shouldPage`, which
-                        // is the only thing that used to retry a page.
-                        item(key = "activity_more_error") {
-                            ActivityPagingRetry(
-                                message = activityState.loadMoreError,
-                                onRetry = onLoadNextPage
-                            )
-                        }
-                    } else if (activityState.hasMore) {
-                        item(key = "activity_more") {
-                            ActivityPagingIndicator(loading = activityState.isLoadingMore)
-                        }
-                    } else if (activityState.activities.size >= PAGE_TRIGGER_ROWS) {
-                        // Only on a feed long enough to have been paged. Saying
-                        // "that's everything" under three rows is noise; under a
-                        // scrollback it is the difference between a feed that
-                        // ended and one that silently failed to load more.
-                        item(key = "activity_end") {
-                            ActivityFeedEnd()
-                        }
-                    }
-                }
-            }
-        }
+        activityFeedItems(
+            activityState = activityState,
+            userName = userName,
+            userAvatar = userAvatar,
+            nowEpochSecond = nowEpochSecond.longValue,
+            onLoadNextPage = onLoadNextPage,
+            onRetry = onRetry,
+            onLike = onLike,
+            onOpenComments = onOpenComments,
+            onOpenLikers = onOpenLikers,
+            onOpenDetail = onOpenDetail
+        )
     }
 
     // The comment sheet is NOT rendered here, and that is deliberate.
@@ -298,6 +232,107 @@ fun ProfileActivityTab(
     // sheets on this screen had opposite lifetimes for no reason either could state.
     //
     // `UserProfileScreen` draws both, as siblings of the tab content.
+}
+
+/**
+ * The feed itself, for whichever load state it is in.
+ *
+ * Out of [ProfileActivityTab] because the tab's own work - the paging trigger,
+ * the minute ticker, the calendar header - was tangled with a state `when` that
+ * nested four more branches, so the reader of the composable could not tell the
+ * page's scaffolding from the feed's contents.
+ */
+private fun LazyListScope.activityFeedItems(
+    activityState: UserActivityViewModel.ActivityState,
+    userName: String?,
+    userAvatar: String?,
+    nowEpochSecond: Long,
+    onLoadNextPage: () -> Unit,
+    onRetry: () -> Unit,
+    onLike: (Int) -> Unit,
+    onOpenComments: (Int) -> Unit,
+    onOpenLikers: (Int) -> Unit,
+    onOpenDetail: (MediaNode) -> Unit
+) {
+    when (activityState) {
+        is UserActivityViewModel.ActivityState.Idle,
+        is UserActivityViewModel.ActivityState.Loading -> {
+            item(key = "activity_loading") {
+                ActivityLoading()
+            }
+        }
+
+        is UserActivityViewModel.ActivityState.Error -> {
+            item(key = "activity_error") {
+                ActivityError(
+                    message = activityState.message,
+                    onRetry = onRetry
+                )
+            }
+        }
+
+        is UserActivityViewModel.ActivityState.Success -> {
+            if (activityState.activities.isEmpty()) {
+                item(key = "activity_empty") {
+                    ActivityEmpty()
+                }
+            } else {
+                items(
+                    items = activityState.activities,
+                    key = { it.id },
+                    // Two card shapes now share this list; telling LazyColumn
+                    // which is which keeps its reuse slots from mixing a poster
+                    // row with a post row's composition.
+                    contentType = { if (it.isTextPost) "post" else "list" }
+                ) { activity ->
+                    ActivityCard(
+                        activity = activity,
+                        userName = userName,
+                        userAvatar = userAvatar,
+                        modifier = Modifier
+                            .widthIn(max = ProfileMaxContentWidth)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        onLike = { onLike(activity.id) },
+                        onComments = { onOpenComments(activity.id) },
+                        onOpenLikers = { onOpenLikers(activity.id) },
+                        onOpenDetail = onOpenDetail,
+                        likePending = activity.id in activityState.pendingLikes,
+                        nowEpochSecond = nowEpochSecond
+                    )
+                }
+
+                if (activityState.loadMoreError != null) {
+                    // Drawn instead of the spinner, and *before* the `hasMore`
+                    // check: `hasMore` is still true after a failed page, so a
+                    // plain spinner here would sit under a feed that has stopped
+                    // growing with nothing to indicate why.
+                    //
+                    // A tap, rather than relying on the reader to scroll away
+                    // from the end and back to re-trigger `shouldPage`, which
+                    // is the only thing that used to retry a page.
+                    item(key = "activity_more_error") {
+                        ActivityPagingRetry(
+                            message = activityState.loadMoreError,
+                            onRetry = onLoadNextPage
+                        )
+                    }
+                } else if (activityState.hasMore) {
+                    item(key = "activity_more") {
+                        ActivityPagingIndicator(loading = activityState.isLoadingMore)
+                    }
+                } else if (activityState.activities.size >= PAGE_TRIGGER_ROWS) {
+                    // Only on a feed long enough to have been paged. Saying
+                    // "that's everything" under three rows is noise; under a
+                    // scrollback it is the difference between a feed that
+                    // ended and one that silently failed to load more.
+                    item(key = "activity_end") {
+                        ActivityFeedEnd()
+                    }
+                }
+            }
+        }
+    }
 }
 
 private const val PAGE_TRIGGER_ROWS = 6

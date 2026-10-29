@@ -1,11 +1,17 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -114,16 +120,29 @@ fun ThemeTab(
             themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
             themeSettings.appBackgroundColor != null
 
-        if (appearanceChanged) {
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsButton(
-                text = "Reset appearance",
-                onClick = { scope.launch { themePreferences.reset() } },
-                icon = AppVectorIcons.Restore,
-                variant = SettingsButtonVariant.Outlined,
-                fillWidth = true,
-                testTag = "reset_appearance_button"
-            )
+        // The button used to appear with a bare `if`, fully drawn on the next
+        // frame - so the page jumped by a button's height the moment the reader
+        // changed anything, and jumped back when they reset. The expansion makes
+        // the movement the thing they see, matching the reset rows on the
+        // Library page.
+        AnimatedVisibility(
+            visible = appearanceChanged,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsButton(
+                    text = "Reset appearance",
+                    onClick = { scope.launch { themePreferences.reset() } },
+                    icon = AppVectorIcons.Restore,
+                    variant = SettingsButtonVariant.Outlined,
+                    fillWidth = true,
+                    testTag = "reset_appearance_button"
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

@@ -109,6 +109,39 @@ internal class TierDragState {
             skipMediaId = mediaId
         )
     }
+
+    /**
+     * [drop], except a release inside the strip floating chrome covers names no row.
+     *
+     * The board scrolls *behind* the tray, so the rows along the bottom of the
+     * viewport are drawn but cannot be seen while it is out. Geometry alone does
+     * not know that: it used to file the poster into a tier hidden under the
+     * shelf, and the title vanished from the finger with no way to see where it
+     * went. A release over the shelf is answered like a release over the gaps
+     * between rows - take it out of the list - which puts it back in the tray it
+     * was dropped on, where the person can see it.
+     *
+     * The finger's *window* position is the board's position at lift plus the
+     * travel: scrolling the board under a stationary finger moves no pointer
+     * event, which is exactly why this cannot be read from the live board top.
+     */
+    fun releaseDrop(
+        arrangement: TierListLayout,
+        zoom: Float,
+        density: Float,
+        viewport: TierBoardViewport
+    ): TierDrop {
+        val windowY = boardTop + origin.y + travel.value.y
+        if (windowY > viewport.visibleBottom) {
+            return TierDrop(tierId = null, beforeMediaId = null)
+        }
+        return drop(
+            arrangement = arrangement,
+            zoom = zoom,
+            density = density,
+            scrollShift = boardTop - viewport.boardTop
+        )
+    }
 }
 
 /**
@@ -136,14 +169,25 @@ internal fun tierDropAtWindow(
     boardTop: Float,
     density: Float,
     zoom: Float,
-    skipMediaId: Int? = null
-): TierDrop = tierDropPlacement(
-    rows = rows,
-    items = items,
-    x = (windowX - boardLeft) / density / zoom,
-    y = (windowY - boardTop) / density / zoom,
-    skipMediaId = skipMediaId
-)
+    skipMediaId: Int? = null,
+    /**
+     * The lowest window y a release can honestly name a row at - the visible
+     * bottom, above the tray. A pointer past it is over chrome the board scrolls
+     * behind, so the answer is "no tier" rather than the hidden row the geometry
+     * happens to sit under. Defaults to no limit so the arithmetic stays testable
+     * on its own.
+     */
+    bottomLimitY: Float = Float.POSITIVE_INFINITY
+): TierDrop {
+    if (windowY > bottomLimitY) return TierDrop(tierId = null, beforeMediaId = null)
+    return tierDropPlacement(
+        rows = rows,
+        items = items,
+        x = (windowX - boardLeft) / density / zoom,
+        y = (windowY - boardTop) / density / zoom,
+        skipMediaId = skipMediaId
+    )
+}
 
 /**
  * Auto-scroll while a drag is held near an edge.
@@ -183,7 +227,10 @@ internal fun TierEdgeAutoScroll(
                 pointerY = currentPointerY(),
                 viewportTop = viewport.viewportTop,
                 viewportBottom = viewport.viewportBottom,
-                edge = edgePx
+                edge = edgePx,
+                // The tray covers the bottom of the viewport, so the band the
+                // finger can actually judge sits above it, not under it.
+                bottomLimit = viewport.visibleBottom
             )
             if (strength != 0f) {
                 // The raw delta rather than `scrollBy`: this is a gesture moving a
@@ -229,9 +276,11 @@ internal fun TierDragHint(
     dragging: Boolean,
     hoveredTierId: String?,
     tiers: List<TierDefinition>,
-    onDragHintChanged: (String?) -> Unit
+    onDragHintChanged: (String?) -> Unit,
+    /** Whether the poster being carried came out of the tray rather than the board. */
+    fromTray: Boolean = false
 ) {
-    val hint = if (!dragging) null else tierDragHint(tiers, hoveredTierId)
+    val hint = if (!dragging) null else tierDragHint(tiers, hoveredTierId, fromTray)
     LaunchedEffect(hint) { onDragHintChanged(hint) }
     DisposableEffect(Unit) {
         onDispose { onDragHintChanged(null) }
@@ -278,12 +327,13 @@ internal fun Modifier.tierDragHandler(
                 //
                 // The scroll shift is read live, like the travel: the board may
                 // have auto-scrolled since the lift, and the finger did not move
-                // with it.
-                val target = drag.drop(
+                // with it. A release over the tray resolves to no tier as well -
+                // see [releaseDrop] - because the rows under it are not visible.
+                val target = drag.releaseDrop(
                     arrangement = arrangement,
                     zoom = zoom,
                     density = density,
-                    scrollShift = drag.boardTop - viewport.boardTop
+                    viewport = viewport
                 )
                 onMove(mediaId, target.tierId, target.beforeMediaId)
             }

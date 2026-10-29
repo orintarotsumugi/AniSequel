@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -146,19 +145,15 @@ fun ActivityCalendarCard(
             AnimatedContent(
                 targetState = showWeek,
                 transitionSpec = {
-                    (
-                        fadeIn(animationSpec = ExpressiveMotion.FastSpatial) +
-                            scaleIn(
-                                animationSpec = ExpressiveMotion.FastSpatial,
-                                initialScale = 0.96f
-                            )
-                    ) togetherWith (
-                        fadeOut(animationSpec = ExpressiveMotion.FastSpatial) +
-                            scaleOut(
-                                animationSpec = ExpressiveMotion.FastSpatial,
-                                targetScale = 0.96f
-                            )
-                    )
+                    fadeIn(animationSpec = ExpressiveMotion.FastSpatial) +
+                        scaleIn(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            initialScale = 0.96f
+                        ) togetherWith fadeOut(animationSpec = ExpressiveMotion.FastSpatial) +
+                        scaleOut(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            targetScale = 0.96f
+                        )
                 },
                 label = "calendar_range"
             ) { weekView ->

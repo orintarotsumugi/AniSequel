@@ -4,6 +4,26 @@
       "version": "1.6.8",
       "entries": [
         {
+          "title": "A drop under the tray says what it does",
+          "detail": "The unranked tray floats over the bottom of the board and the board scrolls behind it, but a release over that strip was resolved like any other drop: the title was filed into a tier hidden under the shelf and seemed to vanish. A release over the tray now means no tier - for picks from the board and from the tray alike - and the bottom auto-scroll band sits above the shelf rather than under it. A tray drag released away from every row also says it will stay in the pool, instead of promising to take it out of a list it was never in."
+        },
+        {
+          "title": "The board stops scrolling when the finger does",
+          "detail": "Auto-scrolling to carry a poster to a row off screen read the board's position live rather than its position when the poster was picked up - so the board slid underneath a stationary finger, the computed pointer climbed out of the bottom band and the scroll stopped a row or two short. The pointer is now the lift-time position plus the travel, which is where the finger actually is."
+        },
+        {
+          "title": "A pinch is kept even when you leave at once",
+          "detail": "The board's zoom was written on a debounce, and leaving the board inside that window cancelled the write - a pinch followed quickly by Back was lost, and the next visit opened at the old size. Leaving now flushes the pending zoom, an arriving echo of the app's own write no longer snaps a newer pinch back, and a zoom restored from saved state is no longer overwritten by the stored value on the first frame. Zoom and caption changes are stored separately from edits as well: going through the normal write stamped the list's edited time, so merely opening a board and pinching reordered a library sorted by recently edited."
+        },
+        {
+          "title": "The export says why it is empty",
+          "detail": "An empty export explained itself with one of two sentences, so a board whose library had not loaded yet was told to rank a title it had already ranked, and one whose ranked titles had left the library was told to clear a filter that hid nothing. The sheet now distinguishes nothing ranked, everything filtered out, a library still loading, and titles gone from the library. The resolution caption also says `Up to`, because the renderer halves its memory budget when the full-size bitmap does not fit - the number is a ceiling, not a promise."
+        },
+        {
+          "title": "Settings remembers the page you were on",
+          "detail": "The Settings shelf and its pages are two compositions, and the outgoing one was thrown away when the slide finished - so every page started at the top again, and the shelf itself forgot where it had been scrolled. Each destination now keeps its saved state while it is off screen, the same way the profile tabs do. The Account row on the shelf also says who is signed in - the one live fact on a shelf of page descriptions - and falls back to saying the demo list is being browsed. The Reset appearance and Reset joke settings buttons now expand into place on the same spring as the rest of the app instead of shoving the page down on one frame."
+        },
+        {
           "title": "The full-screen viewer shows both of AniList's images",
           "detail": "The viewer drew the poster and nothing else, so the banner - the one wide piece of art AniList serves, and the backdrop the hero is built on - could not be seen full size anywhere in the app. It now offers every image the title actually carries as a source: the poster and, when there is one, the banner. The artwork's own ratio is measured rather than assumed, so a wide banner is not letterboxed in a poster's frame, and switching sources resets the zoom and the pan limits that belonged to the other image. The save button saves the source on screen rather than a fixed URL - a banner saves a banner - by copying the CDN's own bytes into Pictures/AniSequel, so the gallery gets the original file instead of a re-encode. Two link pills under it open AniList and, for anime, LiveChart."
         },

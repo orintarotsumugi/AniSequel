@@ -3,20 +3,11 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.anisequel.data.model.AnimeStats
-import com.anisequel.data.model.FavouriteCharacter
-import com.anisequel.data.model.FavouriteStaff
-import com.anisequel.data.model.FormatAmount
-import com.anisequel.data.model.GenreAmount
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaListEntryItem
-import com.anisequel.data.model.MediaNode
-import com.anisequel.data.model.StudioNode
-import com.anisequel.data.model.TagAmount
 import com.anisequel.data.model.UserOverview
-import com.anisequel.data.model.YearAmount
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
@@ -33,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 
 /**
@@ -94,6 +84,20 @@ class UserOverviewViewModel(
 
     private val _uiState = MutableStateFlow<UserOverviewUiState>(UserOverviewUiState.Loading())
     val uiState: StateFlow<UserOverviewUiState> = _uiState.asStateFlow()
+
+    /**
+     * The network-to-screen mapping, kept out of the load pipeline.
+     *
+     * It needs the three chart use cases, which is why they are still constructor
+     * parameters here: tests and the factory keep injecting them, and the mapper
+     * is built from them once.
+     */
+    private val stateMapper = UserOverviewStateMapper(
+        isDemo = isDemo,
+        buildActivityCalendar = buildActivityCalendar,
+        buildListInsights = buildListInsights,
+        buildListEntryInsights = buildListEntryInsights
+    )
 
     /**
      * The in-flight load, cancelled before another starts.
@@ -321,7 +325,7 @@ class UserOverviewViewModel(
             val list = result.getOrNull() ?: loadedList
                 ?: if (isDemo) null else lastKnownListForScreen()
             loadedList = list
-            _uiState.value = buildState(
+            _uiState.value = stateMapper.buildState(
                 overview = overview,
                 list = list,
                 isRefreshing = false,
@@ -363,31 +367,7 @@ class UserOverviewViewModel(
         loadJob = viewModelScope.launch {
             val name = username?.takeUnless { it.isBlank() }
 
-            // Paint the saved copy before the first request leaves.
-            //
-            // This is the profile and Library half of the dashboard's cold-start
-            // paint. Without it a cold start went straight to `Loading`, and a
-            // failed request went straight to the failure page - even though the
-            // bio, the favourites and the whole list were sitting in the snapshot
-            // directory. Not on a manual refresh (`forceRefresh`): the reader
-            // asked for a new answer, not for the one they are already reading.
-            var paintedList: MediaListCollection? = null
-            if (!isDemo && !forceRefresh) {
-                val saved = aniListRepository.lastKnownOverview(userId, name)
-                if (saved != null) {
-                    paintedList = lastKnownListForScreen()
-                    loadedOverview = saved
-                    loadedList = paintedList
-                    _uiState.value = buildState(
-                        overview = saved,
-                        list = paintedList,
-                        isRefreshing = false,
-                        isLibraryLoading = paintedList == null,
-                        isCached = true
-                    )
-                    loadMediaCovers(saved.about)
-                }
-            }
+            val paintedList = paintSavedCopy(name, forceRefresh)
 
             // One request for the page, and the expensive half beside it.
             //
@@ -401,13 +381,7 @@ class UserOverviewViewModel(
             // the bio and the favourites are on screen while the tallies are still
             // being counted. `isLibraryLoading` is what keeps the two readers from
             // showing zeroes as if they were answers.
-            val overviewDeferred = async {
-                if (isDemo) {
-                    Result.success(aniListRepository.getDemoUserOverview())
-                } else {
-                    aniListRepository.getUserOverview(userId, name, forceRefresh)
-                }
-            }
+            val overviewDeferred = async { fetchOverview(name, forceRefresh) }
             // Somebody else's list is only asked for once it is wanted - see
             // [fetchProfileListEagerly] for the failure that made this a question
             // rather than a freebie. `loadedList != null` is the other half: once the
@@ -424,41 +398,7 @@ class UserOverviewViewModel(
                 // cannot be shown either way, and the list query is the
                 // expensive half of the pair.
                 listDeferred?.cancel()
-                val cached = _uiState.value as? UserOverviewUiState.Success
-                // A dead token is not something a saved copy may hide: the profile
-                // would keep claiming a session that AniList has already refused,
-                // and the "Sign in again" exit is on the error state.
-                val isDeadSession = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
-                if (cached != null && !isDeadSession) {
-                    // The saved copy is on screen and belongs to this person. Keep
-                    // it, marked as such, instead of replacing a readable profile
-                    // with a failure page. The flag is preserved rather than forced:
-                    // a refresh of a live page that fails leaves a live page behind,
-                    // and calling that "saved" would be wrong in the other
-                    // direction.
-                    //
-                    // The library half is cancelled with the overview, so if the
-                    // painted copy had no list the "still loading" flag it was given
-                    // has nobody left to clear it. Left set, the Stats tab and the
-                    // Library page spin forever over a profile that has finished
-                    // loading; the honest state is "no list, and here is why".
-                    _uiState.value = cached.copy(
-                        isRefreshing = false,
-                        // In lazy mode there was no fetch to cancel, so a list that
-                        // has not been asked for yet must stay "not asked for yet".
-                        // Flipping it to a failure here would report a list that
-                        // nobody requested as one AniList refused.
-                        isLibraryLoading = cached.isLibraryLoading && listDeferred == null,
-                        libraryError = cached.libraryError
-                            ?: if (cached.isLibraryLoading && listDeferred != null) {
-                                "AniList didn't return this list."
-                            } else {
-                                null
-                            }
-                    )
-                } else {
-                    _uiState.value = errorState(error, "Failed to load the AniList profile")
-                }
+                settleFailedOverview(error, listWasRequested = listDeferred != null)
                 return@launch
             }
 
@@ -474,24 +414,7 @@ class UserOverviewViewModel(
             // the length of the download - trading a slow first paint for a slow
             // every refresh. The previous tallies are seconds old and the refresh
             // bar is already saying the page is being replaced.
-            val alreadyShowing = (_uiState.value as? UserOverviewUiState.Success)?.userId == overview.id
-            loadedOverview = overview
-            if (!alreadyShowing) {
-                // In lazy mode this is not a transient: the list is what it is
-                // until a tab asks, so the state it publishes with has to be the
-                // one that survives (`isLibraryLoading` reading "not asked yet").
-                val listSoFar = if (listDeferred == null) loadedList else null
-                _uiState.value = buildState(
-                    overview = overview,
-                    list = listSoFar,
-                    isRefreshing = false,
-                    // Either on its way, or not asked for yet: both mean the same
-                    // thing to the two readers - the tallies they would print are
-                    // not final, and `isLibraryLoading` is what stops zeroes being
-                    // presented as answers.
-                    isLibraryLoading = listSoFar == null
-                )
-            }
+            publishFreshOverview(overview, listWasRequested = listDeferred != null)
 
             // Here rather than after the list is awaited, so the bio's posters
             // are fetched in parallel with the chunked list download instead of
@@ -511,16 +434,11 @@ class UserOverviewViewModel(
             // with every chip reading (0) and no way to try again.
             val listResult = listDeferred?.await()
             val liveList = listResult?.getOrNull()
-            // A failed list fetch falls back to the last one this device has, on
-            // the same terms as the profile itself. The bio and the favourites are
-            // already live by here, so the alternative was a page that is half
-            // today and half empty - with every chart reading zero.
-            val list = liveList ?: paintedList ?: loadedList
-                ?: if (isDemo) null else lastKnownListForScreen()
+            val list = resolveListAfterFetch(liveList, paintedList)
             val usedSavedList = liveList == null && list != null
             loadedList = list
 
-            _uiState.value = buildState(
+            _uiState.value = stateMapper.buildState(
                 overview = overview,
                 list = list,
                 isRefreshing = false,
@@ -528,21 +446,146 @@ class UserOverviewViewModel(
                 // yet", which the tabs show as *counting* rather than as zeroes -
                 // and it is cleared by [loadAnimeLibrary], the call the tab makes.
                 isLibraryLoading = list == null && listResult == null,
-                libraryError = when {
-                    list != null -> null
-                    // A fetch that was asked for and failed is the only case with a
-                    // reason to print. When nobody asked, `isLibraryLoading` is the
-                    // honest flag and inventing a failure here would blame AniList
-                    // for a request it never saw.
-                    listResult != null ->
-                        listResult.exceptionOrNull()?.message ?: "AniList didn't return this list."
-                    else -> null
-                },
+                libraryError = libraryErrorFor(list, listResult),
                 // The overview itself is live here, so the page is only cached
                 // when the list half had to be given up on.
                 isCached = usedSavedList
             )
         }
+    }
+
+    /**
+     * Paints a saved copy before the first request leaves.
+     *
+     * This is the profile and Library half of the dashboard's cold-start paint.
+     * Without it a cold start went straight to `Loading`, and a failed request
+     * went straight to the failure page - even though the bio, the favourites
+     * and the whole list were sitting in the snapshot directory. Not on a manual
+     * refresh (`forceRefresh`): the reader asked for a new answer, not for the
+     * one they are already reading.
+     */
+    private suspend fun paintSavedCopy(name: String?, forceRefresh: Boolean): MediaListCollection? {
+        if (isDemo || forceRefresh) return null
+        val saved = aniListRepository.lastKnownOverview(userId, name) ?: return null
+        val paintedList = lastKnownListForScreen()
+        loadedOverview = saved
+        loadedList = paintedList
+        _uiState.value = stateMapper.buildState(
+            overview = saved,
+            list = paintedList,
+            isRefreshing = false,
+            isLibraryLoading = paintedList == null,
+            isCached = true
+        )
+        loadMediaCovers(saved.about)
+        return paintedList
+    }
+
+    private suspend fun fetchOverview(name: String?, forceRefresh: Boolean): Result<UserOverview> =
+        if (isDemo) {
+            Result.success(aniListRepository.getDemoUserOverview())
+        } else {
+            aniListRepository.getUserOverview(userId, name, forceRefresh)
+        }
+
+    /**
+     * What the screen keeps when the overview request fails.
+     *
+     * The saved copy is on screen and belongs to this person, so it stays,
+     * marked as such, instead of being replaced by a failure page - except for a
+     * dead token: that is not something a saved copy may hide, because the
+     * profile would keep claiming a session AniList has already refused, and
+     * the "Sign in again" exit is on the error state. The cached flag is
+     * preserved rather than forced: a refresh of a live page that fails leaves
+     * a live page behind, and calling that "saved" would be wrong in the other
+     * direction.
+     *
+     * The library half is cancelled with the overview, so if the painted copy
+     * had no list the "still loading" flag it was given has nobody left to clear
+     * it. Left set, the Stats tab and the Library page spin forever over a
+     * profile that has finished loading; the honest state is "no list, and here
+     * is why". In lazy mode there was no fetch to cancel, so a list that has
+     * not been asked for yet must stay "not asked for yet" - flipping it to a
+     * failure would report a list nobody requested as one AniList refused.
+     */
+    private fun settleFailedOverview(error: Throwable, listWasRequested: Boolean) {
+        val cached = _uiState.value as? UserOverviewUiState.Success
+        val isDeadSession = (error as? AniListException)?.kind == AniListErrorKind.INVALID_SESSION
+        if (cached == null || isDeadSession) {
+            _uiState.value = errorState(error, "Failed to load the AniList profile")
+            return
+        }
+        _uiState.value = cached.copy(
+            isRefreshing = false,
+            isLibraryLoading = cached.isLibraryLoading && !listWasRequested,
+            libraryError = cached.libraryError
+                ?: if (cached.isLibraryLoading && listWasRequested) {
+                    "AniList didn't return this list."
+                } else {
+                    null
+                }
+        )
+    }
+
+    /**
+     * Publishes the live overview before the list is awaited - unless this page
+     * is already painted.
+     *
+     * On a *refresh* the page is already showing, and publishing the list-less
+     * state over it would empty the Library grid and blank every entry-derived
+     * chart for the length of the download - trading a slow first paint for a
+     * slow every refresh. The previous tallies are seconds old and the refresh
+     * bar is already saying the page is being replaced.
+     *
+     * In lazy mode a missing list is not a transient: the list is what it is
+     * until a tab asks, so the state published here has to be the one that
+     * survives (`isLibraryLoading` reading "not asked yet").
+     */
+    private fun publishFreshOverview(overview: UserOverview, listWasRequested: Boolean) {
+        val alreadyShowing = (_uiState.value as? UserOverviewUiState.Success)?.userId == overview.id
+        loadedOverview = overview
+        if (alreadyShowing) return
+        val listSoFar = if (listWasRequested) null else loadedList
+        _uiState.value = stateMapper.buildState(
+            overview = overview,
+            list = listSoFar,
+            isRefreshing = false,
+            // Either on its way, or not asked for yet: both mean the same thing
+            // to the two readers - the tallies they would print are not final,
+            // and `isLibraryLoading` is what stops zeroes being presented as
+            // answers.
+            isLibraryLoading = listSoFar == null
+        )
+    }
+
+    /**
+     * A failed list fetch falls back to the last one this device has, on the
+     * same terms as the profile itself. The bio and the favourites are already
+     * live by here, so the alternative was a page that is half today and half
+     * empty - with every chart reading zero.
+     */
+    private suspend fun resolveListAfterFetch(
+        liveList: MediaListCollection?,
+        paintedList: MediaListCollection?
+    ): MediaListCollection? {
+        val fallback = liveList ?: paintedList ?: loadedList
+        return fallback ?: if (isDemo) null else lastKnownListForScreen()
+    }
+
+    /**
+     * The reason to print under a list-less page, when there is one.
+     *
+     * A fetch that was asked for and failed is the only case with a reason to
+     * print. When nobody asked, `isLibraryLoading` is the honest flag and
+     * inventing a failure here would blame AniList for a request it never saw.
+     */
+    private fun libraryErrorFor(
+        list: MediaListCollection?,
+        listResult: Result<MediaListCollection>?
+    ): String? = when {
+        list != null -> null
+        listResult != null -> listResult.exceptionOrNull()?.message ?: "AniList didn't return this list."
+        else -> null
     }
 
     private suspend fun fetchList(forceRefresh: Boolean): Result<MediaListCollection> = when {
@@ -575,77 +618,6 @@ class UserOverviewViewModel(
         userId != null -> aniListRepository.lastKnownAnimeList(userId)
         else -> username?.takeIf { it.isNotBlank() }
             ?.let { aniListRepository.lastKnownAnimeListByUsername(it) }
-    }
-
-    private fun buildState(
-        overview: UserOverview,
-        list: MediaListCollection?,
-        isRefreshing: Boolean,
-        isLibraryLoading: Boolean = false,
-        /** Null on the way in; see [UserOverviewUiState.Success.libraryError]. */
-        libraryError: String? = null,
-        isCached: Boolean = false
-    ): UserOverviewUiState.Success {
-        val favourites = overview.favourites
-        val animeStats = overview.statistics?.anime
-        val mangaStats = overview.statistics?.manga
-        // `stats` is the deprecated aggregate block. Everything below reads it
-        // defensively: AniList omits a distribution entirely for an account that
-        // has none, and a chart of nothing is better than a crash.
-        val aggregate = overview.stats
-        // Once. It walks every list entry, and this screen already holds the
-        // dashboard's list in memory - calling it three times because three
-        // charts need different slices of the answer would triple the walk for
-        // no reason.
-        val entries = buildListEntryInsights(list)
-
-        return UserOverviewUiState.Success(
-            userId = overview.id,
-            username = overview.name,
-            about = overview.about?.takeIf { it.isNotBlank() },
-            siteUrl = overview.siteUrl,
-            avatarUrl = overview.avatar?.large ?: overview.avatar?.medium,
-            bannerUrl = overview.bannerImage,
-            createdAt = overview.createdAt,
-            updatedAt = overview.updatedAt,
-            favouriteAnime = favourites?.anime?.nodes.orEmpty().distinctById(),
-            favouriteManga = favourites?.manga?.nodes.orEmpty().distinctById(),
-            favouriteCharacters = favourites?.characters?.nodes.orEmpty().distinctById(),
-            favouriteStaff = favourites?.staff?.nodes.orEmpty().distinctById(),
-            favouriteStudios = favourites?.studios?.nodes.orEmpty().distinctById(),
-            insights = buildListInsights(
-                animeStatusDistribution = aggregate?.animeStatusDistribution,
-                animeScoreDistribution = aggregate?.animeScoreDistribution,
-                // These four come from `statistics.anime`, not from the deprecated
-                // `stats` block: requesting `stats.favouredFormats` (and its three
-                // siblings) makes AniList answer HTTP 500 for the entire profile
-                // document, which is what the profile and Library pages were
-                // showing as "Ani-chan is having a nap". See [AnimeStats].
-                favouredFormats = animeStats?.formatAmounts(),
-                favouredYears = animeStats?.releaseYearAmounts(),
-                favouredGenres = animeStats?.genreAmounts(),
-                favouredTags = animeStats?.tagAmounts(),
-                countries = entries.countries,
-                releaseYears = entries.releaseYears
-            ),
-            entryInsights = entries,
-            activity = buildActivityCalendar(aggregate?.activityHistory),
-            libraryAnime = flattenLibrary(list),
-            animeCount = animeStats?.count ?: 0,
-            mangaCount = mangaStats?.count ?: 0,
-            episodesWatched = animeStats?.episodesWatched ?: 0,
-            minutesWatched = animeStats?.minutesWatched
-                ?: aggregate?.watchedTime?.toLong()
-                ?: 0L,
-            meanScore = animeStats?.meanScore
-                ?: aggregate?.animeListScores?.meanScore?.toDouble(),
-            standardDeviation = aggregate?.animeListScores?.standardDeviation,
-            isRefreshing = isRefreshing,
-            isLibraryLoading = isLibraryLoading,
-            libraryError = libraryError,
-            isCached = isCached,
-            isDemoMode = isDemo
-        )
     }
 
     /**

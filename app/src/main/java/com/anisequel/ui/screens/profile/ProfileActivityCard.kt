@@ -1,11 +1,13 @@
 package com.anisequel.ui.screens.profile
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -191,48 +193,7 @@ private fun ActivityListCard(
         border = CardDefaults.outlinedCardBorder()
     ) {
         Box {
-            // The cover, blown up and blurred behind its own card.
-            //
-            // The blur does real work rather than decoration: a *sharp* crop of
-            // the art sat its own lettering and faces directly behind the title
-            // and the status pill, so the card's text fought the background no
-            // matter how the scrim was weighted. Blurred into a wash, the show is
-            // still recognisable by palette and every glyph on the card is
-            // legible. The scrim is bottom-weighted for the same reason the
-            // header's is: the top stays art, the bottom stays readable.
-            if (coverUrl != null) {
-                AsyncImage(
-                    // Remembered rather than built inline: Coil compares requests by
-                    // value, so a fresh instance on every recomposition is a cache
-                    // lookup that can never hit - and this card recomposes when the
-                    // feed pages, when a like lands and when its press animates.
-                    model = remember(coverUrl, context) {
-                        ImageRequest.Builder(context)
-                            .data(coverUrl)
-                            .size(BACKDROP_DECODE_PX)
-                            .build()
-                    },
-                    contentDescription = null,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .blur(COVER_BLUR_RADIUS),
-                    contentScale = ContentScale.Crop,
-                    alpha = COVER_BACKGROUND_ALPHA
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.40f),
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.80f),
-                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.96f)
-                                )
-                            )
-                        )
-                )
-            }
+            ActivityCoverBackdrop(coverUrl = coverUrl, context = context)
 
             Column(modifier = Modifier.padding(14.dp)) {
                 ActivityAuthorRow(
@@ -244,93 +205,196 @@ private fun ActivityListCard(
                 )
 
                 Row {
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .width(96.dp)
-                            .aspectRatio(POSTER_ASPECT)
-                            .clip(MaterialTheme.shapes.medium)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberVectorPainter(
-                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
-                        ),
-                        error = rememberVectorPainter(
-                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
-                        ),
-                        fallback = rememberVectorPainter(
-                            if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
-                        )
-                    )
+                    ActivityPoster(coverUrl = coverUrl, isManga = isManga)
 
                     Spacer(modifier = Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        ActivityStatusPill(
-                            text = activity.displayStatusFor(isManga),
-                            status = activity.status
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = activityDetail(activity),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = media.title?.displayTitle.orEmpty(),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            // 8 rather than 12: the two controls below now carry a
-                            // 48dp minimum each, and at 12 this row needs 182dp of a
-                            // 190dp budget on a 360dp phone - so it fit only until
-                            // somebody turned the font size up.
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SequelInfoChip(
-                                icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
-                                label = if (isManga) "Manga" else "Anime"
-                            )
-                            EngagementAction(
-                                icon = if (activity.isLiked == true) {
-                                    AppVectorIcons.ActivityLiked
-                                } else {
-                                    AppVectorIcons.ActivityNotLiked
-                                },
-                                count = activity.likeCount ?: 0,
-                                active = activity.isLiked == true,
-                                enabled = activity.isLiked != null && !likePending,
-                                contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
-                                onClick = onLike,
-                                onLongClick = onOpenLikers,
-                                modifier = Modifier.testTag("activity_like_button")
-                            )
-                            EngagementAction(
-                                icon = AppVectorIcons.ActivityReplies,
-                                count = activity.replyCount ?: 0,
-                                active = false,
-                                enabled = true,
-                                contentDescription = "Comments",
-                                onClick = onComments,
-                                modifier = Modifier.testTag("activity_comments_button")
-                            )
-                        }
-                    }
+                    ActivityListDetails(
+                        activity = activity,
+                        media = media,
+                        isManga = isManga,
+                        likePending = likePending,
+                        onLike = onLike,
+                        onComments = onComments,
+                        onOpenLikers = onOpenLikers,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * The cover, blown up and blurred behind its own card.
+ *
+ * The blur does real work rather than decoration: a *sharp* crop of the art sat
+ * its own lettering and faces directly behind the title and the status pill, so
+ * the card's text fought the background no matter how the scrim was weighted.
+ * Blurred into a wash, the show is still recognisable by palette and every glyph
+ * on the card is legible. The scrim is bottom-weighted for the same reason the
+ * header's is: the top stays art, the bottom stays readable.
+ *
+ * A [BoxScope] extension because `matchParentSize` is: the wash has to take the
+ * card's measured size without influencing it, which is exactly what that modifier
+ * exists for and `fillMaxSize` does not do.
+ */
+@Composable
+private fun BoxScope.ActivityCoverBackdrop(coverUrl: String?, context: Context) {
+    if (coverUrl == null) return
+    AsyncImage(
+        // Remembered rather than built inline: Coil compares requests by value,
+        // so a fresh instance on every recomposition is a cache lookup that can
+        // never hit - and this card recomposes when the feed pages, when a like
+        // lands and when its press animates.
+        model = remember(coverUrl, context) {
+            ImageRequest.Builder(context)
+                .data(coverUrl)
+                .size(BACKDROP_DECODE_PX)
+                .build()
+        },
+        contentDescription = null,
+        modifier = Modifier
+            .matchParentSize()
+            .blur(COVER_BLUR_RADIUS),
+        contentScale = ContentScale.Crop,
+        alpha = COVER_BACKGROUND_ALPHA
+    )
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.40f),
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.80f),
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.96f)
+                    )
+                )
+            )
+    )
+}
+
+/** The fixed-width poster, falling back to the type's own glyph. */
+@Composable
+private fun ActivityPoster(coverUrl: String?, isManga: Boolean) {
+    // One painter for all three slots rather than three separate ones: the URL
+    // did not load, and the same title glyph is the honest answer for a
+    // placeholder, an error and a null cover alike.
+    val fallback = rememberVectorPainter(
+        if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime
+    )
+    AsyncImage(
+        model = coverUrl,
+        contentDescription = null,
+        modifier = Modifier
+            .width(96.dp)
+            .aspectRatio(POSTER_ASPECT)
+            .clip(MaterialTheme.shapes.medium)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentScale = ContentScale.Crop,
+        placeholder = fallback,
+        error = fallback,
+        fallback = fallback
+    )
+}
+
+/** The status pill, progress line, title and engagement controls beside the poster. */
+@Composable
+private fun ActivityListDetails(
+    activity: ProfileActivity,
+    media: MediaNode,
+    isManga: Boolean,
+    likePending: Boolean,
+    onLike: () -> Unit,
+    onComments: () -> Unit,
+    onOpenLikers: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        ActivityStatusPill(
+            text = activity.displayStatusFor(isManga),
+            status = activity.status
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = activityDetail(activity),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = media.title?.displayTitle.orEmpty(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ActivityActions(
+            activity = activity,
+            isManga = isManga,
+            likePending = likePending,
+            onLike = onLike,
+            onComments = onComments,
+            onOpenLikers = onOpenLikers
+        )
+    }
+}
+
+/** The type chip, the like control and the replies control, in one row. */
+@Composable
+private fun ActivityActions(
+    activity: ProfileActivity,
+    isManga: Boolean,
+    likePending: Boolean,
+    onLike: () -> Unit,
+    onComments: () -> Unit,
+    onOpenLikers: () -> Unit
+) {
+    // Read once: `isLiked` is nullable in the payload, and five separate
+    // `== true` comparisons made the null case look like a different answer
+    // from every place it was consulted.
+    val liked = activity.isLiked == true
+    Row(
+        // 8 rather than 12: the two controls below now carry a 48dp minimum
+        // each, and at 12 this row needs 182dp of a 190dp budget on a 360dp
+        // phone - so it fit only until somebody turned the font size up.
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SequelInfoChip(
+            icon = if (isManga) AppVectorIcons.FavouriteManga else AppVectorIcons.FavouriteAnime,
+            label = if (isManga) "Manga" else "Anime"
+        )
+        EngagementAction(
+            icon = if (liked) {
+                AppVectorIcons.ActivityLiked
+            } else {
+                AppVectorIcons.ActivityNotLiked
+            },
+            count = activity.likeCount ?: 0,
+            active = liked,
+            enabled = activity.isLiked != null && !likePending,
+            contentDescription = if (liked) "Unlike" else "Like",
+            onClick = onLike,
+            onLongClick = onOpenLikers,
+            modifier = Modifier.testTag("activity_like_button")
+        )
+        EngagementAction(
+            icon = AppVectorIcons.ActivityReplies,
+            count = activity.replyCount ?: 0,
+            active = false,
+            enabled = true,
+            contentDescription = "Comments",
+            onClick = onComments,
+            modifier = Modifier.testTag("activity_comments_button")
+        )
     }
 }
 

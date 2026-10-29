@@ -1,7 +1,7 @@
 package com.anisequel.ui.components.detail
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,18 +44,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -65,22 +62,15 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
-import com.anisequel.data.model.englishName
 import com.anisequel.data.model.formatLabel
-import com.anisequel.data.model.isManga
-import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
-import com.anisequel.data.model.romajiName
 import com.anisequel.data.model.statusLabel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.liveChartUrl
-import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -113,13 +103,16 @@ fun FullScreenCoverViewer(
     onDismiss: () -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    // Measured rather than assumed: the pan limits used to be the constants 300f and
-    // 400f, so a tall cover could be dragged past its own edge on a narrow phone and
-    // a wide one could not be dragged far enough on a tablet.
-    var coverSize by remember { mutableStateOf(IntSize.Zero) }
+    // Scale, pan and the measured frame live in one holder: the double-tap, the
+    // pinch and the background tap all move the same three values, and keeping
+    // them together is what lets each gesture be a method rather than another
+    // branch inside this composable.
+    //
+    // The pan limits are measured from the frame rather than the constants 300f
+    // and 400f this used to carry: a tall cover could be dragged past its own
+    // edge on a narrow phone, and a wide one could not be dragged far enough on
+    // a tablet.
+    val zoom = remember(media.id) { CoverZoomState() }
 
     val sources = remember(media.id, media.posterUrl, media.bannerImage) {
         buildList {
@@ -136,14 +129,9 @@ fun FullScreenCoverViewer(
     var sourceIndex by remember(media.id) { mutableIntStateOf(0) }
     val source = sources.getOrNull(sourceIndex)
     val painter = rememberAsyncImagePainter(model = source?.url)
-    val intrinsic = painter.intrinsicSize
     // The artwork's own ratio, so a rare non-2:3 cover - or a wide banner - draws
     // whole instead of letterboxing inside the poster's frame.
-    val coverAspect = if (intrinsic.width > 0f && intrinsic.height > 0f) {
-        intrinsic.width / intrinsic.height
-    } else {
-        source?.fallbackAspect ?: DEFAULT_COVER_ASPECT
-    }
+    val coverAspect = coverAspectOf(painter.intrinsicSize, source)
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -152,9 +140,7 @@ fun FullScreenCoverViewer(
     // banner arrives would open the banner already cropped past its own edges -
     // and the pan limits were measured against the other image's frame.
     LaunchedEffect(source?.url) {
-        scale = 1f
-        offsetX = 0f
-        offsetY = 0f
+        zoom.reset()
         saveState = CoverSaveState.IDLE
     }
     // Saved and failed are acknowledgements, not modes: they return to the idle
@@ -187,13 +173,7 @@ fun FullScreenCoverViewer(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {
-                        if (scale > 1.05f) {
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        } else {
-                            onDismiss()
-                        }
+                        if (zoom.isZoomed) zoom.reset() else onDismiss()
                     }
                 ),
             contentAlignment = Alignment.Center
@@ -221,447 +201,333 @@ fun FullScreenCoverViewer(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Bar: Format Badge, HD tag & Close Button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                tonalElevation = 4.dp
-                            ) {
-                                Text(
-                                    text = "${media.formatLabel} · ${media.statusLabel}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
+                    CoverViewerTopBar(
+                        media = media,
+                        canSave = source != null,
+                        saveState = saveState,
+                        onSave = {
+                            val target = source
+                            if (target != null && saveState != CoverSaveState.SAVING) {
+                                saveState = CoverSaveState.SAVING
+                                scope.launch { saveState = saveCover(context, media, target) }
                             }
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                tonalElevation = 2.dp
-                            ) {
-                                Text(
-                                    text = "HD",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // The artwork, not a re-encode of what is on screen: the
-                            // saver copies the CDN's own bytes, so what lands in the
-                            // gallery is the highest-quality copy AniList serves - and
-                            // whichever source is displayed, so a banner saves a
-                            // banner rather than the poster it was switched from.
-                            if (source != null) {
-                                IconButton(
-                                    onClick = {
-                                        if (saveState == CoverSaveState.SAVING) return@IconButton
-                                        saveState = CoverSaveState.SAVING
-                                        scope.launch {
-                                            val saved = saveCoverToGallery(
-                                                context = context,
-                                                coverUrl = source.url,
-                                                title = if (source.label == "Banner") {
-                                                    "${media.displayName} banner"
-                                                } else {
-                                                    media.displayName
-                                                }
-                                            )
-                                            saveState = if (saved) {
-                                                CoverSaveState.SAVED
-                                            } else {
-                                                CoverSaveState.FAILED
-                                            }
-                                        }
-                                    },
-                                    enabled = saveState != CoverSaveState.SAVING,
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.18f))
-                                        .testTag("cover_save_button")
-                                ) {
-                                    when (saveState) {
-                                        CoverSaveState.SAVING -> ExpressiveLoadingIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            color = Color.White
-                                        )
-                                        CoverSaveState.SAVED -> Icon(
-                                            imageVector = AppVectorIcons.CheckCircle,
-                                            contentDescription = "Cover saved to your gallery",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        CoverSaveState.FAILED -> Icon(
-                                            imageVector = AppVectorIcons.Warning,
-                                            contentDescription = "Couldn't save the cover",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        CoverSaveState.IDLE -> Icon(
-                                            imageVector = AppVectorIcons.Download,
-                                            contentDescription = "Save cover to your gallery",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.18f))
-                            ) {
-                                Icon(
-                                    imageVector = AppVectorIcons.Close,
-                                    contentDescription = "Close full screen",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                    }
+                        },
+                        onDismiss = onDismiss
+                    )
 
                     // Center Anime Cover Artwork with interactive Zoom & Pan
                     val coverBg = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest
                     // The frame is fitted to the artwork rather than to a 340x440
                     // window: a 2:3 cover in that window letterboxed on one axis, so
                     // the "full screen" viewer drew a poster smaller than the hero
-                    // it was opened from. `BoxWithConstraints` gives the space the
-                    // header and footer leave, and the cover takes the largest box
-                    // that fits it at its own ratio.
-                    BoxWithConstraints(
+                    // it was opened from. [CoverArtwork] takes the space the header
+                    // and footer leave, and the cover takes the largest box that
+                    // fits it at its own ratio.
+                    CoverArtwork(
+                        media = media,
+                        painter = painter,
+                        coverAspect = coverAspect,
+                        coverBg = coverBg,
+                        zoom = zoom,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val frameWidth = minOf(maxWidth, maxHeight * coverAspect)
-                        val frameHeight = frameWidth / coverAspect
-                        Box(
-                            modifier = Modifier
-                                .width(frameWidth)
-                                .height(frameHeight)
-                                .shadow(
-                                    elevation = 24.dp,
-                                    shape = MaterialTheme.shapes.large,
-                                    ambientColor = coverBg,
-                                    spotColor = Color.Black
-                                )
-                                .clip(MaterialTheme.shapes.large)
-                                .background(coverBg)
-                                .onSizeChanged { coverSize = it }
-                                .pointerInput(coverSize) {
-                                    detectTapGestures(
-                                        onDoubleTap = {
-                                            if (scale > 1.2f) {
-                                                scale = 1f
-                                                offsetX = 0f
-                                                offsetY = 0f
-                                            } else {
-                                                scale = 2.4f
-                                            }
-                                        }
-                                    )
-                                }
-                                .pointerInput(coverSize) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        val newScale = (scale * zoom).coerceIn(1f, 4.5f)
-                                        scale = newScale
-                                        if (newScale > 1f) {
-                                            // Half the overflow on each side: the
-                                            // image scales around its centre, so this
-                                            // is exactly how far it can move before
-                                            // an edge shows.
-                                            val maxX = coverSize.width * (newScale - 1f) / 2f
-                                            val maxY = coverSize.height * (newScale - 1f) / 2f
-                                            offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                                            offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
-                                        } else {
-                                            offsetX = 0f
-                                            offsetY = 0f
-                                        }
-                                    }
-                                }
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationX = offsetX
-                                    translationY = offsetY
-                                }
-                        ) {
-                            Image(
-                                painter = painter,
-                                contentDescription = media.displayName,
-                                modifier = Modifier.matchParentSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
+                            .padding(vertical = 12.dp)
+                    )
 
                     // Bottom Details Card: Titles & Dismiss Hint
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-                        tonalElevation = 8.dp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = 480.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = media.displayName,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.ExtraBold,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            // Which AniList image is on screen. Only drawn when
-                            // there is a choice: a title with no banner would
-                            // otherwise get a single "Poster" pill that does
-                            // nothing, which reads as a broken control.
-                            if (sources.size > 1) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    sources.forEachIndexed { index, candidate ->
-                                        ViewerPill(
-                                            label = candidate.label,
-                                            selected = index == sourceIndex,
-                                            modifier = Modifier.weight(1f),
-                                            onClick = { sourceIndex = index }
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Romaji & English Titles
-                            val romaji = media.romajiName
-                            val english = media.englishName
-
-                            if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    if (!romaji.isNullOrBlank()) {
-                                        Surface(
-                                            shape = MaterialTheme.shapes.extraSmall,
-                                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Column(modifier = Modifier.padding(8.dp)) {
-                                                Text(
-                                                    text = "ROMAJI",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = romaji,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (!english.isNullOrBlank()) {
-                                        Surface(
-                                            shape = MaterialTheme.shapes.extraSmall,
-                                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Column(modifier = Modifier.padding(8.dp)) {
-                                                Text(
-                                                    text = "ENGLISH",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.secondary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = english,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Where the reader can look at more of this title's
-                            // artwork. AniList is the page this viewer was opened
-                            // from; LiveChart is the only other site the app can
-                            // honestly send them to for the schedule and its own
-                            // poster, since it publishes no API to read.
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                ViewerActionPill(
-                                    icon = AppVectorIcons.OpenInNew,
-                                    label = "AniList",
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { openExternalUrlOrCopy(context, media.pageUrl) }
-                                )
-                                if (!media.isManga) {
-                                    ViewerActionPill(
-                                        icon = AppVectorIcons.CalendarClock,
-                                        label = "LiveChart",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            openExternalUrlOrCopy(context, media.liveChartUrl)
-                                        }
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = if (scale > 1.05f) "Double-tap to reset zoom · Tap anywhere to close" else "Pinch or double-tap to zoom · Tap anywhere to close",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                            )
-                        }
-                    }
+                    ViewerDetailsCard(
+                        media = media,
+                        sources = sources,
+                        sourceIndex = sourceIndex,
+                        onSelectSource = { sourceIndex = it },
+                        zoom = zoom
+                    )
                 }
             }
         }
     }
 }
 
-/** One full-size image the viewer can show, with the shape to assume before it loads. */
-private data class CoverSource(
-    val label: String,
-    val url: String,
-    val fallbackAspect: Float
-)
+/** A pinch that scales past this counts as zoomed for the background tap. */
+private const val ZOOMED_THRESHOLD = 1.05f
+
+/** Past this, a double-tap puts the artwork back instead of opening it further. */
+private const val DOUBLE_TAP_RESET_THRESHOLD = 1.2f
+
+private const val DOUBLE_TAP_SCALE = 2.4f
+private const val MAX_ZOOM = 4.5f
 
 /**
- * One image source, as a selectable pill.
+ * The viewer's zoom and pan.
  *
- * A capsule in [ExpressiveShapes] rather than a Material segmented button: this
- * sits over artwork in a dialog, and the pill matches the cards behind it. The
- * selected state is the primary container, so the current image reads at a
- * glance without a second label.
+ * Held outside the composable so the three gestures that move it - pinch,
+ * double-tap and the background tap - are methods with names rather than more
+ * branches inside the viewer's body. [frameSize] is measured by the artwork,
+ * because the pan limits are half the scaled overflow on each axis; the
+ * constants this replaced (300f by 400f) were wrong on both a narrow phone and
+ * a tablet.
+ *
+ * `internal` rather than file-private because the details card reads
+ * [isZoomed] to word its gesture hint, and recomposing that hint on a pinch is
+ * the card's job rather than the whole overlay's.
+ */
+internal class CoverZoomState {
+    var scale by mutableFloatStateOf(1f)
+        private set
+    var offsetX by mutableFloatStateOf(0f)
+        private set
+    var offsetY by mutableFloatStateOf(0f)
+        private set
+    var frameSize by mutableStateOf(IntSize.Zero)
+
+    val isZoomed: Boolean get() = scale > ZOOMED_THRESHOLD
+
+    fun reset() {
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
+    }
+
+    /** The double-tap: open the artwork, or put a zoomed one back. */
+    fun toggleDoubleTap() {
+        if (scale > DOUBLE_TAP_RESET_THRESHOLD) reset() else scale = DOUBLE_TAP_SCALE
+    }
+
+    /**
+     * One pinch frame.
+     *
+     * Half the overflow on each side: the image scales around its centre, so
+     * that is exactly how far it can move before an edge shows.
+     */
+    fun applyGesture(pan: Offset, zoomChange: Float) {
+        val newScale = (scale * zoomChange).coerceIn(1f, MAX_ZOOM)
+        scale = newScale
+        if (newScale > 1f) {
+            val maxX = frameSize.width * (newScale - 1f) / 2f
+            val maxY = frameSize.height * (newScale - 1f) / 2f
+            offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+            offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+        } else {
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
+}
+
+/** The artwork's own ratio, falling back to what the source is expected to be. */
+private fun coverAspectOf(intrinsic: Size, source: CoverSource?): Float =
+    if (intrinsic.width > 0f && intrinsic.height > 0f) {
+        intrinsic.width / intrinsic.height
+    } else {
+        source?.fallbackAspect ?: DEFAULT_COVER_ASPECT
+    }
+
+/**
+ * The viewer's header: what the artwork is, and the two ways out of it.
+ *
+ * The save button copies the CDN's own bytes rather than re-encoding what is on
+ * screen, so what lands in the gallery is the highest-quality copy AniList
+ * serves - and whichever source is displayed, so a banner saves a banner rather
+ * than the poster it was switched from.
  */
 @Composable
-private fun ViewerPill(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+private fun CoverViewerTopBar(
+    media: MediaNode,
+    canSave: Boolean,
+    saveState: CoverSaveState,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        shape = ExpressiveShapes.pill,
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
-        },
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        modifier = modifier
-            .bouncyPress(interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                role = Role.Button,
-                onClickLabel = "Show the $label",
-                onClick = onClick
-            )
-            .testTag("cover_source_${label.lowercase()}")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation = 4.dp
+            ) {
+                Text(
+                    text = "${media.formatLabel} · ${media.statusLabel}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+            Surface(
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                tonalElevation = 2.dp
+            ) {
+                Text(
+                    text = "HD",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (canSave) {
+                IconButton(
+                    onClick = onSave,
+                    enabled = saveState != CoverSaveState.SAVING,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .testTag("cover_save_button")
+                ) {
+                    SaveButtonIcon(saveState)
+                }
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.18f))
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Close,
+                    contentDescription = "Close full screen",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+/** The save button's glyph: the whole acknowledgement for one save. */
+@Composable
+private fun SaveButtonIcon(state: CoverSaveState) {
+    when (state) {
+        CoverSaveState.SAVING -> ExpressiveLoadingIndicator(
+            modifier = Modifier.size(18.dp),
+            color = Color.White
+        )
+        CoverSaveState.SAVED -> Icon(
+            imageVector = AppVectorIcons.CheckCircle,
+            contentDescription = "Cover saved to your gallery",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+        CoverSaveState.FAILED -> Icon(
+            imageVector = AppVectorIcons.Warning,
+            contentDescription = "Couldn't save the cover",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+        CoverSaveState.IDLE -> Icon(
+            imageVector = AppVectorIcons.Download,
+            contentDescription = "Save cover to your gallery",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
         )
     }
 }
 
-/** One outbound link from the viewer, wearing its destination's name. */
+/**
+ * The artwork between the header and the details card.
+ *
+ * [BoxWithConstraints] gives it the space the header and footer leave, and the
+ * cover takes the largest box that fits it at its own ratio - the 340x440 frame
+ * this replaced letterboxed a 2:3 cover on one axis, so the "full screen" viewer
+ * drew a poster smaller than the hero it was opened from.
+ */
 @Composable
-private fun ViewerActionPill(
-    icon: ImageVector,
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+private fun CoverArtwork(
+    media: MediaNode,
+    painter: Painter,
+    coverAspect: Float,
+    coverBg: Color,
+    zoom: CoverZoomState,
+    modifier: Modifier = Modifier
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        shape = ExpressiveShapes.pill,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier
-            .bouncyPress(interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                role = Role.Button,
-                onClick = onClick
-            )
-            .testTag("cover_action_${label.lowercase()}")
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        val frameWidth = minOf(maxWidth, maxHeight * coverAspect)
+        val frameHeight = frameWidth / coverAspect
+        Box(
+            modifier = Modifier
+                .width(frameWidth)
+                .height(frameHeight)
+                .shadow(
+                    elevation = 24.dp,
+                    shape = MaterialTheme.shapes.large,
+                    ambientColor = coverBg,
+                    spotColor = Color.Black
+                )
+                .clip(MaterialTheme.shapes.large)
+                .background(coverBg)
+                .onSizeChanged { zoom.frameSize = it }
+                .pointerInput(zoom) {
+                    detectTapGestures(onDoubleTap = { zoom.toggleDoubleTap() })
+                }
+                .pointerInput(zoom) {
+                    detectTransformGestures { _, pan, zoomChange, _ ->
+                        zoom.applyGesture(pan, zoomChange)
+                    }
+                }
+                .graphicsLayer {
+                    scaleX = zoom.scale
+                    scaleY = zoom.scale
+                    translationX = zoom.offsetX
+                    translationY = zoom.offsetY
+                }
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+            Image(
+                painter = painter,
+                contentDescription = media.displayName,
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.Fit
             )
         }
     }
 }
+
+/** One save, from the CDN to the gallery. */
+private suspend fun saveCover(context: Context, media: MediaNode, source: CoverSource): CoverSaveState {
+    val title = if (source.label == "Banner") {
+        "${media.displayName} banner"
+    } else {
+        media.displayName
+    }
+    return if (saveCoverToGallery(context = context, coverUrl = source.url, title = title)) {
+        CoverSaveState.SAVED
+    } else {
+        CoverSaveState.FAILED
+    }
+}
+
+/**
+ * One full-size image the viewer can show, with the shape to assume before it loads.
+ *
+ * `internal` because the details card's source switch takes the same list the
+ * viewer shows; the type travels with the image, not with the composable that
+ * happens to declare it.
+ */
+internal data class CoverSource(
+    val label: String,
+    val url: String,
+    val fallbackAspect: Float
+)
 
 /** One save's lifecycle: the button's glyph is the whole acknowledgement. */
 private enum class CoverSaveState { IDLE, SAVING, SAVED, FAILED }

@@ -204,46 +204,18 @@ private fun AnnotatedString.Builder.appendTokens(
     spoilers: InlineSpoilers
 ) {
     tokens.forEach { token ->
+        // The five emphasis runs differ only in their span style, so the token
+        // type picks one and the recursion exists once rather than five times.
+        val decoration = token.decorationStyle()
+        if (decoration != null) {
+            withStyle(decoration) {
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
+            }
+            return@forEach
+        }
+
         when (token) {
             is InlineToken.Plain -> append(token.text)
-
-            // Bold is `ExtraBold`, not `Bold`.
-            //
-            // At `bodyMedium` on a phone the two are close enough to be a coin toss,
-            // so `**bold**` in a bio rendered as very slightly heavier body text and a
-            // reader could not tell it had been emphasised at all. AniList bios lean
-            // on bold hard - the "hall of fame" convention is a whole bold line per
-            // entry - so this is not a rare case. `ExtraBold` is the step that reads
-            // as a deliberate emphasis against `Normal` while still staying a weight
-            // the typeface can render rather than a synthetic embolden.
-            is InlineToken.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.BoldItalic -> withStyle(
-                SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
-            ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            // Underlined *and* coloured, for the same reason as bold above: an
-            // underline alone on body text is a hairline at this size, and it is the
-            // one decoration that reads as a broken link rather than as emphasis.
-            // It is not given the link's own colour - that would make emphasised text
-            // indistinguishable from a hyperlink, and the two mean different things.
-            is InlineToken.Underline -> withStyle(
-                SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
-            ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
 
             is InlineToken.Code -> withStyle(
                 SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)
@@ -343,8 +315,48 @@ private fun AnnotatedString.Builder.appendTokens(
                     }
                 }
             }
+
+            // The five emphasis runs were already handled above: `decorationStyle`
+            // is the single place that says which tokens are emphasis and what
+            // span they draw with. This arm exists because the compiler cannot see
+            // that early return, and the sealed `when` must name every subtype.
+            else -> Unit
         }
     }
+}
+
+/**
+ * The span style an emphasis token draws its children with, or null for a token
+ * that is not an emphasis run.
+ *
+ * These used to be five branches in [appendTokens], each an identical
+ * `withStyle { appendTokens(children...) }` around a different span - so the
+ * recursion and its seven arguments were copied five times, and a change to the
+ * walk had to be made in all of them.
+ */
+private fun InlineToken.decorationStyle(): SpanStyle? = when (this) {
+    // Bold is `ExtraBold`, not `Bold`.
+    //
+    // At `bodyMedium` on a phone the two are close enough to be a coin toss, so
+    // `**bold**` in a bio rendered as very slightly heavier body text and a reader
+    // could not tell it had been emphasised at all. AniList bios lean on bold hard -
+    // the "hall of fame" convention is a whole bold line per entry - so this is not
+    // a rare case. `ExtraBold` is the step that reads as a deliberate emphasis
+    // against `Normal` while still staying a weight the typeface can render rather
+    // than a synthetic embolden.
+    is InlineToken.Bold -> SpanStyle(fontWeight = FontWeight.ExtraBold)
+    is InlineToken.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
+    is InlineToken.BoldItalic ->
+        SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
+    // Underlined *and* coloured, for the same reason as bold above: an underline
+    // alone on body text is a hairline at this size, and it is the one decoration
+    // that reads as a broken link rather than as emphasis. It is not given the
+    // link's own colour - that would make emphasised text indistinguishable from a
+    // hyperlink, and the two mean different things.
+    is InlineToken.Underline ->
+        SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
+    is InlineToken.Strikethrough -> SpanStyle(textDecoration = TextDecoration.LineThrough)
+    else -> null
 }
 
 private fun AnnotatedString.Builder.appendLink(
