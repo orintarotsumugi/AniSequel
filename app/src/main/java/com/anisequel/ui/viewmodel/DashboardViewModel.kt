@@ -24,7 +24,9 @@ import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.domain.usecase.FindArrivingEntriesUseCase
 import com.anisequel.domain.usecase.FindMissedSequelsUseCase
 import com.anisequel.domain.usecase.GetViewerProfileUseCase
+import com.anisequel.domain.usecase.RecentActivitySummary
 import com.anisequel.domain.usecase.SaveToPlanningUseCase
+import com.anisequel.domain.usecase.SummarizeRecentActivityUseCase
 import com.anisequel.ui.components.detail.EntryEditor
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +70,7 @@ class DashboardViewModel(
     private val saveToWatchingUseCase: com.anisequel.domain.usecase.SaveToWatchingUseCase = com.anisequel.domain.usecase.SaveToWatchingUseCase(aniListRepository),
     private val findMissedSequelsUseCase: FindMissedSequelsUseCase = FindMissedSequelsUseCase(),
     private val findArrivingEntriesUseCase: FindArrivingEntriesUseCase = FindArrivingEntriesUseCase(),
+    private val summarizeRecentActivityUseCase: SummarizeRecentActivityUseCase = SummarizeRecentActivityUseCase(),
     /**
      * Optional so the demo and public-profile dashboards - which have no reason
      * to remember anything - construct without one, and so existing call sites
@@ -357,6 +360,20 @@ class DashboardViewModel(
      */
     private var arrivingCache: List<ArrivingEntry>? = null
     private var arrivingSource: MediaListCollection? = null
+
+    /**
+     * The widget's recent-activity summary for [cachedCollection], and the
+     * collection it was computed from.
+     *
+     * The same memo shape as [watchedCountCache]: the answer cannot change
+     * while the collection does not, and [recompute] runs on every keystroke.
+     * The seven-day window is time-dependent, but the only way the count moves
+     * without a new collection is the clock crossing the edge - and the
+     * dashboard refetches on its interval and on open, which replaces the
+     * collection and invalidates this.
+     */
+    private var recentActivityCache: RecentActivitySummary? = null
+    private var recentActivitySource: MediaListCollection? = null
 
     /**
      * Ids whose one-off detail query is in flight.
@@ -674,6 +691,7 @@ class DashboardViewModel(
         // switches in Settings pay their way by stopping the section - and its
         // poster loads - from being composed at all, not by skipping this.
         val arriving = arrivingEntries(collection)
+        val recentActivity = recentActivity(collection)
 
         val updated = filteredVisible.map { found ->
             val entry = withCachedDetail(found)
@@ -709,6 +727,7 @@ class DashboardViewModel(
             arriving = arriving,
             totalWatchedCount = watchedCount,
             totalMissedCount = updated.size,
+            recentActivity = recentActivity,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
@@ -811,6 +830,23 @@ class DashboardViewModel(
         val computed = findArrivingEntriesUseCase.execute(collection)
         arrivingSource = collection
         arrivingCache = computed
+        return computed
+    }
+
+    /**
+     * The activity tile's summary, recomputed only when the collection itself
+     * changes. See [recentActivityCache] for why this is memoised.
+     */
+    private fun recentActivity(collection: MediaListCollection): RecentActivitySummary {
+        recentActivityCache?.let { cached ->
+            if (recentActivitySource === collection) return cached
+        }
+        val computed = summarizeRecentActivityUseCase.execute(
+            collection = collection,
+            nowSeconds = (System.currentTimeMillis() / 1000L).toInt()
+        )
+        recentActivitySource = collection
+        recentActivityCache = computed
         return computed
     }
 

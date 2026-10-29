@@ -282,6 +282,24 @@ fun AppNavigation(
         derivedStateOf { (dashboardState as? DashboardUiState.Success)?.viewer }
     }
 
+    // The three dashboard values the Library and Settings graphs read.
+    //
+    // They used to be handed the whole state instead, which put a read of it in
+    // the root composition: every publish - including one per keystroke in the
+    // dashboard's search box - gave the graphs a new state instance and
+    // recomposed the root, the bar and the toast host to discover the error and
+    // the two counts were unchanged. Derived states compare by equality, so
+    // these invalidate only on a real change.
+    val dashboardError by remember(dashboardFlow) {
+        derivedStateOf { dashboardState as? DashboardUiState.Error }
+    }
+    val totalWatchedCount by remember(dashboardFlow) {
+        derivedStateOf { (dashboardState as? DashboardUiState.Success)?.totalWatchedCount }
+    }
+    val totalMissedCount by remember(dashboardFlow) {
+        derivedStateOf { (dashboardState as? DashboardUiState.Success)?.totalMissedCount }
+    }
+
     // The Library page's remembered filters and grid position, resolved beside the
     // other app-scoped stores rather than inside the route: the route is disposed
     // when the reader switches tabs, and re-asking DataStore - or re-remembering the
@@ -482,7 +500,7 @@ fun AppNavigation(
                     detailHost = detailHost,
                     sharedEntryEditor = sharedEntryEditor,
                     mainDashboardViewModel = mainDashboardViewModel,
-                    dashboardState = dashboardState,
+                    dashboardError = dashboardError,
                     signedInViewer = signedInViewer,
                     authenticated = authenticated,
                     librarySelection = librarySelection,
@@ -509,7 +527,8 @@ fun AppNavigation(
                     jokePreferences = jokePreferences,
                     changelogRepository = changelogRepository,
                     aniListRepository = aniListRepository,
-                    dashboardState = dashboardState,
+                    totalWatchedCount = totalWatchedCount,
+                    totalMissedCount = totalMissedCount,
                     signedInViewer = signedInViewer
                 )
             }

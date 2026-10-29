@@ -15,7 +15,6 @@ import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.screens.settings.SettingsScreen
 import com.anisequel.ui.viewmodel.AuthViewModel
-import com.anisequel.ui.viewmodel.DashboardUiState
 
 /**
  * The settings destination: account, app preferences, diagnostics, and release info.
@@ -32,12 +31,18 @@ fun NavGraphBuilder.settingsDestinations(
     jokePreferences: JokePreferences,
     changelogRepository: ChangelogRepository,
     aniListRepository: AniListRepository,
-    dashboardState: DashboardUiState?,
+    /**
+     * The two dashboard counts the Settings header shows.
+     *
+     * Nullable because the dashboard may still be loading or may have failed.
+     * Passed as values rather than as the whole dashboard state so this graph
+     * does not subscribe the app root to every recompute.
+     */
+    totalWatchedCount: Int?,
+    totalMissedCount: Int?,
     signedInViewer: ViewerProfile?
 ) {
     composable(AppRoutes.SETTINGS) {
-        val successState = dashboardState as? DashboardUiState.Success
-
         SettingsScreen(
             authViewModel = authViewModel,
             themePreferences = themePreferences,
@@ -50,8 +55,8 @@ fun NavGraphBuilder.settingsDestinations(
             changelogRepository = changelogRepository,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
-            totalWatchedCount = successState?.totalWatchedCount,
-            totalMissedCount = successState?.totalMissedCount,
+            totalWatchedCount = totalWatchedCount,
+            totalMissedCount = totalMissedCount,
             onNavigateBack = { navController.popBackStack() },
             onNavigateToLogin = {
                 navController.navigate(AppRoutes.LOGIN) {

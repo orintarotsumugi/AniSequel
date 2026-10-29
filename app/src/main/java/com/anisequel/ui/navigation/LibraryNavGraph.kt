@@ -28,7 +28,15 @@ fun NavGraphBuilder.libraryDestinations(
     detailHost: MediaDetailHost,
     sharedEntryEditor: RepositoryEntryEditor?,
     mainDashboardViewModel: DashboardViewModel?,
-    dashboardState: DashboardUiState?,
+    /**
+     * The dashboard's failure, when the viewer query is what failed.
+     *
+     * The error rather than the whole state: this graph only needs to know
+     * whether the account query answered and, if it did not, what to say. The
+     * state instance is replaced on every dashboard recompute, and passing it
+     * here subscribed the app root to all of them.
+     */
+    dashboardError: DashboardUiState.Error?,
     signedInViewer: ViewerProfile?,
     authenticated: AuthUiState.Authenticated?,
     librarySelection: RememberedLibraryView,
@@ -51,9 +59,8 @@ fun NavGraphBuilder.libraryDestinations(
         // account and then - because its key is the page rather than the person,
         // which is what lets it outlive a tab switch - keep serving that stranger's
         // library on this page for the rest of the session.
-        val viewerState = dashboardState
         if (signedInViewer == null && authenticated != null) {
-            if (viewerState is DashboardUiState.Error) {
+            if (dashboardError != null) {
                 // The account query is what failed, so its answer is this page's
                 // answer: retrying it here is a real retry, and a dead session
                 // offers the same way back rather than a button that cannot work.
@@ -66,10 +73,10 @@ fun NavGraphBuilder.libraryDestinations(
                 // The bits of it that carry information are still in the copy:
                 // the headline and detail come from the same friendly sentences.
                 ProfileErrorView(
-                    message = viewerState.message,
-                    kind = viewerState.kind,
-                    canRetry = viewerState.canRetry,
-                    isAuthError = viewerState.isAuthError,
+                    message = dashboardError.message,
+                    kind = dashboardError.kind,
+                    canRetry = dashboardError.canRetry,
+                    isAuthError = dashboardError.isAuthError,
                     onRetry = { mainDashboardViewModel?.loadData() },
                     onSignInAgain = onSignInAgain
                 )
