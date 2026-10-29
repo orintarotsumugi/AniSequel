@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.model.synonymList
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import kotlinx.coroutines.delay
 
@@ -188,14 +190,20 @@ private fun MetaRowButton(
     testTag: String,
     count: Int? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = ExpressiveShapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = border,
         modifier = Modifier
             .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.98f)
-            .clickable(role = Role.Button, onClick = onClick)
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick
+            )
             .testTag(testTag)
     ) {
         Row(
@@ -284,7 +292,7 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
     }
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = ExpressiveShapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -305,7 +313,7 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
                 )
             }
             Surface(
-                shape = RoundedCornerShape(percent = 50),
+                shape = ExpressiveShapes.pill,
                 // The container changes with the glyph rather than only the glyph
                 // changing: a 17dp tick is a small thing to notice out of the corner
                 // of an eye, and the row it sits on is the confirmation the reader

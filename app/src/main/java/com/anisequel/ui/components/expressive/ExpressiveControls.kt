@@ -93,7 +93,7 @@ fun ExpressiveTabBar(
             // colour fights the spring, and the scale is the feedback instead.
             val pressScale by animateFloatAsState(
                 targetValue = if (pressed) 0.94f else 1f,
-                animationSpec = ExpressiveMotion.PressSpatial,
+                animationSpec = if (pressed) ExpressiveMotion.PressSpatialIn else ExpressiveMotion.PressSpatialOut,
                 label = "tab_press_scale_$label"
             )
             val container by animateColorAsState(

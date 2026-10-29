@@ -93,8 +93,8 @@ object ExpressiveShapes {
     // deliberate shape scale in `ExpressiveTheme.kt` - 10 / 14 / 20 / 28 / 36,
     // rounder than M3's 4 / 8 / 12 / 16 / 28 on purpose, so cards read as curved
     // panels rather than hard rectangles. The literals simply had not been moved
-    // onto it. So these four are the first four steps of *that* scale, named, and
-    // [ExpressiveTheme.kt] is the single place the fifth (36) is applied.
+    // onto it. These are the five steps of *that* scale, named, and read by
+    // [ExpressiveTheme.kt].
     //
     // Naming them here is what stops the drift coming back: a new literal cannot
     // be spelled next to an existing one without the mismatch being visible.
@@ -114,6 +114,9 @@ object ExpressiveShapes {
     /** 28dp — the theme's `large`. Panels and prominent surfaces. */
     val LargeCorner = 28.dp
 
+    /** 36dp — the theme's `extraLarge`. Prominent sheets and hero cards. */
+    val ExtraLargeCorner = 36.dp
+
     /**
      * 24dp — half of a 48dp button, so a control at this radius is a true
      * capsule by measurement.
@@ -122,6 +125,13 @@ object ExpressiveShapes {
      * `animateDpAsState` and [pill] is a `Shape`, which cannot be added to one.
      */
     val PillCorner = 24.dp
+
+    // Ready-to-use shapes constructed from the scale above.
+    val extraSmall: Shape = RoundedCornerShape(ExtraSmallCorner)
+    val small: Shape = RoundedCornerShape(SmallCorner)
+    val medium: Shape = RoundedCornerShape(MediumCorner)
+    val large: Shape = RoundedCornerShape(LargeCorner)
+    val extraLarge: Shape = RoundedCornerShape(ExtraLargeCorner)
 }
 
 /**

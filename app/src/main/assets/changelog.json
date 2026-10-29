@@ -30,6 +30,18 @@
         {
           "title": "The export says how far it has got",
           "detail": "Rendering a tier list to an image fetches every cover on the board, and on a list of a few hundred titles that is long enough for a loading button to look stuck. The export sheet now draws a progress bar with a percentage that moves as each batch of posters arrives, so the wait has a shape and a size."
+        },
+        {
+          "title": "The shape scale completes its family",
+          "detail": "Material 3 Expressive shapes now publish the complete 10 / 14 / 20 / 28 / 36dp scale as named tokens in ExpressiveShapes alongside ready-to-use Shape accessors. Raw corner radii across detail metadata, streaming chips, and profile headers now align with the theme scale."
+        },
+        {
+          "title": "Buttons and cards share tactile springs",
+          "detail": "Taps and holds employ asymmetric spring physics (PressSpatialIn / PressSpatialOut) for immediate down-press feel and snappy release overshoot. Interactive cards share their InteractionSource directly with bouncyPress, eliminating redundant pointer tracking during flings."
+        },
+        {
+          "title": "Modular navigation architecture",
+          "detail": "The navigation graph in AppNavigation is extracted into decoupled NavGraphBuilder extensions per destination group, bringing root file size down from 1,052 lines to 557 lines while keeping destination handling cleanly modularized."
         }
       ]
     },

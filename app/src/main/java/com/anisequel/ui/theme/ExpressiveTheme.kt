@@ -2,7 +2,6 @@ package com.anisequel.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
-import androidx.compose.ui.unit.dp
 
 /**
  * Shapes for this app's surfaces.
@@ -32,5 +31,5 @@ val ExpressiveShapes: Shapes = Shapes(
     small = RoundedCornerShape(Corner.SmallCorner),
     medium = RoundedCornerShape(Corner.MediumCorner),
     large = RoundedCornerShape(Corner.LargeCorner),
-    extraLarge = RoundedCornerShape(36.dp)
+    extraLarge = RoundedCornerShape(Corner.ExtraLargeCorner)
 )

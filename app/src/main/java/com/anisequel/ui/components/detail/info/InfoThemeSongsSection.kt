@@ -2,6 +2,7 @@ package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +38,7 @@ import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.themeSongsSummary
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -116,20 +119,24 @@ private fun ThemeSongCard(theme: ThemeSong) {
     val open: () -> Unit = {
         theme.videoUrl?.takeIf { it.isNotBlank() }?.let { openExternalUrlOrCopy(context, it) }
     }
+    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = ExpressiveShapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier
             .size(width = 172.dp, height = 96.dp)
-            .then(if (playable) Modifier.bouncyPress(pressedScale = 0.96f) else Modifier)
             .then(
                 if (playable) {
-                    Modifier.clickable(
-                        role = Role.Button,
-                        onClickLabel = "Play",
-                        onClick = open
-                    )
+                    Modifier
+                        .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClickLabel = "Play",
+                            onClick = open
+                        )
                 } else {
                     Modifier
                 }

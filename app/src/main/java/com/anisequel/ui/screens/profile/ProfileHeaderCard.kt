@@ -116,9 +116,9 @@ fun ProfileHeaderCard(
                     // its own 92dp box (24/92) rather than a step on a family. At
                     // 28 it reads as a different shape sitting on the banner
                     // rather than the same one sitting on it.
-                    .clip(RoundedCornerShape(24.dp))
-                    .border(4.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(ExpressiveShapes.PillCorner))
+                    .border(4.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(ExpressiveShapes.PillCorner))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(ExpressiveShapes.PillCorner))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentScale = ContentScale.Crop,
                 placeholder = rememberVectorPainter(AppVectorIcons.SequelJump),

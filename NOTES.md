@@ -443,6 +443,21 @@ split is also a file boundary — `AppNavigation` is the destination table, this
 what floats above it — and it is the first step of the tracked split of that
 file.
 
+**The navigation graph is split by destination group.** `AppNavigation` used to
+define every destination inline in one function, putting twelve unrelated screens
+and their captured dependencies in a single ~1,100-line file. Each group lives in
+its own `NavGraphBuilder` extension now (`AuthNavGraph.kt`, `DashboardNavGraph.kt`,
+`ProfileNavGraph.kt`, `TierListNavGraph.kt`, `LibraryNavGraph.kt`,
+`StudioNavGraph.kt`, `SettingsNavGraph.kt`), with `WidgetSync` and
+`RestoringPlaceholder` hoisted. Captured dependencies are passed as parameters,
+keeping every destination file under 200 lines and `AppNavigation` at 557 lines.
+
+**The shape scale publishes all five steps.** Material 3 Expressive surfaces
+curved on the 10 / 14 / 20 / 28 / 36dp scale. `ExpressiveShapes.kt` now names all
+five (`ExtraSmallCorner` through `ExtraLargeCorner`) and exposes ready-to-use
+`Shape` tokens (`extraSmall` through `extraLarge`), eliminating raw corner
+literals across detail metadata rows, streaming cards, and profile headers.
+
 **The Library moved out of the profile for it.** The list was the fourth tab of
 every profile, including a stranger's, which made the thing a reader consults
 most often one tap deeper than the least — and spent a tab of every profile on

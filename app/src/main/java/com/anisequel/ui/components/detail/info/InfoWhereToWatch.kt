@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -10,12 +11,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 
@@ -76,16 +78,21 @@ fun InfoWhereToWatchCard(
         ) {
             available.forEach { link ->
                 val site = link.site.orEmpty()
+                val interactionSource = remember { MutableInteractionSource() }
                 Surface(
-                    shape = RoundedCornerShape(50),
+                    shape = ExpressiveShapes.pill,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
+                        .clip(ExpressiveShapes.pill)
                         // Every other chip on this page that opens something
                         // springs under the finger; these were the only ones that
                         // gave no press feedback at all.
-                        .bouncyPress(pressedScale = 0.95f)
-                        .clickable(role = Role.Button) {
+                        .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Button
+                        ) {
                             openExternalUrlOrCopy(context, link.url.orEmpty())
                         }
                         .testTag("streaming_link_$site")

@@ -566,7 +566,11 @@ fun Modifier.expressiveHoldGesture(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed.value) 0.96f else 1f,
-        animationSpec = ExpressiveMotion.PressSpatial,
+        animationSpec = if (isPressed.value) {
+            ExpressiveMotion.PressSpatialIn
+        } else {
+            ExpressiveMotion.PressSpatialOut
+        },
         label = "expressive_hold_scale"
     )
 
