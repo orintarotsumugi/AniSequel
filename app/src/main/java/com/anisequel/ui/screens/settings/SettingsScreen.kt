@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +36,7 @@ import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
@@ -81,12 +82,20 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
  * account, library and info pages were already good cards; they are now reached
  * from a row instead of a bar, and the old Edit tab was split by subject.
  *
- * ## Why `AnimatedContent` still uses `using null`
+ * ## Why a page slides sideways, and why the height still snaps
  *
  * The pages are scrollable columns, and the previous tab implementation carried
  * a comment about a crash from the default `SizeTransform` animating the
  * container's height while the outgoing page settled its scroll. That reasoning
- * still holds: the height snaps, the fades and scales are draw-phase and stay.
+ * still holds: the height snaps and only the draw-phase motion stays.
+ *
+ * The motion is a short horizontal push instead of a scale. A page that opens is
+ * a level deeper, and a scale says "nearer" about both a page and its backdrop;
+ * a push says which way the stack goes, so the back arrow and the animation now
+ * tell the same story. Only two levels exist, so the direction is simply "into a
+ * page" (new content from the end, hub leaving towards the start) or "out of
+ * one" (the reverse), and the reversal is immediate rather than another flag to
+ * keep in sync.
  */
 @Composable
 fun SettingsScreen(
@@ -97,6 +106,15 @@ fun SettingsScreen(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    /**
+     * The Library page's remembered type, filter and sort.
+     *
+     * Read here only to offer the one action the Library cannot: forgetting them.
+     * The Library writes these itself through the same instance, so this is one
+     * DataStore reader per process rather than a second opinion about what was
+     * last chosen.
+     */
+    libraryPreferences: LibraryPreferences,
     /**
      * Which pages the bottom bar offers.
      *
@@ -149,17 +167,16 @@ fun SettingsScreen(
             AnimatedContent(
                 targetState = page,
                 transitionSpec = {
+                    val opening = targetState != null
                     (
                         fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                            scaleIn(
-                                animationSpec = ExpressiveMotion.FastSpatial,
-                                initialScale = 0.96f
-                            ) togetherWith
+                            slideInHorizontally(
+                                animationSpec = ExpressiveMotion.FastSpatialOffset
+                            ) { width -> if (opening) width / 4 else -width / 4 } togetherWith
                             fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                            scaleOut(
-                                animationSpec = ExpressiveMotion.FastSpatial,
-                                targetScale = 1.03f
-                            )
+                            slideOutHorizontally(
+                                animationSpec = ExpressiveMotion.FastSpatialOffset
+                            ) { width -> if (opening) -width / 4 else width / 4 }
                         ) using null
                 },
                 label = "settings_page_transition",
@@ -194,6 +211,7 @@ fun SettingsScreen(
                                 refreshIntervalPreferences = refreshIntervalPreferences,
                                 arrivingPreferences = arrivingPreferences,
                                 quickAddPreferences = quickAddPreferences,
+                                libraryPreferences = libraryPreferences,
                                 mainTabPreferences = mainTabPreferences,
                                 changelogRepository = changelogRepository,
                                 viewer = viewer,
@@ -362,6 +380,7 @@ private fun SettingsPageContent(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
     viewer: ViewerProfile?,
@@ -376,6 +395,7 @@ private fun SettingsPageContent(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,
             quickAddPreferences = quickAddPreferences,
+            libraryPreferences = libraryPreferences,
             mainTabPreferences = mainTabPreferences
         )
         SettingsPage.ACCOUNT -> EditSettingsTab(

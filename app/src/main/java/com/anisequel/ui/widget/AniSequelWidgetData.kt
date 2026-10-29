@@ -42,8 +42,9 @@ object AniSequelWidgetData {
         if (context != null) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (prefs.contains(KEY_ACTIVITY_COUNT)) return prefs.getInt(KEY_ACTIVITY_COUNT, 0)
-            // The dashboard has no recent-update count to write yet, so a synced
-            // account shows the honest zero rather than a fabricated demo figure.
+            // A saved username with no count is an account whose last sync had
+            // no recent updates to report; zero is the honest answer. The demo
+            // fixture below is only for a widget that has never synced.
             if (prefs.contains(KEY_USERNAME)) return 0
         }
         return DemoProfileProvider.getDemoActivity().size

@@ -30,6 +30,8 @@ class FilterCriteriaNarrowingTest {
         assertTrue("wider relation kinds narrow", FilterCriteria(includedRelations = setOf(RelationKind.SEQUEL, RelationKind.SIDE_STORY)).isNarrowing)
         assertTrue("sequel released this year narrows", FilterCriteria(sequelReleasedThisYear = true).isNarrowing)
         assertTrue("parent completed this year narrows", FilterCriteria(parentCompletedThisYear = true).isNarrowing)
+        assertTrue("a genre selection narrows", FilterCriteria(selectedGenres = setOf("Action")).isNarrowing)
+        assertTrue("a minimum score narrows", FilterCriteria(minScore = 70).isNarrowing)
     }
 
     @Test

@@ -249,21 +249,20 @@ class FindMissedSequelsUseCaseFilterTest {
     }
 
     /**
-     * A documented gap, pinned rather than papered over.
+     * A TV short has its own chip, not a share of "TV series".
      *
-     * The format chips hold AniList's keys - "TV", "MOVIE", "OVA", "ONA",
-     * "SPECIAL" - and the comparison is exact, so a `TV_SHORT` matches **none** of
-     * them: not "TV" (different string) and not "SPECIAL" (also different). A TV
-     * special is therefore unreachable by any format filter while remaining in the
-     * unfiltered list.
+     * This was a documented gap: the chips carried only AniList's five keys -
+     * "TV", "MOVIE", "OVA", "ONA", "SPECIAL" - and the comparison is exact, so a
+     * `TV_SHORT` matched **none** of them. It stayed in the unfiltered list and
+     * vanished from every filtered one, with nothing on screen saying why.
      *
-     * Not fixed here because "which chip should a TV short belong to" is a product
-     * decision, not a bug: folding it into "TV" is defensible and so is giving it a
-     * chip of its own. What is a bug is not *knowing* it, which is what this test
-     * does - the shape is recorded so the decision is made deliberately later.
+     * The other way out was folding `TV_SHORT` into the "TV" chip, which would
+     * make a chip labelled "TV series" quietly include one-episode specials. The
+     * card prints "TV Short" for these, so the filter says the same - the chip
+     * and the label describe one thing.
      */
     @Test
-    fun `a TV short matches no format chip, which is a known gap`() {
+    fun `a TV short is reachable through its own chip`() {
         val tvShort = MediaNode(
             id = 205,
             title = MediaTitle(english = "A Short"),
@@ -278,9 +277,16 @@ class FindMissedSequelsUseCaseFilterTest {
             )
         )
 
+        assertEquals(
+            "the TV short chip keeps the short and drops the full series",
+            listOf(205),
+            useCase.execute(list, FilterCriteria(selectedFormat = "TV_SHORT"))
+                .map { it.sequelId }
+        )
+
         listOf("TV", "MOVIE", "OVA", "ONA", "SPECIAL").forEach { chip ->
             assertFalse(
-                "'$chip' unexpectedly matched a TV_SHORT (id 205)",
+                "'$chip' must not reach across into a TV_SHORT (id 205)",
                 useCase.execute(list, FilterCriteria(selectedFormat = chip))
                     .any { it.sequelId == 205 }
             )
@@ -301,6 +307,83 @@ class FindMissedSequelsUseCaseFilterTest {
         assertEquals(1, useCase.execute(list, FilterCriteria(searchQuery = "aired")).size)
         assertEquals(1, useCase.execute(list, FilterCriteria(searchQuery = "parent 100")).size)
         assertEquals(0, useCase.execute(list, FilterCriteria(searchQuery = "nothing here")).size)
+    }
+
+    private fun ratedSequel(
+        id: Int,
+        score: Int?,
+        genres: List<String> = emptyList()
+    ) = MediaNode(
+        id = id,
+        title = MediaTitle(english = "Sequel $id"),
+        format = "TV",
+        status = "FINISHED",
+        episodes = 12,
+        averageScore = score,
+        genres = genres
+    )
+
+    @Test
+    fun `the genre filter keeps any selected genre and ignores case`() {
+        val action = ratedSequel(501, score = 80, genres = listOf("Action", "Fantasy"))
+        val comedy = ratedSequel(502, score = 75, genres = listOf("Comedy"))
+        val drama = ratedSequel(503, score = 85, genres = listOf("Drama"))
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, action, comedy, drama)
+            )
+        )
+
+        assertEquals(
+            "no genre chosen keeps every genre",
+            3,
+            useCase.execute(list, FilterCriteria()).size
+        )
+
+        assertEquals(
+            "a genre reached through a differently-cased selection still matches",
+            listOf(501),
+            useCase.execute(list, FilterCriteria(selectedGenres = setOf("action")))
+                .map { it.sequelId }
+        )
+
+        assertEquals(
+            "two selections are OR-ed - either genre qualifies - not AND-ed",
+            listOf(501, 502),
+            useCase.execute(
+                list,
+                FilterCriteria(selectedGenres = setOf("Action", "Comedy"))
+            ).map { it.sequelId }.sorted()
+        )
+    }
+
+    @Test
+    fun `a minimum score keeps rated entries at or above it and drops unrated ones`() {
+        val high = ratedSequel(511, score = 88)
+        val onTheLine = ratedSequel(512, score = 70)
+        val low = ratedSequel(513, score = 55)
+        val unrated = ratedSequel(514, score = null)
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, high, onTheLine, low, unrated)
+            )
+        )
+
+        assertEquals(
+            "the threshold is a lower bound, inclusive, and an unrated sequel " +
+                "has no score to prove it clears the bar",
+            listOf(511, 512),
+            useCase.execute(list, FilterCriteria(minScore = 70))
+                .map { it.sequelId }.sorted()
+        )
+
+        assertEquals(
+            "with no minimum, unrated and low-scored entries stay",
+            4,
+            useCase.execute(list, FilterCriteria()).size
+        )
     }
 
     @Test

@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -18,8 +19,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierDisplay
+import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListLayout
+import com.anisequel.domain.tier.TierRowBox
 import kotlinx.coroutines.isActive
 
 /**
@@ -80,10 +83,24 @@ internal class TierDragState {
      * Read at release rather than taken from the last composition: the final
      * pointer move is not required to have triggered a recomposition, and a drop
      * that lands one frame behind the finger is a drop into the wrong row.
+     *
+     * [scrollShift] is how far the board has scrolled since the tile was picked
+     * up, signed the same way the ghost's own shift is. It used to be missing
+     * here while the ghost applied it, so the poster followed the finger
+     * correctly and the *drop* did not: auto-scrolling to reach an off-screen
+     * row moved every row past the finger, and the highlight, the caret and the
+     * release all kept resolving against the content position the tile was
+     * picked up from. The one gesture the auto-scroll exists for - carrying a
+     * title to a row that was not on screen - filed it into the row that *was*.
      */
-    fun drop(arrangement: TierListLayout, zoom: Float, density: Float): TierDrop {
+    fun drop(
+        arrangement: TierListLayout,
+        zoom: Float,
+        density: Float,
+        scrollShift: Float = 0f
+    ): TierDrop {
         val mediaId = mediaId ?: return TierDrop(tierId = null, beforeMediaId = null)
-        val position = origin + travel.value
+        val position = origin + travel.value + Offset(0f, scrollShift)
         return tierDropPlacement(
             rows = arrangement.rows,
             items = arrangement.items,
@@ -95,29 +112,75 @@ internal class TierDragState {
 }
 
 /**
+ * The drop a release at a *window* position would make, or no tier off the board.
+ *
+ * The board's drag works in its own layout coordinates; the tray's drag is handed
+ * a pointer in window pixels, below a scrolling column, with the board zoomed. This
+ * is the single conversion between the two, and the board publishes it through
+ * [TierBoardViewport.dropResolver] so the tray, the row highlight and the drop caret
+ * all read one answer.
+ *
+ * It used to be a second hit test over published row bands - a tray-local opinion
+ * about where the rows were - which could only ever be approximately right: it knew
+ * a row's vertical extent but not its tiles, so a tray drop always appended to the
+ * end of a row and could not show where inside it the poster would land. A tray
+ * that asks the board cannot disagree with the board about the seam between two
+ * posters.
+ */
+internal fun tierDropAtWindow(
+    rows: List<TierRowBox>,
+    items: List<TierItemBox>,
+    windowX: Float,
+    windowY: Float,
+    boardLeft: Float,
+    boardTop: Float,
+    density: Float,
+    zoom: Float,
+    skipMediaId: Int? = null
+): TierDrop = tierDropPlacement(
+    rows = rows,
+    items = items,
+    x = (windowX - boardLeft) / density / zoom,
+    y = (windowY - boardTop) / density / zoom,
+    skipMediaId = skipMediaId
+)
+
+/**
  * Auto-scroll while a drag is held near an edge.
  *
- * One frame at a time, paced by the display rather than by a fixed delay, so the
- * speed is the same on a 60Hz and a 120Hz screen and the scroll stops the
- * instant the finger leaves the band. A `while (isActive)` around
- * `withFrameNanos` is the whole scheduler: this is a foreground gesture, and a
- * job that outlived it would scroll a board nobody is touching.
+ * One frame at a time, paced by the display, so the speed is the same on a 60Hz
+ * and a 120Hz screen and the scroll stops the instant the finger leaves the band.
+ * A `while (isActive)` around `withFrameNanos` is the whole scheduler: this is a
+ * foreground gesture, and a job that outlived it would scroll a board nobody is
+ * touching.
+ *
+ * The distance per frame is scaled by the frame's own duration, and used not to
+ * be: a fixed dp *per frame* is twice the speed at 120Hz, so the same drag that
+ * was controllable on one phone overshot every row on another. [pointerY] is read
+ * every frame rather than captured, because the finger belongs to a gesture that
+ * is moving the board under itself - and the board's drag and the tray's drag each
+ * pass their own.
  */
 @Composable
-internal fun TierDragAutoScroll(
-    drag: TierDragState,
+internal fun TierEdgeAutoScroll(
+    active: Boolean,
+    pointerY: () -> Float,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
     density: Float
 ) {
-    LaunchedEffect(drag.mediaId) {
-        if (drag.mediaId == null) return@LaunchedEffect
+    val currentPointerY by rememberUpdatedState(pointerY)
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         val edgePx = TIER_DRAG_EDGE_DP * density
         val perFramePx = TIER_DRAG_MAX_SCROLL_DP * density
+        var lastFrame = 0L
         while (isActive) {
-            withFrameNanos { }
+            val frame = withFrameNanos { it }
+            val elapsed = if (lastFrame == 0L) 0L else frame - lastFrame
+            lastFrame = frame
             val strength = tierDragScrollStrength(
-                pointerY = viewport.boardTop + drag.origin.y + drag.travel.value.y,
+                pointerY = currentPointerY(),
                 viewportTop = viewport.viewportTop,
                 viewportBottom = viewport.viewportBottom,
                 edge = edgePx
@@ -127,21 +190,48 @@ internal fun TierDragAutoScroll(
                 // list, not an animation, and the raw path cannot fail with a
                 // mutation-priority conflict - which would kill this loop silently
                 // and stop the scroll exactly while it is holding the drag up.
-                scrollState.dispatchRawDelta(strength * perFramePx)
+                scrollState.dispatchRawDelta(
+                    tierAutoScrollDeltaPx(strength, perFramePx, elapsed)
+                )
             }
         }
     }
 }
 
+/** How many 60Hz frames one scroll step's distance is paced against. */
+private const val NANOS_PER_FRAME = 16_666_667f
+
+/**
+ * A frame's worth of auto-scroll, in pixels, at any refresh rate.
+ *
+ * A dropped frame must not teleport the board either, so the elapsed time is
+ * capped at [MAX_FRAME_SPAN] frames - a stall becomes a pause rather than a jump
+ * of a row's height. The first frame after lift has no elapsed time and moves
+ * nothing, which keeps the pick-up frame stable.
+ */
+internal fun tierAutoScrollDeltaPx(
+    strength: Float,
+    perFramePx: Float,
+    elapsedNanos: Long
+): Float {
+    if (elapsedNanos <= 0L) return 0f
+    val frames = (elapsedNanos.toFloat() / NANOS_PER_FRAME)
+        .coerceIn(0f, MAX_FRAME_SPAN)
+    return strength * perFramePx * frames
+}
+
+/** The longest frame a single scroll step may be paced against. */
+private const val MAX_FRAME_SPAN = 4f
+
 /** Draws the "release to file under..." pill, and clears it when the drag ends. */
 @Composable
 internal fun TierDragHint(
-    draggingId: Int?,
+    dragging: Boolean,
     hoveredTierId: String?,
     tiers: List<TierDefinition>,
     onDragHintChanged: (String?) -> Unit
 ) {
-    val hint = if (draggingId == null) null else tierDragHint(tiers, hoveredTierId)
+    val hint = if (!dragging) null else tierDragHint(tiers, hoveredTierId)
     LaunchedEffect(hint) { onDragHintChanged(hint) }
     DisposableEffect(Unit) {
         onDispose { onDragHintChanged(null) }
@@ -185,7 +275,16 @@ internal fun Modifier.tierDragHandler(
                 // null tier id is exactly how `moveTo` un-files a title. This is
                 // the only route to an empty row that does not delete the row
                 // too. The second id is where inside that row it goes.
-                val target = drag.drop(arrangement, zoom, density)
+                //
+                // The scroll shift is read live, like the travel: the board may
+                // have auto-scrolled since the lift, and the finger did not move
+                // with it.
+                val target = drag.drop(
+                    arrangement = arrangement,
+                    zoom = zoom,
+                    density = density,
+                    scrollShift = drag.boardTop - viewport.boardTop
+                )
                 onMove(mediaId, target.tierId, target.beforeMediaId)
             }
             drag.reset()

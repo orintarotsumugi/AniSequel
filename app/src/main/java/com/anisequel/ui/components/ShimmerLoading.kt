@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,11 +51,20 @@ import androidx.compose.ui.unit.dp
  * Hoist it once where the list is built and pass it down. The parameter default
  * exists so a lone card still works, and it is a composable default expression
  * so that lone card still gets its own correctly-scoped driver.
+ *
+ * The clock stops when the screen is not resumed. A shimmer is a decorative
+ * loop, and one left running behind a stopped Activity kept the frame clock
+ * awake for a screen nobody could see - the rule [rememberIsResumed] exists
+ * for. While paused the phase is a still frame at the start of the sweep, so
+ * the skeleton stays painted rather than disappearing to the background.
  */
 @Composable
 fun rememberShimmerPhase(
     durationMillis: Int = SHIMMER_DURATION_MILLIS
 ): State<Float> {
+    if (!rememberIsResumed()) {
+        return remember { mutableFloatStateOf(SHIMMER_START) }
+    }
     val transition = rememberInfiniteTransition(label = "shimmer_transition")
     return transition.animateFloat(
         initialValue = SHIMMER_START,

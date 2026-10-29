@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.detail
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -31,7 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -42,8 +42,10 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.isManga
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveContainedLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
+import com.anisequel.ui.components.expressive.bouncyPress
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -87,36 +89,57 @@ internal fun DetailEditTab(
     media: MediaNode,
     editor: EntryEditor,
     state: EntryEditState,
+    /**
+     * The *sheet's* scope, not one remembered inside this tab.
+     *
+     * A tab-scoped coroutine dies with the tab, and `AnimatedContent` disposes the
+     * tab the moment the reader switches to Info - which cancelled a save that was
+     * already on the wire. The request still reached AniList, but nothing was left
+     * to read the answer, so `isSaving` never returned to false and the tab came
+     * back stuck on its spinner. The sheet outlives every tab switch, so a save
+     * launched there finishes and lands whether or not its tab is still drawn.
+     */
+    scope: CoroutineScope,
     modifier: Modifier = Modifier
 ) {
     val isManga = media.isManga
-    val scope = rememberCoroutineScope()
 
     // The entry is fetched by the sheet, which owns [state]. Nothing to launch
     // here any more, and nothing to re-fetch when this tab is rebuilt.
     val currentError = state.loadError
     if (currentError != null) {
+        // A failed load used to be a dead end: the message replaced the form and
+        // nothing could ask again, so a request that timed out left the tab
+        // unusable until the sheet was closed and reopened. Retrying re-runs the
+        // same one-shot load; it is safe to press twice because [EntryEditState.load]
+        // is a no-op once a draft exists.
         Surface(
             shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.errorContainer,
             modifier = modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = currentError,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
+            Column(modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = AppVectorIcons.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = currentError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                TextButton(onClick = { scope.launch { state.load(editor, media.id) } }) {
+                    Text(
+                        text = "Try again",
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         }
         return
@@ -151,35 +174,45 @@ internal fun DetailEditTab(
     }
 
     val totalUnits = if (isManga) media.chapters ?: 0 else media.episodes ?: 0
+    // Every control reads this, not only the two buttons: the save response
+    // *replaces* the draft, so anything edited while the request is in flight is
+    // overwritten when the answer lands. Locking the form is what makes the
+    // replacement honest instead of a silently lost drag.
+    val enabled = !state.isSaving
 
     fun persist(updated: EntryDraft) {
         state.isSaving = true
         state.statusMessage = null
         scope.launch {
-            editor.save(
-                MediaEntryEdit(
-                    mediaId = media.id,
-                    status = updated.status,
-                    progress = updated.progress,
-                    progressVolumes = updated.progressVolumes,
-                    score = updated.score,
-                    startedAt = updated.startedAt,
-                    completedAt = updated.completedAt,
-                    isPrivate = updated.isPrivate,
-                    notes = updated.notes
+            try {
+                editor.save(
+                    MediaEntryEdit(
+                        mediaId = media.id,
+                        status = updated.status,
+                        progress = updated.progress,
+                        progressVolumes = updated.progressVolumes,
+                        score = updated.score,
+                        startedAt = updated.startedAt,
+                        completedAt = updated.completedAt,
+                        isPrivate = updated.isPrivate,
+                        notes = updated.notes
+                    )
+                ).fold(
+                    onSuccess = { saved ->
+                        // The save payload has no `Viewer` in it, so the reply alone
+                        // cannot say how the score should be drawn. The draft's own
+                        // format is what keeps a hundred-point account on its scale
+                        // after a save whose score happens to be below ten.
+                        state.markSaved(saved.toDraft(updated.scoreFormat))
+                        state.statusMessage = "Saved to your AniList list"
+                    },
+                    onFailure = { state.statusMessage = it.message ?: "Couldn't save your changes." }
                 )
-            ).fold(
-                onSuccess = { saved ->
-                    // The save payload has no `Viewer` in it, so the reply alone
-                    // cannot say how the score should be drawn. The draft's own
-                    // format is what keeps a hundred-point account on its scale
-                    // after a save whose score happens to be below ten.
-                    state.markSaved(saved.toDraft(updated.scoreFormat))
-                    state.statusMessage = "Saved to your AniList list"
-                },
-                onFailure = { state.statusMessage = it.message ?: "Couldn't save your changes." }
-            )
-            state.isSaving = false
+            } finally {
+                // Even a cancelled or throwing save has to hand the form back in a
+                // usable state; without this the busy button outlived the request.
+                state.isSaving = false
+            }
         }
     }
 
@@ -211,7 +244,8 @@ internal fun DetailEditTab(
                     title = "Status",
                     subtitle = statusLabel(entryState.status, isManga),
                     onClick = { state.statusMenuOpen = true },
-                    testTag = "edit_status_row"
+                    testTag = "edit_status_row",
+                    enabled = enabled
                 )
                 DropdownMenu(
                     expanded = state.statusMenuOpen,
@@ -262,6 +296,7 @@ internal fun DetailEditTab(
                                 },
                                 valueRange = 0f..totalUnits.toFloat(),
                                 steps = (totalUnits - 1).coerceAtLeast(0),
+                                enabled = enabled,
                                 modifier = Modifier.testTag("edit_progress_slider")
                             )
                         }
@@ -274,6 +309,7 @@ internal fun DetailEditTab(
                                 icon = AppVectorIcons.StepDown,
                                 contentDescription = "Decrease progress",
                                 testTag = "edit_progress_minus",
+                                enabled = enabled,
                                 onClick = {
                                     state.draft = entryState.copy(
                                         progress = (entryState.progress - 1).coerceAtLeast(0)
@@ -291,11 +327,18 @@ internal fun DetailEditTab(
                                 icon = AppVectorIcons.StepUp,
                                 contentDescription = "Increase progress",
                                 testTag = "edit_progress_plus",
+                                enabled = enabled,
                                 onClick = {
                                     val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
-                                    state.draft = entryState.copy(
-                                        progress = (entryState.progress + 1).coerceAtMost(ceiling)
-                                    )
+                                    // Stop at the ceiling *before* adding. A title
+                                    // with no known total used `Int.MAX_VALUE` as
+                                    // its ceiling, and `Int.MAX_VALUE + 1` overflows
+                                    // to `Int.MIN_VALUE` - so the plus button on an
+                                    // unscheduled show stepped the count backwards
+                                    // into the negative.
+                                    if (entryState.progress < ceiling) {
+                                        state.draft = entryState.copy(progress = entryState.progress + 1)
+                                    }
                                 }
                             )
                         }
@@ -308,7 +351,15 @@ internal fun DetailEditTab(
             EditorCard(
                 icon = AppVectorIcons.Star,
                 title = "Score",
-                subtitle = "${formatScore(entryState.score)} / ${entryState.scoreMax}",
+                // Zero is AniList's own "no score": an unscored entry loads as 0
+                // and saving 0 clears the score again. Printing "0 / 10" for it
+                // claimed the reader had rated the title the lowest possible
+                // mark, which is the opposite of having rated it at all.
+                subtitle = if (entryState.score <= 0.0) {
+                    "Not scored"
+                } else {
+                    "${formatScore(entryState.score)} / ${entryState.scoreMax}"
+                },
                 testTag = "edit_score_row"
             ) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
@@ -325,6 +376,7 @@ internal fun DetailEditTab(
                         onValueChange = { state.draft = entryState.copy(score = scale.quantise(it.toDouble())) },
                         valueRange = 0f..entryState.scoreMax.toFloat(),
                         steps = scale.steps,
+                        enabled = enabled,
                         modifier = Modifier.testTag("edit_score_slider")
                     )
                 }
@@ -337,14 +389,16 @@ internal fun DetailEditTab(
                 value = entryState.startedAt,
                 testTag = "edit_start_date_row",
                 onPick = { state.openDatePicker = DateField.START },
-                onClear = { state.draft = entryState.copy(startedAt = null) }
+                onClear = { state.draft = entryState.copy(startedAt = null) },
+                enabled = enabled
             )
             DateRow(
                 label = "Finish Date",
                 value = entryState.completedAt,
                 testTag = "edit_finish_date_row",
                 onPick = { state.openDatePicker = DateField.FINISH },
-                onClear = { state.draft = entryState.copy(completedAt = null) }
+                onClear = { state.draft = entryState.copy(completedAt = null) },
+                enabled = enabled
             )
 
             // Private entry.
@@ -359,6 +413,7 @@ internal fun DetailEditTab(
                     onCheckedChange = { checked ->
                         state.draft = entryState.copy(isPrivate = checked)
                     },
+                    enabled = enabled,
                     modifier = Modifier
                         .padding(top = 8.dp)
                         .testTag("edit_private_switch")
@@ -383,7 +438,8 @@ internal fun DetailEditTab(
                     label = { Text("Private note") },
                     minLines = 3,
                     maxLines = 6,
-                    shape = MaterialTheme.shapes.small
+                    shape = MaterialTheme.shapes.small,
+                    enabled = enabled
                 )
             }
         }
@@ -421,61 +477,62 @@ internal fun DetailEditTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    val deleteInteraction = remember { MutableInteractionSource() }
                     OutlinedButton(
                         onClick = {
                             val entryId = entryState.entryId ?: return@OutlinedButton
                             state.isSaving = true
                             state.statusMessage = null
                             scope.launch {
-                                editor.delete(entryId).fold(
-                                    onSuccess = {
-                                        // Back to an entry that does not exist yet, so the
-                                        // form is ready to create a fresh one rather than
-                                        // showing the values that were just removed.
-                                        state.cleared()
-                                        state.statusMessage = "Removed from your list"
-                                    },
-                                    onFailure = {
-                                        state.statusMessage =
-                                            it.message ?: "Couldn't remove this entry."
-                                    }
-                                )
-                                state.isSaving = false
+                                try {
+                                    editor.delete(entryId).fold(
+                                        onSuccess = {
+                                            // Back to an entry that does not exist yet, so the
+                                            // form is ready to create a fresh one rather than
+                                            // showing the values that were just removed.
+                                            state.cleared()
+                                            state.statusMessage = "Removed from your list"
+                                        },
+                                        onFailure = {
+                                            state.statusMessage =
+                                                it.message ?: "Couldn't remove this entry."
+                                        }
+                                    )
+                                } finally {
+                                    state.isSaving = false
+                                }
                             }
                         },
                         enabled = !state.isSaving && entryState.entryId != null,
+                        // 48dp, the app's expressive button height, rather than the
+                        // 46dp this used to be: it sits beside the primary action, and
+                        // two heights half a pixel apart read as a misalignment rather
+                        // than as hierarchy.
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(48.dp)
+                            .bouncyPress(pressedScale = 0.96f, interactionSource = deleteInteraction)
                             .testTag("edit_delete_button"),
-                        shape = MaterialTheme.shapes.small
+                        shape = MaterialTheme.shapes.medium,
+                        interactionSource = deleteInteraction
                     ) {
                         Text("Delete")
                     }
 
-                    Button(
+                    // The app's shared primary button rather than a stock `Button`:
+                    // it carries the press spring, the shape morph and the
+                    // loader-on-its-own-container pairing every other busy action in
+                    // the app uses. The stock pair here had it inverted -
+                    // `onPrimary` container with a `primary` spinner - which was a
+                    // light disc with a coloured hole rather than the button thinking.
+                    ExpressivePrimaryButton(
+                        text = "Save changes",
                         onClick = { persist(entryState) },
-                        enabled = !state.isSaving && state.hasUnsavedChanges,
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(46.dp)
-                            .testTag("edit_save_button"),
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        if (state.isSaving) {
-                            // The contained loader, sized to the button, on the button's own
-                            // container colour - the same pairing `ExpressiveButtons` uses,
-                            // so a saving button looks like every other busy button in the
-                            // app rather than like a different control.
-                            ExpressiveContainedLoadingIndicator(
-                                modifier = Modifier.size(16.dp),
-                                containerColor = MaterialTheme.colorScheme.onPrimary,
-                                indicatorColor = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        Text("Save changes")
-                    }
+                        modifier = Modifier.weight(1.3f),
+                        loading = state.isSaving,
+                        enabled = state.hasUnsavedChanges,
+                        testTag = "edit_save_button"
+                    )
                 }
             }
         }

@@ -102,10 +102,11 @@ It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
   API.** Check it against *this* repo's Kotlin, AGP, and compileSdk — not against
   the newest release.
 - **A version pin that looks stale is usually load-bearing.** `material3` is pinned
-  *above* the Compose BOM because Expressive components are alpha-only, and to
-  `1.5.0-alpha14` specifically because alpha16+ requires compileSdk 37 while this
-  app compiles against 36.1. The reasoning lives inline in
-  `gradle/libs.versions.toml`. Read it before "tidying" it.
+  *above* the Compose BOM because the Expressive component set (LoadingIndicator,
+  the wavy progress indicators, SplitButton, the morphing ButtonGroup) only exists
+  in the 1.5 line - the BOM still resolves the stable 1.4.0. Both the BOM and the
+  pin now sit on the Compose 1.12 line and require compileSdk 37; the reasoning
+  lives inline in `gradle/libs.versions.toml`. Read it before "tidying" it.
 - **Scope every dependency.** `ui-tooling-preview` is `debugImplementation`, not
   `implementation`. A release APK has no business shipping preview tooling.
 - **Do not add `-keep` rules on `androidx.compose`.** R8 and

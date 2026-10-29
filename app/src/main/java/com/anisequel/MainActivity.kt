@@ -34,6 +34,7 @@ import com.anisequel.ui.components.update.UpdateController
 import com.anisequel.ui.components.update.UpdatePromptHost
 import com.anisequel.ui.components.update.rememberUpdateController
 import com.anisequel.ui.navigation.AppNavigation
+import com.anisequel.ui.navigation.RestoringPlaceholder
 import com.anisequel.ui.security.AppLockGate
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.ThemePalette
@@ -255,11 +256,14 @@ class MainActivity : ComponentActivity() {
                 appBackgroundColor = themeSettings.appBackgroundColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // Held on the themed background until the stored theme is in.
-                    // The Surface already paints colorScheme.background, so this
-                    // shows the right colour from the first frame rather than a
-                    // default-themed app that repaints a moment later.
+                    // Held on the themed background until the stored theme and
+                    // lock state are in. This used to return an empty Surface,
+                    // which was the right colour but a blank first frame - the
+                    // window had nothing to show and the app looked stopped.
+                    // The same branded placeholder the session read uses is
+                    // drawn instead, so both pre-screen waits look deliberate.
                     if (!themeSettings.isLoaded || !appLockReady) {
+                        RestoringPlaceholder(message = "Restoring your settings\u2026")
                         return@Surface
                     }
 

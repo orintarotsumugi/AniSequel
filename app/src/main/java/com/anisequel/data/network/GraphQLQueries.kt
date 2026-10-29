@@ -754,7 +754,6 @@ object GraphQLQueries {
     private const val STUDIO_MEDIA_FIELDS = """
                 id
                 type
-                idMal
                 title { romaji english native userPreferred }
                 format
                 status
@@ -784,8 +783,10 @@ object GraphQLQueries {
      * reading `Media(id: $id) {id`, and makes any test that compares the two forms
      * line by line compare the seam instead of the fields.
      *
-     * `idMal` is kept because it is the field that distinguishes an entry from its
-     * adult variant, and the parser already knows to drop one.
+     * The field list carries only fields something reads. `idMal` and `isAdult`
+     * were selected for a parser that no longer exists - nothing in the app models
+     * or draws either - so they were removed rather than left to pad every detail
+     * response with two facts that go nowhere.
      *
      * The relation nodes interpolate [RELATED_NODE_FIELDS] rather than listing a
      * handful of fields of their own - see that constant for what the title page's
@@ -833,7 +834,6 @@ object GraphQLQueries {
     private val MEDIA_DETAIL_FIELDS = """
         id
         type
-        idMal
         title { romaji english native userPreferred }
         format
         status
@@ -842,7 +842,6 @@ object GraphQLQueries {
         volumes
         duration
         countryOfOrigin
-        isAdult
         averageScore
         meanScore
         popularity
@@ -856,9 +855,10 @@ object GraphQLQueries {
         studios { edges { isMain node { id name isAnimationStudio } } }
         coverImage { extraLarge large color }
         bannerImage
-        nextAiringEpisode { episode airingAt timeUntilAiring }
+        nextAiringEpisode { episode airingAt }
         startDate { year month day }
-        mediaListEntry { status progress score(format: POINT_100) }
+        endDate { year month day }
+        mediaListEntry { status progress }
         trailer { id site }
         externalLinks {
           id
@@ -963,11 +963,13 @@ object GraphQLQueries {
     /**
      * The viewer's own entry for one media, with every field the editor can change.
      *
-     * `userId` is passed explicitly rather than left to the server. AniList's
-     * `MediaList` does not implicitly select the authenticated user when the id is
-     * omitted - the answer is the same shape whether it is yours or a stranger's -
-     * so the caller supplies the id it already holds and the editor can never
-     * silently open somebody else's entry.
+     * `userId` is passed when the caller has one, and omitted when it does not: an
+     * omitted `userId` is AniList's documented way of asking for the **authenticated
+     * viewer's** entry, which is exactly what the editor wants. The explicit id is
+     * the safer half of the pair - `RepositoryEntryEditor` supplies it when its
+     * host knows it - but it is not required, and a document that treated the
+     * omission as "somebody else's entry" would be solving a problem that does not
+     * exist.
      *
      * `Viewer.mediaListOptions.scoreFormat` rides along in the same document.
      * `MediaList` has no score format of its own, and the editor's score control

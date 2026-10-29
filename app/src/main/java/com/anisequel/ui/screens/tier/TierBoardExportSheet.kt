@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -43,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * "Export tier list": render the whole board, then share or save it.
@@ -185,6 +188,15 @@ internal fun TierExportSheet(
 
             TierExportError(session.error)
 
+            // The render is slow enough on a large list that a button that only
+            // says "loading" reads as stuck: fetching a 300-title board's covers
+            // in batches of eight takes long enough to wonder whether it started.
+            // The fraction is per poster batch, so it moves while the covers are
+            // arriving, which is the whole of the wait.
+            if (session.busy) {
+                TierExportProgress(progress = session.progress)
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
             if (titleCount == 0) {
                 TierExportEmptyHint(ranked = ranked)
@@ -221,6 +233,31 @@ private fun TierExportError(message: String?) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error
     )
+}
+
+/**
+ * The render's progress, while it is running.
+ *
+ * A determinate bar rather than the button's spinner: the renderer knows exactly
+ * how many tiles it has drawn, and "42%" is an answer where an indeterminate bar
+ * is only an apology. The bar is the same width as the buttons below it, so the
+ * sheet does not jump sideways when it appears.
+ */
+@Composable
+private fun TierExportProgress(progress: Float) {
+    Spacer(modifier = Modifier.height(14.dp))
+    Column(modifier = Modifier.testTag("tier_export_progress")) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Rendering the image... ${(progress * 100).roundToInt()}%",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 /** Why there is nothing to export - which depends on what the filters did. */
@@ -354,6 +391,16 @@ private class TierExportSession(
     var busy by mutableStateOf(false)
         private set
 
+    /**
+     * How much of the image has been rendered, 0..1.
+     *
+     * Only meaningful while [busy]: the renderer reports per batch of posters, and
+     * the bar is drawn from this only while an export is running, so a stale
+     * fraction from the last export cannot appear under an idle sheet.
+     */
+    var progress by mutableFloatStateOf(0f)
+        private set
+
     var error by mutableStateOf<String?>(null)
         private set
 
@@ -365,9 +412,17 @@ private class TierExportSession(
         if (busy) return
         busy = true
         error = null
+        progress = 0f
         scope.launch {
-            val outcome = exportTierListImage(action, context, request, targetWidth)
+            val outcome = exportTierListImage(action, context, request, targetWidth) { value ->
+                // The renderer runs on `Dispatchers.Default`; this state is read by
+                // the sheet on the main thread. Hopping here rather than writing
+                // Compose state from the drawing thread keeps the write and the
+                // frame that shows it in the same order.
+                withContext(Dispatchers.Main.immediate) { progress = value }
+            }
             busy = false
+            progress = 0f
             when (outcome) {
                 TierExportOutcome.Shared -> onDismiss()
                 TierExportOutcome.Saved -> {
@@ -396,9 +451,10 @@ private suspend fun exportTierListImage(
     action: TierExportAction,
     context: Context,
     request: TierExportRequest,
-    targetWidth: Int
+    targetWidth: Int,
+    onProgress: suspend (Float) -> Unit
 ): TierExportOutcome {
-    val bitmap = renderTierListImageSafely(context, request, targetWidth)
+    val bitmap = renderTierListImageSafely(context, request, targetWidth, onProgress)
         ?: return TierExportOutcome.RenderFailed
     return try {
         val delivered = when (action) {
@@ -424,7 +480,8 @@ private suspend fun exportTierListImage(
 private suspend fun renderTierListImageSafely(
     context: Context,
     request: TierExportRequest,
-    targetWidth: Int
+    targetWidth: Int,
+    onProgress: suspend (Float) -> Unit
 ): Bitmap? = try {
     renderTierListImage(
         context = context,
@@ -433,7 +490,8 @@ private suspend fun renderTierListImageSafely(
         assignment = request.assignment,
         candidates = request.candidates,
         display = request.display,
-        targetWidth = targetWidth
+        targetWidth = targetWidth,
+        onProgress = onProgress
     )
 } catch (cancellation: CancellationException) {
     throw cancellation

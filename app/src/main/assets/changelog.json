@@ -1,6 +1,87 @@
 {
   "versions": [
     {
+      "version": "1.6.7",
+      "entries": [
+        {
+          "title": "Back moves the way you came",
+          "detail": "Popping a page used to reveal the page underneath from the same edge the pushed page had entered from, so Settings slid in from the right and Back slid the dashboard in from the right too - both halves of one gesture moving the same way. A pop is the push read backwards now: the page being popped leaves to the right and the page underneath enters from the left. Tab pops keep their own direction, which already came from the bar's order."
+        },
+        {
+          "title": "The demo profile keeps Home behind it",
+          "detail": "Opening Profile in the demo used to replace the demo dashboard instead of stacking on it, which left the profile alone on the back stack. Its back arrow did nothing, and a Home/Profile round trip pushed a duplicate profile each time, so Back walked through copies of the same page. Profile is a tab in both sessions now, and every tab keeps the demo dashboard underneath it."
+        },
+        {
+          "title": "A tab switch leaves the graph alone",
+          "detail": "The main bar and the joke toast used to read the current route in the same scope that calls the navigation graph, so every push, pop and tab switch re-ran the graph's destination table to move two overlays. Each host reads the route in its own scope now; a route change redraws the bar and the toast, not the screens behind them."
+        },
+        {
+          "title": "Seventy-five more ways to be interrupted",
+          "detail": "The joke pool gains fifteen lines in each of its five tones - feelings, backlog, meta, craft and dark - for 842 lines in total. The shuffle bag still shows every filtered line once before repeating any, so the new ones arrive before the old favourites come back around."
+        },
+        {
+          "title": "The bar shows where a swipe is going",
+          "detail": "Holding the main bar and dragging used to change tab on every step, so one swipe across three destinations popped and pushed the navigation graph three times: three page transitions under one finger, and the pages that were only passed through still started loading before being replaced. The pill now follows the finger and the page changes once, when you let go. Releasing on the tab you started from is not a page change at all, and an interrupted gesture navigates nowhere."
+        },
+        {
+          "title": "Zoomed covers stay sharp",
+          "detail": "A poster was decoded at exactly the size it was drawn, which changed on every frame of a pinch. Each request cancelled the one before it, so the cover on screen stayed the one decoded at the previous size and was stretched over the growing tile until the fingers stopped. Posters are now decoded at a size that only changes in steps, always at or above the tile, so pinching in from the overview is sharp the whole way instead of settling into focus afterwards."
+        },
+        {
+          "title": "The export says how far it has got",
+          "detail": "Rendering a tier list to an image fetches every cover on the board, and on a list of a few hundred titles that is long enough for a loading button to look stuck. The export sheet now draws a progress bar with a percentage that moves as each batch of posters arrives, so the wait has a shape and a size."
+        },
+        {
+          "title": "The shape scale completes its family",
+          "detail": "Material 3 Expressive shapes now publish the complete 10 / 14 / 20 / 28 / 36dp scale as named tokens in ExpressiveShapes alongside ready-to-use Shape accessors. Raw corner radii across detail metadata, streaming chips, and profile headers now align with the theme scale."
+        },
+        {
+          "title": "Buttons and cards share tactile springs",
+          "detail": "Taps and holds employ asymmetric spring physics (PressSpatialIn / PressSpatialOut) for immediate down-press feel and snappy release overshoot. Interactive cards share their InteractionSource directly with bouncyPress, eliminating redundant pointer tracking during flings."
+        },
+        {
+          "title": "Modular navigation architecture",
+          "detail": "The navigation graph in AppNavigation is extracted into decoupled NavGraphBuilder extensions per destination group, bringing root file size down from 1,052 lines to 557 lines while keeping destination handling cleanly modularized."
+        },
+        {
+          "title": "The first frame is drawn",
+          "detail": "A cold start used to paint nothing between the splash screen and the first data: the settings read returned an empty Surface until DataStore answered. It draws the app's branded placeholder now, and Home, Profile and Library crossfade between Loading, Error and Success instead of snapping, keyed on the state's class so a refresh does not blink. The shimmer's clock also stops while the screen is not resumed."
+        },
+        {
+          "title": "A failed manga list says so",
+          "detail": "A manga fetch that failed used to leave the list null and the loading flag false, which the Library page could only read as \"you have no manga\" - a wrong answer the reader had no reason to doubt. The failure is kept now, so the page says what happened and the chip stays a retry."
+        },
+        {
+          "title": "The widgets count the right things",
+          "detail": "The activity tile counted zero for every signed-in account because no summary was ever written. The dashboard now derives a seven-day recent-update count from the list it already downloads and passes it, with the latest title, to the widget. Widget rendering and in-memory covers moved off the main thread, and the Library and Settings graphs receive only the two counts and the error they need, so a keystroke in the dashboard search no longer recomposes the app root."
+        },
+        {
+          "title": "A save survives the tab switch",
+          "detail": "The Edit tab launched its save on a scope that is disposed the moment you switch to Info, so the request reached AniList and nothing was left to read the answer - the spinner stuck and the form came back unusable. The save runs on the sheet's scope now and always hands the form back in a usable state. The form also locks while a save is on the wire instead of silently discarding a slider dragged mid-request, an unscored entry reads \"Not scored\" instead of \"0 / 10\", the progress plus button can no longer overflow a show with no known total, and a failed load offers Try again instead of being a dead end."
+        },
+        {
+          "title": "The Info page shows what AniList sent",
+          "detail": "A title opened from an activity row could show its full cast next to \"Episodes TBA\" and no score, because the detail merge copied cast and staff but none of the plain facts. Format, status, episode and chapter counts, country, scores, season, genres and dates now carry through without erasing what the list already knew. The card also says when a title ended, spells the country out instead of printing \"JP\", labels the duration \"Episode length\" because it is one episode, and prints \"Apr 5, 2023\" rather than the raw ISO date. The Titles sheet no longer repeats synonyms the page already lists one tap away."
+        },
+        {
+          "title": "Tier drags land where the board is",
+          "detail": "A board auto-scrolling under a stationary finger moved its rows past the pointer without a pointer event, so a release filed the title into the row that was on screen when the drag began. The drop now takes the scroll shift the ghost already used. The tray's weaker hit test - which could name a tier but never a seam - is replaced by the board's own resolver for its preview, highlight and release, and the edge auto-scroll is paced by frame duration, so a 120Hz screen no longer scrolls twice as fast as a 60Hz one."
+        },
+        {
+          "title": "Settings remembers, and says so",
+          "detail": "The Library's narrowed view could only be returned to default by changing three controls in the right order, and the page never said it was remembering them. Settings now names the remembered view and offers one Reset, read in three states so the first frame neither claims the default nor hides the button. Pages push in from the end and return the same way instead of both levels scaling, and the theme preview crossfades as one scheme rather than running its accent through a second, faster spring that arrived before its own gradient."
+        },
+        {
+          "title": "Filters ask about genre and rating",
+          "detail": "The advanced sheet could only narrow by what it had a chip for, while every list response already carried genre and score. Genre is a multi-select that keeps sequels in any of the chosen genres; rating is a lower bound that drops unrated titles while set. Both restate in the quick bar's Filtered row, which can now name OVA, ONA and Special, and TV shorts finally have a chip of their own instead of matching no format at all. A Reset inside the sheet clears narrowing without leaving the dialog."
+        },
+        {
+          "title": "The Compose stack moves to the 1.12 line",
+          "detail": "The Compose BOM moves to 2026.09.00 and Material 3 to 1.5.0-beta02, and the app compiles against API 37 - the floor both of those now require. The material3 pin stays above the BOM because the Expressive components this app draws with only exist in the 1.5 line; the BOM governs the rest of the stack. The target SDK stays at 36 deliberately, because compiling against an API and opting into its runtime behaviour are separate decisions."
+        }
+      ]
+    },
+    {
       "version": "1.6.6",
       "entries": [
         {

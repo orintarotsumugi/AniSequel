@@ -25,6 +25,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -205,6 +206,47 @@ class UserOverviewLoadOrderTest {
         }
 
     /**
+     * A failed manga fetch must be distinguishable from an empty manga list.
+     *
+     * `loadMangaLibrary` used to `onFailure = { }`, which left `mangaLibrary`
+     * null and `isLoadingManga` false - exactly the pair the Library page reads
+     * as "the list is here and it is empty". An account with a private list or a
+     * rate limit got "Nothing in this list yet" over a list nobody had read.
+     *
+     * The retry half is asserted too: the null is what keeps the chip able to
+     * ask again, so failing without clearing it would trade a lie for a dead
+     * control.
+     */
+    @Test
+    fun `a failed manga fetch is reported instead of reading as an empty list`() =
+        runTest(testDispatcher) {
+            val listGate = CompletableDeferred<Unit>().apply { complete(Unit) }
+            val repository = GatedListRepository(listGate = listGate, mangaFails = true)
+            val viewModel = UserOverviewViewModel(repository, userId = 1)
+            advanceUntilIdle()
+
+            viewModel.loadMangaLibrary()
+            advanceUntilIdle()
+
+            assertNotNull(
+                "a failed fetch must not be indistinguishable from an empty list",
+                viewModel.mangaError.value
+            )
+            assertNull(
+                "a null list keeps the manga chip a retry",
+                viewModel.mangaLibrary.value
+            )
+            assertFalse(viewModel.isLoadingManga.value)
+
+            repository.mangaFails = false
+            viewModel.loadMangaLibrary()
+            advanceUntilIdle()
+
+            assertNull("the retry cleared the failure", viewModel.mangaError.value)
+            assertEquals(21, viewModel.mangaLibrary.value?.single()?.media?.id ?: -1)
+        }
+
+    /**
      * A repository whose list fetch waits on [listGate].
      *
      * A gate rather than a delay: the point of the test is that the profile is
@@ -215,7 +257,9 @@ class UserOverviewLoadOrderTest {
     private class GatedListRepository(
         private val listGate: CompletableDeferred<Unit>?,
         /** The bio the fake profile carries. Null for the tests that have none. */
-        private val bio: String? = null
+        private val bio: String? = null,
+        /** Whether the manga fetch fails. Mutable so the retry test can flip it. */
+        var mangaFails: Boolean = false
     ) : AniListRepository {
 
         /**
@@ -262,6 +306,35 @@ class UserOverviewLoadOrderTest {
             userName: String,
             forceRefresh: Boolean
         ): Result<MediaListCollection> = getUserAnimeList(0, forceRefresh)
+
+        override suspend fun getUserMangaList(
+            userId: Int,
+            forceRefresh: Boolean
+        ): Result<MediaListCollection> {
+            if (mangaFails) {
+                return Result.failure(RuntimeException("rate limited"))
+            }
+            return Result.success(
+                MediaListCollection(
+                    lists = listOf(
+                        MediaListGroup(
+                            name = "Reading",
+                            status = "CURRENT",
+                            entries = listOf(
+                                MediaListEntryItem(
+                                    status = "CURRENT",
+                                    progress = 3,
+                                    media = MediaNode(
+                                        id = 21,
+                                        title = MediaTitle(english = "Yotsuba&!")
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        }
 
         override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<MediaNode> = failure()
         override suspend fun addToPlanning(mediaId: Int): Result<SimpleMediaListEntry> = failure()

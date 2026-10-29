@@ -365,11 +365,15 @@ A tab tap replaces rather than pushes: `navigateToMainTab` pops back to Home wit
 them lands on Home instead of walking back through every tab visited, and
 returning to a page restores what it was showing. A repeat tap on the tab already
 on screen is a no-op (`launchSingleTop`, the same guard every other hop in the
-app uses). The demo profile keeps the rule its avatar always had: it replaces the
-demo dashboard rather than stacking on it. The tier list takes this same path from
-all three of its doors, so Back out of a board opened from the Library goes Home
-rather than Library — the alternative was the same page behaving differently
-depending on which door the reader used.
+app uses). The demo profile is a tab like any other: it stacks on the demo
+dashboard, so its own back arrow returns Home. It used to replace the demo
+dashboard instead, on the theory that a demo profile is not on AniList and should
+not stack on it — which popped Home out of the back stack, left the profile alone
+with a back arrow that did nothing, and pushed a duplicate profile on every
+Home/Profile round trip. The tier list takes this same path from all three of its
+doors, so Back out of a board opened from the Library goes Home rather than
+Library — the alternative was the same page behaving differently depending on
+which door the reader used.
 
 **Holding the bar and swiping it.** A hold on the capsule lifts it and lets the
 finger drag the selection: one destination per destination-width of travel, with
@@ -385,9 +389,18 @@ travel is measured against the *measured* bar divided by the destination count,
 not against a fixed dp, because the selected pill is wider than the others and a
 fixed threshold would move two tabs in one gesture on a phone. The current index
 is mirrored inside the pointer handler as well as read from the parameter: the
-selection is a route change, so two steps inside one frame would otherwise both
-compute the same "next" tab. Dragging right pulls the previous tab in, the way a
-horizontal pager does.
+preview is written back so the pill can follow the finger, but the handler must
+not read it back, or two steps inside one frame would both start from the same
+index and move one destination instead of two. Dragging right pulls the previous
+tab in, the way a horizontal pager does.
+
+The drag moves a **preview**; the page changes once, on release. It used to call
+the route change on every step, so one swipe across three tabs popped and pushed
+the graph three times — three page transitions under one finger, and the two
+pages that were only passed through still composed and started loading before
+being replaced. Releasing on the tab the swipe started from is not a route change
+at all, and a cancelled gesture (the tier tab being switched off mid-hold) commits
+nothing: `swipeSelection` returns the destination only on a real finger-up.
 
 **The bar leaves downwards for an open tier board.** It is drawn by the host
 inside an `AnimatedVisibility`, and the board rises from the bottom edge at the
@@ -399,11 +412,15 @@ frame would read as two moves fighting. Tab-to-tab moves also have a direction
 now: the transition asks `tabDirection`, which compares the two tabs' positions in
 `MainTab`, so Library → Home travels right and Home → Library travels left
 instead of both sliding the same way. A pop is the same rule read the other way,
-because the pair is (popped, revealed). A tab move slides on
-`FastSpatialOffset` rather than the route token: it is a control the reader can
-chain faster than any animation — hold, swipe twice — and on the calm spring the
-first slide is still travelling when the second starts, which reads as a stutter
-rather than a switch.
+because the pair is (popped, revealed). Pages pushed from a tab — Settings, a
+studio, somebody else's profile — are not a tab pair, and their pops used to fall
+through to the push direction: Settings entered from the right and Back slid the
+dashboard in from the right too. A non-tab pop now travels right, so the popped
+page leaves to the right and the page underneath enters from the left. A tab move
+slides on `FastSpatialOffset` rather than the route token: it is a control the
+reader can chain faster than any animation — hold, swipe twice — and on the calm
+spring the first slide is still travelling when the second starts, which reads as
+a stutter rather than a switch.
 
 The rows the bar floats over leave it room with `mainBarClearance()` — the bar's
 96dp plus the device's own navigation inset, read at draw time rather than
@@ -414,6 +431,32 @@ bar and reserves the system inset alone, which is why the flag travels as a
 `CompositionLocal` rather than through four tab signatures. The tier list's
 library reserves it too, now that the bar is drawn there; without it the last row
 of lists ended underneath the capsule.
+
+**The chrome reads the route in its own scope.** The bar and the joke toast are
+`MainBarHost` and `JokeHost` in `ui/navigation/MainChrome.kt`, and each calls
+`currentBackStackEntryAsState()` itself. They used to be inlined in
+`AppNavigation`'s `Box`, in the same composition scope that calls `NavHost`, so
+every push, pop and tab switch invalidated that scope and re-ran the graph's
+destination table to move two overlays. The route read now belongs to the host
+that uses it: a route change recomposes a bar and a toast, not the graph. The
+split is also a file boundary — `AppNavigation` is the destination table, this is
+what floats above it — and it is the first step of the tracked split of that
+file.
+
+**The navigation graph is split by destination group.** `AppNavigation` used to
+define every destination inline in one function, putting twelve unrelated screens
+and their captured dependencies in a single ~1,100-line file. Each group lives in
+its own `NavGraphBuilder` extension now (`AuthNavGraph.kt`, `DashboardNavGraph.kt`,
+`ProfileNavGraph.kt`, `TierListNavGraph.kt`, `LibraryNavGraph.kt`,
+`StudioNavGraph.kt`, `SettingsNavGraph.kt`), with `WidgetSync` and
+`RestoringPlaceholder` hoisted. Captured dependencies are passed as parameters,
+keeping every destination file under 200 lines and `AppNavigation` at 557 lines.
+
+**The shape scale publishes all five steps.** Material 3 Expressive surfaces
+curved on the 10 / 14 / 20 / 28 / 36dp scale. `ExpressiveShapes.kt` now names all
+five (`ExtraSmallCorner` through `ExtraLargeCorner`) and exposes ready-to-use
+`Shape` tokens (`extraSmall` through `extraLarge`), eliminating raw corner
+literals across detail metadata rows, streaming cards, and profile headers.
 
 **The Library moved out of the profile for it.** The list was the fourth tab of
 every profile, including a stranger's, which made the thing a reader consults
@@ -726,6 +769,17 @@ down, so a one-finger drag reaches the screen's `verticalScroll` untouched; the
 local zoom value is kept for the gesture because the composition's value is a
 frame behind the next pointer event.
 
+The posters on the board are decoded at a size from a ladder
+(`tierCoverDecodePx`), not at the size they are currently drawn. `AsyncImage`
+asks Coil for exactly its constraints, so a request per frame of a pinch
+cancelled the previous one before it could finish, and `AsyncImagePainter` keeps
+the last successful bitmap while the next loads - the cover on screen was the one
+decoded at the previous size, stretched over a tile that had grown since. The
+ladder rounds the request up to the next rung (1.4x apart), so the size only
+changes about five times across 35%-200%, and it is always at or above the drawn
+tile. The cost is bounded at 40% more pixels than the tile needs, which at the
+overview zoom is 40% of a thumbnail.
+
 The board's shareable export is a **PNG**, rendered from that same layout, at
 1080, 2160 or 3840 pixels across. It is not a screenshot: a screenshot is the
 viewport by definition, so a 300-title board would be forty of them at whatever
@@ -736,7 +790,10 @@ budget gives width back. Posters are requested at their drawn size with Coil's
 memory cache disabled and released batch by batch after they are drawn, so the
 peak is one batch rather than the whole board. The board's zoom is deliberately
 not the export scale: 35% is a useful way to look at the board, not a useful
-resolution to share.
+resolution to share. `renderTierListImage` reports progress through a `suspend`
+callback, once when the layout is ready and then once per poster batch, and the
+sheet draws it as a determinate bar: the fetching is the wait, so the batches are
+the only place a fraction means anything.
 
 Tile corners are a fraction of the tile's width (`tierTileCornerRadius`), not a
 fixed radius. A constant 12dp is a rounded square on a 72dp tile and very nearly

@@ -3,13 +3,13 @@ package com.anisequel.ui.screens.tier
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierRowBox
+import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
 // Pure, testable helpers.
@@ -94,6 +94,45 @@ internal const val TIER_ZOOM_STEP = 0.2f
  */
 internal fun clampTierZoom(value: Float): Float =
     if (value.isNaN()) TIER_MIN_ZOOM else value.coerceIn(TIER_MIN_ZOOM, TIER_MAX_ZOOM)
+
+/**
+ * The width in pixels a board poster is decoded at, for a tile drawn [drawnPx] wide.
+ *
+ * ## Why the decode size is not the drawn size
+ *
+ * `AsyncImage` asks Coil for exactly the constraints it is laid out at, so every
+ * frame of a pinch was a new size and therefore a new request. Each request
+ * cancelled the one before it, and `AsyncImagePainter` keeps the last successful
+ * bitmap while the next one loads - so for the whole of a pinch the cover on screen
+ * was the one decoded at the *previous* size, drawn stretched. Pinching in from the
+ * 35% overview therefore looked like a wall of blurred covers that sharpened only
+ * after the fingers stopped.
+ *
+ * Rounding the request up to a geometric ladder fixes both halves of that:
+ *
+ *  - the size is constant between rungs, so a pinch across 35%-200% is about five
+ *    requests instead of one per frame, and the ones in between are not cancelled;
+ *  - the decoded bitmap is always at least as large as the tile it is drawn into,
+ *    so a settled zoom never shows an upscaled cover.
+ *
+ * The rungs are 1.4x apart, so the waste is at most 40% more pixels than the tile
+ * needs - and at the overview zoom, where forty covers are on screen at once, that
+ * 40% is 40% of a thumbnail rather than of a poster.
+ */
+internal fun tierCoverDecodePx(drawnPx: Int): Int {
+    val drawn = drawnPx.coerceAtLeast(1)
+    var rung = MIN_COVER_DECODE_PX
+    while (rung < drawn) {
+        rung = (rung * COVER_DECODE_STEP).roundToInt()
+    }
+    return rung
+}
+
+/** The smallest rung: below this a poster is a thumbnail whatever is asked for. */
+private const val MIN_COVER_DECODE_PX = 64
+
+/** How much wider each rung is than the one below it. */
+private const val COVER_DECODE_STEP = 1.4f
 
 /**
  * How far outside a row a drop still counts as "on" that row.
@@ -405,20 +444,22 @@ internal class TierBoardViewport {
     var boardWidth by mutableFloatStateOf(0f)
 
     /**
-     * Where each tier row actually is, in window pixels.
+     * Answers "what would a release at this *window* position file into?".
      *
      * Published by the board rather than recomputed by the tray because the board
-     * is the only thing that knows the answer: the rows come from `layoutTierList`
-     * in layout dp, then get scaled by the zoom, then offset by wherever the board
-     * has been scrolled to. A tray that worked it out for itself would be holding a
-     * third opinion about the same geometry, and the two would disagree the moment
-     * a gap or a zoom step changed in one of them - which is exactly the class of
-     * bug the shared layout exists to prevent.
+     * is the only thing that knows the answer: the drop comes from
+     * `layoutTierList` in layout dp, then gets scaled by the zoom and offset by
+     * wherever the board has been scrolled to, and a tray that worked it out for
+     * itself would be holding a second opinion about the same geometry - which is
+     * exactly the class of bug the shared layout exists to prevent. It used to be
+     * a list of row bands, and that second opinion could name a row but not a
+     * *seam*: a tray drop always appended to the end of the row it landed on,
+     * while the board's own drag could place between two posters.
      *
-     * Empty until the board has composed, so a drop in that first frame resolves to
+     * Null until the board has composed, so a drop in that first frame resolves to
      * no tier and un-files rather than filing under a guess.
      */
-    var rowBands by mutableStateOf<List<TierRowBand>>(emptyList())
+    var dropResolver: ((windowX: Float, windowY: Float) -> TierDrop)? = null
 
     val viewportBottom: Float get() = viewportTop + viewportHeight
 }

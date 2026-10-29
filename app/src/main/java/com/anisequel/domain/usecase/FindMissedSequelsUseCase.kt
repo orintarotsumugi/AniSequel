@@ -205,6 +205,20 @@ class FindMissedSequelsUseCase {
             val matchesFormat = filterCriteria.selectedFormat == null ||
                     sequel.sequelMedia.format.equals(filterCriteria.selectedFormat, ignoreCase = true)
 
+            // OR across the selection, and case-insensitive because the chips
+            // carry AniList's spelling while a cached node may not.
+            val genres = filterCriteria.selectedGenres
+            val matchesGenre = genres.isEmpty() ||
+                    sequel.genres.any { genre -> genres.any { it.equals(genre, ignoreCase = true) } }
+
+            // An unrated sequel (null averageScore) has no score to clear the
+            // bar, so it drops out while a minimum is set. See
+            // [filterScoreOptions] - the alternative, keeping unrated entries,
+            // would surface titles the viewer did not ask to see as "meeting"
+            // a threshold AniList never measured them against.
+            val matchesScore = filterCriteria.minScore == null ||
+                    (sequel.sequelMedia.averageScore ?: -1) >= filterCriteria.minScore
+
             // Both year axes are off by default, so the common path is two
             // boolean checks. An undiscovered date (null year) never equals
             // the current year, which is the honest answer for both: a show
@@ -216,7 +230,8 @@ class FindMissedSequelsUseCase {
                     (!filterCriteria.parentCompletedThisYear ||
                         sequel.parentCompletedYear == currentYear)
 
-            matchesQuery && matchesRelease && matchesStatus && matchesFormat && matchesYear
+            matchesQuery && matchesRelease && matchesStatus && matchesFormat &&
+                matchesGenre && matchesScore && matchesYear
         }
 
         return when (filterCriteria.sortOption) {

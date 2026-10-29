@@ -177,6 +177,21 @@ class UserOverviewViewModel(
     private val _isLoadingManga = MutableStateFlow(false)
     val isLoadingManga: StateFlow<Boolean> = _isLoadingManga.asStateFlow()
 
+    /**
+     * Why the manga list could not be read, or null when it was.
+     *
+     * The anime half has carried `libraryError` in the published state since a
+     * failed fetch was flattened into "no list"; this is the same distinction
+     * for the half that is fetched on demand. Without it a rate limit or a
+     * private list left `mangaLibrary` null and the Library page drew its empty
+     * state - "Nothing in this list yet" - over a list nobody had read.
+     *
+     * Cleared on entry and on success, so a retry that works also clears the
+     * message from the previous attempt.
+     */
+    private val _mangaError = MutableStateFlow<String?>(null)
+    val mangaError: StateFlow<String?> = _mangaError.asStateFlow()
+
     private var mangaJob: Job? = null
 
     /**
@@ -193,16 +208,22 @@ class UserOverviewViewModel(
         if (isDemo || userId == null) return
 
         _isLoadingManga.value = true
+        _mangaError.value = null
         mangaJob = viewModelScope.launch {
             val result = aniListRepository.getUserMangaList(userId, false)
             result.fold(
                 onSuccess = { collection ->
                     _mangaLibrary.value = flattenLibrary(collection)
+                    _mangaError.value = null
                 },
                 // Left null on failure so the chip is still a retry: a person who
                 // hit a rate limit needs the tap to be able to ask again, and a
-                // failure is not the same as an empty list.
-                onFailure = { }
+                // failure is not the same as an empty list. The reason is kept
+                // beside the null rather than swallowed, so the page can say what
+                // happened instead of drawing an empty grid.
+                onFailure = { error ->
+                    _mangaError.value = error.message ?: "AniList didn't return this list."
+                }
             )
             _isLoadingManga.value = false
         }

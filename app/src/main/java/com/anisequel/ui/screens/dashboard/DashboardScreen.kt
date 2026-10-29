@@ -45,6 +45,7 @@ import com.anisequel.ui.components.EmptyStateView
 import com.anisequel.ui.components.FilterSortSheet
 import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.QuickFilterBar
+import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -330,157 +331,163 @@ fun DashboardScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.TopCenter
         ) {
-            when (val state = uiState) {
-                is DashboardUiState.Loading -> {
-                    DashboardLoadingView(
-                        message = state.message,
-                        maxWidth = MaxContentWidth
-                    )
-                }
-
-                is DashboardUiState.Error -> {
-                    // Seed the strip from the failure, and probe only when the
-                    // failure left reachability genuinely unknown. Keyed on the
-                    // failure so a *new* error re-diagnoses instead of showing
-                    // the previous one's verdict.
-                    LaunchedEffect(state.kind, state.message) {
-                        apiProbe.onFailure(state.kind)
+            StateCrossfade(
+                targetState = uiState,
+                modifier = Modifier.fillMaxSize(),
+                label = "dashboard_state",
+            ) { state ->
+                when (state) {
+                    is DashboardUiState.Loading -> {
+                        DashboardLoadingView(
+                            message = state.message,
+                            maxWidth = MaxContentWidth
+                        )
                     }
-                    DashboardErrorView(
-                        state = state,
-                        apiStatus = apiStatus,
-                        onCheckApiStatus = { apiProbe.probe() },
-                        onRetry = { dashboardViewModel.loadData() },
-                        onSignInAgain = onSignInAgain
-                    )
-                }
 
-                is DashboardUiState.Success -> {
-                    PullToRefreshBox(
-                        isRefreshing = state.isRefreshing,
-                        onRefresh = requestRefresh,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("sequels_list"),
-                            // The bar floats over the list, so the Scaffold's bottom
-                            // inset is *replaced* by the bar's clearance rather than
-                            // added to it - the two describe the same strip of screen.
-                            // The 32dp of breathing room stays on top of it.
-                            contentPadding = PaddingValues(bottom = 32.dp + mainBarClearance()),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    is DashboardUiState.Error -> {
+                        // Seed the strip from the failure, and probe only when the
+                        // failure left reachability genuinely unknown. Keyed on the
+                        // failure so a *new* error re-diagnoses instead of showing
+                        // the previous one's verdict.
+                        LaunchedEffect(state.kind, state.message) {
+                            apiProbe.onFailure(state.kind)
+                        }
+                        DashboardErrorView(
+                            state = state,
+                            apiStatus = apiStatus,
+                            onCheckApiStatus = { apiProbe.probe() },
+                            onRetry = { dashboardViewModel.loadData() },
+                            onSignInAgain = onSignInAgain
+                        )
+                    }
+
+                    is DashboardUiState.Success -> {
+                        PullToRefreshBox(
+                            isRefreshing = state.isRefreshing,
+                            onRefresh = requestRefresh,
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            if (state.isDemoMode) {
-                                item(key = "demo_banner") {
-                                    DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("sequels_list"),
+                                // The bar floats over the list, so the Scaffold's bottom
+                                // inset is *replaced* by the bar's clearance rather than
+                                // added to it - the two describe the same strip of screen.
+                                // The 32dp of breathing room stays on top of it.
+                                contentPadding = PaddingValues(bottom = 32.dp + mainBarClearance()),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                if (state.isDemoMode) {
+                                    item(key = "demo_banner") {
+                                        DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
+                                    }
                                 }
-                            }
 
-                            // The saved-copy notice moved to the top app bar. It
-                            // used to be an item here, so it appeared and
-                            // disappeared above the stats card as the network
-                            // answered and moved every row below it by its
-                            // height. See [AniTopAppBar.showingSavedCopy].
+                                // The saved-copy notice moved to the top app bar. It
+                                // used to be an item here, so it appeared and
+                                // disappeared above the stats card as the network
+                                // answered and moved every row below it by its
+                                // height. See [AniTopAppBar.showingSavedCopy].
 
-                            item(key = "stats_banner") {
-                                StatsBanner(
-                                    totalWatched = state.totalWatchedCount,
-                                    missedCount = state.totalMissedCount,
-                                    modifier = Modifier
-                                        .widthIn(max = MaxContentWidth)
-                                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            // Above the search bar and the missed-sequel list
-                            // because it is a different question from either,
-                            // and hidden entirely when the viewer has nothing
-                            // arriving rather than rendering an empty header.
-                            // The same emptiness check gates the switch in
-                            // Settings: disabled means the section - and every
-                            // poster load it draws - is not composed at all.
-                            if (state.arriving.isNotEmpty() && arrivingEnabled) {
-                                item(key = "arriving_section") {
-                                    ArrivingSection(
-                                        entries = state.arriving,
-                                        compact = arrivingCompact,
-                                        maxWidth = MaxContentWidth,
-                                        onEntryClick = {
-                                            selectedArrivingId = it.mediaId
-                                            navigatedRelation = null
-                                        }
-                                    )
-                                }
-                            }
-
-                            item(key = "search_bar") {
-                                DashboardSearchBar(
-                                    query = filterCriteria.searchQuery,
-                                    onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
-                                    maxWidth = MaxContentWidth
-                                )
-                            }
-
-                            item(key = "quick_filter_bar") {
-                                QuickFilterBar(
-                                    filterCriteria = filterCriteria,
-                                    onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
-                                    onFormatSelected = { dashboardViewModel.selectFormat(it) },
-                                    onClearAll = { dashboardViewModel.resetFilters() }
-                                )
-                            }
-
-                            item(key = "section_header") {
-                                DashboardSectionHeader(
-                                    count = state.missedSequels.size,
-                                    filterCriteria = filterCriteria,
-                                    maxWidth = MaxContentWidth
-                                )
-                            }
-
-                            if (state.missedSequels.isEmpty()) {
-                                item(key = "empty_state") {
-                                    EmptyStateView(
-                                        // The same predicate as the badge and
-                                        // the quick filter row: an empty list
-                                        // with no filter active has nothing to
-                                        // reset, and an empty list with one
-                                        // active has a way out.
-                                        isSearching = filterCriteria.isNarrowing,
-                                        onResetFilters = { dashboardViewModel.resetFilters() }
-                                    )
-                                }
-                            } else {
-                                items(
-                                    items = state.missedSequels,
-                                    key = { "${it.parentId}_${it.sequelId}" }
-                                ) { item ->
-                                    SequelCard(
-                                        sequel = item,
-                                        onClick = {
-                                            selectedSequelId = item.sequelId
-                                            navigatedRelation = null
-                                        },
-                                        onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
-                                        onAddToWatching = { dashboardViewModel.addToWatching(item) },
-                                        holdDurationSeconds = quickAddSettings.holdDurationSeconds,
-                                        swipeEnabled = quickAddSettings.swipeEnabled,
-                                        onHide = {
-                                            lastHiddenSequel = item
-                                            dashboardViewModel.toggleHideSequel(item)
-                                        },
+                                item(key = "stats_banner") {
+                                    StatsBanner(
+                                        totalWatched = state.totalWatchedCount,
+                                        missedCount = state.totalMissedCount,
                                         modifier = Modifier
                                             .widthIn(max = MaxContentWidth)
-                                            .padding(horizontal = 16.dp)
-                                            .animateItem(
-                                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                                            )
+                                            .padding(horizontal = 16.dp, vertical = 4.dp)
                                     )
+                                }
+
+                                // Above the search bar and the missed-sequel list
+                                // because it is a different question from either,
+                                // and hidden entirely when the viewer has nothing
+                                // arriving rather than rendering an empty header.
+                                // The same emptiness check gates the switch in
+                                // Settings: disabled means the section - and every
+                                // poster load it draws - is not composed at all.
+                                if (state.arriving.isNotEmpty() && arrivingEnabled) {
+                                    item(key = "arriving_section") {
+                                        ArrivingSection(
+                                            entries = state.arriving,
+                                            compact = arrivingCompact,
+                                            maxWidth = MaxContentWidth,
+                                            onEntryClick = {
+                                                selectedArrivingId = it.mediaId
+                                                navigatedRelation = null
+                                            }
+                                        )
+                                    }
+                                }
+
+                                item(key = "search_bar") {
+                                    DashboardSearchBar(
+                                        query = filterCriteria.searchQuery,
+                                        onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
+                                        maxWidth = MaxContentWidth
+                                    )
+                                }
+
+                                item(key = "quick_filter_bar") {
+                                    QuickFilterBar(
+                                        filterCriteria = filterCriteria,
+                                        onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
+                                        onFormatSelected = { dashboardViewModel.selectFormat(it) },
+                                        onClearAll = { dashboardViewModel.resetFilters() }
+                                    )
+                                }
+
+                                item(key = "section_header") {
+                                    DashboardSectionHeader(
+                                        count = state.missedSequels.size,
+                                        filterCriteria = filterCriteria,
+                                        maxWidth = MaxContentWidth
+                                    )
+                                }
+
+                                if (state.missedSequels.isEmpty()) {
+                                    item(key = "empty_state") {
+                                        EmptyStateView(
+                                            // The same predicate as the badge and
+                                            // the quick filter row: an empty list
+                                            // with no filter active has nothing to
+                                            // reset, and an empty list with one
+                                            // active has a way out.
+                                            filtersActive = filterCriteria.isNarrowing,
+                                            onResetFilters = { dashboardViewModel.resetFilters() }
+                                        )
+                                    }
+                                } else {
+                                    items(
+                                        items = state.missedSequels,
+                                        key = { "${it.parentId}_${it.sequelId}" }
+                                    ) { item ->
+                                        SequelCard(
+                                            sequel = item,
+                                            onClick = {
+                                                selectedSequelId = item.sequelId
+                                                navigatedRelation = null
+                                            },
+                                            onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
+                                            onAddToWatching = { dashboardViewModel.addToWatching(item) },
+                                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                                            swipeEnabled = quickAddSettings.swipeEnabled,
+                                            onHide = {
+                                                lastHiddenSequel = item
+                                                dashboardViewModel.toggleHideSequel(item)
+                                            },
+                                            modifier = Modifier
+                                                .widthIn(max = MaxContentWidth)
+                                                .padding(horizontal = 16.dp)
+                                                .animateItem(
+                                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                                )
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -506,6 +513,9 @@ fun DashboardScreen(
             onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
             onToggleCurrentlyWatching = { dashboardViewModel.toggleIncludeCurrentlyWatching(it) },
             onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
+            onToggleGenre = { dashboardViewModel.toggleGenre(it) },
+            onSelectMinScore = { dashboardViewModel.selectMinScore(it) },
+            onResetFilters = { dashboardViewModel.resetFilters() },
             hiddenSequels = hiddenSequels,
             onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
             onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },

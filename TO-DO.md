@@ -176,23 +176,13 @@ the development environment, so none of them can be checked from here, and a
 press-behaviour regression is invisible in review. Doing forty of them blind in
 small batches is how one of them ships broken.
 
-### 1.4 `AppNavigation.kt` keeps every destination in one function — low effort
+### 1.4 ~~AppNavigation.kt keeps every destination in one function~~ — resolved
 
-The file is ~1,130 lines and a dozen `composable()` registrations, past the
-700-line ceiling. Unlike §1.1 and §1.2 this is not shared state: it is a list of
-independent registrations, which is why it has been allowed to grow. What it
-costs is the ceiling itself — the number stops meaning "this file is doing two
-things" and starts being a rule everyone bends.
-
-Two splits have already happened: `MainTabs.kt` holds the tab enum, the bar and
-the tap navigation, so the file no longer owns the app's navigation model, only
-its destination table; and `PageTransitions.kt` holds the route springs and the
-direction rules, which change for motion reasons rather than for destination
-reasons. The next step is a `NavGraphBuilder` extension per destination group —
-studio first, because it needs the repository and the `NavController` and nothing
-else — with the captured locals (preferences, `authState`, `signedInViewer`)
-passed as parameters rather than closed over. Do it a group at a time; the
-registrations do not call each other.
+The destination registrations are now factored into dedicated `NavGraphBuilder`
+extensions (`AuthNavGraph.kt`, `DashboardNavGraph.kt`, `ProfileNavGraph.kt`,
+`TierListNavGraph.kt`, `LibraryNavGraph.kt`, `StudioNavGraph.kt`,
+`SettingsNavGraph.kt`), with `WidgetSync` and `RestoringPlaceholder` hoisted.
+`AppNavigation.kt` is now 557 lines, well under the 700-line ceiling.
 
 ---
 
@@ -279,9 +269,13 @@ Nothing is *wrong*, but several entries are behind:
 
 | Dependency | Current | Note |
 | --- | --- | --- |
-| `composeBom` | 2025.11.01 | Governs the Compose stack; bumping means re-checking the `material3` alpha pin against it |
 | `navigationCompose` | 2.8.9 | Upgrade path is unrelated to the Material 3 pin |
 | `coilCompose` | 2.7.0 | Newer majors changed the API surface |
+
+`composeBom` and `material3` are no longer behind: the BOM moved to 2026.09.00
+and material3 to 1.5.0-beta02 together, with `compileSdk` at 37. They move as a
+pair - a material3 below the BOM's Compose line is an AAR-metadata failure - so
+they are not listed here as independently upgradable.
 
 Room used to be listed here. It is gone — no `roomRuntime` entry exists in
 `gradle/libs.versions.toml`, and there is no database in the app at all (see

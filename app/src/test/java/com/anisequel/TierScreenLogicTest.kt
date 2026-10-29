@@ -14,6 +14,7 @@ import com.anisequel.ui.screens.tier.TIER_MIN_ZOOM
 import com.anisequel.ui.screens.tier.TierDrop
 import com.anisequel.ui.screens.tier.clampTierZoom
 import com.anisequel.ui.screens.tier.relativeTimeLabel
+import com.anisequel.ui.screens.tier.tierCoverDecodePx
 import com.anisequel.ui.screens.tier.tierDragHint
 import com.anisequel.ui.screens.tier.tierDragScrollStrength
 import com.anisequel.ui.screens.tier.tierDropCaret
@@ -407,6 +408,72 @@ class TierScreenLogicTest {
 
         assertTrue("clampTierZoom handed a NaN straight back", !clamped.isNaN())
         assertEquals(TIER_MIN_ZOOM, clamped, 0f)
+    }
+
+    // ---- The size posters are decoded at -----------------------------------
+
+    @Test
+    fun `a poster is never decoded smaller than the tile it is drawn into`() {
+        // The whole point of the ladder: a cover decoded at the size it was drawn
+        // at a moment ago is the blurry cover a pinch used to show, because the
+        // tile kept growing after the bitmap had been chosen.
+        val drawnSizes = listOf(1, 25, 64, 65, 100, 216, 300, 431, 432, 500, 700, 1024)
+
+        drawnSizes.forEach { drawn ->
+            val decoded = tierCoverDecodePx(drawn)
+            assertTrue(
+                "a $drawn px tile was decoded at $decoded px, so it would be upscaled",
+                decoded >= drawn
+            )
+        }
+    }
+
+    @Test
+    fun `the decode rung does not change on every frame of a pinch`() {
+        // This is the other half of the fix. `AsyncImage` re-requests whenever the
+        // constraints change, and a request that changes every frame is cancelled
+        // before it can finish - so the previous, smaller bitmap stays on screen
+        // for the whole gesture.
+        val atThirtyFivePercent = tierCoverDecodePx(76)
+        val atThirtySixPercent = tierCoverDecodePx(78)
+
+        assertEquals(
+            "a two-pixel pinch must not launch a second decode",
+            atThirtyFivePercent,
+            atThirtySixPercent
+        )
+    }
+
+    @Test
+    fun `the decode ladder wastes at most forty percent of the pixels`() {
+        // The ladder rounds *up*, so the cost is memory. Pinned because a step
+        // wide enough to stop the requests entirely would also decode every
+        // overview tile at poster resolution.
+        (64..1024).forEach { drawn ->
+            val decoded = tierCoverDecodePx(drawn)
+            assertTrue(
+                "a $drawn px tile decoded at $decoded px is more than 40% waste",
+                decoded <= (drawn * 1.4f).toInt() + 1
+            )
+        }
+    }
+
+    @Test
+    fun `a tile at maximum zoom is decoded at the tile's own size or above`() {
+        // 360dp of board, a 72-unit tile at 2x, on a 3x-density phone: the widest
+        // a poster is ever drawn, and the size the ladder must reach.
+        val drawnPx = (ScreenTierOptions.itemWidth * TIER_MAX_ZOOM * 3f).toInt()
+
+        assertEquals(432, drawnPx)
+        assertTrue(tierCoverDecodePx(drawnPx) >= drawnPx)
+    }
+
+    @Test
+    fun `a nonsense size cannot ask for a zero-pixel decode`() {
+        // The first frame before the board is measured, and a defensive guard
+        // against a NaN-derived width that arrived as zero.
+        assertEquals(64, tierCoverDecodePx(0))
+        assertEquals(64, tierCoverDecodePx(-10))
     }
 
     // ---- Dragging near an edge --------------------------------------------

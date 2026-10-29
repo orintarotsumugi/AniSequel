@@ -2,6 +2,7 @@ package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -34,6 +35,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTag
 import com.anisequel.data.model.genreList
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -152,7 +154,7 @@ fun InfoCategoriesSection(
 
         if (spoilers.isNotEmpty()) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = ExpressiveShapes.small,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -257,16 +259,22 @@ private fun CategoryChip(
         highlighted -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val interactionSource = remember { MutableInteractionSource() }
     val clickable = if (onClick != null) {
         Modifier
-            .bouncyPress(pressedScale = 0.96f)
-            .clickable(role = Role.Button, onClick = onClick)
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick
+            )
     } else {
         Modifier
     }
 
     Surface(
-        shape = RoundedCornerShape(percent = 50),
+        shape = ExpressiveShapes.pill,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
         border = BorderStroke(1.dp, border),
         modifier = modifier
@@ -290,10 +298,16 @@ private fun ExpandToggle(
     expandedLabel: String,
     testTag: String
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
-            .bouncyPress(pressedScale = 0.94f)
-            .clickable(role = Role.Button, onClick = onToggle)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onToggle
+            )
             .heightIn(min = 48.dp)
             .padding(horizontal = 4.dp)
             .testTag(testTag),

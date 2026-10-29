@@ -33,6 +33,68 @@ enum class StatusFilter(val displayName: String) {
     NOT_YET_RELEASED("Upcoming / Unreleased")
 }
 
+/**
+ * Every format chip the filter surfaces draw, in the order they draw them,
+ * paired with AniList's raw enum key.
+ *
+ * One list because the sheet and the quick filter bar name the same choices.
+ * The sheet kept its own copy and the quick bar kept a two-entry copy, so a
+ * list narrowed to OVA, ONA or Specials said only "Filtered" underneath the
+ * segmented bar - the one row whose job is to say *which* filter is active
+ * could not name half of them.
+ *
+ * `TV short` is here because it was the one format no chip could reach: the
+ * chips held `TV` and `SPECIAL`, and a `TV_SHORT` equals neither, so a TV
+ * special stayed in the unfiltered list and disappeared from every filtered
+ * one. [FilterCriteria.selectedFormat] compares against these raw keys, not
+ * against the readable label the card prints.
+ */
+val filterFormatOptions: List<Pair<String?, String>> = listOf(
+    null to "All",
+    "TV" to "TV series",
+    "MOVIE" to "Movies",
+    "TV_SHORT" to "TV short",
+    "OVA" to "OVA",
+    "ONA" to "ONA",
+    "SPECIAL" to "Special"
+)
+
+/** The readable name for a raw format key, or null when the key is unknown. */
+fun filterFormatLabel(formatKey: String?): String? =
+    filterFormatOptions.firstOrNull { (key, _) -> key == formatKey }?.second
+
+/**
+ * AniList's fixed genre set, as the advanced filter offers it.
+ *
+ * Copied rather than fetched with `GenreCollection`: the list is a closed enum
+ * on AniList's side, and asking for it would spend a request every time the
+ * sheet opened to redraw chips whose labels never change. Matched
+ * case-insensitively by [FilterCriteria.selectedGenres], because a genre
+ * reached through an older cached response could differ in case.
+ */
+val animeGenreOptions: List<String> = listOf(
+    "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy",
+    "Horror", "Mahou Shoujo", "Mecha", "Music", "Mystery", "Psychological",
+    "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"
+)
+
+/**
+ * The minimum-rating chips, paired with the score they require in AniList's
+ * 0-100 average scale. `null` is "Any".
+ *
+ * A threshold is a *lower bound*, not a band: "70+" keeps everything at 70 or
+ * above. Titles AniList has not rated have no score to prove they clear the
+ * bar and are dropped while one is set - quietly keeping them would put
+ * unrated entries above rated ones the viewer explicitly asked to see.
+ */
+val filterScoreOptions: List<Pair<Int?, String>> = listOf(
+    null to "Any",
+    60 to "60+",
+    70 to "70+",
+    80 to "80+",
+    90 to "90+"
+)
+
 data class FilterCriteria(
     val searchQuery: String = "",
     val sortOption: SequelSortOption = SequelSortOption.RELEASE_DATE_DESC,
@@ -93,7 +155,24 @@ data class FilterCriteria(
      * (Completed, Paused, Dropped, etc.). Off by default to keep the focus
      * on gaps and unwatched continuations.
      */
-    val includeInList: Boolean = false
+    val includeInList: Boolean = false,
+
+    /**
+     * Genres the sequel must carry at least one of. Empty means every genre.
+     *
+     * Matched with OR across the set: selecting Action and Comedy asks for
+     * titles that are *either*, which is how every streaming catalogue's genre
+     * checkboxes behave. Requiring all of them would make two selections
+     * almost always empty.
+     */
+    val selectedGenres: Set<String> = emptySet(),
+
+    /**
+     * The lowest AniList average score (0-100) a sequel may have, or null for
+     * no minimum. See [filterScoreOptions] for why unrated entries drop out
+     * while this is set.
+     */
+    val minScore: Int? = null
 ) {
     /**
      * True when any criterion here is actively narrowing the result list.
@@ -120,5 +199,7 @@ data class FilterCriteria(
             sequelReleasedThisYear ||
             parentCompletedThisYear ||
             includeCurrentlyWatching ||
-            includeInList
+            includeInList ||
+            selectedGenres.isNotEmpty() ||
+            minScore != null
 }

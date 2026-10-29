@@ -68,6 +68,20 @@ object WidgetCover {
     }
 
     /**
+     * A second thread for cache hits.
+     *
+     * A hit used to be posted to [executor], the same single thread every
+     * download runs on, so its comment about answering "before any download is
+     * queued" described the check but not the callback: a tile whose art was
+     * already decoded still waited behind somebody else's fetch. Hits are
+     * cheap, so one thread of their own is enough - and it keeps the callback
+     * contract that every render happens off the caller's thread.
+     */
+    private val cacheExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "widget-cover-cache").apply { priority = Thread.MIN_PRIORITY }
+    }
+
+    /**
      * Hard ceiling on a decoded cover, in pixels (~400 KB at `RGB_565`).
      *
      * A `RemoteViews` bitmap is marshalled through a Binder transaction with a
@@ -132,10 +146,11 @@ object WidgetCover {
     /**
      * Fetches [url] and hands the decoded bitmap (or null) to [onLoaded].
      *
-     * The callback always runs on the shared background thread, including for a
-     * null or blank [url], so a caller using it to finish a `goAsync()` pending
-     * result can do so in a `finally` without leaking it - and without ever
-     * running a render on the caller's thread by surprise.
+     * The callback always runs on a background thread owned by this loader -
+     * the download thread for a miss, [cacheExecutor] for a hit - so a caller
+     * using it to finish a `goAsync()` pending result can do so in a `finally`
+     * without leaking it, and without ever running a render on the caller's
+     * thread by surprise.
      */
     fun loadAsync(
         context: Context,
@@ -155,7 +170,7 @@ object WidgetCover {
         val cacheKey = url?.let { "$it|${targetWidthPx}x${targetHeightPx}" }
         if (cacheKey != null) {
             covers.get(cacheKey)?.let { cached ->
-                executor.execute {
+                cacheExecutor.execute {
                     try {
                         onLoaded(cached)
                     } catch (t: Throwable) {

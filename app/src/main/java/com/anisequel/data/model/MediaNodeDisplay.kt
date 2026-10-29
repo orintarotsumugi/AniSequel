@@ -296,6 +296,27 @@ internal const val STREAMING_LINK_TYPE = "STREAMING"
 val MediaNode.synonymList: List<String> get() = synonyms?.filter { it.isNotBlank() } ?: emptyList()
 
 /**
+ * A `CountryCode` enum value as the country a reader knows.
+ *
+ * AniList answers "JP", "KR", "CN" or "TW" (and "US" has appeared), and the
+ * facts grid used to print the raw code - a data leak in the one card that
+ * spells every other value out. An unknown code is uppercased and shown as
+ * itself rather than hidden, so a new enum member is visible instead of silently
+ * absent.
+ */
+fun countryName(code: String): String = when (code.uppercase(Locale.ROOT)) {
+    "JP" -> "Japan"
+    "KR" -> "South Korea"
+    "CN" -> "China"
+    "TW" -> "Taiwan"
+    "US" -> "United States"
+    else -> code.uppercase(Locale.ROOT)
+}
+
+val MediaNode.countryLabel: String?
+    get() = countryOfOrigin?.takeIf { it.isNotBlank() }?.let(::countryName)
+
+/**
  * The synopsis as prose: AniList's HTML stripped, and its `(Source: …)` line gone.
  *
  * Delegates to [descriptionBody] rather than reading [description] itself, because the
@@ -668,6 +689,11 @@ val MediaNode.hasProgressCard: Boolean
  * The labels stay on the *named* forms rather than dropping a single
  * "Main title", because "Romaji / Cowboy Bebop" and "Native / カウボーイビバップ"
  * are the facts a reader is looking up this card for.
+ *
+ * Synonyms are deliberately *not* one of these rows. The page gives them their
+ * own disclosure row ([com.anisequel.ui.components.detail.info.InfoMetaRowsSection]),
+ * and listing them here as well put the same names in two sheets one tap apart,
+ * comma-joined in one and as chips in the other.
  */
 val MediaNode.alternativeTitleRows: List<Pair<String, String>>
     get() {
@@ -676,7 +702,6 @@ val MediaNode.alternativeTitleRows: List<Pair<String, String>>
             romajiName?.let { add("Romaji" to it) }
             englishName?.let { add("English" to it) }
             nativeName?.let { add("Native" to it) }
-            if (synonymList.isNotEmpty()) add("Synonyms" to synonymList.joinToString(", "))
         }.filterNot { (_, value) -> value == preferred }
     }
 

@@ -300,6 +300,15 @@ data class MediaNode(
     val siteUrl: String? = null,
     val bannerImage: String? = null,
     val startDate: FuzzyDate? = null,
+    /**
+     * When the title finished airing/publishing, when AniList knows.
+     *
+     * Detail query only, and fuzzy like [startDate]: a finished show usually has a
+     * full date, an upcoming one has nothing. The Info page paired its "Started"
+     * fact with nothing at all, so a completed series could not say when it ended
+     * without the reader opening AniList's own page.
+     */
+    val endDate: FuzzyDate? = null,
     val coverImage: MediaCoverImage? = null,
     val studios: StudioConnection? = null,
     val relations: MediaRelations? = null,
@@ -350,6 +359,30 @@ data class MediaNode(
         title = detail.title ?: title,
         description = detail.description ?: description,
         bannerImage = detail.bannerImage ?: bannerImage,
+        // The summary's own facts, for the same reason as `title`.
+        //
+        // A node opened from an activity row carries a few fields and no more,
+        // and this merge used to copy only the *rich* blocks - cast, staff,
+        // relations - while dropping the plain scalars the detail answer had also
+        // fetched. So the page opened with its full cast and "Episodes TBA",
+        // "Unknown" status, no start date and no score, from a response that
+        // contained all of them. Null still never erases: the list query's answer
+        // wins wherever the detail response says nothing.
+        format = detail.format ?: format,
+        status = detail.status ?: status,
+        episodes = detail.episodes ?: episodes,
+        chapters = detail.chapters ?: chapters,
+        volumes = detail.volumes ?: volumes,
+        countryOfOrigin = detail.countryOfOrigin ?: countryOfOrigin,
+        averageScore = detail.averageScore ?: averageScore,
+        popularity = detail.popularity ?: popularity,
+        season = detail.season ?: season,
+        seasonYear = detail.seasonYear ?: seasonYear,
+        siteUrl = detail.siteUrl ?: siteUrl,
+        genres = detail.genres ?: genres,
+        startDate = detail.startDate ?: startDate,
+        endDate = detail.endDate ?: endDate,
+        nextAiringEpisode = detail.nextAiringEpisode ?: nextAiringEpisode,
         studios = detail.studios ?: studios,
         source = detail.source ?: source,
         duration = detail.duration ?: duration,
@@ -546,16 +579,31 @@ data class FuzzyDate(
     val month: Int? = null,
     val day: Int? = null
 ) {
+    /**
+     * "Apr 5, 2023", "Apr 2023" or "2023" - never "2023-04".
+     *
+     * AniList dates are *fuzzy*: a date can carry only a year, or a month and a
+     * year. The old formatter printed the raw ISO shape, which read as data rather
+     * than as a date - and a month with no day printed as "2023-04", which looks
+     * like a day of "00" rather than like a month. Spelling the month is what lets
+     * "Apr 2023" and "Apr 5, 2023" read as the two different facts they are.
+     */
     val formatted: String
         get() {
+            val monthName = month?.takeIf { it in 1..12 }?.let { MONTH_NAMES[it - 1] }
             return when {
-                year != null && month != null && day != null -> "$year-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
-                year != null && month != null -> "$year-${month.toString().padStart(2, '0')}"
+                year != null && monthName != null && day != null -> "$monthName $day, $year"
+                year != null && monthName != null -> "$monthName $year"
                 year != null -> "$year"
                 else -> "TBA"
             }
         }
 }
+
+private val MONTH_NAMES = listOf(
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
 
 @JsonClass(generateAdapter = true)
 data class NextAiringEpisode(

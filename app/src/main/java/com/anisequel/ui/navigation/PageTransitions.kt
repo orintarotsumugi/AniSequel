@@ -133,6 +133,58 @@ internal fun tabDirection(
  */
 internal fun isTierList(route: String?): Boolean = route == AppRoutes.TIER_LIST
 
+/**
+ * Which way the incoming page travels, for a push or a pop.
+ *
+ * A tab switch decides its own direction from the bar's order. Everything else -
+ * Settings, a studio, a scanned dashboard, somebody else's profile - used to
+ * default to [AnimatedContentTransitionScope.SlideDirection.Left] on both a push
+ * and a pop, because [popEnterPage] simply called [enterPage]. The result was that
+ * a pop revealed the previous page from the *same* edge the pushed page had just
+ * entered from: Settings slid in from the right, and Back slid the dashboard in
+ * from the right too, as though the stack had grown another page rather than
+ * unwound one. The pushed page's own exit already knew to leave to the right;
+ * only the page underneath it disagreed, so the two halves of one gesture moved
+ * in opposite directions.
+ *
+ * A pop is the push read backwards, so the revealed page enters from the left
+ * while the popped page leaves to the right. The tab case needs no special
+ * handling: its pair is already (popped, revealed), and [tabDirection] returns
+ * the direction for that pair.
+ */
+internal fun pageEnterDirection(
+    from: String?,
+    to: String?,
+    popped: Boolean
+): AnimatedContentTransitionScope.SlideDirection =
+    tabDirection(from, to) ?: if (popped) {
+        AnimatedContentTransitionScope.SlideDirection.Right
+    } else {
+        AnimatedContentTransitionScope.SlideDirection.Left
+    }
+
+/**
+ * The shared arrival: a short slide, a fade and a small expansion.
+ *
+ * Extracted so [enterPage] and [popEnterPage] cannot drift apart again - the pop
+ * used to call the push, which is exactly how the direction bug above survived.
+ */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.slideInPage(
+    direction: AnimatedContentTransitionScope.SlideDirection,
+    spring: FiniteAnimationSpec<IntOffset>
+): EnterTransition = slideIntoContainer(
+    direction,
+    animationSpec = spring,
+    // The incoming page starts a quarter of a page toward its entry edge instead
+    // of a full width. A full-width slide is a card being turned over; a shorter
+    // travel with a growing page reads as this screen expanding out of the one
+    // before it, and it keeps both surfaces on screen while they cross.
+    initialOffset = { fullWidth -> fullWidth / 4 }
+) + fadeIn(RouteFadeEffect) + scaleIn(
+    initialScale = 0.94f,
+    animationSpec = ExpressiveMotion.BouncySpatial
+)
+
 /** A page arriving over the one before it. */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
     from: String?,
@@ -149,19 +201,11 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
         animationSpec = ExpressiveMotion.BouncySpatial
     )
 } else {
-    val direction = tabDirection(from, to)
-        ?: AnimatedContentTransitionScope.SlideDirection.Left
-    slideIntoContainer(
-        direction,
-        animationSpec = pageSlideSpring(from, to),
-        // The incoming page starts a quarter of a page to the right instead of a
-        // full width. A full-width slide is a card being turned over; a shorter
-        // travel with a growing page reads as this screen expanding out of the one
-        // before it, and it keeps both surfaces on screen while they cross.
-        initialOffset = { fullWidth -> fullWidth / 4 }
-    ) + fadeIn(RouteFadeEffect) + scaleIn(
-        initialScale = 0.94f,
-        animationSpec = ExpressiveMotion.BouncySpatial
+    // `pageSlideSpring` still chooses the fast token for a tab switch and the
+    // calm one for a push; the direction is the only part that differs.
+    slideInPage(
+        direction = pageEnterDirection(from, to, popped = false),
+        spring = pageSlideSpring(from, to)
     )
 }
 
@@ -186,12 +230,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.exitPage(
         animationSpec = ExpressiveMotion.FastSpatial
     )
     else -> {
-        val direction = tabDirection(from, to)
-            ?: if (popped) {
-                AnimatedContentTransitionScope.SlideDirection.Right
-            } else {
-                AnimatedContentTransitionScope.SlideDirection.Left
-            }
+        val direction = pageEnterDirection(from, to, popped)
         slideOutOfContainer(
             direction,
             animationSpec = pageSlideSpring(from, to),
@@ -211,6 +250,11 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.exitPage(
  * Coming back from the tier list is a fade rather than a slide: the tier list is
  * travelling downwards, and a second horizontal slide underneath it would make the
  * two movements fight over the same frame.
+ *
+ * Everything else is the arrival [enterPage] draws, with the pop's direction. It
+ * used to call [enterPage] itself, which hardcoded the push direction - so Back
+ * slid the previous page in from the right, the edge the pushed page had just
+ * entered from, instead of from the left as the pushed page left to the right.
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnterPage(
     from: String?,
@@ -221,5 +265,8 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnterPage(
         animationSpec = ExpressiveMotion.FastSpatial
     )
 } else {
-    enterPage(from = from, to = to)
+    slideInPage(
+        direction = pageEnterDirection(from, to, popped = true),
+        spring = pageSlideSpring(from, to)
+    )
 }

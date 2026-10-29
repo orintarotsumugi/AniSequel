@@ -8,6 +8,7 @@ import com.anisequel.data.model.MediaRelationEdge
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.alternativeTitleRows
+import com.anisequel.data.model.countryLabel
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
@@ -216,17 +217,22 @@ class MediaNodeDisplayTest {
         )
     }
 
+    /**
+     * Synonyms have their own disclosure row on the Info page, not a line here.
+     *
+     * They used to appear twice: comma-joined inside the Titles sheet and as a
+     * chip list in the Synonyms sheet, one tap apart. The duplicate line was this
+     * one, so a title whose only other names are synonyms now lists no title rows
+     * at all.
+     */
     @Test
-    fun `synonyms are listed last`() {
+    fun `synonyms are not title rows`() {
         val media = node(
             title = MediaTitle(english = "Steins;Gate"),
             synonyms = listOf("Gates of Steiner", "S:G")
         )
 
-        assertEquals(
-            listOf("Synonyms" to "Gates of Steiner, S:G"),
-            media.alternativeTitleRows
-        )
+        assertTrue(media.alternativeTitleRows.isEmpty())
     }
 
     /**
@@ -258,6 +264,25 @@ class MediaNodeDisplayTest {
         )
 
         assertTrue(media.alternativeTitleRows.isEmpty())
+    }
+
+    // ---- countryLabel ----------------------------------------------------------------
+
+    /**
+     * The facts grid draws the country, so the code has to become a country.
+     *
+     * "JP" on a detail page is a database leaking; the grid spells every other
+     * value out. An unknown code passes through uppercased rather than being
+     * hidden, because a new enum member should be visible - just not invented.
+     */
+    @Test
+    fun `country codes are spelled as countries`() {
+        assertEquals("Japan", node(country = "JP").countryLabel)
+        assertEquals("South Korea", node(country = "KR").countryLabel)
+        assertEquals("China", node(country = "CN").countryLabel)
+        assertEquals("Taiwan", node(country = "TW").countryLabel)
+        assertEquals("XX", node(country = "xx").countryLabel)
+        assertNull(node().countryLabel)
     }
 
     // ---- metaLabel -------------------------------------------------------------------
@@ -492,14 +517,16 @@ class MediaNodeDisplayTest {
         episodes: Int? = null,
         watched: Int? = null,
         rankings: List<MediaRanking> = emptyList(),
-        synonyms: List<String> = emptyList()
+        synonyms: List<String> = emptyList(),
+        country: String? = null
     ): MediaNode = MediaNode(
         id = 1,
         title = title,
         episodes = episodes,
         mediaListEntry = watched?.let { SimpleMediaListEntry(progress = it) },
         rankings = rankings,
-        synonyms = synonyms
+        synonyms = synonyms,
+        countryOfOrigin = country
     )
 
     /**

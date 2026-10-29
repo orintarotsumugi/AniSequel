@@ -4,6 +4,7 @@ import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.domain.usecase.RecentActivitySummary
 
 /**
  * The dashboard's public state contract.
@@ -36,6 +37,16 @@ sealed interface DashboardUiState {
         val arriving: List<ArrivingEntry> = emptyList(),
         val totalWatchedCount: Int,
         val totalMissedCount: Int,
+        /**
+         * What the activity widget's tile counts and names.
+         *
+         * The widget used to render "0 recent updates" for every signed-in
+         * account because the app had no count to write. This is derived from
+         * the list the dashboard already downloads - no extra request - and
+         * carried in the state so the widget sync keyed on it repaints when the
+         * answer changes.
+         */
+        val recentActivity: RecentActivitySummary = RecentActivitySummary.Empty,
         val isRefreshing: Boolean = false,
         /**
          * Whether what is on screen is the device's saved copy rather than a live

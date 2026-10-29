@@ -7,6 +7,7 @@ import com.anisequel.ui.navigation.StudioRoutes
 import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.navigation.mainTabForRoute
+import com.anisequel.ui.navigation.mainTabTarget
 import com.anisequel.ui.navigation.showsMainBar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -182,6 +183,40 @@ class MainTabsTest {
                 "between Library and Profile",
             listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.TIERS, MainTab.PROFILE),
             tabs
+        )
+    }
+
+    @Test
+    fun `every tab is an alternative to Home, in both sessions`() {
+        // Home is the page every tab is popped back to, and it is two routes
+        // because the demo has no session. The profile used to replace the demo
+        // dashboard instead of stacking on it, which left the profile alone on the
+        // stack: its back arrow did nothing, and Home/Profile round trips pushed a
+        // duplicate profile each time.
+        MainTab.entries.forEach { tab ->
+            val signedIn = mainTabTarget(tab, signedIn = true)
+            assertEquals(
+                "a signed-in tab must keep the signed-in dashboard underneath it",
+                AppRoutes.DASHBOARD,
+                signedIn.homeRoute
+            )
+
+            val demo = mainTabTarget(tab, signedIn = false)
+            assertEquals(
+                "a demo tab must keep the demo dashboard underneath it - including " +
+                    "Profile, which is a tab like any other",
+                AppRoutes.DASHBOARD_DEMO,
+                demo.homeRoute
+            )
+        }
+
+        assertEquals(AppRoutes.DASHBOARD, mainTabTarget(MainTab.HOME, signedIn = true).route)
+        assertEquals(AppRoutes.DASHBOARD_DEMO, mainTabTarget(MainTab.HOME, signedIn = false).route)
+        assertEquals(AppRoutes.LIBRARY, mainTabTarget(MainTab.LIBRARY, signedIn = true).route)
+        assertEquals(AppRoutes.TIER_LIST, mainTabTarget(MainTab.TIERS, signedIn = false).route)
+        assertEquals(
+            ProfileRoutes.OWN_DEFAULT,
+            mainTabTarget(MainTab.PROFILE, signedIn = false).route
         )
     }
 

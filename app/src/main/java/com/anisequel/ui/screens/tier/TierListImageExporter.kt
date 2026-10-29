@@ -76,6 +76,19 @@ import kotlin.math.sqrt
  * after it is drawn. Retaining all covers until the end is what would turn a 4K
  * export of a 300-title list into an out-of-memory crash: at 4K each tile is
  * about 256x384, roughly 400 KB, and the sum is over a hundred megabytes.
+ *
+ * ## Progress is reported per poster batch
+ *
+ * [onProgress] is called with a 0..1 fraction: once when the layout is ready, then
+ * once per [POSTER_BATCH] of tiles as their covers arrive and are drawn, and once
+ * at 1 when the bitmap is complete. Fetching is the slow part and it happens in
+ * those batches, so the batches are the only place where a fraction means
+ * anything - a per-pixel report would cost more than the drawing it measures.
+ *
+ * The callback is `suspend` on purpose. It runs inside this function's
+ * `Dispatchers.Default` block, and the sheet's state is Compose state that is read
+ * on the main thread; letting the caller hop threads itself keeps this file from
+ * having to know where the bar that reads it lives.
  */
 internal suspend fun renderTierListImage(
     context: Context,
@@ -84,8 +97,10 @@ internal suspend fun renderTierListImage(
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
     display: TierDisplay,
-    targetWidth: Int = TIER_EXPORT_WIDTH_ULTRA
+    targetWidth: Int = TIER_EXPORT_WIDTH_ULTRA,
+    onProgress: suspend (Float) -> Unit = {}
 ): Bitmap? = withContext(Dispatchers.Default) {
+    onProgress(0f)
     val plan = planTierExport(
         listName = listName,
         tiers = tiers,
@@ -94,6 +109,7 @@ internal suspend fun renderTierListImage(
         display = display
     ) ?: return@withContext null
     val layout = plan.layout
+    onProgress(EXPORT_PROGRESS_LAYOUT)
 
     // First choice is the requested resolution. A failed allocation halves the
     // budget and retries, so a low-memory device gets a smaller complete image
@@ -134,8 +150,14 @@ internal suspend fun renderTierListImage(
             showUnderCover = plan.showUnderCover,
             showOnCover = plan.showOnCover,
             titleLength = plan.titleLength,
-            captionBandHeight = plan.captionBandHeight
+            captionBandHeight = plan.captionBandHeight,
+            onProgress = { fraction ->
+                onProgress(
+                    EXPORT_PROGRESS_LAYOUT + fraction * (1f - EXPORT_PROGRESS_LAYOUT)
+                )
+            }
         )
+        onProgress(1f)
         bitmap
     } catch (failure: Throwable) {
         bitmap.recycle()
@@ -337,6 +359,16 @@ private const val EXPORT_SCORE_SCRIM = 0x99000000.toInt()
 private const val EXPORT_TITLE_SCRIM = 0xC4000000.toInt()
 private const val POSTER_BATCH = 8
 
+/**
+ * Where the progress bar starts once the layout is known.
+ *
+ * The plan is a single pass over the assignment and the drawing is the rest, so a
+ * bar that jumped to 50% for "the layout is ready" would be lying about the work
+ * left. Five percent is the honest share, and it keeps the bar moving from the
+ * first frame rather than sitting at zero until the first batch of covers lands.
+ */
+private const val EXPORT_PROGRESS_LAYOUT = 0.05f
+
 /** The strip under a poster a caption sits in, in the layout's own units. */
 private const val EXPORT_CAPTION_BAND_HEIGHT = 26f
 
@@ -356,7 +388,8 @@ private suspend fun drawItems(
     showUnderCover: Boolean,
     showOnCover: Boolean,
     titleLength: TierTitleLength,
-    captionBandHeight: Float
+    captionBandHeight: Float,
+    onProgress: suspend (Float) -> Unit
 ) {
     val candidateById = candidates.associateBy { it.mediaId }
 
@@ -387,6 +420,11 @@ private suspend fun drawItems(
     val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = EXPORT_TITLE_SCRIM
     }
+
+    // The total is the number of tiles, not of batches: a board of ten tiles is one
+    // batch of ten and one of two, and reporting per batch would jump 5/6 -> 1.
+    val total = layout.size.coerceAtLeast(1)
+    var drawn = 0
 
     layout.chunked(POSTER_BATCH).forEach { batch ->
         val posters = loadPosterBatch(
@@ -424,6 +462,8 @@ private suspend fun drawItems(
             // export's peak memory.
             posters.values.forEach { it.recycle() }
         }
+        drawn += batch.size
+        onProgress(drawn.toFloat() / total)
     }
 }
 

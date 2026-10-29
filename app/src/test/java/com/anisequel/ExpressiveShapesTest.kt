@@ -165,7 +165,8 @@ class ExpressiveShapesTest {
             "ExtraSmallCorner" to ExpressiveShapes.ExtraSmallCorner,
             "SmallCorner" to ExpressiveShapes.SmallCorner,
             "MediumCorner" to ExpressiveShapes.MediumCorner,
-            "LargeCorner" to ExpressiveShapes.LargeCorner
+            "LargeCorner" to ExpressiveShapes.LargeCorner,
+            "ExtraLargeCorner" to ExpressiveShapes.ExtraLargeCorner
         )
 
         scale.zipWithNext().forEach { (lower, upper) ->
@@ -183,9 +184,9 @@ class ExpressiveShapesTest {
      *
      * `ExpressiveTheme.kt` says, in its own doc comment, that this scale runs
      * 10 / 14 / 20 / 28 / 36 — deliberately rounder than M3's 4 / 8 / 12 / 16 / 28
-     * so cards read as curved panels rather than hard rectangles. The four tokens
-     * below are the first four steps of *that*, and the theme now reads them
-     * rather than repeating them.
+     * so cards read as curved panels rather than hard rectangles. The five tokens
+     * below are the steps of *that*, and the theme now reads them rather than
+     * repeating them.
      *
      * Pinning the numbers is what makes a later change to either one deliberate:
      * if someone edits the scale and forgets the theme, or the reverse, this
@@ -203,6 +204,7 @@ class ExpressiveShapesTest {
         assertEquals("SmallCorner", 14f, ExpressiveShapes.SmallCorner.value, TOLERANCE)
         assertEquals("MediumCorner", 20f, ExpressiveShapes.MediumCorner.value, TOLERANCE)
         assertEquals("LargeCorner", 28f, ExpressiveShapes.LargeCorner.value, TOLERANCE)
+        assertEquals("ExtraLargeCorner", 36f, ExpressiveShapes.ExtraLargeCorner.value, TOLERANCE)
     }
 
     private companion object {

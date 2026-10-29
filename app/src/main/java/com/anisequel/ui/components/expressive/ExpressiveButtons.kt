@@ -39,7 +39,16 @@ fun ExpressivePrimaryButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     loading: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    /**
+     * The node's test tag, defaulted to the shared one.
+     *
+     * A parameter rather than a caller-supplied `Modifier.testTag`: test tags are
+     * separate semantics properties on the same node, and this composable's own
+     * `.testTag` is applied after the caller's modifier, so the last one wins. A
+     * screen that needs its own tag has to be able to replace this one.
+     */
+    testTag: String = "${EXPRESSIVE_TAG}primary_button"
 ) {
     // Shared with `bouncyPress` so the press comes from the `Button`, which knows
     // the difference between a tap and a drag. Without it, `bouncyPress` installs
@@ -73,7 +82,7 @@ fun ExpressivePrimaryButton(
         modifier = modifier
             .height(48.dp)
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
-            .testTag("${EXPRESSIVE_TAG}primary_button"),
+            .testTag(testTag),
         shape = RoundedCornerShape(cornerRadius),
         interactionSource = interactionSource
     ) {
