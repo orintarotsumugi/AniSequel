@@ -336,7 +336,7 @@ private fun ActivityListDetails(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.height(8.dp))
-        ActivityActions(
+        ActivityControls(
             activity = activity,
             isManga = isManga,
             likePending = likePending,
@@ -349,7 +349,7 @@ private fun ActivityListDetails(
 
 /** The type chip, the like control and the replies control, in one row. */
 @Composable
-private fun ActivityActions(
+private fun ActivityControls(
     activity: ProfileActivity,
     isManga: Boolean,
     likePending: Boolean,
