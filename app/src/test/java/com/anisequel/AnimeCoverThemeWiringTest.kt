@@ -68,7 +68,42 @@ class AnimeCoverThemeWiringTest {
         )
         assertTrue(
             "and turning the feature on has to recolour for this title",
-            effect.contains("setAnimeThemeActive(") && effect.contains("active = true")
+            effect.contains("applyAnimeColorLayer(") &&
+                effect.contains("retain = themeSettings.animeThemeRetainColor")
+        )
+        assertTrue(
+            "the gate is the stored switch, not the applied layer: a flag that " +
+                "means both is how a temporary colour ended up permanent",
+            effect.contains("themeSettings.animeThemeEnabled") &&
+                effect.contains("if (!themeSettings.animeThemeEnabled) return@LaunchedEffect")
+        )
+    }
+
+    /**
+     * Closing the sheet has to end the layer, and only the layer.
+     *
+     * The dismiss path used to leave the immersive layer switched on when the colour
+     * was retained, so the show's hue stayed in the surfaces of every screen and of
+     * the next launch - and used to schedule the revert from inside the sheet, so the
+     * timer died with the composable and a "5 minutes" colour never expired. Both
+     * halves are wired here: retention clears the layer and keeps the accent,
+     * a temporary colour hands its delay to the repository.
+     */
+    @Test
+    fun `dismissing the sheet ends the immersive layer either way`() {
+        val sheet = source(
+            "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+        )
+        val dismiss = sheet.substringAfter("val handleDismiss")
+            .substringBefore("ModalBottomSheet(")
+
+        assertTrue(
+            "a retained colour hands off to the accent and stops tinting:\n$dismiss",
+            dismiss.contains("clearAnimeColorLayer()")
+        )
+        assertTrue(
+            "a temporary one keeps its delay, which the sheet used to cancel:\n$dismiss",
+            dismiss.contains("releaseAnimeColorLayer(themeSettings.animeThemeRevertDuration)")
         )
     }
 

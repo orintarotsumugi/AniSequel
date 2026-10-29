@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,10 +37,17 @@ import kotlinx.coroutines.launch
  * While you view a detail sheet, the app borrows the anime's cover colour the
  * way Dynamic colour borrows the wallpaper. The seed is read from the cover's
  * pixels - quantized and scored, not taken from AniList's single dominant-colour
- * field - so the palette follows the artwork the reader is looking at. "Retain
- * Anime Color" is the half that used to do nothing: when it is on, the cover
- * colour is persisted as the app's own custom hue, so the whole app keeps the
- * anime's palette after the sheet closes — there is nothing to revert.
+ * field - so the palette follows the artwork the reader is looking at.
+ *
+ * "Retain anime colour" is the difference between the two halves of the feature,
+ * and they are different halves now. The immersive layer - the show's hue in the
+ * surfaces, the containers, the outlines - belongs to the sheet and ends with it.
+ * Retention persists the colour as the app's own accent, which is the same colour
+ * on the app's usual surfaces, and is what the next launch finds. It used to be
+ * one stored flag doing both jobs, so a retained Chainsaw Man left every screen
+ * tinted forever, and a *temporary* colour waiting on its timer came back from a
+ * restart still applied - because the timer was an in-memory job and the flag was
+ * not.
  *
  * Both switches leave a clear exit: picking a palette, a hue or Reset
  * appearance in the other sections owns the accent again.
@@ -50,11 +58,16 @@ internal fun AnimeColourSection(
     settings: ThemePreferences.ThemeSettings,
     scope: CoroutineScope
 ) {
-    val animeColor = remember(settings.animeThemeActive, settings.animeThemeColorHex) {
-        if (settings.animeThemeActive) {
-            DynamicThemeBuilder.parseHexColor(settings.animeThemeColorHex)
-        } else {
-            null
+    val dark = isSystemInDarkTheme()
+    // The colour the app is drawn with right now: the layer while a title is on
+    // screen, otherwise whatever this feature kept as the accent. The hex is
+    // printed as text and the *swatch* is the derived accent, so a dark poster
+    // does not produce an unidentifiable black chip in a dark app.
+    val liveHex = settings.animeThemeColorHex ?: settings.animeThemeRetainedColorHex
+    val layerIsLive = settings.animeThemeColorHex != null
+    val swatch = remember(liveHex, dark) {
+        DynamicThemeBuilder.parseHexColor(liveHex)?.let {
+            DynamicThemeBuilder.accentColor(it, dark = dark)
         }
     }
 
@@ -67,7 +80,7 @@ internal fun AnimeColourSection(
     ) {
         // A live snapshot of the colour currently driving the scheme, so the
         // feature is never a mystery while it is active.
-        if (animeColor != null) {
+        if (swatch != null) {
             Surface(
                 shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -79,7 +92,7 @@ internal fun AnimeColourSection(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner),
-                        color = animeColor,
+                        color = swatch,
                         border = BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.outlineVariant
@@ -89,13 +102,17 @@ internal fun AnimeColourSection(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Now matching this anime",
+                            text = if (layerIsLive) "Now matching this anime" else "Keeping this show's colour",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = settings.animeThemeColorHex ?: "cover colour",
+                            text = if (layerIsLive) {
+                                liveHex ?: "cover colour"
+                            } else {
+                                "As your accent, on your usual backgrounds"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -128,19 +145,12 @@ internal fun AnimeColourSection(
         SwitchRow(
             title = "Anime dynamic theme",
             subtitle = "Recolour the whole app while a detail sheet is open.",
-            checked = settings.animeThemeActive,
-            onCheckedChange = { active ->
-                scope.launch {
-                    themePreferences.setAnimeThemeActive(active, settings.animeThemeColorHex)
-                    if (!active &&
-                        settings.customColorHex?.equals(settings.animeThemeColorHex, ignoreCase = true) == true
-                    ) {
-                        // Turning the switch off ends a retained anime accent:
-                        // the custom hue it left behind only makes sense while
-                        // the feature is on, so clear the one the anime wrote.
-                        themePreferences.setCustomColorHex(null)
-                    }
-                }
+            checked = settings.animeThemeEnabled,
+            onCheckedChange = { enabled ->
+                // One call. Ending the feature also ends the layer and takes back
+                // the accent *only if this feature wrote it*, which is the part
+                // that used to be guessed by comparing hexes here.
+                scope.launch { themePreferences.setAnimeThemeEnabled(enabled) }
             },
             modifier = Modifier.testTag("anime_theme_active_switch")
         )
@@ -150,31 +160,11 @@ internal fun AnimeColourSection(
             subtitle = "Keep that colour as the app's accent after the sheet.",
             checked = settings.animeThemeRetainColor,
             onCheckedChange = { retain ->
-                scope.launch {
-                    themePreferences.setAnimeThemeRetainColor(retain)
-                    if (retain && settings.animeThemeActive && settings.animeThemeColorHex != null) {
-                        // Switching retention on mid-session persists the colour
-                        // that is already live; the detail sheet does the same
-                        // on every new anime while this stays on.
-                        themePreferences.setCustomColorHex(settings.animeThemeColorHex)
-                    } else if (!retain) {
-                        // Turning Retain off has to actually end the retained
-                        // state. The layer outranks every other colour source in
-                        // `Theme.kt`, so clearing only the custom hue left the
-                        // anime scheme drawing and the switch looked like it did
-                        // nothing at all. The sheet is not open on this screen,
-                        // so the layer can be stepped off now; it returns the
-                        // reader to the theme they had before.
-                        if (settings.animeThemeActive) {
-                            themePreferences.setAnimeThemeActive(false, null)
-                        }
-                        if (settings.customColorHex?.equals(settings.animeThemeColorHex, ignoreCase = true) == true) {
-                            // Drop the accent the anime wrote, so the toggle has
-                            // a visible effect in both directions.
-                            themePreferences.setCustomColorHex(null)
-                        }
-                    }
-                }
+                // The preference, the accent it writes or takes back, and the
+                // layer that has to stop outranking every other source when
+                // retention ends - all in the repository, because doing that
+                // bookkeeping a row at a time is what made this switch look dead.
+                scope.launch { themePreferences.setAnimeThemeRetainColor(retain) }
             },
             modifier = Modifier.testTag("anime_theme_retain_switch")
         )
@@ -212,8 +202,9 @@ internal fun AnimeColourSection(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (settings.animeThemeRetainColor) {
-                "Being retained: the colour stays applied to the app. Pick a palette, a hue, " +
-                    "or Reset appearance to take back control."
+                "Being kept as your accent: the colour survives the sheet and the next " +
+                    "launch, on your usual backgrounds. Pick a palette, a hue, or Reset " +
+                    "appearance to take it back."
             } else {
                 "Return to your usual theme the moment the sheet closes, or after a set time."
             },

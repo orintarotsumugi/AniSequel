@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -69,6 +71,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 import com.anisequel.ui.theme.CoverColors
+import com.anisequel.ui.theme.DynamicThemeBuilder
 
 /**
  * The Info page's hero: the artwork, behind its own title.
@@ -146,10 +149,25 @@ fun InfoHero(
     // backdrop, the shadow around the cover and the buttons below cannot be three
     // different readings of the same artwork. AniList's own field is the fallback
     // for the frames before the decode lands, and for a cover that cannot be read.
-    val coverColor = CoverColors.color(media.posterUrl)
+    //
+    // Both are put through `accentColor`, which is the tone the *scheme* uses for
+    // `primary`. Drawing the raw pixel instead made the agreement worse than the
+    // mismatch it was meant to avoid: a night-sky cover scores a near-black bin, so
+    // its shadow and placeholder were invisible on a dark sheet, and a snow cover
+    // flashed white behind the poster for the frames before it loaded. Same hue,
+    // same chroma, a tone that is always the colour the buttons are.
+    val coverSeed = CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
-        ?: MaterialTheme.colorScheme.surfaceContainerHigh
+    val coverColor = coverSeed?.let {
+        DynamicThemeBuilder.accentColor(it, dark = isSystemInDarkTheme())
+    } ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val surface = MaterialTheme.colorScheme.surface
+    // The box behind the full-bleed artwork. The accent at full strength is right
+    // for the small poster and its shadow, and wrong here: tone 80 in a dark sheet
+    // is a light panel, so the frames before the poster decodes flashed white at
+    // 340dp. Held back toward the sheet's own surface, it is still the show's
+    // colour and still a colour you can look at.
+    val heroBackdrop = lerp(surface, coverColor, BACKDROP_TINT)
     // The key visual, always - the KDoc above is the long version of why.
     //
     // This was `bannerImage ?: posterUrl`, and the `?:` looks harmless: a banner is
@@ -170,7 +188,7 @@ fun InfoHero(
             // past it rather than have its title clipped. The artwork is a
             // background, so letting the box grow with the text is free.
             .heightIn(min = HERO_HEIGHT)
-            .background(coverColor)
+            .background(heroBackdrop)
     ) {
         if (backdrop != null) {
             AsyncImage(
@@ -696,6 +714,16 @@ private const val PARALLAX_ZOOM = 0.16f
  * own palette on screen for the handover into the page.
  */
 private const val BACKDROP_HANDOFF = 0.5f
+
+/**
+ * How far the hero's placeholder sits toward the show's colour.
+ *
+ * Under `ContentScale.Crop` the poster covers this box once it decodes, so the
+ * number only governs the loading frames and the seam at the edges. A full-strength
+ * accent is a light panel in a dark sheet; none of it is the flat grey the hero used
+ * to be, which is the one thing the cover colour was extracted to avoid.
+ */
+private const val BACKDROP_TINT = 0.45f
 
 /** How far the lockup lifts *against* the page, on top of scrolling with it. */
 private val LOCKUP_LIFT = 26.dp

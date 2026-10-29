@@ -1,9 +1,11 @@
 package com.anisequel
 
 import android.content.Context
+import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
+import com.anisequel.data.repository.themeDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -127,14 +129,22 @@ class ThemePreferencesTest {
         assertTrue(preferences.settings.first().animeThemeRetainColor)
     }
 
+    /**
+     * Retention is the accent, not the layer.
+     *
+     * The immersive layer - the one that tints the surfaces - is the sheet's, and
+     * it is process state on purpose: the old build persisted it, so a restart left
+     * a title's hue in every surface forever and a temporary colour that was waiting
+     * on an in-memory timer came back still applied with nothing left to clear it.
+     */
     @Test
-    fun `retaining a cover colour writes the layer and the accent together`() = runTest {
+    fun `retaining a cover colour writes the accent and keeps the layer in memory`() = runTest {
         val preferences = preferences()
 
-        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = true)
+        preferences.applyAnimeColorLayer("#7FA9D4", retain = true)
 
         val settings = preferences.settings.first()
-        assertTrue(settings.animeThemeActive)
+        assertTrue("the layer is applied", settings.animeThemeActive)
         assertEquals("#7FA9D4", settings.animeThemeColorHex)
         assertEquals(
             "Retain has to outlive the sheet, so the cover colour must also be " +
@@ -142,42 +152,136 @@ class ThemePreferencesTest {
             "#7FA9D4",
             settings.customColorHex
         )
-    }
-
-    @Test
-    fun `turning the layer off always clears the stored cover colour`() = runTest {
-        val preferences = preferences()
-        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = true)
-
-        // A caller that passes the old hex "for reference" must not leave the
-        // layer half-off: the next enable would silently restore a colour the
-        // reader had already dismissed.
-        preferences.setAnimeThemeActive(false, "#7FA9D4")
-
-        val settings = preferences.settings.first()
-        assertFalse(settings.animeThemeActive)
-        assertEquals(null, settings.animeThemeColorHex)
         assertEquals(
-            "the retained accent survives turning the temporary layer off",
+            "and the app has to know that *this* accent came from the anime, so " +
+                "turning the feature off can take it back",
             "#7FA9D4",
-            settings.customColorHex
+            settings.animeThemeRetainedColorHex
         )
+
+        // The sheet closing ends the immersive layer. The accent is what stays.
+        preferences.clearAnimeColorLayer()
+
+        val afterClose = preferences.settings.first()
+        assertFalse("the layer belongs to the sheet", afterClose.animeThemeActive)
+        assertEquals("#7FA9D4", afterClose.customColorHex)
     }
 
-    /**
-     * A temporary layer must not replace the reader's standing accent.
-     *
-     * Only Retain is allowed to write `customColorHex`; the "just show me this
-     * show's colour" path has to leave it exactly as it was.
-     */
     @Test
     fun `a temporary cover colour leaves the custom accent alone`() = runTest {
         val preferences = preferences()
         preferences.setCustomColorHex("#00BFA5")
 
-        preferences.setAnimeThemeActive(true, "#7FA9D4", retainColor = false)
+        preferences.applyAnimeColorLayer("#7FA9D4", retain = false)
 
-        assertEquals("#00BFA5", preferences.settings.first().customColorHex)
+        assertEquals(
+            "the layer is a preview of one title, not a rewrite of the reader's accent",
+            "#00BFA5",
+            preferences.settings.first().customColorHex
+        )
+        assertEquals(
+            null,
+            preferences.settings.first().animeThemeRetainedColorHex
+        )
+    }
+
+    /**
+     * The switch and the layer are different questions.
+     *
+     * "May a sheet recolour the app" is stored; "a sheet is recolouring the app"
+     * is not. Collapsing them into one flag is what made a temporary colour
+     * permanent after a restart, and let a retained colour keep tinting surfaces
+     * the reader never asked to move.
+     */
+    @Test
+    fun `the stored switch survives while the applied layer does not`() = runTest {
+        val preferences = preferences()
+        preferences.setAnimeThemeEnabled(true)
+        preferences.applyAnimeColorLayer("#D64B4B", retain = false)
+
+        assertTrue(preferences.settings.first().animeThemeActive)
+        assertTrue(preferences.settings.first().animeThemeEnabled)
+
+        // What a new process sees: the feature is still on, the colour is gone.
+        preferences.clearAnimeColorLayer()
+
+        val settings = preferences.settings.first()
+        assertFalse("no layer may outlive the process that applied it", settings.animeThemeActive)
+        assertEquals(null, settings.animeThemeColorHex)
+        assertTrue("and the switch the reader set stays set", settings.animeThemeEnabled)
+    }
+
+    @Test
+    fun `turning the feature off takes back only the colour it wrote`() = runTest {
+        val preferences = preferences()
+        preferences.setAnimeThemeEnabled(true)
+        preferences.applyAnimeColorLayer("#7FA9D4", retain = true)
+
+        preferences.setAnimeThemeEnabled(false)
+
+        val settings = preferences.settings.first()
+        assertFalse(settings.animeThemeEnabled)
+        assertFalse(settings.animeThemeActive)
+        assertEquals(
+            "the accent the anime retained is the feature's, so the feature ends it",
+            null,
+            settings.customColorHex
+        )
+        assertEquals(null, settings.animeThemeRetainedColorHex)
+    }
+
+    @Test
+    fun `turning the feature off keeps an accent the reader chose`() = runTest {
+        val preferences = preferences()
+        preferences.setCustomColorHex("#00BFA5")
+        preferences.setAnimeThemeEnabled(true)
+
+        preferences.setAnimeThemeEnabled(false)
+
+        assertEquals(
+            "a hue picked in Settings is not this feature's to clear, even when a " +
+                "cover happens to share it",
+            "#00BFA5",
+            preferences.settings.first().customColorHex
+        )
+    }
+
+    /**
+     * An upgrade keeps working.
+     *
+     * Older builds stored the switch in `anime_theme_active` next to a stored layer
+     * colour. The switch is read from the old key until the new one is written; the
+     * layer is not, which is the point - nobody upgraded expecting the last title
+     * they had opened to still be painting their surfaces.
+     */
+    @Test
+    fun `the legacy stored flag reads as the switch being on`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.themeDataStore.edit { preferences ->
+            preferences[androidx.datastore.preferences.core.booleanPreferencesKey("anime_theme_active")] = true
+            preferences[androidx.datastore.preferences.core.stringPreferencesKey("anime_theme_color_hex")] = "#D64B4B"
+        }
+
+        val settings = preferences().settings.first()
+        assertTrue(settings.animeThemeEnabled)
+        assertFalse(
+            "a layer applied by an older build does not carry into this one",
+            settings.animeThemeActive
+        )
+        assertEquals(null, settings.animeThemeColorHex)
+
+        preferences().setAnimeThemeEnabled(true)
+
+        val rewritten = preferences().settings.first()
+        assertTrue(rewritten.animeThemeEnabled)
+        assertEquals(
+            "the first write moves the value to the key this build reads, so the " +
+                "meaning never depends on which of two keys a later build looks at",
+            true,
+            context.themeDataStore.data.first()[
+                androidx.datastore.preferences.core.booleanPreferencesKey("anime_theme_enabled")
+            ]
+        )
     }
 
     /**

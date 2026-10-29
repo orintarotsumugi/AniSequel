@@ -67,8 +67,14 @@ fun WavyProgressBar(
 ) {
     LinearWavyProgressIndicator(
         progress = progress,
-        modifier = modifier
+        // The default *before* the caller's modifier, not after it: a chain applies
+        // its last size constraint, so `.then`-ing a height here overrode every
+        // caller that sized the bar itself - the 6dp row in a sequel card silently
+        // became 10dp, and the wave is only legible above a few dp anyway, which is
+        // the one thing to negotiate rather than to have taken away.
+        modifier = Modifier
             .height(10.dp)
+            .then(modifier)
             .testTag("${EXPRESSIVE_TAG}wavy_progress"),
         color = color,
         trackColor = trackColor

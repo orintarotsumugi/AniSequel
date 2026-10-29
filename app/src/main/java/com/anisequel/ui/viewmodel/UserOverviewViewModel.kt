@@ -23,6 +23,9 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.BuildActivityCalendarUseCase
 import com.anisequel.domain.usecase.BuildListEntryInsightsUseCase
 import com.anisequel.domain.usecase.BuildListInsightsUseCase
+import com.anisequel.domain.usecase.fetchProfileListEagerly
+import com.anisequel.domain.usecase.mangaLibraryProblem
+import com.anisequel.domain.usecase.profileIdentityFromRoute
 import com.anisequel.ui.components.markdown.mediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -32,20 +35,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/**
- * Every list entry on a collection, flattened and de-duplicated by media id.
- *
- * AniList returns a list per *status group*, and a custom list can overlap
- * the standard ones, so the same anime can arrive more than once - across
- * *different* groups too. The Library grid is keyed on the media id, and a
- * repeated key throws `IllegalArgumentException` while it lays out, so this is a
- * crash guard rather than tidying.
- */
-private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntryItem> =
-    collection?.lists
-        ?.flatMap { it.entries.orEmpty() }
-        ?.distinctBy { it.media.id }
-        .orEmpty()
 
 /**
  * State holder for the AniList profile screen's Home and Stats tabs - and for the
@@ -70,11 +59,12 @@ private fun flattenLibrary(collection: MediaListCollection?): List<MediaListEntr
  *
  * ## Why the manga half of the Library page is not fetched here
  *
- * The anime list is forced on every profile open for the Stats tallies above. The
- * manga list is needed by none of that, and AniList is currently degraded to 30
- * requests per minute, so it is fetched on demand - the first time somebody
- * filters the Library page to manga - and then cached by the repository like every
- * other list.
+ * The anime list is forced on every *own-profile* open for the Stats tallies above,
+ * and for the main bar's Library page, which renders `libraryAnime` with nothing to
+ * ask for it. On somebody else's profile it is now on demand like the manga half:
+ * the reader may be there for their bio, and a stranger's list costs up to forty
+ * chunked requests. [loadAnimeLibrary] is what the Stats and list tabs call, and
+ * [fetchProfileListEagerly] is the rule that decides which profiles skip the wait.
  */
 class UserOverviewViewModel(
     private val aniListRepository: AniListRepository,
@@ -87,6 +77,16 @@ class UserOverviewViewModel(
     private val userId: Int? = null,
     private val username: String? = null,
     private val isDemo: Boolean = false,
+    /**
+     * Whether this is the signed-in reader's own profile.
+     *
+     * It decides whether the chunked anime list is fetched with the profile or only
+     * when a tab asks for it: see [fetchProfileListEagerly]. Defaulted to `true`
+     * because that is the answer every existing caller wants - the viewer's own list
+     * is rendered by the main bar's Library page, which has no trigger of its own, so
+     * a ViewModel that forgot this would leave that page empty rather than slow.
+     */
+    private val isOwnProfile: Boolean = true,
     private val buildActivityCalendar: BuildActivityCalendarUseCase = BuildActivityCalendarUseCase(),
     private val buildListInsights: BuildListInsightsUseCase = BuildListInsightsUseCase(),
     private val buildListEntryInsights: BuildListEntryInsightsUseCase = BuildListEntryInsightsUseCase()
@@ -103,6 +103,41 @@ class UserOverviewViewModel(
      * profile fetch could leave the screen showing the older result.
      */
     private var loadJob: Job? = null
+
+    /**
+     * The list half, asked for on its own.
+     *
+     * Only for somebody else's profile: [load] cancels the whole job, so the list
+     * needs its own handle or a tab switch would cancel a download the reader is
+     * already waiting on. [loadedOverview] and [loadedList] are what lets the answer
+     * be merged into the page that is already published - `buildState` needs both
+     * halves, and the state the screen holds has the overview only in its printed
+     * form.
+     */
+    private var listJob: Job? = null
+    private var loadedOverview: UserOverview? = null
+    private var loadedList: MediaListCollection? = null
+
+    /**
+     * The id the profile document answered with, for a profile opened *by name*.
+     *
+     * Only the manga half needs it: `getUserMangaList` is addressable by id alone,
+     * while the list and overview this screen fetches can both go by name (and do, so
+     * they reuse the `userName:` cache entry the dashboard filled - see
+     * [ProfileDestination]). Without this the borrowed list's Manga filter on a scanned
+     * profile had a reason it could never outgrow: the id had arrived with the
+     * overview and been thrown away, so the error read "hasn't said who this profile
+     * is yet" for a profile that had said it some time ago.
+     *
+     * Deliberately *not* fed back into [fetchList] or [lastKnownListForScreen]: those
+     * key the list by whichever identifier the route arrived with, and switching
+     * halfway would re-download the most expensive query in the app under a second
+     * key for a page that already has the answer under the first.
+     */
+    private var scannedUserId: Int? = null
+
+    /** Whether the chunked list rides along with the profile open. See [fetchProfileListEagerly]. */
+    private val fetchListEagerly = fetchProfileListEagerly(isOwnProfile = isOwnProfile, isDemo = isDemo)
 
     /**
      * Cover art for the AniList preview cards in this person's bio.
@@ -195,6 +230,19 @@ class UserOverviewViewModel(
     private var mangaJob: Job? = null
 
     /**
+     * Record the id the overview answered with, for a profile opened by name.
+     *
+     * Called by the screen beside the Activity and Social tabs' identical calls, for
+     * the same reason: those flows are addressable by id only, and a scanned profile
+     * arrives with a name. So is [loadMangaLibrary]'s list - which is the only thing
+     * this feeds. A route that already had an id needs none of it.
+     */
+    fun updateUserId(newUserId: Int) {
+        if (userId != null || newUserId <= 0) return
+        scannedUserId = newUserId
+    }
+
+    /**
      * Fetches the manga list, once.
      *
      * Guarded rather than idempotent because the Library page calls it from a
@@ -205,12 +253,26 @@ class UserOverviewViewModel(
      */
     fun loadMangaLibrary() {
         if (_mangaLibrary.value != null || _isLoadingManga.value) return
-        if (isDemo || userId == null) return
+        // Named rather than silent. The `return` this replaces left the Manga filter
+        // of the Library page on a list that was never arriving: no entries, no
+        // error, no reason - which is the same "nothing here" lie as a flattened
+        // failure, only slower to notice, and the reader had no way to tell it apart
+        // from an account that tracks no manga.
+        val id = userId ?: scannedUserId
+        mangaLibraryProblem(isDemo = isDemo, userId = id)?.let { problem ->
+            _mangaError.value = problem
+            return
+        }
+        // Unreachable beside the guard above, and written anyway: everything between
+        // here and the launch flips the in-flight flag, and returning after that with
+        // nothing left to clear it is how a page ends up spinning for an answer that
+        // was never asked for.
+        if (id == null) return
 
         _isLoadingManga.value = true
         _mangaError.value = null
         mangaJob = viewModelScope.launch {
-            val result = aniListRepository.getUserMangaList(userId, false)
+            val result = aniListRepository.getUserMangaList(id, false)
             result.fold(
                 onSuccess = { collection ->
                     _mangaLibrary.value = flattenLibrary(collection)
@@ -229,12 +291,75 @@ class UserOverviewViewModel(
         }
     }
 
+    /**
+     * Ask for the anime list, on a profile that did not fetch it with the overview.
+     *
+     * Guarded the same way [loadMangaLibrary] is, for the same reason times forty:
+     * this is the app's single most expensive query - one request per 500 entries,
+     * chunk-merged and sequential - and the tabs that need it are recomposed on every
+     * scroll, tab switch and rotation. A re-entry that refetched would spend a whole
+     * download per tap against an API AniList holds at 30 requests a minute.
+     */
+    fun loadAnimeLibrary(forceRefresh: Boolean = false) {
+        // The viewer's own list (and the demo's fixture) arrives with [load], so a
+        // call here would race the fetch already in flight and double it. The tabs
+        // can therefore ask unconditionally, on whichever profile they are on.
+        if (fetchListEagerly) return
+        if (listJob?.isActive == true) return
+        if (loadedList != null && !forceRefresh) return
+        // Without the overview there is nothing to rebuild the published state from:
+        // `buildState` takes the profile document, not the printed form the state
+        // holds. The tabs only compose this call from a loaded profile, so reaching it
+        // means the page is not ready, and asking later is the right answer.
+        val overview = loadedOverview ?: return
+
+        listJob = viewModelScope.launch {
+            (_uiState.value as? UserOverviewUiState.Success)?.let { current ->
+                _uiState.value = current.copy(isLibraryLoading = true, libraryError = null)
+            }
+            val result = fetchList(forceRefresh)
+            val list = result.getOrNull() ?: loadedList
+                ?: if (isDemo) null else lastKnownListForScreen()
+            loadedList = list
+            _uiState.value = buildState(
+                overview = overview,
+                list = list,
+                isRefreshing = false,
+                isLibraryLoading = false,
+                libraryError = if (list == null) {
+                    result.exceptionOrNull()?.message ?: "AniList didn't return this list."
+                } else {
+                    null
+                },
+                // Live list, live profile: only a list that had to be taken from
+                // memory or disk makes the page a saved copy.
+                isCached = result.getOrNull() == null && list != null
+            )
+        }
+    }
+
     init {
         load()
     }
 
     fun load(forceRefresh: Boolean = false) {
         loadJob?.cancel()
+        // Who this screen is about, decided once from the two route arguments.
+        //
+        // The by-id route used to read its argument as `getInt("userId") ?: 0`, so an
+        // unfilled route asked AniList for *user 0* and painted whichever account owns
+        // that id as the person the reader tapped: a real name, a real bio, no
+        // connection to the face in the grid. A profile with neither a name nor an id
+        // is not a slow load, it is nobody, and it is not retryable - the same request
+        // would be made again, and again answer the same way.
+        val identity = profileIdentityFromRoute(userId, username)
+        if (!isDemo && !identity.isResolvable) {
+            _uiState.value = UserOverviewUiState.Error(
+                message = identity.problem ?: "Failed to load the AniList profile",
+                canRetry = false
+            )
+            return
+        }
         loadJob = viewModelScope.launch {
             val name = username?.takeUnless { it.isBlank() }
 
@@ -251,6 +376,8 @@ class UserOverviewViewModel(
                 val saved = aniListRepository.lastKnownOverview(userId, name)
                 if (saved != null) {
                     paintedList = lastKnownListForScreen()
+                    loadedOverview = saved
+                    loadedList = paintedList
                     _uiState.value = buildState(
                         overview = saved,
                         list = paintedList,
@@ -281,7 +408,14 @@ class UserOverviewViewModel(
                     aniListRepository.getUserOverview(userId, name, forceRefresh)
                 }
             }
-            val listDeferred = async { fetchList(forceRefresh) }
+            // Somebody else's list is only asked for once it is wanted - see
+            // [fetchProfileListEagerly] for the failure that made this a question
+            // rather than a freebie. `loadedList != null` is the other half: once the
+            // reader has looked at this person's list, a refresh has to bring it
+            // forward too, or the page would go out to the network for the bio and
+            // leave a list behind it that nobody had asked about since.
+            val listDeferred =
+                if (fetchListEagerly || loadedList != null) async { fetchList(forceRefresh) } else null
 
             val overview = overviewDeferred.await().getOrElse { error ->
                 // The list fetch is a child of this coroutine, so returning
@@ -289,7 +423,7 @@ class UserOverviewViewModel(
                 // and then throw its result away. Cancel it instead: the profile
                 // cannot be shown either way, and the list query is the
                 // expensive half of the pair.
-                listDeferred.cancel()
+                listDeferred?.cancel()
                 val cached = _uiState.value as? UserOverviewUiState.Success
                 // A dead token is not something a saved copy may hide: the profile
                 // would keep claiming a session that AniList has already refused,
@@ -302,7 +436,26 @@ class UserOverviewViewModel(
                     // a refresh of a live page that fails leaves a live page behind,
                     // and calling that "saved" would be wrong in the other
                     // direction.
-                    _uiState.value = cached.copy(isRefreshing = false)
+                    //
+                    // The library half is cancelled with the overview, so if the
+                    // painted copy had no list the "still loading" flag it was given
+                    // has nobody left to clear it. Left set, the Stats tab and the
+                    // Library page spin forever over a profile that has finished
+                    // loading; the honest state is "no list, and here is why".
+                    _uiState.value = cached.copy(
+                        isRefreshing = false,
+                        // In lazy mode there was no fetch to cancel, so a list that
+                        // has not been asked for yet must stay "not asked for yet".
+                        // Flipping it to a failure here would report a list that
+                        // nobody requested as one AniList refused.
+                        isLibraryLoading = cached.isLibraryLoading && listDeferred == null,
+                        libraryError = cached.libraryError
+                            ?: if (cached.isLibraryLoading && listDeferred != null) {
+                                "AniList didn't return this list."
+                            } else {
+                                null
+                            }
+                    )
                 } else {
                     _uiState.value = errorState(error, "Failed to load the AniList profile")
                 }
@@ -322,12 +475,21 @@ class UserOverviewViewModel(
             // every refresh. The previous tallies are seconds old and the refresh
             // bar is already saying the page is being replaced.
             val alreadyShowing = (_uiState.value as? UserOverviewUiState.Success)?.userId == overview.id
+            loadedOverview = overview
             if (!alreadyShowing) {
+                // In lazy mode this is not a transient: the list is what it is
+                // until a tab asks, so the state it publishes with has to be the
+                // one that survives (`isLibraryLoading` reading "not asked yet").
+                val listSoFar = if (listDeferred == null) loadedList else null
                 _uiState.value = buildState(
                     overview = overview,
-                    list = null,
+                    list = listSoFar,
                     isRefreshing = false,
-                    isLibraryLoading = true
+                    // Either on its way, or not asked for yet: both mean the same
+                    // thing to the two readers - the tallies they would print are
+                    // not final, and `isLibraryLoading` is what stops zeroes being
+                    // presented as answers.
+                    isLibraryLoading = listSoFar == null
                 )
             }
 
@@ -347,25 +509,34 @@ class UserOverviewViewModel(
             // list" were different answers, and the Library page then rendered
             // "Nothing in this list yet" over an account with nine hundred entries,
             // with every chip reading (0) and no way to try again.
-            val listResult = listDeferred.await()
-            val liveList = listResult.getOrNull()
+            val listResult = listDeferred?.await()
+            val liveList = listResult?.getOrNull()
             // A failed list fetch falls back to the last one this device has, on
             // the same terms as the profile itself. The bio and the favourites are
             // already live by here, so the alternative was a page that is half
             // today and half empty - with every chart reading zero.
-            val list = liveList ?: paintedList ?: if (isDemo) null else lastKnownListForScreen()
+            val list = liveList ?: paintedList ?: loadedList
+                ?: if (isDemo) null else lastKnownListForScreen()
             val usedSavedList = liveList == null && list != null
+            loadedList = list
 
             _uiState.value = buildState(
                 overview = overview,
                 list = list,
                 isRefreshing = false,
-                isLibraryLoading = false,
-                libraryError = if (list == null) {
-                    listResult.exceptionOrNull()?.message
-                        ?: "AniList didn't return this list."
-                } else {
-                    null
+                // Nothing was asked for and nothing is on disk: that is "not asked
+                // yet", which the tabs show as *counting* rather than as zeroes -
+                // and it is cleared by [loadAnimeLibrary], the call the tab makes.
+                isLibraryLoading = list == null && listResult == null,
+                libraryError = when {
+                    list != null -> null
+                    // A fetch that was asked for and failed is the only case with a
+                    // reason to print. When nobody asked, `isLibraryLoading` is the
+                    // honest flag and inventing a failure here would blame AniList
+                    // for a request it never saw.
+                    listResult != null ->
+                        listResult.exceptionOrNull()?.message ?: "AniList didn't return this list."
+                    else -> null
                 },
                 // The overview itself is live here, so the page is only cached
                 // when the list half had to be given up on.
@@ -492,92 +663,16 @@ class UserOverviewViewModel(
         private val aniListRepository: AniListRepository,
         private val userId: Int? = null,
         private val username: String? = null,
-        private val isDemo: Boolean = false
+        private val isDemo: Boolean = false,
+        private val isOwnProfile: Boolean = true
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserOverviewViewModel(
             aniListRepository = aniListRepository,
             userId = userId,
             username = username,
-            isDemo = isDemo
+            isDemo = isDemo,
+            isOwnProfile = isOwnProfile
         ) as T
-    }
-}
-
-/**
- * `statistics.anime` distributions, in the shapes `BuildListInsightsUseCase`
- * already takes.
- *
- * The alternative was to change the chart builder and its tests to the API's own
- * field names. That is a bigger change than the bug asks for: the builder's job is
- * "turn tallies into sorted chart buckets", it already has a tested contract, and
- * a rename would make the diff about naming rather than about the four fields that
- * were returning HTTP 500. The translation is here, in one place, so the mapping
- * (`count` -> `amount`, `Float` -> `Int`) is visible exactly once.
- *
- * A null `meanScore` becomes null rather than 0: a tally with no scores behind it
- * has no mean, and zero is a score a person could plausibly have given.
- */
-private fun AnimeStats.formatAmounts(): List<FormatAmount> =
-    formats.orEmpty().mapNotNull { row ->
-        val format = row.format ?: return@mapNotNull null
-        FormatAmount(format = format, amount = row.count ?: 0)
-    }
-
-private fun AnimeStats.releaseYearAmounts(): List<YearAmount> =
-    releaseYears.orEmpty().mapNotNull { row ->
-        val year = row.releaseYear ?: return@mapNotNull null
-        YearAmount(year = year, amount = row.count ?: 0, meanScore = row.meanScore?.roundToInt())
-    }
-
-private fun AnimeStats.genreAmounts(): List<GenreAmount> =
-    genres.orEmpty().mapNotNull { row ->
-        val genre = row.genre ?: return@mapNotNull null
-        GenreAmount(
-            genre = genre,
-            amount = row.count ?: 0,
-            meanScore = row.meanScore?.roundToInt(),
-            timeWatched = row.minutesWatched?.toInt()
-        )
-    }
-
-private fun AnimeStats.tagAmounts(): List<TagAmount> =
-    tags.orEmpty().mapNotNull { row ->
-        val tag = row.tag ?: return@mapNotNull null
-        TagAmount(tag = tag, amount = row.count ?: 0, meanScore = row.meanScore?.roundToInt())
-    }
-
-/**
- * Drops repeated entries from a favourites connection.
- *
- * Not defensive coding against an impossible response - AniList returns them. A
- * real captured response for a user with six favourited anime contained the same
- * media six times, and another returned the same twelve twice. The `favourites`
- * connection is evidently not de-duplicated server-side.
- *
- * That is not a cosmetic problem. The favourites rows are `LazyRow`s keyed on the
- * media id, and a `LazyRow` handed the same key twice throws
- * `IllegalArgumentException: Key "79" was already used` while it is being laid
- * out - so one person's favourites would crash the screen, on a device, with no way
- * to see what went wrong. De-duplicating here also makes the rows honest: twelve
- * covers of six shows is not what anybody pinned.
- *
- * First occurrence wins, so the order AniList chose is preserved.
- *
- * `internal` rather than private so `FavouritesDeduplicationTest` can exercise the
- * real function. A test that re-implements the rule next to it proves the test,
- * not the screen.
- */
-internal fun <T> List<T>.distinctById(): List<T> {
-    val seen = HashSet<Int>()
-    return filter { item ->
-        val id = when (item) {
-            is MediaNode -> item.id
-            is FavouriteCharacter -> item.id
-            is FavouriteStaff -> item.id
-            is StudioNode -> item.id
-            else -> null
-        }
-        id == null || seen.add(id)
     }
 }

@@ -1854,10 +1854,14 @@ class AniListRepositoryImpl(
         // up in this process.
         overviewCache.clear()
         // As are the activity feed and the follower lists, which are just as
-        // personal and are fetched for other people too.
+        // personal and are fetched for other people too. The friends cache is the
+        // same data one step further in: it holds which of the viewer's friends
+        // have a title on their list, which is friends-only information and must
+        // not survive a sign-out - it was simply missed here when it was added.
         activityCache.clear()
         followersCache.clear()
         followingCache.clear()
+        friendsCache.clear()
         // And the same again for the disk tier. This is the half that outlives
         // the process: without this, signing out would clear what the app is
         // holding and leave the list, the bio, the viewer's record and the

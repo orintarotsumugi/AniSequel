@@ -1,5 +1,6 @@
 package com.anisequel.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -8,6 +9,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.domain.usecase.profileViewModelKey
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.screens.profile.UserProfileScreen
 import com.anisequel.ui.viewmodel.MediaDetailHost
@@ -35,7 +37,10 @@ import com.anisequel.ui.viewmodel.UserSocialViewModel
 object ProfileRoutes {
     const val OWN = "profile"
     const val BY_USERNAME = "profile_user/{username}"
-    const val BY_ID = "profile_id/{userId}"
+    const val BY_ID = "profile_id/{userId}?name={name}"
+
+    /** The by-id route's account name, carried so the bar can be filled on frame one. */
+    const val ID_NAME_ARG = "name"
 
     /**
      * [OWN] with the tab the profile should open on.
@@ -71,11 +76,29 @@ object ProfileRoutes {
     const val OWN_DEFAULT = "profile?tab="
 
     fun byUsername(username: String) = "profile_user/$username"
-    fun byId(userId: Int) = "profile_id/$userId"
+
+    /**
+     * The by-id route, always with the name query - even when it is empty.
+     *
+     * The name is what fills the top bar on the first frame: a follower's profile
+     * used to read "Profile" for the length of a round trip because the route
+     * carried only the number, and the person's name was in the row that was just
+     * tapped. The query form is the same one [StudioRoutes.studio] uses, for the
+     * same reason - a `composable()` route is matched *exactly*, so omitting
+     * `?name=` finds no destination at all and the tap silently does nothing.
+     */
+    fun byId(userId: Int, name: String? = null) =
+        "profile_id/$userId?name=${Uri.encode(name.orEmpty())}"
 }
 
 val ProfileUsernameArguments = listOf(navArgument("username") { type = NavType.StringType })
-val ProfileIdArguments = listOf(navArgument("userId") { type = NavType.IntType })
+val ProfileIdArguments = listOf(
+    navArgument("userId") { type = NavType.IntType },
+    navArgument(ProfileRoutes.ID_NAME_ARG) {
+        type = NavType.StringType
+        defaultValue = ""
+    }
+)
 
 /**
  * Builds the profile screen for whoever it is about, and routes taps on a
@@ -144,9 +167,11 @@ fun ProfileDestination(
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
     // after the other from the same stack, and without the name in the key the
-    // second would render the first one's bio and favourites.
+    // second would render the first one's bio and favourites. `profileViewModelKey`
+    // is where that rule lives, because two follower profiles whose names arrive (or
+    // do not arrive) the same way must still not share one set of ViewModels.
     val viewModelKey = remember(username, userId, isDemo) {
-        "profile_${if (isDemo) "demo" else username}_${userId ?: "name"}"
+        profileViewModelKey(username = username, userId = userId, isDemo = isDemo)
     }
 
     val overviewViewModel: UserOverviewViewModel = viewModel(
@@ -155,7 +180,11 @@ fun ProfileDestination(
             aniListRepository = repository,
             userId = userId,
             username = username,
-            isDemo = isDemo
+            isDemo = isDemo,
+            // Whose list this is decides whether it comes down with the profile.
+            // The reader's own has to (the main bar's Library page has no way to ask
+            // for it); a follower's waits for the tab that shows it.
+            isOwnProfile = isOwnProfile
         )
     )
 
@@ -196,9 +225,18 @@ fun ProfileDestination(
             // twice: a repeated tap used to stack the same profile again, and since
             // every copy looks identical, Back appeared to be broken until the
             // duplicates were gone.
-            navController.navigateSingle(ProfileRoutes.byId(person.id))
+            //
+            // The name travels with the id. The tapped row is the only place in the
+            // app that has both, and without the name the bar of the profile it
+            // opens reads "Profile" until the overview answers - and two follower
+            // profiles then share a ViewModel key that differs only by a number.
+            navController.navigateSingle(ProfileRoutes.byId(person.id, person.name))
         },
         onNavigateBack = { navController.popBackStack() },
+        // The name the route was opened with, so the bar is not blank for the length
+        // of a round trip for a person whose name the caller was holding. The
+        // overview's own answer replaces it as soon as it lands.
+        titleHint = username.takeIf { it.isNotBlank() },
         isOwnProfile = isOwnProfile,
         viewerId = viewerId,
         // The same sheet everywhere, so the same "My Entry" tab: the entry on it

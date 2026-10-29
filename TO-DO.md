@@ -184,6 +184,27 @@ extensions (`AuthNavGraph.kt`, `DashboardNavGraph.kt`, `ProfileNavGraph.kt`,
 `SettingsNavGraph.kt`), with `WidgetSync` and `RestoringPlaceholder` hoisted.
 `AppNavigation.kt` is now 557 lines, well under the 700-line ceiling.
 
+### 1.5 The profile screen and its view-model test are over the ceiling — medium effort
+
+`ProfileSocialTab.kt` and `UserOverviewViewModel.kt` went over 700 with the
+friends-tab work and are now split (`ProfileSocialPieces.kt` carries the ten
+private composables, `UserOverviewAdapters.kt` the payload translations and
+`flattenLibrary`). Two are left, both over before that pass and further over now:
+
+- **`UserProfileScreen.kt`, 932.** `ProfileTabsContent` (lines 686–916, 230 of
+  them) is the obvious half: it is the tab host — pager, indices, saved state per
+  tab — while the rest of the file is the screen's own scaffold, its sheets and
+  its refresh bar. The split needs no visibility changes, because nothing outside
+  the file calls it; the tab index constants (`STATS_TAB`, `BORROWED_LIST_TAB`) and
+  `profileTabs` have to move with it or become `internal`.
+- **`ProfileViewModelTest.kt`, 768.** A test class, so splitting means a second
+  class rather than a second half: the social-state assertions (chip taps, the
+  two-halves failure rule, the re-entry trigger) are a coherent `ProfileSocialStateTest`
+  and would need the fixtures they share moved or duplicated.
+
+Both are mechanical, and both are churn if the code underneath changes first, so
+do whichever of the two you are about to edit anyway.
+
 ---
 
 ## 2. Animation and rendering
@@ -453,34 +474,43 @@ regression in the header the way `ExpressiveShapesTest` catches capsule geometry
 
 AniList serves roughly 30 requests a minute, and this app spends that budget
 fairly carefully: duplicate reads coalesce, lists and profiles are cached for the
-user's own refresh window, covers are one batched request per profile, and manga
-is fetched on demand. The three places below still spend it in a way nobody has
-measured. Each is a deliberate *non*-change rather than an oversight, so each one
-records what it would take to do properly.
+user's own refresh window, covers are one batched request per profile, and both
+lists are fetched by the tab that shows them — the anime half only since §6.1,
+below. The two places left still spend it in a way nobody has measured. Each is a
+deliberate *non*-change rather than an oversight, so each one records what it
+would take to do properly.
 
-### 6.1 Every profile open downloads the whole media list
+### 6.1 ~~Every profile open downloads the whole media list~~ — resolved
 
-`UserOverviewViewModel.load` fetches `MediaListCollection` for every profile it
-opens, because four of the Stats tab's tallies (country, release year, watch year,
-episode bands) have no aggregate on AniList and are counted from the list itself.
+`UserOverviewViewModel.load` used to fetch `MediaListCollection` for every profile
+it opened, because four of the Stats tab's tallies (country, release year, watch
+year, episode bands) have no aggregate on AniList and are counted from the list
+itself. For the signed-in viewer that is usually free — the dashboard has already
+put the list under `user:<id>` — but for a profile the reader has not visited
+before it is the app's most expensive query, one request per 500 entries, and it
+was paid even when all they did was look at a banner and a bio.
 
-For the signed-in viewer that is usually free — the dashboard has already put the
-list under `user:<id>`, and this screen reads it by id precisely so it can reuse
-that entry. For a profile the reader has not visited before it is the app's most
-expensive query, one request per 500 entries, and it is paid even when all they
-did was look at a banner and a bio.
+The tabs that show it ask for it now. `fetchProfileListEagerly` in
+`domain/usecase/ProfileLibraryAccess.kt` keeps the old behaviour for exactly the
+two profiles that cannot ask for themselves — the reader's own, whose list the
+main bar's Library page renders with no trigger of its own, and the demo, which
+reads a local fixture instead of spending the rate limit — and
+`UserOverviewViewModel.loadAnimeLibrary()` is the trigger the Stats tab and the
+borrowed List tab call from a `LaunchedEffect` on the selected tab
+(`UserProfileScreen.kt:772`). It is guarded the way `loadMangaLibrary` is, because
+a tab that recomposes on every scroll would otherwise spend a whole download per
+tap.
 
-The obvious fix — "fetch it when Stats is actually opened" — was
-considered and not taken. `UserOverviewLoadOrderTest` pins the two-publish order
-*and* the `isLibraryLoading` contract that makes it safe, and four of its
-automated assertions are about the list arriving behind the overview; changing the
-design means rewriting requirement tests, not deleting a convenience. It also
-moves the download in front of the Stats tab, which is the screen somebody opened
-the profile *for*, rather than letting it run while they read the bio.
+The requirement tests did not have to be rewritten, which is what had kept this a
+*non*-change: `UserOverviewLoadOrderTest` pins the two-publish order *and* the
+`isLibraryLoading` contract that makes it safe, and every ViewModel it builds is
+the reader's own profile — `isOwnProfile` defaults to `true` — so it still drives
+the eager path and still sees the list arrive behind the overview. The lazy half
+is pinned by `ProfileLibraryAccessTest` instead.
 
-What it would take: a `loadLibrary()` on the ViewModel, an `onLoadLibrary`
-threaded through `ProfileTabsContent` exactly like the existing `onLoadManga`, and
-those tests rewritten to the new contract.
+What is left: a download that fails falls back to `lastKnownListForScreen()`, a
+disk read, and a list taken from there marks the page `isCached` — true of the
+numbers, but stranger under somebody else's banner than under your own.
 
 ### 6.2 The list's chunk walk is sequential
 
@@ -876,10 +906,14 @@ into flags.
 ### The anime colour layer re-themed the app twice per open
 
 Opening a title with the anime colour layer on wrote the layer in two DataStore
-transactions — `setAnimeThemeActive(true, hex)`, then `setCustomColorHex(hex)` for
-Retain. Each transaction emits a new `ThemeSettings`, and a new `ThemeSettings`
-rebuilds the scheme behind the whole app, so the open recoloured everything twice:
-once when the anime colour reached the scheme and once when the retained accent
-arrived a frame later, both inside the sheet's entrance. `setAnimeThemeActive`
-takes the retained accent as a third key and writes one transaction, so the
-recolour is one wave. The layer's lifetime is unchanged.
+transactions — one for the layer, one for the retained accent. Each transaction
+emits a new `ThemeSettings`, and a new `ThemeSettings` rebuilds the scheme behind
+the whole app, so the open recoloured everything twice inside the sheet's
+entrance.
+
+`applyAnimeColorLayer(hex, retain)` fixed the arrival and then the layer stopped
+being stored at all (see *The theme layer and the retained colour are two things*
+in NOTES.md). There is now at most one transaction per open — the accent write,
+and only when Retain is on — and it lands *behind* the in-memory layer, so it
+cannot be seen at all. The recollection that used to be needed here ("the layer's
+lifetime is unchanged") is gone because the lifetime is the thing that changed.

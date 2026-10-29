@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,11 +38,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.CommentThreadStore
 
@@ -89,6 +90,22 @@ internal fun ColumnScope.CommentsThread(
         isRefreshing = state.isRefreshing,
         isLoading = state.isLoading
     )
+
+    // Computed once per thread, not per row: the answer depends on every earlier
+    // reply, and the list is re-threaded only when the replies change. See
+    // [ReplyThreader]. This has to live above the lazy list - the `LazyListScope`
+    // builder is not composable, so `remember` cannot be called down there.
+    val replyDepths = remember(state.replies) {
+        ReplyThreader.depths(
+            state.replies.map {
+                ReplyThreader.Reply(
+                    id = it.id,
+                    author = it.user?.name,
+                    text = it.text
+                )
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -136,6 +153,7 @@ internal fun ColumnScope.CommentsThread(
                 ) { reply ->
                     CommentRow(
                         reply = reply,
+                        indent = replyDepths[reply.id] ?: 0,
                         likePending = reply.id in state.pendingReplyLikes,
                         canManage = viewerId != null && reply.user?.id == viewerId,
                         // A reply is addressed by a leading `@name`, so without an
@@ -200,9 +218,12 @@ private fun CommentsHeader(count: Int, isRefreshing: Boolean, isLoading: Boolean
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                CircularProgressIndicator(
+                // The morphing loader, not a bare `CircularProgressIndicator`:
+                // the body of this same sheet shimmers and the detail sheet's
+                // editor already morphs, so a plain spinner here was the last
+                // thing in the thread that belonged to a different system.
+                ExpressiveLoadingIndicator(
                     modifier = Modifier.size(14.dp),
-                    strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -422,6 +443,7 @@ private fun WriteCommentBar(onClick: () -> Unit) {
 @Composable
 private fun CommentRow(
     reply: ActivityReply,
+    indent: Int,
     likePending: Boolean,
     canManage: Boolean,
     canReply: Boolean,
@@ -432,7 +454,15 @@ private fun CommentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .padding(
+                // One step per threaded level, capped in [ReplyThreader]. The
+                // mention itself is still in the body, so the indent is an aid
+                // rather than the only record of who is being answered.
+                start = 20.dp + 18.dp * indent,
+                end = 20.dp,
+                top = 10.dp,
+                bottom = 10.dp
+            )
             .testTag("activity_reply_row"),
         verticalAlignment = Alignment.Top
     ) {

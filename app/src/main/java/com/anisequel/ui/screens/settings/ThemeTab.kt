@@ -101,6 +101,10 @@ fun ThemeTab(
             themeSettings.motionStyle != MotionStyle.DEFAULT ||
             themeSettings.trueBlack ||
             themeSettings.customColorHex != null ||
+            // The switch is stored, the layer is not, so testing the stored one is
+            // what answers "is there anything here to reset" on a screen where no
+            // sheet is open.
+            themeSettings.animeThemeEnabled ||
             themeSettings.animeThemeActive ||
             // Retain and revert are cleared by `reset()` like everything else here,
             // so leaving them out meant a reader who changed only those two had

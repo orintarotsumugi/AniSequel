@@ -240,7 +240,6 @@ class UserActivityViewModel(
     private fun onListsChanged() {
         if (!started || isDemo) return
         if (userId == null || userId != viewerId) return
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
@@ -290,7 +289,6 @@ class UserActivityViewModel(
             return
         }
         started = true
-        nextPage = 1
         fetch(forceRefresh)
     }
 
@@ -318,7 +316,6 @@ class UserActivityViewModel(
             loadFirstPage()
             return
         }
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
@@ -339,7 +336,6 @@ class UserActivityViewModel(
 
     fun retry() {
         started = false
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
@@ -375,7 +371,13 @@ class UserActivityViewModel(
                 _state.value = ActivityState.Loading()
             }
 
-            val page = nextPage
+            // A refresh or retry is always page one; an append continues from the
+            // cursor. The cursor is *not* reset by the callers any more: a refresh
+            // that failed over existing rows used to rewind it to one while the
+            // rows from pages two and three stayed on screen, so the next scroll
+            // appended page one again. Only a successful page moves it (below),
+            // which makes a redundant fetch impossible rather than merely deduped.
+            val page = if (appending) nextPage else 1
             val result = if (isDemo) {
                 Result.success(
                     UserActivityPage(

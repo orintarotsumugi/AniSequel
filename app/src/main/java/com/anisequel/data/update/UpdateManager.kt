@@ -79,6 +79,12 @@ open class UpdateManager(private val context: Context) {
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        // An overall ceiling, not a throughput target. The read timeout only
+        // catches a stalled socket; a server that keeps dribbling a few bytes
+        // just inside it could hold an update "in progress" indefinitely, and the
+        // dialog has no cancel. Five minutes is generous for a ~2.5 MB APK even
+        // on a slow connection, and it is a bound rather than a race.
+        .callTimeout(5, TimeUnit.MINUTES)
         .build()
 
     /**
@@ -297,7 +303,17 @@ open class UpdateManager(private val context: Context) {
     private fun looksLikeApk(apk: File): Boolean = runCatching {
         apk.inputStream().use { stream ->
             val magic = ByteArray(4)
-            stream.read(magic) == 4 &&
+            // A loop rather than one `read(magic) == 4`: `InputStream.read` is
+            // allowed to return fewer bytes than asked for, and the zip check must
+            // not depend on the file stream being one call. Only a short file
+            // (which is not an APK anyway) reaches EOF here.
+            var filled = 0
+            while (filled < magic.size) {
+                val count = stream.read(magic, filled, magic.size - filled)
+                if (count <= 0) break
+                filled += count
+            }
+            filled == magic.size &&
                 magic[0] == 0x50.toByte() &&
                 magic[1] == 0x4B.toByte() &&
                 magic[2] == 0x03.toByte() &&

@@ -104,8 +104,16 @@ on the way back up the page.
 height of that wave *is* the progress, which the M3 component's parameters
 cannot express; its geometry lives in `domain/motion/WaveGeometry.kt` so the
 shape is asserted by `WaveGeometryTest` rather than eyeballed. Its travelling
-phase is one `rememberInfiniteTransition`, gated on there being progress to
-show, and its fill springs from zero once per title.
+phase is one `rememberInfiniteTransition`, and its fill springs from zero once
+per title.
+
+The transition's existence is gated on the *clock* — resumed, and not on
+`INSTANT` — never on the progress. It used to be built only when `target > 0`,
+which swapped the composable's shape the first time a title went from untouched
+to one episode in, tearing down and rebuilding the transition exactly under the
+reader's thumb, and it kept the loop alive with the screen off and against the
+motion setting alike. `target` is read where the phase is consumed: an idle bar
+draws a still wave at zero phase.
 
 Track and fill are one path. The fill used to be built as its own wave, with its
 own amplitude and its own travelling phase, so the coloured stretch floated at a
@@ -504,11 +512,16 @@ app is in the background and be waiting when the reader returns.
 
 Four tabs — Home (identity, bio, pinned favourites), Activity (calendar and
 paginated list history), Stats, and Social — switched from directly under the
-profile's top bar. They used to be a capsule at the bottom edge of the screen,
+profile's top bar, and a fifth, List, appears only on somebody *else's* profile
+(below). They used to be a capsule at the bottom edge of the screen,
 which the app's main bar owns now; two bars stacked at one edge would be two
 answers to one question. Each tab keeps its own scroll position across a tab
 switch, because `AnimatedContent` disposes the tab it animates away from and
-anything remembered inside it dies with it.
+anything remembered inside it dies with it; the state saved *inside* a tab — the
+Social tab's search text, its A-Z switch, its grid-or-list choice — survives for
+the same reason, through a `SaveableStateHolder` keyed on the tab index, because
+the transition disposes the tab and `rememberSaveable` alone could not tell one
+tab's saved values from the next tab's.
 
 **A profile paints after one request.** The overview — identity, bio, favourites,
 and AniList's own aggregates — is published the moment it arrives. The media list
@@ -519,6 +532,57 @@ before drawing a bio that had already come back. Between the two publishes
 counting" rather than a tally of zero — an empty list is a real answer for an
 account that tracks nothing, so the flag, not the emptiness, is what the screen
 reads.
+
+**That download is now the tab's to ask for, and only on somebody else's
+profile.** `domain/usecase/ProfileLibraryAccess.kt` decides it: the reader's own
+list still comes with the profile, because the main bar's Library page renders
+`libraryAnime` and has no trigger of its own; a stranger's waits for the tab that
+shows it (Stats or the borrowed list), because forty sequential chunk requests is
+a bill the reader who came for a bio never agreed to pay. The same flag covers a
+third state now — not "counting" but "nobody has asked yet" — and
+`UserOverviewViewModel.loadAnimeLibrary` is the one call that clears it, guarded
+against re-entry the same way the manga fetch is. The by-name routes get the id
+back from the overview (`updateUserId`) for the manga half only: `getUserMangaList`
+is addressable by id alone, while the list and profile keep fetching by name so
+they hit the `userName:` cache entry the dashboard already filled.
+
+**Another person's list is a fifth tab, on one condition.** `ProfileLibraryTab` is
+reused rather than rewritten, and `canBrowseProfileLibrary` refuses it for the
+reader's own profile and for the demo — their list is the bar's page, and two
+doors to it would be two remembered views behind one label. The condition the
+reuse has to honour is *whose* view the chips write to: `borrowedLibraryView()`
+hands a borrowed grid a store that forgets, because pointing it at the reader's
+`LibraryPreferences` would both draw a stranger's grid in the reader's own
+"manga, by score" and write the stranger's sort into the store the reader's
+Library page opens from.
+
+**The Social tab's two lists are one job, and one failure.** It fetches followers
+*and* following because the reader is one tap from switching, so `SocialState`
+carries both: `isRefreshing` keeps the rows already on screen through a re-fetch
+(skeletons over fifty people read as the data being lost), and `failedList` with
+`failureMessage` attributes a refusal to the half it happened to instead of
+replacing the grid being read with an error for the one nobody asked for.
+`domain/usecase/SocialFetchPolicy.kt` holds the two rules that keep that to one
+pair of requests per visit: entering asks only when nothing is on screen, nothing
+is in flight and nothing is failing (a failure stays behind its own retry button),
+and a chip tap during a fetch moves what is *shown* rather than cancelling the job
+that already answers both. The unresolved-id case publishes an `Error` and not a
+`Loading`, because `Loading`'s only exit is the answer to a request that branch
+never makes — a permanently spinning tab.
+
+**A profile route says *who*, and "nobody" is an answer.** Three routes reach this
+screen — the viewer's own, a scanned username, and `profile_id/{userId}?name=` for
+anybody tapped in the Social grid. The by-id route used to read
+`getInt("userId") ?: 0`, which turned an unfilled route into a live request for
+AniList user 0: a real account, with a real bio and a real name, painted as the
+person the reader tapped. `domain/usecase/ProfileIdentity.kt` replaces that — a
+non-positive id is not a person, a name with no id still is (fetched by name), and
+a route carrying neither is reported as a failure that cannot be retried, because
+retrying it would ask the same question of nobody. The name travels with the id
+because the tapped row is the only place in the app holding both: it fills the top
+bar on the first frame instead of reading "Profile" for a round trip, and it is
+half of the ViewModel key — `profileViewModelKey` needs name *and* id, since two
+accounts can share a display name and a scanned profile has no id at all.
 
 **Every favourites row on Home opens something.** Anime and manga open the title
 page, characters and staff hand off to the browser, and the studios were the only
@@ -559,6 +623,37 @@ the anime layer (`tintSurfaces`); the custom accent in Settings shares the build
 and is a standing preference, so it must not repaint surfaces the user did not
 ask to change (`appBackgroundColor` exists to move the background on purpose).
 
+**The immersive layer and the retained colour are two different things.** They
+used to be one stored boolean, `anime_theme_active`, which answered "may a detail
+sheet recolour the app" and "is the app recoloured right now" at once — and both
+answers were wrong half the time. A retained colour left the *immersive* layer
+switched on, so the show's hue stayed in every surface, container and outline on
+every screen and came back on the next launch: the reader kept the accent, but the
+app kept the tint too, which is exactly what a standing preference is not allowed
+to do. A temporary colour was worse. Its revert timer is an in-memory coroutine,
+the flag is on disk, so killing the app before the timer fired left a "5 minutes"
+tint applied with nothing left to clear it, until the next title overwrote it.
+
+Now `ThemePreferences` stores the switch (`anime_theme_enabled`, read from the old
+key until the first write) and holds the applied layer in a process-scoped
+`StateFlow`. `applyAnimeColorLayer(hex, retain)` is what a sheet does on opening;
+`clearAnimeColorLayer()` ends it on closing, and retention's durability comes from
+the accent it persisted instead, which is the same colour on the app's usual
+surfaces. A third stored key, `anime_theme_retained_color_hex`, records that the
+current accent *is* the anime's, which is what lets turning the feature off take
+back that colour and leave a hue the reader chose alone — the old code guessed by
+comparing hexes, so a custom `#7FA9D4` could be deleted by a cover that happened to
+share it. Anything on a timer now dies with the process, which is the honest
+lifetime for a preview.
+
+The seed's own tone is normalised on the way out as well. `CoverColorQuantizer`
+scores pixels by chroma and population, not by tone, so a night-sky cover legitimately
+wins on a near-black bin — and the app then painted that pixel as a swatch. The
+Settings chip and the hero's placeholder and shadow ask
+`MaterialColorSchemes.accentFor(seed, dark)`, the tone 80/40 the scheme itself uses
+for `primary`, so the colour a reader is shown is the colour the app is drawn with
+and neither can be a black box on a black sheet.
+
 The tone ladder is also the accessibility argument: tone in HCT is CIELAB L*, so
 `onSurface`/`surface` and every container pair keep their contrast for a yellow
 cover exactly as for a blue one, and `readableOn` flips the foreground when a
@@ -567,6 +662,38 @@ own `#6750A4` values and AA contrast across hues, `CoverColorQuantizerTest` the
 image path, `AnimeThemeSurfaceTest` the tint/surface invariant, and
 `AnimeCoverThemeWiringTest` the `isLoaded` race that used to make the feature
 work only when DataStore beat the tap.
+
+**One vocabulary for AniList's six list statuses.** `MediaListStatus` has exactly
+`CURRENT`, `REPEATING`, `COMPLETED`, `PLANNING`, `PAUSED`, `DROPPED`, and four
+surfaces used to keep their own private copy of what those words mean: the entry
+editor's picker, the Library's filter chips, the Stats tab's tally and the tier
+board's filter sheet. They drifted — the editor and the chips called `PAUSED`
+"Paused" while the tally called it "On-Hold", so a status you had just set was
+not findable under the name you had given it. `domain/list/ListStatuses.kt` is
+the one table now, and it carries *both* spellings per option because AniList
+models one enum for anime and manga and nobody says they are watching a book;
+callers pick with `labelFor(isManga)`.
+
+The same table is what makes the Library's chips work on old data. The chips used
+to compare the raw status string, so an entry recorded under API v1's `ON_HOLD`,
+or a cached `WATCHING`, or v1's seventh status `CLEARED`, matched no chip and
+vanished from every filter while still counting under "All". `normalize` folds
+those aliases onto the six; an unknown token still matches nothing, because
+filing a status this build has never seen under its nearest neighbour is a lie
+about the entry. The activity feed is deliberately *not* in the table: a list row
+says a title *is* "Watching", the feed says the reader "Watched" it, and those
+are different sentences about different things.
+
+**The shimmer measures its own box.** `rememberShimmerPhase` publishes a fraction
+and `shimmerBackground` scales it, because the sweep used to run between two
+absolute pixel constants with a fixed 300px bleed: on a 100dp chip the highlight
+crossed in a tenth of the cycle and on a tablet card it never reached the far
+edge at all, so the same skeleton looked half-painted at one width and strobed at
+another. It also branches on `MotionStyle.INSTANT` like every other loop in the
+app — the one control the reader has over motion had no idea the most
+constantly-drawn animation in the app existed — and it sweeps linearly, because
+ease-in-out braked into both edges, which read as the highlight stopping in the
+middle of a card and starting again.
 
 **Bios** are AniList-flavoured Markdown, rendered by `ui/components/markdown/`:
 headings, lists and checklists, code, blockquotes, spoilers (`~!like this!~`),

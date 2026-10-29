@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -62,6 +63,7 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.domain.usecase.canBrowseProfileLibrary
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.EntryEditor
@@ -135,6 +137,38 @@ private val ProfileTabs = listOf(
     NavigationDestination("Social", AppVectorIcons.ProfileSocial, "profile_tab_social")
 )
 
+/** The Stats tab, which reads the person's list for three of its charts. */
+private const val STATS_TAB = 2
+
+/** The borrowed list, which is only in the bar for somebody else's profile. */
+private const val BORROWED_LIST_TAB = 4
+
+/**
+ * The bar for one profile, which is four tabs for the reader's own and five for
+ * anybody else's.
+ *
+ * The fifth is a *borrowed* list and is not the reader's Library page under another
+ * name: [canBrowseProfileLibrary] is the rule, and the reason it refuses an own
+ * profile is that the viewer's list is one of the bar's pages with its own remembered
+ * view in DataStore. Drawing it here too would be two doors on one page with two
+ * different sets of chips behind them, and one of them would quietly stop being the
+ * reader's own view of their own things.
+ *
+ * Appended rather than inserted, so every existing tab index keeps its meaning -
+ * [ProfileRoutes.ACTIVITY_TAB_INDEX] and a profile opened *on* the Activity tab from
+ * the home-screen widget are both indices into this list.
+ */
+private fun profileTabs(isOwnProfile: Boolean, isDemo: Boolean): List<NavigationDestination> =
+    if (canBrowseProfileLibrary(isOwnProfile = isOwnProfile, isDemo = isDemo)) {
+        ProfileTabs + NavigationDestination(
+            label = "List",
+            icon = AppVectorIcons.Library,
+            testTag = "profile_tab_library"
+        )
+    } else {
+        ProfileTabs
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileScreen(
@@ -170,6 +204,16 @@ fun UserProfileScreen(
      * tab the first was left on.
      */
     viewModelKey: String = "",
+    /**
+     * The name this profile was opened with, when the route carried one.
+     *
+     * Only a label for the first frames: the bar prints it before the overview
+     * answers, and the overview's own name replaces it. It used to have no source at
+     * all on the by-id route, so tapping a face in the Social grid opened a page
+     * titled "Profile" - the name was in the row that was just tapped and never
+     * travelled with the tap.
+     */
+    titleHint: String? = null,
     overviewViewModel: UserOverviewViewModel,
     activityViewModel: UserActivityViewModel,
     socialViewModel: UserSocialViewModel,
@@ -310,6 +354,12 @@ fun UserProfileScreen(
                             targetState = (uiState as? UserOverviewUiState.Success)
                                 ?.username
                                 ?.let { "@$it" }
+                                // The name the route came with, before the overview
+                                // answers. Falling back to "Profile" here was the
+                                // whole of the by-id route's load: a follower's
+                                // profile titled "Profile" for a round trip, with the
+                                // name one tap away in the grid behind it.
+                                ?: titleHint?.let { "@$it" }
                                 ?: "Profile",
                             transitionSpec = {
                                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
@@ -468,6 +518,13 @@ fun UserProfileScreen(
                             if (state.userId > 0) {
                                 activityViewModel.updateUserId(state.userId)
                                 socialViewModel.updateUserId(state.userId)
+                                // And this screen's own ViewModel, which needs it for
+                                // one half only: `getUserMangaList` is addressable by
+                                // id, so a profile opened *by name* could otherwise
+                                // never read its manga - the id had arrived with this
+                                // very state and been thrown away. See
+                                // `UserOverviewViewModel.updateUserId`.
+                                overviewViewModel.updateUserId(state.userId)
                             }
                         }
                         // The flag the tabs' list padding reads. Provided here rather
@@ -478,6 +535,8 @@ fun UserProfileScreen(
                                 state = state,
                                 selectedTab = selectedTab,
                                 onSelectTab = { selectedTab = it },
+                                overviewViewModel = overviewViewModel,
+                                isOwnProfile = isOwnProfile,
                                 activityState = activityState,
                                 activityViewModel = activityViewModel,
                                 socialState = socialState,
@@ -565,9 +624,12 @@ fun UserProfileScreen(
     ActivityEngagementSheets(
         activityViewModel = activityViewModel,
         viewerId = viewerId,
-        // A comment is a write, and a demo profile has no session to write with.
-        // Same gate as the like: see [UserActivityViewModel.postComment].
-        canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true
+        // A comment is a write, and only a signed-in reader can write one. This
+        // used to test `isDemoMode` alone, so a signed-out visitor on a public
+        // profile (which is not the demo) was shown a composer whose every
+        // submission could only fail with an auth error. The demo is covered too:
+        // it has no viewer id.
+        canPost = viewerId != null
     )
 }
 
@@ -632,6 +694,17 @@ private fun ProfileTabsContent(
      * tab is resolved against.
      */
     onSelectTab: (Int) -> Unit,
+    /**
+     * Held rather than read from [state], because two of the tabs ask it for work.
+     *
+     * The Stats tab and a borrowed list both render this person's anime list, and on
+     * anybody but the viewer that list is not fetched with the profile - it is asked
+     * for by whichever of the two is opened, because the download is up to forty
+     * sequential chunk requests. Its manga half arrives the same way.
+     */
+    overviewViewModel: UserOverviewViewModel,
+    /** Whether the list tab is offered at all. See [profileTabs]. */
+    isOwnProfile: Boolean,
     activityState: UserActivityViewModel.ActivityState,
     activityViewModel: UserActivityViewModel,
     socialState: UserSocialViewModel.SocialState,
@@ -660,6 +733,10 @@ private fun ProfileTabsContent(
     val activityListState = rememberLazyListState()
     val statsListState = rememberLazyListState()
     val socialGridState = rememberLazyGridState()
+    // Its own state, not the Social tab's: two grids of a stranger's things that
+    // share a scroll position would drop the reader halfway down one when they
+    // switch to the other.
+    val listGridState = rememberLazyGridState()
 
     // Which group of Stats charts is open, held here for the same reason the scroll
     // states are: the tab is disposed on every switch away, so a choice made inside
@@ -668,6 +745,33 @@ private fun ProfileTabsContent(
     // `rememberSaveable` is what keeps it across a rotation - a reader who opened
     // Tags on a tablet and turned it should not be handed Overview back.
     var statsSection by rememberSaveable { mutableStateOf(StatsSection.OVERVIEW) }
+
+    // Per-tab saveable state, so what a tab remembers inside itself survives the
+    // `AnimatedContent` disposing it. The hoisted scroll states above are one half
+    // of that; this is the other - the Social tab's search query, A-Z switch and
+    // grid/list choice are `rememberSaveable` *inside* the tab, and switching to
+    // Stats and back silently threw all three away.
+    val tabStateHolder = rememberSaveableStateHolder()
+
+    val tabs = profileTabs(isOwnProfile = isOwnProfile, isDemo = state.isDemoMode)
+    // A saved index can only be out of range if the tab set changed under it, which
+    // cannot happen for one profile (the saved tab is keyed per profile) - but a
+    // capsule with nothing selected and a `when` that falls through to Home is the
+    // better outcome if it ever does.
+    val shownTab = selectedTab.coerceIn(0, tabs.lastIndex)
+
+    // The two tabs that read this person's anime list are what ask for it.
+    //
+    // On the reader's own profile the list already came down with the overview, and
+    // `loadAnimeLibrary` returns without doing anything in that case. On anybody
+    // else's it is up to forty sequential chunk requests, so it waits until a tab
+    // that shows it is open: opening a follower's profile to read their bio used to
+    // spend the whole download on tallies behind three more taps.
+    LaunchedEffect(shownTab, state.userId) {
+        if (shownTab == STATS_TAB || shownTab == BORROWED_LIST_TAB) {
+            overviewViewModel.loadAnimeLibrary()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // The tab capsule, at the top of the page.
@@ -679,8 +783,8 @@ private fun ProfileTabsContent(
         // own pages are still a page-level switch, so they keep the capsule -
         // directly under the top bar, above the content it switches.
         ExpressiveNavigationBar(
-            destinations = ProfileTabs,
-            selectedIndex = selectedTab,
+            destinations = tabs,
+            selectedIndex = shownTab,
             onSelect = onSelectTab
         )
 
@@ -706,7 +810,7 @@ private fun ProfileTabsContent(
         }
 
         AnimatedContent(
-            targetState = selectedTab,
+            targetState = shownTab,
             transitionSpec = {
                 val forward = targetState > initialState
                 // The trailing `using null` drops the default `SizeTransform`. Every
@@ -737,56 +841,74 @@ private fun ProfileTabsContent(
             label = "profile_tab_transition",
             modifier = Modifier.fillMaxSize()
         ) { tabIndex ->
-            val padding = PaddingValues(top = 0.dp)
-            when (tabIndex) {
-                1 -> ProfileActivityTab(
-                    activityState = activityState,
-                    onLoadFirstPage = { activityViewModel.loadFirstPage() },
-                    onLoadNextPage = { activityViewModel.loadNextPage() },
-                    onRetry = { activityViewModel.retry() },
-                    onRefresh = { activityViewModel.refresh() },
-                    contentPadding = padding,
-                    listState = activityListState,
-                    calendar = state.activity,
-                    userName = state.username,
-                    userAvatar = state.avatarUrl,
-                    onLike = { activityViewModel.toggleLike(it) },
-                    onOpenComments = { activityViewModel.openComments(it) },
-                    onOpenLikers = { activityViewModel.openLikers(it) },
-                    onOpenDetail = onOpenDetail
-                )
+            tabStateHolder.SaveableStateProvider(tabIndex) {
+                val padding = PaddingValues(top = 0.dp)
+                when (tabIndex) {
+                    1 -> ProfileActivityTab(
+                        activityState = activityState,
+                        onLoadFirstPage = { activityViewModel.loadFirstPage() },
+                        onLoadNextPage = { activityViewModel.loadNextPage() },
+                        onRetry = { activityViewModel.retry() },
+                        onRefresh = { activityViewModel.refresh() },
+                        contentPadding = padding,
+                        listState = activityListState,
+                        calendar = state.activity,
+                        userName = state.username,
+                        userAvatar = state.avatarUrl,
+                        onLike = { activityViewModel.toggleLike(it) },
+                        onOpenComments = { activityViewModel.openComments(it) },
+                        onOpenLikers = { activityViewModel.openLikers(it) },
+                        onOpenDetail = onOpenDetail
+                    )
 
-                2 -> ProfileStatsTab(
-                    state = state,
-                    contentPadding = padding,
-                    section = statsSection,
-                    onSelectSection = { statsSection = it },
-                    listState = statsListState
-                )
+                    2 -> ProfileStatsTab(
+                        state = state,
+                        contentPadding = padding,
+                        section = statsSection,
+                        onSelectSection = { statsSection = it },
+                        listState = statsListState
+                    )
 
-                3 -> ProfileSocialTab(
-                    socialState = socialState,
-                    onSelectList = { list ->
-                        socialViewModel.select(list)
-                    },
-                    onLoad = { list ->
-                        socialViewModel.load(list)
-                    },
-                    onOpenUser = onOpenUser,
-                    contentPadding = padding,
-                    gridState = socialGridState
-                )
+                    3 -> ProfileSocialTab(
+                        socialState = socialState,
+                        onSelectList = { list ->
+                            socialViewModel.select(list)
+                        },
+                        // The failure state's button: the reader is asking again, so
+                        // this one does mean a fresh pair of requests.
+                        onLoad = { list ->
+                            socialViewModel.load(list, forceRefresh = true)
+                        },
+                        // And the tab's own entry trigger, which spends nothing when
+                        // rows are on screen or a fetch is already producing them.
+                        onEnsureLoaded = { list ->
+                            socialViewModel.ensureLoaded(list)
+                        },
+                        onOpenUser = onOpenUser,
+                        contentPadding = padding,
+                        gridState = socialGridState
+                    )
 
-                else -> ProfileHomeTab(
-                    state = state,
-                    contentPadding = padding,
-                    onOpenDetail = onOpenDetail,
-                    onOpenStudio = onOpenStudio,
-                    onOpenCharacter = onOpenCharacter,
-                    onOpenStaff = onOpenStaff,
-                    listState = homeListState,
-                    mediaCovers = mediaCovers
-                )
+                    BORROWED_LIST_TAB -> ProfileBorrowedListTab(
+                        state = state,
+                        overviewViewModel = overviewViewModel,
+                        onOpenDetail = onOpenDetail,
+                        onRefresh = { overviewViewModel.refresh() },
+                        contentPadding = padding,
+                        gridState = listGridState
+                    )
+
+                    else -> ProfileHomeTab(
+                        state = state,
+                        contentPadding = padding,
+                        onOpenDetail = onOpenDetail,
+                        onOpenStudio = onOpenStudio,
+                        onOpenCharacter = onOpenCharacter,
+                        onOpenStaff = onOpenStaff,
+                        listState = homeListState,
+                        mediaCovers = mediaCovers
+                    )
+                }
             }
         }
     }

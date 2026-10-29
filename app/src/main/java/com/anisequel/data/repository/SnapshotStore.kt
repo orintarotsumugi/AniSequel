@@ -219,18 +219,27 @@ class SnapshotStore(
     private suspend fun persist(kind: String) {
         val stored = kinds[kind] ?: return
         evictToFit(stored)
-        val text = fileAdapter.toJson(SnapshotFile(SCHEMA, formatTag, stored))
+        val text = runCatching { fileAdapter.toJson(SnapshotFile(SCHEMA, formatTag, stored)) }
+            .getOrNull() ?: return
+        // Best-effort: the disk tier is an optimisation over the in-memory
+        // caches, and a full disk (or a revoked app directory) must not turn a
+        // successful AniList response into a failed screen. This used to throw
+        // straight out of the fetch's success path, so a write error made a
+        // loaded list look unloaded even though the answer was already in
+        // memory. The in-memory entry stays either way.
         withContext(Dispatchers.IO) {
-            directory.mkdirs()
-            val file = fileFor(kind)
-            val temp = File(directory, "${file.name}.tmp")
-            temp.writeText(text)
-            if (!temp.renameTo(file)) {
-                // A rename inside one directory does not fail on a healthy
-                // filesystem; if it somehow does, a copy is still correct and
-                // the next write replaces it.
-                temp.copyTo(file, overwrite = true)
-                temp.delete()
+            runCatching {
+                directory.mkdirs()
+                val file = fileFor(kind)
+                val temp = File(directory, "${file.name}.tmp")
+                temp.writeText(text)
+                if (!temp.renameTo(file)) {
+                    // A rename inside one directory does not fail on a healthy
+                    // filesystem; if it somehow does, a copy is still correct and
+                    // the next write replaces it.
+                    temp.copyTo(file, overwrite = true)
+                    temp.delete()
+                }
             }
         }
     }

@@ -84,8 +84,11 @@ class BuildListInsightsUseCaseTest {
             )
         )
 
+        // The words are AniList's own, from `domain/list/ListStatuses`: the strip
+        // used to keep a private copy of the vocabulary, which is how it ended up
+        // printing "On Hold" for the status the editor called "Paused".
         assertEquals(
-            listOf("Watching", "Completed", "On Hold", "Dropped", "Planning"),
+            listOf("Watching", "Completed", "On-Hold", "Dropped", "Plan to Watch"),
             insights.status.segments.map { it.label }
         )
         assertEquals(248, insights.status.total)

@@ -69,6 +69,13 @@ fun ThemePreviewCard(
         themeSettings.animeThemeActive && themeSettings.animeThemeColorHex != null ->
             "Anime (${themeSettings.animeThemeColorHex})"
         themeSettings.useDynamicColor -> "Dynamic Wallpaper"
+        // The layer is gone with the sheet, so a kept cover colour arrives here as
+        // what it now is: the app's accent, with a record of where it came from.
+        themeSettings.animeThemeRetainedColorHex != null &&
+            themeSettings.animeThemeRetainedColorHex.equals(
+                themeSettings.customColorHex,
+                ignoreCase = true
+            ) -> "Anime, kept (${themeSettings.customColorHex})"
         themeSettings.customColorHex != null -> "Custom (${themeSettings.customColorHex})"
         else -> ThemePalette.fromStorage(themeSettings.paletteId).displayName
     }

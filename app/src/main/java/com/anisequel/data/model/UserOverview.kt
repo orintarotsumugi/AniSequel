@@ -301,18 +301,16 @@ data class ListActivity(
     val isUnrecognised: Boolean
         get() = media == null && status == null
 
-    val displayStatus: String
-        get() = when (status?.lowercase()) {
-            "current" -> "Watched"
-            "planning" -> "Plans to watch"
-            "completed" -> "Completed"
-            "dropped" -> "Dropped"
-            "paused" -> "Paused"
-            "repeating" -> "Rewatching"
-            else -> status?.replaceFirstChar { it.uppercase() } ?: "Updated"
-        }
-
-    /** Anime and manga use different words for the same status. */
+    /**
+     * The activity's status in words.
+     *
+     * Past tense on purpose, and *not* the [com.anisequel.domain.list.ListStatuses]
+     * labels: a list row says a title *is* "Watching", the feed says the reader
+     * "Watched" it, and those are different sentences about different things. The
+     * app used to carry a second, manga-blind `displayStatus` property beside this
+     * one for the same string; the card only ever called this one, so the other was
+     * deleted rather than kept in step by a test.
+     */
     fun displayStatusFor(isManga: Boolean): String = when (status?.lowercase()) {
         "current" -> if (isManga) "Read" else "Watched"
         "watched", "watched episode" -> if (isManga) "Read" else "Watched"
@@ -320,7 +318,7 @@ data class ListActivity(
         "planning" -> if (isManga) "Plans to read" else "Plans to watch"
         "completed" -> "Completed"
         "dropped" -> "Dropped"
-        "paused" -> "Paused"
+        "paused" -> "On-Hold"
         "repeating" -> if (isManga) "Rereading" else "Rewatching"
         else -> status?.replaceFirstChar { it.uppercase() } ?: "Updated"
     }

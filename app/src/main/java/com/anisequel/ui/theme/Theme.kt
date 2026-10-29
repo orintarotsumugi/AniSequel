@@ -254,9 +254,15 @@ fun AniSequelTheme(
     // once per colour, keyed on the parsed value.
     //
     // The anime layer generates both light and dark. `tintSurfaces = true`
-    // because it is an immersive layer opened for a specific show: the cover's
-    // hue reaches the neutral palettes, so the background behind a Chainsaw Man
-    // page is not the brand navy it was behind a Frieren one.
+    // because it is the immersive half: a sheet is open for one show, so the
+    // cover's hue reaches the neutral palettes and the backdrop behind a Chainsaw
+    // Man page is not the brand navy it was behind a Frieren one.
+    //
+    // What *outlives* the sheet does not come through here. Retention writes the
+    // cover colour as the custom accent below, which is the same colour on the
+    // app's usual surfaces - the distinction `DynamicThemeBuilder` documents, and
+    // the one this file used to get wrong by keeping the tinted layer switched on
+    // after the reader had closed the title.
     val animeSchemes = androidx.compose.runtime.remember(animeColor) {
         animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true) }
     }
@@ -297,7 +303,15 @@ fun AniSequelTheme(
                 surfaceContainerLow = Color(0xFF070707),
                 surfaceContainer = Color(0xFF101010),
                 surfaceContainerHigh = Color(0xFF1A1A1A),
-                surfaceContainerHighest = Color(0xFF262626)
+                surfaceContainerHighest = Color(0xFF262626),
+                // The two roles the ramp is not complete without. Sheets, menus
+                // and the tonal app-bar states read these directly, so leaving
+                // them alone kept the show's hue in the bottom and top of a
+                // ramp that was otherwise pure black - a coloured band at the
+                // foot of an OLED screen, which is the one place true black is
+                // supposed to be obvious.
+                surfaceDim = Color.Black,
+                surfaceBright = Color(0xFF2E2E2E)
             )
         } else {
             scheme

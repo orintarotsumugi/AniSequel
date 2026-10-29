@@ -444,11 +444,10 @@ class UserActivityJsonTest {
         // and the feed would never say "Watched" at all.
         val activities = parse<ActivityFeedData>(capturedFeed).page!!.activities!!
 
-        assertEquals("Completed", activities[0].displayStatus)
+        assertEquals("Completed", activities[0].displayStatusFor(isManga = false))
         // The captured item is "current", not "planning" - "Plans to watch" is
         // PLANNING's label, and asserting it here would have passed for the wrong
         // reason if the fixture had been changed underneath.
-        assertEquals("Watched", activities[1].displayStatus)
         assertEquals("Watched", activities[1].displayStatusFor(isManga = false))
         // The same CURRENT status means something else for manga.
         assertEquals("Read", activities[1].displayStatusFor(isManga = true))
@@ -460,7 +459,7 @@ class UserActivityJsonTest {
             """{"data":{"Page":{"activities":[{"id":1,"status":"repeating","createdAt":1,"media":{"id":1}}]}}}"""
         ).page!!.activities!!.single()
 
-        assertEquals("Rewatching", activity.displayStatus)
+        assertEquals("Rewatching", activity.displayStatusFor(isManga = false))
     }
 
     @Test

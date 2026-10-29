@@ -1,22 +1,14 @@
 package com.anisequel.ui.screens.profile
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -25,24 +17,15 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
-import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
-import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.SocialList
 import com.anisequel.ui.viewmodel.UserSocialViewModel
 
@@ -52,14 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.theme.AniSequelTheme
 import java.util.Locale
 
 /**
@@ -96,7 +72,22 @@ import java.util.Locale
 fun ProfileSocialTab(
     socialState: UserSocialViewModel.SocialState,
     onSelectList: (SocialList) -> Unit,
+    /**
+     * Re-asks for a list, discarding whatever is on screen.
+     *
+     * Reached from the failure state's own button, and from the chip that stands
+     * for a list whose fetch failed - both are a reader asking again, so the
+     * guard in [onEnsureLoaded] does not apply.
+     */
     onLoad: (SocialList) -> Unit,
+    /**
+     * Starts the fetch if nothing is producing one.
+     *
+     * This, not [onLoad], is what the entry trigger calls: the effect re-runs on
+     * every state change, so an unguarded `load` here would be one pair of requests
+     * per recomposition. The ViewModel's guard makes it one per visit.
+     */
+    onEnsureLoaded: (SocialList) -> Unit,
     onOpenUser: (FollowUser) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
@@ -110,14 +101,6 @@ fun ProfileSocialTab(
      */
     gridState: LazyGridState = rememberLazyGridState()
 ) {
-    // Triggers initial load when the Social tab is opened. Without this,
-    // the tab stays indefinitely in Idle state and spins forever.
-    LaunchedEffect(Unit) {
-        if (socialState is UserSocialViewModel.SocialState.Idle) {
-            onLoad(SocialList.FOLLOWERS)
-        }
-    }
-
     var searchQuery by rememberSaveable { mutableStateOf("") }
     // Sort state survives a rotation for the same reason the query does: a reader
     // who switched to A-Z and rotated the phone would otherwise be handed the
@@ -141,7 +124,30 @@ fun ProfileSocialTab(
     var asGrid by rememberSaveable { mutableStateOf(true) }
 
     val successState = socialState as? UserSocialViewModel.SocialState.Success
-    val currentSelected = successState?.selected ?: SocialList.FOLLOWERS
+    // Which chip is highlighted comes from the state that is actually on screen.
+    // Only `Success` used to be consulted, so tapping Following - and then waiting
+    // for it, or failing to load it - left Followers lit while the content under
+    // the switch was the other list's spinner or error.
+    val currentSelected = when (socialState) {
+        is UserSocialViewModel.SocialState.Success -> socialState.selected
+        is UserSocialViewModel.SocialState.Loading -> socialState.list
+        is UserSocialViewModel.SocialState.Error -> socialState.list
+        UserSocialViewModel.SocialState.Idle -> SocialList.FOLLOWERS
+    }
+    // The tab's entry trigger, keyed on what it actually loads rather than on
+    // `Unit`.
+    //
+    // A one-shot effect could only ever ask once per composition, and only from
+    // `Idle`: re-entering the tab after the job had been cancelled - or arriving
+    // on the state the ViewModel publishes while the profile's id is still
+    // unknown - left a spinner that nothing was going to clear, because the only
+    // thing that could restart the request was a first frame the tab had already
+    // had. Keying on the selection means switching Followers/Following and coming
+    // back asks again, and [onEnsureLoaded] is what keeps that to one request per
+    // visit rather than one per recomposition.
+    LaunchedEffect(currentSelected, socialState) {
+        onEnsureLoaded(currentSelected)
+    }
     val rawPeople = successState?.peopleFor(currentSelected).orEmpty()
     val filteredPeople = remember(rawPeople, searchQuery, sortByName) {
         val matches = if (searchQuery.isBlank()) {
@@ -171,8 +177,18 @@ fun ProfileSocialTab(
         item(span = { GridItemSpan(maxLineSpan) }) {
             SocialSelector(
                 selected = currentSelected,
-                followersCount = successState?.followers?.size,
-                followingCount = successState?.following?.size,
+                // A list that failed has no count to print. Reporting the rows this
+                // state still holds for it - which after a failure are the ones from
+                // before it, or none - as "Following (0)" states a fact about that
+                // person's account that nothing has evidence for, and it contradicts
+                // the failure the same state carries. `SocialSelector` omits the
+                // number for a null count, which is the honest label.
+                followersCount = successState
+                    ?.takeIf { it.failedList != SocialList.FOLLOWERS }
+                    ?.followers?.size,
+                followingCount = successState
+                    ?.takeIf { it.failedList != SocialList.FOLLOWING }
+                    ?.following?.size,
                 onSelect = { list ->
                     searchQuery = ""
                     onSelectList(list)
@@ -182,6 +198,16 @@ fun ProfileSocialTab(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
             )
+        }
+
+        if (successState?.isRefreshing == true && rawPeople.isNotEmpty()) {
+            // A re-fetch of rows that are already on screen says so with a marker
+            // *beside* them. It used to replace the grid with skeletons, which read
+            // as the data being lost - and for the length of the round trip left the
+            // reader's scroll position pointing into a placeholder list.
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SocialRefreshing()
+            }
         }
 
         if (rawPeople.isNotEmpty()) {
@@ -259,8 +285,35 @@ fun ProfileSocialTab(
 
             is UserSocialViewModel.SocialState.Success -> {
                 if (rawPeople.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SocialEmpty(selected = socialState.selected)
+                    // Three different things look identical here - nothing on screen -
+                    // and only one of them is a sentence about this person.
+                    //
+                    // A re-fetch of a list that has no rows yet is still fetching, and
+                    // the two outcomes of that are not yet known. The half that
+                    // *failed* is not the half that is empty: saying "nobody follows
+                    // this account" because one request was refused states a fact about
+                    // that person that nothing has evidence for, so it keeps the reason
+                    // and the re-ask instead. Only a list that came back with nobody in
+                    // it gets the empty message.
+                    val shownFailed = socialState.failedList == currentSelected
+                    when {
+                        socialState.isRefreshing ->
+                            item(span = { GridItemSpan(maxLineSpan) }) { SocialLoading() }
+
+                        shownFailed && socialState.failureMessage != null ->
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SocialError(
+                                    message = socialState.failureMessage,
+                                    // The deliberate re-ask, which is also what a tap
+                                    // on the failed chip does.
+                                    onRetry = { onLoad(currentSelected) }
+                                )
+                            }
+
+                        else ->
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SocialEmpty(selected = socialState.selected)
+                            }
                     }
                 } else if (filteredPeople.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -316,300 +369,5 @@ fun ProfileSocialTab(
                 }
             }
         }
-    }
-}
-
-/**
- * Grid or list, as one control.
- *
- * The glyph is the mode that is *on screen*, not the one the tap will switch to,
- * because the control sits under the grid it describes and a button showing an
- * incoming layout reads as a claim about the current one - the same mistake the
- * Library's sort chips were fixed for, where the chip pressed and the order
- * applied were different controls. The content description carries the action.
- *
- * 48dp rather than the chip row's 44: it is a square icon with no label beside
- * it, so its hit area is the only thing telling the user it is a control at all.
- */
-@Composable
-private fun SocialViewToggle(
-    asGrid: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    IconButton(
-        onClick = onToggle,
-        modifier = modifier
-            .size(48.dp)
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .bouncyPress(pressedScale = 0.92f)
-            .testTag("social_view_toggle")
-    ) {
-        Icon(
-            imageVector = if (asGrid) AppVectorIcons.ViewGrid else AppVectorIcons.List,
-            contentDescription = if (asGrid) "Show as list" else "Show as grid",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-private fun SocialSearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier.testTag("social_search_input"),
-        placeholder = {
-            Text(
-                text = "Search users...",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = AppVectorIcons.Search,
-                contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        imageVector = AppVectorIcons.Close,
-                        contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        singleLine = true,
-        shape = ExpressiveShapes.pill,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-        )
-    )
-}
-
-@Composable
-private fun SocialSelector(
-    selected: SocialList,
-    followersCount: Int?,
-    followingCount: Int?,
-    onSelect: (SocialList) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val followersLabel = if (followersCount != null) "Followers ($followersCount)" else "Followers"
-    val followingLabel = if (followingCount != null) "Following ($followingCount)" else "Following"
-
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ExpressiveStateChip(
-            label = followersLabel,
-            selected = selected == SocialList.FOLLOWERS,
-            onClick = { onSelect(SocialList.FOLLOWERS) },
-            // These two are this tab's only navigation, and at the chip's own
-            // ~30dp height they were the smallest targets on the screen.
-            minTouchTargetHeight = 48.dp,
-            modifier = Modifier
-                .weight(1f)
-                .testTag("social_tab_followers")
-        )
-        ExpressiveStateChip(
-            label = followingLabel,
-            selected = selected == SocialList.FOLLOWING,
-            onClick = { onSelect(SocialList.FOLLOWING) },
-            minTouchTargetHeight = 48.dp,
-            modifier = Modifier
-                .weight(1f)
-                .testTag("social_tab_following")
-        )
-    }
-}
-
-@Composable
-private fun FollowerCard(
-    person: FollowUser,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Column(
-        modifier = modifier
-            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
-            .padding(bottom = 6.dp)
-            .testTag("follower_card"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            AsyncImage(
-                model = person.avatar?.medium ?: person.avatar?.large,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Square, matching the reference. A 1:1 crop of a 220x220
-                    // avatar is also what AniList serves, so nothing is
-                    // resampled. `shapes.large` and the hairline border are what
-                    // separate one face from the next: two hundred avatars on the
-                    // app's surface colour used to bleed into each other into a
-                    // single mosaic with no edges.
-                    .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.large)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentScale = ContentScale.Crop,
-                placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-                error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-                fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
-            )
-        }
-        Spacer(modifier = Modifier.height(7.dp))
-        Text(
-            text = person.name,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-/**
- * One person as a full-width row: portrait, then the whole name.
- *
- * The name is `titleSmall` and unconstrained in width where the grid's card is a
- * single ellipsised `labelLarge` line - which is the entire point of the mode.
- * The portrait is 52dp because it has to survive being seen next to a line of text
- * rather than on its own; below about 48 it stops reading as a face.
- */
-@Composable
-private fun FollowerRow(
-    person: FollowUser,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = modifier
-            .widthIn(max = ProfileMaxContentWidth)
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .testTag("follower_row"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AsyncImage(
-            model = person.avatar?.medium ?: person.avatar?.large,
-            contentDescription = null,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
-        )
-        Spacer(modifier = Modifier.width(14.dp))
-        Text(
-            text = person.name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun SocialLoading() {
-    val phase = rememberShimmerPhase()
-    PersonRowsSkeleton(
-        phase = phase,
-        avatarSize = 52.dp,
-        // The rows it stands in for clip their avatars to a rounded square, not a
-        // circle - see `FollowerRow` - and a skeleton of the wrong shape is a
-        // layout the reader will watch change.
-        avatarShape = MaterialTheme.shapes.medium,
-        horizontalPadding = 12.dp,
-        modifier = Modifier
-            .widthIn(max = ProfileMaxContentWidth)
-            .fillMaxWidth()
-            .testTag("social_loading")
-    )
-}
-
-@Composable
-private fun SocialError(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp)
-            .testTag("social_error"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        TextButton(
-            onClick = onRetry,
-            modifier = Modifier
-                .bouncyPress()
-                .testTag("social_retry_button")
-        ) {
-            Text("Try again")
-        }
-    }
-}
-
-@Composable
-private fun SocialEmpty(selected: SocialList) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 48.dp)
-            .testTag("social_empty"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        ExpressiveEmptyOrb(
-            icon = AppVectorIcons.ProfileSocial,
-            containerColor = AniSequelTheme.statusColors.infoContainer,
-            iconTint = AniSequelTheme.statusColors.info
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = when (selected) {
-                SocialList.FOLLOWERS -> "No followers"
-                SocialList.FOLLOWING -> "Not following anyone"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
     }
 }

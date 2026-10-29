@@ -15,6 +15,22 @@ private val Context.libraryPrefsDataStore: DataStore<Preferences> by preferences
 )
 
 /**
+ * Where the Library's view choices are written.
+ *
+ * Split out of [LibraryPreferences] because the same grid is now drawn for two
+ * different owners: the reader's own list, whose chips belong in the reader's own
+ * preferences, and somebody else's - a follower's or a scanned stranger's - whose
+ * chips belong nowhere once the page is left. A borrowed list pointed at this
+ * store would re-arrange the reader's own Library page the next time they opened
+ * it: a stranger's "Manga, by score" arriving as the viewer's remembered view.
+ */
+interface LibraryViewStore {
+    suspend fun setType(value: String)
+    suspend fun setFilter(value: String)
+    suspend fun setSort(name: String, ascending: Boolean)
+}
+
+/**
  * The Library page's own view preferences.
  *
  * ## Why the choices are remembered
@@ -39,7 +55,7 @@ private val Context.libraryPrefsDataStore: DataStore<Preferences> by preferences
  * correct about when to refetch - two caches answering "what does this person
  * track" is how one of them starts lying.
  */
-class LibraryPreferences(private val context: Context) {
+class LibraryPreferences(private val context: Context) : LibraryViewStore {
 
     private object Keys {
         val TYPE = stringPreferencesKey("library_type")
@@ -68,17 +84,17 @@ class LibraryPreferences(private val context: Context) {
     val lastSortAscending: Flow<Boolean?> =
         context.libraryPrefsDataStore.data.map { it[Keys.SORT_ASCENDING] }
 
-    suspend fun setType(value: String) {
+    override suspend fun setType(value: String) {
         context.libraryPrefsDataStore.edit { it[Keys.TYPE] = value }
     }
 
-    suspend fun setFilter(value: String) {
+    override suspend fun setFilter(value: String) {
         context.libraryPrefsDataStore.edit { it[Keys.FILTER] = value }
     }
 
     /** Sort and direction in one edit: they are one choice, and a torn pair would
      *  restore a sort the reader never picked the direction for. */
-    suspend fun setSort(name: String, ascending: Boolean) {
+    override suspend fun setSort(name: String, ascending: Boolean) {
         context.libraryPrefsDataStore.edit {
             it[Keys.SORT] = name
             it[Keys.SORT_ASCENDING] = ascending

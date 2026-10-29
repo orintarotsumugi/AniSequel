@@ -49,7 +49,6 @@ import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.viewmodel.QuickAddStatus
-import kotlinx.coroutines.launch
 
 /**
  * The sheet that shows one title's Info page.
@@ -236,7 +235,7 @@ fun SequelDetailSheet(
         subject.media.type,
         media.posterUrl,
         themeSettings.isLoaded,
-        themeSettings.animeThemeActive,
+        themeSettings.animeThemeEnabled,
         themeSettings.animeThemeRetainColor
     ) {
         if (!themeSettings.isLoaded) return@LaunchedEffect
@@ -246,7 +245,7 @@ fun SequelDetailSheet(
             CoverColors.put(media.posterUrl, seed)
         }
 
-        if (!themeSettings.animeThemeActive) return@LaunchedEffect
+        if (!themeSettings.animeThemeEnabled) return@LaunchedEffect
 
         // Fallback order, most specific first: the cover's own pixels, then
         // AniList's dominant colour (which is still the cover, just computed
@@ -257,17 +256,10 @@ fun SequelDetailSheet(
             ?: media.posterColor
             ?: "#0057B7"
 
-        // One call, one transaction, one recolour of the app.
-        //
-        // "Retain" means the anime's colour becomes the app's accent, not just a
-        // glow around this sheet: it is persisted as a custom hue so the whole
-        // app - and the next launch - keeps it. There is an exit hatch: picking a
-        // palette or a hue in the Theme tab clears it, as does Reset appearance.
         themeWrite {
-            themePreferences.setAnimeThemeActive(
-                active = true,
+            themePreferences.applyAnimeColorLayer(
                 colorHex = colorHex,
-                retainColor = themeSettings.animeThemeRetainColor
+                retain = themeSettings.animeThemeRetainColor
             )
         }
     }
@@ -275,24 +267,20 @@ fun SequelDetailSheet(
     // The revert timer starts when the sheet is *closed*, not while it is open.
     // It used to be a `LaunchedEffect` here, which the dismiss disposed - so the
     // "5 Minutes" and "10 Minutes" choices never fired at all, and a temporary
-    // colour outlived every title it was borrowed for. `handleDismiss` hands the
-    // delay to a process-scoped job in `ThemePreferences` instead.
+    // colour outlived every title it was borrowed for. The delay now belongs to a
+    // process-scoped job in `ThemePreferences`, and it ends the in-memory layer
+    // rather than a stored flag, so a colour on a timer cannot survive a restart
+    // the way the stored one did.
     val handleDismiss: () -> Unit = {
-        scope.launch {
-            // Retain owns the colour: the sheet closing must not switch off the
-            // layer that is deliberately being kept. The immediate-revert branch
-            // used to ignore this and ended a retained colour on every close.
-            themeWrite {
-                if (!themeSettings.animeThemeRetainColor) {
-                    if (themeSettings.animeThemeRevertDuration == 0) {
-                        themePreferences.setAnimeThemeActive(false, null)
-                    } else {
-                        themePreferences.scheduleAnimeThemeRevert(
-                            themeSettings.animeThemeRevertDuration
-                        )
-                    }
-                }
-            }
+        if (themeSettings.animeThemeRetainColor) {
+            // Retain owns the colour, and it owns it through the accent it
+            // persisted - so the immersive layer can end here. Keeping the layer
+            // alive instead left the show's hue in every surface on every screen
+            // and on the next launch, which is the thing a standing preference is
+            // not supposed to do.
+            themePreferences.clearAnimeColorLayer()
+        } else {
+            themePreferences.releaseAnimeColorLayer(themeSettings.animeThemeRevertDuration)
         }
         onDismiss()
     }

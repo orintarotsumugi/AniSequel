@@ -29,7 +29,9 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.motion.WaveGeometry
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberIsResumed
 
 /**
  * The wavy determinate progress bar of the Info page's progress card.
@@ -121,13 +123,22 @@ fun WavyProgressBar(
     // Null while there is nothing to travel: an idle bar draws a still wave, and a
     // looping animation on a screenful of cards is exactly what the motion rules
     // cap.
-    val cycle: State<Float>? = if (target > 0f) {
+    //
+    // Gated on the *clock*, not on the progress. It used to be `if (target > 0f)`,
+    // which flipped the composable shape every time a title went from untouched to
+    // one episode in - and back on the way through a list - disposing and
+    // rebuilding the transition at the exact moment the reader interacts with the
+    // bar. Whether the loop is allowed to exist at all is a visibility and a
+    // motion-style question, which is what [rememberIsResumed] and the Instant
+    // style answer; `target` only decides whether the phase is *read*, below.
+    val animates = rememberIsResumed() && ExpressiveMotion.speed != MotionStyle.INSTANT
+    val cycle: State<Float>? = if (animates) {
         val transition = rememberInfiniteTransition(label = "wavy_progress_bar")
         transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2400, easing = LinearEasing),
+                animation = tween(durationMillis = WAVE_CYCLE_MILLIS, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "wave_phase"
@@ -154,8 +165,10 @@ fun WavyProgressBar(
         // from this one amplitude, so the wave is continuous across the seam.
         val amplitude = WaveGeometry.amplitude(maxAmplitude, progress = fill.value)
         // Null when the bar was idle at composition time, which is a still wave -
-        // zero phase, the shape the track has always had.
-        val phase = WaveGeometry.phase(cycle?.value ?: 0f)
+        // zero phase, the shape the track has always had. `target` is read here
+        // rather than at the transition above: a bar nobody has started does not
+        // pay for a moving phase.
+        val phase = WaveGeometry.phase(if (target > 0f) cycle?.value ?: 0f else 0f)
 
         val wave = wavePath(
             width = size.width,
@@ -214,6 +227,9 @@ private fun wavePath(
 
 /** Two and a half periods across the bar: a wave, not a zigzag, at any width. */
 private const val WAVES_ACROSS = 2.5f
+
+/** How long the travelling phase takes to come round. */
+private const val WAVE_CYCLE_MILLIS = 2400
 
 /** Crest-to-trough is a third of the bar's height, which leaves room for the 5dp stroke. */
 private const val MAX_AMPLITUDE_RATIO = 0.32f
