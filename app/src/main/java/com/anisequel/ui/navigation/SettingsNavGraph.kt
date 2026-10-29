@@ -9,6 +9,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
@@ -27,6 +28,11 @@ fun NavGraphBuilder.settingsDestinations(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    /**
+     * The Library page's remembered view, so Settings can offer to forget it.
+     * The same instance the Library writes through - one DataStore reader.
+     */
+    libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
     jokePreferences: JokePreferences,
     changelogRepository: ChangelogRepository,
@@ -50,6 +56,7 @@ fun NavGraphBuilder.settingsDestinations(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,
             quickAddPreferences = quickAddPreferences,
+            libraryPreferences = libraryPreferences,
             mainTabPreferences = mainTabPreferences,
             jokePreferences = jokePreferences,
             changelogRepository = changelogRepository,

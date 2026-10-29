@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ArrivingPreferences
+import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshInterval
@@ -44,6 +46,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -61,11 +64,13 @@ fun LibrarySettingsTab(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     quickAddPreferences: QuickAddPreferences,
+    libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
     modifier: Modifier = Modifier
 ) {
     SettingsScrollColumn(modifier) {
         ListRefreshCard(refreshIntervalPreferences)
+        LibraryViewCard(libraryPreferences)
         ArrivingSectionCard(arrivingPreferences)
         QuickAddSectionCard(quickAddPreferences)
         BottomBarSectionCard(mainTabPreferences)
@@ -112,6 +117,84 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
             },
             modifier = Modifier.testTag("tier_list_tab_switch")
         )
+    }
+}
+
+/**
+ * The Library page's remembered view, and the one thing only Settings can undo.
+ *
+ * The type, status filter and sort on the Library are remembered on purpose - a
+ * page that asks the same one-tap question every visit is a page failing to
+ * remember an answer. But `LibraryPreferences.reset()` had no caller: a reader
+ * who once narrowed the Library to "Manga, Completed, score high to low" could
+ * only get back to the default view by changing three controls in the right
+ * order, and had no way to know the page was remembering them at all. The card
+ * says what is remembered and offers the one action that forgets it.
+ *
+ * The read is three-state (`null` until DataStore answers) rather than defaulting
+ * to "nothing remembered". That first frame would otherwise hide the reset
+ * button from exactly the reader who needs it and replace it with a claim about
+ * the default that is about to become false.
+ */
+@Composable
+private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
+    val scope = rememberCoroutineScope()
+    val remembered by remember(libraryPreferences) {
+        combine(
+            libraryPreferences.lastType,
+            libraryPreferences.lastFilter,
+            libraryPreferences.lastSort,
+            libraryPreferences.lastSortAscending
+        ) { type, filter, sort, ascending ->
+            type != null || filter != null || sort != null || ascending != null
+        }
+    }.collectAsState(initial = null)
+
+    SectionCard(
+        title = "Library view",
+        icon = AppVectorIcons.List,
+        subtitle = "What the Library reopens with"
+    ) {
+        Text(
+            text = when (remembered) {
+                null -> "Reading the view saved on this device."
+                true -> "The Library reopens with the type, status filter and sort you " +
+                    "last chose there."
+                false -> "The Library opens on all titles in list order until you " +
+                    "choose something else there."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // Mounted only when there is something to forget: a reset button on a page
+        // that already opens at the default is a control promising to do nothing.
+        AnimatedVisibility(
+            visible = remembered == true,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
+                SettingsButton(
+                    text = "Forget remembered view",
+                    onClick = { scope.launch { libraryPreferences.reset() } },
+                    icon = AppVectorIcons.Restore,
+                    variant = SettingsButtonVariant.Outlined,
+                    fillWidth = true,
+                    testTag = "reset_library_view_button"
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Only the remembered view is cleared. Nothing is removed " +
+                        "from your list.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

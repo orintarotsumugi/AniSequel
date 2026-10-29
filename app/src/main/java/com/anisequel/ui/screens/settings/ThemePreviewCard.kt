@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
@@ -75,14 +73,16 @@ fun ThemePreviewCard(
         else -> ThemePalette.fromStorage(themeSettings.paletteId).displayName
     }
 
+    // Read straight, not wrapped in another animation: `rememberAnimatedColorScheme`
+    // already crossfades every role through the same `ThemeColorEffects` spring, so
+    // these are the scheme as it is arriving. The mockup used to run `primary`
+    // through its own faster `FastColorEffects` spring on top of that - the border,
+    // the poster tint and the Plan button reached the new accent before the gradient
+    // and the swatches beside them, in the one card whose job is to show the colour
+    // as one thing.
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val tertiary = MaterialTheme.colorScheme.tertiary
-    val heroAccent by animateColorAsState(
-        targetValue = primary,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "theme_hero_accent"
-    )
 
     Surface(
         modifier = modifier
@@ -161,7 +161,7 @@ fun ThemePreviewCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, heroAccent.copy(alpha = 0.5f))
+                    border = BorderStroke(1.dp, primary.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
@@ -173,13 +173,13 @@ fun ThemePreviewCard(
                                 modifier = Modifier
                                     .size(48.dp, 64.dp)
                                     .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
-                                    .background(heroAccent.copy(alpha = 0.22f)),
+                                    .background(primary.copy(alpha = 0.22f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = AppVectorIcons.Movie,
                                     contentDescription = null,
-                                    tint = heroAccent,
+                                    tint = primary,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -247,7 +247,7 @@ fun ThemePreviewCard(
                                     )
                                 } else {
                                     ButtonDefaults.buttonColors(
-                                        containerColor = heroAccent,
+                                        containerColor = primary,
                                         contentColor = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }

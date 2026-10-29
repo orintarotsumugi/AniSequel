@@ -523,6 +523,7 @@ fun AppNavigation(
                     refreshIntervalPreferences = refreshIntervalPreferences,
                     arrivingPreferences = arrivingPreferences,
                     quickAddPreferences = quickAddPreferences,
+                    libraryPreferences = libraryPreferences,
                     mainTabPreferences = mainTabPreferences,
                     jokePreferences = jokePreferences,
                     changelogRepository = changelogRepository,
