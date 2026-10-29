@@ -269,9 +269,13 @@ Nothing is *wrong*, but several entries are behind:
 
 | Dependency | Current | Note |
 | --- | --- | --- |
-| `composeBom` | 2025.11.01 | Governs the Compose stack; bumping means re-checking the `material3` alpha pin against it |
 | `navigationCompose` | 2.8.9 | Upgrade path is unrelated to the Material 3 pin |
 | `coilCompose` | 2.7.0 | Newer majors changed the API surface |
+
+`composeBom` and `material3` are no longer behind: the BOM moved to 2026.09.00
+and material3 to 1.5.0-beta02 together, with `compileSdk` at 37. They move as a
+pair - a material3 below the BOM's Compose line is an AAR-metadata failure - so
+they are not listed here as independently upgradable.
 
 Room used to be listed here. It is gone — no `roomRuntime` entry exists in
 `gradle/libs.versions.toml`, and there is no database in the app at all (see

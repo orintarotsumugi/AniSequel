@@ -22,7 +22,16 @@ android {
   // It is NOT the app's identity and does not have to match `applicationId`
   // below - see that comment for why those two are deliberately different.
   namespace = "com.anisequel"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  // 37, because the Compose 1.12 line requires it: both `composeBom` 2026.09.00
+  // and `material3` 1.5.0-beta02 are compiled against API 37, and AAR metadata
+  // checking fails the build below it. The floor moved twice to get here - 36.1
+  // was the last version the previous pins accepted - and this is the only
+  // reason it moved.
+  //
+  // `targetSdk` stays at 36 on purpose. Compiling against an API and opting into
+  // its runtime behaviour changes are separate decisions, and the second one
+  // needs the Android 17 behaviour review that this change does not make.
+  compileSdk { version = release(37) }
 
   defaultConfig {
     // The identity every installed copy already answers to, and the one the

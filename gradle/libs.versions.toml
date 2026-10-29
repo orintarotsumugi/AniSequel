@@ -36,36 +36,27 @@ activityCompose = "1.10.1"
 # from this same key, so it moves in lockstep and there is nothing to keep in
 # step by hand.
 kotlin = "2.4.21"
-# 2025.11.01 is the first BOM that resolves androidx.compose.material3 to
-# 1.4.0 - the first stable Material 3 Expressive release.
-composeBom = "2025.11.01"
+# 2026.09.00 resolves Compose UI 1.12.1 and material3 1.4.0 (the current stable
+# Material 3 release). The Compose 1.12 line requires compileSdk 37, which is why
+# app/build.gradle.kts compiles against 37 rather than 36.1.
+composeBom = "2026.09.00"
 # 1.4.0 stable ships the *theming* half of Expressive (MaterialExpressiveTheme,
 # MotionScheme, MaterialShapes) but not the component set. LoadingIndicator,
 # ContainedLoadingIndicator, the Wavy*ProgressIndicators, SplitButton and the
-# morphing ButtonGroup are only in 1.5.0-alpha, so material3 is pinned above the
-# BOM deliberately. The BOM still governs everything else in the Compose stack.
+# morphing ButtonGroup only exist in the 1.5 line, so material3 is pinned above
+# the BOM deliberately. The BOM still governs everything else in the stack.
 #
-# alpha14 specifically, not a later alpha, and this was re-checked on 2026-10-22
-# when an update was requested. There is still no version that can replace it:
+# beta02, not a later beta: it is the newest 1.5 release whose published POM
+# resolves against the Compose 1.12 line the BOM provides. The older pin was
+# 1.5.0-alpha14, held back because every release after it required compileSdk 37
+# (or, for alpha24+, Compose 1.12) while this app compiled against 36.1. Both of
+# those floors are now met here - see app/build.gradle.kts - so the pin moved
+# with them instead of staying on an alpha for a reason that no longer exists.
 #
-#  - 1.5.0-alpha15 is the very next release, and its published POM depends on
-#    **Compose UI 1.11.0-alpha06** (see
-#    https://dl.google.com/dl/android/maven2/androidx/compose/material3/material3/1.5.0-alpha15/material3-1.5.0-alpha15.pom).
-#    That is already off the Compose 1.8 line this app resolves through the BOM,
-#    and it is exactly the transitive upgrade the `compileSdk 37` rule below is
-#    about.
-#  - 1.5.0-beta01 / beta02 exist now and are newer still, so they inherit the
-#    same problem. alpha23 removed material3's *own* compileSdk 37 requirement,
-#    but alpha24 moved its Compose dependency to the 1.12 line, which has it.
-#
-# So the pin stays. Bumping it is not a maintenance chore here - it is a build
-# that fails at AAR metadata checking, or worse, one that resolves a mixed UI
-# stack. The upgrade path is a `compileSdk` raise, tracked in TO-DO.md, not an
-# edit to this line.
-#
-# Verified by extracting each artifact and compiling against the real signatures,
-# not by reading release notes.
-material3 = "1.5.0-alpha14"
+# Keep this in step with the BOM in both directions: a material3 below the BOM's
+# Compose line is an AAR-metadata failure at build time, not a runtime bug, and a
+# BOM below this pin's Compose line is the same failure the other way round.
+material3 = "1.5.0-beta02"
 # KSP2's own versioning, which since 2.3.0 is decoupled from the Kotlin version
 # above - it is not the old `2.2.10-2.0.2` shape. That is why this is safe to
 # move independently, and also why it is worth noticing if it ever goes back to
