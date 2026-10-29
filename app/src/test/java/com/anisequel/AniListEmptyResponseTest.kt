@@ -11,6 +11,7 @@ import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.DeleteMediaListEntryData
+import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLError
@@ -435,6 +436,10 @@ private class FakeService(
     override suspend fun getMediaCovers(
         request: GraphQLRequest
     ): GraphQLResponse<Map<String, MediaCoverPage>> = notServed("getMediaCovers")
+
+    override suspend fun getEntityPreviews(
+        request: GraphQLRequest
+    ): GraphQLResponse<EntityPreviewPages> = notServed("getEntityPreviews")
 
     override suspend fun getUserOverview(request: GraphQLRequest): GraphQLResponse<UserOverviewData> =
         notServed("getUserOverview")

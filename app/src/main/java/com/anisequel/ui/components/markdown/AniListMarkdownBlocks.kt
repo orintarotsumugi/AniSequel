@@ -46,12 +46,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.MediaCover
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import java.util.Locale
 
 @Composable
 fun RenderHeader(header: MarkdownNode.Header) {
@@ -477,18 +479,33 @@ private fun SpoilerChip(
  * jumped to two the moment the cover arrived - which re-laid out the whole bio
  * under the reader's eyes. The type icon underneath keeps the frame from reading
  * as a broken image in the meantime, and for an entity that will never have a
- * cover (a studio, a staff member) the frame still matches every other card.
+ * cover (a studio) the frame still matches every other card.
+ *
+ * ## [entity] is the non-media half
+ *
+ * A character, staff or studio link has no `MediaCover`; it has a name and, for
+ * the first two, a portrait, resolved by a separate batch. Before that existed
+ * those cards were headed by whatever the URL held - `Character #127222` on a
+ * link with no slug - and drew the anime icon, because the fallback only knew
+ * manga from everything else. [previewFallback] is now per type, and a resolved
+ * [entity] supplies the heading and the face the same way a [cover] does for a
+ * title.
  */
 @Composable
 fun RenderAniListPreview(
     preview: MarkdownNode.AniListPreviewBlock,
-    cover: MediaCover? = null
+    cover: MediaCover? = null,
+    entity: EntityPreview? = null
 ) {
     val context = LocalContext.current
-    // An unblank fetched title wins. `ANIME #1` is a fallback, not a title, and
-    // the whole point of fetching the cover in the first place is that AniList
-    // told us what this media is actually called.
-    val title = cover?.title?.takeIf { it.isNotBlank() } ?: preview.title
+    // An unblank fetched name wins - the entity's for a character or studio, the
+    // cover's for a title. `ANIME #1` is a fallback, not a title, and the whole
+    // point of fetching is that AniList told us what this link actually names.
+    val title = entity?.name?.takeIf { it.isNotBlank() }
+        ?: cover?.title?.takeIf { it.isNotBlank() }
+        ?: preview.title
+    // One image slot either way: a portrait for an entity, a poster for media.
+    val artUrl = entity?.imageUrl?.takeIf { it.isNotBlank() } ?: cover?.url
     // One press source for the spring and the click; see [RenderImage].
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -528,9 +545,9 @@ fun RenderAniListPreview(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
-                cover?.let { fetched ->
+                artUrl?.let { url ->
                     AsyncImage(
-                        model = fetched.url,
+                        model = url,
                         contentDescription = title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -587,13 +604,23 @@ fun RenderAniListPreview(
     }
 }
 
-/** The type-appropriate icon drawn while a cover loads, or when there is none. */
-private fun previewFallback(type: String) =
-    if (type.equals("MANGA", ignoreCase = true)) {
-        AppVectorIcons.FavouriteManga
-    } else {
-        AppVectorIcons.FavouriteAnime
-    }
+/**
+ * The type-appropriate icon drawn while art loads, or when there is none.
+ *
+ * This used to be a two-way `if`: manga got the book, and every other entity -
+ * character, staff, studio and user cards included - got the **anime** film
+ * icon. A hall of fame of characters therefore wore twelve identical film reels,
+ * claiming each was a TV show. The one icon that is never wrong here is the one
+ * for the type that was actually linked.
+ */
+private fun previewFallback(type: String) = when (type.uppercase(Locale.ROOT)) {
+    "MANGA" -> AppVectorIcons.FavouriteManga
+    "CHARACTER" -> AppVectorIcons.FavouriteCharacters
+    "STAFF" -> AppVectorIcons.FavouriteStaff
+    "STUDIO" -> AppVectorIcons.Studio
+    "USER" -> AppVectorIcons.ProfilePerson
+    else -> AppVectorIcons.FavouriteAnime
+}
 
 /** AniList covers are 2:3. */
 private const val POSTER_ASPECT = 2f / 3f

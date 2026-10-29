@@ -9,6 +9,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.repository.AniListRepository
@@ -49,6 +51,27 @@ fun interface MediaCoverLoader {
 val LocalMediaCoverLoader = staticCompositionLocalOf<MediaCoverLoader?> { null }
 
 /**
+ * Resolves the name and portrait for the non-media AniList links in a document.
+ *
+ * A separate interface from [MediaCoverLoader] because the keys are a different
+ * namespace and the answer is a different shape - a character card draws a name
+ * and a face from a `Page.characters` root, a media card draws a poster from
+ * `Page.media` - but it is provided and consumed by the same plumbing, so a host
+ * does not have to know which kind of card its document will produce.
+ */
+fun interface EntityPreviewLoader {
+    suspend fun load(keys: List<EntityPreviewKey>): Map<EntityPreviewKey, EntityPreview>
+}
+
+/**
+ * How markdown resolves the faces on its character, staff and studio cards.
+ *
+ * Null is a real answer, exactly as on [LocalMediaCoverLoader]: without a
+ * connection the cards draw their label and type icon, which is a complete card.
+ */
+val LocalEntityPreviewLoader = staticCompositionLocalOf<EntityPreviewLoader?> { null }
+
+/**
  * Provides [LocalMediaCoverLoader] for everything drawn inside [content].
  *
  * The one line a host needs for its markdown surfaces to resolve their AniList
@@ -69,7 +92,53 @@ fun ProvideMediaCovers(
             MediaCoverLoader { keys -> source.getMediaCovers(keys).getOrNull().orEmpty() }
         }
     }
-    CompositionLocalProvider(LocalMediaCoverLoader provides loader, content = content)
+    // The entity half rides along with the media half rather than gaining its own
+    // `Provide…` at the navigation root: both exist to decorate the *same* card
+    // list, and two providers a host could forget to add separately is how one
+    // surface ends up with heads and another without.
+    val entityLoader = remember(repository) {
+        repository?.let { source ->
+            EntityPreviewLoader { keys -> source.getEntityPreviews(keys).getOrNull().orEmpty() }
+        }
+    }
+    CompositionLocalProvider(
+        LocalMediaCoverLoader provides loader,
+        LocalEntityPreviewLoader provides entityLoader,
+        content = content
+    )
+}
+
+/**
+ * The entity half of one document's preview cards, resolved once per key set.
+ *
+ * ## Why this is loaded from the *view* and not by `AniListMarkdownWithCovers`
+ *
+ * Media covers are threaded in by callers because the profile's About card
+ * deliberately starts that fetch in its ViewModel, before the card composes (see
+ * `ProfileAboutCard`). Entity previews have no such owner: they are pure
+ * decoration on the same cards and should appear wherever markdown renders,
+ * including the surfaces that call [AniListMarkdownView] directly. Resolving them
+ * here means every host gets them with no plumbing, and the repository's cache
+ * makes a document rendered twice free the second time.
+ *
+ * Keyed on the keys and the loader, not on the nodes, for the reason spelled out
+ * on [AniListMarkdownWithCovers]: an edit to the prose around the same links must
+ * neither re-request the faces nor clear the ones already drawn.
+ */
+@Composable
+internal fun rememberEntityPreviews(
+    nodes: List<MarkdownNode>,
+    loader: EntityPreviewLoader? = LocalEntityPreviewLoader.current
+): Map<EntityPreviewKey, EntityPreview> {
+    val keys = remember(nodes) { entityPreviewKeysIn(nodes) }
+    var previews by remember(keys, loader) {
+        mutableStateOf<Map<EntityPreviewKey, EntityPreview>>(emptyMap())
+    }
+    LaunchedEffect(keys, loader) {
+        if (keys.isEmpty() || loader == null) return@LaunchedEffect
+        previews = loader.load(keys)
+    }
+    return previews
 }
 
 /**

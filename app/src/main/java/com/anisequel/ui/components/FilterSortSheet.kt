@@ -1,5 +1,6 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,7 +24,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -37,6 +42,19 @@ import com.anisequel.data.model.StatusFilter
 import com.anisequel.data.model.animeGenreOptions
 import com.anisequel.data.model.filterFormatOptions
 import com.anisequel.data.model.filterScoreOptions
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+
+/**
+ * How many genres the sheet shows before the reader asks for the rest.
+ *
+ * Eight fills a little over two rows of chips on a phone. The remaining ten used
+ * to push every filter below the genre section - minimum rating, the toggles,
+ * the hidden list - a long scroll away from the top of the sheet, for chips most
+ * readers never touch. A genre the reader has *selected* is never folded away:
+ * a filter that is in effect must be visible, or the sheet hides why its results
+ * are narrow.
+ */
+private const val GENRE_PREVIEW_COUNT = 8
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -229,11 +247,28 @@ fun FilterSortSheet(
                 )
             )
             Spacer(modifier = Modifier.height(8.dp))
+            // Folded by default, but a selected genre on the far side of the fold
+            // is pulled up into the visible set: the chips are the only place the
+            // sheet can show that a genre filter is narrowing the results.
+            var genresExpanded by rememberSaveable { mutableStateOf(false) }
+            val selectedFoldedGenres = remember(filterCriteria.selectedGenres) {
+                animeGenreOptions
+                    .drop(GENRE_PREVIEW_COUNT)
+                    .filter { genre ->
+                        filterCriteria.selectedGenres.any { it.equals(genre, ignoreCase = true) }
+                    }
+            }
+            val visibleGenres = if (genresExpanded) {
+                animeGenreOptions
+            } else {
+                animeGenreOptions.take(GENRE_PREVIEW_COUNT) + selectedFoldedGenres
+            }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
             ) {
-                animeGenreOptions.forEach { genre ->
+                visibleGenres.forEach { genre ->
                     FilterOptionChip(
                         label = genre,
                         selected = filterCriteria.selectedGenres.any {
@@ -241,6 +276,31 @@ fun FilterSortSheet(
                         },
                         onClick = { onToggleGenre(genre) },
                         testTag = "genre_chip_${genre.lowercase().replace(' ', '_')}"
+                    )
+                }
+            }
+            if (animeGenreOptions.size > GENRE_PREVIEW_COUNT) {
+                TextButton(
+                    onClick = { genresExpanded = !genresExpanded },
+                    modifier = Modifier.testTag("genre_expand_toggle")
+                ) {
+                    Text(
+                        if (genresExpanded) {
+                            "Show fewer genres"
+                        } else {
+                            "Show all ${animeGenreOptions.size} genres"
+                        }
+                    )
+                    Icon(
+                        imageVector = if (genresExpanded) {
+                            AppVectorIcons.ExpandLess
+                        } else {
+                            AppVectorIcons.ExpandMore
+                        },
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(18.dp)
                     )
                 }
             }

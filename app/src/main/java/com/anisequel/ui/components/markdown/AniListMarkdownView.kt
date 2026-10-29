@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 
@@ -41,6 +43,12 @@ const val MARKDOWN_COLLAPSED_BLOCK_LIMIT = 4
  * dozen of AniList's 30-a-minute budget before the reader had scrolled. A miss
  * draws the badge alone, which is what these cards looked like before covers
  * existed.
+ *
+ * [entityPreviews] is the same idea for the non-media links - a character's name
+ * and face, a studio's name. It defaults to resolving through
+ * [LocalEntityPreviewLoader] because, unlike media covers, no host owns that
+ * fetch; see [rememberEntityPreviews]. A caller holding its own map (a test, or
+ * a screen that already batched) can pass one and the loader is not consulted.
  */
 @Composable
 fun AniListMarkdownView(
@@ -48,6 +56,7 @@ fun AniListMarkdownView(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
+    entityPreviews: Map<EntityPreviewKey, EntityPreview> = rememberEntityPreviews(nodes),
     /**
      * Reports whether the *collapsed* render actually hid something.
      *
@@ -89,6 +98,7 @@ fun AniListMarkdownView(
                             nodes = node.children,
                             maxLines = maxLines,
                             mediaCovers = mediaCovers,
+                            entityPreviews = entityPreviews,
                             onOverflowChange = onOverflowChange
                         )
                     }
@@ -97,7 +107,8 @@ fun AniListMarkdownView(
                     node,
                     // One lookup by key, so an anime and a manga that happen to
                     // share an id each draw their own poster.
-                    cover = node.mediaCoverKeyOrNull()?.let { mediaCovers[it] }
+                    cover = node.mediaCoverKeyOrNull()?.let { mediaCovers[it] },
+                    entity = node.entityPreviewKeyOrNull()?.let { entityPreviews[it] }
                 )
                 is MarkdownNode.Divider -> HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),

@@ -3,6 +3,8 @@ package com.anisequel.data.repository
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.CharacterProfile
+import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCover
@@ -94,6 +96,24 @@ interface AniListRepository {
      */
     suspend fun getMediaCovers(keys: List<MediaCoverKey>): Result<Map<MediaCoverKey, MediaCover>> =
         unsupported("getMediaCovers")
+
+    /**
+     * Names and portraits for the character, staff and studio links in a document.
+     *
+     * Batched for the same reason as [getMediaCovers]: a favourites hall can link
+     * twenty entities, and AniList allows roughly thirty requests a minute. The
+     * answer is decoration, not content - a key with no entry is simply absent
+     * from the map and its card keeps the label it was written with - so a partial
+     * answer is a success and only a wholly refused document is a failure.
+     *
+     * Separate from [getMediaCovers] because the ids live in different namespaces
+     * and the lookups have different shapes (see [EntityPreviewKey]), not because
+     * callers should have to think about it: the markdown renderer resolves both
+     * through the same composition-local plumbing.
+     */
+    suspend fun getEntityPreviews(
+        keys: List<EntityPreviewKey>
+    ): Result<Map<EntityPreviewKey, EntityPreview>> = unsupported("getEntityPreviews")
 
     /** As [getUserAnimeList], for a profile looked up by name. */
     suspend fun getUserAnimeListByUsername(

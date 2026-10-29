@@ -317,6 +317,25 @@ internal fun statusLabel(status: String?, isManga: Boolean): String =
     ListStatuses.label(status, isManga)
 
 /**
+ * The glyph for a list status, used by both the status row and its menu.
+ *
+ * The row used to show [AppVectorIcons.Info] whatever status the entry held, so
+ * the one icon on the only row that changes with the entry said only "this is a
+ * form field". The mapping is semantic - play, repeat, check, bookmark, pause,
+ * broken heart - and unknown or absent statuses keep the old Info glyph, because
+ * an unrecognised token has no meaning to draw.
+ */
+internal fun statusIcon(status: String?): ImageVector = when (ListStatuses.normalize(status)) {
+    ListStatuses.CURRENT -> AppVectorIcons.Play
+    ListStatuses.REPEATING -> AppVectorIcons.Refresh
+    ListStatuses.COMPLETED -> AppVectorIcons.CheckCircle
+    ListStatuses.PLANNING -> AppVectorIcons.BookmarkAdd
+    ListStatuses.PAUSED -> AppVectorIcons.Pause
+    ListStatuses.DROPPED -> AppVectorIcons.BrokenHeart
+    else -> AppVectorIcons.Info
+}
+
+/**
  * How much of a row's colour survives while it is disabled.
  *
  * Not M3's 0.38 content alpha: a row dimmed that far stops being readable, and

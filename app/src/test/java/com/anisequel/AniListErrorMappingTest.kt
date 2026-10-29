@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.data.model.AniListErrorEnvelope
 import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.DeleteMediaListEntryData
+import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
@@ -95,6 +96,11 @@ class AniListErrorMappingTest {
         override suspend fun getMediaCovers(
             request: GraphQLRequest
         ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
+
+        // Added with the entity previews for the same reason as the covers above.
+        override suspend fun getEntityPreviews(
+            request: GraphQLRequest
+        ): GraphQLResponse<EntityPreviewPages> = GraphQLResponse(EntityPreviewPages())
 
         // The profile screen's four endpoints. Thrown rather than returned as an
         // empty response on purpose: if a test ever starts calling one, that is a
@@ -361,6 +367,11 @@ class RequestCoalescingPolicyTest {
         override suspend fun getMediaCovers(
             request: GraphQLRequest
         ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
+
+        // Added with the entity previews for the same reason as the covers above.
+        override suspend fun getEntityPreviews(
+            request: GraphQLRequest
+        ): GraphQLResponse<EntityPreviewPages> = GraphQLResponse(EntityPreviewPages())
 
         // The profile screen's four endpoints. Thrown rather than returned as an
         // empty response on purpose: if a test ever starts calling one, that is a

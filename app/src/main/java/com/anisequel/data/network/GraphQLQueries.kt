@@ -1,6 +1,8 @@
 package com.anisequel.data.network
 
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCoverKey
+import java.util.Locale
 
 /**
  * GraphQL documents sent to `graphql.anilist.co`.
@@ -652,6 +654,116 @@ object GraphQLQueries {
      * namespaces - a single key per alias would collide and drop one of them.
      */
     fun mediaCoverAlias(index: Int): String = "m$index"
+
+    /**
+     * How many entities one preview document may ask for.
+     *
+     * AniList caps `perPage` at 50, so this is both the `perPage` written into
+     * the document and the batch size the repository chunks by. One constant
+     * rather than two: a chunker that asked for 60 while the document asked for
+     * 50 would silently lose the last ten cards of a very long favourites list,
+     * and nothing would ever say so.
+     */
+    const val ENTITY_PREVIEW_PAGE_SIZE = 50
+
+    /**
+     * The batched entity query: names and portraits for the character, staff and
+     * studio links a document carries.
+     *
+     * ## The shape
+     *
+     * One aliased root per *type*, not one alias per id. `Page.characters`,
+     * `Page.staff` and `Page.studios` each accept `id_in`, so a hall of fame of
+     * twenty characters spends one root field and one variable, and the response
+     * comes back grouped by type rather than read back by document position.
+     *
+     * `Page`-wrapped for the same reason [getMediaCoversQuery] is: the singular
+     * root fields (`Character(id:)`, `Staff(id:)`, `Studio(id:)`) are nullable
+     * and AniList answers a request containing one stale id with HTTP 404 for
+     * the whole response - so one deleted character would blank every other card
+     * on the page. A connection filters instead of failing: an id with nothing
+     * behind it is simply absent from the list, on a 200.
+     *
+     * ## Why the document is built from the types present
+     *
+     * GraphQL rejects a *declared* variable the operation never uses, so a
+     * document that always declared all three lists would fail on the very
+     * common bio that links only characters. The declarations and the root
+     * fields are therefore emitted together, from the same [types] set. Verified
+     * against the live API with all three roots and with each one alone.
+     *
+     * [types] carries entity kinds (`CHARACTER`, `STAFF`, `STUDIO`) rather than
+     * keys: the ids travel as variables, and the set is what decides the
+     * document's shape.
+     */
+    fun getEntityPreviewsQuery(types: Collection<String>): String {
+        val requested = EntityPreviewKey.SUPPORTED_TYPES.filter { supported ->
+            types.any { it.equals(supported, ignoreCase = true) }
+        }
+        require(requested.isNotEmpty()) { "an entity batch needs at least one type" }
+
+        val fields = requested.joinToString("\n") { type ->
+            when (type) {
+                "CHARACTER" -> """
+                    characters: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      characters(id_in: ${'$'}characterIds) {
+                        id
+                        name { full native alternative }
+                        image { large medium }
+                      }
+                    }
+                """.trimIndent()
+
+                "STAFF" -> """
+                    staff: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      staff(id_in: ${'$'}staffIds) {
+                        id
+                        name { full native alternative }
+                        image { large medium }
+                      }
+                    }
+                """.trimIndent()
+
+                else -> """
+                    studios: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      studios(id_in: ${'$'}studioIds) {
+                        id
+                        name
+                        isAnimationStudio
+                      }
+                    }
+                """.trimIndent()
+            }
+        }
+        // `[Int]` is nullable by default, which matches the variables sent: a
+        // list, never a null. The sigil is written explicitly for the same
+        // reason `getMediaCoversQuery` spells it out - a declaration without one
+        // is a 400 for the whole document.
+        val variables = requested.joinToString(", ") { type ->
+            "${'$'}${entityPreviewVariable(type)}: [Int]"
+        }
+        return """
+            query EntityPreviews($variables) {
+            $fields
+            }
+        """.trimIndent()
+    }
+
+    /**
+     * The variable a type's ids travel in, named the way the document declares it.
+     *
+     * Shared with the repository so the variable it fills and the variable the
+     * document uses cannot be spelled differently - the failure that produces is
+     * an HTTP 400 for every card in the document.
+     */
+    fun entityPreviewVariable(type: String): String = when (type.uppercase(Locale.ROOT)) {
+        "CHARACTER" -> "characterIds"
+        "STAFF" -> "staffIds"
+        "STUDIO" -> "studioIds"
+        else -> throw IllegalArgumentException(
+            "\"$type\" is not an entity type AniList can batch"
+        )
+    }
 
     /**
      * The single media record the detail sheet renders.

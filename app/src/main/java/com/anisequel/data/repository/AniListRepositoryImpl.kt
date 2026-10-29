@@ -5,6 +5,8 @@ import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.CharacterProfile
+import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
@@ -16,6 +18,7 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
+import com.anisequel.data.model.MediaName
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StudioNode
@@ -115,6 +118,19 @@ private const val ACTIVITY_PAGE_SIZE = 25
 /** Logcat tag for the cover batches. One line, warning level, never a UI message. */
 private const val COVER_LOG_TAG = "AniSequelCovers"
 
+/**
+ * The most entity links one preview document may carry.
+ *
+ * Equal to `GraphQLQueries.ENTITY_PREVIEW_PAGE_SIZE` by construction rather than
+ * by a second constant: that value is the `perPage` the document asks for, and a
+ * batch larger than it would be silently truncated by AniList. A favourites hall
+ * that links twenty characters therefore spends one request, not twenty.
+ */
+private const val ENTITY_BATCH_KEYS = GraphQLQueries.ENTITY_PREVIEW_PAGE_SIZE
+
+/** Logcat tag for the entity-preview batches, for the same reason as [COVER_LOG_TAG]. */
+private const val ENTITY_LOG_TAG = "AniSequelPreviews"
+
 /** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
 internal fun mediaCoverBatches(keys: List<MediaCoverKey>): List<List<MediaCoverKey>> =
     keys.chunked(MAX_COVER_BATCH_KEYS)
@@ -175,6 +191,15 @@ class AniListRepositoryImpl(
          * recurs across profiles, so a small cache here would miss constantly.
          */
         const val MAX_COVER_CACHE_ENTRIES = 512
+
+        /**
+         * Soft cap on cached entity previews.
+         *
+         * Same order as [MAX_COVER_CACHE_ENTRIES], for the same reason: a name and
+         * a portrait URL are a few dozen bytes, and the same hall-of-fame cast
+         * recurs across profiles.
+         */
+        const val MAX_ENTITY_PREVIEW_CACHE_ENTRIES = 512
 
         /**
          * How long the reachability probe may take before it is declared a
@@ -401,6 +426,17 @@ class AniListRepositoryImpl(
     private val coverCache = ConcurrentHashMap<MediaCoverKey, CachedCover>()
 
     private class CachedCover(val cover: MediaCover, val storedAtMillis: Long)
+
+    /**
+     * Character, staff and studio previews, keyed by their own kind and id.
+     *
+     * Not cleared on sign-out with the list and profile caches: a public name and
+     * portrait carry no session, and clearing them would only make the next
+     * account's first bio re-spend the requests. Keyed on [EntityPreviewKey]
+     * because a character and a staff member can share a numeric id and are two
+     * different people - the same namespace collision the media caches guard.
+     */
+    private val entityPreviewCache = ConcurrentHashMap<EntityPreviewKey, EntityPreview>()
 
     /**
      * Completed list responses, kept briefly so re-entering the app does not
@@ -1374,6 +1410,113 @@ class AniListRepositoryImpl(
             Result.success(resolved)
         }
     }
+
+    override suspend fun getEntityPreviews(
+        keys: List<EntityPreviewKey>
+    ): Result<Map<EntityPreviewKey, EntityPreview>> {
+        if (keys.isEmpty()) return Result.success(emptyMap())
+
+        val resolved = LinkedHashMap<EntityPreviewKey, EntityPreview>()
+        val missing = mutableListOf<EntityPreviewKey>()
+        keys.distinct().forEach { key ->
+            // A key this request cannot answer for is dropped rather than sent:
+            // asking the character root for a media id would draw a stranger's
+            // portrait on the card, and an unknown type would fail the document.
+            if (key.graphqlType !in EntityPreviewKey.SUPPORTED_TYPES) return@forEach
+            val known = entityPreviewCache[key]
+            if (known != null) resolved[key] = known else missing += key
+        }
+        if (missing.isEmpty()) return Result.success(resolved)
+
+        var anyAccepted = false
+        var firstFailure: Throwable? = null
+
+        missing.chunked(ENTITY_BATCH_KEYS).forEach { batch ->
+            // One root per type, so twenty characters cost one field and one
+            // variable rather than twenty aliases.
+            val groups = batch.groupBy { it.graphqlType }
+            val variables = buildMap<String, Any> {
+                groups.forEach { (type, group) ->
+                    put(GraphQLQueries.entityPreviewVariable(type), group.map { it.id })
+                }
+            }
+            execute(
+                GraphQLRequest(
+                    query = GraphQLQueries.getEntityPreviewsQuery(groups.keys),
+                    variables = variables
+                ),
+                apiService::getEntityPreviews
+            ).fold(
+                onSuccess = { pages ->
+                    anyAccepted = true
+                    groups.forEach { (type, group) ->
+                        val found: Map<Int, EntityPreview> = when (type) {
+                            "CHARACTER" -> pages.characters?.characters.orEmpty()
+                                .associate { profile ->
+                                    profile.id to EntityPreview(
+                                        name = profile.name?.previewName(),
+                                        imageUrl = profile.image?.bestUrl
+                                    )
+                                }
+
+                            "STAFF" -> pages.staff?.staff.orEmpty()
+                                .associate { profile ->
+                                    profile.id to EntityPreview(
+                                        name = profile.name?.previewName(),
+                                        imageUrl = profile.image?.bestUrl
+                                    )
+                                }
+
+                            // A studio has no portrait on AniList, and a novel
+                            // with no id is not a row this batch can match.
+                            "STUDIO" -> pages.studios?.studios.orEmpty()
+                                .mapNotNull { studio ->
+                                    studio.id?.let { it to EntityPreview(name = studio.name) }
+                                }
+                                .toMap()
+
+                            else -> emptyMap()
+                        }
+                        group.forEach { key ->
+                            val preview = found[key.id] ?: return@forEach
+                            if (entityPreviewCache.size >= MAX_ENTITY_PREVIEW_CACHE_ENTRIES) {
+                                entityPreviewCache.clear()
+                            }
+                            entityPreviewCache[key] = preview
+                            resolved[key] = preview
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    if (firstFailure == null) firstFailure = error
+                    // Silent on screen, like the cover batches: a missing preview
+                    // leaves the card with its label and type icon, which is a
+                    // complete card. The line exists for logcat.
+                    Log.w(
+                        ENTITY_LOG_TAG,
+                        "AniList refused an entity preview batch of ${batch.size}",
+                        error
+                    )
+                }
+            )
+        }
+
+        // Same contract as the covers: a partial answer is a success, because each
+        // card is independently useful; only a wholly refused document is a
+        // failure the caller can retry.
+        val failure = firstFailure
+        return if (!anyAccepted && failure != null) {
+            Result.failure(failure)
+        } else {
+            Result.success(resolved)
+        }
+    }
+
+    /** The name a preview card draws: AniList's full form, then native, then an alias. */
+    private fun MediaName.previewName(): String? =
+        full?.takeIf { it.isNotBlank() }
+            ?: native?.takeIf { it.isNotBlank() }
+            ?: alternative?.firstOrNull { it.isNotBlank() }
 
     /** Memory half of [knownCover], on the list's window. */
     private fun cachedCover(key: MediaCoverKey): MediaCover? {

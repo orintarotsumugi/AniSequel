@@ -6,6 +6,7 @@ import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.DeleteMediaListEntryData
+import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLRequest
@@ -230,6 +231,10 @@ private class ChunkedListService(
     override suspend fun getMediaCovers(
         request: GraphQLRequest
     ): GraphQLResponse<Map<String, MediaCoverPage>> = notServed("getMediaCovers")
+
+    override suspend fun getEntityPreviews(
+        request: GraphQLRequest
+    ): GraphQLResponse<EntityPreviewPages> = notServed("getEntityPreviews")
 
     override suspend fun getUserOverview(
         request: GraphQLRequest

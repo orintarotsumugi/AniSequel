@@ -6,6 +6,7 @@ import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.DeleteMediaListEntryData
+import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLRequest
@@ -104,6 +105,19 @@ interface AniListApiService {
     suspend fun getMediaCovers(
         @Body request: GraphQLRequest
     ): GraphQLResponse<Map<String, MediaCoverPage>>
+
+    /**
+     * Names and portraits for a batch of characters, staff or studios.
+     *
+     * The document has one alias per *type* present (see
+     * [GraphQLQueries.getEntityPreviewsQuery]), so the response is read as a
+     * fixed record with three nullable pages rather than a runtime-keyed map.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getEntityPreviews(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<EntityPreviewPages>
 
     /** Bio, list statistics, favourites and aggregate stats. Profile screen only. */
     @POST("/")

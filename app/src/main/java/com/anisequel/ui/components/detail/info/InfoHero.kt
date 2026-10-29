@@ -1,5 +1,8 @@
 package com.anisequel.ui.components.detail.info
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -11,6 +14,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +36,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,11 +59,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
@@ -72,6 +84,7 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
+import kotlinx.coroutines.delay
 
 /**
  * The Info page's hero: the artwork, behind its own title.
@@ -144,6 +157,20 @@ fun InfoHero(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // Long-pressing the title is the shortcut to the one thing people do with a
+    // title on this page: take it somewhere else. The full name sheet with its
+    // four copy buttons is still the discoverable path; this is the one gesture
+    // a reader who already knows the title tries first.
+    var titleCopied by remember(media.id) { mutableStateOf(false) }
+    // `expressiveHoldGesture`'s `pointerInput(Unit)` keeps the first lambda it saw,
+    // and the sheet can swap the list node for the detail node under a live hero -
+    // so the title is read through a state rather than captured.
+    val currentTitle = rememberUpdatedState(media.displayName)
+    LaunchedEffect(titleCopied) {
+        if (!titleCopied) return@LaunchedEffect
+        delay(COPY_CONFIRMATION_MILLIS)
+        titleCopied = false
+    }
     // The extracted seed first. It is read from the pixels the reader is looking
     // at, and it is the same colour the theme is built from - so the hero's
     // backdrop, the shadow around the cover and the buttons below cannot be three
@@ -156,11 +183,21 @@ fun InfoHero(
     // its shadow and placeholder were invisible on a dark sheet, and a snow cover
     // flashed white behind the poster for the frames before it loaded. Same hue,
     // same chroma, a tone that is always the colour the buttons are.
+    //
+    // `CoverColors.color` is read *outside* the `remember` on purpose: it is
+    // snapshot state, so the hero must recompose when the extraction lands. The
+    // conversion itself - an HCT conversion and a palette sample - is what is
+    // memoised, because the hero recomposes several times inside one open and the
+    // seed only changes once.
     val coverSeed = CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
-    val coverColor = coverSeed?.let {
-        DynamicThemeBuilder.accentColor(it, dark = isSystemInDarkTheme())
-    } ?: MaterialTheme.colorScheme.surfaceContainerHigh
+    val dark = isSystemInDarkTheme()
+    val coverFallback = MaterialTheme.colorScheme.surfaceContainerHigh
+    val coverColor = remember(coverSeed, dark, coverFallback) {
+        coverSeed?.let {
+            DynamicThemeBuilder.accentColor(it, dark = dark)
+        } ?: coverFallback
+    }
     val surface = MaterialTheme.colorScheme.surface
     // The box behind the full-bleed artwork. The accent at full strength is right
     // for the small poster and its shadow, and wrong here: tone 80 in a dark sheet
@@ -274,6 +311,22 @@ fun InfoHero(
             }
         }
 
+        // The confirmation floats over the artwork instead of taking a row in the
+        // lockup: a layout that moved when a copy landed would shift the chips
+        // under the reader's thumb for the whole acknowledgement window.
+        AnimatedVisibility(
+            visible = titleCopied,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+        ) {
+            TitleCopiedPill()
+        }
+
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -362,7 +415,15 @@ fun InfoHero(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = media.displayName,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        // Set tighter than the body's default line height: a
+                        // three-line title in `ExtraBold` with headlineSmall's
+                        // 32sp leading read as three separate sentences. The
+                        // slightly negative tracking is what makes it read as one
+                        // display block against the artwork.
+                        lineHeight = 30.sp,
+                        letterSpacing = (-0.4).sp
+                    ),
                     // The artwork behind is sharp now, so the title carries its own
                     // shadow rather than relying on the gradient alone. One shadow on
                     // one short block of text: it is what keeps a white
@@ -373,12 +434,35 @@ fun InfoHero(
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.shadow(
-                        elevation = 6.dp,
-                        shape = RectangleShape,
-                        ambientColor = Color.Black,
-                        spotColor = Color.Black
-                    )
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = RectangleShape,
+                            ambientColor = Color.Black,
+                            spotColor = Color.Black
+                        )
+                        // The hold gesture, not `combinedClickable`: the title is a
+                        // line of text in a scrolling hero, and a tap ripple on it
+                        // would promise an action a tap does not have. The hold
+                        // plays the same haptic as every other hold in the app.
+                        .expressiveHoldGesture(
+                            onHold = {
+                                copyTitle(context, currentTitle.value)
+                                titleCopied = true
+                            }
+                        )
+                        // The hold is a `pointerInput`, which TalkBack cannot
+                        // perform; the long-click action is what gives a screen
+                        // reader the same copy - the same pairing as the poster's
+                        // semantics above.
+                        .semantics {
+                            onLongClick(label = "Copy title") {
+                                copyTitle(context, media.displayName)
+                                titleCopied = true
+                                true
+                            }
+                        }
+                        .testTag("detail_hero_title")
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -448,191 +532,51 @@ fun InfoHero(
 }
 
 /**
- * The controls that take over once the hero has scrolled away.
+ * The acknowledgement for a copied title, over the artwork.
  *
- * The hero's own pill leaves the screen with the hero - which is what the reference
- * does, and it means that on a twelve-card page the only way out is the sheet's own
- * swipe. This is the same two actions, docked, arriving as the lockup hands its title
- * over: the two are timed against each other by [DOCKED_BAR_AT] and [LOCKUP_FADE_FROM]
- * in `InfoMotion.kt`. `visible` is computed from a `derivedStateOf` at the call site,
- * so the crossing recomposes this bar once rather than on every scrolled frame.
- *
- * ## The title pill is a control, and it carries the two things this page lacked
- *
- * A fourteen-section page has no orientation and no way back. The pill is both: the
- * label is a *button* that returns to the hero, and the same pill carries [progress]
- * as a wash that fills from the left as the reader descends. Both live inside the one
- * control rather than being added as a fourth floating element, because everything
- * floating over this page already competes with the content behind it.
- *
- * The wash is `scaleX` on a full-size box, read inside `graphicsLayer`, so it is a
- * draw-phase transform: the bar does not recompose on the frames the reader is
- * scrolling - the same reason the hero's parallax is written the way it is. [progress]
- * is a function rather than a value for the same reason the hero's `collapse` is one.
- *
- * ## The bug this replaces
- *
- * The title `Surface` took `weight(1f, fill = false)` and a `Spacer` then took
- * `weight(1f)` *after* it, so two weighted children split the free width in half:
- * the title was measured against roughly half the bar and ellipsized there no matter
- * how much room the bar really had. On screen that was a long title cut to
- * `MARRIAGETO...` with a third of the screen sitting empty beside it. With one
- * weighted child the title still hugs its content (`fill = false`, so a short title's
- * pill stays short) but is measured against every dp the controls are not using.
+ * Same pill vocabulary as the hero's action bar - black glass, white glyph - so
+ * it reads as part of this surface rather than as a system toast that happened to
+ * land on it.
  */
 @Composable
-fun InfoFloatingBar(
-    visible: Boolean,
-    title: String,
-    progress: () -> Float,
-    onScrollToTop: () -> Unit,
-    onOpenAniList: () -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val container = MaterialTheme.colorScheme.surfaceContainerHigh
-    val onContainer = MaterialTheme.colorScheme.onSurface
-    val wash = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    val pill = ExpressiveShapes.pill
-
-    AnimatedVisibility(
-        visible = visible,
-        // It docks rather than blinks: it comes down from the edge it belongs to,
-        // on the spatial spring, so the bar arrives with the feel of a control
-        // settling into place. Under `INSTANT` both the slide and the fade are a
-        // `snap`, which is the style saying exactly that.
-        enter = slideInVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height -> -height } +
-            fadeIn(animationSpec = ExpressiveMotion.FastEffects),
-        exit = slideOutVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height -> -height } +
-            fadeOut(animationSpec = ExpressiveMotion.FastEffects),
-        modifier = modifier
+private fun TitleCopiedPill() {
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = Color.Black.copy(alpha = 0.62f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = pill,
-                color = container,
-                shadowElevation = 6.dp,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    // The pill's content is a 22dp icon and two 8dp paddings, so it
-                    // measured about 38dp - under the 48dp minimum on the one
-                    // control a reader reaches for one-handed at the top of a
-                    // fourteen-section page.
-                    .heightIn(min = 48.dp)
-                    .clip(pill)
-                    // `onClickLabel` rather than a `contentDescription` on the icon:
-                    // the pill's own text is what should be announced, and the action
-                    // is what a screen reader needs said after it. Overwriting the
-                    // description with "Scroll to top" would replace the title.
-                    .clickable(
-                        role = Role.Button,
-                        onClickLabel = "Scroll to top",
-                        onClick = onScrollToTop
-                    )
-                    .testTag("info_bar_title")
-            ) {
-                Box {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .graphicsLayer {
-                                scaleX = progress()
-                                transformOrigin = TransformOrigin(0f, 0.5f)
-                            }
-                            .background(wash)
-                    )
-                    Row(
-                        modifier = Modifier.padding(start = 9.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.ExpandLess,
-                            contentDescription = null,
-                            tint = onContainer,
-                            modifier = Modifier.size(17.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Surface(
-                shape = pill,
-                color = container,
-                shadowElevation = 6.dp
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeroIconButton(
-                        icon = AppVectorIcons.OpenInBrowser,
-                        label = "Open on AniList",
-                        onClick = onOpenAniList,
-                        tint = onContainer
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(22.dp)
-                            .background(onContainer.copy(alpha = 0.18f))
-                    )
-                    HeroIconButton(
-                        icon = AppVectorIcons.Close,
-                        label = "Close",
-                        onClick = onClose,
-                        tint = onContainer
-                    )
-                }
-            }
+            Icon(
+                imageVector = AppVectorIcons.CheckCircle,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Title copied",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
 /**
- * One icon in a hero pill.
+ * Puts [title] on the clipboard.
  *
- * Deliberately not an `IconButton`: the pill draws the surface, the divider and the
- * ripple clipping as one control, and Material's own button brings its own container
- * and padding that would leave the divider floating inside a gap.
- *
- * 48dp is the platform minimum touch target and this used to be 46dp, which put
- * both the hero's own controls and the docked bar's below it. The two that matter
- * most are the ones a reader reaches for one-handed at the bottom of the screen, so
- * the shortfall was felt rather than merely linted.
+ * The platform clipboard rather than Compose's, for the reason `CopyLinkRow`
+ * records: it is the contract that cannot break under a Compose upgrade, and
+ * plain text is all this needs. `as?` because a device that does not publish a
+ * clipboard must not turn a hold on the title into a crash.
  */
-@Composable
-private fun HeroIconButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    tint: Color = Color.White
-) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(19.dp)
-        )
-    }
+private fun copyTitle(context: Context, title: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("AniList title", title))
 }
 
 /** A translucent chip over artwork, so it stays legible on any still. */

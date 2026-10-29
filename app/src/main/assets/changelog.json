@@ -4,6 +4,42 @@
       "version": "1.6.8",
       "entries": [
         {
+          "title": "The full-screen viewer shows both of AniList's images",
+          "detail": "The viewer drew the poster and nothing else, so the banner - the one wide piece of art AniList serves, and the backdrop the hero is built on - could not be seen full size anywhere in the app. It now offers every image the title actually carries as a source: the poster and, when there is one, the banner. The artwork's own ratio is measured rather than assumed, so a wide banner is not letterboxed in a poster's frame, and switching sources resets the zoom and the pan limits that belonged to the other image. The save button saves the source on screen rather than a fixed URL - a banner saves a banner - by copying the CDN's own bytes into Pictures/AniSequel, so the gallery gets the original file instead of a re-encode. Two link pills under it open AniList and, for anime, LiveChart."
+        },
+        {
+          "title": "A character link is a person, not a film reel",
+          "detail": "Every preview card for a character, staff or studio link used to be headed by whatever the URL held - `Character #127222` when the profile used the numeric form - and drew the anime film icon, because only anime and manga were ever looked up. The markdown renderer now batches those entities through one request with an aliased `Page` root per type: a hall of fame of twenty characters costs one call, not twenty, and the answer supplies the name AniList knows and a portrait where one exists. Studios have no portrait, so their cards keep the studio icon, and a user link still keeps the label the author wrote because it carries a name rather than an id. The lookup runs wherever markdown renders - bios, comments, synopses, person sheets and the composer's preview - through the same composition-local plumbing as media posters, caches up to 512 answers, and treats a partial answer as success: a card whose entity is missing keeps its label and type icon. Character, staff and studio ids are three separate namespaces and are never sent to the media lookup, and a slug is not asked for as id zero."
+        },
+        {
+          "title": "LiveChart is a link, not a scrape",
+          "detail": "LiveChart.me answers airing schedules, countdowns and streaming availability that AniList does not, and it publishes no API - its own FAQ points at RSS and nothing else - so the app links to it instead of reading it. The Extras card gains a row for anime titles, and the full-screen viewer a pill, both opening LiveChart's own title search: the URL is the `SearchAction` the site declares in its own schema.org metadata, not one guessed from the address bar. The romaji title is searched first because that is how LiveChart names its entries, and manga does not get the row - LiveChart tracks anime, and a link that finds nothing is worse than no link."
+        },
+        {
+          "title": "A spoiler can be closed again",
+          "detail": "An inline `~!...!~` spoiler opened on a tap and could never be closed, because the run stopped being tappable once it was plain text - so a plot point revealed by accident stayed revealed for the rest of the paragraph's life. The revealed run keeps the spoiler tint and stays tappable: the tint shows where the hidden text was, and a second tap covers it again. The block-level chip is unchanged - it has its own control and deliberately leaves the text under it inert."
+        },
+        {
+          "title": "The genre list folds away",
+          "detail": "Eighteen genre chips pushed every filter below them - minimum rating, the toggles, the hidden list - most of a sheet's scroll away from the top, for chips most readers never touch. The section shows eight now, with a Show all toggle, and the height change is animated on the spring rather than snapping. A selected genre is never folded: if a filter is narrowing the results the sheet has to show which one, so a chosen genre from the hidden half is pulled up beside the visible set."
+        },
+        {
+          "title": "The status row shows the status",
+          "detail": "The one row that changes with the entry said only that it was a form field: Status carried the generic info icon whatever status was set. It now draws the status itself - play, repeat, check, bookmark, pause, broken heart - in the row and beside every option in its menu, where the current status is marked, bolded and carries a test tag. The comparison goes through the shared status table, so an entry cached under an old spelling such as `ON_HOLD` still opens its menu with the right option marked instead of none."
+        },
+        {
+          "title": "Hold the title to copy it",
+          "detail": "The full name sheet with its copy buttons is still the discoverable path, but holding a title's name in the hero is the gesture people try first. It copies the name and floats a small confirmation over the artwork, rather than adding a row to the lockup that would shift the chips under the thumb for the whole acknowledgement. A screen reader cannot perform a hold, so the title also carries the action as a long-click, and the hold reads the title through a state because the sheet can swap the list node for the detail node under a live hero."
+        },
+        {
+          "title": "The info page paints less",
+          "detail": "Three things on the title page did work they did not need to. The hero's accent conversion ran an HCT conversion and a palette sample on every recomposition rather than memoising them against the seed. The lazy column had no content types, so a fast fling could hand an artwork row's recycled slot to an arriving card; cards and rows now say which kind of slot they are. The docked bar's open action was a fresh lambda on every pass. The title lockup also sets tighter leading and tracking so a three-line name reads as one block, and the bar's press spring is lighter than the icon buttons' because a scale on a full-width capsule reads as the bar jumping."
+        },
+        {
+          "title": "Sixty more ways it ended",
+          "detail": "The dark tone grows by sixty lines - the dedicated finale, the studio that has already emptied, the merch restocked after the funeral. The shuffle bag still shows every filtered line once before repeating any."
+        },
+        {
           "title": "The feed shows what people said, not only what they watched",
           "detail": "The activity feed asked AniList for list updates and nothing else - the query filtered `type_in: [ANIME_LIST, MANGA_LIST]` - so a person's status posts, the part of their profile where they actually talk, were invisible on the tab built to show their activity. Text posts arrive now and draw as their own card: the author's own Markdown through the same parser the bio uses, clamped to nine lines with a Read more that appears only when something was actually hidden, and the same like and comment controls as any list row. Tapping the card opens its thread. The demo feed carries one, because otherwise the card had no offline path at all."
         },
