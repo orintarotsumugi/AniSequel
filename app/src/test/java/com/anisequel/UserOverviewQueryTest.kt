@@ -165,15 +165,18 @@ class UserOverviewQueryTest {
     }
 
     @Test
-    fun `the activity feed filters to list updates and selects the union member`() {
+    fun `the activity feed filters to the two members it renders and selects both`() {
         val activity = GraphQLQueries.GET_USER_ACTIVITY
 
-        // Unfiltered, `activities` answers with `MessageActivity` - forum posts by
-        // the user - which is not what the feed is for.
-        assertTrue(activity.contains("type_in: [ANIME_LIST, MANGA_LIST]"))
-        // A union cannot be read by Moshi, so the ListActivity member is selected
-        // with an inline fragment; everything else is modelled as unrecognised.
+        // `TEXT` is how a person's status posts reach the feed; the feed asked
+        // for list updates only and simply never showed them. `MESSAGE` must
+        // stay out - it is site messages between two users, not a public feed.
+        assertTrue(activity.contains("type_in: [ANIME_LIST, MANGA_LIST, TEXT]"))
+        assertFalse(activity.contains("MESSAGE"))
+        // A union cannot be read by Moshi, so both members are selected with
+        // inline fragments; everything else is modelled as unrecognised.
         assertTrue(activity.contains("... on ListActivity"))
+        assertTrue(activity.contains("... on TextActivity"))
         assertTrue(activity.contains("sort: [ID_DESC]"))
     }
 
@@ -213,11 +216,25 @@ class UserOverviewQueryTest {
 
         assertTrue(replies.trimStart().startsWith("query"))
         assertTrue(replies.contains("Activity(id:"))
-        // `Activity(id:)` is a union, so the member must be fragmented.
+        // `Activity(id:)` is a union, so both feed members must be fragmented or
+        // a text post's id answers with an empty object and its thread looks empty.
         assertTrue(replies.contains("... on ListActivity"))
+        assertTrue(replies.contains("... on TextActivity"))
         assertTrue(replies.contains("replies"))
         // The comment body, parsed as markdown by the sheet's renderer.
         assertTrue(replies.contains("text"))
+    }
+
+    @Test
+    fun `the likers query fragments both feed members too`() {
+        val likes = GraphQLQueries.GET_ACTIVITY_LIKES
+
+        // Same union trap as replies: a text post's id against a list-only
+        // document answers an empty object, and the sheet would say nobody liked
+        // a post that has likes.
+        assertTrue(likes.contains("... on ListActivity"))
+        assertTrue(likes.contains("... on TextActivity"))
+        assertTrue(likes.contains("likes"))
     }
 
     @Test
@@ -231,6 +248,7 @@ class UserOverviewQueryTest {
         assertTrue(toggle.contains("ToggleLikeV2"))
         assertTrue(toggle.contains("type: ACTIVITY"))
         assertTrue(toggle.contains("... on ListActivity"))
+        assertTrue(toggle.contains("... on TextActivity"))
     }
 
     @Test

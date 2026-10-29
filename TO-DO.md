@@ -202,6 +202,16 @@ private composables, `UserOverviewAdapters.kt` the payload translations and
   two-halves failure rule, the re-entry trigger) are a coherent `ProfileSocialStateTest`
   and would need the fixtures they share moved or duplicated.
 
+- **`ProfileLibraryTab.kt`, 1139 — the biggest file in the app, and it was 1114
+  before this batch touched it.** It is four things: the `LibraryFilter`/`LibrarySort`/
+  `LibraryType` vocabulary and the pure `filterLibrary`/`libraryCounts`/`sortLibrary`
+  rules (already covered by `LibraryFilterTest`), the section/grouped list building,
+  the filter-and-sort sheet UI, and the grid itself. The first half is the clean cut
+  — the rules are pure and their test already imports them from this file, so
+  moving them to `LibraryRules.kt` in the same package changes no call sites and no
+  visibility. That is roughly lines 60–400 and would leave the screen file near the
+  ceiling rather than 400 lines past it.
+
 Both are mechanical, and both are churn if the code underneath changes first, so
 do whichever of the two you are about to edit anyway.
 

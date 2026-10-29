@@ -262,24 +262,45 @@ data class PersonImage(
  *
  * AniList returns the feed as `[ActivityUnion]`, a union of `ListActivity`,
  * `TextActivity`, `MessageActivity` and others. Moshi cannot discriminate a
- * union, and this type models only the `ListActivity` member.
+ * union, so one flat type reads both members this feed shows: a **list update**
+ * ([media] plus [status], "watched 3 episodes") and a **text post** ([text],
+ * "what are you watching this season?"). The query asks for `type_in:
+ * [ANIME_LIST, MANGA_LIST, TEXT]`; `MessageActivity` - site messages between
+ * two users - stays out, because a private message rendered on a public profile
+ * tab is not a feed.
  *
- * That is not a shortcut with a hidden cost, because the query filters with
- * `type_in: [ANIME_LIST, MANGA_LIST]` and the parser then drops anything
- * without a [media] or a [status] - which is exactly the shape of every other
- * union member. So a forum post or a site message that slipped through the
- * server-side filter is skipped rather than rendered as a blank card. See
- * `UserActivityJsonTest`.
+ * The parser drops anything [isUnrecognised], which is every remaining union
+ * member: a forum post arriving through some future document, or a member that
+ * slipped past the server-side filter, would otherwise render as a blank card.
+ * See `UserActivityJsonTest`.
  *
  * [status] is **lowercase** here - `"completed"`, not `"COMPLETED"` - unlike
  * every other status in the API. Compare case-insensitively; the JSON test pins
  * it.
  */
 @JsonClass(generateAdapter = true)
-data class ListActivity(
+data class ProfileActivity(
     val id: Int,
     val status: String? = null,
     val progress: String? = null,
+    /**
+     * The body of a text post, AniList Markdown.
+     *
+     * Null for list updates. Parsed at render time rather than here, the same
+     * rule the bio and replies follow: a post that scrolled past unread should
+     * not have paid for a Markdown parse.
+     */
+    val text: String? = null,
+    /**
+     * The union member's name, when the response carried it.
+     *
+     * `MessageActivity` - a site message between two users - has a `text` field
+     * exactly like `TextActivity`, so the body alone cannot tell them apart.
+     * `type_in` already excludes `MESSAGE` server-side; this is the second line
+     * of defence for a response that ignored the filter, and it is why a
+     * message cannot be drawn as a text post.
+     */
+    @Json(name = "__typename") val typename: String? = null,
     val createdAt: Int? = null,
     val likeCount: Int? = null,
     val replyCount: Int? = null,
@@ -297,9 +318,23 @@ data class ListActivity(
     val siteUrl: String? = null,
     val media: MediaNode? = null
 ) {
-    /** True for the members of the union this app does not model. */
+    /** True for the members of the union this feed does not render. */
     val isUnrecognised: Boolean
-        get() = media == null && status == null
+        get() = media == null && status == null && !isTextPost
+
+    /**
+     * A text post: a body and no media.
+     *
+     * Not just `text != null`: a list update's status and text can both arrive
+     * (AniList lets "completed" statuses carry a comment), and those are still
+     * list cards - the media is what decides which card draws. Nor is a
+     * `MessageActivity` one, even though it also has a body: a private message
+     * rendered on a public profile tab is not a feed.
+     */
+    val isTextPost: Boolean
+        get() = text != null &&
+            media == null &&
+            !typename.equals("MessageActivity", ignoreCase = true)
 
     /**
      * The activity's status in words.
@@ -333,7 +368,7 @@ data class ActivityFeedData(
 @JsonClass(generateAdapter = true)
 data class ActivityFeedPage(
     val pageInfo: PageInfo? = null,
-    val activities: List<ListActivity>? = null
+    val activities: List<ProfileActivity>? = null
 )
 
 /**
@@ -362,7 +397,7 @@ data class PageInfo(
  * place that can still tell.
  */
 data class UserActivityPage(
-    val activities: List<ListActivity>,
+    val activities: List<ProfileActivity>,
     val hasMore: Boolean
 )
 

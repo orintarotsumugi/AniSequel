@@ -7,7 +7,7 @@ import com.squareup.moshi.JsonClass
  * The reply-and-like side of the activity feed.
  *
  * Kept out of [UserOverview.kt] because it is a different concern with a
- * different lifetime: [ListActivity] is parsed once per feed page and thrown
+ * different lifetime: [ProfileActivity] is parsed once per feed page and thrown
  * away, while these types only exist while a comment sheet is open or a like is
  * in flight. They also have their own query documents, so they change when the
  * engagement features change and for no other reason.
@@ -37,11 +37,12 @@ data class ActivityReply(
 /**
  * Payload of the activity-with-replies query.
  *
- * `Activity(id:)` returns `ActivityUnion`, so the document fragments the
- * `ListActivity` member. A member the fragment does not match comes back as an
- * object with no selected fields, and an id that no longer exists as null; both
- * read as an empty thread through `replies.orEmpty()`. The feed can only contain
- * list activities, but a stale id could still resolve to something else.
+ * `Activity(id:)` returns `ActivityUnion`, so the document fragments the two
+ * members the feed can open a thread for, `ListActivity` and `TextActivity`. A
+ * member the fragments do not match comes back as an object with no selected
+ * fields, and an id that no longer exists as null; both read as an empty thread
+ * through `replies.orEmpty()`. The feed only contains those two, but a stale id
+ * could still resolve to something else.
  */
 @JsonClass(generateAdapter = true)
 data class ActivityDetailData(

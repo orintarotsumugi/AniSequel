@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -37,14 +35,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaNode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import java.time.Instant
 import java.util.Locale
 
 /** AniList covers are 2:3. */
@@ -87,9 +84,58 @@ private val COVER_BLUR_RADIUS = 28.dp
  */
 private const val BACKDROP_DECODE_PX = 220
 
+/**
+ * One activity in the feed, whichever member of `ActivityUnion` it is.
+ *
+ * Two shapes share this entry point so the feed does not have to branch: a
+ * list update with a poster ([ActivityListCard]) and a text post
+ * ([ActivityTextCard]). Anything else is a union member the feed does not
+ * render and draws nothing - the repository filters those out before the feed
+ * sees them, this is only a second line of defence for the preview.
+ */
 @Composable
 fun ActivityCard(
-    activity: ListActivity,
+    activity: ProfileActivity,
+    modifier: Modifier = Modifier,
+    userName: String? = null,
+    userAvatar: String? = null,
+    onLike: () -> Unit = {},
+    onComments: () -> Unit = {},
+    onOpenLikers: () -> Unit = {},
+    onOpenDetail: (MediaNode) -> Unit = {},
+    likePending: Boolean = false,
+    nowEpochSecond: Long? = null
+) {
+    when {
+        activity.media != null -> ActivityListCard(
+            activity = activity,
+            modifier = modifier,
+            userName = userName,
+            userAvatar = userAvatar,
+            onLike = onLike,
+            onComments = onComments,
+            onOpenLikers = onOpenLikers,
+            onOpenDetail = onOpenDetail,
+            likePending = likePending,
+            nowEpochSecond = nowEpochSecond
+        )
+        activity.isTextPost -> ActivityTextCard(
+            activity = activity,
+            modifier = modifier,
+            userName = userName,
+            userAvatar = userAvatar,
+            onLike = onLike,
+            onComments = onComments,
+            onOpenLikers = onOpenLikers,
+            likePending = likePending,
+            nowEpochSecond = nowEpochSecond
+        )
+    }
+}
+
+@Composable
+private fun ActivityListCard(
+    activity: ProfileActivity,
     modifier: Modifier = Modifier,
     userName: String? = null,
     userAvatar: String? = null,
@@ -189,51 +235,13 @@ fun ActivityCard(
             }
 
             Column(modifier = Modifier.padding(14.dp)) {
-                // User info header row if present
-                if (userName != null || userAvatar != null || activity.createdAt != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (userAvatar != null) {
-                            AsyncImage(
-                                model = userAvatar,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                        }
-                        if (userName != null) {
-                            Text(
-                                text = userName,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                        if (activity.createdAt != null) {
-                            Text(
-                                text = formatRelativeSeconds(
-                                    timestamp = activity.createdAt,
-                                    now = Instant.ofEpochSecond(nowEpochSecond ?: Instant.now().epochSecond)
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+                ActivityAuthorRow(
+                    userName = userName,
+                    userAvatar = userAvatar,
+                    createdAt = activity.createdAt,
+                    nowEpochSecond = nowEpochSecond,
+                    avatarSize = 28.dp
+                )
 
                 Row {
                     AsyncImage(
@@ -339,7 +347,7 @@ fun ActivityCard(
  * and "Chapter 42 of null" is worse than the number on its own. The demo fixture
  * carries one manga row so this branch is exercised without a real account.
  */
-private fun activityDetail(activity: ListActivity): String {
+private fun activityDetail(activity: ProfileActivity): String {
     val media = activity.media ?: return ""
     val isManga = media.type.equals("MANGA", ignoreCase = true)
     val progress = activity.progress?.takeIf { it.isNotBlank() }

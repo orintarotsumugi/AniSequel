@@ -23,8 +23,10 @@ import org.junit.Test
  *    this payload, so the card deliberately prints "Chapter 42" on its own; a
  *    fixture that gave a manga an `episodes` value would make the anime branch
  *    look correct for it and hide a wrong "Episode N of M".
- *  - Every row must resolve to a media node with a title. The card returns early
- *    for a row with no media at all, so such a row is a silent missing card.
+ *  - Every **list-update** row must resolve to a media node with a title. The
+ *    list card returns early for a row with no media at all, so such a row is a
+ *    silent missing card. A text post is the deliberate exception: it has no
+ *    media and is drawn by its own card shape.
  *
  * Pure JVM, no Robolectric: this is fixture data plus the model, and the point is
  * that it can be asserted without an Android runtime.
@@ -64,16 +66,32 @@ class DemoActivityFixtureTest {
     }
 
     @Test
-    fun `every demo activity resolves to a titled media node`() {
-        val blank = feed.filter {
-            it.media == null || it.media.title?.displayTitle.isNullOrBlank()
-        }
+    fun `every demo list update resolves to a titled media node`() {
+        val blank = feed
+            .filterNot { it.isTextPost }
+            .filter { it.media == null || it.media.title?.displayTitle.isNullOrBlank() }
 
         assertTrue(
-            "the demo feed has ${blank.size} row(s) with no media or no title. The card " +
-                "returns early for the first, so the row renders as a gap in the list " +
-                "rather than as an error.",
+            "the demo feed has ${blank.size} list-update row(s) with no media or no title. " +
+                "The list card returns early for the first, so the row renders as a gap " +
+                "in the list rather than as an error.",
             blank.isEmpty()
+        )
+    }
+
+    /**
+     * The feed renders two members of `ActivityUnion`, and the demo has to show
+     * both. The feed asked AniList for list updates only for its whole first
+     * life, so the text-post card had no offline path at all - without this row
+     * the demo keeps proving that half the feed works and says nothing about the
+     * half that used to be missing.
+     */
+    @Test
+    fun `the demo feed contains a text post`() {
+        assertTrue(
+            "the demo activity feed has no text post, so the post card is never " +
+                "rendered offline",
+            feed.any { it.isTextPost }
         )
     }
 

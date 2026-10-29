@@ -761,14 +761,31 @@ needed, so it is fetched the first time somebody filters to it and then cached.
 
 ## The activity feed
 
-AniList returns a person's activity as an `ActivityUnion`, and the feed asks only
-for the two list members (`type_in: [ANIME_LIST, MANGA_LIST]`, newest first). The
-repository then drops anything it cannot draw: a union member that slipped past
-the server-side filter, and a list update whose media has since been removed.
-That filter is right — a blank card is worse than no card — but it used to make
-the feed's *pagination* wrong. The ViewModel treated a page shorter than 25 rows
-as the last page, so one removed title could end a history that still had entries
-behind it, and the tab showed nothing to explain the stop.
+AniList returns a person's activity as an `ActivityUnion`, and the feed asks for
+the two members it renders: the two list types (`ANIME_LIST`, `MANGA_LIST`) and
+`TEXT`, newest first. The repository then drops anything it cannot draw: a union
+member that slipped past the server-side filter, and a list update whose media
+has since been removed. That filter is right — a blank card is worse than no card
+— but it used to make the feed's *pagination* wrong. The ViewModel treated a page
+shorter than 25 rows as the last page, so one removed title could end a history
+that still had entries behind it, and the tab showed nothing to explain the stop.
+
+`TEXT` was missing for the feed's whole first life, which meant a person's status
+posts — the part of the profile where they actually talk — never appeared on the
+tab built to show their activity. The feed was only ever showing list updates.
+One flat model now reads both members: a list update has `media` and `status`, a
+text post has `text` and no media, and `ActivityCard` picks the card shape from
+exactly that. `MESSAGE` stays out — it is a site message between two users, and a
+private message on a public tab is not a feed. The body alone cannot tell a
+message from a post (both have `text`), so the model reads the union's
+`__typename` as the discriminator; `type_in` already excludes `MESSAGE`, and the
+typename is the second line of defence for a response that ignored it.
+
+The three engagement documents (`GET_ACTIVITY_REPLIES`, `GET_ACTIVITY_LIKES`,
+`TOGGLE_ACTIVITY_LIKE`) each fragment *both* members. They fragmented only
+`ListActivity`, so opening a text post's thread or likers answered with an
+object that had no selected fields — an empty sheet over a post that has
+comments. Liking a post worked; reading what anyone said about it did not.
 
 `GET_USER_ACTIVITY` now asks for `pageInfo { hasNextPage }`; `perPage` is a
 variable so the document and the repository's page size cannot disagree; and

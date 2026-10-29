@@ -3,7 +3,7 @@ package com.anisequel
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
@@ -52,7 +52,7 @@ class ProfileViewModelTest {
     }
 
     private class FakeProfileRepository(
-        var activityPages: Map<Int, List<ListActivity>> = emptyMap(),
+        var activityPages: Map<Int, List<ProfileActivity>> = emptyMap(),
         /**
          * The `pageInfo.hasNextPage` each page answers with.
          *
@@ -756,7 +756,7 @@ class ProfileViewModelTest {
         isLiked: Boolean? = null,
         likeCount: Int = 0,
         replyCount: Int = 0
-    ) = ListActivity(
+    ) = ProfileActivity(
         id = id,
         status = "completed",
         progress = "12",

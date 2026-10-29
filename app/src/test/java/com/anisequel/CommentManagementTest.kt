@@ -3,7 +3,7 @@ package com.anisequel
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
@@ -432,7 +432,7 @@ class CommentManagementTest {
      * implementation to keep in step.
      */
     private class FakeCommentRepository(
-        private val activity: ListActivity = createActivity(id = 1),
+        private val activity: ProfileActivity = createActivity(id = 1),
         var replies: List<ActivityReply> = emptyList(),
         var postResult: Result<ActivityReply> =
             Result.success(ActivityReply(id = 1, text = "posted")),
@@ -560,7 +560,7 @@ class CommentManagementTest {
  * repository - a nested class - uses it as a default argument, and a nested class
  * cannot reach its outer class's companion as unqualified scope.
  */
-private fun createActivity(id: Int, replyCount: Int = 0) = ListActivity(
+private fun createActivity(id: Int, replyCount: Int = 0) = ProfileActivity(
     id = id,
     status = "completed",
     progress = "12",

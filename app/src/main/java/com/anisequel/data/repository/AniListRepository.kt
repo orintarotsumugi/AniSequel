@@ -4,7 +4,7 @@ import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaEntryEdit
@@ -359,7 +359,7 @@ interface AniListRepository {
      * screen - including its failures, which is the point.
      */
     fun getDemoUserOverview(): UserOverview = unsupported("getDemoUserOverview")
-    fun getDemoUserActivity(): List<ListActivity> = unsupported("getDemoUserActivity")
+    fun getDemoUserActivity(): List<ProfileActivity> = unsupported("getDemoUserActivity")
     fun getDemoFollowers(): List<FollowUser> = unsupported("getDemoFollowers")
     fun getDemoFollowing(): List<FollowUser> = unsupported("getDemoFollowing")
 

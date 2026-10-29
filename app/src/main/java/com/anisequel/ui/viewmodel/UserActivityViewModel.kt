@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
@@ -72,7 +72,7 @@ class UserActivityViewModel(
         data object Idle : ActivityState
         data class Loading(val message: String = "Loading recent activity...") : ActivityState
         data class Success(
-            val activities: List<ListActivity>,
+            val activities: List<ProfileActivity>,
             val isLoadingMore: Boolean = false,
             /**
              * Whether AniList said there is another page.
@@ -567,7 +567,7 @@ class UserActivityViewModel(
 
     /** Rewrites the one activity in the loaded page, and its in-flight marker. */
     private fun replaceActivity(
-        activity: ListActivity,
+        activity: ProfileActivity,
         addPending: Int? = null,
         removePending: Int? = null
     ) {

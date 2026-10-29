@@ -10,7 +10,7 @@ import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.FavouriteStaffConnection
 import com.anisequel.data.model.Favourites
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.ListScoreStats
 import com.anisequel.data.model.MangaStats
 import com.anisequel.data.model.MediaCoverImage
@@ -168,9 +168,23 @@ object DemoProfileProvider {
      * broken. The `MediaNode` ids are the real AniList ids of the demo shows, so
      * tapping a card opens something that exists.
      */
-    fun getDemoActivity(): List<ListActivity> = listOf(
+    fun getDemoActivity(): List<ProfileActivity> = listOf(
         activity(1, 100465, "completed", null, hoursAgo(2), likes = 8, replies = 0),
         activity(2, 142329, "current", "7", hoursAgo(9), likes = 3, replies = 1),
+        // A text post, the other half of `ActivityUnion`. The feed asked AniList
+        // for list updates only for its whole first life, so this card shape had
+        // no offline path; without this row the demo would keep proving that a
+        // feed of list updates still works and nothing about the posts it used
+        // to hide. Markdown on purpose - the body goes through the same parser
+        // as the bio.
+        ProfileActivity(
+            id = 10,
+            text = "Seasonal check-in: **Frieren** is still the best thing airing, " +
+                "and nobody can tell me otherwise. What is everyone else watching?",
+            createdAt = (System.currentTimeMillis() / 1000 - hoursAgo(20)).toInt(),
+            likeCount = 6,
+            replyCount = 2
+        ),
         activity(3, 154587, "planning", null, hoursAgo(26), likes = 1, replies = 0),
         activity(4, 113415, "completed", null, hoursAgo(31), likes = 12, replies = 4),
         activity(5, 20605, "current", "22", hoursAgo(50), likes = 2, replies = 0),
@@ -229,7 +243,7 @@ object DemoProfileProvider {
         createdAtSecondsAgo: Long,
         likes: Int,
         replies: Int
-    ): ListActivity = ListActivity(
+    ): ProfileActivity = ProfileActivity(
         id = index,
         status = status,
         progress = progress,

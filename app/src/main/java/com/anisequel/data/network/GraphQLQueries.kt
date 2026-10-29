@@ -235,14 +235,17 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
-     * A page of somebody's list activity: "watched 3 episodes", "completed X",
-     * "added Y to planning".
+     * A page of somebody's activity: list updates ("watched 3 episodes",
+     * "completed X") and text posts, newest first.
      *
-     * `Page.activities` returns `[ActivityUnion]`, so this selects the
-     * `ListActivity` member with an inline fragment and filters to the two list
-     * types with `type_in`. Without the filter the same query answers with
-     * `MessageActivity` - forum posts by the user, which is not what the feed is
-     * for. The parser drops anything that is still not a list update.
+     * `Page.activities` returns `[ActivityUnion]`, so this selects the two
+     * members the feed renders with inline fragments and filters to the
+     * activity types with `type_in`. Both are asked for in one request: text
+     * posts are how people on AniList talk between list updates, and a feed
+     * without them was only ever showing half of what the person did.
+     * `MESSAGE` stays out and must stay out - it is site messages between two
+     * users, which do not belong on a public profile tab. The parser drops
+     * anything that is still not one of these two.
      *
      * `type_in` takes both media types in one request rather than one query per
      * medium: the response carries each item's own `media.type`, and the screen
@@ -260,7 +263,7 @@ object GraphQLQueries {
         query GetUserActivity(${'$'}userId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
           Page(page: ${'$'}page, perPage: ${'$'}perPage) {
             pageInfo { hasNextPage }
-            activities(userId: ${'$'}userId, type_in: [ANIME_LIST, MANGA_LIST], sort: [ID_DESC]) {
+            activities(userId: ${'$'}userId, type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
               ... on ListActivity {
                 id
                 status
@@ -281,6 +284,15 @@ object GraphQLQueries {
                   coverImage { extraLarge large color }
                   siteUrl
                 }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
               }
             }
           }
@@ -1066,12 +1078,35 @@ object GraphQLQueries {
      * one of them would fetch threads nobody opened. The sheet is the only thing
      * that needs them, so it is the only thing that asks.
      *
-     * `Activity(id:)` returns `ActivityUnion`, so the fragment is required.
+     * `Activity(id:)` returns `ActivityUnion`, so the fragments are required.
+     * Both members this feed can open a thread for are listed: the sheet is
+     * reachable from a list card and from a text post, and a thread query with
+     * only the `ListActivity` fragment would answer a text post's id with an
+     * empty object - an open sheet showing zero comments on a post that has
+     * them.
      */
     val GET_ACTIVITY_REPLIES = """
         query GetActivityReplies(${'$'}activityId: Int) {
           Activity(id: ${'$'}activityId) {
             ... on ListActivity {
+              id
+              isLiked
+              likeCount
+              replyCount
+              replies {
+                id
+                text
+                likeCount
+                isLiked
+                createdAt
+                user {
+                  id
+                  name
+                  avatar { large medium }
+                }
+              }
+            }
+            ... on TextActivity {
               id
               isLiked
               likeCount
@@ -1096,23 +1131,34 @@ object GraphQLQueries {
     /**
      * The people who liked one activity.
      *
-     * `ListActivity.likes` is a plain `[User]`, not a paginated connection, so
-     * unlike replies this needs no page argument and always returns everyone who
-     * liked the activity. That is what lets the sheet print "Liked by N" from the
-     * list it just drew instead of trusting a count that could disagree with it.
+     * `ListActivity.likes` and `TextActivity.likes` are plain `[User]`, not
+     * paginated connections, so unlike replies this needs no page argument and
+     * always returns everyone who liked the activity. That is what lets the
+     * sheet print "Liked by N" from the list it just drew instead of trusting a
+     * count that could disagree with it.
      *
      * Its own document rather than a field on the feed query, for the same reason
      * [GET_ACTIVITY_REPLIES] is: a feed page carries twenty-five activities, and
      * every liker of every one of them is a list nobody asked to see until the
      * sheet opens.
      *
-     * `Activity(id:)` returns `ActivityUnion`, so the `ListActivity` fragment is
-     * required.
+     * `Activity(id:)` returns `ActivityUnion`, so the fragments are required;
+     * both members the feed can open the likers sheet for are listed, because a
+     * text post's id against a list-only document would answer an empty object.
      */
     val GET_ACTIVITY_LIKES = """
         query GetActivityLikes(${'$'}activityId: Int) {
           Activity(id: ${'$'}activityId) {
             ... on ListActivity {
+              id
+              likeCount
+              likes {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+            ... on TextActivity {
               id
               likeCount
               likes {
@@ -1133,14 +1179,19 @@ object GraphQLQueries {
      * likes this app will add next use the identical shape. `type: ACTIVITY`
      * disambiguates the id, which is not unique across the likeable types.
      *
-     * The union is fragmented on `ListActivity`, the only member this can return
-     * for `ACTIVITY`; a reply like (not sent yet) would add an `ActivityReply`
-     * fragment here.
+     * `LikeableUnion` carries both feed members; the document fragments both so
+     * a text post can be liked from its card. A reply like (not sent yet) would
+     * add an `ActivityReply` fragment here.
      */
     val TOGGLE_ACTIVITY_LIKE = """
         mutation ToggleActivityLike(${'$'}activityId: Int) {
           ToggleLikeV2(id: ${'$'}activityId, type: ACTIVITY) {
             ... on ListActivity {
+              id
+              isLiked
+              likeCount
+            }
+            ... on TextActivity {
               id
               isLiked
               likeCount

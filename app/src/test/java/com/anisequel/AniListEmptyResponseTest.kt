@@ -16,7 +16,7 @@ import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaFriendsData
@@ -188,7 +188,7 @@ class AniListEmptyResponseTest {
     /**
      * The feed's end is AniList's answer, not the number of rows that survived.
      *
-     * A `ListActivity` whose media has since been removed is dropped at this
+     * A `ProfileActivity` whose media has since been removed is dropped at this
      * boundary so no blank card is drawn. That makes the page shorter than the one
      * the server sent, which is why "fewer rows than `perPage`" used to end the
      * feed one page early - with the rest of the history behind it and nothing on
@@ -197,7 +197,7 @@ class AniListEmptyResponseTest {
      */
     @Test
     fun `a filtered activity page keeps the next-page answer`() = runTest {
-        val removedMedia = ListActivity(id = 7, status = "completed", media = null)
+        val removedMedia = ProfileActivity(id = 7, status = "completed", media = null)
         val repository = AniListRepositoryImpl(
             FakeService(
                 feed = {
@@ -227,7 +227,7 @@ class AniListEmptyResponseTest {
      * the replies connection answered null, or it answered an empty list.
      *
      * `Activity(id:)` returns a union, so an id that no longer resolves to a
-     * `ListActivity` is an object with no selected fields rather than an error
+     * `ProfileActivity` is an object with no selected fields rather than an error
      * - and the sheet still has to open and say there are no comments.
      */
     @Test

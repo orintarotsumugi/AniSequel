@@ -4,6 +4,14 @@
       "version": "1.6.8",
       "entries": [
         {
+          "title": "The feed shows what people said, not only what they watched",
+          "detail": "The activity feed asked AniList for list updates and nothing else - the query filtered `type_in: [ANIME_LIST, MANGA_LIST]` - so a person's status posts, the part of their profile where they actually talk, were invisible on the tab built to show their activity. Text posts arrive now and draw as their own card: the author's own Markdown through the same parser the bio uses, clamped to nine lines with a Read more that appears only when something was actually hidden, and the same like and comment controls as any list row. Tapping the card opens its thread. The demo feed carries one, because otherwise the card had no offline path at all."
+        },
+        {
+          "title": "A post's thread and likers reach the post",
+          "detail": "Opening comments on a text post would have shown an empty thread: the three engagement documents - replies, likes and the like toggle - each fragmented only the list-update member of AniList's activity union, so a post's id came back as an object with no selected fields. All three select both members now. A site message is still refused - it carries a body exactly like a post does, so the feed reads the union's `__typename` to keep a private message off a public tab."
+        },
+        {
           "title": "A colour you kept is a colour you chose",
           "detail": "\"Retain anime colour\" used to write one stored flag that did two different jobs: it kept the show's accent *and* it left the immersive layer switched on. So a retained title tinted every screen - the surfaces, the containers, the outlines - for as long as you left the switch alone, and the next launch found it still tinted. The opposite half was wrong too: a temporary colour waiting on its five-minute timer came back from a restart still applied, because the timer was an in-memory job and the flag that told it to run was not. The two are separate things now. The cover layer lives in memory and ends with the sheet that opened it; retention writes the colour as the app's own accent, which is the same colour drawn on your usual backgrounds rather than a repaint of everything. Turning the feature off hands back only what it wrote - a hue you picked yourself survives, even if a cover happened to be exactly that shade."
         },

@@ -9,7 +9,7 @@ import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
@@ -1560,7 +1560,7 @@ class AniListRepositoryImpl(
 
     override fun getDemoUserOverview(): UserOverview = DemoProfileProvider.getDemoUserOverview()
 
-    override fun getDemoUserActivity(): List<ListActivity> = DemoProfileProvider.getDemoActivity()
+    override fun getDemoUserActivity(): List<ProfileActivity> = DemoProfileProvider.getDemoActivity()
 
     override fun getDemoFollowers(): List<FollowUser> = DemoProfileProvider.getDemoFollowers()
 
@@ -1585,14 +1585,15 @@ class AniListRepositoryImpl(
             ),
             apiService::getUserActivity
         ).map { data ->
-            // `isUnrecognised` is the union member this app does not model. The
-            // query filters with `type_in`, so in practice the server only sends
-            // list updates - but the filter is a `type_in` argument, not a
-            // guarantee, and a forum post arriving here would parse into an
-            // activity with no media and no status. Dropping those here means a
-            // blank card is never rendered; see `ListActivity.isUnrecognised`.
+            // `isUnrecognised` is the union member this feed does not render. The
+            // query asks for list updates and text posts, but the filter is a
+            // `type_in` argument, not a guarantee, and anything else arriving
+            // here parses into an activity with no media, status or text.
+            // Dropping those here means a blank card is never rendered; see
+            // `ProfileActivity.isUnrecognised`. A text post has no media by
+            // definition, so it must not be caught by the media check.
             val raw = data.page?.activities.orEmpty()
-            val activities = raw.filterNot { it.isUnrecognised || it.media == null }
+            val activities = raw.filterNot { it.isUnrecognised || (!it.isTextPost && it.media == null) }
             // AniList's own answer first: the filtering above is exactly why a
             // page's row count cannot be trusted as "is this the end". The
             // fallback only exists for a response that did not carry pageInfo at

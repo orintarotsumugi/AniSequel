@@ -231,7 +231,10 @@ fun ProfileActivityTab(
                     items(
                         items = activityState.activities,
                         key = { it.id },
-                        contentType = { "activity" }
+                        // Two card shapes now share this list; telling LazyColumn
+                        // which is which keeps its reuse slots from mixing a
+                        // poster row with a post row's composition.
+                        contentType = { if (it.isTextPost) "post" else "list" }
                     ) { activity ->
                         ActivityCard(
                             activity = activity,
