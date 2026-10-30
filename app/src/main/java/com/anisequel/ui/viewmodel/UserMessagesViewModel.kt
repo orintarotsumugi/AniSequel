@@ -203,23 +203,9 @@ class UserMessagesViewModel(
 
     private fun fetch(source: MessageFilter, forceRefresh: Boolean, appending: Boolean) {
         if (source == MessageFilter.ALL) return
-        if (source == MessageFilter.SENT && viewerId == null && !isDemo) {
-            updateSource(source) {
-                it.copy(
-                    loaded = true,
-                    isLoading = false,
-                    error = "Sign in to read the messages you sent."
-                )
-            }
-            return
-        }
+        if (refuseWithoutViewer(source)) return
 
-        val page = if (appending) {
-            if (source == MessageFilter.RECEIVED) receivedNextPage else sentNextPage
-        } else {
-            1
-        }
-
+        val page = cursorFor(source, appending)
         if (source == MessageFilter.RECEIVED) receivedJob?.cancel() else sentJob?.cancel()
         updateSource(source) { current ->
             if (appending) {
@@ -230,77 +216,133 @@ class UserMessagesViewModel(
         }
 
         val job = viewModelScope.launch {
-            val result: Result<UserMessagesPage> = if (isDemo) {
-                // The fixture is both halves in one list; each source takes its
-                // own direction out of it, so the chips cannot show the other
-                // half's rows. It is the whole feed, hence no next page.
-                val directed = aniListRepository.getDemoMessages().filter { message ->
-                    if (source == MessageFilter.RECEIVED) {
-                        !message.isSentBy(viewerId)
-                    } else {
-                        message.isSentBy(viewerId)
-                    }
-                }
-                Result.success(UserMessagesPage(messages = directed, hasMore = false))
-            } else {
-                repositoryResult {
-                    when (source) {
-                        MessageFilter.RECEIVED ->
-                            aniListRepository.getReceivedMessages(page, forceRefresh)
-                        else ->
-                            aniListRepository.getSentMessages(viewerId!!, page, forceRefresh)
-                    }
-                }
-            }
-
-            result.fold(
-                onSuccess = { pageResult ->
-                    if (source == MessageFilter.RECEIVED) {
-                        receivedNextPage = page + 1
-                    } else {
-                        sentNextPage = page + 1
-                    }
-                    updateSource(source) { current ->
-                        val combined = if (appending) {
-                            current.messages + pageResult.messages
-                        } else {
-                            pageResult.messages
-                        }
-                        current.copy(
-                            // De-duplicated on the id: a message arriving
-                            // between two requests appears on both pages, and a
-                            // list keyed on the id would throw on the duplicate.
-                            messages = combined.distinctBy { it.id },
-                            loaded = true,
-                            isLoading = false,
-                            isLoadingMore = false,
-                            hasMore = pageResult.hasMore,
-                            error = null,
-                            loadMoreError = null
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    updateSource(source) { current ->
-                        if (appending) {
-                            // The pages already read stay; only the footer says
-                            // that the next one did not arrive, the same rule the
-                            // activity feed's paging follows.
-                            current.copy(
-                                isLoadingMore = false,
-                                loadMoreError = error.message ?: "Couldn't load more messages."
-                            )
-                        } else {
-                            current.copy(
-                                isLoading = false,
-                                error = error.message ?: "Couldn't load messages."
-                            )
-                        }
-                    }
-                }
+            loadSourcePage(source, page, forceRefresh).fold(
+                onSuccess = { pageResult -> recordPage(source, page, appending, pageResult) },
+                onFailure = { error -> recordFailure(source, appending, error) }
             )
         }
         if (source == MessageFilter.RECEIVED) receivedJob = job else sentJob = job
+    }
+
+    /**
+     * Marks the sent source as unreadable when there is nobody to ask for, and
+     * answers true when the fetch must not go out.
+     *
+     * The id is part of the request, so this is the one case where the answer is
+     * known before the network is. The demo is exempt because its fixture names a
+     * viewer of its own - see [viewerId].
+     */
+    private fun refuseWithoutViewer(source: MessageFilter): Boolean {
+        if (source != MessageFilter.SENT || viewerId != null || isDemo) return false
+        updateSource(source) {
+            it.copy(
+                loaded = true,
+                isLoading = false,
+                error = "Sign in to read the messages you sent."
+            )
+        }
+        return true
+    }
+
+    /** The page asked for: the source's own cursor when appending, page one otherwise. */
+    private fun cursorFor(source: MessageFilter, appending: Boolean): Int = when {
+        !appending -> 1
+        source == MessageFilter.RECEIVED -> receivedNextPage
+        else -> sentNextPage
+    }
+
+    /**
+     * One page from one source, in demo or network form.
+     *
+     * The two are kept apart by this function rather than inlined into [fetch]
+     * because the fold below must not have to know which one it got.
+     */
+    private suspend fun loadSourcePage(
+        source: MessageFilter,
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<UserMessagesPage> {
+        if (!isDemo) {
+            return if (source == MessageFilter.RECEIVED) {
+                repositoryResult { aniListRepository.getReceivedMessages(page, forceRefresh) }
+            } else {
+                repositoryResult {
+                    aniListRepository.getSentMessages(viewerId!!, page, forceRefresh)
+                }
+            }
+        }
+
+        // The fixture is both halves in one list; each source takes its own
+        // direction out of it, so the chips cannot show the other half's rows.
+        // It is the whole feed, hence no next page.
+        val wantSent = source == MessageFilter.SENT
+        val directed = aniListRepository.getDemoMessages().filter { message ->
+            message.isSentBy(viewerId) == wantSent
+        }
+        return Result.success(UserMessagesPage(messages = directed, hasMore = false))
+    }
+
+    /**
+     * Folds a landed page into its source and advances that source's cursor.
+     *
+     * Only the source that answered moves its cursor - the two page independently,
+     * and a shared counter would let one source skip the page the other had not
+     * asked for.
+     */
+    private fun recordPage(
+        source: MessageFilter,
+        page: Int,
+        appending: Boolean,
+        pageResult: UserMessagesPage
+    ) {
+        if (source == MessageFilter.RECEIVED) {
+            receivedNextPage = page + 1
+        } else {
+            sentNextPage = page + 1
+        }
+        updateSource(source) { current ->
+            val combined = if (appending) {
+                current.messages + pageResult.messages
+            } else {
+                pageResult.messages
+            }
+            current.copy(
+                // De-duplicated on the id: a message arriving between two
+                // requests appears on both pages, and a list keyed on the id
+                // would throw on the duplicate.
+                messages = combined.distinctBy { it.id },
+                loaded = true,
+                isLoading = false,
+                isLoadingMore = false,
+                hasMore = pageResult.hasMore,
+                error = null,
+                loadMoreError = null
+            )
+        }
+    }
+
+    /**
+     * Records a failed page without discarding the rows that did arrive.
+     *
+     * A paging failure leaves the pages already read and puts the sentence in the
+     * footer; a first-page failure owns the whole tab. The same split the activity
+     * feed's paging makes, and for the same reason: replacing loaded messages with
+     * an error screen throws away the half that worked.
+     */
+    private fun recordFailure(source: MessageFilter, appending: Boolean, error: Throwable) {
+        updateSource(source) { current ->
+            if (appending) {
+                current.copy(
+                    isLoadingMore = false,
+                    loadMoreError = error.message ?: "Couldn't load more messages."
+                )
+            } else {
+                current.copy(
+                    isLoading = false,
+                    error = error.message ?: "Couldn't load messages."
+                )
+            }
+        }
     }
 
     private fun sourceState(source: MessageFilter): SourceState = when (source) {

@@ -313,7 +313,6 @@ private fun MessageCard(
     val body = message.message ?: return
     val sent = message.isSentBy(viewerId)
     val counterpart = message.counterpartFor(viewerId)
-    val context = LocalContext.current
     var expanded by remember(message.id) { mutableStateOf(false) }
     // Latched for the same reason the text-post card latches it: the overflow
     // report describes the collapsed render, so an expanded card reports false
@@ -334,59 +333,16 @@ private fun MessageCard(
                 .animateContentSize()
                 .padding(14.dp)
         ) {
-            Row(
+            MessageAuthorRow(
+                counterpart = counterpart,
+                sent = sent,
+                createdAt = message.createdAt,
+                nowEpochSecond = nowEpochSecond,
+                onOpenUser = onOpenUser,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if (counterpart != null) {
-                                Modifier
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable { onOpenUser(counterpart) }
-                            } else {
-                                Modifier
-                            }
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MessageAvatar(counterpart)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = counterpart?.name ?: "Unknown account",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            // The body has no other cue about whose voice it is
-                            // in: both directions share the card. This line is
-                            // that cue, and the footer chip repeats it for
-                            // readers scanning rather than reading.
-                            text = if (sent) "You sent" else "Sent you",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (message.createdAt != null) {
-                    Text(
-                        text = formatRelativeSeconds(
-                            timestamp = message.createdAt,
-                            now = Instant.ofEpochSecond(nowEpochSecond)
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+                    .padding(bottom = 10.dp)
+            )
 
             AniListMarkdownWithCovers(
                 markdown = body,
@@ -398,59 +354,160 @@ private fun MessageCard(
             )
 
             if (everOverflowed) {
-                Text(
-                    text = if (expanded) "Show less" else "Read more",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable { expanded = !expanded }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                        .testTag("message_read_more")
+                MessageExpandToggle(
+                    expanded = expanded,
+                    onToggle = { expanded = !expanded }
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 10.dp)
-            ) {
-                SequelInfoChip(
-                    icon = if (sent) {
-                        AppVectorIcons.ActivitySend
+            MessageFooter(
+                sent = sent,
+                isPrivate = message.isPrivate == true,
+                siteUrl = message.siteUrl
+            )
+        }
+    }
+}
+
+/**
+ * Who the message is with, which way it went, and when.
+ *
+ * The face and the name are the link; the direction line underneath is the only
+ * prose cue to whose voice the body is, and it is repeated by the footer's chip
+ * for readers who scan rather than read.
+ */
+@Composable
+private fun MessageAuthorRow(
+    counterpart: FollowUser?,
+    sent: Boolean,
+    createdAt: Int?,
+    nowEpochSecond: Long,
+    onOpenUser: (FollowUser) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (counterpart != null) {
+                        Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { onOpenUser(counterpart) }
                     } else {
-                        AppVectorIcons.MessageReceived
-                    },
-                    label = if (sent) "Sent" else "Received"
-                )
-                if (message.isPrivate == true) {
-                    SequelInfoChip(
-                        icon = AppVectorIcons.Privacy,
-                        label = "Private"
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                // Only when the row is a real AniList activity. The demo's
-                // fixtures carry no URL, and a made-up one would open an
-                // unrelated real activity - so the action is simply absent there.
-                message.siteUrl?.let { url ->
-                    IconButton(
-                        onClick = { openExternalUrl(context, url) },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .bouncyPress(pressedScale = 0.9f)
-                            .testTag("message_open_anilist")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.OpenInNew,
-                            contentDescription = "Open on AniList",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Modifier
                     }
-                }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MessageAvatar(counterpart)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = counterpart?.name ?: "Unknown account",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    // The body has no other cue about whose voice it is
+                    // in: both directions share the card. This line is
+                    // that cue, and the footer chip repeats it for
+                    // readers scanning rather than reading.
+                    text = if (sent) "You sent" else "Sent you",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (createdAt != null) {
+            Text(
+                text = formatRelativeSeconds(
+                    timestamp = createdAt,
+                    now = Instant.ofEpochSecond(nowEpochSecond)
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** Read more / Show less, drawn only once the collapsed body has actually overflowed. */
+@Composable
+private fun MessageExpandToggle(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = if (expanded) "Show less" else "Read more",
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .padding(top = 6.dp)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .testTag("message_read_more")
+    )
+}
+
+/**
+ * The chip row under the body: the direction again, the privacy flag when AniList
+ * says the message was private, and the link out to the site.
+ */
+@Composable
+private fun MessageFooter(
+    sent: Boolean,
+    isPrivate: Boolean,
+    siteUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.padding(top = 10.dp)
+    ) {
+        SequelInfoChip(
+            icon = if (sent) {
+                AppVectorIcons.ActivitySend
+            } else {
+                AppVectorIcons.MessageReceived
+            },
+            label = if (sent) "Sent" else "Received"
+        )
+        if (isPrivate) {
+            SequelInfoChip(
+                icon = AppVectorIcons.Privacy,
+                label = "Private"
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        // Only when the row is a real AniList activity. The demo's
+        // fixtures carry no URL, and a made-up one would open an
+        // unrelated real activity - so the action is simply absent there.
+        siteUrl?.let { url ->
+            IconButton(
+                onClick = { openExternalUrl(context, url) },
+                modifier = Modifier
+                    .size(34.dp)
+                    .bouncyPress(pressedScale = 0.9f)
+                    .testTag("message_open_anilist")
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.OpenInNew,
+                    contentDescription = "Open on AniList",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

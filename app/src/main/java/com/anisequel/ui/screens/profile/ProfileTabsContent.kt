@@ -312,17 +312,17 @@ internal fun ProfileTabsContent(
                 // main bar's own pages use the fast token for exactly that reason. On
                 // the calm spring a second tap lands while the first slide is still
                 // travelling, and the two half-finished pages read as a stutter.
-                (
-                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) + slideInHorizontally(
+                val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    slideInHorizontally(
                         animationSpec = ExpressiveMotion.FastSpatialOffset,
                         initialOffsetX = { fullWidth -> if (forward) fullWidth / 8 else -fullWidth / 8 }
                     )
-                    ) togetherWith (
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) + slideOutHorizontally(
+                val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    slideOutHorizontally(
                         animationSpec = ExpressiveMotion.FastSpatialOffset,
                         targetOffsetX = { fullWidth -> if (forward) -fullWidth / 8 else fullWidth / 8 }
                     )
-                    ) using null
+                enter togetherWith exit using null
             },
             label = "profile_tab_transition",
             modifier = Modifier.fillMaxSize()

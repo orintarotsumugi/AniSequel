@@ -164,17 +164,17 @@ fun ProfileActivityPage(
                 // travel like the page's own switches rather than like a new
                 // destination being pushed. `using null` drops the default height
                 // spring, which would re-measure both feeds on every frame.
-                (
-                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) + slideInHorizontally(
+                val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    slideInHorizontally(
                         animationSpec = ExpressiveMotion.FastSpatialOffset,
                         initialOffsetX = { width -> if (forward) width / 8 else -width / 8 }
                     )
-                    ) togetherWith (
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) + slideOutHorizontally(
+                val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    slideOutHorizontally(
                         animationSpec = ExpressiveMotion.FastSpatialOffset,
                         targetOffsetX = { width -> if (forward) -width / 8 else width / 8 }
                     )
-                    ) using null
+                enter togetherWith exit using null
             },
             label = "profile_activity_segment",
             modifier = Modifier.fillMaxSize()
