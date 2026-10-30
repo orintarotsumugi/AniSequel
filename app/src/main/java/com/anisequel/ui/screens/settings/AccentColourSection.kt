@@ -83,11 +83,16 @@ internal fun AccentColourSection(
             checked = settings.useDynamicColor,
             onCheckedChange = { enabled ->
                 scope.launch {
-                    // Turning it on has to clear the anime layer for exactly the
+                    // Turning it on has to release the anime's claim for exactly the
                     // reason a palette pick does: the anime colour outranks the
-                    // wallpaper scheme in `Theme.kt`, so a live adaptation would make
-                    // this switch look broken until it timed out on its own.
-                    if (enabled) themePreferences.clearAnimeColorLayer()
+                    // wallpaper scheme in `Theme.kt`, so either the live layer or a
+                    // *retained* cover colour would make this switch look broken -
+                    // the retained tint is what the app keeps drawing with after the
+                    // sheet, which is precisely the state this switch has to beat.
+                    if (enabled) {
+                        themePreferences.clearAnimeColorLayer()
+                        themePreferences.releaseAnimeRetainedColor()
+                    }
                     themePreferences.setUseDynamicColor(enabled)
                 }
             },
@@ -136,13 +141,15 @@ internal fun AccentColourSection(
                 PaletteCard(
                     palette = palette,
                     // A palette is "selected" only when nothing outranks it: the
-                    // wallpaper scheme, a custom hue, or an active anime colour means
-                    // no palette read is actually driving the scheme. Without the
-                    // dynamic-colour term the check mark moved to a card that had
-                    // changed nothing.
+                    // wallpaper scheme, a custom hue, or an anime colour - live or
+                    // retained - means no palette read is actually driving the
+                    // scheme. Without the dynamic-colour term the check mark moved to
+                    // a card that had changed nothing; without the retained term it
+                    // moved back the moment a title's colour was kept.
                     selected = settings.paletteId == palette.id &&
                         settings.customColorHex == null &&
                         !settings.animeThemeActive &&
+                        settings.retainedAnimeColorHex == null &&
                         !settings.useDynamicColor,
                     onClick = {
                         scope.launch {
@@ -174,7 +181,13 @@ internal fun AccentColourSection(
                 HueChip(
                     hex = hex,
                     name = name,
+                    // A retained cover colour writes its hex into the custom
+                    // accent, so a show whose cover happens to match a preset hue
+                    // used to light that chip while the anime's tinted scheme - not
+                    // the hue - was what the app drew.
                     isSelected = settings.customColorHex?.equals(hex, ignoreCase = true) == true &&
+                        settings.retainedAnimeColorHex == null &&
+                        !settings.animeThemeActive &&
                         !settings.useDynamicColor,
                     onClick = {
                         scope.launch {

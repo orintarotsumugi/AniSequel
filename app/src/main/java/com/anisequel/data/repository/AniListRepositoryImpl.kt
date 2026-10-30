@@ -2376,7 +2376,21 @@ private fun parseReceivedMessages(data: ReceivedMessagesData): UserMessagesPage 
     val messages = raw
         .asSequence()
         .filterNot { it.isUnrecognised }
-        .mapNotNull { it.message }
+        .mapNotNull { notification ->
+            val message = notification.message ?: return@mapNotNull null
+            // The notification's own timestamp is the fallback, and it is not
+            // cosmetic. `ActivityMessageNotification.createdAt` and the embedded
+            // `MessageActivity.createdAt` are the same moment in practice, but only
+            // one of them is guaranteed - and a received row with a null time sorted
+            // to the bottom of the merged inbox (behind every sent message, however
+            // old) and printed no age at all. The notification is the envelope, so
+            // its timestamp is the honest stand-in for the envelope's contents.
+            if (message.createdAt == null && notification.createdAt != null) {
+                message.copy(createdAt = notification.createdAt)
+            } else {
+                message
+            }
+        }
         .filter { it.hasBody }
         .toList()
     val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= MESSAGE_PAGE_SIZE)

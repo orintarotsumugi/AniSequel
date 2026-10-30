@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -124,14 +125,32 @@ private fun BuildCard() {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(14.dp))
-        InfoRow(
-            label = "Version",
-            value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        InfoRow(label = "Package", value = BuildConfig.APPLICATION_ID)
-        Spacer(modifier = Modifier.height(10.dp))
-        InfoRow(label = "Data source", value = "AniList GraphQL API")
+        // The three facts a bug report needs, grouped on one surface with
+        // dividers rather than floated as three loose rows. The version is the
+        // one value a reader actually reads here, and a package id is long enough
+        // that it needs a line of its own to be copyable at a glance.
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                InfoRow(
+                    label = "Version",
+                    value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                InfoRow(label = "Package", value = BuildConfig.APPLICATION_ID)
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                InfoRow(label = "Data source", value = "AniList GraphQL API")
+            }
+        }
     }
 }
 

@@ -219,6 +219,13 @@ class FindMissedSequelsUseCase {
             val matchesScore = filterCriteria.minScore == null ||
                     (sequel.sequelMedia.averageScore ?: -1) >= filterCriteria.minScore
 
+            // Same shape, same rule as the score floor: a title AniList has not
+            // given a length (or given 0 for "not announced") has no number to
+            // clear the bar, so it drops out instead of being claimed as short.
+            val announcedEpisodes = sequel.sequelMedia.episodes?.takeIf { it > 0 } ?: -1
+            val matchesEpisodes = filterCriteria.minEpisodes == null ||
+                    announcedEpisodes >= filterCriteria.minEpisodes
+
             // Both year axes are off by default, so the common path is two
             // boolean checks. An undiscovered date (null year) never equals
             // the current year, which is the honest answer for both: a show
@@ -231,7 +238,7 @@ class FindMissedSequelsUseCase {
                         sequel.parentCompletedYear == currentYear)
 
             matchesQuery && matchesRelease && matchesStatus && matchesFormat &&
-                matchesGenre && matchesScore && matchesYear
+                matchesGenre && matchesScore && matchesEpisodes && matchesYear
         }
 
         return when (filterCriteria.sortOption) {

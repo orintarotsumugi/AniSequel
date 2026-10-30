@@ -65,17 +65,21 @@ fun ThemePreviewCard(
     // wallpaper, and the two are independent preferences - a hue set before the switch
     // was flipped stays set - so the pill used to label the card with a colour the app
     // was not drawing.
+    // Read once into a local: `retainedAnimeColorHex` has a getter, so it cannot be
+    // smart-cast by the null check below the way a stored `val` would be.
+    val keptAnimeColor = themeSettings.retainedAnimeColorHex
     val activePaletteName = when {
         themeSettings.animeThemeActive && themeSettings.animeThemeColorHex != null ->
             "Anime (${themeSettings.animeThemeColorHex})"
+        // The kept cover colour outranks Material You and the custom hue now: the
+        // theme is built from the retained marker whenever it is present (see
+        // `AniSequelTheme`), so listing wallpaper above it named a colour the app
+        // was not drawing - the same bug this ordering already fixed once for the
+        // custom hue, reintroduced by retention gaining the background.
+        keptAnimeColor != null &&
+            keptAnimeColor.equals(themeSettings.customColorHex, ignoreCase = true) ->
+            "Anime, kept ($keptAnimeColor)"
         themeSettings.useDynamicColor -> "Dynamic Wallpaper"
-        // The layer is gone with the sheet, so a kept cover colour arrives here as
-        // what it now is: the app's accent, with a record of where it came from.
-        themeSettings.animeThemeRetainedColorHex != null &&
-            themeSettings.animeThemeRetainedColorHex.equals(
-                themeSettings.customColorHex,
-                ignoreCase = true
-            ) -> "Anime, kept (${themeSettings.customColorHex})"
         themeSettings.customColorHex != null -> "Custom (${themeSettings.customColorHex})"
         else -> ThemePalette.fromStorage(themeSettings.paletteId).displayName
     }

@@ -273,11 +273,12 @@ fun SequelDetailSheet(
     // the way the stored one did.
     val handleDismiss: () -> Unit = {
         if (themeSettings.animeThemeRetainColor) {
-            // Retain owns the colour, and it owns it through the accent it
-            // persisted - so the immersive layer can end here. Keeping the layer
-            // alive instead left the show's hue in every surface on every screen
-            // and on the next launch, which is the thing a standing preference is
-            // not supposed to do.
+            // Retain owns the colour. The *live* layer still ends here - it is
+            // process state for one sheet - but the colour it wrote is retained,
+            // and `AniSequelTheme` builds the tinted scheme from that marker, so
+            // the background the reader is looking at does not snap back to the
+            // brand navy on the way out. Only the layer has to stop; a layer left
+            // on would outrank the reader's own palette in Settings.
             themePreferences.clearAnimeColorLayer()
         } else {
             themePreferences.releaseAnimeColorLayer(themeSettings.animeThemeRevertDuration)

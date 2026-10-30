@@ -672,14 +672,40 @@ tint applied with nothing left to clear it, until the next title overwrote it.
 Now `ThemePreferences` stores the switch (`anime_theme_enabled`, read from the old
 key until the first write) and holds the applied layer in a process-scoped
 `StateFlow`. `applyAnimeColorLayer(hex, retain)` is what a sheet does on opening;
-`clearAnimeColorLayer()` ends it on closing, and retention's durability comes from
-the accent it persisted instead, which is the same colour on the app's usual
-surfaces. A third stored key, `anime_theme_retained_color_hex`, records that the
-current accent *is* the anime's, which is what lets turning the feature off take
-back that colour and leave a hue the reader chose alone — the old code guessed by
-comparing hexes, so a custom `#7FA9D4` could be deleted by a cover that happened to
-share it. Anything on a timer now dies with the process, which is the honest
-lifetime for a preview.
+`clearAnimeColorLayer()` ends it on closing. A third stored key,
+`anime_theme_retained_color_hex`, records that the current accent *is* the anime's,
+which is what lets turning the feature off take back that colour and leave a hue
+the reader chose alone — the old code guessed by comparing hexes, so a custom
+`#7FA9D4` could be deleted by a cover that happened to share it. Anything on a
+timer now dies with the process, which is the honest lifetime for a preview.
+
+**Retention has to keep the background, and that is a correction to the design
+above.** The first version of this split was defensive in the wrong direction: it
+kept the colour as an accent and deliberately dropped the tinted surfaces, so the
+reader who opened a reddish show watched the app go red and then watched every
+surface snap back to the brand navy on the way out. Retain, to someone who chose
+it, means "keep what I am looking at" — and the thing they are looking at is the
+background. So the theme now seeds its tinted scheme from
+`anime_theme_retained_color_hex` whenever no sheet is open, and the live layer is
+only what makes the same colour arrive *before* the marker is written. The two
+lifetimes still differ, which is the part that was right: the layer is process
+state, the marker is on disk, and the marker is the only one that can survive a
+restart. `MainActivity` gates the marker on the feature *and* the retain switch, so
+a marker left by a downgrade cannot outrank the reader's own palette, and the exits
+that remove it (feature off, Retain off, an explicit accent, Reset appearance) are
+the same ones that were already there. Retention and the timer stay mutually
+exclusive: off means the sheet is a preview and the app returns to its own theme.
+
+**The retained tint has a strength because full and accent-only are both honest.**
+`RetainedTint` (Subtle 0.35, Balanced 0.7, Full 1) is stored beside the retain
+switch. It is applied only in the retained branch, by blending the generated
+scheme's neutral roles toward the palette (or the custom accent's own neutral
+surfaces) while every accent and container role stays the cover's. While a sheet
+is open the layer is always full strength - a preview that disagrees with the
+sheet is not a preview - and a strength of 1 is the old behaviour exactly. This is
+why the blend is at the theme boundary and not in `MaterialColorSchemes`: the
+tonal ladder still generates a contrast-safe scheme, and the setting only decides
+how much of it the background keeps.
 
 The seed's own tone is normalised on the way out as well. `CoverColorQuantizer`
 scores pixels by chroma and population, not by tone, so a night-sky cover legitimately
@@ -1237,6 +1263,18 @@ the thumbnail; LiveChart serves posters from the CDN host `u.livechart.me` at
 thumbnail, `large.jpg` is the anime page's own `og:image`, and the underlying source
 is the `.webp`. So the viewer is handed the `large.jpg` variant, not the little
 thumbnail. The pure parser is pinned in `LiveChartCoverTest` without a network.
+
+**The gallery is the title's own `/visuals` tab, and it is read from the poster's
+id.** LiveChart's search result names a poster, and that URL carries
+`/anime/{id}`; the fetcher derives the title page from it rather than matching the
+same title a second time against the search page's anchors, then opens
+`/anime/{id}/visuals` with the same browser User-Agent and a `Referer`. Every card
+on that page puts its full-size image in `data-anime-visual-url-value`; those are
+the gallery's pages, in site order, de-duplicated and capped at 40. This is the
+same path AnymeX uses. A title with no visuals keeps its LiveChart poster as a
+single-image source; a failed second request still leaves the poster and never
+fails the viewer. Both requests share `LiveChartCovers`, so two opens of one title
+cost one gallery fetch, and an empty answer is cached for the shorter miss window.
 
 **A browser User-Agent is load-bearing, not a nicety.** Verified:
 `https://www.livechart.me` answers **403** to OkHttp's own default agent and to an

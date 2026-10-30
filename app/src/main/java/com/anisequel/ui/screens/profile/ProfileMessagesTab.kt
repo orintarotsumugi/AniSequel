@@ -147,7 +147,11 @@ fun ProfileMessagesTab(
     // that the page usually lands before the reader, near enough that a short
     // list does not spin. `OnLoadMore` is guarded in the ViewModel, so the effect
     // firing on every scroll frame costs nothing.
-    val shouldPage by remember {
+    // Keyed on the state it reads. The tab is normally given one hoisted by the
+    // profile screen, and an unkeyed `remember` would keep watching the first one
+    // if the host ever swapped it - a trigger bound to a list that is no longer on
+    // screen never fires, and the inbox stops paging with no visible cause.
+    val shouldPage by remember(listState) {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val total = listState.layoutInfo.totalItemsCount

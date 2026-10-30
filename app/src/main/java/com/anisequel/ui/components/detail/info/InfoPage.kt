@@ -188,7 +188,10 @@ fun AnimeInfoPage(
                 .fillMaxSize()
                 .testTag("info_page"),
             contentPadding = PaddingValues(bottom = bottomContentPadding),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            // 16 rather than 14: the cards are dense, and the extra 2dp is what
+            // makes two adjacent surfaces read as two sections rather than one
+            // long card with seams.
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item(key = "hero", contentType = "info_hero") {
                 InfoHero(

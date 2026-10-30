@@ -3,6 +3,7 @@ package com.anisequel
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
+import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.themeDataStore
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -106,6 +108,31 @@ class ThemePreferencesTest {
     }
 
     @Test
+    fun `the retained tint strength defaults to full and round-trips`() = runTest {
+        val preferences = preferences()
+        assertEquals(RetainedTint.FULL, preferences.settings.first().retainedTint)
+
+        preferences.setRetainedTint(RetainedTint.SUBTLE)
+        assertEquals(RetainedTint.SUBTLE, preferences.settings.first().retainedTint)
+
+        preferences.setRetainedTint(RetainedTint.BALANCED)
+        assertEquals(RetainedTint.BALANCED, preferences.settings.first().retainedTint)
+
+        preferences.reset()
+        assertEquals(RetainedTint.FULL, preferences.settings.first().retainedTint)
+    }
+
+    @Test
+    fun `retained tint strengths are ordered and stable for storage`() {
+        assertEquals("subtle", RetainedTint.SUBTLE.storageValue)
+        assertEquals("balanced", RetainedTint.BALANCED.storageValue)
+        assertEquals("full", RetainedTint.FULL.storageValue)
+        assertTrue(RetainedTint.SUBTLE.strength < RetainedTint.BALANCED.strength)
+        assertTrue(RetainedTint.BALANCED.strength < RetainedTint.FULL.strength)
+        assertEquals(RetainedTint.FULL, RetainedTint.fromStorage("sepia"))
+    }
+
+    @Test
     fun `custom accent color round-trips through storage`() = runTest {
         val preferences = preferences()
         preferences.setCustomColorHex("#00BFA5")
@@ -141,6 +168,13 @@ class ThemePreferencesTest {
     fun `retaining a cover colour writes the accent and keeps the layer in memory`() = runTest {
         val preferences = preferences()
 
+        // The feature switch is part of the fixture, not a detail of it. A sheet
+        // only ever calls `applyAnimeColorLayer` when the feature is on
+        // (`MainActivity` gates it), so an enabled switch is the state the app is
+        // actually in here - and `retainedAnimeColorHex` is the *gated* accessor,
+        // which is deliberately null while the feature that owns it is off.
+        preferences.setAnimeThemeEnabled(true)
+
         preferences.applyAnimeColorLayer("#7FA9D4", retain = true)
 
         val settings = preferences.settings.first()
@@ -165,6 +199,12 @@ class ThemePreferencesTest {
         val afterClose = preferences.settings.first()
         assertFalse("the layer belongs to the sheet", afterClose.animeThemeActive)
         assertEquals("#7FA9D4", afterClose.customColorHex)
+        assertEquals(
+            "and the tinted scheme has to keep a colour to be built from, or the " +
+                "background snaps back to the palette the moment the sheet closes",
+            "#7FA9D4",
+            afterClose.retainedAnimeColorHex
+        )
     }
 
     @Test
@@ -183,6 +223,45 @@ class ThemePreferencesTest {
             null,
             preferences.settings.first().animeThemeRetainedColorHex
         )
+    }
+
+    /**
+     * Another control taking the theme has to be able to take it back.
+     *
+     * A retained colour now drives the background as well as the accent, so a
+     * control that should own the scheme - the wallpaper switch is the one - would
+     * otherwise be silently overruled by a title the reader opened earlier. The
+     * release removes the marker and the accent only because the marker proves the
+     * anime wrote the accent.
+     */
+    @Test
+    fun `releasing the anime claim clears what the anime wrote`() = runTest {
+        val preferences = preferences()
+        preferences.applyAnimeColorLayer("#D64B4B", retain = true)
+        preferences.clearAnimeColorLayer()
+
+        preferences.releaseAnimeRetainedColor()
+
+        val settings = preferences.settings.first()
+        assertNull(settings.animeThemeRetainedColorHex)
+        assertNull(
+            "the accent this feature wrote has to go with the marker, or the " +
+                "reader is left with a colour they cannot explain",
+            settings.customColorHex
+        )
+    }
+
+    @Test
+    fun `releasing the anime claim leaves a reader's own accent alone`() = runTest {
+        val preferences = preferences()
+        preferences.applyAnimeColorLayer("#D64B4B", retain = true)
+        preferences.clearAnimeColorLayer()
+        // An explicit pick · the marker goes with it, and the hue is the reader's.
+        preferences.setCustomColorHex("#00BFA5")
+
+        preferences.releaseAnimeRetainedColor()
+
+        assertEquals("#00BFA5", preferences.settings.first().customColorHex)
     }
 
     /**

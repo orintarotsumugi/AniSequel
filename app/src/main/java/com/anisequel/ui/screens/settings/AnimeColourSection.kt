@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
@@ -39,15 +40,16 @@ import kotlinx.coroutines.launch
  * pixels - quantized and scored, not taken from AniList's single dominant-colour
  * field - so the palette follows the artwork the reader is looking at.
  *
- * "Retain anime colour" is the difference between the two halves of the feature,
- * and they are different halves now. The immersive layer - the show's hue in the
- * surfaces, the containers, the outlines - belongs to the sheet and ends with it.
- * Retention persists the colour as the app's own accent, which is the same colour
- * on the app's usual surfaces, and is what the next launch finds. It used to be
- * one stored flag doing both jobs, so a retained Chainsaw Man left every screen
- * tinted forever, and a *temporary* colour waiting on its timer came back from a
- * restart still applied - because the timer was an in-memory job and the flag was
- * not.
+ * "Retain anime colour" decides what survives the sheet. Retention stores the
+ * cover colour as the app's accent *and* as the seed the retained scheme is built
+ * from, so closing a title no longer drops the background back to the palette's
+ * navy: the tint the reader was looking at stays, and the next launch finds it.
+ * With retention off the colour is a preview on a timer and the app returns to
+ * its own theme. It used to be one stored flag doing both jobs, so a retained
+ * Chainsaw Man left every screen tinted *forever* with no way back, and a
+ * temporary colour whose timer was an in-memory job came back from a restart
+ * still applied. The marker is the fix for both: it is stored, so it survives a
+ * restart, and it is removed by every exit this screen offers.
  *
  * Both switches leave a clear exit: picking a palette, a hue or Reset
  * appearance in the other sections owns the accent again.
@@ -63,7 +65,7 @@ internal fun AnimeColourSection(
     // screen, otherwise whatever this feature kept as the accent. The hex is
     // printed as text and the *swatch* is the derived accent, so a dark poster
     // does not produce an unidentifiable black chip in a dark app.
-    val liveHex = settings.animeThemeColorHex ?: settings.animeThemeRetainedColorHex
+    val liveHex = settings.animeThemeColorHex ?: settings.retainedAnimeColorHex
     val layerIsLive = settings.animeThemeColorHex != null
     val swatch = remember(liveHex, dark) {
         DynamicThemeBuilder.parseHexColor(liveHex)?.let {
@@ -111,7 +113,7 @@ internal fun AnimeColourSection(
                             text = if (layerIsLive) {
                                 liveHex ?: "cover colour"
                             } else {
-                                "As your accent, on your usual backgrounds"
+                                "Accent and background, kept"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -157,7 +159,7 @@ internal fun AnimeColourSection(
         Spacer(modifier = Modifier.height(10.dp))
         SwitchRow(
             title = "Retain anime colour",
-            subtitle = "Keep that colour as the app's accent after the sheet.",
+            subtitle = "Keep the background and accent after the sheet closes.",
             checked = settings.animeThemeRetainColor,
             onCheckedChange = { retain ->
                 // The preference, the accent it writes or takes back, and the
@@ -169,7 +171,36 @@ internal fun AnimeColourSection(
             modifier = Modifier.testTag("anime_theme_retain_switch")
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsFieldLabel(text = "Background tint after closing the anime")
+        Spacer(modifier = Modifier.height(6.dp))
+        // Only meaningful while retaining: with a temporary colour there is no
+        // "after" to tint. The control stays visible and disabled rather than
+        // appearing with the switch, because a row that shows up on a tap moves
+        // every control below it under the reader's finger.
+        val tintEnabled = settings.animeThemeRetainColor
+        ExpressivePolygonSegmentedBar(
+            options = RetainedTint.entries.map { SegmentedOption(label = it.displayName) },
+            selectedIndex = RetainedTint.entries.indexOf(settings.retainedTint),
+            onSelect = { index ->
+                if (tintEnabled) {
+                    scope.launch { themePreferences.setRetainedTint(RetainedTint.entries[index]) }
+                }
+            },
+            modifier = Modifier
+                .alpha(if (tintEnabled) 1f else 0.4f)
+                .testTag("anime_retained_tint_row")
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Full keeps the sheet's whole background. Subtle keeps the " +
+                "show's colour in the accent and buttons while your palette keeps " +
+                "the surface. The sheet itself always uses the full tint.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
         SettingsFieldLabel(text = "Revert after closing the anime")
         Spacer(modifier = Modifier.height(6.dp))
         val revertOptions = listOf("Immediately", "5 minutes", "10 minutes")
@@ -202,9 +233,9 @@ internal fun AnimeColourSection(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (settings.animeThemeRetainColor) {
-                "Being kept as your accent: the colour survives the sheet and the next " +
-                    "launch, on your usual backgrounds. Pick a palette, a hue, or Reset " +
-                    "appearance to take it back."
+                "Being kept: the colour survives the sheet and the next launch, tinted " +
+                    "background included. Pick a palette, a hue, or Reset appearance to " +
+                    "take it back."
             } else {
                 "Return to your usual theme the moment the sheet closes, or after a set time."
             },

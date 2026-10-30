@@ -284,6 +284,7 @@ object GraphQLQueries {
                   volumes
                   title { english romaji native }
                   coverImage { extraLarge large color }
+                  bannerImage
                   siteUrl
                 }
               }
@@ -343,6 +344,7 @@ object GraphQLQueries {
                   volumes
                   title { english romaji native }
                   coverImage { extraLarge large color }
+                  bannerImage
                   siteUrl
                 }
               }

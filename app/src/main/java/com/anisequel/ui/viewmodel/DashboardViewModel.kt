@@ -974,6 +974,12 @@ class DashboardViewModel(
         requestRecompute()
     }
 
+    /** Sets the minimum announced episode count, or null for no minimum. */
+    fun selectMinEpisodes(episodes: Int?) {
+        _filterCriteria.value = _filterCriteria.value.copy(minEpisodes = episodes)
+        requestRecompute()
+    }
+
     /**
      * Narrows the list to sequels releasing in the current calendar year.
      *

@@ -95,6 +95,27 @@ val filterScoreOptions: List<Pair<Int?, String>> = listOf(
     90 to "90+"
 )
 
+/**
+ * The episode-count floor, paired with the count it requires.
+ *
+ * A third scalar filter beside the score floor, and it exists for a concrete
+ * question the score cannot answer: "show me the full-cour ones" while the
+ * dashboard is full of two-episode shorts. Counts are AniList's announced total,
+ * so a title whose length is still unknown has no number to clear the bar and
+ * drops out while one is set - the same rule the score floor follows.
+ *
+ * Manga are not excluded by this filter; a manga's `episodes` field is null, so
+ * they are dropped whenever a minimum is on. That is honest rather than hidden:
+ * the control says *episodes*, and a manga has chapters.
+ */
+val filterEpisodeOptions: List<Pair<Int?, String>> = listOf(
+    null to "Any",
+    1 to "1+",
+    6 to "6+",
+    12 to "12+",
+    24 to "24+"
+)
+
 data class FilterCriteria(
     val searchQuery: String = "",
     val sortOption: SequelSortOption = SequelSortOption.RELEASE_DATE_DESC,
@@ -172,7 +193,15 @@ data class FilterCriteria(
      * no minimum. See [filterScoreOptions] for why unrated entries drop out
      * while this is set.
      */
-    val minScore: Int? = null
+    val minScore: Int? = null,
+
+    /**
+     * The fewest announced episodes a sequel may have, or null for no minimum.
+     *
+     * See [filterEpisodeOptions] for why titles with no announced count drop out
+     * while this is set, and why manga do too.
+     */
+    val minEpisodes: Int? = null
 ) {
     /**
      * True when any criterion here is actively narrowing the result list.
@@ -201,5 +230,6 @@ data class FilterCriteria(
             includeCurrentlyWatching ||
             includeInList ||
             selectedGenres.isNotEmpty() ||
-            minScore != null
+            minScore != null ||
+            minEpisodes != null
 }

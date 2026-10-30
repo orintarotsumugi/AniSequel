@@ -113,11 +113,12 @@ fun InfoFloatingBar(
                 color = container,
                 shadowElevation = 6.dp,
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    // The pill's content is a 22dp icon and two 8dp paddings, so it
-                    // measured about 38dp - under the 48dp minimum on the one
-                    // control a reader reaches for one-handed at the top of a
-                    // fourteen-section page.
+                    // `fill = true`, not the old `fill = false`: a hugging pill
+                    // left the bar visibly left-weighted and the title ran out of
+                    // room while the right third of the screen sat empty. The
+                    // actions keep their own pill, and the title takes every dp
+                    // they are not using.
+                    .weight(1f)
                     .heightIn(min = 48.dp)
                     .clip(pill)
                     // `onClickLabel` rather than a `contentDescription` on the icon:
@@ -138,17 +139,26 @@ fun InfoFloatingBar(
                     .testTag("info_bar_title")
             ) {
                 Box {
+                    // The progress is a line at the bottom edge, not a wash over
+                    // the whole pill. The old wash was a rectangle clipped by the
+                    // capsule, so its leading edge cut straight through the middle
+                    // of the title and the bar read as two different pills glued
+                    // together. A 3dp line is legible as progress and cannot sit
+                    // under a glyph.
                     Box(
                         modifier = Modifier
-                            .matchParentSize()
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
                             .graphicsLayer {
                                 scaleX = progress()
                                 transformOrigin = TransformOrigin(0f, 0.5f)
                             }
                             .background(wash)
+                            .testTag("info_bar_progress")
                     )
                     Row(
-                        modifier = Modifier.padding(start = 9.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -163,8 +173,13 @@ fun InfoFloatingBar(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.weight(1f)
                         )
+                        // Balances the leading chevron so the title is centred in
+                        // the pill rather than in the space left after the icon.
+                        Spacer(modifier = Modifier.width(23.dp))
                     }
                 }
             }

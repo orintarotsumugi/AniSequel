@@ -110,7 +110,14 @@ fun QuickFilterBar(
             else -> "${activeGenres.take(2).joinToString(", ")} +${activeGenres.size - 2}"
         }
         val scoreSummary = filterCriteria.minScore?.let { "$it+" }
-        val activeFilters = listOfNotNull(activeStatus, activeFormat, genreSummary, scoreSummary)
+        val episodeSummary = filterCriteria.minEpisodes?.let { "$it+ eps" }
+        val activeFilters = listOfNotNull(
+            activeStatus,
+            activeFormat,
+            genreSummary,
+            scoreSummary,
+            episodeSummary
+        )
 
         // The shared predicate rather than a local copy. This row's own
         // version used to look at status, search and "include unreleased" only,
