@@ -168,6 +168,13 @@ class ThemePreferencesTest {
     fun `retaining a cover colour writes the accent and keeps the layer in memory`() = runTest {
         val preferences = preferences()
 
+        // The feature switch is part of the fixture, not a detail of it. A sheet
+        // only ever calls `applyAnimeColorLayer` when the feature is on
+        // (`MainActivity` gates it), so an enabled switch is the state the app is
+        // actually in here - and `retainedAnimeColorHex` is the *gated* accessor,
+        // which is deliberately null while the feature that owns it is off.
+        preferences.setAnimeThemeEnabled(true)
+
         preferences.applyAnimeColorLayer("#7FA9D4", retain = true)
 
         val settings = preferences.settings.first()
