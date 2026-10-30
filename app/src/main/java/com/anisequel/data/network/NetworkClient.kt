@@ -294,9 +294,9 @@ object NetworkClient {
 
     /**
      * User-Agent for image requests only. A generic desktop browser string,
-     * because the CDNs that reject `okhttp/*` accept anything that looks like
-     * one; deliberately not tied to the app's identity - artwork is public and
-     * the API's rate-limiting UA stays separate.
+     * because the CDNs that reject the bare okhttp agent accept anything that
+     * looks like one; deliberately not tied to the app's identity - artwork is
+     * public and the API's rate-limiting UA stays separate.
      */
     private const val IMAGE_USER_AGENT =
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"

@@ -125,23 +125,31 @@ internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
     val onCanvas = if (canvasIsDark) Color.White else Color.Black
     val drop = if (canvasIsDark) Color.Black else Color.White
 
-    fun blend(from: Color, to: Color, fraction: Float) = Color.lerp(from, to, fraction)!!
-    fun lift(fraction: Float) = blend(canvas, onCanvas, fraction)
+    fun mix(from: Color, to: Color, fraction: Float): Color {
+        fun leg(a: Float, b: Float) = a + (b - a) * fraction
+        return Color(
+            red = leg(from.red, to.red),
+            green = leg(from.green, to.green),
+            blue = leg(from.blue, to.blue),
+            alpha = leg(from.alpha, to.alpha)
+        )
+    }
+    fun lift(fraction: Float) = mix(canvas, onCanvas, fraction)
 
     return base.copy(
         background = canvas,
         onBackground = onCanvas,
         surface = canvas,
         onSurface = onCanvas,
-        surfaceContainerLowest = blend(canvas, drop, 0.20f),
+        surfaceContainerLowest = mix(canvas, drop, 0.20f),
         surfaceContainerLow = lift(0.05f),
         surfaceContainer = lift(0.10f),
         surfaceContainerHigh = lift(0.16f),
         surfaceContainerHighest = lift(0.22f),
-        surfaceDim = blend(canvas, drop, 0.10f),
+        surfaceDim = mix(canvas, drop, 0.10f),
         surfaceBright = lift(0.12f),
         surfaceVariant = lift(0.10f),
-        onSurfaceVariant = blend(onCanvas, canvas, 0.35f)
+        onSurfaceVariant = mix(onCanvas, canvas, 0.35f)
     )
 }
 
