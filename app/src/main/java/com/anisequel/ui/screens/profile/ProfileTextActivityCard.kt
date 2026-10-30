@@ -66,6 +66,11 @@ private const val TEXT_COLLAPSED_LINES = 9
  * [avatarSize] is the one thing that differs - a text post has no poster to
  * anchor the eye, so its avatar is drawn a little larger - and everything else
  * must stay identical, or a feed of mixed cards stops reading as one feed.
+ *
+ * [onOpenAuthor] is non-null only in the friends feed, where the author is a
+ * different person on every row and tapping their name is the way to their
+ * profile. The profile feed leaves it null: the author is the person whose page
+ * is already open, so the row is not a link and does not ripple.
  */
 @Composable
 internal fun ActivityAuthorRow(
@@ -73,7 +78,8 @@ internal fun ActivityAuthorRow(
     userAvatar: String?,
     createdAt: Int?,
     nowEpochSecond: Long?,
-    avatarSize: Dp
+    avatarSize: Dp,
+    onOpenAuthor: (() -> Unit)? = null
 ) {
     if (userName == null && userAvatar == null && createdAt == null) return
     Row(
@@ -82,30 +88,43 @@ internal fun ActivityAuthorRow(
             .padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (userAvatar != null) {
-            AsyncImage(
-                model = userAvatar,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(avatarSize)
-                    .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentScale = ContentScale.Crop
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-        }
-        if (userName != null) {
-            Text(
-                text = userName,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (onOpenAuthor != null) {
+                        Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClick = onOpenAuthor)
+                    } else {
+                        Modifier
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (userAvatar != null) {
+                AsyncImage(
+                    model = userAvatar,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(avatarSize)
+                        .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            if (userName != null) {
+                Text(
+                    text = userName,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         if (createdAt != null) {
             Text(
@@ -140,7 +159,9 @@ internal fun ActivityTextCard(
     onComments: () -> Unit,
     onOpenLikers: () -> Unit,
     likePending: Boolean,
-    nowEpochSecond: Long?
+    nowEpochSecond: Long?,
+    /** Opens the author's profile; null on the profile's own feed. See [ActivityAuthorRow]. */
+    onOpenAuthor: (() -> Unit)? = null
 ) {
     val text = activity.text ?: return
     val interactionSource = remember { MutableInteractionSource() }
@@ -175,7 +196,8 @@ internal fun ActivityTextCard(
                 userAvatar = userAvatar,
                 createdAt = activity.createdAt,
                 nowEpochSecond = nowEpochSecond,
-                avatarSize = 40.dp
+                avatarSize = 40.dp,
+                onOpenAuthor = onOpenAuthor
             )
 
             AniListMarkdownWithCovers(

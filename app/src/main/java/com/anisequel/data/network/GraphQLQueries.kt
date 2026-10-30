@@ -302,6 +302,146 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The activity feed of everyone the viewer follows.
+     *
+     * A separate document rather than `GET_USER_ACTIVITY` with the id dropped:
+     * `isFollowing: true` is the only way AniList will build this feed, and it
+     * is resolved from the request's own token - there is no parameter naming
+     * whose follow list to use, because it is always the signed-in viewer's.
+     *
+     * Each row asks for its own `user`, unlike the profile feed where every
+     * card belongs to the profile being read. Here every card is a different
+     * person, so the author has to travel with the activity or the feed would
+     * draw a wall of anonymous updates. The nested author is the reason the row
+     * model carries `user` and the card falls back to it.
+     *
+     * `MESSAGE` is excluded for the same reason it is excluded above, and
+     * `type_in` is spelled out rather than left to the server's default, which
+     * is every member of the union.
+     */
+    val GET_FOLLOWING_ACTIVITY = """
+        query GetFollowingActivity(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(isFollowing: true, type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
+              ... on ListActivity {
+                id
+                status
+                progress
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+                media {
+                  id
+                  type
+                  format
+                  episodes
+                  chapters
+                  volumes
+                  title { english romaji native }
+                  coverImage { extraLarge large color }
+                  siteUrl
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Messages the viewer has sent, newest first.
+     *
+     * `messengerId` is the sender's id - AniList's message model calls the
+     * author the messenger and the other party the recipient, regardless of who
+     * wrote first. There is **no `recipientId` filter on `Page.activities`**;
+     * the inbox therefore cannot be read from this side of the conversation at
+     * all, which is why [GET_RECEIVED_MESSAGES] goes through notifications.
+     *
+     * Both ends of the conversation are selected - `recipient` and `messenger` -
+     * so a row can name the person it was addressed to without a second query
+     * per message, and either field can be used whichever side is missing.
+     */
+    val GET_SENT_MESSAGES = """
+        query GetSentMessages(${'$'}messengerId: Int!, ${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(messengerId: ${'$'}messengerId, type_in: [MESSAGE], sort: [ID_DESC]) {
+              ... on MessageActivity {
+                id
+                message
+                isPrivate
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                recipientId
+                messengerId
+                recipient { id name avatar { medium large } }
+                messenger { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Messages the viewer has received.
+     *
+     * The inbox is `Page.notifications` filtered to `ACTIVITY_MESSAGE`, not
+     * `Page.activities`: the activity filter list has no recipient argument, so
+     * the account being messaged can only see a message through the
+     * notification AniList raises for it. Each notification embeds the whole
+     * `MessageActivity`, which is what lets a row show the sender, the body and
+     * the timestamp without opening the site.
+     *
+     * `resetNotificationCount` is deliberately **not** sent: it marks the
+     * notifications read on the server, and opening the Messages tab must not
+     * clear badges the user has not read yet.
+     */
+    val GET_RECEIVED_MESSAGES = """
+        query GetReceivedMessages(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            notifications(type_in: [ACTIVITY_MESSAGE]) {
+              ... on ActivityMessageNotification {
+                id
+                activityId
+                createdAt
+                message {
+                  id
+                  message
+                  isPrivate
+                  createdAt
+                  likeCount
+                  replyCount
+                  isLiked
+                  siteUrl
+                  recipientId
+                  messengerId
+                  recipient { id name avatar { medium large } }
+                  messenger { id name avatar { medium large } }
+                }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * The people who follow this account.
      *
      * Followers live on the `Page` query and not on `User` - there is no

@@ -14,6 +14,7 @@ import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.screens.profile.UserProfileScreen
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserActivityViewModel
+import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.UserSocialViewModel
 
@@ -199,6 +200,31 @@ fun ProfileDestination(
         )
     )
 
+    // The viewer's friends feed. Built with `followingOnly` so the class asks
+    // AniList for "everyone I follow" rather than for one id, and with no
+    // `userId`: whose profile this is has no bearing on whose friends are shown.
+    val followingViewModel: UserActivityViewModel = viewModel(
+        key = "$viewModelKey:following",
+        factory = UserActivityViewModel.Factory(
+            aniListRepository = repository,
+            userId = null,
+            viewerId = viewerId,
+            isDemo = isDemo,
+            followingOnly = true
+        )
+    )
+
+    // The inbox. Takes the viewer id rather than the profile's: the messages are
+    // the reader's own, and the screen hides the segment on anybody else's page.
+    val messagesViewModel: UserMessagesViewModel = viewModel(
+        key = "$viewModelKey:messages",
+        factory = UserMessagesViewModel.Factory(
+            aniListRepository = repository,
+            viewerId = viewerId,
+            isDemo = isDemo
+        )
+    )
+
     val socialViewModel: UserSocialViewModel = viewModel(
         key = "$viewModelKey:social",
         factory = UserSocialViewModel.Factory(
@@ -216,6 +242,8 @@ fun ProfileDestination(
         detailHost = detailHost,
         overviewViewModel = overviewViewModel,
         activityViewModel = activityViewModel,
+        followingViewModel = followingViewModel,
+        messagesViewModel = messagesViewModel,
         socialViewModel = socialViewModel,
         // Carries the tapped person, id and all. Not `username` from screen
         // state and never the signed-in viewer: that is how a grid of fifty faces

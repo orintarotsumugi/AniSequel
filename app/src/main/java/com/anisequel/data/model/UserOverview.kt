@@ -316,6 +316,17 @@ data class ProfileActivity(
     val isLiked: Boolean? = null,
     /** This activity's own page on AniList (`https://anilist.co/activity/<id>`). */
     val siteUrl: String? = null,
+    /**
+     * The account that posted this activity, when the response carried it.
+     *
+     * Only the following feed asks for it - every row there is a different
+     * person, so the author has to travel with the activity. The profile feed
+     * leaves it null on purpose: every card already belongs to the person whose
+     * profile is open, and the screen passes their name and avatar down in one
+     * place rather than repeating them in twenty-five payloads. A card whose
+     * author is unknown still draws; it just starts at the poster.
+     */
+    val user: FollowUser? = null,
     val media: MediaNode? = null
 ) {
     /** True for the members of the union this feed does not render. */

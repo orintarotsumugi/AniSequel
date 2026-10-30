@@ -64,7 +64,20 @@ class UserActivityViewModel(
      * can only fail.
      */
     private val viewerId: Int? = null,
-    private val isDemo: Boolean = false
+    private val isDemo: Boolean = false,
+    /**
+     * True for the friends feed: everyone the viewer follows, not one person.
+     *
+     * A flag rather than a second ViewModel because every other part of this
+     * class - paging, refresh-over-rows, optimistic likes, the comment thread,
+     * the likers sheet - is identical and has been debugged once. The only
+     * differences are whose feed the repository is asked for and that there is
+     * no id to require; both are decided in [fetch].
+     *
+     * The author of each row comes from the row itself in this mode
+     * (`ProfileActivity.user`), because every card is a different person.
+     */
+    private val followingOnly: Boolean = false
 ) : ViewModel() {
 
     sealed interface ActivityState {
@@ -284,7 +297,7 @@ class UserActivityViewModel(
      */
     fun loadFirstPage(forceRefresh: Boolean = false) {
         if (started && !forceRefresh) return
-        if (userId == null && !isDemo) {
+        if (userId == null && !isDemo && !followingOnly) {
             _state.value = ActivityState.Loading("Loading recent activity...")
             return
         }
@@ -341,7 +354,7 @@ class UserActivityViewModel(
 
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {
         val currentId = userId
-        if (currentId == null && !isDemo) {
+        if (currentId == null && !isDemo && !followingOnly) {
             _state.value = ActivityState.Error(
                 "AniList does not serve activity by name, and this profile was opened without an id."
             )
@@ -378,8 +391,14 @@ class UserActivityViewModel(
             // appended page one again. Only a successful page moves it (below),
             // which makes a redundant fetch impossible rather than merely deduped.
             val page = if (appending) nextPage else 1
-            val result = if (isDemo) {
-                Result.success(
+            val result = when {
+                isDemo && followingOnly -> Result.success(
+                    UserActivityPage(
+                        activities = aniListRepository.getDemoFollowingActivity(),
+                        hasMore = false
+                    )
+                )
+                isDemo -> Result.success(
                     UserActivityPage(
                         activities = aniListRepository.getDemoUserActivity(),
                         // The fixture is the whole feed. Claiming another page
@@ -387,8 +406,10 @@ class UserActivityViewModel(
                         hasMore = false
                     )
                 )
-            } else {
-                repositoryResult {
+                followingOnly -> repositoryResult {
+                    aniListRepository.getFollowingActivity(page, forceRefresh)
+                }
+                else -> repositoryResult {
                     aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
                 }
             }
@@ -607,14 +628,16 @@ class UserActivityViewModel(
         private val aniListRepository: AniListRepository,
         private val userId: Int? = null,
         private val viewerId: Int? = null,
-        private val isDemo: Boolean = false
+        private val isDemo: Boolean = false,
+        private val followingOnly: Boolean = false
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserActivityViewModel(
             aniListRepository = aniListRepository,
             userId = userId,
             viewerId = viewerId,
-            isDemo = isDemo
+            isDemo = isDemo,
+            followingOnly = followingOnly
         ) as T
     }
 }

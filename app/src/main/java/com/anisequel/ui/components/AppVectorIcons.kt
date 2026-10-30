@@ -176,6 +176,13 @@ object AppVectorIcons {
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group
+    // The Activity tab's Messages segment: site messages rather than a feed. An
+    // envelope rather than a chat bubble, which is already [ProfileActivity] -
+    // the two sit side by side in the segment row and must not read as one icon.
+    val ProfileMessages = Icons.Default.Email
+    // The same distinction inside a message card: an envelope arriving, against
+    // [ActivitySend] leaving.
+    val MessageReceived = Icons.Default.Inbox
     // The main bar's Profile tab falls back to this while the viewer's avatar is unknown.
     val ProfilePerson = Icons.Default.AccountCircle
 

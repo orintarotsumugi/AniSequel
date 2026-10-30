@@ -106,7 +106,9 @@ fun ActivityCard(
     onOpenLikers: () -> Unit = {},
     onOpenDetail: (MediaNode) -> Unit = {},
     likePending: Boolean = false,
-    nowEpochSecond: Long? = null
+    nowEpochSecond: Long? = null,
+    /** Opens the author's profile; null on the profile's own feed. */
+    onOpenAuthor: (() -> Unit)? = null
 ) {
     when {
         activity.media != null -> ActivityListCard(
@@ -119,7 +121,8 @@ fun ActivityCard(
             onOpenLikers = onOpenLikers,
             onOpenDetail = onOpenDetail,
             likePending = likePending,
-            nowEpochSecond = nowEpochSecond
+            nowEpochSecond = nowEpochSecond,
+            onOpenAuthor = onOpenAuthor
         )
         activity.isTextPost -> ActivityTextCard(
             activity = activity,
@@ -130,7 +133,8 @@ fun ActivityCard(
             onComments = onComments,
             onOpenLikers = onOpenLikers,
             likePending = likePending,
-            nowEpochSecond = nowEpochSecond
+            nowEpochSecond = nowEpochSecond,
+            onOpenAuthor = onOpenAuthor
         )
     }
 }
@@ -153,7 +157,9 @@ private fun ActivityListCard(
      * Null is "read the clock at composition", which is what a preview or a
      * caller with one card wants.
      */
-    nowEpochSecond: Long? = null
+    nowEpochSecond: Long? = null,
+    /** Opens the author's profile; null on the profile's own feed. */
+    onOpenAuthor: (() -> Unit)? = null
 ) {
     // Read before the early return below rather than after it: the card has nothing
     // to draw without a media node, and a `Local` read that only happens on some
@@ -201,7 +207,8 @@ private fun ActivityListCard(
                     userAvatar = userAvatar,
                     createdAt = activity.createdAt,
                     nowEpochSecond = nowEpochSecond,
-                    avatarSize = 28.dp
+                    avatarSize = 28.dp,
+                    onOpenAuthor = onOpenAuthor
                 )
 
                 Row {

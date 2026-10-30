@@ -13,10 +13,12 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserActivityPage
+import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.ApiReachability
@@ -283,6 +285,47 @@ interface AniListRepository {
     ): Result<List<FollowUser>> = unsupported("getUserFollowing")
 
     /**
+     * The activity feed of everyone the viewer follows.
+     *
+     * No user id on purpose: `isFollowing` is resolved from the request's token,
+     * so the account asking is the account whose follow list is read. Same
+     * paging contract as [getUserActivity] - a short page is not the last page.
+     *
+     * Defaulted rather than abstract for the same reason the follower calls
+     * are: a repository without a session cannot answer, and its empty feed is
+     * the truth rather than an error the tab cannot act on.
+     */
+    suspend fun getFollowingActivity(
+        page: Int = 1,
+        forceRefresh: Boolean = false
+    ): Result<UserActivityPage> = unsupported("getFollowingActivity")
+
+    /**
+     * One page of messages the viewer sent, newest first.
+     *
+     * [messengerId] is the signed-in viewer's id - AniList filters messages by
+     * their sender through `messengerId`, and only sent messages are listable
+     * that way. The inbox is [getReceivedMessages].
+     */
+    suspend fun getSentMessages(
+        messengerId: Int,
+        page: Int = 1,
+        forceRefresh: Boolean = false
+    ): Result<UserMessagesPage> = unsupported("getSentMessages")
+
+    /**
+     * One page of messages the viewer received, newest first.
+     *
+     * Read through `Page.notifications` because the activity listing has no
+     * recipient filter; see `GET_RECEIVED_MESSAGES`. The page's `hasMore` is the
+     * only end-of-inbox signal for the same reason it is on the activity feed.
+     */
+    suspend fun getReceivedMessages(
+        page: Int = 1,
+        forceRefresh: Boolean = false
+    ): Result<UserMessagesPage> = unsupported("getReceivedMessages")
+
+    /**
      * The followed users who have this title on their list, best rating first.
      *
      * Takes the media's AniList type as well as its id for the reason
@@ -382,6 +425,18 @@ interface AniListRepository {
     fun getDemoUserActivity(): List<ProfileActivity> = unsupported("getDemoUserActivity")
     fun getDemoFollowers(): List<FollowUser> = unsupported("getDemoFollowers")
     fun getDemoFollowing(): List<FollowUser> = unsupported("getDemoFollowing")
+
+    /**
+     * The friends feed and the inbox in demo form.
+     *
+     * The demo account follows people and trades messages like any other, so
+     * both tabs have to have something to show without a token - otherwise the
+     * one account the app can open signed-out would be the only one whose new
+     * tabs are empty.
+     */
+    fun getDemoFollowingActivity(): List<ProfileActivity> =
+        unsupported("getDemoFollowingActivity")
+    fun getDemoMessages(): List<MessageNode> = unsupported("getDemoMessages")
 
     /**
      * Drops everything the repository holds about the signed-in person.

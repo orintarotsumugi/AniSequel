@@ -4,6 +4,18 @@
       "version": "1.6.8",
       "entries": [
         {
+          "title": "The Activity tab has a Friends segment",
+          "detail": "What the people you follow are watching, finishing and saying now has its own segment inside the Activity tab, read from AniList's own following feed rather than stitched together profile by profile. It pages, likes and threads exactly like your own feed, and a friend's name or face opens their profile in the app. The segment row is drawn only on your own profile - a profile opened by name has no follow graph of yours behind it."
+        },
+        {
+          "title": "The inbox reads both directions",
+          "detail": "Messages shows the private messages AniList holds for the signed-in account - received, sent, or both merged by time, under All/Received/Sent chips. Received messages are read from the notification stream, because the activities feed has no recipient filter and the notification is the only place AniList serves them. A card names its direction twice on purpose - under the counterpart's name and as a footer chip - because both directions share one card shape, and mixing up who said what in an inbox is the one mistake that matters. Message bodies render as markdown with a Read more control, the counterpart opens their profile, and the chip links to the message on AniList itself."
+        },
+        {
+          "title": "Three feeds, three sets of state",
+          "detail": "Your activity, your friends' activity and the inbox each keep their own scroll position, comment thread, likers and paging cursor, so opening a friend's thread no longer borrows your own feed's sheet, and switching segments no longer starts a list over at the top. The segment row and the inbox filter row stay fixed above the list instead of scrolling away with it. The profile refresh button now also refreshes whichever viewer feeds have been opened - and only those, so a page-level refresh spends no requests on an inbox nobody has looked at."
+        },
+        {
           "title": "A drop under the tray says what it does",
           "detail": "The unranked tray floats over the bottom of the board and the board scrolls behind it, but a release over that strip was resolved like any other drop: the title was filed into a tier hidden under the shelf and seemed to vanish. A release over the tray now means no tier - for picks from the board and from the tray alike - and the bottom auto-scroll band sits above the shelf rather than under it. A tray drag released away from every row also says it will stay in the pool, instead of promising to take it out of a list it was never in."
         },

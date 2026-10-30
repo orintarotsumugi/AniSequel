@@ -17,8 +17,10 @@ import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.CharacterProfileData
+import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveMediaListEntryData
+import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.StudioData
 import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.ToggleLikeData
@@ -152,6 +154,39 @@ interface AniListApiService {
     suspend fun getUserFollowing(
         @Body request: GraphQLRequest
     ): GraphQLResponse<FollowingData>
+
+    /**
+     * The activity feed of the accounts the viewer follows.
+     *
+     * The same [ActivityFeedData] shape as [getUserActivity]: it is the same
+     * union and the same fragments, only filtered by `isFollowing` instead of
+     * `userId`, with each row carrying its own author.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getFollowingActivity(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityFeedData>
+
+    /** Messages the viewer sent. The inbox has no activity listing; see [getReceivedMessages]. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getSentMessages(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<SentMessagesData>
+
+    /**
+     * Messages the viewer received, read through `Page.notifications`.
+     *
+     * Not an oversight in naming: `Page.activities` has no recipient filter, so
+     * a received message is only listable through the notification AniList
+     * raises for it. See the class docs on `MessageNotificationNode`.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getReceivedMessages(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ReceivedMessagesData>
 
     /**
      * The followed users' list entries for one title.
