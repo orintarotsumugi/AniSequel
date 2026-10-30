@@ -137,9 +137,12 @@ internal fun ViewerDetailsCard(
             }
 
             // Where the reader can look at more of this title's artwork. AniList
-            // is the page this viewer was opened from; LiveChart is the only
-            // other site the app can honestly send them to for the schedule and
-            // its own poster, since it publishes no API to read.
+            // is the page this viewer was opened from; LiveChart is the only other
+            // site the app can honestly send them to for the airing schedule. Its
+            // poster also appears up above as a third image source - the owner
+            // reversed the earlier no-scrape rule (see [FullScreenCoverViewer] and
+            // [com.anisequel.ui.components.LiveChart]) - but this pill is still
+            // just the outbound link it has always been, to the search page.
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
