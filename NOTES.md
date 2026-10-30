@@ -19,6 +19,7 @@ That is this file. Read the section for the screen before you change it.
 ## Contents
 
 - [The title page](#the-title-page)
+- [The LiveChart cover](#the-livechart-cover)
 - [Studio pages](#studio-pages)
 - [Character and staff pages](#character-and-staff-pages)
 - [The main bar](#the-main-bar)
@@ -363,7 +364,7 @@ Settings, a studio page, a scanned dashboard and somebody else's profile are
 pushed *from* a page, and a bar drawn over them would claim the reader is
 somewhere they are not — with a selected tab they never chose. The one that looks
 like a literal and is not is the profile: `NavDestination` reports the registered
-*pattern* (`profile?tab={tab}`), so the mapping matches the pattern.
+*pattern* (`profile?tab={tab}&segment={segment}`), so the mapping matches the pattern.
 `MainTabsTest` pins the mapping, the order of the destinations (the bar turns its
 index back into a `MainTab` with `tabs[index]`, never `MainTab.entries[index]` —
 the tier tab can be off, and an ordinal would then point one slot too far right)
@@ -410,6 +411,39 @@ pages that were only passed through still composed and started loading before
 being replaced. Releasing on the tab the swipe started from is not a route change
 at all, and a cancelled gesture (the tier tab being switched off mid-hold) commits
 nothing: `swipeSelection` returns the destination only on a real finger-up.
+
+**A hold that never moves is the destination's shortcut.** The same gesture with no
+travel is now routed to `ExpressiveNavigationBar`'s optional `onHold` instead of
+`onSelect`, and the main bar uses it for one destination only: holding the bar while
+the profile is the page on screen navigates to
+`profile?tab=activity&segment=messages`, which is the viewer's own inbox — the Activity
+tab's third segment, which before this could only be reached by opening the profile,
+finding the Activity tab and tapping the chip. The hold resolves to the destination it
+*began* on, which is the selected tab, not to the item under the finger: the bar is one
+`pointerInput` over a `Row` whose items are deliberately unequal (the selected pill
+claims more width) and it has no item bounds to test. A swipe that went out and came
+back is *not* the shortcut — `holdThenSwipe` tracks whether the preview ever left the
+tab the hold began on, because that is the finger changing its mind, not asking for
+something. The profile's own four-tab capsule passes no handler, so its hold stays the
+acknowledgement it always was.
+
+That route is why `navigateToProfileMessages` is a second function beside
+`navigateToMainTab` rather than the same one with a different string: the early return
+that makes a repeat tap on the current tab a no-op also swallows a hold on the tab you
+are already looking at, and `restoreState` would hand the profile back the segment it
+was left on instead of the one the route asked for. It therefore pops back to Home
+*without* saving, so the replaced profile has no saved state to re-claim its own route
+key from, and the new entry composes on the requested segment on its first frame —
+which is also why the segment is an *initial* value of the page's saved state rather
+than something written to it after composition: the latter shows Activity for a frame
+and then flips.
+
+The `segment` argument defaults to `""`, **not** to null, and that is load-bearing. A
+query argument whose default is null still has to appear in the URI, which is the whole
+reason every caller here spells `tab=` out — `navigate("profile")` matched nothing and
+left the dashboard's avatar tap dead. Adding the segment the way the tab is declared
+would have silently un-matched `profile?tab=` and `profile?tab=activity`, breaking the
+bar's Profile tab and the home-screen widget with no error anywhere.
 
 **The bar leaves downwards for an open tier board.** It is drawn by the host
 inside an `AnimatedVisibility`, and the board rises from the bottom edge at the
@@ -1175,6 +1209,53 @@ keying the window on the notice means one kind's storm cannot silence another's.
 This is deliberately a `Toast`, not a `Snackbar`: the failures land most often on
 `ModalBottomSheet`s, which live in their own window over the host screen, so a
 Scaffold snackbar would post behind the sheet where the reader is not looking.
+
+---
+
+## The LiveChart cover
+
+**The app now reads one image from a site it used to only link to.** For its whole
+life LiveChart was "a link, not a scrape": it publishes no API - its FAQ offers
+only RSS - so the app built the search URL the outbound "LiveChart" pill uses
+(`liveChartSearchUrl` in `ui/components/LiveChart.kt`) and drew nothing from the
+site, on the reasoning that scraping a host that has asked not to be consumed that
+way is not AniSequel's call to make. **The owner has reversed that for one bounded
+thing: the full-screen cover viewer now adds LiveChart's own poster as a third
+source**, because LiveChart's artwork is more numerous and higher quality than
+AniList's for many titles. This is a deliberate decision recorded here and in the
+KDoc on `LiveChart.kt` and `FullScreenCoverViewer.kt`, not an oversight - everything
+the old rule warned about (reverse-engineered endpoints, reading the schedule,
+touching anything but a poster) is still off-limits.
+
+**What is actually fetched, verified against the live site.** There is no endpoint,
+so the fetcher (`data/network/LiveChartPosterApi.kt`) opens the one page the site
+advertises in its own schema.org `SearchAction`, `https://www.livechart.me/search?q={term}`,
+and parses the poster straight out of the HTML. A result's cover is an `<img>`
+tagged `data-anime-item-target="poster"` whose `alt` is the title and whose `src` is
+the thumbnail; LiveChart serves posters from the CDN host `u.livechart.me` at
+`/anime/{id}/poster_image/{hash}.webp/{size}.jpg`, where `small.jpg` is the result
+thumbnail, `large.jpg` is the anime page's own `og:image`, and the underlying source
+is the `.webp`. So the viewer is handed the `large.jpg` variant, not the little
+thumbnail. The pure parser is pinned in `LiveChartCoverTest` without a network.
+
+**A browser User-Agent is load-bearing, not a nicety.** Verified:
+`https://www.livechart.me` answers **403** to OkHttp's own default agent and to an
+empty one, and only returns the page for a normal desktop Chrome string - which is
+what the fetcher sends. The poster host is less strict (`u.livechart.me` returns
+200 to any agent), so Coil loads the chosen image directly with the app's normal
+image loader; only the *discovery* request needs the header.
+
+**The match is conservative, and failure is invisible.** LiveChart titles entries in
+romaji and treats English as an alias, so a search for one show returns a dozen
+near-misses - sequels, spin-offs, unrelated shows sharing a word. The picker scores
+exact > prefix > partial, prefers the shortest agreeing title (so "Sousou no Frieren"
+settles on the base rather than its 2nd Season), and returns nothing when no result
+overlaps the query at all rather than guessing. The request runs on `Dispatchers.IO`,
+is cached for a session by `LiveChartCovers` on the same politeness argument as
+`AniThemes`, and every failure path - 403, offline, a page that changed shape, a
+manga (LiveChart tracks anime only, so none is searched) - means one thing: no extra
+pill. AniList's poster and banner still paint immediately; the LiveChart source is
+appended only once it arrives.
 
 ---
 

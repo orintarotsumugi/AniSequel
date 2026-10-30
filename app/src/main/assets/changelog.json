@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.6.9",
+      "entries": [
+        {
+          "title": "The background you pick is the background you get",
+          "detail": "Picking a canvas colour in Settings saved it correctly, lit the chip as chosen, and then - in light mode, or System on a light phone - quietly threw it away: the override was gated on dark mode because a dark canvas with the light theme's near-black text was unreadable, and dropping the feature was the answer the old code chose. The gate is gone and the real problem is fixed instead. The picked colour now paints both modes and derives the whole neutral ramp from itself - background, surface, every container a card sits on, the dim and bright ends sheets and app bars read - so the change reaches the full app rather than three roles of it. Text colours are computed from the canvas's own luminance, which keeps them above AA on any tone from pure black to paper white, and two light canvases join the presets for the mode that could never use one."
+        },
+        {
+          "title": "Covers stop hiding behind a placeholder",
+          "detail": "Image requests went out with OkHttp's default `okhttp/4.12.0` as their User-Agent, and image CDNs answer that string with a 403. Nothing looked like an error, because every failed cover fell back to the same painter as its placeholder - so a forbidden request rendered as a permanent grey box that read as slow loading. The image client now sends a browser-like User-Agent on cover requests, pinned by a test that reads the header off the request the interceptor produces, because a bug that lives in one header is invisible to everything else."
+        },
+        {
+          "title": "A message opens in the app, on frame one",
+          "detail": "Reading a private message in full used to mean the AniList chip and a browser. Tapping a message card now opens the whole thing inside the app - face, name, which direction it went, the full date, the body unclamped and rendered with the app's own markdown - with no request behind it: the sheet draws from the row already in memory that the card list rendered, so there is no spinner and nothing to wait for. Preview cards for links inside a message still enrich afterwards, the way they do everywhere else, but the words never wait on a lookup. The outbound link stays as a footer action; it is just no longer the only way to finish reading."
+        },
+        {
+          "title": "The inbox is a hold away",
+          "detail": "The Messages segment used to be three actions deep - open the profile, find the Activity tab, tap the chip - and had no way to be addressed from outside. The profile route now carries a segment argument, so `profile?tab=activity&segment=messages` composes the inbox from its first frame rather than flicking through the Activity feed on the way, and holding the Profile tab on the bar - the gesture that already existed and, without a swipe, did nothing - now asks for exactly that route. A swipe that travels and comes back is still the finger changing its mind, not a shortcut."
+        },
+        {
+          "title": "LiveChart's poster joins the viewer",
+          "detail": "The app's rule was that LiveChart is a link, not a scrape - it publishes no API, so reading its pages was somebody else's call to make. The owner has reversed that for one narrow thing: the full-screen cover viewer can now show LiveChart's own poster, which for many titles is the higher-quality art. The app reads exactly one thing off the search page it has always linked to - the best title match's large poster - and nothing else. AniList's poster and banner still paint immediately; the LiveChart source arrives later or not at all, and a no-match, an offline phone or a changed page simply means one fewer pill. LiveChart 403s non-browser agents, so the page fetch carries a browser User-Agent of its own and the token to AniList is never sent to a third party."
+        },
+        {
+          "title": "Twenty-six more ways it ended",
+          "detail": "The dark tone grows - the author died and the anime continued, the role recast from last year's leftover takes, the character who came back as an AI voice in a mobile game. The shuffle bag still shows every filtered line once before repeating any."
+        }
+      ]
+    },
+    {
       "version": "1.6.8",
       "entries": [
         {
