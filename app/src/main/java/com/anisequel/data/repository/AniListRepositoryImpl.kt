@@ -2,24 +2,32 @@ package com.anisequel.data.repository
 
 import android.util.Log
 import com.anisequel.data.model.ActivityLikeState
+import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.CharacterProfile
+import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.MessageNode
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
+import com.anisequel.data.model.MediaName
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.ReceivedMessagesData
+import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.UserActivityPage
+import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.sortedForDisplay
@@ -35,6 +43,7 @@ import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.network.parseAniListErrorBody
 import com.anisequel.data.network.readCapped
 import com.anisequel.data.network.RequestCoalescer
+import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,8 +121,31 @@ internal const val MAX_COVER_BATCH_KEYS = 10
  */
 private const val ACTIVITY_PAGE_SIZE = 25
 
+/**
+ * Rows requested per message page.
+ *
+ * The same size as [ACTIVITY_PAGE_SIZE], but a separate constant: an inbox is
+ * read in bursts and could reasonably ask for more rows than a feed that draws
+ * full cards, and tying the two together would make that change a change to the
+ * feed as well.
+ */
+private const val MESSAGE_PAGE_SIZE = 25
+
 /** Logcat tag for the cover batches. One line, warning level, never a UI message. */
 private const val COVER_LOG_TAG = "AniSequelCovers"
+
+/**
+ * The most entity links one preview document may carry.
+ *
+ * Equal to `GraphQLQueries.ENTITY_PREVIEW_PAGE_SIZE` by construction rather than
+ * by a second constant: that value is the `perPage` the document asks for, and a
+ * batch larger than it would be silently truncated by AniList. A favourites hall
+ * that links twenty characters therefore spends one request, not twenty.
+ */
+private const val ENTITY_BATCH_KEYS = GraphQLQueries.ENTITY_PREVIEW_PAGE_SIZE
+
+/** Logcat tag for the entity-preview batches, for the same reason as [COVER_LOG_TAG]. */
+private const val ENTITY_LOG_TAG = "AniSequelPreviews"
 
 /** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
 internal fun mediaCoverBatches(keys: List<MediaCoverKey>): List<List<MediaCoverKey>> =
@@ -175,6 +207,15 @@ class AniListRepositoryImpl(
          * recurs across profiles, so a small cache here would miss constantly.
          */
         const val MAX_COVER_CACHE_ENTRIES = 512
+
+        /**
+         * Soft cap on cached entity previews.
+         *
+         * Same order as [MAX_COVER_CACHE_ENTRIES], for the same reason: a name and
+         * a portrait URL are a few dozen bytes, and the same hall-of-fame cast
+         * recurs across profiles.
+         */
+        const val MAX_ENTITY_PREVIEW_CACHE_ENTRIES = 512
 
         /**
          * How long the reachability probe may take before it is declared a
@@ -403,6 +444,17 @@ class AniListRepositoryImpl(
     private class CachedCover(val cover: MediaCover, val storedAtMillis: Long)
 
     /**
+     * Character, staff and studio previews, keyed by their own kind and id.
+     *
+     * Not cleared on sign-out with the list and profile caches: a public name and
+     * portrait carry no session, and clearing them would only make the next
+     * account's first bio re-spend the requests. Keyed on [EntityPreviewKey]
+     * because a character and a staff member can share a numeric id and are two
+     * different people - the same namespace collision the media caches guard.
+     */
+    private val entityPreviewCache = ConcurrentHashMap<EntityPreviewKey, EntityPreview>()
+
+    /**
      * Completed list responses, kept briefly so re-entering the app does not
      * re-buy the same multi-megabyte answer.
      *
@@ -507,6 +559,33 @@ class AniListRepositoryImpl(
     private val activityCache = ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
     private val followersCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
     private val followingCache = ConcurrentHashMap<String, CachedValue<List<FollowUser>>>()
+
+    /**
+     * The viewer's own friends feed, keyed by page alone.
+     *
+     * Viewer-scoped rather than per-user: `isFollowing` resolves to whoever the
+     * request's token belongs to, so there is no id in the key that could keep
+     * two accounts apart. That is safe only because `clearDetailCache()` drops
+     * this map on sign-out - it is followers-only data and the next account must
+     * not inherit it. Kept apart from [activityCache] so opening one feed does
+     * not throw away the other's pages; both share the same TTL.
+     */
+    private val followingActivityCache =
+        ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
+
+    /**
+     * Sent and received messages, kept per source.
+     *
+     * Two documents with two cursors: the sent list pages through
+     * `Page.activities`, the received list through `Page.notifications`, and a
+     * page numbered 2 in one says nothing about page 2 in the other. One cache
+     * would need a source in its key anyway, so two maps make the separation
+     * impossible to get wrong.
+     */
+    private val sentMessagesCache =
+        ConcurrentHashMap<String, CachedValue<UserMessagesPage>>()
+    private val receivedMessagesCache =
+        ConcurrentHashMap<String, CachedValue<UserMessagesPage>>()
 
     /**
      * Followed users' entries per title, keyed by namespace and id.
@@ -1375,6 +1454,113 @@ class AniListRepositoryImpl(
         }
     }
 
+    override suspend fun getEntityPreviews(
+        keys: List<EntityPreviewKey>
+    ): Result<Map<EntityPreviewKey, EntityPreview>> {
+        if (keys.isEmpty()) return Result.success(emptyMap())
+
+        val resolved = LinkedHashMap<EntityPreviewKey, EntityPreview>()
+        val missing = mutableListOf<EntityPreviewKey>()
+        keys.distinct().forEach { key ->
+            // A key this request cannot answer for is dropped rather than sent:
+            // asking the character root for a media id would draw a stranger's
+            // portrait on the card, and an unknown type would fail the document.
+            if (key.graphqlType !in EntityPreviewKey.SUPPORTED_TYPES) return@forEach
+            val known = entityPreviewCache[key]
+            if (known != null) resolved[key] = known else missing += key
+        }
+        if (missing.isEmpty()) return Result.success(resolved)
+
+        var anyAccepted = false
+        var firstFailure: Throwable? = null
+
+        missing.chunked(ENTITY_BATCH_KEYS).forEach { batch ->
+            // One root per type, so twenty characters cost one field and one
+            // variable rather than twenty aliases.
+            val groups = batch.groupBy { it.graphqlType }
+            val variables = buildMap<String, Any> {
+                groups.forEach { (type, group) ->
+                    put(GraphQLQueries.entityPreviewVariable(type), group.map { it.id })
+                }
+            }
+            execute(
+                GraphQLRequest(
+                    query = GraphQLQueries.getEntityPreviewsQuery(groups.keys),
+                    variables = variables
+                ),
+                apiService::getEntityPreviews
+            ).fold(
+                onSuccess = { pages ->
+                    anyAccepted = true
+                    groups.forEach { (type, group) ->
+                        val found: Map<Int, EntityPreview> = when (type) {
+                            "CHARACTER" -> pages.characters?.characters.orEmpty()
+                                .associate { profile ->
+                                    profile.id to EntityPreview(
+                                        name = profile.name?.previewName(),
+                                        imageUrl = profile.image?.bestUrl
+                                    )
+                                }
+
+                            "STAFF" -> pages.staff?.staff.orEmpty()
+                                .associate { profile ->
+                                    profile.id to EntityPreview(
+                                        name = profile.name?.previewName(),
+                                        imageUrl = profile.image?.bestUrl
+                                    )
+                                }
+
+                            // A studio has no portrait on AniList, and a novel
+                            // with no id is not a row this batch can match.
+                            "STUDIO" -> pages.studios?.studios.orEmpty()
+                                .mapNotNull { studio ->
+                                    studio.id?.let { it to EntityPreview(name = studio.name) }
+                                }
+                                .toMap()
+
+                            else -> emptyMap()
+                        }
+                        group.forEach { key ->
+                            val preview = found[key.id] ?: return@forEach
+                            if (entityPreviewCache.size >= MAX_ENTITY_PREVIEW_CACHE_ENTRIES) {
+                                entityPreviewCache.clear()
+                            }
+                            entityPreviewCache[key] = preview
+                            resolved[key] = preview
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    if (firstFailure == null) firstFailure = error
+                    // Silent on screen, like the cover batches: a missing preview
+                    // leaves the card with its label and type icon, which is a
+                    // complete card. The line exists for logcat.
+                    Log.w(
+                        ENTITY_LOG_TAG,
+                        "AniList refused an entity preview batch of ${batch.size}",
+                        error
+                    )
+                }
+            )
+        }
+
+        // Same contract as the covers: a partial answer is a success, because each
+        // card is independently useful; only a wholly refused document is a
+        // failure the caller can retry.
+        val failure = firstFailure
+        return if (!anyAccepted && failure != null) {
+            Result.failure(failure)
+        } else {
+            Result.success(resolved)
+        }
+    }
+
+    /** The name a preview card draws: AniList's full form, then native, then an alias. */
+    private fun MediaName.previewName(): String? =
+        full?.takeIf { it.isNotBlank() }
+            ?: native?.takeIf { it.isNotBlank() }
+            ?: alternative?.firstOrNull { it.isNotBlank() }
+
     /** Memory half of [knownCover], on the list's window. */
     private fun cachedCover(key: MediaCoverKey): MediaCover? {
         val entry = coverCache[key] ?: return null
@@ -1560,11 +1746,16 @@ class AniListRepositoryImpl(
 
     override fun getDemoUserOverview(): UserOverview = DemoProfileProvider.getDemoUserOverview()
 
-    override fun getDemoUserActivity(): List<ListActivity> = DemoProfileProvider.getDemoActivity()
+    override fun getDemoUserActivity(): List<ProfileActivity> = DemoProfileProvider.getDemoActivity()
 
     override fun getDemoFollowers(): List<FollowUser> = DemoProfileProvider.getDemoFollowers()
 
     override fun getDemoFollowing(): List<FollowUser> = DemoProfileProvider.getDemoFollowing()
+
+    override fun getDemoFollowingActivity(): List<ProfileActivity> =
+        DemoProfileProvider.getDemoFollowingActivity()
+
+    override fun getDemoMessages(): List<MessageNode> = DemoProfileProvider.getDemoMessages()
 
     override suspend fun getUserActivity(
         userId: Int,
@@ -1585,23 +1776,87 @@ class AniListRepositoryImpl(
             ),
             apiService::getUserActivity
         ).map { data ->
-            // `isUnrecognised` is the union member this app does not model. The
-            // query filters with `type_in`, so in practice the server only sends
-            // list updates - but the filter is a `type_in` argument, not a
-            // guarantee, and a forum post arriving here would parse into an
-            // activity with no media and no status. Dropping those here means a
-            // blank card is never rendered; see `ListActivity.isUnrecognised`.
-            val raw = data.page?.activities.orEmpty()
-            val activities = raw.filterNot { it.isUnrecognised || it.media == null }
-            // AniList's own answer first: the filtering above is exactly why a
-            // page's row count cannot be trusted as "is this the end". The
-            // fallback only exists for a response that did not carry pageInfo at
-            // all (an older fixture, or a server that omitted it), and it asks
-            // the unfiltered count so it stays as honest as it can be.
-            val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= ACTIVITY_PAGE_SIZE)
-            val feedPage = UserActivityPage(activities = activities, hasMore = hasMore)
+            val feedPage = parseActivityFeed(data)
             storeValue(activityCache, key, feedPage)
             feedPage
+        }
+    }
+
+    override suspend fun getFollowingActivity(
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<UserActivityPage> {
+        val key = "following:page:$page"
+        if (!forceRefresh) cachedValue(followingActivityCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_FOLLOWING_ACTIVITY,
+                variables = mapOf(
+                    "page" to page,
+                    "perPage" to ACTIVITY_PAGE_SIZE
+                )
+            ),
+            apiService::getFollowingActivity
+        ).map { data ->
+            val feedPage = parseActivityFeed(data)
+            storeValue(followingActivityCache, key, feedPage)
+            feedPage
+        }
+    }
+
+    override suspend fun getSentMessages(
+        messengerId: Int,
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<UserMessagesPage> {
+        // The sender id stays in the key even though it is the viewer's own:
+        // `clearDetailCache()` is the real account boundary, and a key that
+        // cannot be served to the wrong account is the cheaper second line of it.
+        val key = "sent:$messengerId:page:$page"
+        if (!forceRefresh) cachedValue(sentMessagesCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_SENT_MESSAGES,
+                variables = mapOf(
+                    "messengerId" to messengerId,
+                    "page" to page,
+                    "perPage" to MESSAGE_PAGE_SIZE
+                )
+            ),
+            apiService::getSentMessages
+        ).map { data ->
+            val pageResult = parseSentMessages(data)
+            storeValue(sentMessagesCache, key, pageResult)
+            pageResult
+        }
+    }
+
+    override suspend fun getReceivedMessages(
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<UserMessagesPage> {
+        // No account in this key because there is no account *in the request*:
+        // notifications resolve from the token. Sign-out clearing this map is
+        // what keeps the next account from reading this inbox; see
+        // `clearDetailCache()`.
+        val key = "received:page:$page"
+        if (!forceRefresh) cachedValue(receivedMessagesCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_RECEIVED_MESSAGES,
+                variables = mapOf(
+                    "page" to page,
+                    "perPage" to MESSAGE_PAGE_SIZE
+                )
+            ),
+            apiService::getReceivedMessages
+        ).map { data ->
+            val pageResult = parseReceivedMessages(data)
+            storeValue(receivedMessagesCache, key, pageResult)
+            pageResult
         }
     }
 
@@ -1712,7 +1967,11 @@ class AniListRepositoryImpl(
             // The cached feed pages still carry the pre-toggle like state and
             // count. Dropping them is cheaper than patching each page in place,
             // and it is what stops a re-entry showing a like the user has undone.
+            // The friends feed caches the same rows under its own keys and has
+            // to go with them, or the same activity would disagree with itself
+            // depending on which tab was opened second.
             activityCache.clear()
+            followingActivityCache.clear()
         }
 
     override suspend fun toggleActivityReplyLike(replyId: Int): Result<ActivityLikeState> =
@@ -1747,8 +2006,10 @@ class AniListRepositoryImpl(
         ).mapRequire { it.reply.require("No response from the reply mutation") }
             .onSuccess {
                 // The feed's `replyCount` is now one short of the truth, so the
-                // same cache drop the like does applies here.
+                // same cache drop the like does applies here - on both feeds,
+                // which carry the same activity under different keys.
                 activityCache.clear()
+                followingActivityCache.clear()
             }
 
     override suspend fun editActivityReply(
@@ -1779,8 +2040,10 @@ class AniListRepositoryImpl(
                 // The cached pages carry the pre-delete reply count, and unlike a
                 // like there is no toggle back: dropping them is cheaper than
                 // patching each page in place and is what stops a re-entry
-                // showing a count for a comment that no longer exists.
+                // showing a count for a comment that no longer exists. Both
+                // feeds hold the same activity, so both are dropped.
                 activityCache.clear()
+                followingActivityCache.clear()
             }
 
     /**
@@ -1854,10 +2117,21 @@ class AniListRepositoryImpl(
         // up in this process.
         overviewCache.clear()
         // As are the activity feed and the follower lists, which are just as
-        // personal and are fetched for other people too.
+        // personal and are fetched for other people too. The friends cache is the
+        // same data one step further in: it holds which of the viewer's friends
+        // have a title on their list, which is friends-only information and must
+        // not survive a sign-out - it was simply missed here when it was added.
         activityCache.clear()
         followersCache.clear()
         followingCache.clear()
+        friendsCache.clear()
+        // The friends feed and the inbox are viewer-only reads: both resolve from
+        // the token rather than from an id in the URL, so unlike every cache
+        // above their keys cannot keep two accounts apart on their own. Clearing
+        // here is the entire account boundary for them.
+        followingActivityCache.clear()
+        sentMessagesCache.clear()
+        receivedMessagesCache.clear()
         // And the same again for the disk tier. This is the half that outlives
         // the process: without this, signing out would clear what the app is
         // holding and leave the list, the bio, the viewer's record and the
@@ -1906,6 +2180,13 @@ class AniListRepositoryImpl(
         } catch (e: AniListException) {
             Result.failure(e)
         } catch (e: IOException) {
+            // Every read and write that cannot leave the device lands here, and
+            // it is the one place an offline failure is classified - so the
+            // app-wide notice is raised exactly once per episode, deduplicated in
+            // [SystemNotices]. A screen that has no connection surface of its own
+            // (a sheet, a background paging request) would otherwise fail with a
+            // dead spinner and no "there is no network".
+            SystemNotices.report(SystemNotices.Notice.Offline)
             Result.failure(
                 AniListException(
                     kind = AniListErrorKind.OFFLINE,
@@ -2034,6 +2315,72 @@ class AniListRepositoryImpl(
                 response()?.errorBody()?.readCapped()
             )?.errors?.firstOrNull()
         )
+}
+
+/**
+ * One activity response reduced to the rows the feed can draw, and the honest
+ * answer about whether another page exists.
+ *
+ * Shared by the profile feed and the friends feed: the two queries select the
+ * same fragments and differ only in *whose* activities the server picks, so the
+ * filtering and the pagination rule have to be identical or the two tabs would
+ * end at different rows for the same account.
+ *
+ * `isUnrecognised` is the union member this feed does not render. The query asks
+ * for list updates and text posts, but the filter is a `type_in` argument, not a
+ * guarantee, and anything else arriving here parses into an activity with no
+ * media, status or text. Dropping those means a blank card is never rendered; a
+ * text post has no media by definition, so it must not be caught by the media
+ * check.
+ *
+ * `hasNextPage` is AniList's own answer first, because the filtering above is
+ * exactly why a page's row count cannot be trusted as "is this the end". The
+ * fallback only exists for a response that did not carry `pageInfo` at all, and
+ * it asks the unfiltered count so it stays as honest as it can be.
+ */
+private fun parseActivityFeed(data: ActivityFeedData): UserActivityPage {
+    val raw = data.page?.activities.orEmpty()
+    val activities = raw.filterNot { it.isUnrecognised || (!it.isTextPost && it.media == null) }
+    val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= ACTIVITY_PAGE_SIZE)
+    return UserActivityPage(activities = activities, hasMore = hasMore)
+}
+
+/**
+ * Sent messages as a page of drawable rows.
+ *
+ * A message whose body is gone - deleted on the site while its activity row
+ * survived - is dropped rather than drawn as an empty bubble, the same rule the
+ * activity feed applies to union members it cannot render. `hasMore` keeps the
+ * feed's two-tier rule: the server's answer first, the unfiltered row count only
+ * when the response carried no `pageInfo`.
+ */
+private fun parseSentMessages(data: SentMessagesData): UserMessagesPage {
+    val raw = data.page?.activities.orEmpty()
+    val messages = raw.filter { it.hasBody }
+    val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= MESSAGE_PAGE_SIZE)
+    return UserMessagesPage(messages = messages, hasMore = hasMore)
+}
+
+/**
+ * Received messages, unwrapped from their notifications.
+ *
+ * `ActivityMessageNotification` embeds the whole `MessageActivity` under
+ * `message`, so the row the inbox draws is that field, not the notification.
+ * A notification with no message (a retired activity, or a member the fragment
+ * did not match) is dropped for the same reason as above. The count for the
+ * pagination fallback is the raw *notification* count - the only number this
+ * response actually carries.
+ */
+private fun parseReceivedMessages(data: ReceivedMessagesData): UserMessagesPage {
+    val raw = data.page?.notifications.orEmpty()
+    val messages = raw
+        .asSequence()
+        .filterNot { it.isUnrecognised }
+        .mapNotNull { it.message }
+        .filter { it.hasBody }
+        .toList()
+    val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= MESSAGE_PAGE_SIZE)
+    return UserMessagesPage(messages = messages, hasMore = hasMore)
 }
 
 /**

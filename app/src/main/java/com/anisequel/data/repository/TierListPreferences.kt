@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TierDefinition
+import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierListDocument
 import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.decodeDocumentIds
@@ -169,6 +170,37 @@ class TierListPreferences(private val context: Context) {
             result = TierListMutation(before = current, after = updated)
         }
         return result
+    }
+
+    /**
+     * Applies [change] to one list's display options, without restamping the edit
+     * time.
+     *
+     * Zoom and caption options are how a list is *looked at*, not a change to the
+     * ranking. Going through [mutate] stamped `updatedAt`, so merely opening a
+     * board and pinching reordered a library sorted by "recently edited" - the
+     * list a person had just finished arranging slid down the shelf for an edit
+     * that never happened. `LAST_OPENED` is left alone for the same reason: the
+     * board records the open itself, and a display write can arrive after the
+     * person has already left for another list.
+     *
+     * Still a single `edit`, so a display change cannot be observed half-applied,
+     * and still a no-op when the change is: a pinch that settles on the stored
+     * value writes nothing.
+     */
+    suspend fun mutateDisplay(
+        listId: String,
+        change: (TierDisplay) -> TierDisplay
+    ) {
+        context.tierListDataStore.edit { prefs ->
+            val current = decodeTierListDocument(listId, prefs[Keys.document(listId)])
+                ?: return@edit
+            val display = change(current.display)
+            if (display == current.display) return@edit
+            prefs[Keys.document(listId)] = encodeTierListDocument(
+                current.copy(display = display)
+            )
+        }
     }
 
     /**

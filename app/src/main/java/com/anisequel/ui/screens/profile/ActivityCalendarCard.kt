@@ -1,5 +1,11 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -11,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,11 +27,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,8 +47,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ActivityCalendar
+import com.anisequel.domain.usecase.ActivityDay
 import com.anisequel.domain.usecase.ActivityMonthLabel
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 private val CellSize = 13.dp
 private val CellGap = 3.dp
@@ -87,6 +103,15 @@ fun ActivityCalendarCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder()
     ) {
+        // Which reading of the same data the card shows. Months is the shape of
+        // the habit; Week is "how much this week", which the 13dp grid answers
+        // only by counting coloured squares. Kept in `rememberSaveable` so a
+        // rotation - or a tab switch, now that the tab's state is preserved -
+        // does not hand the reader the other view back.
+        var showWeek by rememberSaveable { mutableStateOf(false) }
+        val week = calendar.columns.lastOrNull()?.days.orEmpty()
+        val weekChanges = week.filter { it.inRange }.sumOf { it.count }
+
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -96,7 +121,14 @@ fun ActivityCalendarCard(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = "${calendar.totalChanges} changes in ${calendar.weeksShown} weeks",
+                    // The week reading says "this week", not "in 26 weeks":
+                    // the number beside it is the week's total, and a summary
+                    // that kept the old count would disagree with the bars.
+                    text = if (showWeek) {
+                        "$weekChanges changes this week"
+                    } else {
+                        "${calendar.totalChanges} changes in ${calendar.weeksShown} weeks"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -104,12 +136,134 @@ fun ActivityCalendarCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            CalendarGrid(calendar = calendar)
+            // The two ranges share a card, so a switch between them used to be a
+            // hard swap: the grid vanished, seven rows appeared, and the eye lost
+            // the place it had been looking at. Cross-fading with a small scale
+            // keeps the card's size the thing that stays put, and springs rather
+            // than a tween because everything else in this app settles on the
+            // shared tokens.
+            AnimatedContent(
+                targetState = showWeek,
+                transitionSpec = {
+                    fadeIn(animationSpec = ExpressiveMotion.FastSpatial) +
+                        scaleIn(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            initialScale = 0.96f
+                        ) togetherWith fadeOut(animationSpec = ExpressiveMotion.FastSpatial) +
+                        scaleOut(
+                            animationSpec = ExpressiveMotion.FastSpatial,
+                            targetScale = 0.96f
+                        )
+                },
+                label = "calendar_range"
+            ) { weekView ->
+                if (weekView) {
+                    WeekBreakdown(week = week)
+                } else {
+                    CalendarGrid(calendar = calendar)
+                }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            CalendarLegend()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CalendarLegend()
+                Spacer(modifier = Modifier.weight(1f))
+                CalendarRangeToggle(showWeek = showWeek, onChange = { showWeek = it })
+            }
         }
+    }
+}
+
+/**
+ * The current Sunday-to-Saturday week, one row per day.
+ *
+ * The same data the grid draws, read at the scale where "three changes" and
+ * "eleven changes" are visibly different lengths rather than two shades of the
+ * same colour. The last column of the calendar is always the current week - see
+ * `BuildActivityCalendarUseCase` - so this needs no second dataset and no second
+ * request.
+ *
+ * Days after today are drawn as an empty track with an em dash: AniList's stats
+ * also lag ~48 hours, so the last two days can legitimately read zero, and a
+ * blank right-hand side is the honest picture of a week that is still happening.
+ */
+@Composable
+private fun WeekBreakdown(week: List<ActivityDay>) {
+    val maxCount = week.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("activity_calendar_week"),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        week.forEach { day ->
+            val label = LocalDate.ofEpochDay(day.epochDay).dayOfWeek
+                .getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(34.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                ) {
+                    if (day.inRange && day.count > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                // A floor of 12%: one change beside a fifteen-change
+                                // day would otherwise be a sliver indistinguishable
+                                // from an empty track.
+                                .fillMaxWidth((day.count.toFloat() / maxCount).coerceIn(0.12f, 1f))
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(legendColourFor(day.intensity))
+                        )
+                    }
+                }
+                Text(
+                    text = if (day.inRange) day.count.toString() else "—",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (day.inRange) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(32.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Months or Week, as two filter chips.
+ *
+ * A toggle rather than a third chart section: both readings describe the same
+ * seven-day columns, and the card is small enough that making the reader leave
+ * it to see the other scale would hide the useful half.
+ */
+@Composable
+private fun CalendarRangeToggle(showWeek: Boolean, onChange: (Boolean) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(
+            selected = !showWeek,
+            onClick = { onChange(false) },
+            label = { Text("Months", style = MaterialTheme.typography.labelSmall) }
+        )
+        FilterChip(
+            selected = showWeek,
+            onClick = { onChange(true) },
+            label = { Text("Week", style = MaterialTheme.typography.labelSmall) }
+        )
     }
 }
 
@@ -145,16 +299,24 @@ private fun CalendarGrid(calendar: ActivityCalendar) {
  *
  * Each label is given every column up to the next label's start, so "Sep" spans
  * the four weeks it covers instead of being clipped into one 13dp cell - and the
- * spans sum to exactly the width of the cells row below, because the last one
- * runs to the end. That is what keeps a label from ending up over the wrong
- * month when one is short (February) and its neighbour long.
+ * spans plus their gutters sum to exactly the width of the cells row below,
+ * because the last one runs to the end. That is what keeps a label from ending up
+ * over the wrong month when one is short (February) and its neighbour long.
+ *
+ * The `spacedBy(CellGap)` is load-bearing: a label's width stops one gutter
+ * short of the next column's start, so the *gap* is what puts each label on its
+ * column's left edge. Without it every label after the first sat three dp to the
+ * left of its month and the error accumulated across the grid.
  */
 @Composable
 private fun MonthHeaderRow(
     labels: List<ActivityMonthLabel>,
     columnCount: Int
 ) {
-    Row(modifier = Modifier.padding(start = GutterWidth + GutterGap)) {
+    Row(
+        modifier = Modifier.padding(start = GutterWidth + GutterGap),
+        horizontalArrangement = Arrangement.spacedBy(CellGap)
+    ) {
         if (labels.isEmpty()) return@Row
 
         labels.forEachIndexed { index, label ->

@@ -1,6 +1,8 @@
 package com.anisequel.data.network
 
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCoverKey
+import java.util.Locale
 
 /**
  * GraphQL documents sent to `graphql.anilist.co`.
@@ -235,14 +237,17 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
-     * A page of somebody's list activity: "watched 3 episodes", "completed X",
-     * "added Y to planning".
+     * A page of somebody's activity: list updates ("watched 3 episodes",
+     * "completed X") and text posts, newest first.
      *
-     * `Page.activities` returns `[ActivityUnion]`, so this selects the
-     * `ListActivity` member with an inline fragment and filters to the two list
-     * types with `type_in`. Without the filter the same query answers with
-     * `MessageActivity` - forum posts by the user, which is not what the feed is
-     * for. The parser drops anything that is still not a list update.
+     * `Page.activities` returns `[ActivityUnion]`, so this selects the two
+     * members the feed renders with inline fragments and filters to the
+     * activity types with `type_in`. Both are asked for in one request: text
+     * posts are how people on AniList talk between list updates, and a feed
+     * without them was only ever showing half of what the person did.
+     * `MESSAGE` stays out and must stay out - it is site messages between two
+     * users, which do not belong on a public profile tab. The parser drops
+     * anything that is still not one of these two.
      *
      * `type_in` takes both media types in one request rather than one query per
      * medium: the response carries each item's own `media.type`, and the screen
@@ -260,7 +265,7 @@ object GraphQLQueries {
         query GetUserActivity(${'$'}userId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
           Page(page: ${'$'}page, perPage: ${'$'}perPage) {
             pageInfo { hasNextPage }
-            activities(userId: ${'$'}userId, type_in: [ANIME_LIST, MANGA_LIST], sort: [ID_DESC]) {
+            activities(userId: ${'$'}userId, type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
               ... on ListActivity {
                 id
                 status
@@ -280,6 +285,155 @@ object GraphQLQueries {
                   title { english romaji native }
                   coverImage { extraLarge large color }
                   siteUrl
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The activity feed of everyone the viewer follows.
+     *
+     * A separate document rather than `GET_USER_ACTIVITY` with the id dropped:
+     * `isFollowing: true` is the only way AniList will build this feed, and it
+     * is resolved from the request's own token - there is no parameter naming
+     * whose follow list to use, because it is always the signed-in viewer's.
+     *
+     * Each row asks for its own `user`, unlike the profile feed where every
+     * card belongs to the profile being read. Here every card is a different
+     * person, so the author has to travel with the activity or the feed would
+     * draw a wall of anonymous updates. The nested author is the reason the row
+     * model carries `user` and the card falls back to it.
+     *
+     * `MESSAGE` is excluded for the same reason it is excluded above, and
+     * `type_in` is spelled out rather than left to the server's default, which
+     * is every member of the union.
+     */
+    val GET_FOLLOWING_ACTIVITY = """
+        query GetFollowingActivity(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(isFollowing: true, type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
+              ... on ListActivity {
+                id
+                status
+                progress
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+                media {
+                  id
+                  type
+                  format
+                  episodes
+                  chapters
+                  volumes
+                  title { english romaji native }
+                  coverImage { extraLarge large color }
+                  siteUrl
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Messages the viewer has sent, newest first.
+     *
+     * `messengerId` is the sender's id - AniList's message model calls the
+     * author the messenger and the other party the recipient, regardless of who
+     * wrote first. There is **no `recipientId` filter on `Page.activities`**;
+     * the inbox therefore cannot be read from this side of the conversation at
+     * all, which is why [GET_RECEIVED_MESSAGES] goes through notifications.
+     *
+     * Both ends of the conversation are selected - `recipient` and `messenger` -
+     * so a row can name the person it was addressed to without a second query
+     * per message, and either field can be used whichever side is missing.
+     */
+    val GET_SENT_MESSAGES = """
+        query GetSentMessages(${'$'}messengerId: Int!, ${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(messengerId: ${'$'}messengerId, type_in: [MESSAGE], sort: [ID_DESC]) {
+              ... on MessageActivity {
+                id
+                message
+                isPrivate
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                recipientId
+                messengerId
+                recipient { id name avatar { medium large } }
+                messenger { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Messages the viewer has received.
+     *
+     * The inbox is `Page.notifications` filtered to `ACTIVITY_MESSAGE`, not
+     * `Page.activities`: the activity filter list has no recipient argument, so
+     * the account being messaged can only see a message through the
+     * notification AniList raises for it. Each notification embeds the whole
+     * `MessageActivity`, which is what lets a row show the sender, the body and
+     * the timestamp without opening the site.
+     *
+     * `resetNotificationCount` is deliberately **not** sent: it marks the
+     * notifications read on the server, and opening the Messages tab must not
+     * clear badges the user has not read yet.
+     */
+    val GET_RECEIVED_MESSAGES = """
+        query GetReceivedMessages(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            notifications(type_in: [ACTIVITY_MESSAGE]) {
+              ... on ActivityMessageNotification {
+                id
+                activityId
+                createdAt
+                message {
+                  id
+                  message
+                  isPrivate
+                  createdAt
+                  likeCount
+                  replyCount
+                  isLiked
+                  siteUrl
+                  recipientId
+                  messengerId
+                  recipient { id name avatar { medium large } }
+                  messenger { id name avatar { medium large } }
                 }
               }
             }
@@ -640,6 +794,116 @@ object GraphQLQueries {
      * namespaces - a single key per alias would collide and drop one of them.
      */
     fun mediaCoverAlias(index: Int): String = "m$index"
+
+    /**
+     * How many entities one preview document may ask for.
+     *
+     * AniList caps `perPage` at 50, so this is both the `perPage` written into
+     * the document and the batch size the repository chunks by. One constant
+     * rather than two: a chunker that asked for 60 while the document asked for
+     * 50 would silently lose the last ten cards of a very long favourites list,
+     * and nothing would ever say so.
+     */
+    const val ENTITY_PREVIEW_PAGE_SIZE = 50
+
+    /**
+     * The batched entity query: names and portraits for the character, staff and
+     * studio links a document carries.
+     *
+     * ## The shape
+     *
+     * One aliased root per *type*, not one alias per id. `Page.characters`,
+     * `Page.staff` and `Page.studios` each accept `id_in`, so a hall of fame of
+     * twenty characters spends one root field and one variable, and the response
+     * comes back grouped by type rather than read back by document position.
+     *
+     * `Page`-wrapped for the same reason [getMediaCoversQuery] is: the singular
+     * root fields (`Character(id:)`, `Staff(id:)`, `Studio(id:)`) are nullable
+     * and AniList answers a request containing one stale id with HTTP 404 for
+     * the whole response - so one deleted character would blank every other card
+     * on the page. A connection filters instead of failing: an id with nothing
+     * behind it is simply absent from the list, on a 200.
+     *
+     * ## Why the document is built from the types present
+     *
+     * GraphQL rejects a *declared* variable the operation never uses, so a
+     * document that always declared all three lists would fail on the very
+     * common bio that links only characters. The declarations and the root
+     * fields are therefore emitted together, from the same [types] set. Verified
+     * against the live API with all three roots and with each one alone.
+     *
+     * [types] carries entity kinds (`CHARACTER`, `STAFF`, `STUDIO`) rather than
+     * keys: the ids travel as variables, and the set is what decides the
+     * document's shape.
+     */
+    fun getEntityPreviewsQuery(types: Collection<String>): String {
+        val requested = EntityPreviewKey.SUPPORTED_TYPES.filter { supported ->
+            types.any { it.equals(supported, ignoreCase = true) }
+        }
+        require(requested.isNotEmpty()) { "an entity batch needs at least one type" }
+
+        val fields = requested.joinToString("\n") { type ->
+            when (type) {
+                "CHARACTER" -> """
+                    characters: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      characters(id_in: ${'$'}characterIds) {
+                        id
+                        name { full native alternative }
+                        image { large medium }
+                      }
+                    }
+                """.trimIndent()
+
+                "STAFF" -> """
+                    staff: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      staff(id_in: ${'$'}staffIds) {
+                        id
+                        name { full native alternative }
+                        image { large medium }
+                      }
+                    }
+                """.trimIndent()
+
+                else -> """
+                    studios: Page(page: 1, perPage: $ENTITY_PREVIEW_PAGE_SIZE) {
+                      studios(id_in: ${'$'}studioIds) {
+                        id
+                        name
+                        isAnimationStudio
+                      }
+                    }
+                """.trimIndent()
+            }
+        }
+        // `[Int]` is nullable by default, which matches the variables sent: a
+        // list, never a null. The sigil is written explicitly for the same
+        // reason `getMediaCoversQuery` spells it out - a declaration without one
+        // is a 400 for the whole document.
+        val variables = requested.joinToString(", ") { type ->
+            "${'$'}${entityPreviewVariable(type)}: [Int]"
+        }
+        return """
+            query EntityPreviews($variables) {
+            $fields
+            }
+        """.trimIndent()
+    }
+
+    /**
+     * The variable a type's ids travel in, named the way the document declares it.
+     *
+     * Shared with the repository so the variable it fills and the variable the
+     * document uses cannot be spelled differently - the failure that produces is
+     * an HTTP 400 for every card in the document.
+     */
+    fun entityPreviewVariable(type: String): String = when (type.uppercase(Locale.ROOT)) {
+        "CHARACTER" -> "characterIds"
+        "STAFF" -> "staffIds"
+        "STUDIO" -> "studioIds"
+        else -> throw IllegalArgumentException(
+            "\"$type\" is not an entity type AniList can batch"
+        )
+    }
 
     /**
      * The single media record the detail sheet renders.
@@ -1066,12 +1330,35 @@ object GraphQLQueries {
      * one of them would fetch threads nobody opened. The sheet is the only thing
      * that needs them, so it is the only thing that asks.
      *
-     * `Activity(id:)` returns `ActivityUnion`, so the fragment is required.
+     * `Activity(id:)` returns `ActivityUnion`, so the fragments are required.
+     * Both members this feed can open a thread for are listed: the sheet is
+     * reachable from a list card and from a text post, and a thread query with
+     * only the `ListActivity` fragment would answer a text post's id with an
+     * empty object - an open sheet showing zero comments on a post that has
+     * them.
      */
     val GET_ACTIVITY_REPLIES = """
         query GetActivityReplies(${'$'}activityId: Int) {
           Activity(id: ${'$'}activityId) {
             ... on ListActivity {
+              id
+              isLiked
+              likeCount
+              replyCount
+              replies {
+                id
+                text
+                likeCount
+                isLiked
+                createdAt
+                user {
+                  id
+                  name
+                  avatar { large medium }
+                }
+              }
+            }
+            ... on TextActivity {
               id
               isLiked
               likeCount
@@ -1096,23 +1383,34 @@ object GraphQLQueries {
     /**
      * The people who liked one activity.
      *
-     * `ListActivity.likes` is a plain `[User]`, not a paginated connection, so
-     * unlike replies this needs no page argument and always returns everyone who
-     * liked the activity. That is what lets the sheet print "Liked by N" from the
-     * list it just drew instead of trusting a count that could disagree with it.
+     * `ListActivity.likes` and `TextActivity.likes` are plain `[User]`, not
+     * paginated connections, so unlike replies this needs no page argument and
+     * always returns everyone who liked the activity. That is what lets the
+     * sheet print "Liked by N" from the list it just drew instead of trusting a
+     * count that could disagree with it.
      *
      * Its own document rather than a field on the feed query, for the same reason
      * [GET_ACTIVITY_REPLIES] is: a feed page carries twenty-five activities, and
      * every liker of every one of them is a list nobody asked to see until the
      * sheet opens.
      *
-     * `Activity(id:)` returns `ActivityUnion`, so the `ListActivity` fragment is
-     * required.
+     * `Activity(id:)` returns `ActivityUnion`, so the fragments are required;
+     * both members the feed can open the likers sheet for are listed, because a
+     * text post's id against a list-only document would answer an empty object.
      */
     val GET_ACTIVITY_LIKES = """
         query GetActivityLikes(${'$'}activityId: Int) {
           Activity(id: ${'$'}activityId) {
             ... on ListActivity {
+              id
+              likeCount
+              likes {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+            ... on TextActivity {
               id
               likeCount
               likes {
@@ -1133,14 +1431,19 @@ object GraphQLQueries {
      * likes this app will add next use the identical shape. `type: ACTIVITY`
      * disambiguates the id, which is not unique across the likeable types.
      *
-     * The union is fragmented on `ListActivity`, the only member this can return
-     * for `ACTIVITY`; a reply like (not sent yet) would add an `ActivityReply`
-     * fragment here.
+     * `LikeableUnion` carries both feed members; the document fragments both so
+     * a text post can be liked from its card. A reply like (not sent yet) would
+     * add an `ActivityReply` fragment here.
      */
     val TOGGLE_ACTIVITY_LIKE = """
         mutation ToggleActivityLike(${'$'}activityId: Int) {
           ToggleLikeV2(id: ${'$'}activityId, type: ACTIVITY) {
             ... on ListActivity {
+              id
+              isLiked
+              likeCount
+            }
+            ... on TextActivity {
               id
               isLiked
               likeCount

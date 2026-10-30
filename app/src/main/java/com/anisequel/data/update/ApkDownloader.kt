@@ -221,7 +221,12 @@ internal class ApkDownloader(private val client: OkHttpClient) {
         }
 
         val total = when {
-            plan.baseOffset + bodyLength > 0 -> plan.baseOffset + bodyLength
+            // `>= 0` matters: `contentLength()` is -1 for a chunked or otherwise
+            // unmeasured body, and `baseOffset + (-1)` on a resumed transfer is a
+            // total one byte short of the truth rather than "unknown". The bar
+            // would then sit at 99% forever and land on 100% only at the end.
+            bodyLength >= 0 && plan.baseOffset + bodyLength > 0 ->
+                plan.baseOffset + bodyLength
             declaredSize > 0 -> declaredSize
             else -> 0L
         }

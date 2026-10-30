@@ -18,11 +18,29 @@ class AuthInterceptor(
     private val authRepository: AuthRepository
 ) : Interceptor {
 
+    /**
+     * Whether [authRepository]'s memory cache has been observed carrying "no
+     * token" rather than "not read yet".
+     *
+     * `cachedAccessToken()` is null for both, so without this the signed-out
+     * case re-entered the blocking disk read on *every* request - the exact
+     * cost the in-memory cache was added to remove. Once a read has positively
+     * answered null, only a later sign-in can change the answer, and that writes
+     * the cache directly ([AuthRepository.saveAccessToken]).
+     */
+    @Volatile
+    private var resolvedWithoutToken = false
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val requestBuilder = chain.request().newBuilder()
 
         val token = authRepository.cachedAccessToken()
-            ?: runBlocking { authRepository.getAccessToken() }
+            ?: if (resolvedWithoutToken) {
+                null
+            } else {
+                runBlocking { authRepository.getAccessToken() }
+                    .also { resolvedWithoutToken = it.isNullOrBlank() }
+            }
 
         if (!token.isNullOrBlank()) {
             requestBuilder.header("Authorization", "Bearer $token")

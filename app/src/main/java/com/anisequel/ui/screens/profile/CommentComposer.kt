@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -397,10 +397,9 @@ private fun ComposerBottomBar(
                 modifier = Modifier.testTag("activity_comment_send")
             ) {
                 if (isPosting) {
-                    CircularProgressIndicator(
+                    ExpressiveLoadingIndicator(
                         modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
                     Icon(

@@ -1,9 +1,11 @@
 package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.ContentLimits
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -163,6 +165,18 @@ class CommentThreadStore(
     private var cachedReplies: List<ActivityReply> = emptyList()
 
     /**
+     * The fetch for the currently open thread.
+     *
+     * Cancelled rather than merely ignored on the next open. The activity-id
+     * guard below discards a response for a *different* thread, but opening the
+     * same thread twice - close and reopen in quick succession, which is what a
+     * dismiss-by-accident looks like - left two requests racing, and the older
+     * one could land last and overwrite the newer thread's replies (including a
+     * comment posted in between).
+     */
+    private var openJob: Job? = null
+
+    /**
      * Opens the comment thread for [activityId] and loads it.
      *
      * If this is the thread that was just closed, its comments are drawn
@@ -172,6 +186,7 @@ class CommentThreadStore(
      * [CommentsState.isRefreshing] for the problem that fixed.
      */
     fun open(activityId: Int) {
+        openJob?.cancel()
         val cached = if (cachedActivityId == activityId) cachedReplies else emptyList()
         _state.value = CommentsState(
             activityId = activityId,
@@ -179,7 +194,7 @@ class CommentThreadStore(
             isRefreshing = cached.isNotEmpty(),
             replies = cached
         )
-        scope.launch {
+        openJob = scope.launch {
             val result = if (isDemo) {
                 Result.success(emptyList())
             } else {
@@ -245,7 +260,24 @@ class CommentThreadStore(
         scope.launch {
             repositoryResult { repository.postActivityReply(activityId, trimmed) }.fold(
                 onSuccess = { reply ->
-                    val latest = _state.value?.takeIf { it.activityId == activityId } ?: return@fold
+                    // The count belongs to the feed, not to the sheet, and the
+                    // write landed whether or not the sheet is still open. This
+                    // used to sit behind the state guard, so closing the sheet
+                    // while the request was out - the normal thing to do after
+                    // tapping Post - left the card claiming one comment fewer
+                    // than the thread had, until some later refresh fixed it.
+                    onReplyCountDelta(activityId, 1)
+                    val latest = _state.value?.takeIf { it.activityId == activityId }
+                    if (latest == null) {
+                        // The sheet was closed before the write landed, so the
+                        // inline confirmation - the new comment scrolled into
+                        // view - has nowhere to draw. Say it app-wide instead, so
+                        // a reader who posted and dismissed is not left guessing
+                        // whether the comment went through. The count delta above
+                        // still applied; this only replaces the lost notice.
+                        SystemNotices.report(SystemNotices.Notice.CommentPosted)
+                        return@fold
+                    }
                     _state.value = latest.copy(
                         isPosting = false,
                         postError = null,
@@ -258,7 +290,6 @@ class CommentThreadStore(
                         // view. See [CommentsState.postedReplyId].
                         postedReplyId = reply.id
                     )
-                    onReplyCountDelta(activityId, 1)
                 },
                 onFailure = { error ->
                     _state.value = _state.value
@@ -449,6 +480,10 @@ class CommentThreadStore(
         scope.launch {
             repositoryResult { repository.deleteActivityReply(reply.id) }.fold(
                 onSuccess = {
+                    // Same ordering as a post: the delete landed on the server,
+                    // so the feed's count moves even if the sheet was closed
+                    // while the confirmation was in flight.
+                    onReplyCountDelta(current.activityId, -1)
                     val latest = _state.value?.takeIf { it.activityId == current.activityId }
                         ?: return@fold
                     if (latest.action?.replyId != reply.id) return@fold
@@ -456,9 +491,6 @@ class CommentThreadStore(
                         replies = latest.replies.filterNot { it.id == reply.id },
                         action = null
                     )
-                    // The mirror of the bump a post does, so the feed's count
-                    // still describes the thread AniList is holding.
-                    onReplyCountDelta(current.activityId, -1)
                 },
                 onFailure = { error ->
                     val latest = _state.value?.takeIf { it.activityId == current.activityId }

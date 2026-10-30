@@ -4,6 +4,7 @@ import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.screens.profile.LibraryFilter
 import com.anisequel.ui.screens.profile.LibrarySort
 import com.anisequel.ui.screens.profile.LibraryType
@@ -187,6 +188,41 @@ class LibraryFilterTest {
         // Buckets that mean the same thing either way are not reworded.
         assertEquals("Completed", LibraryFilter.COMPLETED.labelFor(isManga = true))
         assertEquals("Completed", LibraryFilter.COMPLETED.labelFor(isManga = false))
+    }
+
+    @Test
+    fun `a chip words a status exactly the way the entry editor words it`() {
+        // The chips used to carry their own spelling, and it drifted: the chip said
+        // "Paused" and "Planning" while the editor the reader had just used said
+        // "On-Hold" and "Plan to Watch". Both halves now come from ListStatuses, so
+        // there is one vocabulary in the app and a status cannot be renamed in one
+        // place without the other following.
+        LibraryFilter.entries
+            .filter { it.statusToken != null }
+            .forEach { filter ->
+                assertEquals(
+                    ListStatuses.label(filter.statusToken, isManga = true),
+                    filter.labelFor(isManga = true)
+                )
+                assertEquals(
+                    ListStatuses.label(filter.statusToken, isManga = false),
+                    filter.labelFor(isManga = false)
+                )
+            }
+        assertEquals("On-Hold", LibraryFilter.PAUSED.labelFor(isManga = false))
+        assertEquals("Plan to Watch", LibraryFilter.PLANNING.labelFor(isManga = false))
+        assertEquals("Plan to Read", LibraryFilter.PLANNING.labelFor(isManga = true))
+    }
+
+    @Test
+    fun `an entry whose status is an older spelling still reaches its chip`() {
+        // API v1 named three statuses differently and the app used to compare the
+        // raw wire string, so a cached or imported `ON_HOLD` matched no chip and
+        // disappeared from every filter while still counting under "All".
+        assertEquals(LibraryFilter.PAUSED, libraryBucketOf("ON_HOLD"))
+        assertEquals(LibraryFilter.WATCHING, libraryBucketOf("WATCHING"))
+        assertEquals(LibraryFilter.PLANNING, libraryBucketOf("PLAN_TO_READ"))
+        assertEquals(LibraryFilter.DROPPED, libraryBucketOf("CLEARED"))
     }
 
     @Test

@@ -3,8 +3,11 @@ package com.anisequel
 import com.anisequel.data.model.AniListErrorEnvelope
 import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.DeleteMediaListEntryData
+import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
+import com.anisequel.data.model.ReceivedMessagesData
+import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
@@ -96,6 +99,11 @@ class AniListErrorMappingTest {
             request: GraphQLRequest
         ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
 
+        // Added with the entity previews for the same reason as the covers above.
+        override suspend fun getEntityPreviews(
+            request: GraphQLRequest
+        ): GraphQLResponse<EntityPreviewPages> = GraphQLResponse(EntityPreviewPages())
+
         // The profile screen's four endpoints. Thrown rather than returned as an
         // empty response on purpose: if a test ever starts calling one, that is a
         // change of intent, and a blank `GraphQLResponse` would let it keep
@@ -107,6 +115,18 @@ class AniListErrorMappingTest {
         override suspend fun getUserActivity(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getFollowingActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getFollowingActivity")
+
+        override suspend fun getSentMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<SentMessagesData> = notServed("getSentMessages")
+
+        override suspend fun getReceivedMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
         override suspend fun getUserFollowers(
             request: GraphQLRequest
@@ -362,6 +382,11 @@ class RequestCoalescingPolicyTest {
             request: GraphQLRequest
         ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
 
+        // Added with the entity previews for the same reason as the covers above.
+        override suspend fun getEntityPreviews(
+            request: GraphQLRequest
+        ): GraphQLResponse<EntityPreviewPages> = GraphQLResponse(EntityPreviewPages())
+
         // The profile screen's four endpoints. Thrown rather than returned as an
         // empty response on purpose: if a test ever starts calling one, that is a
         // change of intent, and a blank `GraphQLResponse` would let it keep
@@ -373,6 +398,18 @@ class RequestCoalescingPolicyTest {
         override suspend fun getUserActivity(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getFollowingActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getFollowingActivity")
+
+        override suspend fun getSentMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<SentMessagesData> = notServed("getSentMessages")
+
+        override suspend fun getReceivedMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
         override suspend fun getUserFollowers(
             request: GraphQLRequest

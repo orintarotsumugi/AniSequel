@@ -207,33 +207,46 @@ class ReplyLikeQueryTest {
      * likers sheet had been hoisted out for that reason and carried a note saying so;
      * the comments sheet was left behind, leaving the two with opposite lifetimes and
      * nothing to explain why.
+     *
+     * The rule is about *who* draws the sheets, not which file they are typed in, so
+     * this reads the two files that could wrongly own them - the feed tab and the
+     * Activity page that now hosts the segment `AnimatedContent` - and asserts the
+     * calls live only in the screen-level host that `UserProfileScreen` composes
+     * outside every `AnimatedContent`.
      */
     @Test
     fun `neither sheet is drawn from inside the tab AnimatedContent disposes`() {
-        val screen = File(
+        fun source(name: String) = File(
             findProjectRoot(),
-            "app/src/main/java/com/anisequel/ui/screens/profile/UserProfileScreen.kt"
+            "app/src/main/java/com/anisequel/ui/screens/profile/$name"
         ).readText()
-        val tab = File(
-            findProjectRoot(),
-            "app/src/main/java/com/anisequel/ui/screens/profile/ProfileActivityTab.kt"
-        ).readText()
+
+        val activityTab = source("ProfileActivityTab.kt")
+        val activityPage = source("ProfileActivityPage.kt")
+        val screen = source("UserProfileScreen.kt")
+        val host = source("ProfileTabsContent.kt")
 
         assertFalse(
             "the comments sheet must not be drawn by the tab",
-            tab.contains("ActivityCommentsSheet(")
+            activityTab.contains("ActivityCommentsSheet(")
+        )
+        assertFalse(
+            "and neither by the segment host, whose own AnimatedContent disposes a " +
+                "switching feed exactly the way the tab's does",
+            activityPage.contains("ActivityCommentsSheet(") ||
+                activityPage.contains("ActivityLikersSheet(")
         )
         assertTrue(
-            "the screen draws it as a sibling instead",
-            screen.contains("ActivityCommentsSheet(")
+            "the screen-level host draws both",
+            host.contains("ActivityCommentsSheet(") && host.contains("ActivityLikersSheet(")
         )
         assertTrue(
-            "and so does the likers sheet, which is the arrangement this fixes",
-            screen.contains("ActivityLikersSheet(")
+            "the screen composes that host at its own level, not from a tab",
+            screen.contains("ActivityEngagementSheets(")
         )
         assertTrue(
             "the thread still opens from the tab, which is what the tap is on",
-            tab.contains("onOpenComments(activity.id)")
+            activityTab.contains("onOpenComments(activity.id)")
         )
     }
 

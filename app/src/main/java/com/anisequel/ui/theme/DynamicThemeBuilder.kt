@@ -48,6 +48,21 @@ object DynamicThemeBuilder {
     fun parseHexColor(hex: String?): Color? = ArgbHex.parse(hex)?.let { Color(it) }
 
     /**
+     * The accent a seed produces, as the app draws it.
+     *
+     * Anything that shows a cover colour as a *colour* - the Settings chip, the
+     * hero's backdrop and shadow - has to ask for this rather than paint the seed.
+     * The seed is a pixel and pixels come in any tone, so a night-sky cover's raw
+     * value is a near-black box on a near-black card and a snow cover's is a flash
+     * of white; this is the tone the scheme actually uses for `primary`, which is
+     * the colour the reader is being told about.
+     */
+    fun accentColor(seed: Color, dark: Boolean): Color {
+        val argb = MaterialColorSchemes.accentFor(seed.toArgb(), dark)
+        return Color(argb)
+    }
+
+    /**
      * Generates a light and a dark [ColorScheme] from [seed].
      *
      * [tintSurfaces] is the difference between an accent and a theme:

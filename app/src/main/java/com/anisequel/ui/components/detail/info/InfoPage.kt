@@ -165,15 +165,20 @@ fun AnimeInfoPage(
     // work the sheet was doing while it was still animating.
     val sections = remember(media) { infoSectionsFor(media) }
 
+    // Remembered so the docked bar's parameter stays identical across the page's
+    // recompositions (the detail arriving, the theme songs landing): a fresh lambda
+    // on every pass would make the bar recompose with it, for nothing.
+    val openOnAniList: () -> Unit = remember(context, media.pageUrl) {
+        {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(media.pageUrl)))
+            }
+        }
+    }
+
     var showCover by remember(media.id, media.type) { mutableStateOf(false) }
     if (showCover) {
         FullScreenCoverViewer(media = media, onDismiss = { showCover = false })
-    }
-
-    val openOnAniList: () -> Unit = {
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(media.pageUrl)))
-        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -185,7 +190,7 @@ fun AnimeInfoPage(
             contentPadding = PaddingValues(bottom = bottomContentPadding),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item(key = "hero") {
+            item(key = "hero", contentType = "info_hero") {
                 InfoHero(
                     media = media,
                     relationLabel = subject.sequel?.relationLabel,

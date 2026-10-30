@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,9 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.AuthViewModel
 import com.anisequel.ui.viewmodel.rememberApiStatusProbe
+
+/** The key the [rememberSaveableStateHolder] files the shelf under. */
+private const val HUB_SAVEABLE_KEY = "settings_hub"
 
 /**
  * The pages behind the Settings hub.
@@ -151,6 +155,14 @@ fun SettingsScreen(
     // already opens the same dialog.
     val apiProbe = rememberApiStatusProbe(checkApiReachability)
 
+    // The shelf and the pages are separate compositions, and `AnimatedContent`
+    // disposes the outgoing one when its slide finishes - so `rememberScrollState`
+    // inside a page started at the top every time the reader came back to it, and
+    // the shelf did too. The holder keys each destination so scroll positions and
+    // page-local drafts survive the trip out and back, the same way the profile
+    // tabs keep theirs.
+    val pageStateHolder = rememberSaveableStateHolder()
+
     BackHandler {
         if (page != null) page = null else onNavigateBack()
     }
@@ -184,41 +196,46 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .testTag("settings_tab_content")
             ) { destination ->
-                if (destination == null) {
-                    SettingsRoot(
-                        onClose = onNavigateBack,
-                        onOpen = { page = it },
-                        onCheckConnection = { showConnectionCheck = true }
-                    )
-                } else {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        SettingsSubHeader(
-                            title = destination.title,
-                            subtitle = destination.subtitle,
-                            onBack = { page = null }
+                pageStateHolder.SaveableStateProvider(
+                    key = destination?.name ?: HUB_SAVEABLE_KEY
+                ) {
+                    if (destination == null) {
+                        SettingsRoot(
+                            viewer = viewer,
+                            onClose = onNavigateBack,
+                            onOpen = { page = it },
+                            onCheckConnection = { showConnectionCheck = true }
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        ) {
-                            SettingsPageContent(
-                                page = destination,
-                                authViewModel = authViewModel,
-                                themePreferences = themePreferences,
-                                jokePreferences = jokePreferences,
-                                appLockPreferences = appLockPreferences,
-                                refreshIntervalPreferences = refreshIntervalPreferences,
-                                arrivingPreferences = arrivingPreferences,
-                                quickAddPreferences = quickAddPreferences,
-                                libraryPreferences = libraryPreferences,
-                                mainTabPreferences = mainTabPreferences,
-                                changelogRepository = changelogRepository,
-                                viewer = viewer,
-                                onNavigateToLogin = onNavigateToLogin,
-                                totalWatchedCount = totalWatchedCount,
-                                totalMissedCount = totalMissedCount
+                    } else {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            SettingsSubHeader(
+                                title = destination.title,
+                                subtitle = destination.subtitle,
+                                onBack = { page = null }
                             )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) {
+                                SettingsPageContent(
+                                    page = destination,
+                                    authViewModel = authViewModel,
+                                    themePreferences = themePreferences,
+                                    jokePreferences = jokePreferences,
+                                    appLockPreferences = appLockPreferences,
+                                    refreshIntervalPreferences = refreshIntervalPreferences,
+                                    arrivingPreferences = arrivingPreferences,
+                                    quickAddPreferences = quickAddPreferences,
+                                    libraryPreferences = libraryPreferences,
+                                    mainTabPreferences = mainTabPreferences,
+                                    changelogRepository = changelogRepository,
+                                    viewer = viewer,
+                                    onNavigateToLogin = onNavigateToLogin,
+                                    totalWatchedCount = totalWatchedCount,
+                                    totalMissedCount = totalMissedCount
+                                )
+                            }
                         }
                     }
                 }
@@ -244,6 +261,7 @@ fun SettingsScreen(
  */
 @Composable
 private fun SettingsRoot(
+    viewer: ViewerProfile?,
     onClose: () -> Unit,
     onOpen: (SettingsPage) -> Unit,
     onCheckConnection: () -> Unit
@@ -297,6 +315,11 @@ private fun SettingsRoot(
                     page = SettingsPage.ACCOUNT,
                     icon = AppVectorIcons.SectionAniList,
                     testTag = "settings_row_account",
+                    // The one live fact on the shelf: whether this session is a
+                    // real AniList account or the built-in demo list. Everything
+                    // else the row could say is already on the page it opens.
+                    subtitle = viewer?.let { "Signed in as ${it.name}" }
+                        ?: "Not signed in - browsing the demo list",
                     onOpen = onOpen
                 )
                 SettingsHubRow(
@@ -352,18 +375,24 @@ private fun SettingsRows(content: @Composable () -> Unit) {
  * while the page it opened said "timing, tone and saved lines". A row that
  * describes a different page than the one it opens is a small lie on the way in.
  * Deriving both from the enum makes the drift impossible rather than unlikely.
+ *
+ * The one exception is [subtitle], used only by the account row to state who is
+ * signed in. That is not a second description of the page - it is a fact about
+ * the session that changes while the page itself does not, and the shelf is
+ * where a reader glances to ask whether they are signed in at all.
  */
 @Composable
 private fun SettingsRow(
     page: SettingsPage,
     icon: ImageVector,
     testTag: String,
-    onOpen: (SettingsPage) -> Unit
+    onOpen: (SettingsPage) -> Unit,
+    subtitle: String? = null
 ) {
     SettingsHubRow(
         icon = icon,
         title = page.title,
-        subtitle = page.subtitle,
+        subtitle = subtitle ?: page.subtitle,
         onClick = { onOpen(page) },
         testTag = testTag
     )

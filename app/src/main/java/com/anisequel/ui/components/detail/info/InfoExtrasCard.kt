@@ -38,12 +38,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.liveChartUrl
+import com.anisequel.ui.components.openExternalUrlOrCopy
 import kotlinx.coroutines.delay
 
 /**
@@ -96,6 +99,20 @@ fun InfoExtrasCard(
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
                     }
                 }
+            )
+        }
+
+        // Anime only: LiveChart tracks airing anime, so its search answers
+        // nothing useful for a manga and offering the row there would be a link
+        // that fails to do what its label promises. No API is called - LiveChart
+        // publishes none - so this opens the site's own title search; see
+        // `liveChartUrl`.
+        if (!media.isManga) {
+            InfoExtraRow(
+                icon = AppVectorIcons.CalendarClock,
+                title = "Find it on LiveChart",
+                subtitle = "Airing schedule, countdowns and streams",
+                onClick = { openExternalUrlOrCopy(context, media.liveChartUrl) }
             )
         }
 

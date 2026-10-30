@@ -36,12 +36,14 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
@@ -176,6 +178,18 @@ object AppVectorIcons {
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group
+    // The Activity tab's Messages segment: site messages rather than a feed. An
+    // envelope rather than a chat bubble, which is already [ProfileActivity] -
+    // the two sit side by side in the segment row and must not read as one icon.
+    //
+    // `Mail`, not `Email`: 1.7.8 has no `Email` icon at all - the Material name
+    // changed - so `Icons.Default.Email` is an unresolved reference discovered in
+    // CI, not at a glance. Checked against `material-icons-extended-android`'s own
+    // class list rather than assumed, the same way [ProfileStats] was.
+    val ProfileMessages = Icons.Default.Mail
+    // The same distinction inside a message card: an envelope arriving, against
+    // [ActivitySend] leaving.
+    val MessageReceived = Icons.Default.Inbox
     // The main bar's Profile tab falls back to this while the viewer's avatar is unknown.
     val ProfilePerson = Icons.Default.AccountCircle
 

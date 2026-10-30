@@ -13,10 +13,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-private val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(
+/**
+ * Internal rather than private so a test can write the keys an older build wrote,
+ * which is the only way to cover the upgrade path below. Nothing outside this file
+ * should read it: every access goes through `ThemePreferences` and its
+ * application-context field.
+ */
+internal val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "anisequel_theme_prefs"
 )
 
@@ -98,9 +105,18 @@ enum class MotionStyle(val storageValue: String, val displayName: String) {
  * nothing ever set it, so the "themes from my wallpaper" behaviour could not be
  * turned on even by a developer.
  */
-class ThemePreferences(private val context: Context) {
+class ThemePreferences(context: Context) {
 
-    /** Held for the revert timer, which must not keep an Activity alive. */
+    /**
+     * The application context, and every DataStore access through it.
+     *
+     * `preferencesDataStore` allows exactly one instance per file, and callers hand
+     * this class whatever they happen to have: `MainActivity` passes the application
+     * context, a detail sheet passes `LocalContext`, which is the Activity. Reading
+     * and writing through this field is what keeps both paths on the same store
+     * instead of the second one dying with "there is already one instance of
+     * DataStore handles that file".
+     */
     private val appContext: Context = context.applicationContext
 
     private object Keys {
@@ -110,8 +126,28 @@ class ThemePreferences(private val context: Context) {
         val MOTION_STYLE = stringPreferencesKey("motion_style")
         val TRUE_BLACK = booleanPreferencesKey("true_black")
         val CUSTOM_COLOR_HEX = stringPreferencesKey("custom_color_hex")
+        val ANIME_THEME_ENABLED = booleanPreferencesKey("anime_theme_enabled")
+
+        /**
+         * Legacy. This build keeps the *applied* anime layer in memory and reads
+         * the switch from [ANIME_THEME_ENABLED]; the key is only consulted when
+         * the new one has never been written, and removed on the first write so
+         * the value never depends on which key a later build reads.
+         */
         val ANIME_THEME_ACTIVE = booleanPreferencesKey("anime_theme_active")
+
+        /** Legacy, and dropped rather than adapted: see [ANIME_THEME_ACTIVE]. */
         val ANIME_THEME_COLOR_HEX = stringPreferencesKey("anime_theme_color_hex")
+
+        /**
+         * The cover colour this feature wrote into [CUSTOM_COLOR_HEX].
+         *
+         * Provenance, not a second copy of the accent: it is what lets turning
+         * the feature off take back *only* the colour the anime chose, and lets
+         * Settings say "keeping this show's colour" about a specific accent
+         * instead of guessing from whatever hex happens to be stored.
+         */
+        val ANIME_THEME_RETAINED_COLOR_HEX = stringPreferencesKey("anime_theme_retained_color_hex")
         val ANIME_THEME_RETAIN_COLOR = booleanPreferencesKey("anime_theme_retain_color")
         val ANIME_THEME_REVERT_DURATION = androidx.datastore.preferences.core.intPreferencesKey("anime_theme_revert_duration")
         val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
@@ -133,14 +169,32 @@ class ThemePreferences(private val context: Context) {
         val motionStyle: MotionStyle = MotionStyle.DEFAULT,
         val trueBlack: Boolean = false,
         val customColorHex: String? = null,
+        /**
+         * The switch: whether opening a title is allowed to recolour the app.
+         *
+         * This used to be the same flag as [animeThemeActive], and the two mean
+         * different things now that the layer lives in memory. Keeping them apart
+         * is what lets a reader say "yes, do this for every title" without that
+         * also being a stored claim that a layer is on right now.
+         */
+        val animeThemeEnabled: Boolean = false,
+        /**
+         * True while an immersive layer is applied - a sheet is open, or a
+         * temporary colour has not timed out yet. Never survives the process.
+         */
         val animeThemeActive: Boolean = false,
+        /** The applied layer's colour; null when [animeThemeActive] is false. */
         val animeThemeColorHex: String? = null,
         /**
-         * Whether the anime-derived colour is *kept* as the app's own accent
-         * after the detail sheet closes, rather than reverting. Only meaningful
-         * while [animeThemeActive] is in use: the detail sheet reads it to
-         * decide whether to persist the cover colour as a custom hue, and the
-         * revert timer is skipped while it is on.
+         * The cover colour this feature persisted as [customColorHex], if any.
+         * Null means the current accent is the reader's own pick.
+         */
+        val animeThemeRetainedColorHex: String? = null,
+        /**
+         * Whether the cover colour is *kept* as the app's accent once the sheet
+         * closes. Read by the detail sheet when deciding whether to persist the
+         * colour, and by [setAnimeThemeRetainColor] when the choice changes
+         * mid-session. Off means the layer is on a timer instead.
          */
         val animeThemeRetainColor: Boolean = true,
         val animeThemeRevertDuration: Int = 300,
@@ -149,7 +203,18 @@ class ThemePreferences(private val context: Context) {
         val isLoaded: Boolean = false
     )
 
-    val settings: Flow<ThemeSettings> = context.themeDataStore.data.map { preferences ->
+    /**
+     * The stored preferences and the in-memory anime layer, as one stream.
+     *
+     * Combined rather than collected twice at the call sites: the theme wraps the
+     * whole app and needs *one* value, and a screen that watched the layer
+     * separately could draw a scheme from the stored half and a label from the
+     * other.
+     */
+    val settings: Flow<ThemeSettings> = combine(
+        appContext.themeDataStore.data,
+        appliedColorLayer
+    ) { preferences, layerHex ->
         ThemeSettings(
             themeMode = ThemeMode.fromStorage(preferences[Keys.THEME_MODE]),
             useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: false,
@@ -157,8 +222,15 @@ class ThemePreferences(private val context: Context) {
             motionStyle = MotionStyle.fromStorage(preferences[Keys.MOTION_STYLE]),
             trueBlack = preferences[Keys.TRUE_BLACK] ?: false,
             customColorHex = preferences[Keys.CUSTOM_COLOR_HEX],
-            animeThemeActive = preferences[Keys.ANIME_THEME_ACTIVE] ?: false,
-            animeThemeColorHex = preferences[Keys.ANIME_THEME_COLOR_HEX],
+            animeThemeEnabled = preferences[Keys.ANIME_THEME_ENABLED]
+                // An upgrade that has never written the new key had the switch on
+                // if the old flag was set, which is the honest reading: that flag
+                // meant "this feature is what colours my app".
+                ?: preferences[Keys.ANIME_THEME_ACTIVE]
+                ?: false,
+            animeThemeActive = layerHex != null,
+            animeThemeColorHex = layerHex,
+            animeThemeRetainedColorHex = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX],
             animeThemeRetainColor = preferences[Keys.ANIME_THEME_RETAIN_COLOR] ?: true,
             animeThemeRevertDuration = preferences[Keys.ANIME_THEME_REVERT_DURATION] ?: 300,
             appBackgroundColor = preferences[Keys.APP_BACKGROUND_COLOR],
@@ -167,13 +239,25 @@ class ThemePreferences(private val context: Context) {
     }
 
     suspend fun setPalette(paletteId: String) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.THEME_PALETTE] = paletteId
         }
     }
 
+    /**
+     * Writes the app's own accent.
+     *
+     * Also ends the anime feature's claim on it: an explicit pick - including
+     * clearing it - is the reader taking the accent back, so the retained marker
+     * that lets Settings say "this colour came from that show" has to go with it,
+     * or the card would keep describing an accent the reader just replaced.
+     */
     suspend fun setCustomColorHex(hex: String?) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
+            val retained = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
+            if (retained != null && !retained.equals(hex, ignoreCase = true)) {
+                preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
+            }
             if (hex != null) {
                 preferences[Keys.CUSTOM_COLOR_HEX] = hex
             } else {
@@ -183,111 +267,174 @@ class ThemePreferences(private val context: Context) {
     }
 
     suspend fun setMotionStyle(style: MotionStyle) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.MOTION_STYLE] = style.storageValue
         }
     }
 
     suspend fun setTrueBlack(enabled: Boolean) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.TRUE_BLACK] = enabled
         }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.THEME_MODE] = mode.storageValue
         }
     }
 
     /**
-     * The anime layer, and the accent it may retain, in **one** transaction.
+     * The switch that lets a detail sheet recolour the app.
      *
-     * `retainColor` is a third key here rather than a second call to
-     * [setCustomColorHex] because every transaction emits a new [ThemeSettings], and
-     * a new [ThemeSettings] re-themes the whole app. Written as two calls, opening a
-     * title with Retain on recoloured the app twice in the frames after the tap -
-     * once when the anime colour reached the scheme, once when the retained accent
-     * reached `customDynamicSchemes` - both times inside the detail sheet's entrance
-     * animation. One write, one recolour. The layer's lifetime is unchanged; it is
-     * only the arrival that stopped being two waves.
+     * Turning it off takes the anime's colour away completely: the live layer
+     * ends, its timer with it, and so does an accent this feature retained - and
+     * only if this feature is the one that wrote it, never the reader's own hue.
      */
-    suspend fun setAnimeThemeActive(
-        active: Boolean,
-        colorHex: String? = null,
-        retainColor: Boolean = false
-    ) {
-        // A new layer (or an explicit ending of one) supersedes any pending
-        // revert from the previous title.
-        cancelAnimeThemeRevert()
-        context.themeDataStore.edit { preferences ->
-            preferences[Keys.ANIME_THEME_ACTIVE] = active
-            if (active && colorHex != null) {
-                preferences[Keys.ANIME_THEME_COLOR_HEX] = colorHex
-            } else if (!active) {
-                // Always drop the cover colour when the layer is switched off.
-                // This used to keep it whenever a caller passed the old hex
-                // "for reference" - so `active = false` still left a colour
-                // behind that the next enable would silently restore.
-                preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
-            }
-            if (active && retainColor && colorHex != null) {
-                preferences[Keys.CUSTOM_COLOR_HEX] = colorHex
+    suspend fun setAnimeThemeEnabled(enabled: Boolean) {
+        // The layer is process state, so a reader who turns the feature off while
+        // a title is on screen has to see it go immediately, whatever the stored
+        // value says next.
+        appliedColorLayer.value = null
+        cancelPendingRevert()
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_ENABLED] = enabled
+            // One source of truth from the first write: the legacy key is only a
+            // migration read, and leaving it set would make the effective value
+            // depend on which key a later build happens to look at.
+            preferences.remove(Keys.ANIME_THEME_ACTIVE)
+            preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            if (!enabled) {
+                val retained = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
+                preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
+                if (retained != null &&
+                    retained.equals(preferences[Keys.CUSTOM_COLOR_HEX], ignoreCase = true)
+                ) {
+                    preferences.remove(Keys.CUSTOM_COLOR_HEX)
+                }
             }
         }
     }
 
     /**
-     * Keeps the anime-derived colour as the app's own custom accent while the
-     * feature is in use. The detail sheet reads this to decide whether to
-     * persist the cover colour, so switching it here and opening a detail sheet
-     * is what changes the whole app's colours — the same "content-based dynamic
-     * colour" idea as the wallpaper toggle, driven by the cover art instead.
+     * Applies the immersive layer for the title whose sheet is open.
+     *
+     * The colour lives in memory rather than in DataStore, and that is the fix for
+     * two things the stored flag did:
+     *
+     *  - **A temporary colour that was not temporary.** The revert timer is a
+     *    process-scoped coroutine; kill the app - or let the OS kill it - before
+     *    the timer fires and the stored `active = true` outlived the job that was
+     *    going to clear it. "5 minutes" became permanent until the next title
+     *    overwrote it.
+     *  - **A retained colour that tinted everything forever.** Retention used to
+     *    leave the *immersive* layer switched on, so the show's hue stayed in the
+     *    surfaces, containers and outlines on every screen and the next launch.
+     *    That is the one thing [com.anisequel.ui.theme.DynamicThemeBuilder] says a
+     *    standing preference must not do: surfaces the reader did not ask about
+     *    move because a title was opened.
+     *
+     * [retain] is the difference between the two paths: the accent is persisted
+     * *as well*, so what outlives the sheet is the ordinary custom-hue theme -
+     * same colour, untinted surfaces - rather than the layer.
+     *
+     * Order matters. The layer is emitted first, so everything the reader sees
+     * while the accent write lands is the immersive scheme; writing the accent
+     * first would flash the untinted theme in the middle of the sheet's entrance,
+     * which is the two-wave arrival the old single-transaction comment is about.
      */
-    suspend fun setAnimeThemeRetainColor(retain: Boolean) {
-        context.themeDataStore.edit { preferences ->
-            preferences[Keys.ANIME_THEME_RETAIN_COLOR] = retain
+    suspend fun applyAnimeColorLayer(colorHex: String, retain: Boolean) {
+        cancelPendingRevert()
+        appliedColorLayer.value = colorHex
+        if (retain) {
+            appContext.themeDataStore.edit { preferences ->
+                // The same title reopened, or a recomposition that reaches this
+                // effect again, must not rewrite two identical values: a write
+                // emits a new `ThemeSettings` and a new `ThemeSettings` rebuilds
+                // the scheme behind the whole app.
+                if (preferences[Keys.CUSTOM_COLOR_HEX] != colorHex ||
+                    preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX] != colorHex
+                ) {
+                    preferences[Keys.CUSTOM_COLOR_HEX] = colorHex
+                    preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX] = colorHex
+                }
+            }
         }
     }
 
+    /**
+     * The sheet closed. Keep the colour for [revertAfterSeconds] or drop it now.
+     *
+     * A retained colour never gets here with a timer: the caller ends the layer on
+     * the spot, and the accent the anime wrote is what carries the colour onward.
+     */
+    fun releaseAnimeColorLayer(revertAfterSeconds: Int) {
+        if (revertAfterSeconds <= 0) {
+            clearAnimeColorLayer()
+        } else {
+            revertJob?.cancel()
+            revertJob = revertScope.launch {
+                delay(revertAfterSeconds * 1000L)
+                appliedColorLayer.value = null
+            }
+        }
+    }
+
+    /** Ends the immersive layer now, keeping whatever accent is stored. */
+    fun clearAnimeColorLayer() {
+        cancelPendingRevert()
+        appliedColorLayer.value = null
+    }
+
+    /**
+     * The retain switch, applied to the colour that is live right now.
+     *
+     * On persists it as the app's accent; off ends the retained state properly -
+     * the layer, the marker, and the accent *only if the marker says the anime
+     * wrote it*. Checking the marker instead of comparing hexes is what keeps a
+     * reader's own `#00BFA5` from being cleared because a cover happened to be
+     * that colour.
+     */
+    suspend fun setAnimeThemeRetainColor(retain: Boolean) {
+        val liveHex = appliedColorLayer.value
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_RETAIN_COLOR] = retain
+            if (retain) {
+                val color = liveHex ?: preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
+                if (color != null) {
+                    preferences[Keys.CUSTOM_COLOR_HEX] = color
+                    preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX] = color
+                }
+            } else {
+                val retained = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
+                preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
+                if (retained != null &&
+                    retained.equals(preferences[Keys.CUSTOM_COLOR_HEX], ignoreCase = true)
+                ) {
+                    preferences.remove(Keys.CUSTOM_COLOR_HEX)
+                }
+            }
+        }
+        // With retention off there is nothing left to keep the colour alive, and
+        // the layer outranks every other source in `Theme.kt`. Leaving it applied
+        // is what made this switch look dead: the reader turned it off and the
+        // app stayed the show's colour.
+        if (!retain) clearAnimeColorLayer()
+    }
+
     suspend fun setAnimeThemeRevertDuration(durationSeconds: Int) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.ANIME_THEME_REVERT_DURATION] = durationSeconds
         }
     }
 
-    /**
-     * Schedules the temporary anime colour to go away **after the sheet closes**.
-     *
-     * This timer used to live in a `LaunchedEffect` inside the detail sheet, so
-     * dismissing the sheet cancelled it: picking "5 Minutes" or "10 Minutes"
-     * left the colour applied until the next title overwrote it, which made the
-     * setting indistinguishable from Retain. The job is process-scoped and
-     * app-context-bound so it can outlive the screen that started it.
-     */
-    fun scheduleAnimeThemeRevert(durationSeconds: Int) {
-        revertJob?.cancel()
-        if (durationSeconds <= 0) {
-            revertJob = null
-            return
-        }
-        revertJob = revertScope.launch {
-            delay(durationSeconds * 1000L)
-            appContext.themeDataStore.edit { preferences ->
-                preferences[Keys.ANIME_THEME_ACTIVE] = false
-                preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
-            }
-        }
-    }
-
-    /** Called when a new title (or Retain) takes over before an old timer fires. */
-    fun cancelAnimeThemeRevert() {
+    private fun cancelPendingRevert() {
         revertJob?.cancel()
         revertJob = null
     }
 
     suspend fun setAppBackgroundColor(hex: String?) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             if (hex != null) {
                 preferences[Keys.APP_BACKGROUND_COLOR] = hex
             } else {
@@ -306,23 +453,25 @@ class ThemePreferences(private val context: Context) {
      * it applies to, so the switch is always live and the caveat is gone.
      */
     suspend fun setUseDynamicColor(enabled: Boolean) {
-        context.themeDataStore.edit { preferences ->
+        appContext.themeDataStore.edit { preferences ->
             preferences[Keys.USE_DYNAMIC_COLOR] = enabled
         }
     }
 
     /** Back to shipping defaults. Used by the "Reset appearance" action. */
     suspend fun reset() {
-        cancelAnimeThemeRevert()
-        context.themeDataStore.edit { preferences ->
+        clearAnimeColorLayer()
+        appContext.themeDataStore.edit { preferences ->
             preferences.remove(Keys.THEME_MODE)
             preferences.remove(Keys.USE_DYNAMIC_COLOR)
             preferences.remove(Keys.THEME_PALETTE)
             preferences.remove(Keys.MOTION_STYLE)
             preferences.remove(Keys.TRUE_BLACK)
             preferences.remove(Keys.CUSTOM_COLOR_HEX)
+            preferences.remove(Keys.ANIME_THEME_ENABLED)
             preferences.remove(Keys.ANIME_THEME_ACTIVE)
             preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
+            preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
             preferences.remove(Keys.ANIME_THEME_RETAIN_COLOR)
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
@@ -331,11 +480,21 @@ class ThemePreferences(private val context: Context) {
 
     private companion object {
         /**
+         * The immersive layer a detail sheet applied, as a hex colour, or null.
+         *
+         * Process state rather than a field on the instance because the sheet
+         * builds its own `ThemePreferences` and the theme reads `MainActivity`'s:
+         * two instances, one colour. And deliberately not DataStore - see
+         * [applyAnimeColorLayer] for what storing it cost.
+         */
+        val appliedColorLayer = MutableStateFlow<String?>(null)
+
+        /**
          * The temporary anime layer's revert timer. Process-scoped on purpose:
          * the sheet that started it is gone by the time it fires. There is only
          * one temporary layer at a time, so one job is the whole state, and a
          * new title (or Retain) cancels the previous one through
-         * [cancelAnimeThemeRevert].
+         * [cancelPendingRevert].
          */
         val revertScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         var revertJob: Job? = null

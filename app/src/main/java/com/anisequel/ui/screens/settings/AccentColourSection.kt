@@ -87,7 +87,7 @@ internal fun AccentColourSection(
                     // reason a palette pick does: the anime colour outranks the
                     // wallpaper scheme in `Theme.kt`, so a live adaptation would make
                     // this switch look broken until it timed out on its own.
-                    if (enabled) themePreferences.setAnimeThemeActive(false, null)
+                    if (enabled) themePreferences.clearAnimeColorLayer()
                     themePreferences.setUseDynamicColor(enabled)
                 }
             },
@@ -153,7 +153,7 @@ internal fun AccentColourSection(
                             // too, and `setCustomColorHex(null)` is what makes the
                             // chosen palette the basis again.
                             themePreferences.setCustomColorHex(null)
-                            themePreferences.setAnimeThemeActive(false, null)
+                            themePreferences.clearAnimeColorLayer()
                             themePreferences.setUseDynamicColor(false)
                             themePreferences.setPalette(palette.id)
                         }
@@ -185,7 +185,7 @@ internal fun AccentColourSection(
                             // like the palette picker does - and the wallpaper
                             // with it, which is the other override that made this
                             // chip a control that could not change anything.
-                            themePreferences.setAnimeThemeActive(false, null)
+                            themePreferences.clearAnimeColorLayer()
                             themePreferences.setUseDynamicColor(false)
                             themePreferences.setCustomColorHex(
                                 if (settings.customColorHex?.equals(hex, ignoreCase = true) == true) null else hex

@@ -216,14 +216,20 @@ private fun TierBoard(
                 boardLeft = viewport.boardLeft,
                 boardTop = viewport.boardTop,
                 density = density.density,
-                zoom = zoom
+                zoom = zoom,
+                bottomLimitY = viewport.visibleBottom
             )
         }
         onDispose { viewport.dropResolver = null }
     }
     TierEdgeAutoScroll(
         active = drag.mediaId != null,
-        pointerY = { viewport.boardTop + drag.origin.y + drag.travel.value.y },
+        // The board's position *at lift* plus the travel: this is the finger's
+        // window position. It used to read the live `viewport.boardTop`, which
+        // moves as the board auto-scrolls under the finger, so the computed
+        // pointer climbed out of the bottom band while the finger still held it
+        // there and the scroll stopped short.
+        pointerY = { drag.boardTop + drag.origin.y + drag.travel.value.y },
         viewport = viewport,
         scrollState = scrollState,
         density = density.density
@@ -245,11 +251,11 @@ private fun TierBoard(
     // visible as a drop that files a title into the wrong tier after a scroll.
     val drop = remember(drag.mediaId, arrangement, zoom, density) {
         derivedStateOf {
-            drag.drop(
+            drag.releaseDrop(
                 arrangement = arrangement,
                 zoom = zoom,
                 density = density.density,
-                scrollShift = drag.boardTop - viewport.boardTop
+                viewport = viewport
             )
         }
     }
@@ -291,7 +297,10 @@ private fun TierBoard(
         dragging = boardDragging || externalDragging,
         hoveredTierId = hoveredTierId,
         tiers = tiers,
-        onDragHintChanged = onDragHintChanged
+        onDragHintChanged = onDragHintChanged,
+        // Only the tray's drag is "from the pool"; a board drag that has been
+        // carried over the shelf is still taking a title out of the list.
+        fromTray = !boardDragging
     )
 
     // ## Pinch is two fingers only; one finger belongs to the scroll

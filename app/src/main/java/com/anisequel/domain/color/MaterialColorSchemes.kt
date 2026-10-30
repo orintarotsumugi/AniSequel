@@ -116,8 +116,9 @@ data class MaterialScheme(
  *    beside primary without competing with it
  *  - **tertiary** - the hue rotated 60 degrees, for accents that are related but
  *    distinguishable
- *  - **neutral** - the seed's hue at a twentieth of the chroma: surfaces
- *  - **neutral variant** - the same, slightly more chromatic: inputs, outlines
+ *  - **neutral** - the seed's hue at an eighth of its chroma (floored, capped,
+ *    see [tonalSpot]): surfaces
+ *  - **neutral variant** - the same, four chroma more: inputs, outlines
  *
  * Each palette is then sampled at fixed tones. Those fixed tones are the whole
  * accessibility argument: `surface` is tone 98 in light and 6 in dark, and
@@ -156,8 +157,48 @@ object MaterialColorSchemes {
     /** The app's neutral blue-grey for untinted surfaces. */
     private const val BRAND_NEUTRAL_CHROMA: Double = 6.0
 
+    /**
+     * The tinted surface ramp's chroma bounds: low enough that a grey cover still
+     * gets a recognisably tinted page, high enough that a vivid one does not
+     * repaint the containers as coloured cards.
+     */
+    private const val MIN_TINTED_NEUTRAL_CHROMA: Double = 8.0
+    private const val MAX_TINTED_NEUTRAL_CHROMA: Double = 12.0
+
     /** WCAG AA for normal text; the tone ladder is designed around it. */
     private const val MIN_TEXT_CONTRAST: Double = 4.5
+
+    /** The tone the primary sits at: Material's 40 in light, 80 in dark. */
+    private const val PRIMARY_TONE_LIGHT = 40
+    private const val PRIMARY_TONE_DARK = 80
+
+    /**
+     * The colour a cover seed produces as the app's accent.
+     *
+     * A seed is a pixel, and pixels come in any tone: a night-sky cover scores a
+     * near-black bin and a snow cover a near-white one. The *scheme* never shows
+     * that raw value - it samples the seed's palette at tone 40 or 80 - so
+     * anything that draws the seed as a colour (the Settings chip, the hero's
+     * backdrop and shadow) has to take the same tone or it disagrees with the
+     * buttons sitting next to it. It used to draw the raw pixel, which is why a
+     * dark poster's "Now matching this anime" chip was a black box nobody could
+     * tell was a colour, and a pale one flashed white behind the poster before
+     * the image loaded.
+     */
+    fun accentFor(seedArgb: Int, dark: Boolean): Int =
+        primaryPalette(Hct.fromInt(seedArgb)).tone(if (dark) PRIMARY_TONE_DARK else PRIMARY_TONE_LIGHT)
+
+    /**
+     * The primary palette for [seed] - the hue and chroma rules in one place, so
+     * [accentFor] and [tonalSpot] cannot drift into describing two different
+     * "the anime's colour".
+     */
+    private fun primaryPalette(seed: Hct): TonalPalette {
+        if (seed.chroma < MIN_USABLE_CHROMA) {
+            return TonalPalette(BRAND_HUE, MIN_PRIMARY_CHROMA)
+        }
+        return TonalPalette(seed.hue, maxOf(seed.chroma, MIN_PRIMARY_CHROMA))
+    }
 
     /**
      * Builds the light and dark schemes for [seedArgb].
@@ -172,19 +213,15 @@ object MaterialColorSchemes {
         tintSurfaces: Boolean
     ): MaterialScheme {
         val seed = Hct.fromInt(seedArgb)
-        val usableHue = seed.chroma >= MIN_USABLE_CHROMA
-        val hue = if (usableHue) seed.hue else BRAND_HUE
-        val primaryChroma = if (usableHue) {
-            maxOf(seed.chroma, MIN_PRIMARY_CHROMA)
-        } else {
-            MIN_PRIMARY_CHROMA
-        }
+        val primary = primaryPalette(seed)
+        val primaryChroma = primary.chroma
+        val hue = primary.hue
 
-        val primary = TonalPalette(hue, primaryChroma)
         val secondary = TonalPalette(
             hue,
             maxOf(primaryChroma - 32.0, primaryChroma * 0.5)
         )
+
         val tertiary = TonalPalette(
             ColorMath.sanitizeDegrees(hue + 60.0),
             primaryChroma
@@ -195,7 +232,13 @@ object MaterialColorSchemes {
         val error = TonalPalette(25.0, 84.0)
 
         val neutralChroma = if (tintSurfaces) {
-            maxOf(primaryChroma / 8.0, 8.0)
+            // Material caps its neutral palettes (4 and 8 chroma) because a
+            // wallpaper is a standing choice the user did not make for one app.
+            // This is the immersive path, so the cast is allowed to be stronger -
+            // but a vivid cover at chroma 100 would put the surfaces at 12.5 and
+            // turn `surfaceContainerHighest` into a pastel card instead of a grey
+            // one, so the tint is capped where it stops reading as a backdrop.
+            (primaryChroma / 8.0).coerceIn(MIN_TINTED_NEUTRAL_CHROMA, MAX_TINTED_NEUTRAL_CHROMA)
         } else {
             BRAND_NEUTRAL_CHROMA
         }
@@ -218,10 +261,10 @@ object MaterialColorSchemes {
         neutral: TonalPalette,
         neutralVariant: TonalPalette
     ): MaterialScheme {
-        val primaryColor = primary.tone(40)
-        val secondaryColor = secondary.tone(40)
-        val tertiaryColor = tertiary.tone(40)
-        val errorColor = error.tone(40)
+        val primaryColor = primary.tone(PRIMARY_TONE_LIGHT)
+        val secondaryColor = secondary.tone(PRIMARY_TONE_LIGHT)
+        val tertiaryColor = tertiary.tone(PRIMARY_TONE_LIGHT)
+        val errorColor = error.tone(PRIMARY_TONE_LIGHT)
 
         return MaterialScheme(
             primary = primaryColor,
@@ -271,10 +314,10 @@ object MaterialColorSchemes {
         neutral: TonalPalette,
         neutralVariant: TonalPalette
     ): MaterialScheme {
-        val primaryColor = primary.tone(80)
-        val secondaryColor = secondary.tone(80)
-        val tertiaryColor = tertiary.tone(80)
-        val errorColor = error.tone(80)
+        val primaryColor = primary.tone(PRIMARY_TONE_DARK)
+        val secondaryColor = secondary.tone(PRIMARY_TONE_DARK)
+        val tertiaryColor = tertiary.tone(PRIMARY_TONE_DARK)
+        val errorColor = error.tone(PRIMARY_TONE_DARK)
 
         return MaterialScheme(
             primary = primaryColor,

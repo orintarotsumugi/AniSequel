@@ -436,10 +436,17 @@ private suspend fun AwaitPointerEventScope.swipeSelection(
 
     while (true) {
         val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return null
+        // Read the delta *before* consuming. `consume()` marks the change as
+        // position-consumed, and from that moment `positionChange()` is defined
+        // to return `Offset.Zero` - so the old order here (consume, then read)
+        // accumulated exactly zero travel for the whole gesture. That is the bug
+        // that made the bar lift on a hold and then ignore the drag: every
+        // release returned the starting tab and the swipe cancelled itself.
+        val deltaX = change.positionChange().x
         change.consume()
         if (!change.pressed) return index
 
-        travel += change.positionChange().x
+        travel += deltaX
 
         // Positive travel is a drag to the right, which pulls the previous
         // destination in from the left.

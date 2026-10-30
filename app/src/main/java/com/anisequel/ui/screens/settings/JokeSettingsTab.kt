@@ -1,6 +1,12 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +33,7 @@ import com.anisequel.domain.jokes.JokeTone
 import com.anisequel.ui.components.AppJokes
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.JokePreviewBus
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -365,21 +372,31 @@ private fun PreviewAndReset(
         modifier = Modifier.padding(horizontal = 4.dp)
     )
 
-    if (settings != JokeSettings()) {
-        SettingsButton(
-            text = "Reset joke settings",
-            onClick = { scope.launch { preferences.reset() } },
-            icon = AppVectorIcons.Restore,
-            variant = SettingsButtonVariant.Outlined,
-            fillWidth = true,
-            testTag = "reset_jokes_button"
-        )
-        Text(
-            text = "Saved lines are kept: they are yours, not a setting.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
+    // Same entry as the Theme and Library reset rows: the pair appears with a
+    // spring expansion instead of shoving the page's footer down on one frame.
+    AnimatedVisibility(
+        visible = settings != JokeSettings(),
+        enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+        exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+            shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            SettingsButton(
+                text = "Reset joke settings",
+                onClick = { scope.launch { preferences.reset() } },
+                icon = AppVectorIcons.Restore,
+                variant = SettingsButtonVariant.Outlined,
+                fillWidth = true,
+                testTag = "reset_jokes_button"
+            )
+            Text(
+                text = "Saved lines are kept: they are yours, not a setting.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
     }
 
     Spacer(modifier = Modifier.height(24.dp))

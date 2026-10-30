@@ -1,6 +1,6 @@
 package com.anisequel.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -30,6 +30,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.MotionStyle
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 
 /**
  * The one clock every shimmer on screen shares.
@@ -57,20 +59,36 @@ import androidx.compose.ui.unit.dp
  * awake for a screen nobody could see - the rule [rememberIsResumed] exists
  * for. While paused the phase is a still frame at the start of the sweep, so
  * the skeleton stays painted rather than disappearing to the background.
+ *
+ * `MotionStyle.INSTANT` gets the same still frame. Every other loop in the app
+ * branches on that setting - the orb becomes [StaticEmptyOrb], the page springs
+ * become `snap()` - and the shimmer used to inline its own tween and keep
+ * sweeping regardless, so the one control the user has over motion did not
+ * control the most constantly-drawn animation in the app.
+ *
+ * The value is a *fraction* of the sweep, not a pixel offset: a skeleton painted
+ * at an absolute range could not tell a 100dp chip from a 900dp tablet card, and
+ * the highlight only ever crossed part of the box. [shimmerBackground] scales it
+ * to the box it is drawing.
  */
 @Composable
 fun rememberShimmerPhase(
     durationMillis: Int = SHIMMER_DURATION_MILLIS
 ): State<Float> {
-    if (!rememberIsResumed()) {
-        return remember { mutableFloatStateOf(SHIMMER_START) }
+    val still = ExpressiveMotion.speed == MotionStyle.INSTANT || !rememberIsResumed()
+    if (still) {
+        return remember { mutableFloatStateOf(0f) }
     }
     val transition = rememberInfiniteTransition(label = "shimmer_transition")
     return transition.animateFloat(
-        initialValue = SHIMMER_START,
-        targetValue = SHIMMER_END,
+        initialValue = 0f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            // Linear, because the sweep now starts and ends *outside* the box:
+            // the old ease-in-out decelerated into the two edges, which read as
+            // the highlight stopping in the middle of the skeleton and starting
+            // again.
+            animation = tween(durationMillis = durationMillis, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer_animation"
@@ -108,12 +126,13 @@ private fun Modifier.shimmerBackground(phase: State<Float>): Modifier {
     }
 
     return drawBehind {
-        val offset = phase.value
+        val bleed = maxOf(size.width, size.height) * SHIMMER_BLEED_FRACTION
+        val centre = -bleed + phase.value * (size.width + 2f * bleed)
         drawRect(
             brush = Brush.linearGradient(
                 colors = colors,
-                start = Offset(x = offset - SHIMMER_BLEED, y = offset - SHIMMER_BLEED),
-                end = Offset(x = offset + SHIMMER_BLEED, y = offset + SHIMMER_BLEED)
+                start = Offset(x = centre - bleed, y = centre - bleed),
+                end = Offset(x = centre + bleed, y = centre + bleed)
             )
         )
     }
@@ -233,14 +252,13 @@ fun ShimmerCard(
 }
 
 /**
- * How far the highlight's centre sits outside the box on each side.
+ * How far the highlight's centre sits outside the box on each side, as a
+ * fraction of the box's longest edge.
  *
- * Held in a constant rather than written as `300f` at both ends of the gradient,
- * because the two numbers are one idea: the gradient's centre tracks
- * [SHIMMER_START]..[SHIMMER_END], and this is how much of it hangs off each end
- * so the sweep enters and leaves the box rather than popping at its edges.
+ * Relative rather than a fixed pixel offset: a 300px bleed crosses a 100dp chip
+ * in a tenth of the sweep and never reaches the far edge of a tablet card at
+ * all, so the same skeleton looked half-painted at one width and strobed at
+ * another. Measured off the box, every skeleton enters and leaves its own edges.
  */
-private const val SHIMMER_BLEED = 300f
-private const val SHIMMER_START = -300f
-private const val SHIMMER_END = 1200f
+private const val SHIMMER_BLEED_FRACTION = 0.35f
 private const val SHIMMER_DURATION_MILLIS = 1100

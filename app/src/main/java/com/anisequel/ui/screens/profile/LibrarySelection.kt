@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.LibraryPreferences
+import com.anisequel.data.repository.LibraryViewStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -40,7 +41,14 @@ import kotlinx.coroutines.flow.combine
  * would otherwise have nothing to go to.
  */
 class RememberedLibraryView(
-    val preferences: LibraryPreferences,
+    /**
+     * Where the tab's next choice is written.
+     *
+     * The reader's own [LibraryPreferences] on their Library page; see
+     * [borrowedLibraryView] for the store that forgets, which is what a *stranger's*
+     * list has to be given.
+     */
+    val preferences: LibraryViewStore,
     /** Whether DataStore has answered at least once. False is the only resolving state. */
     val answered: Boolean,
     /** The remembered media type, or null when none is stored or the name is unknown. */
@@ -110,3 +118,43 @@ fun rememberLibrarySelection(preferences: LibraryPreferences): RememberedLibrary
  */
 private fun <T : Enum<T>> storedEntry(stored: String?, entries: List<T>): T? =
     stored?.let { name -> entries.firstOrNull { it.name == name } }
+
+/**
+ * A borrowed list's view: local defaults, written nowhere.
+ *
+ * [ProfileLibraryTab] is the browsing surface for two different owners now, and only
+ * one of them owns the preferences. Reusing the viewer's saved view for a follower's
+ * list would read the viewer's own choices onto a stranger's grid - a Manga-only,
+ * by-score view they never chose for *this* person - and, worse, every chip they tap
+ * there would write into the store the viewer's own Library page opens from, so
+ * leaving somebody's profile would silently re-arrange the reader's own page.
+ *
+ * [answered] is `true` and it is not decoration: `false` is the tab's "DataStore has
+ * not answered yet" spinner, and this store is never going to answer. The defaults
+ * below are the answer.
+ */
+fun borrowedLibraryView(): RememberedLibraryView = RememberedLibraryView(
+    preferences = ForgetfulLibraryViewStore,
+    answered = true,
+    // Anime, not All: the borrowed half this tab can draw on the first frame is the
+    // list the profile already fetched. Their manga is a second, separate download -
+    // so `All` would draw one type's entries under the other type's label until the
+    // reader tapped the chip that asks.
+    type = LibraryType.ANIME,
+    filter = LibraryFilter.ALL,
+    sort = LibrarySort.LIST_ORDER,
+    sortAscending = true
+)
+
+/**
+ * A store that forgets every choice.
+ *
+ * The tab's chips still work - the grid re-sorts immediately - they just do not
+ * outlive the page, which is the whole difference between the reader's own library
+ * and somebody else's.
+ */
+private object ForgetfulLibraryViewStore : LibraryViewStore {
+    override suspend fun setType(value: String) = Unit
+    override suspend fun setFilter(value: String) = Unit
+    override suspend fun setSort(name: String, ascending: Boolean) = Unit
+}

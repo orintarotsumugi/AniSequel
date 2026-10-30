@@ -6,6 +6,7 @@ import com.anisequel.data.model.ScoreAmount
 import com.anisequel.data.model.StatusAmount
 import com.anisequel.data.model.TagAmount
 import com.anisequel.data.model.YearAmount
+import com.anisequel.domain.list.ListStatuses
 
 /** One row of a horizontal bar chart: a label, a count, and a share of the largest. */
 data class BucketTally(
@@ -186,17 +187,16 @@ class BuildListInsightsUseCase {
         return if (index >= 0) index else KNOWN_STATUS_ORDER.size
     }
 
-    private fun String.toStatusLabel(): String = when (this) {
-        "CURRENT" -> "Watching"
-        "COMPLETED" -> "Completed"
-        "PAUSED" -> "On Hold"
-        "DROPPED" -> "Dropped"
-        "PLANNING" -> "Planning"
-        "REPEATING" -> "Rewatching"
-        // Underscores are word breaks here, not characters. See the note on
-        // `statusDistribution`.
-        else -> lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
-    }
+    /**
+     * The strip's wording, from [ListStatuses] - the one vocabulary the entry
+     * editor and the Library chips read too. It used to be a private copy here,
+     * which is how this surface came to print "On Hold" for a status the editor
+     * called "Paused".
+     *
+     * Anime wording: unlike the editor, a tally is not drawn with one title's type
+     * in hand, and the two spellings differ in three labels out of six.
+     */
+    private fun String.toStatusLabel(): String = ListStatuses.label(this, isManga = false)
 
     /**
      * AniList's format enums as people write them.

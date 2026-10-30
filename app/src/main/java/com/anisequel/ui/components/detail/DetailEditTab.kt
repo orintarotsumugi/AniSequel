@@ -41,6 +41,7 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.isManga
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
@@ -240,7 +241,7 @@ internal fun DetailEditTab(
             // Status.
             Box {
                 EditorCard(
-                    icon = AppVectorIcons.Info,
+                    icon = statusIcon(entryState.status),
                     title = "Status",
                     subtitle = statusLabel(entryState.status, isManga),
                     onClick = { state.statusMenuOpen = true },
@@ -252,12 +253,54 @@ internal fun DetailEditTab(
                     onDismissRequest = { state.statusMenuOpen = false }
                 ) {
                     ENTRY_STATUSES.forEach { option ->
+                        // The entry's token can be a v1 alias, so the comparison
+                        // goes through `normalize` rather than against the raw
+                        // string - otherwise a cached "ON_HOLD" entry would open
+                        // the menu with nothing marked current.
+                        val selected = ListStatuses.normalize(entryState.status) == option.apiValue
                         DropdownMenuItem(
-                            text = { Text(option.labelFor(isManga)) },
+                            text = {
+                                Text(
+                                    text = option.labelFor(isManga),
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = statusIcon(option.apiValue),
+                                    contentDescription = null,
+                                    tint = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            trailingIcon = if (selected) {
+                                {
+                                    Icon(
+                                        imageVector = AppVectorIcons.Done,
+                                        contentDescription = "Current status",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                             onClick = {
                                 state.statusMenuOpen = false
                                 state.draft = entryState.copy(status = option.apiValue)
-                            }
+                            },
+                            modifier = Modifier.testTag(
+                                "edit_status_option_${option.apiValue.lowercase()}"
+                            )
                         )
                     }
                 }

@@ -10,13 +10,14 @@ import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.FavouriteStaffConnection
 import com.anisequel.data.model.Favourites
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.ListScoreStats
 import com.anisequel.data.model.MangaStats
 import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTag
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.PersonImage
 import com.anisequel.data.model.PersonName
 import com.anisequel.data.model.ScoreAmount
@@ -51,7 +52,7 @@ import com.anisequel.data.model.UserTagStatistic
 object DemoProfileProvider {
 
     fun getDemoUserOverview(): UserOverview = UserOverview(
-        id = 999999,
+        id = DemoDataProvider.DEMO_VIEWER_ID,
         name = "OtakuExplorer",
         about = """
             ### How I rate
@@ -168,9 +169,23 @@ object DemoProfileProvider {
      * broken. The `MediaNode` ids are the real AniList ids of the demo shows, so
      * tapping a card opens something that exists.
      */
-    fun getDemoActivity(): List<ListActivity> = listOf(
+    fun getDemoActivity(): List<ProfileActivity> = listOf(
         activity(1, 100465, "completed", null, hoursAgo(2), likes = 8, replies = 0),
         activity(2, 142329, "current", "7", hoursAgo(9), likes = 3, replies = 1),
+        // A text post, the other half of `ActivityUnion`. The feed asked AniList
+        // for list updates only for its whole first life, so this card shape had
+        // no offline path; without this row the demo would keep proving that a
+        // feed of list updates still works and nothing about the posts it used
+        // to hide. Markdown on purpose - the body goes through the same parser
+        // as the bio.
+        ProfileActivity(
+            id = 10,
+            text = "Seasonal check-in: **Frieren** is still the best thing airing, " +
+                "and nobody can tell me otherwise. What is everyone else watching?",
+            createdAt = (System.currentTimeMillis() / 1000 - hoursAgo(20)).toInt(),
+            likeCount = 6,
+            replyCount = 2
+        ),
         activity(3, 154587, "planning", null, hoursAgo(26), likes = 1, replies = 0),
         activity(4, 113415, "completed", null, hoursAgo(31), likes = 12, replies = 4),
         activity(5, 20605, "current", "22", hoursAgo(50), likes = 2, replies = 0),
@@ -209,6 +224,100 @@ object DemoProfileProvider {
         FollowUser(1535, "smkybear15", avatarFor("b1535-1yTxkLdGnfdO"))
     )
 
+    /**
+     * The friends feed: activity attributed to the accounts the demo follows.
+     *
+     * The rows are [getDemoActivity]'s, copied with a `user` attached rather
+     * than written out again: the friends tab's only visual difference is whose
+     * name sits on the card, and sharing the rows means a card change is
+     * exercised by both feeds without a second fixture to keep in step.
+     *
+     * Authors cycle through [getDemoFollowing] so every followed account shows
+     * up. The ids stay as they are - each feed is its own list, and ids only
+     * have to be unique within one.
+     */
+    fun getDemoFollowingActivity(): List<ProfileActivity> {
+        val authors = getDemoFollowing()
+        return getDemoActivity().mapIndexed { index, activity ->
+            activity.copy(user = authors[index % authors.size])
+        }
+    }
+
+    /**
+     * Received and sent messages in one list, as the inbox and the sent page
+     * would each answer.
+     *
+     * Both directions are present on purpose: the Messages tab exists to tell
+     * them apart, and a fixture with one direction would make every filter chip
+     * draw the same list. `messengerId` and `recipientId` are what decide that -
+     * the demo viewer's id is [DemoDataProvider.DEMO_VIEWER_ID], the same one
+     * [getDemoUserOverview] reports. The bodies are Markdown, one with an
+     * AniList spoiler block, because the tab renders them with the same parser
+     * as the bio.
+     */
+    fun getDemoMessages(): List<MessageNode> {
+        val viewer = DemoDataProvider.getDemoViewer()
+        val me = FollowUser(viewer.id, viewer.name, viewer.avatar)
+        val following = getDemoFollowing()
+        val jester = following[0]
+        val lettuce = following[1]
+        val smky = following[2]
+
+        fun message(
+            id: Int,
+            from: FollowUser,
+            to: FollowUser,
+            body: String,
+            ageMinutes: Long,
+            likes: Int = 0,
+            replies: Int = 0
+        ) = MessageNode(
+            id = id,
+            message = body,
+            isPrivate = true,
+            createdAt = (System.currentTimeMillis() / 1000 - ageMinutes * 60L).toInt(),
+            likeCount = likes,
+            replyCount = replies,
+            recipientId = to.id,
+            messengerId = from.id,
+            recipient = to,
+            messenger = from
+        )
+
+        return listOf(
+            message(
+                5001, jester, me,
+                "yo, did you finish *Frieren* yet? That last episode destroyed me.",
+                ageMinutes = 190, likes = 1
+            ),
+            message(
+                5002, me, jester,
+                "Finished it last night. The funeral scene... had to pause it for a minute.",
+                ageMinutes = 175
+            ),
+            message(
+                5003, lettuce, me,
+                "Your tier list is a war crime. Putting **Haibane Renmei** below JJK is not real.",
+                ageMinutes = 61, replies = 2
+            ),
+            message(
+                5004, me, lettuce,
+                "Haibane Renmei is a mood, JJK is a sugar rush. They are not the same food group.",
+                ageMinutes = 44, likes = 2
+            ),
+            message(
+                5005, smky, me,
+                "Seasonal check-in: are you picking anything up this season, or is it backlog-only again?",
+                ageMinutes = 12
+            ),
+            message(
+                5006, me, smky,
+                "Backlog-only. I have 114 planned shows and ~!absolutely no self-control!~.",
+                ageMinutes = 6
+            )
+        )
+    }
+
     private fun avatarFor(hash: String) = UserAvatar(
         medium = "https://s4.anilist.co/file/anilistcdn/user/avatar/medium/$hash.png",
         large = "https://s4.anilist.co/file/anilistcdn/user/avatar/large/$hash.png"
@@ -229,7 +338,7 @@ object DemoProfileProvider {
         createdAtSecondsAgo: Long,
         likes: Int,
         replies: Int
-    ): ListActivity = ListActivity(
+    ): ProfileActivity = ProfileActivity(
         id = index,
         status = status,
         progress = progress,

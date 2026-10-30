@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -26,28 +27,72 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
 import com.anisequel.domain.usecase.ActivityCalendar
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.UserActivityViewModel
-import java.time.Instant
-import kotlinx.coroutines.delay
+
+/**
+ * Everything that differs between the two feeds the Activity tab can show.
+ *
+ * The profile's own history and the friends feed are the same screen with the
+ * same cards, paging, skeleton and failure states - only whose rows they are,
+ * what the heading says, and whether each card carries its own author differ.
+ * Passing those differences as one object keeps [ProfileActivityTab] one
+ * composable rather than two copies that would drift the first time a card or a
+ * retry row changed.
+ *
+ * The author fields are for the profile feed: every card belongs to the person
+ * whose profile is open, so the screen passes their name once instead of the
+ * payload repeating it in every row. The friends feed leaves both null and each
+ * card reads `ProfileActivity.user` instead.
+ */
+data class ActivityFeedSource(
+    val state: UserActivityViewModel.ActivityState,
+    val title: String,
+    val icon: ImageVector,
+    val emptyMessage: String,
+    val onLoadFirstPage: () -> Unit,
+    val onLoadNextPage: () -> Unit,
+    val onRetry: () -> Unit,
+    /**
+     * Re-reads the first page over the rows already on screen.
+     *
+     * The retry offered by a failed refresh. Deliberately not [onRetry]: that
+     * path is allowed to show the loading skeleton because there is nothing to
+     * keep, whereas this one keeps the feed visible and swaps the rows in when
+     * the new page lands.
+     */
+    val onRefresh: () -> Unit,
+    val onLike: (Int) -> Unit,
+    val onOpenComments: (Int) -> Unit,
+    val onOpenLikers: (Int) -> Unit,
+    val calendar: ActivityCalendar? = null,
+    val userName: String? = null,
+    val userAvatar: String? = null,
+    /**
+     * Opens the person a card is attributed to, or null when the card's author
+     * cannot be somebody else - the profile feed, where the answer is "the page
+     * you are already on".
+     */
+    val onOpenAuthor: ((FollowUser) -> Unit)? = null
+)
 
 /**
  * The Activity tab: the person's activity heatmap and list history, newest first.
@@ -59,22 +104,17 @@ import kotlinx.coroutines.delay
  *    consistency and streaks.
  * 2. The paginated activity feed presents rich, tinted cards for individual episodes
  *    watched, titles completed, or items planned.
+ *
+ * ## One feed, two sources
+ *
+ * [source] is either the profile's own activity or the people the viewer
+ * follows; see [ActivityFeedSource]. The tab itself is unchanged by which one it
+ * is showing, which is what keeps the two from behaving differently under the
+ * same finger.
  */
 @Composable
 fun ProfileActivityTab(
-    activityState: UserActivityViewModel.ActivityState,
-    onLoadFirstPage: () -> Unit,
-    onLoadNextPage: () -> Unit,
-    onRetry: () -> Unit = onLoadFirstPage,
-    /**
-     * Re-reads the first page over the rows already on screen.
-     *
-     * The retry offered by a failed refresh. It is deliberately not [onRetry]:
-     * that path is allowed to show the loading skeleton because there is nothing
-     * to keep, whereas this one keeps the feed visible and swaps the rows in when
-     * the new page lands.
-     */
-    onRefresh: () -> Unit = onRetry,
+    source: ActivityFeedSource,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     /**
@@ -85,25 +125,16 @@ fun ProfileActivityTab(
      * composable died with it, so switching to Stats and back dropped the reader
      * at the top of the feed they had scrolled a long way down. Every tab on the
      * screen keeps one of these for the same reason.
-     *
-     * Named `listState` to match the other tabs even though this one also has an
-     * `activityState`; a bare `state` next to that read as the tab's data rather
-     * than its scroll position.
      */
     listState: LazyListState = rememberLazyListState(),
-    calendar: ActivityCalendar? = null,
-    userName: String? = null,
-    userAvatar: String? = null,
-    onLike: (Int) -> Unit = {},
-    onOpenComments: (Int) -> Unit = {},
-    onOpenLikers: (Int) -> Unit = {},
-    onOpenDetail: (MediaNode) -> Unit = {}
+    onOpenDetail: (MediaNode) -> Unit = {},
+    nowEpochSecond: Long = rememberNowEpochSecond()
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
     // not opening the profile.
     LaunchedEffect(Unit) {
-        if (activityState is UserActivityViewModel.ActivityState.Idle) {
-            onLoadFirstPage()
+        if (source.state is UserActivityViewModel.ActivityState.Idle) {
+            source.onLoadFirstPage()
         }
     }
 
@@ -117,34 +148,12 @@ fun ProfileActivityTab(
         }
     }
     LaunchedEffect(shouldPage) {
-        if (shouldPage) onLoadNextPage()
+        if (shouldPage) source.onLoadNextPage()
     }
 
     // A failed refresh over existing rows is kept apart from the feed's paging
     // error: the retry below re-reads page one, where the footer's retry appends.
-    val refreshError = (activityState as? UserActivityViewModel.ActivityState.Success)?.refreshError
-
-    // The relative times are recomputed once a minute while this tab is composed.
-    //
-    // They used to be evaluated when the card was first composed and then frozen,
-    // so a feed left open went on saying "just now" an hour later - and a history
-    // whose whole point is *when* things happened was quietly wrong. One ticker for
-    // the tab, not one per card: a minute is the smallest unit the label prints, so
-    // anything faster would recompose for nothing. It is gated on
-    // `rememberIsResumed`, the same helper the toast and the orb use, so it is
-    // cancelled while the app is behind another one.
-    val nowEpochSecond = remember { mutableLongStateOf(Instant.now().epochSecond) }
-    val isResumed = rememberIsResumed()
-    LaunchedEffect(isResumed) {
-        if (!isResumed) return@LaunchedEffect
-        // The clock may have gone stale while the app was paused, so the first
-        // write happens on resume rather than a minute after it.
-        nowEpochSecond.longValue = Instant.now().epochSecond
-        while (true) {
-            delay(60_000)
-            nowEpochSecond.longValue = Instant.now().epochSecond
-        }
-    }
+    val refreshError = (source.state as? UserActivityViewModel.ActivityState.Success)?.refreshError
 
     LazyColumn(
         modifier = modifier
@@ -155,7 +164,7 @@ fun ProfileActivityTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         state = listState
     ) {
-        if (calendar != null && calendar.columns.isNotEmpty()) {
+        if (source.calendar != null && source.calendar.columns.isNotEmpty()) {
             item(key = "activity_calendar_section") {
                 Column(
                     modifier = Modifier
@@ -166,10 +175,10 @@ fun ProfileActivityTab(
                     ProfileSectionHeader(
                         title = "Activity History",
                         icon = AppVectorIcons.Calendar,
-                        trailing = "${calendar.totalChanges} changes"
+                        trailing = "${source.calendar.totalChanges} changes"
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    ActivityCalendarCard(calendar = calendar)
+                    ActivityCalendarCard(calendar = source.calendar)
                 }
             }
         }
@@ -178,14 +187,14 @@ fun ProfileActivityTab(
             // The count mirrors the calendar's "N changes" line above it, so the
             // two sections of the tab read as the same kind of heading rather
             // than one labelled and one bare.
-            val loadedCount = (activityState as? UserActivityViewModel.ActivityState.Success)
+            val loadedCount = (source.state as? UserActivityViewModel.ActivityState.Success)
                 ?.activities
                 ?.size
                 ?.takeIf { it > 0 }
                 ?.toString()
             ProfileSectionHeader(
-                title = "Recent Activity",
-                icon = AppVectorIcons.ProfileActivity,
+                title = source.title,
+                icon = source.icon,
                 trailing = loadedCount,
                 modifier = Modifier
                     .widthIn(max = ProfileMaxContentWidth)
@@ -200,87 +209,16 @@ fun ProfileActivityTab(
             item(key = "activity_refresh_error") {
                 ActivityRefreshFailure(
                     message = refreshError,
-                    onRetry = onRefresh
+                    onRetry = source.onRefresh
                 )
             }
         }
 
-        when (activityState) {
-            is UserActivityViewModel.ActivityState.Idle,
-            is UserActivityViewModel.ActivityState.Loading -> {
-                item(key = "activity_loading") {
-                    ActivityLoading()
-                }
-            }
-
-            is UserActivityViewModel.ActivityState.Error -> {
-                item(key = "activity_error") {
-                    ActivityError(
-                        message = activityState.message,
-                        onRetry = onRetry
-                    )
-                }
-            }
-
-            is UserActivityViewModel.ActivityState.Success -> {
-                if (activityState.activities.isEmpty()) {
-                    item(key = "activity_empty") {
-                        ActivityEmpty()
-                    }
-                } else {
-                    items(
-                        items = activityState.activities,
-                        key = { it.id },
-                        contentType = { "activity" }
-                    ) { activity ->
-                        ActivityCard(
-                            activity = activity,
-                            userName = userName,
-                            userAvatar = userAvatar,
-                            modifier = Modifier
-                                .widthIn(max = ProfileMaxContentWidth)
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            onLike = { onLike(activity.id) },
-                            onComments = { onOpenComments(activity.id) },
-                            onOpenLikers = { onOpenLikers(activity.id) },
-                            onOpenDetail = onOpenDetail,
-                            likePending = activity.id in activityState.pendingLikes,
-                            nowEpochSecond = nowEpochSecond.longValue
-                        )
-                    }
-
-                    if (activityState.loadMoreError != null) {
-                        // Drawn instead of the spinner, and *before* the
-                        // `hasMore` check: `hasMore` is still true after a failed
-                        // page, so a plain spinner here would sit under a feed
-                        // that has stopped growing with nothing to indicate why.
-                        //
-                        // A tap, rather than relying on the reader to scroll away
-                        // from the end and back to re-trigger `shouldPage`, which
-                        // is the only thing that used to retry a page.
-                        item(key = "activity_more_error") {
-                            ActivityPagingRetry(
-                                message = activityState.loadMoreError,
-                                onRetry = onLoadNextPage
-                            )
-                        }
-                    } else if (activityState.hasMore) {
-                        item(key = "activity_more") {
-                            ActivityPagingIndicator(loading = activityState.isLoadingMore)
-                        }
-                    } else if (activityState.activities.size >= PAGE_TRIGGER_ROWS) {
-                        // Only on a feed long enough to have been paged. Saying
-                        // "that's everything" under three rows is noise; under a
-                        // scrollback it is the difference between a feed that
-                        // ended and one that silently failed to load more.
-                        item(key = "activity_end") {
-                            ActivityFeedEnd()
-                        }
-                    }
-                }
-            }
-        }
+        activityFeedItems(
+            source = source,
+            nowEpochSecond = nowEpochSecond,
+            onOpenDetail = onOpenDetail
+        )
     }
 
     // The comment sheet is NOT rendered here, and that is deliberate.
@@ -295,6 +233,114 @@ fun ProfileActivityTab(
     // sheets on this screen had opposite lifetimes for no reason either could state.
     //
     // `UserProfileScreen` draws both, as siblings of the tab content.
+}
+
+/**
+ * The feed itself, for whichever load state it is in.
+ *
+ * Out of [ProfileActivityTab] because the tab's own work - the paging trigger,
+ * the minute ticker, the calendar header - was tangled with a state `when` that
+ * nested four more branches, so the reader of the composable could not tell the
+ * page's scaffolding from the feed's contents.
+ */
+private fun LazyListScope.activityFeedItems(
+    source: ActivityFeedSource,
+    nowEpochSecond: Long,
+    onOpenDetail: (MediaNode) -> Unit
+) {
+    when (val activityState = source.state) {
+        is UserActivityViewModel.ActivityState.Idle,
+        is UserActivityViewModel.ActivityState.Loading -> {
+            item(key = "activity_loading") {
+                ActivityLoading()
+            }
+        }
+
+        is UserActivityViewModel.ActivityState.Error -> {
+            item(key = "activity_error") {
+                ActivityError(
+                    message = activityState.message,
+                    onRetry = source.onRetry
+                )
+            }
+        }
+
+        is UserActivityViewModel.ActivityState.Success -> {
+            if (activityState.activities.isEmpty()) {
+                item(key = "activity_empty") {
+                    ActivityEmpty(message = source.emptyMessage)
+                }
+            } else {
+                items(
+                    items = activityState.activities,
+                    key = { it.id },
+                    // Two card shapes now share this list; telling LazyColumn
+                    // which is which keeps its reuse slots from mixing a poster
+                    // row with a post row's composition.
+                    contentType = { if (it.isTextPost) "post" else "list" }
+                ) { activity ->
+                    // The friends feed carries a different author on every row;
+                    // the profile feed carries one name for all of them and
+                    // passes it once, through the source. Falling back to the
+                    // row's own `user` is what lets one card serve both.
+                    val author = activity.user
+                    ActivityCard(
+                        activity = activity,
+                        userName = source.userName ?: author?.name,
+                        userAvatar = source.userAvatar
+                            ?: author?.avatar?.large
+                            ?: author?.avatar?.medium,
+                        modifier = Modifier
+                            .widthIn(max = ProfileMaxContentWidth)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        onLike = { source.onLike(activity.id) },
+                        onComments = { source.onOpenComments(activity.id) },
+                        onOpenLikers = { source.onOpenLikers(activity.id) },
+                        onOpenDetail = onOpenDetail,
+                        likePending = activity.id in activityState.pendingLikes,
+                        nowEpochSecond = nowEpochSecond,
+                        // Only a feed of other people's rows has anywhere for
+                        // the author tap to go.
+                        onOpenAuthor = if (source.onOpenAuthor != null && author != null) {
+                            { source.onOpenAuthor(author) }
+                        } else {
+                            null
+                        }
+                    )
+                }
+
+                if (activityState.loadMoreError != null) {
+                    // Drawn instead of the spinner, and *before* the `hasMore`
+                    // check: `hasMore` is still true after a failed page, so a
+                    // plain spinner here would sit under a feed that has stopped
+                    // growing with nothing to indicate why.
+                    //
+                    // A tap, rather than relying on the reader to scroll away
+                    // from the end and back to re-trigger `shouldPage`, which
+                    // is the only thing that used to retry a page.
+                    item(key = "activity_more_error") {
+                        ActivityPagingRetry(
+                            message = activityState.loadMoreError,
+                            onRetry = source.onLoadNextPage
+                        )
+                    }
+                } else if (activityState.hasMore) {
+                    item(key = "activity_more") {
+                        ActivityPagingIndicator(loading = activityState.isLoadingMore)
+                    }
+                } else if (activityState.activities.size >= PAGE_TRIGGER_ROWS) {
+                    // Only on a feed long enough to have been paged. Saying
+                    // "that's everything" under three rows is noise; under a
+                    // scrollback it is the difference between a feed that
+                    // ended and one that silently failed to load more.
+                    item(key = "activity_end") {
+                        ActivityFeedEnd()
+                    }
+                }
+            }
+        }
+    }
 }
 
 private const val PAGE_TRIGGER_ROWS = 6
@@ -346,7 +392,7 @@ private fun ActivityError(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun ActivityEmpty() {
+private fun ActivityEmpty(message: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -367,7 +413,7 @@ private fun ActivityEmpty() {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "No list activity to show",
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center

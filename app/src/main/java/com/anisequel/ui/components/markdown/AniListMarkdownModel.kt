@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.markdown
 
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCoverKey
 import java.util.Locale
 
@@ -99,11 +100,40 @@ internal fun mediaCoverKeysIn(markdown: String): List<MediaCoverKey> =
  * Distinct and in document order, so a bio that links the same anime twice asks
  * for it once.
  */
-internal fun mediaCoverKeysIn(nodes: List<MarkdownNode>): List<MediaCoverKey> {
-    val keys = LinkedHashSet<MediaCoverKey>()
+internal fun mediaCoverKeysIn(nodes: List<MarkdownNode>): List<MediaCoverKey> =
+    previewKeysIn(nodes) { it.mediaCoverKeyOrNull() }
+
+/**
+ * The characters, staff and studios in a parsed document.
+ *
+ * The other half of the same preview cards: a media link is looked up for a
+ * poster and a title, an entity link for a name and a portrait. Both come from
+ * the same walk and the same batching idea, which is why the two collectors sit
+ * beside each other - a host that renders one without the other used to get a
+ * character card headed `Character #127222` next to correctly labelled titles.
+ *
+ * Distinct and in document order, so a bio that names the same character twice
+ * asks once. Media, user and slug links are not here; see
+ * [MarkdownNode.AniListPreviewBlock.entityPreviewKeyOrNull] for why.
+ */
+internal fun entityPreviewKeysIn(nodes: List<MarkdownNode>): List<EntityPreviewKey> =
+    previewKeysIn(nodes) { it.entityPreviewKeyOrNull() }
+
+/**
+ * [keyOf] applied to every preview block in the document, deduplicated in order.
+ *
+ * One walk shared by both collectors, so "where can a preview block be" is
+ * answered once. A second copy is how the two would drift the day a node type
+ * gains a `children` field.
+ */
+private fun <K> previewKeysIn(
+    nodes: List<MarkdownNode>,
+    keyOf: (MarkdownNode.AniListPreviewBlock) -> K?
+): List<K> {
+    val keys = LinkedHashSet<K>()
     fun walk(node: MarkdownNode) {
         when (node) {
-            is MarkdownNode.AniListPreviewBlock -> node.mediaCoverKeyOrNull()?.let(keys::add)
+            is MarkdownNode.AniListPreviewBlock -> keyOf(node)?.let(keys::add)
             // Only these two nest. Walking into every other node type would be
             // dead code today and a source of surprises the day another gains a
             // `children` field.
@@ -223,6 +253,31 @@ internal fun MarkdownNode.AniListPreviewBlock.mediaCoverKeyOrNull(): MediaCoverK
     if (type != "anime" && type != "manga") return null
     val mediaId = id.toIntOrNull()?.takeIf { it > 0 } ?: return null
     return MediaCoverKey(type = type.uppercase(Locale.ROOT), id = mediaId)
+}
+
+/**
+ * This link's entity key, or null when it names something a batch cannot resolve.
+ *
+ * ## Why users are excluded
+ *
+ * A `/user/<name>` link carries a username rather than a numeric id, and there is
+ * no batched name-and-avatar lookup for it that is worth a request; those cards
+ * keep the label the author wrote and the profile icon. Sending a username to
+ * `id_in: [Int]` would be a syntax-level failure for the whole document.
+ *
+ * ## Why a slug is excluded
+ *
+ * The link pattern accepts `anilist.co/studio/mappa` as well as
+ * `anilist.co/studio/43`, but only the numeric form is an id. Asking for 0 - the
+ * number a careless `toIntOrNull()` fallback would produce - is a confident wrong
+ * portrait on the card, so a non-numeric id simply gets no lookup. The card still
+ * draws, with the name parsed out of the slug.
+ */
+internal fun MarkdownNode.AniListPreviewBlock.entityPreviewKeyOrNull(): EntityPreviewKey? {
+    val entityType = type.uppercase(Locale.ROOT)
+    if (entityType !in EntityPreviewKey.SUPPORTED_TYPES) return null
+    val entityId = id.toIntOrNull()?.takeIf { it > 0 } ?: return null
+    return EntityPreviewKey(type = entityType, id = entityId)
 }
 
 data class CheckListItem(

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
@@ -64,7 +64,20 @@ class UserActivityViewModel(
      * can only fail.
      */
     private val viewerId: Int? = null,
-    private val isDemo: Boolean = false
+    private val isDemo: Boolean = false,
+    /**
+     * True for the friends feed: everyone the viewer follows, not one person.
+     *
+     * A flag rather than a second ViewModel because every other part of this
+     * class - paging, refresh-over-rows, optimistic likes, the comment thread,
+     * the likers sheet - is identical and has been debugged once. The only
+     * differences are whose feed the repository is asked for and that there is
+     * no id to require; both are decided in [fetch].
+     *
+     * The author of each row comes from the row itself in this mode
+     * (`ProfileActivity.user`), because every card is a different person.
+     */
+    private val followingOnly: Boolean = false
 ) : ViewModel() {
 
     sealed interface ActivityState {
@@ -72,7 +85,7 @@ class UserActivityViewModel(
         data object Idle : ActivityState
         data class Loading(val message: String = "Loading recent activity...") : ActivityState
         data class Success(
-            val activities: List<ListActivity>,
+            val activities: List<ProfileActivity>,
             val isLoadingMore: Boolean = false,
             /**
              * Whether AniList said there is another page.
@@ -240,7 +253,6 @@ class UserActivityViewModel(
     private fun onListsChanged() {
         if (!started || isDemo) return
         if (userId == null || userId != viewerId) return
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
@@ -285,12 +297,11 @@ class UserActivityViewModel(
      */
     fun loadFirstPage(forceRefresh: Boolean = false) {
         if (started && !forceRefresh) return
-        if (userId == null && !isDemo) {
+        if (userId == null && !isDemo && !followingOnly) {
             _state.value = ActivityState.Loading("Loading recent activity...")
             return
         }
         started = true
-        nextPage = 1
         fetch(forceRefresh)
     }
 
@@ -318,7 +329,6 @@ class UserActivityViewModel(
             loadFirstPage()
             return
         }
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
@@ -339,13 +349,12 @@ class UserActivityViewModel(
 
     fun retry() {
         started = false
-        nextPage = 1
         fetch(forceRefresh = true)
     }
 
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {
         val currentId = userId
-        if (currentId == null && !isDemo) {
+        if (currentId == null && !isDemo && !followingOnly) {
             _state.value = ActivityState.Error(
                 "AniList does not serve activity by name, and this profile was opened without an id."
             )
@@ -375,9 +384,21 @@ class UserActivityViewModel(
                 _state.value = ActivityState.Loading()
             }
 
-            val page = nextPage
-            val result = if (isDemo) {
-                Result.success(
+            // A refresh or retry is always page one; an append continues from the
+            // cursor. The cursor is *not* reset by the callers any more: a refresh
+            // that failed over existing rows used to rewind it to one while the
+            // rows from pages two and three stayed on screen, so the next scroll
+            // appended page one again. Only a successful page moves it (below),
+            // which makes a redundant fetch impossible rather than merely deduped.
+            val page = if (appending) nextPage else 1
+            val result = when {
+                isDemo && followingOnly -> Result.success(
+                    UserActivityPage(
+                        activities = aniListRepository.getDemoFollowingActivity(),
+                        hasMore = false
+                    )
+                )
+                isDemo -> Result.success(
                     UserActivityPage(
                         activities = aniListRepository.getDemoUserActivity(),
                         // The fixture is the whole feed. Claiming another page
@@ -385,8 +406,10 @@ class UserActivityViewModel(
                         hasMore = false
                     )
                 )
-            } else {
-                repositoryResult {
+                followingOnly -> repositoryResult {
+                    aniListRepository.getFollowingActivity(page, forceRefresh)
+                }
+                else -> repositoryResult {
                     aniListRepository.getUserActivity(currentId!!, page, forceRefresh)
                 }
             }
@@ -565,7 +588,7 @@ class UserActivityViewModel(
 
     /** Rewrites the one activity in the loaded page, and its in-flight marker. */
     private fun replaceActivity(
-        activity: ListActivity,
+        activity: ProfileActivity,
         addPending: Int? = null,
         removePending: Int? = null
     ) {
@@ -605,14 +628,16 @@ class UserActivityViewModel(
         private val aniListRepository: AniListRepository,
         private val userId: Int? = null,
         private val viewerId: Int? = null,
-        private val isDemo: Boolean = false
+        private val isDemo: Boolean = false,
+        private val followingOnly: Boolean = false
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserActivityViewModel(
             aniListRepository = aniListRepository,
             userId = userId,
             viewerId = viewerId,
-            isDemo = isDemo
+            isDemo = isDemo,
+            followingOnly = followingOnly
         ) as T
     }
 }

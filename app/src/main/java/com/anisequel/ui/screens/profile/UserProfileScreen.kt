@@ -1,13 +1,8 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -25,8 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,8 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.MediaCover
-import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
@@ -71,14 +62,12 @@ import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.viewmodel.toMediaNode
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
-import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.navigation.MainBarClearance
 import com.anisequel.ui.viewmodel.UserActivityViewModel
+import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import com.anisequel.ui.viewmodel.UserSocialViewModel
@@ -121,20 +110,6 @@ internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues())
     )
 }
 
-/**
- * The four destinations, declared once so the bar and the `when` cannot disagree.
- *
- * The Library used to sit fourth, between Stats and Social. It left for the app's
- * main bar: a person's own list is a top-level page now, not a tab of a profile
- * that could belong to anybody. The remaining four keep their order.
- */
-private val ProfileTabs = listOf(
-    NavigationDestination("Home", AppVectorIcons.ProfileHome, "profile_tab_home"),
-    NavigationDestination("Activity", AppVectorIcons.ProfileActivity, "profile_tab_activity"),
-    NavigationDestination("Stats", AppVectorIcons.ProfileStats, "profile_tab_stats"),
-    NavigationDestination("Social", AppVectorIcons.ProfileSocial, "profile_tab_social")
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileScreen(
@@ -170,8 +145,28 @@ fun UserProfileScreen(
      * tab the first was left on.
      */
     viewModelKey: String = "",
+    /**
+     * The name this profile was opened with, when the route carried one.
+     *
+     * Only a label for the first frames: the bar prints it before the overview
+     * answers, and the overview's own name replaces it. It used to have no source at
+     * all on the by-id route, so tapping a face in the Social grid opened a page
+     * titled "Profile" - the name was in the row that was just tapped and never
+     * travelled with the tap.
+     */
+    titleHint: String? = null,
     overviewViewModel: UserOverviewViewModel,
     activityViewModel: UserActivityViewModel,
+    /**
+     * The viewer's friends feed, shown as the Activity tab's second segment.
+     *
+     * A `UserActivityViewModel` in `followingOnly` mode rather than a class of
+     * its own: it is the same feed - paging, refresh, likes, comments - with the
+     * rows coming from everyone the viewer follows instead of one person.
+     */
+    followingViewModel: UserActivityViewModel,
+    /** The viewer's sent and received messages, shown as the third segment. */
+    messagesViewModel: UserMessagesViewModel,
     socialViewModel: UserSocialViewModel,
     onOpenUser: (FollowUser) -> Unit,
     onNavigateBack: () -> Unit,
@@ -248,7 +243,10 @@ fun UserProfileScreen(
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
 
-    val activityState by activityViewModel.state.collectAsStateWithLifecycle()
+    // The activity feed's state is deliberately *not* collected here. It is read
+    // by `ProfileActivityPage`, which is composed only while the Activity tab is
+    // open; reading it here made every page of the feed - and every like - redraw
+    // the top bar, the tab capsule and the whole Home tab behind them.
     val socialState by socialViewModel.state.collectAsStateWithLifecycle()
     // Covers for the bio's AniList links. Arrive after the profile does, so the
     // bio renders immediately and posters fill in underneath the reader.
@@ -310,6 +308,12 @@ fun UserProfileScreen(
                             targetState = (uiState as? UserOverviewUiState.Success)
                                 ?.username
                                 ?.let { "@$it" }
+                                // The name the route came with, before the overview
+                                // answers. Falling back to "Profile" here was the
+                                // whole of the by-id route's load: a follower's
+                                // profile titled "Profile" for a round trip, with the
+                                // name one tap away in the grid behind it.
+                                ?: titleHint?.let { "@$it" }
                                 ?: "Profile",
                             transitionSpec = {
                                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
@@ -383,6 +387,12 @@ fun UserProfileScreen(
                             onClick = {
                                 overviewViewModel.refresh()
                                 activityViewModel.refreshIfStarted()
+                                // The two viewer feeds refresh only if their
+                                // segment has been opened: a page-level refresh
+                                // must not spend requests on an inbox nobody has
+                                // looked at.
+                                followingViewModel.refreshIfStarted()
+                                messagesViewModel.refreshIfStarted()
                             },
                             modifier = Modifier
                                 .testTag("profile_refresh_button")
@@ -468,6 +478,13 @@ fun UserProfileScreen(
                             if (state.userId > 0) {
                                 activityViewModel.updateUserId(state.userId)
                                 socialViewModel.updateUserId(state.userId)
+                                // And this screen's own ViewModel, which needs it for
+                                // one half only: `getUserMangaList` is addressable by
+                                // id, so a profile opened *by name* could otherwise
+                                // never read its manga - the id had arrived with this
+                                // very state and been thrown away. See
+                                // `UserOverviewViewModel.updateUserId`.
+                                overviewViewModel.updateUserId(state.userId)
                             }
                         }
                         // The flag the tabs' list padding reads. Provided here rather
@@ -478,8 +495,14 @@ fun UserProfileScreen(
                                 state = state,
                                 selectedTab = selectedTab,
                                 onSelectTab = { selectedTab = it },
-                                activityState = activityState,
+                                overviewViewModel = overviewViewModel,
+                                isOwnProfile = isOwnProfile,
                                 activityViewModel = activityViewModel,
+                                followingViewModel = followingViewModel,
+                                messagesViewModel = messagesViewModel,
+                                // The viewer's id, which decides whether the two
+                                // viewer-only segments can be offered at all.
+                                viewerId = viewerId,
                                 socialState = socialState,
                                 socialViewModel = socialViewModel,
                                 mediaCovers = mediaCovers,
@@ -565,246 +588,22 @@ fun UserProfileScreen(
     ActivityEngagementSheets(
         activityViewModel = activityViewModel,
         viewerId = viewerId,
-        // A comment is a write, and a demo profile has no session to write with.
-        // Same gate as the like: see [UserActivityViewModel.postComment].
-        canPost = (uiState as? UserOverviewUiState.Success)?.isDemoMode != true
+        // A comment is a write, and only a signed-in reader can write one. This
+        // used to test `isDemoMode` alone, so a signed-out visitor on a public
+        // profile (which is not the demo) was shown a composer whose every
+        // submission could only fail with an auth error. The demo is covered too:
+        // it has no viewer id.
+        canPost = viewerId != null
     )
-}
 
-/**
- * The activity feed's two engagement sheets, and only they.
- *
- * It exists to give the sheet states a composition boundary. `comments` and
- * `likers` are read here rather than in [UserProfileScreen], so a reply like, a
- * page of likers or a post settling recomposes this and not the profile's feed - a
- * feed that is a paged `LazyColumn` of blurred covers and is the most expensive
- * thing on the screen.
- *
- * The sheets themselves are siblings of the tab content, not children of a tab: a
- * `ModalBottomSheet` is a window of its own, so one drawn from inside the tab
- * `AnimatedContent` disposes is torn down with the tab - mid-sentence, draft
- * included.
- */
-@Composable
-private fun ActivityEngagementSheets(
-    activityViewModel: UserActivityViewModel,
-    viewerId: Int?,
-    canPost: Boolean
-) {
-    val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
-    commentsState?.let { comments ->
-        ActivityCommentsSheet(
-            state = comments,
-            canPost = canPost,
-            viewerId = viewerId,
-            onDismiss = { activityViewModel.closeComments() },
-            onRetry = { activityViewModel.openComments(comments.activityId) },
-            onPost = { activityViewModel.postComment(it) },
-            onLikeReply = { activityViewModel.toggleReplyLike(it) },
-            onOpenReplyActions = { activityViewModel.openReplyActions(it) },
-            onReplyActionMode = { activityViewModel.setReplyActionMode(it) },
-            onReplyActionDraft = { activityViewModel.updateReplyActionDraft(it) },
-            onSubmitReplyEdit = { activityViewModel.submitReplyEdit() },
-            onSubmitReplyDelete = { activityViewModel.submitReplyDelete() },
-            onDismissReplyAction = { activityViewModel.dismissReplyAction() }
-        )
-    }
-
-    val likersState by activityViewModel.likers.collectAsStateWithLifecycle()
-    likersState?.let { likers ->
-        ActivityLikersSheet(
-            state = likers,
-            onDismiss = { activityViewModel.dismissLikers() },
-            onRetry = { activityViewModel.openLikers(likers.activityId) }
-        )
-    }
-}
-
-@Composable
-private fun ProfileTabsContent(
-    state: UserOverviewUiState.Success,
-    selectedTab: Int,
-    /**
-     * The capsule's tap, owned by the screen above.
-     *
-     * [ProfileTabsContent] draws the capsule but does not keep the selection: the
-     * saved tab belongs to the screen, which is also what the widget's requested
-     * tab is resolved against.
-     */
-    onSelectTab: (Int) -> Unit,
-    activityState: UserActivityViewModel.ActivityState,
-    activityViewModel: UserActivityViewModel,
-    socialState: UserSocialViewModel.SocialState,
-    socialViewModel: UserSocialViewModel,
-    /** Media key to cover, for the AniList preview cards in the bio. */
-    mediaCovers: Map<MediaCoverKey, MediaCover>,
-    onOpenUser: (FollowUser) -> Unit,
-    onOpenDetail: (MediaNode) -> Unit,
-    /** Forwarded to the Home tab's pinned-studio chips. */
-    onOpenStudio: (Int, String?) -> Unit,
-    /** Forwarded to the Home tab's pinned characters; null opens the AniList page. */
-    onOpenCharacter: ((Int) -> Unit)? = null,
-    /** The same, for the pinned staff row. */
-    onOpenStaff: ((Int) -> Unit)? = null
-) {
-    // Hoisted above [AnimatedContent] so each tab keeps its own scroll position.
-    //
-    // `AnimatedContent` composes the incoming tab alongside the outgoing one and
-    // then *disposes* the outgoing one when its transition finishes. Anything
-    // remembered inside a tab therefore dies with it, and a tab remembered its
-    // `LazyListState` there: switching to Stats and back dropped the reader at
-    // the top of a feed they had scrolled a long way down, every time, with no
-    // indication that anything had happened. Hoisting makes the states outlive
-    // the transition, so returning to a tab restores exactly where it was.
-    val homeListState = rememberLazyListState()
-    val activityListState = rememberLazyListState()
-    val statsListState = rememberLazyListState()
-    val socialGridState = rememberLazyGridState()
-
-    // Which group of Stats charts is open, held here for the same reason the scroll
-    // states are: the tab is disposed on every switch away, so a choice made inside
-    // it dies with the transition. It lives in this composable rather than in the
-    // screen's own state because nothing outside the Stats tab reads it, and
-    // `rememberSaveable` is what keeps it across a rotation - a reader who opened
-    // Tags on a tablet and turned it should not be handed Overview back.
-    var statsSection by rememberSaveable { mutableStateOf(StatsSection.OVERVIEW) }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // The tab capsule, at the top of the page.
-        //
-        // It used to be pinned to the bottom edge, and that edge now belongs to the
-        // app's main bar, which is drawn by the host over this screen: a profile row
-        // on the same edge would be two bars stacked at one edge, and the selected
-        // tab of one would read as the selected page of the other. The profile's
-        // own pages are still a page-level switch, so they keep the capsule -
-        // directly under the top bar, above the content it switches.
-        ExpressiveNavigationBar(
-            destinations = ProfileTabs,
-            selectedIndex = selectedTab,
-            onSelect = onSelectTab
-        )
-
-        // The refresh spinner is ~32dp of height that the tab below has to make room
-        // for, and it used to appear and vanish with a bare `if`: a silent background
-        // refresh therefore snapped every tab up and down by that height twice per
-        // round trip. `expandVertically`/`shrinkVertically` grow and give back the bar's
-        // own measured height on the spatial spring, so the content beneath it travels
-        // rather than jumping, and the spinner fades in alongside it rather than
-        // popping into existence.
-        // `FastSpatialSize`, not the `Int` token: `expandVertically` is typed on
-        // `FiniteAnimationSpec<IntSize>` (it animates a measured height, not a
-        // count), and the two are not interchangeable - the compiler rejects the
-        // `Int` one outright.
-        AnimatedVisibility(
-            visible = state.isRefreshing,
-            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
-            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
-        ) {
-            ProfileRefreshBar()
-        }
-
-        AnimatedContent(
-            targetState = selectedTab,
-            transitionSpec = {
-                val forward = targetState > initialState
-                // The trailing `using null` drops the default `SizeTransform`. Every
-                // tab here is a `LazyColumn`, and the default transform springs the
-                // container's height between the outgoing and incoming page - which
-                // re-measures both lists on every frame of the switch, under a reader
-                // who may already be scrolling the one that is arriving. Settings and
-                // the detail sheet carry the same note: the height snaps, while the
-                // slide and the fade are draw-phase and stay.
-                //
-                // `FastSpatialOffset`, not `DefaultSpatialOffset`: the tab capsule is
-                // a control the reader can tap faster than a page settles, and the
-                // main bar's own pages use the fast token for exactly that reason. On
-                // the calm spring a second tap lands while the first slide is still
-                // travelling, and the two half-finished pages read as a stutter.
-                (
-                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) + slideInHorizontally(
-                        animationSpec = ExpressiveMotion.FastSpatialOffset,
-                        initialOffsetX = { fullWidth -> if (forward) fullWidth / 8 else -fullWidth / 8 }
-                    )
-                ) togetherWith (
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) + slideOutHorizontally(
-                        animationSpec = ExpressiveMotion.FastSpatialOffset,
-                        targetOffsetX = { fullWidth -> if (forward) -fullWidth / 8 else fullWidth / 8 }
-                    )
-                ) using null
-            },
-            label = "profile_tab_transition",
-            modifier = Modifier.fillMaxSize()
-        ) { tabIndex ->
-            val padding = PaddingValues(top = 0.dp)
-            when (tabIndex) {
-                1 -> ProfileActivityTab(
-                    activityState = activityState,
-                    onLoadFirstPage = { activityViewModel.loadFirstPage() },
-                    onLoadNextPage = { activityViewModel.loadNextPage() },
-                    onRetry = { activityViewModel.retry() },
-                    onRefresh = { activityViewModel.refresh() },
-                    contentPadding = padding,
-                    listState = activityListState,
-                    calendar = state.activity,
-                    userName = state.username,
-                    userAvatar = state.avatarUrl,
-                    onLike = { activityViewModel.toggleLike(it) },
-                    onOpenComments = { activityViewModel.openComments(it) },
-                    onOpenLikers = { activityViewModel.openLikers(it) },
-                    onOpenDetail = onOpenDetail
-                )
-
-                2 -> ProfileStatsTab(
-                    state = state,
-                    contentPadding = padding,
-                    section = statsSection,
-                    onSelectSection = { statsSection = it },
-                    listState = statsListState
-                )
-
-                3 -> ProfileSocialTab(
-                    socialState = socialState,
-                    onSelectList = { list ->
-                        socialViewModel.select(list)
-                    },
-                    onLoad = { list ->
-                        socialViewModel.load(list)
-                    },
-                    onOpenUser = onOpenUser,
-                    contentPadding = padding,
-                    gridState = socialGridState
-                )
-
-                else -> ProfileHomeTab(
-                    state = state,
-                    contentPadding = padding,
-                    onOpenDetail = onOpenDetail,
-                    onOpenStudio = onOpenStudio,
-                    onOpenCharacter = onOpenCharacter,
-                    onOpenStaff = onOpenStaff,
-                    listState = homeListState,
-                    mediaCovers = mediaCovers
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileRefreshBar() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("profile_refreshing"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(6.dp))
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(20.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-    }
+    // The friends feed's own sheets, from its own ViewModel. They exist as a
+    // second call rather than a shared one because the two feeds page and fail
+    // independently and each ViewModel owns one open thread - sharing the sheet
+    // state would have the profile feed's comment thread open over a card in the
+    // friends feed.
+    ActivityEngagementSheets(
+        activityViewModel = followingViewModel,
+        viewerId = viewerId,
+        canPost = viewerId != null
+    )
 }

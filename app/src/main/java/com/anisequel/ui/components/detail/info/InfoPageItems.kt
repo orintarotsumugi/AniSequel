@@ -226,6 +226,11 @@ internal fun LazyListScope.infoPageItems(
  *
  * [visible] skips the item entirely rather than drawing nothing, for the reason
  * [infoPageItems] gives: an empty slot is still a gap.
+ *
+ * `contentType` is what lets the list recycle a slot after a fast fling instead
+ * of disposing it: every card shares the same shell (the same `InfoCard` and the
+ * same inset), so a scrolled-away card and an arriving one are the same kind of
+ * slot to reuse.
  */
 private fun LazyListScope.cardItem(
     key: String,
@@ -234,14 +239,15 @@ private fun LazyListScope.cardItem(
     content: @Composable (Modifier) -> Unit
 ) {
     if (!visible) return
-    item(key = key) { content(Modifier.infoSection(index)) }
+    item(key = key, contentType = "info_card") { content(Modifier.infoSection(index)) }
 }
 
 /**
  * A section that is a **row**: artwork that bleeds to the screen edge, so it must
  * not take the page's inset on top of the one it draws itself. It still joins the
  * entrance stagger through `sectionReveal`, which is the same modifier
- * [cardItem] applies - only the inset differs.
+ * [cardItem] applies - only the inset differs. `contentType` groups the three
+ * artwork rows for the same reuse reason [cardItem] documents.
  *
  * The heading and content padding belong to the row (see `InfoTalent.kt` and
  * `InfoThemeSongsSection.kt`); this function is only where that split is decided.
@@ -253,7 +259,7 @@ private fun LazyListScope.rowItem(
     content: @Composable (Modifier) -> Unit
 ) {
     if (!visible) return
-    item(key = key) { content(Modifier.sectionReveal(index)) }
+    item(key = key, contentType = "info_row") { content(Modifier.sectionReveal(index)) }
 }
 
 /**

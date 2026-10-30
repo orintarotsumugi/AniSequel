@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.domain.usecase.profileIdentityFromRoute
 import com.anisequel.ui.viewmodel.MediaDetailHost
 
 /**
@@ -105,15 +106,24 @@ fun NavGraphBuilder.profileDestinations(
         route = ProfileRoutes.BY_ID,
         arguments = ProfileIdArguments
     ) { backStackEntry ->
-        val userId = backStackEntry.arguments?.getInt("userId") ?: 0
+        // Read as an identity rather than as two loose arguments, because the two
+        // failure modes are different: a name with no id is a profile that can be
+        // fetched (by name), and an id that is missing or `0` is nobody at all. The
+        // route used to say `getInt("userId") ?: 0`, which made that second case a
+        // live request for AniList user 0 - a real account, with a real bio, that
+        // nobody asked to see.
+        val identity = profileIdentityFromRoute(
+            rawUserId = backStackEntry.arguments?.getInt("userId"),
+            rawUsername = backStackEntry.arguments?.getString(ProfileRoutes.ID_NAME_ARG)
+        )
         ProfileDestination(
             repository = aniListRepository,
             detailHost = detailHost,
-            // The name is only a label at this point; the query is by id. The
-            // follower row carries both, so an empty name would be a bug in
-            // the caller rather than a real case, and it still fetches.
-            username = "",
-            userId = userId,
+            // The tapped follower's own name, which the row carries. It is what the
+            // bar prints on the first frame and what the ViewModel key is built
+            // from; the query itself still goes by id, which is the cheap half.
+            username = identity.username.orEmpty(),
+            userId = identity.userId,
             // See the by-name route: the reader and the profile being read
             // are two different accounts here.
             viewerId = signedInViewer?.id,

@@ -213,6 +213,64 @@ class AnimeThemeSurfaceTest {
         }
     }
 
+    /**
+     * The colour drawn *for* a seed is the colour the seed produces.
+     *
+     * A seed is a pixel and pixels come in any tone: a night sky scores near-black,
+     * a snow field near-white. Anything that shows the cover's colour as a swatch
+     * - the Settings chip, the hero's placeholder and shadow - used to draw that raw
+     * value, so the "Now matching this anime" chip was a black box in a dark app and
+     * the hero flashed white behind a pale poster for the frames before it loaded.
+     * They ask for the tone the scheme itself uses for `primary`, so this pins the
+     * two to the same number.
+     */
+    @Test
+    fun `the colour drawn for a seed is the accent the scheme uses`() {
+        val extremes = listOf(
+            "a night-sky cover" to Color(0xFF0A0F1E),
+            "a snow field" to Color(0xFFF2F6FB),
+            "a pure black bar" to Color(0xFF000000)
+        )
+
+        (seeds + extremes).forEach { (name, seed) ->
+            val darkAccent = DynamicThemeBuilder.createDynamicSchemes(seed, tintSurfaces = true).second.primary
+            assertEquals(
+                "$name: the swatch and the scheme disagreed, so the colour the reader " +
+                    "was shown was not the colour the app was drawn with",
+                darkAccent,
+                DynamicThemeBuilder.accentColor(seed, dark = true)
+            )
+
+            val lightAccent = DynamicThemeBuilder.createDynamicSchemes(seed, tintSurfaces = true).first.primary
+            assertEquals(
+                "$name: the light scheme's primary is the light chip",
+                lightAccent,
+                DynamicThemeBuilder.accentColor(seed, dark = false)
+            )
+        }
+    }
+
+    /**
+     * A normalised accent is legible against the surface it sits on.
+     *
+     * The point of taking tone 80 rather than the pixel is that the tone ladder is
+     * what carries the contrast, so an extreme seed cannot produce a swatch that
+     * disappears into the sheet.
+     */
+    @Test
+    fun `the drawn accent stays readable on its own surface`() {
+        listOf(Color(0xFF0A0F1E), Color(0xFFF2F6FB), Color(0xFF000000), Color(0xFFFFFFFF)).forEach { seed ->
+            val scheme = DynamicThemeBuilder.createDynamicSchemes(seed, tintSurfaces = true).second
+            val accent = DynamicThemeBuilder.accentColor(seed, dark = true)
+
+            assertTrue(
+                "the accent is text-sized furniture on a $seed cover: contrast " +
+                    "${ColorUtils.calculateContrast(accent.toArgb(), scheme.surface.toArgb())}",
+                ColorUtils.calculateContrast(accent.toArgb(), scheme.surface.toArgb()) >= 4.5
+            )
+        }
+    }
+
     private fun angularDistance(a: Double, b: Double): Double {
         val raw = kotlin.math.abs(a - b) % 360.0
         return if (raw > 180.0) 360.0 - raw else raw

@@ -393,11 +393,20 @@ internal fun tierDragScrollStrength(
     pointerY: Float,
     viewportTop: Float,
     viewportBottom: Float,
-    edge: Float
+    edge: Float,
+    /**
+     * Where the board stops being visible - above the unranked tray, when it is
+     * out. The band hugs this line instead of the viewport's own bottom, and a
+     * finger over the tray scrolls nothing: those rows are already behind chrome,
+     * and carrying a poster over the shelf is the gesture for leaving it there.
+     */
+    bottomLimit: Float = viewportBottom
 ): Float {
     if (edge <= 0f || viewportBottom <= viewportTop) return 0f
+    val bottom = bottomLimit.coerceAtMost(viewportBottom)
+    if (bottom < viewportBottom && pointerY > bottom) return 0f
     val fromTop = pointerY - viewportTop
-    val fromBottom = viewportBottom - pointerY
+    val fromBottom = bottom - pointerY
     return when {
         fromTop < edge -> -((edge - fromTop) / edge).coerceIn(0f, 1f)
         fromBottom < edge -> ((edge - fromBottom) / edge).coerceIn(0f, 1f)
@@ -444,6 +453,22 @@ internal class TierBoardViewport {
     var boardWidth by mutableFloatStateOf(0f)
 
     /**
+     * Window-space height of the strip along the bottom of the viewport that
+     * floating chrome covers - the unranked tray while it is on screen.
+     *
+     * The board scrolls *behind* the tray, so rows in this strip are drawn but
+     * cannot be seen. A release over them used to be resolved like any other
+     * drop: the title vanished into a tier hidden under the shelf, or - for a
+     * tray poster put back where it came from - looked like nothing happened
+     * because the tile was filed into a row nobody could see. Both drop paths
+     * and the bottom auto-scroll band stop at this line instead.
+     */
+    var bottomOcclusionPx by mutableFloatStateOf(0f)
+
+    /** Window-space bottom of the part of the board a drop can honestly name. */
+    val visibleBottom: Float get() = viewportBottom - bottomOcclusionPx
+
+    /**
      * Answers "what would a release at this *window* position file into?".
      *
      * Published by the board rather than recomputed by the tray because the board
@@ -464,11 +489,23 @@ internal class TierBoardViewport {
     val viewportBottom: Float get() = viewportTop + viewportHeight
 }
 
-/** The hint pill's text for the row under the finger, or null when nothing is picked up. */
-internal fun tierDragHint(tiers: List<TierDefinition>, tierId: String?): String =
-    if (tierId == null) {
-        "Release here to take it out of the list"
-    } else {
+/**
+ * The hint pill's text for the row under the finger, or null when nothing is picked up.
+ *
+ * [fromTray] picks the wording of the no-row case only: a board poster released
+ * off every row is being taken out of the list, while a tray poster released off
+ * every row is already out and is simply staying where it came from. One string
+ * for both told a tray drag it was about to change the ranking when it was not.
+ */
+internal fun tierDragHint(
+    tiers: List<TierDefinition>,
+    tierId: String?,
+    fromTray: Boolean = false
+): String = when {
+    tierId != null -> {
         val label = tiers.firstOrNull { it.id == tierId }?.label ?: tierId
         "Release to file under $label"
     }
+    fromTray -> "Release to leave it in the pool"
+    else -> "Release here to take it out of the list"
+}

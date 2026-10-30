@@ -1,5 +1,7 @@
 package com.anisequel.domain.tier
 
+import com.anisequel.domain.list.ListStatuses
+
 /**
  * Which half of an AniList account a tier list ranks.
  *
@@ -71,23 +73,27 @@ enum class TierMediaType(
         get() = if (this == MANGA) "Publishing" else "Airing"
 }
 
-private val ANIME_LIST_STATUSES: List<TierStatusOption> = listOf(
-    TierStatusOption("CURRENT", "Watching"),
-    TierStatusOption("REPEATING", "Rewatching"),
-    TierStatusOption("COMPLETED", "Completed"),
-    TierStatusOption("PAUSED", "Paused"),
-    TierStatusOption("DROPPED", "Dropped"),
-    TierStatusOption("PLANNING", "Planning")
-)
+/**
+ * The list-status filter options, in the order the board's sheet groups them:
+ * what is in progress, what ended, and what has not started.
+ *
+ * The labels come from [com.anisequel.domain.list.ListStatuses] rather than a copy
+ * kept here, so a filter chip and the entry editor cannot end up naming the same
+ * status two different things.
+ */
+private fun tierListStatuses(isManga: Boolean): List<TierStatusOption> =
+    listOf(
+        ListStatuses.CURRENT,
+        ListStatuses.REPEATING,
+        ListStatuses.COMPLETED,
+        ListStatuses.PAUSED,
+        ListStatuses.DROPPED,
+        ListStatuses.PLANNING
+    ).map { status -> TierStatusOption(status, ListStatuses.label(status, isManga)) }
 
-private val MANGA_LIST_STATUSES: List<TierStatusOption> = listOf(
-    TierStatusOption("CURRENT", "Reading"),
-    TierStatusOption("REPEATING", "Rereading"),
-    TierStatusOption("COMPLETED", "Completed"),
-    TierStatusOption("PAUSED", "Paused"),
-    TierStatusOption("DROPPED", "Dropped"),
-    TierStatusOption("PLANNING", "Planning")
-)
+private val ANIME_LIST_STATUSES: List<TierStatusOption> = tierListStatuses(isManga = false)
+
+private val MANGA_LIST_STATUSES: List<TierStatusOption> = tierListStatuses(isManga = true)
 
 private val ANIME_AIRING_STATUSES: List<TierStatusOption> = listOf(
     TierStatusOption("RELEASING", "Releasing"),

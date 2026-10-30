@@ -63,19 +63,26 @@ private const val INLINE_SPOILER_TAG = "markdown_inline_spoiler_"
  * not wrapped a second time - it is styled in place - so no two link annotations
  * ever overlap, which is the one shape that makes the framework pick arbitrarily.
  *
- * ## An inline spoiler reveals in place
+ * ## An inline spoiler toggles in place
  *
  * `~!...!~` in the middle of a sentence is the same token the block-level
  * [RenderSpoilerBlock] handles, one paragraph down. The run is the tap target:
  * an `AnnotatedString` cannot hold a chip, and a pill dropped mid-sentence would
  * break the line it lives on, so the placeholder characters carry a
- * [LinkAnnotation.Clickable] and open on the tap that lands on them.
+ * [LinkAnnotation.Clickable] and toggle on the tap that lands on them.
  *
  * It used to be unrevealable, and the note here said why: "an `AnnotatedString`
  * cannot be tapped, so it has nowhere to put a reveal". That stopped being true
  * with `LinkAnnotation.Clickable`, and the cost of not noticing was that every
  * plot point written inline in a review stayed covered for good - while a
  * `~!...!~` block a line away, whose chip did reveal fine, sat right next to it.
+ *
+ * Unlike the block chip, which is a separate control and deliberately leaves the
+ * revealed text inert, an inline spoiler has no control but the text itself - so
+ * the revealed run stays tappable and keeps its container tint to show it can be
+ * closed again. A tap there is a deliberate hit on a marked run, not a thumb
+ * resting on a paragraph.
+ *
  * The reveal is per paragraph and saved, for the same reason the chip's is: a bio
  * paragraph composed into a scrolling list is disposed when it leaves the
  * viewport, and a reader who opened a spoiler has already chosen to read it.
@@ -117,6 +124,14 @@ fun buildInlineAnnotatedString(
             )
         )
     }
+    // A revealed run keeps the same container so the reader can see what used to
+    // be covered - and therefore where to tap to cover it again - but switches to
+    // ordinary body colour, because the plot point is supposed to be read now.
+    val revealedSpoilerStyles = remember(spoilerBackground) {
+        TextLinkStyles(
+            style = SpanStyle(background = spoilerBackground)
+        )
+    }
 
     val currentOnLinkClick = rememberUpdatedState(onLinkClick)
 
@@ -126,7 +141,7 @@ fun buildInlineAnnotatedString(
     // chose must not be undone by scrolling past and back.
     var revealedSpoilers by rememberSaveable { mutableStateOf(IntArray(0)) }
 
-    return remember(inlines, linkStyles, mentionStyles, codeBackground, spoilerStyles, revealedSpoilers) {
+    return remember(inlines, linkStyles, mentionStyles, codeBackground, spoilerStyles, revealedSpoilerStyles, revealedSpoilers) {
         buildAnnotatedString {
             appendTokens(
                 tokens = inlines,
@@ -137,8 +152,15 @@ fun buildInlineAnnotatedString(
                 allowLinks = true,
                 spoilers = InlineSpoilers(
                     styles = spoilerStyles,
+                    revealedStyles = revealedSpoilerStyles,
                     revealed = revealedSpoilers,
-                    onReveal = { index -> revealedSpoilers = revealedSpoilers + index }
+                    onToggle = { index ->
+                        revealedSpoilers = if (revealedSpoilers.contains(index)) {
+                            revealedSpoilers.filterNot { it == index }.toIntArray()
+                        } else {
+                            revealedSpoilers + index
+                        }
+                    }
                 )
             )
         }
@@ -157,8 +179,9 @@ fun buildInlineAnnotatedString(
  */
 private class InlineSpoilers(
     val styles: TextLinkStyles,
+    val revealedStyles: TextLinkStyles,
     val revealed: IntArray,
-    val onReveal: (Int) -> Unit
+    val onToggle: (Int) -> Unit
 ) {
     var index: Int = 0
 }
@@ -181,46 +204,18 @@ private fun AnnotatedString.Builder.appendTokens(
     spoilers: InlineSpoilers
 ) {
     tokens.forEach { token ->
+        // The five emphasis runs differ only in their span style, so the token
+        // type picks one and the recursion exists once rather than five times.
+        val decoration = token.decorationStyle()
+        if (decoration != null) {
+            withStyle(decoration) {
+                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
+            }
+            return@forEach
+        }
+
         when (token) {
             is InlineToken.Plain -> append(token.text)
-
-            // Bold is `ExtraBold`, not `Bold`.
-            //
-            // At `bodyMedium` on a phone the two are close enough to be a coin toss,
-            // so `**bold**` in a bio rendered as very slightly heavier body text and a
-            // reader could not tell it had been emphasised at all. AniList bios lean
-            // on bold hard - the "hall of fame" convention is a whole bold line per
-            // entry - so this is not a rare case. `ExtraBold` is the step that reads
-            // as a deliberate emphasis against `Normal` while still staying a weight
-            // the typeface can render rather than a synthetic embolden.
-            is InlineToken.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.BoldItalic -> withStyle(
-                SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
-            ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            // Underlined *and* coloured, for the same reason as bold above: an
-            // underline alone on body text is a hairline at this size, and it is the
-            // one decoration that reads as a broken link rather than as emphasis.
-            // It is not given the link's own colour - that would make emphasised text
-            // indistinguishable from a hyperlink, and the two mean different things.
-            is InlineToken.Underline -> withStyle(
-                SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
-            ) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
-
-            is InlineToken.Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                appendTokens(token.childrenOrText(), onLinkClick, linkStyles, mentionStyles, codeBackground, allowLinks, spoilers)
-            }
 
             is InlineToken.Code -> withStyle(
                 SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)
@@ -290,21 +285,27 @@ private fun AnnotatedString.Builder.appendTokens(
             // at all - so every spoiler written inline inside a paragraph was
             // permanently hidden, while the block-level `~!...!~` chip a line away
             // opened fine. (Before *that* it printed `[Spoiler: ...]` in full, which
-            // is the opposite failure.)
+            // is the opposite failure.) The revealed run stays link-annotated so a
+            // second tap closes it again, matching the block chip's toggle.
             is InlineToken.Spoiler -> {
                 val index = spoilers.index++
-                if (spoilers.revealed.contains(index)) {
-                    append(token.text)
-                } else if (allowLinks) {
+                val revealed = spoilers.revealed.contains(index)
+                if (allowLinks) {
                     withLink(
                         LinkAnnotation.Clickable(
                             tag = "$INLINE_SPOILER_TAG$index",
-                            styles = spoilers.styles,
-                            linkInteractionListener = { spoilers.onReveal(index) }
+                            styles = if (revealed) spoilers.revealedStyles else spoilers.styles,
+                            linkInteractionListener = { spoilers.onToggle(index) }
                         )
                     ) {
-                        append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                        if (revealed) {
+                            append(token.text)
+                        } else {
+                            append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                        }
                     }
+                } else if (revealed) {
+                    append(token.text)
                 } else {
                     // Inside a link label: two annotations over the same characters
                     // is the one shape the framework resolves arbitrarily (see
@@ -314,8 +315,48 @@ private fun AnnotatedString.Builder.appendTokens(
                     }
                 }
             }
+
+            // The five emphasis runs were already handled above: `decorationStyle`
+            // is the single place that says which tokens are emphasis and what
+            // span they draw with. This arm exists because the compiler cannot see
+            // that early return, and the sealed `when` must name every subtype.
+            else -> Unit
         }
     }
+}
+
+/**
+ * The span style an emphasis token draws its children with, or null for a token
+ * that is not an emphasis run.
+ *
+ * These used to be five branches in [appendTokens], each an identical
+ * `withStyle { appendTokens(children...) }` around a different span - so the
+ * recursion and its seven arguments were copied five times, and a change to the
+ * walk had to be made in all of them.
+ */
+private fun InlineToken.decorationStyle(): SpanStyle? = when (this) {
+    // Bold is `ExtraBold`, not `Bold`.
+    //
+    // At `bodyMedium` on a phone the two are close enough to be a coin toss, so
+    // `**bold**` in a bio rendered as very slightly heavier body text and a reader
+    // could not tell it had been emphasised at all. AniList bios lean on bold hard -
+    // the "hall of fame" convention is a whole bold line per entry - so this is not
+    // a rare case. `ExtraBold` is the step that reads as a deliberate emphasis
+    // against `Normal` while still staying a weight the typeface can render rather
+    // than a synthetic embolden.
+    is InlineToken.Bold -> SpanStyle(fontWeight = FontWeight.ExtraBold)
+    is InlineToken.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
+    is InlineToken.BoldItalic ->
+        SpanStyle(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic)
+    // Underlined *and* coloured, for the same reason as bold above: an underline
+    // alone on body text is a hairline at this size, and it is the one decoration
+    // that reads as a broken link rather than as emphasis. It is not given the
+    // link's own colour - that would make emphasised text indistinguishable from a
+    // hyperlink, and the two mean different things.
+    is InlineToken.Underline ->
+        SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)
+    is InlineToken.Strikethrough -> SpanStyle(textDecoration = TextDecoration.LineThrough)
+    else -> null
 }
 
 private fun AnnotatedString.Builder.appendLink(

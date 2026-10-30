@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import java.time.Instant
 import java.time.LocalDate
@@ -49,31 +50,16 @@ import java.time.ZoneOffset
  * can use it while nothing outside `ui.components.detail` can.
  */
 
-/** One selectable list status, with the wording each medium uses for it. */
-internal data class EntryStatusOption(
-    val apiValue: String,
-    val animeLabel: String,
-    val mangaLabel: String
-) {
-    fun labelFor(isManga: Boolean): String = if (isManga) mangaLabel else animeLabel
-}
-
 /**
  * The six AniList list statuses, in the order a person is most likely to reach
- * for them: what they are doing now, then what they would do next, then the ends.
+ * for them, read from [ListStatuses].
  *
- * Both spellings are carried because "Watching" is wrong on a manga list, and the
- * filter labels were shared between the two media once before - a manga list that
- * offered "Watching" instead of "Reading".
+ * This used to be the second of four hand-copied versions of the same list, which
+ * is how the picker and the Library chips ended up calling `PAUSED` "Paused" while
+ * the Stats tally called it "On-Hold" - the same status, two names, one screen
+ * apart. The vocabulary lives in `domain/list` now and every surface quotes it.
  */
-internal val ENTRY_STATUSES = listOf(
-    EntryStatusOption("CURRENT", "Watching", "Reading"),
-    EntryStatusOption("REPEATING", "Rewatching", "Rereading"),
-    EntryStatusOption("COMPLETED", "Completed", "Completed"),
-    EntryStatusOption("PLANNING", "Planning", "Planning"),
-    EntryStatusOption("PAUSED", "Paused", "Paused"),
-    EntryStatusOption("DROPPED", "Dropped", "Dropped")
-)
+internal val ENTRY_STATUSES = ListStatuses.options
 
 /** Which of the two dates a picker is open for. */
 internal enum class DateField { START, FINISH }
@@ -319,12 +305,34 @@ internal class EntryEditState {
     }
 }
 
-/** A label for a status the entry already has, including one this build predates. */
-internal fun statusLabel(status: String?, isManga: Boolean): String {
-    if (status == null) return "Not on your list"
-    return ENTRY_STATUSES.firstOrNull { it.apiValue.equals(status, ignoreCase = true) }
-        ?.labelFor(isManga)
-        ?: status.lowercase().replaceFirstChar { it.uppercase() }
+/**
+ * A label for a status the entry already has, including one this build predates.
+ *
+ * A thin alias for [ListStatuses.label] kept because the form and its tests read
+ * the wording as a property of the editor; the *rules* - which token means what,
+ * and what an unrecognised one is shown as - are in the domain file, beside the
+ * three other surfaces that print the same words.
+ */
+internal fun statusLabel(status: String?, isManga: Boolean): String =
+    ListStatuses.label(status, isManga)
+
+/**
+ * The glyph for a list status, used by both the status row and its menu.
+ *
+ * The row used to show [AppVectorIcons.Info] whatever status the entry held, so
+ * the one icon on the only row that changes with the entry said only "this is a
+ * form field". The mapping is semantic - play, repeat, check, bookmark, pause,
+ * broken heart - and unknown or absent statuses keep the old Info glyph, because
+ * an unrecognised token has no meaning to draw.
+ */
+internal fun statusIcon(status: String?): ImageVector = when (ListStatuses.normalize(status)) {
+    ListStatuses.CURRENT -> AppVectorIcons.Play
+    ListStatuses.REPEATING -> AppVectorIcons.Refresh
+    ListStatuses.COMPLETED -> AppVectorIcons.CheckCircle
+    ListStatuses.PLANNING -> AppVectorIcons.BookmarkAdd
+    ListStatuses.PAUSED -> AppVectorIcons.Pause
+    ListStatuses.DROPPED -> AppVectorIcons.BrokenHeart
+    else -> AppVectorIcons.Info
 }
 
 /**

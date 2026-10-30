@@ -131,18 +131,49 @@ internal fun GraphQLError.toAniListException(): AniListException {
         status == 429 -> rateLimitedException(
             message = "AniList is rate limiting this device. Try again in a moment."
         )
-        status == 401 || status == 403 -> AniListException(
-            kind = AniListErrorKind.INVALID_SESSION,
-            message = "Session expired. Please re-authenticate."
-        )
+        status == 401 || status == 403 -> sessionExpiredException()
         status == 404 || text.contains("not found", ignoreCase = true) ->
             AniListException(AniListErrorKind.NOT_FOUND, text)
-        reportsAuthFailure -> AniListException(
-            kind = AniListErrorKind.INVALID_SESSION,
-            message = "Session expired. Please re-authenticate."
-        )
+        reportsAuthFailure -> sessionExpiredException()
         else -> AniListException(AniListErrorKind.INVALID_REQUEST, text)
     }
+}
+
+/**
+ * Builds a [AniListErrorKind.INVALID_SESSION] failure and raises the app-wide
+ * notice.
+ *
+ * The same one-place-for-one-behaviour rule as [rateLimitedException]: a dead
+ * token is raised from the HTTP road and the GraphQL-message road, and each
+ * would otherwise have to remember to notify. [SystemNotices] collapses the burst
+ * of parallel auth failures a single screen produces into one notice. This is the
+ * case the per-screen surfaces cannot cover on their own - a *background* refresh
+ * that comes back 401 has no sheet to show "sign in again" on, so without the
+ * notice it fails silently.
+ */
+private fun sessionExpiredException(cause: Throwable? = null): AniListException {
+    SystemNotices.report(SystemNotices.Notice.SessionExpired)
+    return AniListException(
+        kind = AniListErrorKind.INVALID_SESSION,
+        message = "Session expired. Please re-authenticate.",
+        cause = cause
+    )
+}
+
+/**
+ * Builds a [AniListErrorKind.SERVER] failure and raises the app-wide notice.
+ *
+ * 5xx is AniList's problem, not the reader's, and the same outage fails every
+ * in-flight request at once - hence the deduped notice rather than a Toast per
+ * request.
+ */
+private fun serverException(code: Int, cause: Throwable? = null): AniListException {
+    SystemNotices.report(SystemNotices.Notice.ServerDown)
+    return AniListException(
+        kind = AniListErrorKind.SERVER,
+        message = "AniList is having trouble right now (HTTP $code). Try again shortly.",
+        cause = cause
+    )
 }
 
 /**
@@ -202,11 +233,7 @@ fun aniListHttpError(
     // Verdicts the body cannot overturn, decided first. 429 is also the only
     // place `Retry-After` exists, so it has to be answered here.
     if (code == 401 || code == 403) {
-        return AniListException(
-            kind = AniListErrorKind.INVALID_SESSION,
-            message = "Session expired. Please re-authenticate.",
-            cause = cause
-        )
+        return sessionExpiredException(cause = cause)
     }
     if (code == 429) {
         // `Retry-After` is free text from the server, and the interceptor has
@@ -224,11 +251,7 @@ fun aniListHttpError(
         )
     }
     if (code in 500..599) {
-        return AniListException(
-            kind = AniListErrorKind.SERVER,
-            message = "AniList is having trouble right now (HTTP $code). Try again shortly.",
-            cause = cause
-        )
+        return serverException(code = code, cause = cause)
     }
 
     // 400 and 404 are the statuses AniList overloads, so the body decides.

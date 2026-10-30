@@ -339,8 +339,9 @@ class UserOverviewJsonTest {
  * The activity feed and the two social lists, from captured responses.
  *
  * The union handling is the point. `Page.activities` answers `[ActivityUnion]`
- * and Moshi cannot discriminate a union, so the model is the `ListActivity` member
- * alone and anything that is not one has to be recognisable and droppable.
+ * and Moshi cannot discriminate a union, so one flat model reads both members
+ * the feed renders - list updates and text posts - and anything else has to be
+ * recognisable and droppable.
  */
 class UserActivityJsonTest {
 
@@ -397,6 +398,14 @@ class UserActivityJsonTest {
                   "__typename": "MessageActivity",
                   "id": 790600000,
                   "text": "a forum post that slipped past the type filter"
+                },
+                {
+                  "__typename": "TextActivity",
+                  "id": 790618700,
+                  "text": "Seasonal check-in",
+                  "createdAt": 1726929000,
+                  "likeCount": 6,
+                  "replyCount": 2
                 }
               ]
             }
@@ -419,23 +428,56 @@ class UserActivityJsonTest {
     }
 
     @Test
-    fun `the union typename field is ignored rather than failing the parse`() {
+    fun `the union typename does not fail the parse and is kept for the drop rules`() {
         val activities = parse<ActivityFeedData>(capturedFeed).page!!.activities!!
 
-        assertEquals(3, activities.size)
+        assertEquals(4, activities.size)
+        // Read, not merely tolerated: it is the only thing that separates a text
+        // post from a site message, which carry the same body field.
+        assertEquals("TextActivity", activities[3].typename)
     }
 
     @Test
-    fun `an activity with no media and no status is recognisable as unmodelled`() {
-        // A forum post or a site message parses into the ListActivity shape with
-        // every field absent. The repository drops these rather than rendering a
-        // blank card.
+    fun `a message with a body is still dropped, because it is not a post`() {
+        // A site message parses with a text body exactly like a text post does -
+        // the flat model cannot tell them apart by fields alone. `__typename` is
+        // what keeps a private message from being drawn on a public profile tab.
         val activities = parse<ActivityFeedData>(capturedFeed).page!!.activities!!
         val message = activities[2]
 
+        assertEquals("a forum post that slipped past the type filter", message.text)
         assertTrue(message.isUnrecognised)
+        assertFalse(message.isTextPost)
         assertFalse(activities[0].isUnrecognised)
         assertFalse(activities[1].isUnrecognised)
+    }
+
+    @Test
+    fun `a text post parses as its own shape and is not unrecognised`() {
+        val activities = parse<ActivityFeedData>(capturedFeed).page!!.activities!!
+        val post = activities[3]
+
+        assertEquals(790618700, post.id)
+        assertEquals("Seasonal check-in", post.text)
+        assertEquals(6, post.likeCount)
+        assertEquals(2, post.replyCount)
+        assertEquals(1726929000, post.createdAt)
+        assertTrue(post.isTextPost)
+        assertFalse(post.isUnrecognised)
+        assertNull(post.media)
+    }
+
+    @Test
+    fun `a list update that carries a comment is still a list update`() {
+        // AniList lets a status change carry a message, so `text` can arrive on a
+        // `ListActivity` too. The media is what decides which card draws; treating
+        // any body as a text post would lose the poster and the progress.
+        val activity = parse<ActivityFeedData>(
+            """{"data":{"Page":{"activities":[{"id":1,"status":"completed","text":"so good","media":{"id":1}}]}}}"""
+        ).page!!.activities!!.single()
+
+        assertFalse(activity.isTextPost)
+        assertFalse(activity.isUnrecognised)
     }
 
     @Test
@@ -444,11 +486,10 @@ class UserActivityJsonTest {
         // and the feed would never say "Watched" at all.
         val activities = parse<ActivityFeedData>(capturedFeed).page!!.activities!!
 
-        assertEquals("Completed", activities[0].displayStatus)
+        assertEquals("Completed", activities[0].displayStatusFor(isManga = false))
         // The captured item is "current", not "planning" - "Plans to watch" is
         // PLANNING's label, and asserting it here would have passed for the wrong
         // reason if the fixture had been changed underneath.
-        assertEquals("Watched", activities[1].displayStatus)
         assertEquals("Watched", activities[1].displayStatusFor(isManga = false))
         // The same CURRENT status means something else for manga.
         assertEquals("Read", activities[1].displayStatusFor(isManga = true))
@@ -460,7 +501,7 @@ class UserActivityJsonTest {
             """{"data":{"Page":{"activities":[{"id":1,"status":"repeating","createdAt":1,"media":{"id":1}}]}}}"""
         ).page!!.activities!!.single()
 
-        assertEquals("Rewatching", activity.displayStatus)
+        assertEquals("Rewatching", activity.displayStatusFor(isManga = false))
     }
 
     @Test

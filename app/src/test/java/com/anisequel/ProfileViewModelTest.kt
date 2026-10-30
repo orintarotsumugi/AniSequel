@@ -3,7 +3,7 @@ package com.anisequel
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
-import com.anisequel.data.model.ListActivity
+import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
@@ -12,6 +12,8 @@ import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.SocialList
 import com.anisequel.ui.viewmodel.UserActivityViewModel
@@ -50,7 +52,7 @@ class ProfileViewModelTest {
     }
 
     private class FakeProfileRepository(
-        var activityPages: Map<Int, List<ListActivity>> = emptyMap(),
+        var activityPages: Map<Int, List<ProfileActivity>> = emptyMap(),
         /**
          * The `pageInfo.hasNextPage` each page answers with.
          *
@@ -64,6 +66,16 @@ class ProfileViewModelTest {
         var failPages: Set<Int> = emptySet(),
         var followersResult: List<FollowUser> = emptyList(),
         var followingResult: List<FollowUser> = emptyList(),
+        /**
+         * Make one half of the pair fail.
+         *
+         * Both exist because the tab fetches the two lists in one job and shows one
+         * of them, so the case that matters is *one* answer arriving and the other not
+         * - which is the state that used to replace a readable grid with an error for
+         * a list nobody had asked to see.
+         */
+        var followersFail: Boolean = false,
+        var followingFail: Boolean = false,
         var likeResult: Result<ActivityLikeState> =
             Result.success(ActivityLikeState(isLiked = true, likeCount = 1)),
         var repliesResult: Result<List<ActivityReply>> = Result.success(emptyList()),
@@ -124,6 +136,7 @@ class ProfileViewModelTest {
             forceRefresh: Boolean
         ): Result<List<FollowUser>> {
             followersFetchCount++
+            if (followersFail) return Result.failure(AniListException(AniListErrorKind.SERVER, "followers unavailable"))
             return Result.success(followersResult)
         }
 
@@ -132,6 +145,7 @@ class ProfileViewModelTest {
             forceRefresh: Boolean
         ): Result<List<FollowUser>> {
             followingFetchCount++
+            if (followingFail) return Result.failure(AniListException(AniListErrorKind.SERVER, "following unavailable"))
             return Result.success(followingResult)
         }
 
@@ -221,6 +235,84 @@ class ProfileViewModelTest {
         assertEquals(2, repository.followersFetchCount)
         assertEquals(2, repository.followingFetchCount)
     }
+
+    /**
+     * The prefetch must not outrank the list being read.
+     *
+     * `load` fetches followers *and* following in one job and the tab only ever
+     * shows one of them. The job used to report *either* failure by replacing the
+     * whole tab with an error screen, so a reader looking at a fifty-person grid
+     * lost it because the list they had not asked for was refused. The failure now
+     * belongs to the half it happened to, recorded beside the rows that survived.
+     */
+    @Test
+    fun `a prefetched list that fails leaves the list on screen alone`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            followersResult = listOf(FollowUser(1, "Follower1"), FollowUser(2, "Follower2")),
+            followingFail = true
+        )
+        val viewModel = UserSocialViewModel(repository, userId = 1)
+
+        viewModel.load(SocialList.FOLLOWERS)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as UserSocialViewModel.SocialState.Success
+        assertEquals(
+            "the list being read is still the one shown",
+            SocialList.FOLLOWERS,
+            state.selected
+        )
+        assertEquals(2, state.followers.size)
+        assertTrue("a failed half is not an answer about this account", state.following.isEmpty())
+        assertEquals(SocialList.FOLLOWING, state.failedList)
+        assertNotNull("and it keeps the reason, for the tab to show on that chip", state.failureMessage)
+        assertFalse("the fetch is over, so the marker must not stay up", state.isRefreshing)
+    }
+
+    /**
+     * A chip tap during a refresh of a list with no rows yet must still switch.
+     *
+     * `Retarget` means "a job on the wire will answer this; move what the reader is
+     * looking at rather than restart it". It only knew how to move the spinner, and
+     * a refresh of rows that already exist is published as `Success` carrying
+     * [UserSocialViewModel.SocialState.Success.isRefreshing] instead - so on an
+     * account that follows nobody, tapping Following while a refresh was running
+     * answered the tap with nothing at all.
+     */
+    @Test
+    fun `a chip tap during a refresh moves the selection without restarting the job`() =
+        runTest(testDispatcher) {
+            val repository = FakeProfileRepository(
+                followersResult = listOf(FollowUser(1, "Follower1"))
+            )
+            val viewModel = UserSocialViewModel(repository, userId = 1)
+            viewModel.load(SocialList.FOLLOWERS)
+            advanceUntilIdle()
+
+            // A refresh in flight over rows that are on screen: `Success`, not
+            // `Loading`, and no following rows to switch to.
+            viewModel.load(SocialList.FOLLOWERS, forceRefresh = true)
+            val refreshing = viewModel.state.value as UserSocialViewModel.SocialState.Success
+            assertTrue("the rows stayed", refreshing.isRefreshing)
+            assertTrue(refreshing.following.isEmpty())
+
+            val fetchesBefore = repository.followersFetchCount + repository.followingFetchCount
+            viewModel.select(SocialList.FOLLOWING)
+
+            val switched = viewModel.state.value as UserSocialViewModel.SocialState.Success
+            assertEquals(
+                "the tap has to move what is shown, or it does nothing at all",
+                SocialList.FOLLOWING,
+                switched.selected
+            )
+            assertEquals(
+                "and it must not cancel the job already answering both lists",
+                fetchesBefore,
+                repository.followersFetchCount + repository.followingFetchCount
+            )
+
+            advanceUntilIdle()
+        }
 
     @Test
     fun `UserActivityViewModel updateUserId triggers load when starting with null userId`() = runTest(testDispatcher) {
@@ -378,8 +470,12 @@ class ProfileViewModelTest {
         viewModel.load(SocialList.FOLLOWERS)
         advanceUntilIdle()
 
-        // Stays in loading gracefully
-        assertTrue(viewModel.state.value is UserSocialViewModel.SocialState.Loading)
+        // The old assertion here was `is Loading`, which is the contract this
+        // replaced: `Loading` is a spinner whose only exit is the answer to the
+        // request this branch never makes. An `Error` is the same sentence with
+        // two exits - the tab's retry button, and the id arriving below.
+        val pending = viewModel.state.value as UserSocialViewModel.SocialState.Error
+        assertEquals(SocialList.FOLLOWERS, pending.list)
         assertEquals(0, repository.followersFetchCount)
 
         // Resolving the id triggers the fetch
@@ -660,7 +756,7 @@ class ProfileViewModelTest {
         isLiked: Boolean? = null,
         likeCount: Int = 0,
         replyCount: Int = 0
-    ) = ListActivity(
+    ) = ProfileActivity(
         id = id,
         status = "completed",
         progress = "12",

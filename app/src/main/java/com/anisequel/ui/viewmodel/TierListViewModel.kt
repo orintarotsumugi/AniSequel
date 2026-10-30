@@ -583,8 +583,9 @@ class TierListViewModel(
      * Deliberately outside [edit]: display options are not work to undo, and a
      * zoom step pushed onto the undo stack would mean the next "Undo" after
      * zooming in undid the zoom instead of the drag the person actually regrets.
-     * [TierListPreferences.mutate] still skips the write when nothing changed, so
-     * a debounced zoom that settles on the value already stored costs no write.
+     * [TierListPreferences.mutateDisplay] still skips the write when nothing
+     * changed, so a debounced zoom that settles on the value already stored costs
+     * no write.
      */
     fun setDisplay(display: TierDisplay) {
         writeDisplay { display }
@@ -605,9 +606,9 @@ class TierListViewModel(
     private fun writeDisplay(change: (TierDisplay) -> TierDisplay) {
         val listId = _openedId.value ?: return
         viewModelScope.launch {
-            preferences.mutate(listId) { document ->
-                document.copy(display = change(document.display))
-            }
+            // Not `mutate`: a display change is not an edit, and letting it stamp
+            // `updatedAt` reordered the library every time somebody pinched.
+            preferences.mutateDisplay(listId, change)
         }
     }
 

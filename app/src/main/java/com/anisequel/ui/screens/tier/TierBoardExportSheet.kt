@@ -92,6 +92,15 @@ internal fun TierExportSheet(
      * with a full board to "rank at least one title".
      */
     ranked: Int,
+    /**
+     * How many titles the library holds, before the filters.
+     *
+     * A board whose placements are all missing from the *visible* candidates can
+     * mean two different things, and they have different fixes: the library is
+     * still loading (wait) or the ranked titles are gone from it (rank others).
+     * An empty unfiltered library is the loading case; a full one is not.
+     */
+    librarySize: Int,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -199,7 +208,11 @@ internal fun TierExportSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
             if (titleCount == 0) {
-                TierExportEmptyHint(ranked = ranked)
+                TierExportEmptyHint(
+                    ranked = ranked,
+                    visibleRanked = assignment.tierIdByMediaId.size,
+                    librarySize = librarySize
+                )
             } else {
                 ExpressivePrimaryButton(
                     text = "Share image",
@@ -260,19 +273,43 @@ private fun TierExportProgress(progress: Float) {
     }
 }
 
-/** Why there is nothing to export - which depends on what the filters did. */
+/**
+ * Why there is nothing to export - which depends on what the filters, the
+ * library and the ranking each did.
+ *
+ * The cases are tried in the order that makes the previous one impossible:
+ * nothing ranked; every placement filtered out; the library itself empty (the
+ * shapes are still loading); otherwise the ranked titles are not in the library
+ * any more - possibly some of them merely filtered out on top of that.
+ */
 @Composable
-private fun TierExportEmptyHint(ranked: Int) {
-    Text(
-        // Two different empty boards: one has nothing ranked, the other has
-        // ranked titles the filters are holding back. The fix is different, so
-        // the sentence cannot be the same.
-        text = if (ranked == 0) {
-            "Rank at least one title before exporting."
-        } else {
+private fun TierExportEmptyHint(
+    ranked: Int,
+    visibleRanked: Int,
+    librarySize: Int
+) {
+    val scopeHidden = ranked > visibleRanked
+    val message = when {
+        ranked == 0 -> "Rank at least one title before exporting."
+        visibleRanked == 0 ->
             "No ranked title is visible with the current filters. " +
                 "Clear one to include it in the image."
-        },
+        // The board keeps the slots for these placements - which is why the
+        // assignment is not empty - but an export has no poster to draw for
+        // them. With an empty library the titles have not arrived yet, and
+        // "rank a title" would be advice to redo work that is already done.
+        librarySize == 0 ->
+            "Your library has not loaded yet, so there are no posters to draw. " +
+                "The export will work once it does."
+        scopeHidden ->
+            "Some ranked titles are hidden by the current filters, and the rest " +
+                "are no longer in your library. Clear a filter to check."
+        else ->
+            "The ranked titles are no longer in your library, so there are no " +
+                "posters to draw. Rank a title you still have."
+    }
+    Text(
+        text = message,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -285,7 +322,7 @@ private fun TierExportEmptyHint(ranked: Int) {
  * the exporter can still lower the scale when the whole bitmap would not fit the
  * heap. Naming the numbers instead of calling them "High"/"Highest" is deliberate
  * - a person choosing 4K is choosing a pixel count, and the caption underneath
- * says what they will actually get.
+ * says the largest file they can actually get.
  */
 private enum class TierExportQuality(val width: Int, val label: String) {
     STANDARD(TIER_EXPORT_WIDTH_STANDARD, "1080p"),
@@ -297,9 +334,12 @@ private enum class TierExportQuality(val width: Int, val label: String) {
  * The resolution chips, plus the measured output size.
  *
  * The caption is the honest half of the control: the chips say what was asked
- * for, [estimate] says what the file will be after the heap guard. It is null for
- * the first frame while the measurement runs, and the caption simply stays out of
- * the way rather than showing a guessed number that then changes.
+ * for, [estimate] says the size the layout implies at the full memory budget.
+ * It is a ceiling rather than a promise - the renderer halves its budget when an
+ * allocation fails, so a board too tall for the heap comes out smaller than
+ * this - which is why the caption says "Up to". It is null for the first frame
+ * while the measurement runs, and the caption simply stays out of the way rather
+ * than showing a guessed number that then changes.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -331,7 +371,7 @@ private fun TierExportQualityPicker(
     }
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = estimate?.let { "${it.width} x ${it.height} px PNG" }
+        text = estimate?.let { "Up to ${it.width} x ${it.height} px PNG" }
             ?: "Measuring the board...",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant

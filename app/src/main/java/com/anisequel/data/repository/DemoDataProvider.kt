@@ -17,9 +17,19 @@ import com.anisequel.data.model.ViewerProfile
 
 object DemoDataProvider {
 
+    /**
+     * The demo account's id.
+     *
+     * Named because it is no longer one fixture's private number: the profile,
+     * the friends feed and the message direction all have to agree on whose
+     * account they are describing, and a second literal would eventually answer
+     * "which rows did the viewer send?" differently from the viewer record.
+     */
+    const val DEMO_VIEWER_ID = 999999
+
     fun getDemoViewer(): ViewerProfile {
         return ViewerProfile(
-            id = 999999,
+            id = DEMO_VIEWER_ID,
             name = "OtakuExplorer",
             avatar = UserAvatar(
                 large = "https://s4.anilist.co/file/anilistcdn/character/large/b154587-n6onjReL2gwM.jpg",

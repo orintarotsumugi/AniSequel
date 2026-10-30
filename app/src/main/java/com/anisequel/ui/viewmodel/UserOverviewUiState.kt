@@ -50,11 +50,16 @@ sealed interface UserOverviewUiState {
         /**
          * Every anime on this person's list, flattened and de-duplicated.
          *
-         * Free: the Stats tab already forces the whole anime list to be fetched
-         * and chunk-merged, and this screen was throwing all of it away the
-         * moment [entryInsights] had been tallied. The Library page is built on it,
-         * which is why adding a tab that lists hundreds of entries cost no extra
-         * request.
+         * Free on the viewer's own profile: the dashboard that led here has already
+         * downloaded and cached the whole thing, and the Stats tab forces the merge
+         * anyway, so this screen was throwing all of it away the moment
+         * [entryInsights] had been tallied. The Library page is built on it, which is
+         * why adding a tab that lists hundreds of entries cost no extra request.
+         *
+         * On somebody *else's* profile it starts empty and arrives when a tab asks for
+         * it - see `UserOverviewViewModel.loadAnimeLibrary` and
+         * `fetchProfileListEagerly` - because a stranger's list is up to forty
+         * sequential requests that a reader looking at their bio never wanted.
          *
          * Entries rather than bare media because the list status and progress are
          * the reason to list things - "Completed, 24/24" beside a cover is what
@@ -70,7 +75,7 @@ sealed interface UserOverviewUiState {
         val isRefreshing: Boolean = false,
         /**
          * Whether the media list this profile's tallies are built from is still
-         * on its way.
+         * on its way - or has not been asked for yet.
          *
          * True between the two publishes in `UserOverviewViewModel.load`: the
          * profile arrives in one request and is shown immediately, and the list -
@@ -78,6 +83,11 @@ sealed interface UserOverviewUiState {
          * exists so the two tabs that read it can say "counting" instead of
          * rendering zeroes, because "0 completed" is a wrong answer rather than a
          * loading one, and it is what a reader would have seen.
+         *
+         * On another person's profile it also covers the state before anybody asked:
+         * the same flag is the honest one, because "we have not counted this" and "we
+         * are counting it" both forbid the same wrong answer. The tab that shows it
+         * is the one that starts the download.
          */
         val isLibraryLoading: Boolean = false,
         /**

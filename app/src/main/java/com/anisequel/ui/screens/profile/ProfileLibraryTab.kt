@@ -57,6 +57,7 @@ import com.anisequel.data.model.withListStatus
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.isManga
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -249,8 +250,20 @@ internal fun releaseYearOf(entry: MediaListEntryItem): Int? =
  * filter row that quietly omitted them would make those entries reachable only
  * under "All" - a list you cannot narrow is a list you cannot finish working
  * through.
+ *
+ * Every bucket that *is* an AniList status names its [statusToken] and takes its
+ * wording from [ListStatuses] rather than spelling the words out again. The chips
+ * used to carry their own labels, and they drifted from the entry editor and the
+ * Stats tally: the chips said "Paused" and "Planning", the editor said "On-Hold"
+ * and "Plan to Watch", so a reader who had just set a status in one place could
+ * not find it under that name in the other. `ALL` and `FAVOURITES` are the two
+ * chips that are not statuses - one is the absence of a filter, the other is a
+ * membership test on a separate connection - so they are the only ones with a
+ * label of their own.
  */
 enum class LibraryFilter(
+    /** The `MediaListStatus` this chip narrows to, or null for the non-status chips. */
+    val statusToken: String?,
     /**
      * The label as written for a *reading* list, which is the wording people
      * recognise for both.
@@ -261,17 +274,17 @@ enum class LibraryFilter(
      * watching a book. [animeLabel] is the alternative, and
      * [labelFor] picks between them per entry.
      */
-    val label: String,
-    val animeLabel: String = label
+    val label: String = ListStatuses.label(statusToken, isManga = true),
+    val animeLabel: String = ListStatuses.label(statusToken, isManga = false)
 ) {
-    ALL("All"),
-    WATCHING("Reading", "Watching"),
-    COMPLETED("Completed"),
-    PAUSED("Paused"),
-    PLANNING("Planning"),
-    DROPPED("Dropped"),
-    REWATCHING("Rereading", "Rewatching"),
-    FAVOURITES("Favourites");
+    ALL(null, "All", "All"),
+    WATCHING(ListStatuses.CURRENT),
+    COMPLETED(ListStatuses.COMPLETED),
+    PAUSED(ListStatuses.PAUSED),
+    PLANNING(ListStatuses.PLANNING),
+    DROPPED(ListStatuses.DROPPED),
+    REWATCHING(ListStatuses.REPEATING),
+    FAVOURITES(null, "Favourites", "Favourites");
 
     /** The chip label for a row whose media type is known. */
     fun labelFor(isManga: Boolean): String = if (isManga) label else animeLabel
@@ -280,21 +293,21 @@ enum class LibraryFilter(
 /**
  * Which bucket an entry belongs to, or null when there is none to file it under.
  *
- * AniList's `status` is an enum name on the wire and is compared
- * case-insensitively, because a lower-case value has been seen in a fixture and a
- * filter that misses it renders an empty list for somebody who demonstrably has
- * entries.
+ * The match goes through [ListStatuses.normalize] rather than comparing the raw
+ * wire string, because the buckets used to be spelled out here in lower case and
+ * compared against `status?.lowercase()`: an entry carrying API v1's `ON_HOLD`, or
+ * a cached `WATCHING`, matched no bucket at all and so vanished from every chip
+ * while still counting under "All". Normalising folds those aliases onto the six
+ * real statuses, and an unknown token still fails to match - it is not filed under
+ * its nearest neighbour.
  */
 internal fun libraryBucketOf(status: String?): LibraryFilter? =
-    when (status?.lowercase(Locale.ROOT)) {
-        "current" -> LibraryFilter.WATCHING
-        "completed" -> LibraryFilter.COMPLETED
-        "paused" -> LibraryFilter.PAUSED
-        "planning" -> LibraryFilter.PLANNING
-        "dropped" -> LibraryFilter.DROPPED
-        "repeating" -> LibraryFilter.REWATCHING
-        else -> null
-    }
+    ListStatuses.normalize(status)?.let { token -> filterByStatusToken[token] }
+
+private val filterByStatusToken: Map<String, LibraryFilter> =
+    LibraryFilter.entries.mapNotNull { filter ->
+        filter.statusToken?.let { it to filter }
+    }.toMap()
 
 /**
  * How many entries sit in each bucket, within one media type.

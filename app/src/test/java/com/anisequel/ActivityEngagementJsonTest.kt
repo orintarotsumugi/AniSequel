@@ -63,8 +63,8 @@ class ActivityEngagementJsonTest {
     @Test
     fun `an unmodelled union member or a missing id is an empty thread`() {
         // `Activity(id:)` returns ActivityUnion and the document fragments only
-        // `ListActivity`. A member the fragment did not match comes back as an
-        // object with no selected fields, and an id that no longer exists as null.
+        // the two feed members. A member the fragments did not match comes back as
+        // an object with no selected fields, and an id that no longer exists as null.
         // Both must read as "no comments", not as a crash or a blank screen with
         // no explanation - the repository reduces both with `replies.orEmpty()`.
         val unmodelled = parse<ActivityDetailData>("""{"data":{"Activity":{}}}""")

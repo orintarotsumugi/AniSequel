@@ -212,6 +212,7 @@ internal fun TierBoardSheetsHost(
             candidates = data.visibleCandidates,
             display = data.display,
             ranked = data.ranked,
+            librarySize = data.candidates.size,
             onDismiss = { state.exporting = false }
         )
     }
