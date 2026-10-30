@@ -515,6 +515,7 @@ fun DashboardScreen(
             onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
             onToggleGenre = { dashboardViewModel.toggleGenre(it) },
             onSelectMinScore = { dashboardViewModel.selectMinScore(it) },
+            onSelectMinEpisodes = { dashboardViewModel.selectMinEpisodes(it) },
             onResetFilters = { dashboardViewModel.resetFilters() },
             hiddenSequels = hiddenSequels,
             onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },

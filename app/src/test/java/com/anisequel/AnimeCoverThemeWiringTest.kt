@@ -88,6 +88,10 @@ class AnimeCoverThemeWiringTest {
      * timer died with the composable and a "5 minutes" colour never expired. Both
      * halves are wired here: retention clears the layer and keeps the accent,
      * a temporary colour hands its delay to the repository.
+     *
+     * Clearing the layer is still right, and it is no longer the same thing as
+     * clearing the colour: the retained marker keeps the tinted scheme alive after
+     * the sheet (pinned by the test below), so an exit does not repaint the app.
      */
     @Test
     fun `dismissing the sheet ends the immersive layer either way`() {
@@ -98,12 +102,60 @@ class AnimeCoverThemeWiringTest {
             .substringBefore("ModalBottomSheet(")
 
         assertTrue(
-            "a retained colour hands off to the accent and stops tinting:\n$dismiss",
+            "a retained colour has to end the live layer (the retained marker is " +
+                "what keeps the tint):\n$dismiss",
             dismiss.contains("clearAnimeColorLayer()")
         )
         assertTrue(
             "a temporary one keeps its delay, which the sheet used to cancel:\n$dismiss",
             dismiss.contains("releaseAnimeColorLayer(themeSettings.animeThemeRevertDuration)")
+        )
+    }
+
+    /**
+     * A retained colour has to outlive the sheet as the *background*, not just as
+     * the accent.
+     *
+     * The reported behaviour was exact: open a title, the app takes the cover's
+     * reddish tint; back out, and the background snaps to the brand navy while the
+     * buttons keep the hue. The fix is the stored marker the preferences already
+     * write - the theme seeds its tinted scheme from it while no sheet is open, and
+     * the caller gates that on the feature and the retain switch so a marker left
+     * by an older build cannot outrank the reader's own palette.
+     */
+    @Test
+    fun `a retained cover colour keeps tinting after the sheet closes`() {
+        val theme = source("app/src/main/java/com/anisequel/ui/theme/Theme.kt")
+        val activity = source("app/src/main/java/com/anisequel/MainActivity.kt")
+
+        assertTrue(
+            "the theme has to fall back to the retained marker when the live layer " +
+                "is gone, or every exit repaints the app:\n$theme",
+            theme.contains("animeThemeRetainedColorHex") &&
+                theme.contains("?: animeThemeRetainedColorHex")
+        )
+        assertTrue(
+            "and the tinted branch must be selected by the seed, not by the live " +
+                "layer's flag",
+            theme.contains("animeColor != null ->") &&
+                !theme.contains("animeThemeActive && animeColor != null ->")
+        )
+        assertTrue(
+            "the activity has to hand the gated value to the theme, not the raw " +
+                "marker:\n$activity",
+            activity.contains("animeThemeRetainedColorHex = themeSettings.retainedAnimeColorHex")
+        )
+
+        // The gate itself, in the one place that can assert it without a device.
+        val preferences = source(
+            "app/src/main/java/com/anisequel/data/repository/ThemePreferences.kt"
+        )
+        assertTrue(
+            "the retained marker must only drive the scheme while the feature and " +
+                "Retain are both on; otherwise a marker left by a downgrade outranks " +
+                "the reader's palette",
+            preferences.contains("val retainedAnimeColorHex: String?") &&
+                preferences.contains("animeThemeEnabled && animeThemeRetainColor")
         )
     }
 

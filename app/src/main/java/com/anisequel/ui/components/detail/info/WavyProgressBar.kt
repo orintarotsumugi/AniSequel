@@ -79,7 +79,24 @@ fun WavyProgressBar(
     modifier: Modifier = Modifier,
     height: Dp = 40.dp,
     waveColor: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+    /**
+     * The un-watched part of the curve.
+     *
+     * 0.45 rather than the 0.28 this carried: at the old alpha the track all but
+     * vanished on a dark themed surface, so a title at zero progress showed a
+     * faint squiggle with nothing above it and the card read as a rendering
+     * failure rather than as an empty bar.
+     */
+    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+    /**
+     * Re-runs the entrance when this changes - the title's id, in practice.
+     *
+     * The "already played" flag is saved so scrolling the card off screen and
+     * back does not replay the fill, but it was saved for the *sheet* rather than
+     * for the title: walking a franchise reuses the same list item, so a new show's
+     * bar appeared already full instead of rising from zero.
+     */
+    entranceKey: Any? = null
 ) {
     val target = progress.coerceIn(0f, 1f)
 
@@ -90,21 +107,30 @@ fun WavyProgressBar(
     // `remember` lost it with the item, and the bar replayed the entire fill from
     // zero on the way back up the page - a second counting of a progress the reader
     // had already watched arrive.
-    var played by rememberSaveable { mutableStateOf(false) }
+    //
+    // Keyed on the title, because the saved flag was scoped to the sheet: following
+    // a relation to the next title reuses this list item, so the restored flag said
+    // "already played" and the new title's bar arrived full instead of rising.
+    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
     // A `Float` rather than `animateFloatAsState`: that initialises *at* its
     // target, so the bar would simply appear full rather than filling. Where this
     // one starts is the flag's decision - at nothing for a bar that has never
     // played, at the progress it is about to show for one that has, which is how a
     // bar restored from a scroll keeps the height it already had instead of rising
     // a second time.
-    val fill = remember { Animatable(if (played) target else 0f) }
+    val fill = remember(entranceKey) { Animatable(if (played) target else 0f) }
     // Unconditional, and it checks the flag's meaning rather than being wrapped in
     // `if (!played)`: a `LaunchedEffect` skipped on the played path would also never
     // see a *later* progress - the entry editor's own writes - and the bar would sit
     // on a number that is no longer true. Entering from zero and re-targeting from
     // the current value are the same call; the flag only decides where the fill
     // starts.
-    LaunchedEffect(target) {
+    //
+    // Keyed on the entrance too, and that is not belt-and-braces: two titles can
+    // have the same fraction - a 6/12 show followed by another 6/12 show - and an
+    // effect keyed on the value alone would not restart, leaving the freshly
+    // remembered fill sitting at zero for a bar that should be half full.
+    LaunchedEffect(entranceKey, target) {
         played = true
         fill.animateTo(target, ExpressiveMotion.FastSpatial)
     }
@@ -183,24 +209,31 @@ fun WavyProgressBar(
         // start eating into.
         drawPath(path = wave, color = trackColor, style = stroke)
 
-        if (filled <= 0.5f) return@Canvas
-
-        // The first `filled` of the same path again, in the fill colour. A clip and
-        // not a second path, so the fill cannot drift away from the track: it is
-        // that curve, drawn twice.
-        clipRect(right = filled) {
-            drawPath(path = wave, color = waveColor, style = stroke)
+        if (filled > 0.5f) {
+            // The first `filled` of the same path again, in the fill colour. A clip
+            // and not a second path, so the fill cannot drift away from the track:
+            // it is that curve, drawn twice.
+            clipRect(right = filled) {
+                drawPath(path = wave, color = waveColor, style = stroke)
+            }
         }
 
         // A round head on the leading edge, so the fill ends at a point rather
         // than at wherever the sine happened to be when the clip cut it. Sampled
         // from the same amplitude and phase as the path, so it sits on it.
+        //
+        // Drawn at zero too, half a stroke in from the left edge: a bar at 0%
+        // used to return before this and draw nothing but a dim wave, which on a
+        // freshly added title looked like a broken control rather than a bar that
+        // has not started. The dot is the start of the fill and it is in the fill's
+        // colour, so the empty state still says "this is the beginning".
+        val headX = if (filled > 0.5f) filled else stroke.width / 2f
         drawCircle(
             color = waveColor,
             radius = stroke.width / 2f,
             center = Offset(
-                x = filled,
-                y = midY + WaveGeometry.offset(filled, wavelength, amplitude, phase)
+                x = headX,
+                y = midY + WaveGeometry.offset(headX, wavelength, amplitude, phase)
             )
         )
     }

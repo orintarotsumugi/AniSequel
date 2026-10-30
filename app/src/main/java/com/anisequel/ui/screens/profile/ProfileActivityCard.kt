@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,41 +49,31 @@ import java.util.Locale
 private const val POSTER_ASPECT = 2f / 3f
 
 /**
- * How present the cover is behind its own card.
+ * How present an AniList banner is behind its own card.
  *
- * Raised from 0.22 now that the backdrop is blurred: a sharp crop had to stay
- * faint to keep the card's text readable, whereas a blurred one can be half
- * present and still leave every glyph legible - so the show's palette actually
- * reads instead of being a hint.
+ * The report was that the old blurred cover read as a smudge, not as the show.
+ * AniList serves a purpose-made wide banner for exactly this use, so the card uses
+ * it at most of its strength and keeps a scrim only where the text needs one.
+ * A title with no banner still gets its cover, but faint: a sharp poster crop
+ * behind a paragraph is the one case where the art has to give way.
  */
-private const val COVER_BACKGROUND_ALPHA = 0.50f
+private const val BANNER_BACKGROUND_ALPHA = 0.78f
+
+/** No banner means the cover is a fallback, not the artwork the card is about. */
+private const val COVER_BACKGROUND_ALPHA = 0.26f
 
 /**
- * How hard the ambient cover is blurred.
+ * The backdrop's decode budget, in pixels on its longest side.
  *
- * Enough that the art behind a card reads as a colour wash and its own lettering
- * and faces cannot compete with the card's text, which is what a sharp crop at
- * even low alpha did. `Modifier.blur` needs the API 31 render effect, which is
- * this app's whole supported range.
+ * A banner is wide and is drawn behind a card about 150dp tall, so 900px is
+ * already more than a 3x phone shows and far less than the 1900px source. The
+ * cover fallback is decoded smaller still because it is only ever a tint under
+ * the scrim. Neither is a blur source any more: the point of dropping the blur is
+ * that the art is recognisable, which also means the decode cannot be a thumbnail
+ * and then be expected to look sharp.
  */
-private val COVER_BLUR_RADIUS = 28.dp
-
-/**
- * How large the blurred backdrop is decoded, on its longest side.
- *
- * A quarter of what the card actually draws on a 3x phone, and deliberately so: the
- * bitmap is blurred by [COVER_BLUR_RADIUS] and then drawn at 50% alpha as a colour
- * wash, so nothing finer than a colour survives it. Asking Coil for the card's own
- * size made every row that scrolled into view pay for a full-resolution decode of
- * art it was about to smear into background - which is the busiest thing the
- * Activity feed does while scrolling, on the one tab that is read by scrolling for
- * a long time.
- *
- * 220 rather than a dp value because this is a decode budget, not a layout: the
- * blur radius is 84px at 3x, so anything above a couple of hundred pixels is
- * thrown away by the effect regardless of the screen.
- */
-private const val BACKDROP_DECODE_PX = 220
+private const val BANNER_DECODE_PX = 900
+private const val COVER_DECODE_PX = 360
 
 /**
  * One activity in the feed, whichever member of `ActivityUnion` it is.
@@ -167,10 +156,12 @@ private fun ActivityListCard(
     val context = LocalContext.current
     val media = activity.media ?: return
     // `large` before `bestUrl`, deliberately: this row draws a 96dp poster and a
-    // backdrop decoded at [BACKDROP_DECODE_PX] pixels, so `extraLarge` (AniList
+    // cover fallback decoded at [COVER_DECODE_PX] pixels, so `extraLarge` (AniList
     // serves roughly 460x690 there) is more than twice the pixels anything on the
     // card can show - downloaded and decoded for every row that scrolls in. The
-    // fallback keeps the card working if a response omits the smaller size.
+    // fallback keeps the card working if a response omits the smaller size. The
+    // backdrop itself prefers `media.bannerImage`, which is a separate request at
+    // [BANNER_DECODE_PX]; it is the image the reader actually sees now.
     val coverUrl = media.coverImage?.large ?: media.coverImage?.extraLarge
     // `MANGA` is the value AniList sends, but the model documents `type` as the
     // discriminator the whole feed depends on, so a case difference must not be
@@ -199,7 +190,11 @@ private fun ActivityListCard(
         border = CardDefaults.outlinedCardBorder()
     ) {
         Box {
-            ActivityCoverBackdrop(coverUrl = coverUrl, context = context)
+            ActivityCoverBackdrop(
+                bannerUrl = media.bannerImage,
+                coverUrl = coverUrl,
+                context = context
+            )
 
             Column(modifier = Modifier.padding(14.dp)) {
                 ActivityAuthorRow(
@@ -233,39 +228,50 @@ private fun ActivityListCard(
 }
 
 /**
- * The cover, blown up and blurred behind its own card.
+ * The show's own wide banner behind its card, not a blurred cover.
  *
- * The blur does real work rather than decoration: a *sharp* crop of the art sat
- * its own lettering and faces directly behind the title and the status pill, so
- * the card's text fought the background no matter how the scrim was weighted.
- * Blurred into a wash, the show is still recognisable by palette and every glyph
- * on the card is legible. The scrim is bottom-weighted for the same reason the
- * header's is: the top stays art, the bottom stays readable.
+ * The previous version blew the 2:3 poster up to a square crop and blurred it,
+ * which turned every row into the same dark smudge and made the identification
+ * the backdrop exists for impossible. AniList's `bannerImage` is the artwork its
+ * own pages use for this shape, so it is the right image and needs no blur: it is
+ * drawn at [BANNER_BACKGROUND_ALPHA] under a scrim that is strongest behind the
+ * text at the bottom and lighter at the top. A title with no banner falls back to
+ * the cover at [COVER_BACKGROUND_ALPHA], where its detail is deliberately not
+ * readable and only the palette comes through.
  *
- * A [BoxScope] extension because `matchParentSize` is: the wash has to take the
- * card's measured size without influencing it, which is exactly what that modifier
- * exists for and `fillMaxSize` does not do.
+ * The scrim is a gradient rather than a flat tint because the card has two reading
+ * zones: the avatar and name at the top, and the status, progress and title below.
+ * One alpha for both either drowned the art or lost the text.
+ *
+ * A [BoxScope] extension because `matchParentSize` is: the backdrop has to take
+ * the card's measured size without influencing it, which is exactly what that
+ * modifier exists for and `fillMaxSize` does not do.
  */
 @Composable
-private fun BoxScope.ActivityCoverBackdrop(coverUrl: String?, context: Context) {
-    if (coverUrl == null) return
+private fun BoxScope.ActivityCoverBackdrop(
+    bannerUrl: String?,
+    coverUrl: String?,
+    context: Context
+) {
+    val banner = bannerUrl?.takeIf { it.isNotBlank() }
+    val url = banner ?: coverUrl?.takeIf { it.isNotBlank() } ?: return
+    val decodeWidth = if (banner != null) BANNER_DECODE_PX else COVER_DECODE_PX
     AsyncImage(
         // Remembered rather than built inline: Coil compares requests by value,
         // so a fresh instance on every recomposition is a cache lookup that can
         // never hit - and this card recomposes when the feed pages, when a like
         // lands and when its press animates.
-        model = remember(coverUrl, context) {
+        model = remember(url, decodeWidth, context) {
             ImageRequest.Builder(context)
-                .data(coverUrl)
-                .size(BACKDROP_DECODE_PX)
+                .data(url)
+                .size(decodeWidth)
+                .crossfade(true)
                 .build()
         },
         contentDescription = null,
-        modifier = Modifier
-            .matchParentSize()
-            .blur(COVER_BLUR_RADIUS),
+        modifier = Modifier.matchParentSize(),
         contentScale = ContentScale.Crop,
-        alpha = COVER_BACKGROUND_ALPHA
+        alpha = if (banner != null) BANNER_BACKGROUND_ALPHA else COVER_BACKGROUND_ALPHA
     )
     Box(
         modifier = Modifier
@@ -273,9 +279,9 @@ private fun BoxScope.ActivityCoverBackdrop(coverUrl: String?, context: Context) 
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.40f),
-                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.80f),
-                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.96f)
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.30f),
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.74f),
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f)
                     )
                 )
             )

@@ -1,9 +1,13 @@
 package com.anisequel
 
 import com.anisequel.data.network.LiveChartPosterCandidate
+import com.anisequel.data.network.liveChartAnimePathFromPoster
+import com.anisequel.data.network.normalizeLiveChartImageUrl
 import com.anisequel.data.network.normalizeLiveChartTitle
 import com.anisequel.data.network.parseLiveChartPosterCandidates
+import com.anisequel.data.network.parseLiveChartVisualUrls
 import com.anisequel.data.network.selectLiveChartPoster
+import com.anisequel.data.network.visualsPageUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -145,10 +149,139 @@ class LiveChartCoverTest {
         assertEquals(emptyList<LiveChartPosterCandidate>(), parseLiveChartPosterCandidates(""))
     }
 
+    /**
+     * A result whose image has not been hydrated yet.
+     *
+     * This is the shape a lazily-loaded search page serves: the real URL lives in
+     * a data attribute and `src` is a transparent placeholder. Reading only `src`
+     * - which the parser did - produced no candidates at all, so the viewer showed
+     * no LiveChart pill for a page that did carry the poster.
+     */
+    @Test
+    fun `a lazily loaded result is read from its data attribute`() {
+        val page = "<img alt=\"Frieren\" data-src=\"$frierenThumb/webp/small.jpg\" " +
+            "src=\"data:image/gif;base64,R0lGODlhAQABAAAAACw=\" />"
+
+        val candidates = parseLiveChartPosterCandidates(page)
+
+        assertEquals(1, candidates.size)
+        assertEquals("$frierenThumb/webp/small.jpg", candidates.single().imageUrl)
+        assertEquals(
+            "$frierenThumb/webp/large.jpg",
+            selectLiveChartPoster(candidates, listOf("Sousou no Frieren"))
+        )
+    }
+
+    /** A page that offers only a `srcset` still names its smallest variant first. */
+    @Test
+    fun `a srcset only result is read from its smallest variant`() {
+        val page = "<img alt=\"Frieren\" " +
+            "srcset=\"//u.livechart.me/anime/11376/poster_image/c7df.webp/small.webp 1x, " +
+            "//u.livechart.me/anime/11376/poster_image/c7df.webp/large.webp 2x\" />"
+
+        val candidates = parseLiveChartPosterCandidates(page)
+
+        assertEquals(
+            "https://u.livechart.me/anime/11376/poster_image/c7df.webp/small.webp",
+            candidates.single().imageUrl
+        )
+    }
+
+    /** The size segment is the only thing rewritten, and the file format is kept. */
+    @Test
+    fun `a webp thumbnail is swapped for the large webp`() {
+        val page = "<img alt=\"Solo Leveling\" " +
+            "src=\"https://u.livechart.me/anime/12/poster_image/y.webp/small.webp\" />"
+
+        assertEquals(
+            "https://u.livechart.me/anime/12/poster_image/y.webp/large.webp",
+            selectLiveChartPoster(parseLiveChartPosterCandidates(page), listOf("Solo Leveling"))
+        )
+    }
+
     @Test
     fun `normalisation folds case, punctuation and runs of spaces`() {
         assertEquals("attack on titan", normalizeLiveChartTitle("Attack on Titan"))
         assertEquals("shingeki no kyojin", normalizeLiveChartTitle("  SHINGEKI   NO: KYOJIN! "))
         assertEquals("one piece", normalizeLiveChartTitle("One-Piece"))
+    }
+
+    /**
+     * The gallery is derived from the poster the matcher chose, not from a second
+     * title search.
+     *
+     * AnymeX takes the first result's anchor and appends `/visuals`; doing that
+     * here would mean matching the same title twice against two different pieces
+     * of markup, and a near-miss could open the wrong show's gallery under the
+     * right show's poster. The poster URL already carries the id of the result the
+     * matcher accepted.
+     */
+    @Test
+    fun `the anime path is read from the chosen poster URL`() {
+        assertEquals(
+            "/anime/11376",
+            liveChartAnimePathFromPoster("$frierenThumb/webp/large.jpg")
+        )
+        assertEquals(
+            "/anime/11376",
+            liveChartAnimePathFromPoster("https://u.livechart.me/anime/11376")
+        )
+        assertNull(liveChartAnimePathFromPoster("https://u.livechart.me/anime/ten"))
+        assertNull(liveChartAnimePathFromPoster("https://u.livechart.me/poster_image/x"))
+    }
+
+    @Test
+    fun `the visuals page is one path away`() {
+        assertEquals(
+            "https://www.livechart.me/anime/11376/visuals",
+            visualsPageUrl("/anime/11376")
+        )
+        assertEquals(
+            "https://www.livechart.me/anime/11376/visuals",
+            visualsPageUrl("/anime/11376/")
+        )
+    }
+
+    /**
+     * The visuals tab marks each lightbox image in a data attribute.
+     *
+     * Reading `src` would take the thumbnail - often a different crop - and
+     * reading a whole `<img>` would miss the cards that render their real URL only
+     * in the attribute. The `data:` placeholder and a relative advertisement must
+     * not become gallery pages.
+     */
+    @Test
+    fun `every visual image is read, normalised and de-duplicated`() {
+        val page = """
+            <div data-anime-visual-url-value="https://u.livechart.me/anime_visuals/local_version/1/image/a.webp/small.jpg"></div>
+            <div data-anime-visual-url-value='//u.livechart.me/anime_visuals/local_version/1/image/b.webp/small.jpg'></div>
+            <div data-anime-visual-url-value="/uploads/ad/banner.jpg"></div>
+            <div data-anime-visual-url-value="data:image/gif;base64,R0lGODlhAQABAAAAACw="></div>
+            <div data-anime-visual-url-value="https://u.livechart.me/anime_visuals/local_version/1/image/a.webp/small.jpg"></div>
+            <div data-anime-visual-url-value="https://example.com/anime_visuals/image/c.jpg"></div>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                "https://u.livechart.me/anime_visuals/local_version/1/image/a.webp/small.jpg",
+                "https://u.livechart.me/anime_visuals/local_version/1/image/b.webp/small.jpg",
+                "https://www.livechart.me/uploads/ad/banner.jpg"
+            ),
+            parseLiveChartVisualUrls(page)
+        )
+    }
+
+    @Test
+    fun `an image URL keeps its own size and format, and upgrades only the scheme`() {
+        assertEquals(
+            "https://u.livechart.me/anime_visuals/x/image/a.webp/small.webp",
+            normalizeLiveChartImageUrl("//u.livechart.me/anime_visuals/x/image/a.webp/small.webp")
+        )
+        assertEquals(
+            "https://u.livechart.me/anime_visuals/x/image/a.webp/large.jpg",
+            normalizeLiveChartImageUrl("http://u.livechart.me/anime_visuals/x/image/a.webp/large.jpg")
+        )
+        assertNull(normalizeLiveChartImageUrl("data:image/png;base64,AAAA"))
+        assertNull(normalizeLiveChartImageUrl("not a url"))
     }
 }

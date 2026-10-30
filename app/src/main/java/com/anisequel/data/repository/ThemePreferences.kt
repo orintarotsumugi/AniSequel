@@ -2,6 +2,7 @@ package com.anisequel.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -50,6 +51,36 @@ enum class ThemeMode(val storageValue: String, val displayName: String) {
          * and a theme preference is not worth refusing to start over.
          */
         fun fromStorage(value: String?): ThemeMode =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
+ * How far a retained cover colour reaches into the background.
+ *
+ * Retention used to be all-or-nothing: the show's hue either repainted every
+ * surface or stopped at the accent. Both are honest answers to different readers -
+ * a night-sky show at full tint is a very dark app, while its accent alone is a
+ * navy app with one blue button - so the choice is a setting rather than a guess.
+ *
+ * The strength only applies after the sheet closes. While a title is open the
+ * immersive layer is the point, and dialling it down would make the preview
+ * disagree with the page the reader is looking at.
+ */
+enum class RetainedTint(
+    val storageValue: String,
+    val displayName: String,
+    /** 0 = the palette's own surfaces, 1 = the cover's tinted scheme. */
+    val strength: Float
+) {
+    SUBTLE("subtle", "Subtle", 0.35f),
+    BALANCED("balanced", "Balanced", 0.7f),
+    FULL("full", "Full", 1f);
+
+    companion object {
+        val DEFAULT = FULL
+
+        fun fromStorage(value: String?): RetainedTint =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }
 }
@@ -149,6 +180,7 @@ class ThemePreferences(context: Context) {
          */
         val ANIME_THEME_RETAINED_COLOR_HEX = stringPreferencesKey("anime_theme_retained_color_hex")
         val ANIME_THEME_RETAIN_COLOR = booleanPreferencesKey("anime_theme_retain_color")
+        val ANIME_THEME_RETAINED_TINT = stringPreferencesKey("anime_theme_retained_tint")
         val ANIME_THEME_REVERT_DURATION = androidx.datastore.preferences.core.intPreferencesKey("anime_theme_revert_duration")
         val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
     }
@@ -197,11 +229,33 @@ class ThemePreferences(context: Context) {
          * mid-session. Off means the layer is on a timer instead.
          */
         val animeThemeRetainColor: Boolean = true,
+        /**
+         * How much of the retained colour's tinted scheme the background keeps.
+         * Full by default, which is the colour the reader was looking at in the
+         * sheet; Subtle keeps the accent and leaves the surfaces to the palette.
+         */
+        val retainedTint: RetainedTint = RetainedTint.DEFAULT,
         val animeThemeRevertDuration: Int = 300,
         val appBackgroundColor: String? = null,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
-    )
+    ) {
+        /**
+         * The retained cover colour, if it is allowed to drive the scheme now.
+         *
+         * The marker on its own is provenance: it records who wrote the accent,
+         * and it outlives the switch being flipped so that turning the feature back
+         * on does not need a title opened to find the colour again. Only these two
+         * switches decide whether it may tint, which is why the resolution lives
+         * here rather than at each of the four call sites (the theme, the preview
+         * card, the palette/hue selection state and the reset button) - four copies
+         * is how one of them ends up naming a colour the app is not drawing.
+         */
+        val retainedAnimeColorHex: String?
+            get() = animeThemeRetainedColorHex?.takeIf {
+                animeThemeEnabled && animeThemeRetainColor
+            }
+    }
 
     /**
      * The stored preferences and the in-memory anime layer, as one stream.
@@ -232,6 +286,7 @@ class ThemePreferences(context: Context) {
             animeThemeColorHex = layerHex,
             animeThemeRetainedColorHex = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX],
             animeThemeRetainColor = preferences[Keys.ANIME_THEME_RETAIN_COLOR] ?: true,
+            retainedTint = RetainedTint.fromStorage(preferences[Keys.ANIME_THEME_RETAINED_TINT]),
             animeThemeRevertDuration = preferences[Keys.ANIME_THEME_REVERT_DURATION] ?: 300,
             appBackgroundColor = preferences[Keys.APP_BACKGROUND_COLOR],
             isLoaded = true
@@ -305,14 +360,27 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.ANIME_THEME_ACTIVE)
             preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
             if (!enabled) {
-                val retained = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
-                preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
-                if (retained != null &&
-                    retained.equals(preferences[Keys.CUSTOM_COLOR_HEX], ignoreCase = true)
-                ) {
-                    preferences.remove(Keys.CUSTOM_COLOR_HEX)
-                }
+                preferences.removeAnimeClaim()
             }
+        }
+    }
+
+    /**
+     * Hands the accent back to the reader, ending the anime's claim on it.
+     *
+     * Called when a control that *should* own the scheme would otherwise be
+     * silently overruled by a retained cover colour. The wallpaper switch is the
+     * one that needs it: a palette or a custom hue already clears the claim through
+     * [setCustomColorHex], and the anime section's own switches have their paths.
+     * Only the accent this feature wrote is removed - the marker is the whole
+     * reason a reader's identical-looking hex is safe.
+     *
+     * The live layer is not touched: that is the sheet's, and this is about what the
+     * app is drawn with once no sheet is open.
+     */
+    suspend fun releaseAnimeRetainedColor() {
+        appContext.themeDataStore.edit { preferences ->
+            preferences.removeAnimeClaim()
         }
     }
 
@@ -327,16 +395,18 @@ class ThemePreferences(context: Context) {
      *    the timer fires and the stored `active = true` outlived the job that was
      *    going to clear it. "5 minutes" became permanent until the next title
      *    overwrote it.
-     *  - **A retained colour that tinted everything forever.** Retention used to
-     *    leave the *immersive* layer switched on, so the show's hue stayed in the
-     *    surfaces, containers and outlines on every screen and the next launch.
-     *    That is the one thing [com.anisequel.ui.theme.DynamicThemeBuilder] says a
-     *    standing preference must not do: surfaces the reader did not ask about
-     *    move because a title was opened.
+     *  - **A retained colour and the layer getting confused.** Retention and the
+     *    live layer are two different lifetimes, and the bug was storing the
+     *    layer's flag on disk. The retained *marker* is stored; the layer is not.
+     *    The theme now builds the tinted scheme from the marker while no sheet is
+     *    open (see `MainActivity` and `AniSequelTheme`), so a kept colour keeps the
+     *    background it showed in the sheet - which is what the reader asked for -
+     *    without a process-scoped flag pretending a sheet is still open.
      *
-     * [retain] is the difference between the two paths: the accent is persisted
-     * *as well*, so what outlives the sheet is the ordinary custom-hue theme -
-     * same colour, untinted surfaces - rather than the layer.
+     * [retain] is the difference between the two paths: the accent *and* the
+     * provenance marker are persisted, so the retained scheme has a colour to be
+     * built from after the layer ends. With retention off nothing is stored and
+     * the sheet is a preview on its own timer.
      *
      * Order matters. The layer is emitted first, so everything the reader sees
      * while the accent write lands is the immersive scheme; writing the accent
@@ -406,13 +476,7 @@ class ThemePreferences(context: Context) {
                     preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX] = color
                 }
             } else {
-                val retained = preferences[Keys.ANIME_THEME_RETAINED_COLOR_HEX]
-                preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
-                if (retained != null &&
-                    retained.equals(preferences[Keys.CUSTOM_COLOR_HEX], ignoreCase = true)
-                ) {
-                    preferences.remove(Keys.CUSTOM_COLOR_HEX)
-                }
+                preferences.removeAnimeClaim()
             }
         }
         // With retention off there is nothing left to keep the colour alive, and
@@ -428,9 +492,31 @@ class ThemePreferences(context: Context) {
         }
     }
 
+    suspend fun setRetainedTint(tint: RetainedTint) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.ANIME_THEME_RETAINED_TINT] = tint.storageValue
+        }
+    }
+
     private fun cancelPendingRevert() {
         revertJob?.cancel()
         revertJob = null
+    }
+
+    /**
+     * Removes the retained marker, and the accent too when the marker says this
+     * feature wrote it.
+     *
+     * One function rather than three copies of the check: the three exits (feature
+     * off, Retain off, another control taking over) have to make the same decision,
+     * and a fourth caller is how one of them would drift.
+     */
+    private fun MutablePreferences.removeAnimeClaim() {
+        val retained = this[Keys.ANIME_THEME_RETAINED_COLOR_HEX] ?: return
+        remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
+        if (retained.equals(this[Keys.CUSTOM_COLOR_HEX], ignoreCase = true)) {
+            remove(Keys.CUSTOM_COLOR_HEX)
+        }
     }
 
     suspend fun setAppBackgroundColor(hex: String?) {
@@ -473,6 +559,7 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.ANIME_THEME_COLOR_HEX)
             preferences.remove(Keys.ANIME_THEME_RETAINED_COLOR_HEX)
             preferences.remove(Keys.ANIME_THEME_RETAIN_COLOR)
+            preferences.remove(Keys.ANIME_THEME_RETAINED_TINT)
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
         }

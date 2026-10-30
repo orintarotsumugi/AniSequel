@@ -18,6 +18,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.anisequel.data.repository.ThemeMode
@@ -99,6 +100,50 @@ internal val LightColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFD8E1EC),
     scrim = Color(0xFF000000),
 )
+
+/**
+ * A retained scheme with its neutral roles eased back toward [base].
+ *
+ * [strength] 1 returns [retained] untouched. At lower values the *surfaces* move
+ * toward the base scheme while every accent, container and `on` role stays the
+ * cover's - which is the difference between "this show tints my app" and "this
+ * show's colour is in my app but my background is still mine". The blend is a
+ * plain per-channel lerp, which is enough because both schemes are generated for
+ * the same dark/light mode and their brightness is already in the same band.
+ *
+ * The `on` roles are deliberately not blended with the surfaces: they were chosen
+ * against the *retained* surfaces by the tonal ladder, and mixing them toward a
+ * second set of `on` colours could only lower contrast.
+ */
+private fun blendRetainedTint(
+    retained: ColorScheme,
+    base: ColorScheme,
+    strength: Float
+): ColorScheme {
+    val fraction = strength.coerceIn(0f, 1f)
+    fun blend(from: Color, to: Color): Color = lerp(from, to, fraction)
+    return retained.copy(
+        background = blend(base.background, retained.background),
+        surface = blend(base.surface, retained.surface),
+        surfaceVariant = blend(base.surfaceVariant, retained.surfaceVariant),
+        surfaceTint = retained.surfaceTint,
+        surfaceBright = blend(base.surfaceBright, retained.surfaceBright),
+        surfaceDim = blend(base.surfaceDim, retained.surfaceDim),
+        surfaceContainer = blend(base.surfaceContainer, retained.surfaceContainer),
+        surfaceContainerHigh = blend(base.surfaceContainerHigh, retained.surfaceContainerHigh),
+        surfaceContainerHighest = blend(
+            base.surfaceContainerHighest,
+            retained.surfaceContainerHighest
+        ),
+        surfaceContainerLow = blend(base.surfaceContainerLow, retained.surfaceContainerLow),
+        surfaceContainerLowest = blend(
+            base.surfaceContainerLowest,
+            retained.surfaceContainerLowest
+        ),
+        outline = blend(base.outline, retained.outline),
+        outlineVariant = blend(base.outlineVariant, retained.outlineVariant)
+    )
+}
 
 /**
  * The picked canvas colour as a whole surface ramp, not just `background`.
@@ -253,6 +298,34 @@ fun AniSequelTheme(
     customColorHex: String? = null,
     animeThemeActive: Boolean = false,
     animeThemeColorHex: String? = null,
+    /**
+     * The cover colour retention kept, used as the seed when no sheet is open.
+     *
+     * Retention used to stop at the accent: the sheet closed, the immersive layer
+     * ended, and the background snapped back to the palette's neutral navy while
+     * only the buttons kept the show's hue. That is a visible flick back to normal
+     * on every exit, which reads as the colour being lost rather than kept. The
+     * stored marker is what the retained tint is built from now, so a kept colour
+     * keeps the *whole* scheme - surfaces included - until the reader picks a
+     * palette, a hue or Reset appearance in Settings (each of which clears the
+     * marker in `ThemePreferences`).
+     *
+     * Resolved by the caller rather than by a second flag here: only
+     * `ThemePreferences` knows whether retention is on and whether the feature is
+     * still enabled, and a theme that re-derived that would be a second answer to
+     * a question the preferences already answer.
+     */
+    animeThemeRetainedColorHex: String? = null,
+    /**
+     * How much of the retained colour's tinted surfaces survive the sheet.
+     *
+     * 1 is the full scheme the sheet was drawn with; lower values ease the neutral
+     * roles back toward the palette while leaving the accent on the cover. It is
+     * ignored while a sheet is open, because a preview that does not match the
+     * sheet is not a preview. See `RetainedTint` in the preferences for the three
+     * offered values and why this is a setting rather than a constant.
+     */
+    animeTintStrength: Float = 1f,
     appBackgroundColor: String? = null,
     content: @Composable () -> Unit
 ) {
@@ -263,8 +336,14 @@ fun AniSequelTheme(
         ThemeMode.DARK -> true
     }
 
-    val animeColor = androidx.compose.runtime.remember(animeThemeActive, animeThemeColorHex) {
-        if (animeThemeActive) DynamicThemeBuilder.parseHexColor(animeThemeColorHex) else null
+    // The live layer while a sheet is open, and the retained marker after it
+    // closes. Both produce the tinted scheme; which one is present is the only
+    // difference, and keeping them in one seed is what makes the exit stop
+    // repainting every surface back to the brand.
+    val animeSeedHex = animeThemeColorHex?.takeIf { animeThemeActive }
+        ?: animeThemeRetainedColorHex
+    val animeColor = androidx.compose.runtime.remember(animeSeedHex) {
+        DynamicThemeBuilder.parseHexColor(animeSeedHex)
     }
 
     // The anime layer follows Light/Dark/System. It used to force dark mode,
@@ -334,13 +413,36 @@ fun AniSequelTheme(
         } else null
     }
 
+    // The neutral scheme the retained tint eases back toward. It is the custom
+    // accent's own surfaces (which are brand-neutral by construction) when the
+    // retained colour wrote that accent, and the chosen palette otherwise. The
+    // accent roles are never blended: "Subtle" is about how far the background
+    // moves, not about desaturating the show's colour.
+    val neutralBaseScheme = when {
+        customColor != null -> {
+            val (lightDynamic, darkDynamic) = requireNotNull(customDynamicSchemes)
+            if (darkTheme) darkDynamic else lightDynamic
+        }
+        darkTheme -> palette.dark
+        else -> palette.light
+    }
+    // True only when the scheme is built from the stored marker rather than the
+    // live layer. While a sheet is open the immersive scheme is the whole point.
+    val retainedOnly = animeThemeColorHex?.takeIf { animeThemeActive } == null &&
+        animeThemeRetainedColorHex != null
+
     val colorScheme = when {
         // Both asserts are gated by the same condition in the branch above, and
         // `remember` guarantees the same value a read would give - a kotlin
         // nullable here would only re-check what the branch already proved.
-        animeThemeActive && animeColor != null -> {
+        animeColor != null -> {
             val schemes = requireNotNull(animeSchemes)
-            if (darkTheme) schemes.second else schemes.first
+            val selected = if (darkTheme) schemes.second else schemes.first
+            if (retainedOnly && animeTintStrength < 1f) {
+                blendRetainedTint(selected, neutralBaseScheme, animeTintStrength)
+            } else {
+                selected
+            }
         }
         dynamicColor -> requireNotNull(wallpaperScheme)
         customColor != null -> {

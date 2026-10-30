@@ -113,6 +113,31 @@ class FindMissedSequelsUseCaseFilterTest {
         assertTrue(result.none { it.isUnreleased })
     }
 
+    /**
+     * The episode floor drops both the too-short and the unannounced title.
+     *
+     * `0` is AniList's "not announced yet", not "no episodes", so it has to be
+     * treated as unknown rather than as a number that fails the comparison - the
+     * same rule the score floor already applies to an unrated sequel. A null
+     * count is unknown for the same reason.
+     */
+    @Test
+    fun `minimum episodes keeps only titles with at least that many announced`() {
+        val short = MediaNode(id = 203, title = MediaTitle(english = "Short"), episodes = 6)
+        val unknown = MediaNode(id = 204, title = MediaTitle(english = "Unknown"), episodes = 0)
+        val long = MediaNode(id = 205, title = MediaTitle(english = "Long"), episodes = 24)
+        val list = collection(
+            MediaListEntryItem(
+                status = "COMPLETED",
+                media = parent(100, short, unknown, long)
+            )
+        )
+
+        val result = useCase.execute(list, FilterCriteria(minEpisodes = 12))
+
+        assertEquals(listOf(205), result.map { it.sequelId })
+    }
+
     @Test
     fun `choosing the airing status returns currently releasing sequels`() {
         // The filter compared the card's display label ("Airing") to the raw

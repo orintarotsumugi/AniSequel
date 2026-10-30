@@ -1,6 +1,13 @@
 package com.anisequel.data.repository
 
+import com.anisequel.data.network.LiveChartArtwork
 import com.anisequel.data.network.LiveChartPosterApi
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 
 /**
  * LiveChart's poster for one title, kept for a session.
@@ -20,13 +27,26 @@ import com.anisequel.data.network.LiveChartPosterApi
  * [MISS_TTL_MILLIS] so a re-open retries, while a real poster is kept for a day.
  *
  * One instance per process: two would double the requests for the same pill.
+ *
+ * ## Two opens, one request
+ *
+ * The viewer fetches on composition, and a dialog can be dismissed and reopened - or
+ * recomposed into a second `produceState` - before the first answer lands. The cache
+ * below cannot absorb that, because the entry does not exist until the request
+ * returns, so this class also keeps the *in-flight* fetch per key and hands the same
+ * one to every caller. It runs in a process scope rather than the caller's, so
+ * closing the viewer mid-fetch still fills the cache for the next open instead of
+ * throwing the work away - which is what the old caller-scoped fetch did.
  */
 class LiveChartCoverRepository(
     private val api: LiveChartPosterApi = LiveChartPosterApi(),
     private val nowMillis: () -> Long = System::currentTimeMillis
 ) {
 
-    private data class Cached(val url: String?, val storedAtMillis: Long)
+    private data class Cached(val artwork: LiveChartArtwork, val storedAtMillis: Long)
+
+    /** Guards [cache] and [inFlight]; both are touched under it, never across a suspend. */
+    private val lock = Any()
 
     /** Small, because this is the handful of titles a session views full-screen. */
     private val cache = object : LinkedHashMap<String, Cached>(16, 0.75f, true) {
@@ -34,28 +54,69 @@ class LiveChartCoverRepository(
             size > MAX_ENTRIES
     }
 
+    /** Fetches that have not answered yet, so concurrent opens share one request. */
+    private val inFlight = HashMap<String, Deferred<LiveChartArtwork>>()
+
+    /**
+     * Outlives every viewer that asks.
+     *
+     * `Dispatchers.IO` because the API call blocks on an HTTP read; the supervisor
+     * because one failed cover must not cancel the rest of the session's fetches.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     /**
      * The LiveChart poster for [queryTitles], via [searchUrl]; null when there is
-     * none. The key is the first non-blank title so two spellings of one show do
-     * not occupy two entries; with none to key on the search URL itself is used.
+     * none. A thin alias for [artwork], kept for callers that only draw a cover.
      */
-    suspend fun posterUrl(searchUrl: String, queryTitles: List<String>): String? {
+    suspend fun posterUrl(searchUrl: String, queryTitles: List<String>): String? =
+        artwork(searchUrl, queryTitles).posterUrl
+
+    /**
+     * LiveChart's poster and visuals for [queryTitles], via [searchUrl].
+     *
+     * The key is the first non-blank title so two spellings of one show do not
+     * occupy two entries; with none to key on the search URL itself is used. An
+     * empty [LiveChartArtwork] is cached for [MISS_TTL_MILLIS] like a failed
+     * poster lookup, so a title LiveChart does not carry is not re-searched on
+     * every open while a dropped request still gets a second chance in minutes.
+     */
+    suspend fun artwork(searchUrl: String, queryTitles: List<String>): LiveChartArtwork {
         val key = queryTitles.firstOrNull { it.isNotBlank() } ?: searchUrl
-        val now = nowMillis()
-        synchronized(cache) {
-            cache[key]?.let { cached ->
-                val ttl = if (cached.url != null) HIT_TTL_MILLIS else MISS_TTL_MILLIS
-                if (now - cached.storedAtMillis <= ttl) return cached.url
-                cache.remove(key)
+        cachedOrNull(key)?.let { return it }
+
+        val pending = synchronized(lock) {
+            inFlight.getOrPut(key) {
+                scope.async {
+                    try {
+                        api.artwork(searchUrl, queryTitles).also { artwork ->
+                            synchronized(lock) { cache[key] = Cached(artwork, nowMillis()) }
+                        }
+                    } catch (cancelled: CancellationException) {
+                        // The scope is only cancelled at process teardown; rethrow so
+                        // the deferred is marked cancelled rather than "no art".
+                        throw cancelled
+                    } catch (_: Exception) {
+                        LiveChartArtwork()
+                    } finally {
+                        synchronized(lock) { inFlight.remove(key) }
+                    }
+                }
             }
         }
+        return pending.await()
+    }
 
-        val url = api.posterUrl(searchUrl, queryTitles)
-
-        synchronized(cache) {
-            cache[key] = Cached(url, nowMillis())
+    /** A fresh cache entry's artwork, or null when there is none or it has expired. */
+    private fun cachedOrNull(key: String): LiveChartArtwork? {
+        val now = nowMillis()
+        synchronized(lock) {
+            val entry = cache[key] ?: return null
+            val ttl = if (entry.artwork.isEmpty) MISS_TTL_MILLIS else HIT_TTL_MILLIS
+            if (now - entry.storedAtMillis <= ttl) return entry.artwork
+            cache.remove(key)
         }
-        return url
+        return null
     }
 
     private companion object {

@@ -278,6 +278,12 @@ class MainActivity : ComponentActivity() {
                 customColorHex = themeSettings.customColorHex,
                 animeThemeActive = themeSettings.animeThemeActive,
                 animeThemeColorHex = themeSettings.animeThemeColorHex,
+                // Retention's durability, resolved by the preferences because the
+                // theme is given a colour rather than the flags: the marker only
+                // tints while the feature and the retain switch are both on, so a
+                // marker left by a downgrade cannot outrank the reader's palette.
+                animeThemeRetainedColorHex = themeSettings.retainedAnimeColorHex,
+                animeTintStrength = themeSettings.retainedTint.strength,
                 appBackgroundColor = themeSettings.appBackgroundColor
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {

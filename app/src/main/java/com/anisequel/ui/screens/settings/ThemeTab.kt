@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
+import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
@@ -112,11 +113,16 @@ fun ThemeTab(
             // sheet is open.
             themeSettings.animeThemeEnabled ||
             themeSettings.animeThemeActive ||
+            // A retained cover colour is a theme override in its own right now: it
+            // tints the scheme after the sheet, so Reset appearance has to be
+            // offered for it even if the accent it wrote is cleared some other way.
+            themeSettings.retainedAnimeColorHex != null ||
             // Retain and revert are cleared by `reset()` like everything else here,
             // so leaving them out meant a reader who changed only those two had
             // something to reset and no button offering to reset it. Retention
             // defaults to on, which is why the test is negated.
             !themeSettings.animeThemeRetainColor ||
+            themeSettings.retainedTint != RetainedTint.DEFAULT ||
             themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
             themeSettings.appBackgroundColor != null
 

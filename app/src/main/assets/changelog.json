@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "1.7.0",
+      "entries": [
+        {
+          "title": "The cover viewer is a gallery now",
+          "detail": "LiveChart carries far more than one picture per show, and the viewer only ever showed its poster. It now reads the title's own `/visuals` tab - the page AnymeX uses - and turns every key visual, character visual and seasonal piece into a swipeable page, with a `2 / 4` counter in the header and a save button that saves the image actually on screen. Swipe between images, or pinch one and the pager stays out of the way until the zoom is reset. The AniList poster and banner are still the first two sources and still paint immediately; the LiveChart gallery is appended only when it arrives, and a title with no visuals falls back to its LiveChart poster rather than losing the pill. The search page and the gallery share one browser-shaped request path, so a miss costs one round trip and two opens share one fetch."
+        },
+        {
+          "title": "The docked title bar is centred and legible",
+          "detail": "Scrolling the Info page far enough brought in a bar that was visibly left-weighted: the title hugged its content, the right third of the screen sat empty, and the progress wash was a rectangle clipped by the capsule so its leading edge cut straight through the title. The title pill now takes the width the actions do not use, the title is centred inside it, and progress is a 3dp rounded line along the bottom edge instead of a wash behind the words. The bar arrives and leaves on the same spatial spring."
+        },
+        {
+          "title": "Activity cards show the show's banner",
+          "detail": "The feed blew each 2:3 cover up behind its card and blurred it, which turned every row into the same dark smudge. AniList already serves a wide `bannerImage` for exactly that shape, and the card now requests it with the activity and draws it sharp under a bottom-weighted scrim; the cover remains only as a faint fallback for titles with no banner. The backdrop is decoded at a size that is actually shown, so the better-looking card is not a more expensive one."
+        },
+        {
+          "title": "Retention has a strength, not just a switch",
+          "detail": "Keeping a cover colour used to be all-or-nothing: the show either repainted every surface or stopped at the accent. Theme settings now offer Subtle, Balanced and Full. Subtle keeps the show's colour in the accent and buttons while the palette keeps the background, Balanced eases the tint halfway, and Full keeps the scheme the sheet was drawn with. The sheet itself is always full tint - a preview that does not match the page it opened from is not a preview - and Reset appearance still takes the colour back."
+        },
+        {
+          "title": "Filter the dashboard by episode count",
+          "detail": "The filter sheet gained a minimum-episodes floor beside the minimum rating: Any, 1+, 6+, 12+ or 24+. It answers the question the score cannot - \"show me the full-cour ones\" - and follows the same honest rule as the score floor, so a title AniList has not given a length drops out while a minimum is set. The quick filter bar restates it, clearing the filters clears it, and the dashboard recomputes on the tap."
+        },
+        {
+          "title": "Settings and Info read more clearly",
+          "detail": "The About card's version, package and data source moved onto one grouped surface with dividers instead of floating as three loose rows; package ids now centre against their label rather than sitting on top of it. Section titles carry the same weight as the shelf rows, Info cards are more opaque and spaced further apart so a retained tint cannot read through a paragraph, and the detail cards gained a little breathing room between their contents."
+        },
+        {
+          "title": "A kept colour now keeps its background",
+          "detail": "Retaining a cover colour used to stop at the accent: the sheet closed, the immersive layer ended, and every surface snapped back to the palette's navy while only the buttons kept the show's hue. That read as the colour being lost at exactly the moment it was supposed to be kept. The colour retention stores is what builds the tinted scheme now, so the background the reader was looking at stays after the sheet, across page changes and across the next launch - and a palette, a hue or Reset appearance still takes it back."
+        },
+        {
+          "title": "The progress wave reads as a progress bar",
+          "detail": "The Watching Progress card at zero episodes was a faint squiggle with nothing above it, which read as a broken control rather than as a bar that has not started. The track is drawn at a contrast that survives a dark themed surface, the fill keeps a round start marker at 0%, the card says \"Not started yet\" under the wave, and the entrance is keyed on the title so following a relation rises from zero instead of arriving already full."
+        },
+        {
+          "title": "LiveChart's poster actually loads",
+          "detail": "The scrape read the poster URL out of `src` only, so a lazily loaded search page - which keeps the real URL in a data attribute and puts a placeholder in `src` - produced no cover at all and the viewer showed no third pill with nothing saying why. It now reads whichever attribute carries the poster, takes the smallest `srcset` variant, upgrades protocol-relative URLs, and swaps the size segment on any format, not just jpg. Two opens of the same title now share one in-flight fetch instead of spending two."
+        },
+        {
+          "title": "The cover viewer switches instead of cutting",
+          "detail": "Choosing a source swapped the artwork in one frame, and closing the viewer removed the dialog in the same frame, so the exit animation that was written never ran. Sources now crossfade, the close fades and shrinks before the dialog goes, an index left over from a source that never arrived is clamped instead of drawing an empty frame, and the three source pills stay on one line when the LiveChart cover appears."
+        },
+        {
+          "title": "A received message knows when it arrived",
+          "detail": "Received messages are unwrapped from AniList's notifications, and the row kept only the embedded message's timestamp. When that field came back empty the row printed no age and sorted behind every sent message, however old - a merged inbox that lied about order. The notification's own timestamp is the fallback now, so the row's time and its place in the list are both right."
+        },
+        {
+          "title": "Thirty-three more ways it ended",
+          "detail": "The dark tone grows again - the finale's most quoted line improvised the day the actor learned the show was ending, the sequel announced on April Fools' and never denied, the 4K remaster that found detail in the background and none in the ending. The shuffle bag still shows every filtered line once before repeating any."
+        }
+      ]
+    },
+    {
       "version": "1.6.9",
       "entries": [
         {

@@ -86,13 +86,16 @@ fun InfoCard(
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        // 0.55 was see-through enough that a retained cover tint showed *through*
+        // the card and fought the body text. The card is the reading surface; the
+        // page's backdrop is what should carry the colour.
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
             if (title != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,7 +163,20 @@ fun InfoProgressCard(
             )
         }
     ) {
-        WavyProgressBar(progress = fraction)
+        WavyProgressBar(progress = fraction, entranceKey = media.id)
+
+        // A tracked title at zero is a real state AniList records the moment a show
+        // is added to Planning, and it is the one state this card has no words for:
+        // the wave is at its resting height, the fill is a single dot, and the
+        // header already says "0 / 12". Without a caption the reader is left to
+        // decide whether the bar is empty or broken.
+        if (fraction <= 0f) {
+            Text(
+                text = if (isManga) "Not read yet" else "Not started yet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         if (nextEpisode != null && countdown != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -56,6 +56,9 @@ internal fun ViewerDetailsCard(
     media: MediaNode,
     sources: List<CoverSource>,
     sourceIndex: Int,
+    /** The page inside the selected source, and how many images it holds. */
+    imageIndex: Int,
+    imageCount: Int,
     onSelectSource: (Int) -> Unit,
     /**
      * Read here rather than at the call site so a pinch recomposes this card
@@ -85,6 +88,17 @@ internal fun ViewerDetailsCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            if (imageCount > 1) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = "Image ${imageIndex + 1} of $imageCount · " +
+                        sources.getOrNull(sourceIndex)?.label.orEmpty(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             // Which AniList image is on screen. Only drawn when there is a
             // choice: a title with no banner would otherwise get a single
@@ -166,13 +180,14 @@ internal fun ViewerDetailsCard(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (zoom.isZoomed) {
-                    "Double-tap to reset zoom · Tap anywhere to close"
-                } else {
-                    "Pinch or double-tap to zoom · Tap anywhere to close"
+                text = when {
+                    zoom.isZoomed -> "Double-tap to reset zoom · Tap anywhere to close"
+                    imageCount > 1 -> "Swipe or tap a source for more · Pinch to zoom"
+                    else -> "Pinch or double-tap to zoom · Tap anywhere to close"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -252,6 +267,13 @@ private fun ViewerPill(
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
+            // One line, always. Three equal-width pills on a 360dp phone leave
+            // about 90dp each; "LiveChart" at this size is close to that, and a
+            // wrapped pill made the row taller than the card it sits in the moment
+            // the third source arrived - which read as the switch breaking when the
+            // LiveChart cover finally loaded.
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }

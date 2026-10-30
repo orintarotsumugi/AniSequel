@@ -40,6 +40,7 @@ import com.anisequel.data.model.RelationKind
 import com.anisequel.data.model.SequelSortOption
 import com.anisequel.data.model.StatusFilter
 import com.anisequel.data.model.animeGenreOptions
+import com.anisequel.data.model.filterEpisodeOptions
 import com.anisequel.data.model.filterFormatOptions
 import com.anisequel.data.model.filterScoreOptions
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -79,6 +80,8 @@ fun FilterSortSheet(
     onToggleInList: (Boolean) -> Unit = {},
     onToggleGenre: (String) -> Unit = {},
     onSelectMinScore: (Int?) -> Unit = {},
+    /** The episode-count floor; null is "Any". See `filterEpisodeOptions`. */
+    onSelectMinEpisodes: (Int?) -> Unit = {},
     /**
      * Puts every filter back to its default in place, without closing the
      * sheet. The quick bar's clear button is behind the sheet while it is open,
@@ -338,6 +341,44 @@ fun FilterSortSheet(
                         selected = filterCriteria.minScore == score,
                         onClick = { onSelectMinScore(score) },
                         testTag = "score_chip_${score ?: "any"}"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Episode floor. A separate scalar from the score floor because the
+            // two answer different questions - "is it good" and "is it long" -
+            // and a reader looking for a full cour should not have to hope the
+            // short entries happen to score lower.
+            Text(
+                text = "Minimum episodes",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Only sequels AniList lists at least this many episodes. \"12+\" " +
+                    "is one cour or more; titles with no announced count drop out.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                filterEpisodeOptions.forEach { (episodes, label) ->
+                    FilterOptionChip(
+                        label = label,
+                        selected = filterCriteria.minEpisodes == episodes,
+                        onClick = { onSelectMinEpisodes(episodes) },
+                        testTag = "episode_chip_${episodes ?: "any"}"
                     )
                 }
             }
