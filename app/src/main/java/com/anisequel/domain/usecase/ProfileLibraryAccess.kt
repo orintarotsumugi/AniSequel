@@ -41,6 +41,26 @@ fun fetchProfileListEagerly(isOwnProfile: Boolean, isDemo: Boolean): Boolean =
     isOwnProfile || isDemo
 
 /**
+ * Whether an overview load should fetch the anime list alongside the profile.
+ *
+ * Eagerly on the viewer's own profile and the demo (see [fetchProfileListEagerly]),
+ * and once the reader has looked at this person's list ([hasList]), so a refresh
+ * brings that list forward instead of leaving it behind the bio.
+ *
+ * [libraryError] is the third case, and the one this function exists for: the list
+ * is not in memory, because asking for it failed, and the only control on the
+ * borrowed Library tab that means "ask again" is its pull-to-refresh - which is an
+ * overview refresh. That refresh used to leave a list it never had alone, so a
+ * stranger's failed list was retried by nothing, and the error note stayed over the
+ * grid until the reader left the tab and came back.
+ */
+fun shouldFetchProfileList(
+    fetchEagerly: Boolean,
+    hasList: Boolean,
+    libraryError: String?
+): Boolean = fetchEagerly || hasList || libraryError != null
+
+/**
  * Why this profile's manga list cannot be asked for, or null when it can.
  *
  * The guard used to `return` silently, which left the Manga filter spinning on a

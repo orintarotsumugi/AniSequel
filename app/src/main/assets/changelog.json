@@ -170,6 +170,10 @@
         {
           "title": "Thirty-six more ways it ended",
           "detail": "The dark tone gains thirty-six lines - cancelled shows, studios that no longer exist, the wiki page with a section called Unresolved. The pool is above four hundred dark lines now, and the shuffle bag still shows each filtered line once before repeating any."
+        },
+        {
+          "title": "A failed list on somebody else's profile can be retried where it failed",
+          "detail": "Opening a follower's Library tab downloads their anime list on demand, and when that download failed the grid said so with no way to ask again: the page's pull-to-refresh re-read the bio and left the list behind, so the same note came back over the same empty grid until the reader left the tab and returned. A refresh now re-asks a list the page already knows failed, and the note clears once the retry lands."
         }
       ]
     },

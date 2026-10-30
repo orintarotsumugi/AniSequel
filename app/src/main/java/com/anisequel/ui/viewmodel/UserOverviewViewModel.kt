@@ -17,6 +17,7 @@ import com.anisequel.domain.usecase.BuildListInsightsUseCase
 import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.domain.usecase.mangaLibraryProblem
 import com.anisequel.domain.usecase.profileIdentityFromRoute
+import com.anisequel.domain.usecase.shouldFetchProfileList
 import com.anisequel.ui.components.markdown.mediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -388,8 +389,19 @@ class UserOverviewViewModel(
             // reader has looked at this person's list, a refresh has to bring it
             // forward too, or the page would go out to the network for the bio and
             // leave a list behind it that nobody had asked about since.
-            val listDeferred =
-                if (fetchListEagerly || loadedList != null) async { fetchList(forceRefresh) } else null
+            //
+            // The error case is what made the borrowed Library tab's failed list
+            // unretryable: with no list in memory and no eager mode, this condition
+            // was false, so the tab's pull-to-refresh refetched the bio and returned
+            // the same failure note over the same empty grid, every pull, with no
+            // other control on the page that meant "ask again".
+            val listDeferred = if (
+                shouldFetchProfileList(
+                    fetchEagerly = fetchListEagerly,
+                    hasList = loadedList != null,
+                    libraryError = (_uiState.value as? UserOverviewUiState.Success)?.libraryError
+                )
+            ) async { fetchList(forceRefresh) } else null
 
             val overview = overviewDeferred.await().getOrElse { error ->
                 // The list fetch is a child of this coroutine, so returning

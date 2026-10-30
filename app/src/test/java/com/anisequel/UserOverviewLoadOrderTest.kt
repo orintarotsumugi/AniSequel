@@ -206,6 +206,54 @@ class UserOverviewLoadOrderTest {
         }
 
     /**
+     * A stranger's list that failed has to be re-asked by the only retry it has.
+     *
+     * On somebody else's profile the list is lazy: [loadAnimeLibrary] fetches it
+     * when the Library tab opens, and that fetch can fail. The error state it
+     * publishes sits over the grid with no button, so the pull-to-refresh gesture is
+     * the retry - but `load` only fetched the list when it already had one in
+     * memory, so a refresh re-read the bio and left the list unfetched. The reader
+     * pulled, watched the spinner, and got the identical failure back, with no way
+     * to ask again short of leaving the tab.
+     */
+    @Test
+    fun `pull-to-refresh retries a borrowed list that failed`() =
+        runTest(testDispatcher) {
+            val repository = GatedListRepository(
+                listGate = CompletableDeferred<Unit>().apply { complete(Unit) },
+                listFails = true
+            )
+            // A borrowed profile: its list waits for the tab that shows it.
+            val viewModel = UserOverviewViewModel(
+                repository,
+                userId = 1,
+                isOwnProfile = false
+            )
+            advanceUntilIdle()
+
+            // Opening the Library tab is what asks for the list, and it failed.
+            viewModel.loadAnimeLibrary()
+            advanceUntilIdle()
+
+            val failed = viewModel.uiState.value as UserOverviewUiState.Success
+            assertNotNull("the failure must be on screen to have a retry", failed.libraryError)
+            assertEquals(1, repository.listCalls)
+
+            repository.listFails = false
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            assertEquals(
+                "the refresh the failure is shown behind must re-ask the list",
+                2,
+                repository.listCalls
+            )
+            val recovered = viewModel.uiState.value as UserOverviewUiState.Success
+            assertNull("the retry cleared the failure", recovered.libraryError)
+            assertEquals(11, recovered.libraryAnime.single().media.id)
+        }
+
+    /**
      * A failed manga fetch must be distinguishable from an empty manga list.
      *
      * `loadMangaLibrary` used to `onFailure = { }`, which left `mangaLibrary`
@@ -259,8 +307,14 @@ class UserOverviewLoadOrderTest {
         /** The bio the fake profile carries. Null for the tests that have none. */
         private val bio: String? = null,
         /** Whether the manga fetch fails. Mutable so the retry test can flip it. */
-        var mangaFails: Boolean = false
+        var mangaFails: Boolean = false,
+        /** Whether the anime list fetch fails. Mutable so the retry test can flip it. */
+        var listFails: Boolean = false
     ) : AniListRepository {
+
+        /** How many times the anime list was asked for, to pin *that* a retry happened. */
+        var listCalls: Int = 0
+            private set
 
         /**
          * Every key the profile asked a cover for, in order.
@@ -278,6 +332,8 @@ class UserOverviewLoadOrderTest {
             userId: Int,
             forceRefresh: Boolean
         ): Result<MediaListCollection> {
+            listCalls++
+            if (listFails) return Result.failure(RuntimeException("rate limited"))
             val gate = listGate ?: return Result.failure(RuntimeException("no list for you"))
             gate.await()
             return Result.success(
