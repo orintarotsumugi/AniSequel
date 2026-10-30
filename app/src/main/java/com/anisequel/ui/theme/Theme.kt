@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -17,6 +18,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.anisequel.data.repository.ThemeMode
 
@@ -97,6 +99,51 @@ internal val LightColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFD8E1EC),
     scrim = Color(0xFF000000),
 )
+
+/**
+ * The picked canvas colour as a whole surface ramp, not just `background`.
+ *
+ * Overriding only `background`/`surface` left most of the app on the old ramp:
+ * cards sit on `surfaceContainer*`, and sheets and app bars on `surfaceDim`/
+ * `surfaceBright`, so a changed canvas looked half-applied - "the colour
+ * doesn't stick". Every neutral role is re-derived from the canvas itself, and
+ * the `on` roles are derived too, which is what lets a canvas apply in light
+ * mode without putting dark-on-dark text on screen.
+ *
+ * The ramp is built by blending toward the contrast colour (lifts) or toward
+ * the further-out extreme (drops), so elevation steps stay visible on any
+ * canvas and text keeps the contrast the blend was chosen for.
+ */
+internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
+    if (canvas == null) return base
+
+    // The 0.18 crossover is where pure white and pure black text have equal
+    // contrast on the canvas, and it is chosen so neither candidate dips below
+    // WCAG AA anywhere: a mid-tone canvas would otherwise read 4.1:1 with a
+    // fixed light/dark boolean at 0.5 and Material's toned text colours.
+    val canvasIsDark = canvas.luminance() < 0.18f
+    val onCanvas = if (canvasIsDark) Color.White else Color.Black
+    val drop = if (canvasIsDark) Color.Black else Color.White
+
+    fun blend(from: Color, to: Color, fraction: Float) = Color.lerp(from, to, fraction)!!
+    fun lift(fraction: Float) = blend(canvas, onCanvas, fraction)
+
+    return base.copy(
+        background = canvas,
+        onBackground = onCanvas,
+        surface = canvas,
+        onSurface = onCanvas,
+        surfaceContainerLowest = blend(canvas, drop, 0.20f),
+        surfaceContainerLow = lift(0.05f),
+        surfaceContainer = lift(0.10f),
+        surfaceContainerHigh = lift(0.16f),
+        surfaceContainerHighest = lift(0.22f),
+        surfaceDim = blend(canvas, drop, 0.10f),
+        surfaceBright = lift(0.12f),
+        surfaceVariant = lift(0.10f),
+        onSurfaceVariant = blend(onCanvas, canvas, 0.35f)
+    )
+}
 
 /**
  * Status colours Material 3 has no role for.
@@ -317,18 +364,14 @@ fun AniSequelTheme(
             scheme
         }
 
-        // The canvas choices are dark colours and the setting is documented as
-        // a dark-mode choice. Applying one in light mode used to leave the
-        // light theme's near-black `onBackground` text on a black canvas.
-        if (bgCustomColor != null && darkTheme) {
-            baseScheme.copy(
-                background = bgCustomColor,
-                surface = bgCustomColor,
-                surfaceContainerLowest = bgCustomColor
-            )
-        } else {
-            baseScheme
-        }
+        // The canvas colour applies in both modes now. It used to be gated on
+        // `darkTheme` because every preset was a dark colour and applying one in
+        // light mode left the light theme's near-black `onBackground` text on a
+        // black canvas - so a picked background silently did nothing for anyone
+        // on light mode or System-on-a-light-phone. `applyCanvasColour` fixes the
+        // actual problem instead: it derives the on-roles and the surface ramp
+        // from the picked colour, whatever mode it lands in.
+        applyCanvasColour(baseScheme, bgCustomColor)
     }
 
     // Every role eases to its new value instead of cutting. This is read after
