@@ -3,6 +3,7 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.repository.AniListRepository
@@ -94,6 +95,58 @@ class UserMessagesViewModel(
     private val _state = MutableStateFlow(UiState(viewerId = viewerId))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /**
+     * The one message the reader has opened, or null when no sheet is up.
+     *
+     * [message] is the row itself rather than an id to look up, because the inbox
+     * is already in memory and the sheet is the one place a message has to be
+     * readable the instant it is tapped: a target held by id would be a second
+     * pass through the list for data this class is already holding, and would put
+     * the sheet's content behind whatever that pass costs.
+     *
+     * [sent] and [counterpart] are resolved here rather than left to the sheet
+     * because the id they are decided against is this class's own - see
+     * [viewerId]. The card derives the same two from the same object, so the sheet
+     * cannot disagree with the row it was opened from, and a demo fixture whose
+     * viewer id comes from the profile rather than the route still reads in the
+     * right direction.
+     */
+    data class MessageDetail(
+        val message: MessageNode,
+        val sent: Boolean,
+        val counterpart: FollowUser?
+    )
+
+    /**
+     * Held here, and not as `rememberSaveable` in the tab, for the two reasons the
+     * likers tray is held in its ViewModel: the sheet is drawn as a sibling of the
+     * tab content (so a profile-tab switch cannot tear it down mid-read - see
+     * [com.anisequel.ui.screens.profile.ProfileTabsContent]), and this class
+     * outlives a rotation without the open row having to be serialised.
+     */
+    private val _detail = MutableStateFlow<MessageDetail?>(null)
+    val detail: StateFlow<MessageDetail?> = _detail.asStateFlow()
+
+    /**
+     * Opens [message] in the detail sheet.
+     *
+     * Writes the state and nothing else: no request goes out, because everything
+     * the sheet draws - body, sender, timestamp, privacy flag, site URL - arrived
+     * with the list the row is sitting in.
+     */
+    fun openMessage(message: MessageNode) {
+        _detail.value = MessageDetail(
+            message = message,
+            sent = message.isSentBy(viewerId),
+            counterpart = message.counterpartFor(viewerId)
+        )
+    }
+
+    /** Closes the detail sheet. */
+    fun dismissMessage() {
+        _detail.value = null
+    }
+
     // Cursors advance only on success, for the same reason the activity feed's
     // does: a refresh that failed over existing rows used to rewind the cursor
     // and the next scroll re-appended page one under page three.
@@ -136,6 +189,11 @@ class UserMessagesViewModel(
      * [started]: the messages tab loads lazily, so a refresh tapped before the
      * segment was ever opened must not be the thing that spends two requests on
      * it.
+     *
+     * An open detail sheet is left alone on purpose: the refresh rewrites the list
+     * underneath, and the message being read travels with the sheet it was opened
+     * from. Replacing that copy mid-sentence would redraw the sheet out from under
+     * the reader because somebody else tapped a button.
      */
     fun refreshIfStarted() {
         if (!started) return

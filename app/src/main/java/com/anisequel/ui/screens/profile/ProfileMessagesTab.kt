@@ -3,6 +3,7 @@ package com.anisequel.ui.screens.profile
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
@@ -88,6 +90,15 @@ import java.time.Instant
  * - in words under the counterpart's name ("You sent" / "Sent you") and as a
  * chip in the footer - because misreading who said what in an inbox is the one
  * mistake that matters.
+ *
+ * ## A tap reads the message here
+ *
+ * The card opens [MessageDetailSheet], in this app, on the row already on screen.
+ * It used to send the reader to AniList's own message page for the rest of a body
+ * the app had already downloaded, which is a browser hop for text that was in
+ * memory the whole time. The outbound link is still there - as the sheet's
+ * secondary action, and as the card's own chip - it is just no longer the only
+ * way to finish reading.
  */
 @Composable
 fun ProfileMessagesTab(
@@ -103,6 +114,14 @@ fun ProfileMessagesTab(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onOpenUser: (FollowUser) -> Unit,
+    /**
+     * Opens one message in the detail sheet.
+     *
+     * Handed the row rather than its id: the list this tab is drawing is the
+     * sheet's only source of content, so the sheet can render on the frame the
+     * tap lands rather than waiting on a lookup it would have to do anyway.
+     */
+    onOpenMessage: (MessageNode) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     /**
@@ -195,6 +214,7 @@ fun ProfileMessagesTab(
                         viewerId = state.viewerId,
                         nowEpochSecond = nowEpochSecond,
                         onOpenUser = onOpenUser,
+                        onOpenMessage = onOpenMessage,
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)
                             .fillMaxWidth()
@@ -297,10 +317,17 @@ private fun FilterChip(
 /**
  * One message, both directions, with the counterpart named on it.
  *
- * The card is deliberately not clickable as a whole: a message has no thread to
- * open in this app, and a tap that only expands the body would fight the
- * explicit "Read more" control. The two things that are links - the counterpart's
- * face/name and AniList itself - are drawn as links.
+ * The card is clickable as a whole, and the three things inside it that are
+ * already controls stay controls: a nested `clickable` or `IconButton` claims its
+ * own region, so the counterpart's face still opens their profile, "Read more"
+ * still expands in place, and the footer's chip still leaves for AniList. What a
+ * tap on the card - the body, the padding, anywhere that is not one of those -
+ * now does is open [MessageDetailSheet] with this row in it.
+ *
+ * The note here used to say the opposite: that the card was "deliberately not
+ * clickable as a whole, because a message has no thread to open in this app".
+ * That was true of the inbox as it stood, and it is exactly the assumption that
+ * made reading a long message mean leaving the app.
  */
 @Composable
 private fun MessageCard(
@@ -308,6 +335,7 @@ private fun MessageCard(
     viewerId: Int?,
     nowEpochSecond: Long,
     onOpenUser: (FollowUser) -> Unit,
+    onOpenMessage: (MessageNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val body = message.message ?: return
@@ -318,9 +346,23 @@ private fun MessageCard(
     // report describes the collapsed render, so an expanded card reports false
     // and a live-bound control would delete its own "Show less".
     var everOverflowed by remember(message.id) { mutableStateOf(false) }
+    // Shared with [bouncyPress] for the reason [com.anisequel.ui.screens.profile.ActivityTextCard]
+    // gives: one press signal for the card, cancelled the moment the gesture
+    // becomes a scroll, instead of two pointer-input loops competing on every row.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Card(
-        modifier = modifier.testTag("message_card"),
+        modifier = modifier
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                // The label a screen reader announces in place of the card's
+                // contents, so the gesture is described as "Read message" rather
+                // than as a nameless group of text.
+                onClickLabel = "Read message",
+                onClick = { onOpenMessage(message) }
+            )
+            .testTag("message_card"),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -513,8 +555,18 @@ private fun MessageFooter(
     }
 }
 
+/**
+ * The counterpart's face, at the size the surface carrying it uses.
+ *
+ * `internal` rather than private because the detail sheet draws the same face: one
+ * person rendered as two avatars of different shape or different fallback is how a
+ * sheet stops reading as the row it was opened from.
+ */
 @Composable
-private fun MessageAvatar(counterpart: FollowUser?) {
+internal fun MessageAvatar(
+    counterpart: FollowUser?,
+    size: Dp = 32.dp
+) {
     val avatar = counterpart?.avatar?.large ?: counterpart?.avatar?.medium
     val shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner)
     if (avatar != null) {
@@ -522,7 +574,7 @@ private fun MessageAvatar(counterpart: FollowUser?) {
             model = avatar,
             contentDescription = null,
             modifier = Modifier
-                .size(32.dp)
+                .size(size)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop
@@ -532,7 +584,7 @@ private fun MessageAvatar(counterpart: FollowUser?) {
         // the response did not name still has to occupy the row the name sits on.
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(size)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center

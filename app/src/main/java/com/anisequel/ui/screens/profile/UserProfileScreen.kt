@@ -239,6 +239,15 @@ fun UserProfileScreen(
      * user's own taps own the selection.
      */
     initialTab: Int = 0,
+    /**
+     * The Activity tab's opening segment.
+     *
+     * The same rule as [initialTab] and for the same reason: it is what the first
+     * composition opens, not a standing instruction. A profile reached from the
+     * main bar's held Profile tab starts on the inbox; after that the reader's own
+     * taps own the choice, and a rotation restores wherever they left it.
+     */
+    initialSegment: Int = SEGMENT_ACTIVITY,
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
@@ -495,6 +504,7 @@ fun UserProfileScreen(
                                 state = state,
                                 selectedTab = selectedTab,
                                 onSelectTab = { selectedTab = it },
+                                initialSegment = initialSegment,
                                 overviewViewModel = overviewViewModel,
                                 isOwnProfile = isOwnProfile,
                                 activityViewModel = activityViewModel,
@@ -605,5 +615,13 @@ fun UserProfileScreen(
         activityViewModel = followingViewModel,
         viewerId = viewerId,
         canPost = viewerId != null
+    )
+
+    // The inbox's message sheet, on the same terms as the two above: a sibling of
+    // the tab content rather than a child of the tab that opened it, and reading
+    // the row the ViewModel is holding rather than asking anybody for it.
+    MessagesDetailSheetHost(
+        messagesViewModel = messagesViewModel,
+        onOpenUser = onOpenUser
     )
 }

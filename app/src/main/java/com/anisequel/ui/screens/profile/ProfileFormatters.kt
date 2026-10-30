@@ -44,6 +44,24 @@ internal fun formatRelativeSeconds(timestamp: Int, now: Instant = Instant.now())
 }
 
 /**
+ * A Unix timestamp as the moment it names: "Tuesday, 3 March 2026 at 19:42".
+ *
+ * [formatRelativeSeconds] answers "how long ago", which is what a feed row wants
+ * and what a reader quoting a message to somebody else cannot use. The detail
+ * sheet is where the date itself belongs, so the row keeps the relative cue and
+ * the sheet states the absolute one.
+ *
+ * The zone is the device's, not UTC: AniList stores epoch seconds, and a message
+ * read at 09:00 local was sent at 09:00 local by the person who wrote it - the
+ * offset is theirs, not the reader's business. `Locale.ROOT` for the same reason
+ * the relative formatter's note gives.
+ */
+internal fun formatFullTimestamp(timestamp: Int): String =
+    Instant.ofEpochSecond(timestamp.toLong())
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm", Locale.ROOT))
+
+/**
  * Minutes watched as the largest two units that say something.
  */
 internal fun formatWatchTime(minutesWatched: Long): String {

@@ -108,7 +108,17 @@ internal fun BoxScope.MainBarHost(
             // The largest the viewer's avatar has; the bar falls back to a glyph
             // while it is still unknown.
             profileAvatarUrl = profileAvatarUrl,
-            onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = signedIn) }
+            onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = signedIn) },
+            // Held without swiping, the Profile tab goes to the inbox. Only that
+            // tab, because only that page has a segment worth a shortcut, and a
+            // hold belongs to the destination it began on - the page already on
+            // screen. Every other tab keeps the hold the acknowledgement it always
+            // was.
+            onHold = { tab ->
+                if (tab == MainTab.PROFILE) {
+                    navController.navigateToProfileMessages(signedIn = signedIn)
+                }
+            }
         )
     }
 }

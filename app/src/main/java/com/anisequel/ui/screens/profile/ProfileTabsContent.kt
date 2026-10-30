@@ -167,6 +167,14 @@ internal fun ProfileTabsContent(
      */
     onSelectTab: (Int) -> Unit,
     /**
+     * The Activity tab's opening segment, from the route.
+     *
+     * Threaded rather than read here because this composable does not own the
+     * selection either: like [selectedTab], it belongs to the page it seeds, and
+     * the only route that can ask for one is the viewer's own profile.
+     */
+    initialSegment: Int = SEGMENT_ACTIVITY,
+    /**
      * Held rather than read from [state], because two of the tabs ask it for work.
      *
      * The Stats tab and a borrowed list both render this person's anime list, and on
@@ -341,6 +349,12 @@ internal fun ProfileTabsContent(
                         // than drawing two chips that would open empty pages.
                         showViewerSegments = isOwnProfile &&
                             (state.isDemoMode || viewerId != null),
+                        // The route's request, which is [SEGMENT_ACTIVITY] for
+                        // every way in that did not name one. Only meaningful
+                        // while the segments exist at all - a profile that hides
+                        // them cannot be showing one, which `ProfileActivityPage`
+                        // already enforces.
+                        initialSegment = initialSegment,
                         calendar = state.activity,
                         userName = state.username,
                         userAvatar = state.avatarUrl,

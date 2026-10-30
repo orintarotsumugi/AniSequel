@@ -183,6 +183,23 @@ private const val HOLD_TO_SWIPE_MILLIS = 220L
  * the gesture did not register, and it was reported as exactly that. The platform
  * timeout is not ours to change, so the timer here is.
  *
+ * ## A hold that does not move is the destination's own shortcut
+ *
+ * [onHold] is for that case: a destination can carry one thing it would rather be
+ * reached in one gesture than two taps, and the bar already has a gesture that is
+ * *nothing but* a hold - the swipe needs travel to have anywhere to go. It is only
+ * ever offered to the caller that draws the bar, and only when the hold never
+ * moved, so a swipe that wandered off and came back is still the no-op it was: the
+ * finger changed its mind, it did not ask for the shortcut. The main bar uses it for
+ * the viewer's inbox.
+ *
+ * It is handed the destination the hold **began** on, which is the current page's
+ * tab - the same answer the swipe starts from, and for the same reason: the bar is
+ * one `pointerInput` over a `Row` whose items are deliberately unequal (the selected
+ * pill claims more width), so it knows which destination is selected, not which one
+ * is under a finger. A shortcut therefore belongs to the page you are on, which is
+ * also the only page where it means anything.
+ *
  * The direction is the one a strip of pages has rather than the one a list has:
  * dragging to the right pulls the pages right, so the selection moves *left* to the
  * previous tab. That is the same direction as a horizontal pager, which is the
@@ -201,6 +218,13 @@ fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
+    /**
+     * The destination a hold that never moved was made on, if the bar offers one.
+     *
+     * Null for every bar that has no shortcut to offer - the profile's own tab
+     * capsule - which leaves the hold exactly the acknowledgement it always was.
+     */
+    onHold: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -223,6 +247,10 @@ fun ExpressiveNavigationBar(
     // are the values that legitimately change while a finger is down.
     val currentIndex by rememberUpdatedState(selectedIndex)
     val selectTab by rememberUpdatedState(onSelect)
+    // The same reason as the two above: a bar whose shortcut is rebuilt by a
+    // recomposition mid-hold must still fire the callback the caller is holding
+    // now, not the lambda the `pointerInput` was first keyed on.
+    val holdDestination by rememberUpdatedState(onHold)
     val stepPx by rememberUpdatedState(
         // Never zero: the step is the divisor of the travel accumulator, and a
         // bar measured at zero width (before its first layout) would make the
@@ -275,7 +303,8 @@ fun ExpressiveNavigationBar(
                             stepPx = stepPx,
                             haptic = haptic,
                             onPreview = { previewIndex = it },
-                            onSwitch = selectTab
+                            onSwitch = selectTab,
+                            onHold = holdDestination
                         )
                     }
                 },
@@ -337,6 +366,12 @@ fun ExpressiveNavigationBar(
  * per step. A cancellation (the tier tab being switched off while the bar is held,
  * or the screen leaving) commits nothing and only clears the preview, so an
  * interrupted gesture cannot navigate somewhere the finger never settled on.
+ *
+ * [onHold] replaces [onSwitch] when the preview never left the destination the hold
+ * began on. That is the whole of the difference between the two gestures, and it is
+ * why the shortcut cannot live on the tap: the bar's items already switch on tap,
+ * and a hold that goes nowhere was, until now, a gesture that only ever lifted the
+ * bar and then did nothing.
  */
 private suspend fun AwaitPointerEventScope.holdThenSwipe(
     startIndex: () -> Int,
@@ -344,27 +379,36 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
     stepPx: Float,
     haptic: HapticFeedback,
     onPreview: (Int?) -> Unit,
-    onSwitch: (Int) -> Unit
+    onSwitch: (Int) -> Unit,
+    onHold: ((Int) -> Unit)?
 ) {
     val down = awaitFirstDown(requireUnconsumed = false)
     if (!awaitHold(down)) return
 
+    // Read now, not before the hold: the bar can be switched by a tap while the
+    // timer runs, and the swipe has to start from where the selection actually is.
+    val start = startIndex()
     // The preview opens on the tab the hold began on, which is the route's own
-    // selection: a hold with no movement must not change anything.
-    onPreview(startIndex())
+    // selection: a hold with no movement must not switch anything.
+    onPreview(start)
     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+    // Whether the preview ever moved off `start`. The shortcut belongs to the hold
+    // alone, and a swipe that travelled out and came back is the finger changing its
+    // mind rather than asking for anything - so it stays the no-op it was.
+    var moved = false
     var settled: Int? = null
     try {
         settled = swipeSelection(
             down = down,
-            // Read now, not before the hold: the bar can be switched by a tap
-            // while the timer runs, and the swipe has to start from where the
-            // selection actually is.
-            startIndex = startIndex,
+            startIndex = { start },
             lastIndex = lastIndex,
             stepPx = stepPx,
             haptic = haptic,
-            onPreview = onPreview
+            onPreview = { index ->
+                if (index != start) moved = true
+                onPreview(index)
+            }
         )
     } finally {
         // `finally`, not after the call: a key change (the tier tab being switched
@@ -375,7 +419,10 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
         // The commit happens *before* the preview closes so the bar never flashes
         // the tab the swipe started from between the two writes.
         val destination = settled
-        if (destination != null) onSwitch(destination)
+        if (destination != null) {
+            val shortcut = if (moved) null else onHold
+            if (shortcut != null) shortcut(destination) else onSwitch(destination)
+        }
         onPreview(null)
     }
 }

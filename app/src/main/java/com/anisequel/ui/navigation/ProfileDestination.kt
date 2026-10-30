@@ -11,6 +11,8 @@ import com.anisequel.data.model.FollowUser
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.profileViewModelKey
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
+import com.anisequel.ui.screens.profile.SEGMENT_ACTIVITY
+import com.anisequel.ui.screens.profile.SEGMENT_MESSAGES
 import com.anisequel.ui.screens.profile.UserProfileScreen
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserActivityViewModel
@@ -44,19 +46,38 @@ object ProfileRoutes {
     const val ID_NAME_ARG = "name"
 
     /**
-     * [OWN] with the tab the profile should open on.
+     * [OWN] with the tab - and the Activity tab's segment - it should open on.
      *
-     * The tab is an optional query argument rather than a second destination, so
+     * Both are optional query arguments rather than further destinations, so
      * `navigate(OWN)` from the dashboard resolves to the same composable and the
      * two cannot drift. It carries the home-screen widget's request: a tap on the
      * tile asks for the Activity tab, and `"profile"` alone leaves the profile on
-     * its default tab as before.
+     * its default tab as before. [OWN_SEGMENT_ARG] is the bar's held Profile tab
+     * asking for the inbox one level deeper, so a shortcut to Messages does not
+     * have to open the profile and then tap a chip.
+     *
+     * ## Why [OWN_SEGMENT_ARG] defaults to `""` rather than to null
+     *
+     * [OWN_TAB_ARG] is `nullable = true, defaultValue = null`, and that is what
+     * makes `profile?tab=` - with the parameter *present and empty* - the only
+     * literal that reaches this route: a query argument whose default is null is
+     * still required to appear in the URI, which is the failure
+     * [OWN_DEFAULT] documents. Copying that into the new argument would therefore
+     * have broken every caller that does not name a segment - the bar's Profile
+     * tab and the widget among them - by leaving nothing for the route to match,
+     * and `navigate` that matches no destination does nothing at all, silently. A
+     * **non-null** default is the thing that makes an argument genuinely optional
+     * here, so `""` is the value that means "no segment asked for".
      */
-    const val OWN_ROUTE = "profile?tab={tab}"
+    const val OWN_ROUTE = "profile?tab={tab}&segment={segment}"
     const val OWN_TAB_ARG = "tab"
+    const val OWN_SEGMENT_ARG = "segment"
 
     /** The value [OWN_TAB_ARG] takes for the profile's Activity tab. */
     const val TAB_ACTIVITY = "activity"
+
+    /** The value [OWN_SEGMENT_ARG] takes for the Activity tab's inbox. */
+    const val SEGMENT_MESSAGES = "messages"
 
     /** Index of the Activity tab in `ProfileTabs`. */
     const val ACTIVITY_TAB_INDEX = 1
@@ -65,14 +86,25 @@ object ProfileRoutes {
     const val OWN_ACTIVITY = "profile?tab=activity"
 
     /**
+     * [OWN] opening directly on the Activity tab's Messages segment.
+     *
+     * The bar's held Profile tab asks for this, and the profile composes on the
+     * inbox from its first frame - see `ProfileActivityPage`'s `initialSegment`.
+     */
+    const val OWN_MESSAGES = "profile?tab=activity&segment=$SEGMENT_MESSAGES"
+
+    /**
      * The tab a profile opens on when nothing asks for one in particular.
      *
      * [OWN_TAB_ARG] with an **empty** value rather than [OWN] on its own, because a
      * `composable()` route is matched exactly: navigating to `"profile"` finds no
-     * match for `"profile?tab={tab}"` and silently does nothing, so the avatar tap
+     * match for the [OWN_ROUTE] pattern and silently does nothing, so the avatar tap
      * from the dashboard - and the demo dashboard - were dead. The empty value is
      * the optional argument left unset, which is the one thing this route *can* be
      * reached by.
+     *
+     * [OWN_SEGMENT_ARG] is left out of it entirely, which is only safe because that
+     * argument has a non-null default - see [OWN_ROUTE].
      */
     const val OWN_DEFAULT = "profile?tab="
 
@@ -100,6 +132,26 @@ val ProfileIdArguments = listOf(
         defaultValue = ""
     }
 )
+
+/**
+ * [ProfileRoutes.OWN_SEGMENT_ARG] as the index the Activity page switches on, or
+ * null when the route asked for nothing.
+ *
+ * Null rather than a stand-in index, because "no request" and "requested the
+ * history segment" are different intentions even though they open the same screen:
+ * the first leaves the reader's own last choice alone, the second is a shortcut
+ * that has to land on the inbox. Collapsing them into [SEGMENT_ACTIVITY] here is
+ * what the call site does, where the two genuinely do the same thing.
+ *
+ * Lives beside [ProfileRoutes] because it is the only place that is allowed to
+ * know both halves of the mapping - the word a route can carry and the number a
+ * screen indexes - and that pair drifting apart is silent: nothing fails, the
+ * shortcut just stops opening what it says.
+ */
+internal fun profileSegmentFromRoute(requested: String?): Int? = when (requested) {
+    ProfileRoutes.SEGMENT_MESSAGES -> SEGMENT_MESSAGES
+    else -> null
+}
 
 /**
  * Builds the profile screen for whoever it is about, and routes taps on a
@@ -164,7 +216,22 @@ fun ProfileDestination(
      * on the side that cannot offer a write that would fail.
      */
     viewerId: Int? = null,
-    initialTab: Int = 0
+    /**
+     * The tab this profile opens on, resolved from [ProfileRoutes.OWN_TAB_ARG].
+     *
+     * Kept here as an index rather than as the route's word on purpose: the tab is
+     * `UserProfileScreen`'s own state, and a screen that had to know the route's
+     * vocabulary to draw itself would drag navigation into the presentation layer.
+     */
+    initialTab: Int = 0,
+    /**
+     * The Activity tab's segment, resolved from [ProfileRoutes.OWN_SEGMENT_ARG].
+     *
+     * Only ever the inbox or "nothing asked for", which is the same shape the tab
+     * argument has; the index it maps to belongs to `ProfileActivityPage`, which is
+     * why this is that file's [SEGMENT_ACTIVITY] rather than a local guess.
+     */
+    initialSegment: Int = SEGMENT_ACTIVITY
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
     // after the other from the same stack, and without the name in the key the
@@ -296,6 +363,7 @@ fun ProfileDestination(
         },
         onSignInAgain = onSignInAgain,
         initialTab = initialTab,
+        initialSegment = initialSegment,
         // The same key the ViewModels are built on, handed to the screen so its saved
         // tab is scoped per profile too - see `UserProfileScreen`.
         viewModelKey = viewModelKey
