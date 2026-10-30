@@ -1,8 +1,5 @@
 package com.anisequel
 
-import android.app.Application
-import androidx.test.core.app.ApplicationProvider
-import coil.util.okHttpClient
 import com.anisequel.data.network.NetworkClient
 import okhttp3.Call
 import okhttp3.Connection
@@ -13,8 +10,7 @@ import okhttp3.Response
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,9 +26,10 @@ import java.util.concurrent.TimeUnit
  *
  * Pinned at the interceptor itself because the bug is a header on a request,
  * and running a fake chain is the only way to read that header without a
- * socket in the test.
+ * socket in the test. (Coil 2's built `ImageLoader` does not expose the client
+ * it was built with, so the wiring half is pinned by reading the source, the
+ * same way [MinimumSdkReachabilityTest] pins a branch that cannot run.)
  */
-@RunWith(RobolectricTestRunner::class)
 class ImageUserAgentTest {
 
     private class RecordingChain(private val original: Request) : Interceptor.Chain {
@@ -105,22 +102,31 @@ class ImageUserAgentTest {
     }
 
     /**
-     * The interceptor is on the image loader's client, not just defined.
+     * The interceptor is on the cover client, not just defined.
      *
-     * The feature is the client's header, so this is the level the user's bug
-     * lives at: `createImageLoader` is what every `AsyncImage` in the app
-     * resolves to.
+     * `createImageLoader` is what every `AsyncImage` in the app resolves to,
+     * and a missing `.addInterceptor` line is the whole bug returning. Coil 2
+     * gives no way back from a built `ImageLoader` to its client, so this
+     * reads the builder source directly - the same instrument [MinimumSdk-
+     * ReachabilityTest] uses for a branch no runtime can reach.
      */
     @Test
-    fun `the image loader's client carries the interceptor`() {
-        val context = ApplicationProvider.getApplicationContext<Application>()
+    fun `the image loader builder registers the interceptor`() {
+        var dir = File(".").absoluteFile
+        while (!File(dir, "settings.gradle.kts").exists()) {
+            dir = dir.parentFile ?: error("no settings.gradle.kts above the working directory")
+        }
+        val source = File(
+            dir,
+            "app/src/main/java/com/anisequel/data/network/NetworkClient.kt"
+        ).readText()
 
-        val client = requireNotNull(NetworkClient.createImageLoader(context).okHttpClient)
+        val imageLoaderBody = source.substringAfter("fun createImageLoader")
 
         assertTrue(
             "the cover client is built without the UA interceptor, so CDN " +
-                "requests are back to sending okhttp/* and silently 403ing",
-            client.interceptors.contains(NetworkClient.ImageUserAgentInterceptor)
+                "requests are back to sending the bare okhttp agent and silently 403ing",
+            imageLoaderBody.contains(".addInterceptor(ImageUserAgentInterceptor)")
         )
     }
 }
