@@ -2,6 +2,7 @@ package com.anisequel
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import coil.util.okHttpClient
 import com.anisequel.data.network.NetworkClient
 import okhttp3.Call
 import okhttp3.Connection
@@ -43,7 +44,7 @@ class ImageUserAgentTest {
             proceeded = request
             return Response.Builder()
                 .request(request)
-                .protocol(Protocol.HTTP_1)
+                .protocol(Protocol.HTTP_1_1)
                 .code(200)
                 .message("captured")
                 .build()
