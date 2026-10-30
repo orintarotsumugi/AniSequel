@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -62,11 +63,16 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.englishName
 import com.anisequel.data.model.formatLabel
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
+import com.anisequel.data.model.romajiName
 import com.anisequel.data.model.statusLabel
+import com.anisequel.data.repository.LiveChartCovers
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.liveChartUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -86,14 +92,20 @@ import kotlinx.coroutines.launch
  * the zoom, and the save button saves whichever source is on screen rather than
  * a fixed URL.
  *
- * ## Why LiveChart has a link and not an image source
+ * ## LiveChart as a third source - the owner reversed the no-scrape rule
  *
- * LiveChart serves its own posters, but publishes no API - its FAQ points at RSS
- * feeds and nothing else - so reading those images would mean scraping a site
- * that has asked not to be consumed that way. The viewer therefore links out to
- * LiveChart's own search for this title, where the reader sees the schedule and
- * the artwork on the site that hosts it. That is the honest version of "show me
- * the LiveChart cover": the tap goes to LiveChart.
+ * This viewer used to carry only AniList's two images and deliberately no
+ * LiveChart art, on the reasoning that LiveChart publishes no API and so reading
+ * its posters would be scraping a site that has asked not to be consumed that way
+ * (the full history is in [com.anisequel.ui.components.LiveChart] and NOTES.md).
+ * The owner has since decided that LiveChart's posters - more numerous and higher
+ * quality than AniList's for many titles - should be shown here. That is a
+ * deliberate reversal, so it is done the narrow way: the app reads exactly one
+ * thing off the search page, the best title match's `large.jpg` poster
+ * ([com.anisequel.data.network.LiveChartPosterApi]), added lazily as a source only
+ * once it arrives. AniList's poster and banner still paint immediately, the
+ * outbound "LiveChart" link still goes to the same search page, and a failure to
+ * fetch simply means there is no third pill.
  *
  * Pinch-to-zoom, double-tap and pan are unchanged; see the frame below.
  */
@@ -114,7 +126,12 @@ fun FullScreenCoverViewer(
     // a tablet.
     val zoom = remember(media.id) { CoverZoomState() }
 
-    val sources = remember(media.id, media.posterUrl, media.bannerImage) {
+    // LiveChart's poster, fetched off the UI thread after the dialog opens so it
+    // never delays the AniList sources. Null until it arrives - or forever, if the
+    // search finds no close match or the request fails.
+    val liveChartCoverUrl = rememberLiveChartCoverUrl(media)
+
+    val sources = remember(media.id, media.posterUrl, media.bannerImage, liveChartCoverUrl) {
         buildList {
             media.posterUrl?.let {
                 add(CoverSource(label = "Poster", url = it, fallbackAspect = DEFAULT_COVER_ASPECT))
@@ -123,6 +140,13 @@ fun FullScreenCoverViewer(
             // for the frame before the image reports its real size.
             media.bannerImage?.let {
                 add(CoverSource(label = "Banner", url = it, fallbackAspect = DEFAULT_BANNER_ASPECT))
+            }
+            // The owner reversed the earlier no-scrape rule; LiveChart's own poster
+            // is appended only once the search fetch returns one, so AniList's two
+            // sources paint immediately and a null (failure, no match, manga) simply
+            // means no third pill. See the header and [LiveChartPosterApi].
+            liveChartCoverUrl?.let {
+                add(CoverSource(label = "LiveChart", url = it, fallbackAspect = DEFAULT_COVER_ASPECT))
             }
         }
     }
@@ -247,6 +271,29 @@ fun FullScreenCoverViewer(
             }
         }
     }
+}
+
+/**
+ * The viewer's extra LiveChart source, arrived at late and off the UI thread.
+ *
+ * Mirrors how [com.anisequel.ui.components.detail.info] loads theme songs: the
+ * search fetch runs in `LiveChartPosterApi`'s own `withContext(Dispatchers.IO)`,
+ * cached for the session by `LiveChartCovers`, and `produceState` is keyed on the
+ * search URL so opening a different title cancels the previous fetch instead of
+ * letting its poster land here. A manga has no LiveChart entry to find, so it is
+ * skipped outright and no request is spent.
+ *
+ * `null` is a real answer rather than a loading state to render: until (and unless)
+ * a poster comes back, the viewer just shows its AniList sources.
+ */
+@Composable
+private fun rememberLiveChartCoverUrl(media: MediaNode): String? {
+    if (media.isManga) return null
+    val searchUrl = media.liveChartUrl
+    val titles = listOfNotNull(media.romajiName, media.englishName, media.displayName)
+    return produceState(initialValue = null as String?, searchUrl) {
+        value = LiveChartCovers.repository().posterUrl(searchUrl, titles)
+    }.value
 }
 
 /** A pinch that scales past this counts as zoomed for the background tap. */

@@ -188,7 +188,7 @@ private fun BackgroundSection(
     SectionCard(
         title = "Background",
         icon = AppVectorIcons.SectionBackground,
-        subtitle = "How dark the app is in dark mode"
+        subtitle = "The canvas every surface is derived from"
     ) {
         SwitchRow(
             title = "True black",
@@ -326,14 +326,24 @@ private fun MotionSection(
     }
 }
 
-/** The background canvas choices; `null` is "follow the theme". */
+/**
+ * The background canvas choices; `null` is "follow the theme".
+ *
+ * These used to be dark colours only, because the canvas override was gated on
+ * dark mode and did nothing in light. `applyCanvasColour` now derives the text
+ * and surface ramp from whichever chip is picked, so light canvases are honest
+ * choices and the light-mode reader gets the same "this changed the whole app"
+ * result as the dark-mode one.
+ */
 private val backgroundColors = listOf(
     null to "Default",
     "#000000" to "Pure Black",
     "#080C14" to "Midnight Navy",
     "#121212" to "Deep Charcoal",
     "#1C1410" to "Warm Espresso",
-    "#101820" to "Slate Navy"
+    "#101820" to "Slate Navy",
+    "#F2F0F7" to "Mist White",
+    "#F5EFE3" to "Warm Paper"
 )
 
 /**

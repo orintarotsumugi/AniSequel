@@ -10,7 +10,9 @@ import com.anisequel.data.repository.AuthRepository
 import com.squareup.moshi.Moshi
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -245,6 +247,15 @@ object NetworkClient {
                             maxRequestsPerHost = IMAGE_MAX_REQUESTS_PER_HOST
                         }
                     )
+                    // A browser-like User-Agent on cover requests. This client had
+                    // none, so it sent OkHttp's default `okhttp/4.12.0` - and image
+                    // CDNs answer that with a 403 (the same class of rejection Coil
+                    // itself documents for hosts that check the UA). The failure was
+                    // invisible: the API client has its own interceptors, so only
+                    // images went dark, and every `AsyncImage` either showed nothing
+                    // or aliased its error painter to the placeholder - a permanent
+                    // grey box that reads as "still loading", not "forbidden".
+                    .addInterceptor(ImageUserAgentInterceptor)
                     .build()
             }
             // No OkHttp response cache here on purpose. Coil's disk cache is
@@ -280,6 +291,29 @@ object NetworkClient {
             .build()
 
     private const val MEMORY_CACHE_PERCENT = 0.25
+
+    /**
+     * User-Agent for image requests only. A generic desktop browser string,
+     * because the CDNs that reject the bare okhttp agent accept anything that
+     * looks like one; deliberately not tied to the app's identity - artwork is
+     * public and the API's rate-limiting UA stays separate.
+     */
+    private const val IMAGE_USER_AGENT =
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+    /**
+     * Names the image client's UA rewrite rather than inlining the lambda, so
+     * the regression test can run a real chain through it without a socket -
+     * the bug shipped precisely because nothing could see this header.
+     */
+    internal object ImageUserAgentInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response =
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("User-Agent", IMAGE_USER_AGENT)
+                    .build()
+            )
+    }
 
     /**
      * How much cover art is kept on disk.

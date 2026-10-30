@@ -63,6 +63,14 @@ import com.anisequel.ui.viewmodel.UserMessagesViewModel
  * through. Sharing one would drop the reader halfway down the friends feed when
  * they switched back to their own history - the two lists have unrelated
  * lengths and nothing in common but their card shape.
+ *
+ * ## The segment can be asked for by name
+ *
+ * [initialSegment] is how a route reaches this page's state without the reader
+ * tapping: it is how the main bar's held Profile tab offers the viewer's own
+ * inbox. It is an *initial* value and nothing more - see the note on the saved
+ * state below for why re-applying it after the first composition would be the
+ * worse rule.
  */
 @Composable
 fun ProfileActivityPage(
@@ -81,6 +89,17 @@ fun ProfileActivityPage(
      * state explains nothing. The demo qualifies too - it has fixtures for both.
      */
     showViewerSegments: Boolean,
+    /**
+     * The segment this page opens on.
+     *
+     * [SEGMENT_ACTIVITY] for every way in that does not name one, which is what
+     * leaves the reader's own last choice in charge - this only ever decides the
+     * *first* frame. The app's main bar asks for [SEGMENT_MESSAGES] through the
+     * profile route's `segment` argument so the inbox opens without a tap, and
+     * seeding the saved state here rather than writing to it after composition is
+     * the difference between opening on Messages and flashing Activity first.
+     */
+    initialSegment: Int = SEGMENT_ACTIVITY,
     calendar: ActivityCalendar?,
     userName: String?,
     userAvatar: String?,
@@ -101,7 +120,13 @@ fun ProfileActivityPage(
     // handed "All". Not keyed on the profile, deliberately - `ProfileActivityPage`
     // is recomposed per profile anyway, and on a profile that hides the segments
     // the remembered index is never read.
-    var segment by rememberSaveable { mutableIntStateOf(SEGMENT_ACTIVITY) }
+    //
+    // [initialSegment] is the *initial value* only, which is the same rule the
+    // profile's tab follows (see `UserProfileScreen`): a route that names a
+    // segment asks where to open, it does not outrank the choice the reader made
+    // here afterwards. Applying it on every recomposition instead would both
+    // fight the chips and flash the wrong feed on the way in.
+    var segment by rememberSaveable { mutableIntStateOf(initialSegment) }
     // A profile that does not offer the segments can never be showing one. The
     // saved value is kept rather than reset, so returning to an own profile
     // restores the last choice.
@@ -194,6 +219,10 @@ fun ProfileActivityPage(
                     onLoadMore = { messagesViewModel.loadNextPage() },
                     onRetry = { messagesViewModel.retry() },
                     onOpenUser = onOpenUser,
+                    // The row travels to the ViewModel, which is what the detail
+                    // sheet is drawn from - see `MessageDetailSheet` for why that
+                    // means the sheet opens on the tap's own frame.
+                    onOpenMessage = { message -> messagesViewModel.openMessage(message) },
                     contentPadding = contentPadding,
                     listState = messagesListState
                 )
@@ -209,9 +238,13 @@ fun ProfileActivityPage(
     }
 }
 
-private const val SEGMENT_ACTIVITY = 0
-private const val SEGMENT_FRIENDS = 1
-private const val SEGMENT_MESSAGES = 2
+// `internal`, not private: the profile route has to name one of these to open the
+// inbox from a shortcut, and a second copy of the numbering in `ui/navigation` is
+// how the two drift - silently, because nothing fails when an index means a
+// different chip than the one the route said.
+internal const val SEGMENT_ACTIVITY = 0
+internal const val SEGMENT_FRIENDS = 1
+internal const val SEGMENT_MESSAGES = 2
 
 /**
  * The chip row that switches between the tab's three views.

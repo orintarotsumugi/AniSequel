@@ -8,6 +8,7 @@ import androidx.navigation.navArgument
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.profileIdentityFromRoute
+import com.anisequel.ui.screens.profile.SEGMENT_ACTIVITY
 import com.anisequel.ui.viewmodel.MediaDetailHost
 
 /**
@@ -38,6 +39,21 @@ fun NavGraphBuilder.profileDestinations(
                 type = NavType.StringType
                 nullable = true
                 defaultValue = null
+            },
+            // A **non-null** default, which is what makes the argument omissible so
+            // that `OWN_DEFAULT` (`profile?tab=`) and the widget's `OWN_ACTIVITY`
+            // still resolve to this destination. `OWN_TAB_ARG` above leaves the
+            // default null, and that is exactly why those two callers have to spell
+            // `tab=` out: an argument with no default value has to be present in the
+            // URI, and a `navigate` that matches nothing does nothing at all. Copying
+            // the tab's shape here would therefore have broken the bar's Profile tab
+            // the moment the segment was added. `nullable` is set as well so the
+            // argument is optional however the matcher reads it; both "absent" and
+            // "empty" mean the same thing to `profileSegmentFromRoute`.
+            navArgument(ProfileRoutes.OWN_SEGMENT_ARG) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = ""
             }
         )
     ) { backStackEntry ->
@@ -46,6 +62,8 @@ fun NavGraphBuilder.profileDestinations(
         // re-open the Activity tab on the *next* profile the user opened,
         // from wherever they opened it.
         val requestedTab = backStackEntry.arguments?.getString(ProfileRoutes.OWN_TAB_ARG)
+        val requestedSegment =
+            backStackEntry.arguments?.getString(ProfileRoutes.OWN_SEGMENT_ARG)
 
         // `signedInViewer` is null until the dashboard has loaded, and a demo
         // dashboard has no session ViewModel at all - hence the two sources
@@ -72,7 +90,14 @@ fun NavGraphBuilder.profileDestinations(
                 ProfileRoutes.ACTIVITY_TAB_INDEX
             } else {
                 0
-            }
+            },
+            // The same one-way mapping as the tab's: the route's word decides the
+            // segment the Activity page is *initialised* to, and nothing else. An
+            // unrecognised or absent value means "whatever the reader left it on",
+            // which is what keeps every existing caller - `OWN_DEFAULT`, the widget's
+            // `OWN_ACTIVITY` - behaving exactly as it did before a route could name a
+            // segment.
+            initialSegment = profileSegmentFromRoute(requestedSegment) ?: SEGMENT_ACTIVITY
         )
     }
 

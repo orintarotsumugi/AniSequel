@@ -8,18 +8,28 @@ import java.nio.charset.StandardCharsets
 /**
  * Where this title can be found on LiveChart.me, as a search rather than a page.
  *
- * ## Why the app links out instead of reading LiveChart itself
+ * ## The app both links out here and reads one poster from it
  *
  * LiveChart publishes no API - its FAQ says so outright and points at RSS feeds
- * as the only machine-readable surface - so there is nothing here to call that
- * would not be scraping somebody else's site behind their back. The alternative
- * integrations people write against LiveChart are reverse-engineered endpoints
- * that can change, throttle or block without notice, and a title page that
- * quietly loses its schedule is worse than one that hands the reader the site.
+ * as the only machine-readable surface. For a long time the rule was that this
+ * meant the app could only *link* to LiveChart and never read it, on the
+ * reasoning that scraping a site that has asked not to be consumed that way is
+ * someone else's call to make.
+ *
+ * **The owner has since reversed that for one narrow thing: the cover viewer now
+ * shows LiveChart's own poster**, which is more numerous and higher quality than
+ * AniList's for many titles. See [com.anisequel.data.network.LiveChartPosterApi]
+ * and the NOTES.md section of the same name for what is actually fetched and why.
+ * The reversal is deliberately bounded: nothing but the best title match's poster
+ * is read, the reverse-engineered endpoints the old comment warned about are still
+ * untouched, and this file still does exactly what it always did - build the
+ * search URL the outbound "LiveChart" pill uses.
  *
  * The URL is the search LiveChart advertises in its own pages' schema.org
  * `SearchAction` (`https://www.livechart.me/search?q={search_term}`), so it is a
- * shape the site itself promises rather than one guessed from its address bar.
+ * shape the site itself promises rather than one guessed from its address bar. It
+ * is also the page the cover fetch opens, which is why the same builder is the
+ * honest single definition of "a LiveChart search for this title".
  *
  * ## Why the romaji title
  *
