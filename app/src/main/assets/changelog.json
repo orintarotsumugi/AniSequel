@@ -4,6 +4,10 @@
       "version": "1.6.8",
       "entries": [
         {
+          "title": "AniList explains itself even when no screen is asking",
+          "detail": "Three failures used to be invisible whenever they happened to a background request or a sheet the reader had already closed: an expired session, a 5xx from AniList's side, and a device with no connection. A screen that could not show its own error just left a dead spinner. They now raise one app-wide popup each - a Toast at the composition root, the same way a rate limit already announced itself - so the reader is told even when nothing on screen was waiting for the answer. A burst is one popup, not one per request: an outage fails every in-flight query at once, and each kind keeps its own quiet window so a server blip (a minute) cannot be silenced by a dead token's longer one (five). A comment that lands after its sheet was dismissed now says so too, replacing the inline confirmation that had nowhere left to draw."
+        },
+        {
           "title": "The Activity tab has a Friends segment",
           "detail": "What the people you follow are watching, finishing and saying now has its own segment inside the Activity tab, read from AniList's own following feed rather than stitched together profile by profile. It pages, likes and threads exactly like your own feed, and a friend's name or face opens their profile in the app. The segment row is drawn only on your own profile - a profile opened by name has no follow graph of yours behind it."
         },

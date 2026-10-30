@@ -27,6 +27,7 @@ That is this file. Read the section for the screen before you change it.
 - [Home-screen widgets](#home-screen-widgets)
 - [Release notes](#release-notes)
 - [Crashes you cannot see](#crashes-you-cannot-see)
+- [App-wide notices](#app-wide-notices)
 - [Deliberate non-goals](#deliberate-non-goals)
 - [Keeping the list fresh](#keeping-the-list-fresh)
 - [What survives closing the app](#what-survives-closing-the-app)
@@ -1141,6 +1142,39 @@ plain JVM test: the half of the object worth testing takes a header string and a
 dying can be checked without crashing it. The default is pinned by
 `DiagnosticsPreferencesTest`, because "off" is the consent model rather than a
 preference.
+
+---
+
+## App-wide notices
+
+Two failures the reader must be told about even when no screen asked for them,
+and the one write confirmation that has nowhere else to go, are raised on a
+process-wide channel and drawn as a `Toast` at the composition root
+(`MainActivity`). The reason is a hole no screen can cover: a *background*
+refresh - a silent re-fetch, a sheet's paging request, a comment still in flight
+after its sheet closed - has no surface left to explain itself on, so without a
+global notice it fails as a dead spinner or silent success.
+
+- **`RateLimitNotice`** carries only a 429, because a rate limit is a distinct
+  instruction ("wait, do not tap") with a `Retry-After` number attached. It
+  reports from the one place a 429 is classified (`AniListException`), so both
+  roads that recognise one - the HTTP status and a GraphQL `status == 429` entry -
+  cannot drift into one notifying and the other going quiet.
+- **`SystemNotices`** carries the rest: `SessionExpired`, `ServerDown`, `Offline`
+  (all raised from the same classification choke point, so reads *and* refused
+  writes are covered in one place) and `CommentPosted` (raised only when a comment
+  lands after its sheet closed - the inline scroll confirmation has no window left
+  to draw in).
+
+Both buses deduplicate a burst to one notice per episode, because an outage or a
+dead token fails every in-flight request in the same second and each would
+otherwise post its own Toast. The window is **per kind**, not global: a server
+blip can clear in a minute, a dead token should not nag more than every five, and
+keying the window on the notice means one kind's storm cannot silence another's.
+
+This is deliberately a `Toast`, not a `Snackbar`: the failures land most often on
+`ModalBottomSheet`s, which live in their own window over the host screen, so a
+Scaffold snackbar would post behind the sheet where the reader is not looking.
 
 ---
 

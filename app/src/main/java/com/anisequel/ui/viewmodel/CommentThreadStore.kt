@@ -1,6 +1,7 @@
 package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.ContentLimits
 import kotlinx.coroutines.CoroutineScope
@@ -266,7 +267,17 @@ class CommentThreadStore(
                     // tapping Post - left the card claiming one comment fewer
                     // than the thread had, until some later refresh fixed it.
                     onReplyCountDelta(activityId, 1)
-                    val latest = _state.value?.takeIf { it.activityId == activityId } ?: return@fold
+                    val latest = _state.value?.takeIf { it.activityId == activityId }
+                    if (latest == null) {
+                        // The sheet was closed before the write landed, so the
+                        // inline confirmation - the new comment scrolled into
+                        // view - has nowhere to draw. Say it app-wide instead, so
+                        // a reader who posted and dismissed is not left guessing
+                        // whether the comment went through. The count delta above
+                        // still applied; this only replaces the lost notice.
+                        SystemNotices.report(SystemNotices.Notice.CommentPosted)
+                        return@fold
+                    }
                     _state.value = latest.copy(
                         isPosting = false,
                         postError = null,

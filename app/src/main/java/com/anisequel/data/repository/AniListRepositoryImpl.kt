@@ -43,6 +43,7 @@ import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.network.parseAniListErrorBody
 import com.anisequel.data.network.readCapped
 import com.anisequel.data.network.RequestCoalescer
+import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.network.toAniListException
 import com.squareup.moshi.JsonDataException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2179,6 +2180,13 @@ class AniListRepositoryImpl(
         } catch (e: AniListException) {
             Result.failure(e)
         } catch (e: IOException) {
+            // Every read and write that cannot leave the device lands here, and
+            // it is the one place an offline failure is classified - so the
+            // app-wide notice is raised exactly once per episode, deduplicated in
+            // [SystemNotices]. A screen that has no connection surface of its own
+            // (a sheet, a background paging request) would otherwise fail with a
+            // dead spinner and no "there is no network".
+            SystemNotices.report(SystemNotices.Notice.Offline)
             Result.failure(
                 AniListException(
                     kind = AniListErrorKind.OFFLINE,

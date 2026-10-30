@@ -24,6 +24,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.RateLimitNotice
+import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
@@ -201,6 +202,30 @@ class MainActivity : ComponentActivity() {
                         "AniList is busy — you're rate limited. Give it a minute and try again.$wait",
                         Toast.LENGTH_SHORT
                     ).show()
+                }
+            }
+
+            // The other failures and the one write confirmation that have no
+            // surface of their own where they happen. Same composition-root
+            // reasoning as the rate-limit notice above: a background refresh that
+            // comes back on a dead token has no sheet to put "sign in again" on,
+            // and a comment that lands after its sheet closed has no inline
+            // confirmation left to scroll into — a Toast is the only thing that
+            // reaches either. Deduplicated per kind in [SystemNotices], so one
+            // outage is one notice rather than one per in-flight request.
+            LaunchedEffect(Unit) {
+                SystemNotices.events.collect { notice ->
+                    val message = when (notice) {
+                        SystemNotices.Notice.SessionExpired ->
+                            "Your AniList session expired. Sign in again to sync your list."
+                        SystemNotices.Notice.ServerDown ->
+                            "AniList's servers are down right now. Nothing on this device is broken."
+                        SystemNotices.Notice.Offline ->
+                            "No connection. Reconnect and it will load."
+                        SystemNotices.Notice.CommentPosted ->
+                            "Comment posted."
+                    }
+                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                 }
             }
 
