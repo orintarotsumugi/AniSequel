@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -124,47 +125,7 @@ fun FullScreenCoverViewer(
     val liveChartArtwork = rememberLiveChartArtwork(media)
 
     val sources = remember(media.id, media.posterUrl, media.bannerImage, liveChartArtwork) {
-        buildList {
-            media.posterUrl?.let {
-                add(
-                    CoverSource(
-                        label = "Poster",
-                        urls = listOf(it),
-                        fallbackAspect = DEFAULT_COVER_ASPECT
-                    )
-                )
-            }
-            // AniList banners are about 1900x400. The fallback is only ever read
-            // for the frame before the image reports its real size.
-            media.bannerImage?.let {
-                add(
-                    CoverSource(
-                        label = "Banner",
-                        urls = listOf(it),
-                        fallbackAspect = DEFAULT_BANNER_ASPECT
-                    )
-                )
-            }
-            // The owner reversed the earlier no-scrape rule; LiveChart's gallery is
-            // appended only once the fetch returns one, so AniList's two sources
-            // paint immediately and a null (failure, no match, manga) simply means
-            // no third pill. The gallery is the point: a title with no visuals
-            // falls back to its LiveChart poster rather than losing the source.
-            liveChartArtwork?.let { artwork ->
-                val urls = artwork.visualUrls.ifEmpty {
-                    listOfNotNull(artwork.posterUrl)
-                }
-                if (urls.isNotEmpty()) {
-                    add(
-                        CoverSource(
-                            label = "LiveChart",
-                            urls = urls,
-                            fallbackAspect = DEFAULT_COVER_ASPECT
-                        )
-                    )
-                }
-            }
-        }
+        buildCoverSources(media, liveChartArtwork)
     }
     var sourceIndex by remember(media.id) { mutableIntStateOf(0) }
     // The LiveChart source is appended *after* the dialog opens, and it can also
@@ -289,98 +250,36 @@ fun FullScreenCoverViewer(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    CoverViewerTopBar(
+                    CoverViewerHeader(
                         media = media,
-                        canSave = currentUrl != null,
                         saveState = saveState,
-                        pageLabel = if ((source?.urls?.size ?: 0) > 1) {
-                            "${currentPage + 1} / ${source?.urls?.size}"
-                        } else {
-                            null
-                        },
-                        onSave = {
-                            if (currentUrl != null && saveState != CoverSaveState.SAVING) {
-                                saveState = CoverSaveState.SAVING
-                                scope.launch {
-                                    saveState = saveCover(
-                                        context = context,
-                                        media = media,
-                                        source = source,
-                                        imageIndex = currentPage
-                                    )
-                                }
+                        source = source,
+                        currentPage = currentPage,
+                        onDismiss = requestDismiss,
+                        startSave = {
+                            saveState = CoverSaveState.SAVING
+                            scope.launch {
+                                saveState = saveCover(
+                                    context = context,
+                                    media = media,
+                                    source = source,
+                                    imageIndex = currentPage
+                                )
                             }
-                        },
-                        onDismiss = requestDismiss
+                        }
                     )
 
                     // Center Anime Cover Artwork with interactive Zoom & Pan.
-                    //
-                    // A real pager, not a single image: LiveChart's visuals tab
-                    // can carry dozens of key visuals, and the counter in the
-                    // header is only honest if the artwork underneath it can be
-                    // swiped. The pager is the only thing attached to
-                    // [pagerState]; the crossfade between sources lives *inside*
-                    // one page, on the image, because composing two pagers with
-                    // one state would attach the same state twice.
-                    val coverBg = media.posterColor.toCoverColorOrNull()
-                        ?: MaterialTheme.colorScheme.surfaceContainerHighest
-                    if (source == null) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        )
-                    } else {
-                        HorizontalPager(
-                            state = pagerState,
-                            // A zoomed image owns the finger: letting the pager
-                            // steal a pan would make a 2.4x cover impossible to
-                            // inspect past its own edge.
-                            userScrollEnabled = !zoom.isZoomed,
-                            pageSpacing = 12.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .testTag("cover_gallery")
-                        ) { page ->
-                            val url = source.urls.getOrNull(page)
-                            if (url != null) {
-                                AnimatedContent(
-                                    targetState = url,
-                                    transitionSpec = {
-                                        fadeIn(ExpressiveMotion.FastEffects)
-                                            .togetherWith(fadeOut(ExpressiveMotion.FastEffects)) using null
-                                    },
-                                    contentKey = { it },
-                                    label = "cover_viewer_image",
-                                    modifier = Modifier.fillMaxSize()
-                                ) { activeUrl ->
-                                    val painter = rememberAsyncImagePainter(model = activeUrl)
-                                    CoverArtwork(
-                                        media = media,
-                                        painter = painter,
-                                        // The artwork's own ratio, so a rare
-                                        // non-2:3 cover - or a wide banner - draws
-                                        // whole instead of letterboxing inside the
-                                        // poster's frame.
-                                        coverAspect = coverAspectOf(painter.intrinsicSize, source),
-                                        coverBg = coverBg,
-                                        zoom = zoom,
-                                        // Both images are composed for the
-                                        // crossfade, and the pan limits are half
-                                        // the scaled overflow of one frame - so
-                                        // only the image on screen may publish its
-                                        // size.
-                                        reportsFrame = page == currentPage && activeUrl == url,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(vertical = 12.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    CoverViewerPager(
+                        source = source,
+                        pagerState = pagerState,
+                        currentPage = currentPage,
+                        zoom = zoom,
+                        media = media,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    )
 
                     // Bottom Details Card: Titles & Dismiss Hint
                     ViewerDetailsCard(
@@ -394,6 +293,175 @@ fun FullScreenCoverViewer(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * The viewer's header: what the artwork is, and the two ways out of it.
+ *
+ * The counter and the save guard belong to the header rather than to the viewer
+ * because both are answers to "what is on screen", and that is one question with
+ * one answer: a label like `2 / 4` and a save button that refuses to run against
+ * a page that does not exist are the same fact read twice. Keeping them here
+ * also keeps the guard where the button it guards is.
+ *
+ * The save button copies the CDN's own bytes rather than re-encoding what is on
+ * screen, so what lands in the gallery is the highest-quality copy AniList
+ * serves - and whichever source is displayed, so a banner saves a banner rather
+ * than the poster it was switched from.
+ */
+@Composable
+private fun CoverViewerHeader(
+    media: MediaNode,
+    saveState: CoverSaveState,
+    source: CoverSource?,
+    currentPage: Int,
+    onDismiss: () -> Unit,
+    startSave: () -> Unit
+) {
+    val imageCount = source?.urls?.size ?: 0
+    val onScreen = source?.urls?.getOrNull(currentPage) != null
+    CoverViewerTopBar(
+        media = media,
+        canSave = onScreen,
+        saveState = saveState,
+        pageLabel = if (imageCount > 1) {
+            "${currentPage + 1} / $imageCount"
+        } else {
+            null
+        },
+        onSave = {
+            if (onScreen && saveState != CoverSaveState.SAVING) startSave()
+        },
+        onDismiss = onDismiss
+    )
+}
+
+/**
+ * The artwork: one pager page per image of the selected source.
+ *
+ * Extracted from [FullScreenCoverViewer] because the viewer is the dialog, the
+ * header and the save state, while this is the gallery - a null source, a page
+ * with no image, and the crossfade between two images of one source all belong
+ * together. It also keeps the viewer itself readable: CodeFactor's complexity
+ * ceiling was crossed when every one of those cases lived in the one function.
+ *
+ * The pager is the only thing attached to [pagerState], and the crossfade lives
+ * *inside* a page on the image rather than around the pager - composing two
+ * pagers for one state would attach that state twice. [modifier] carries the
+ * caller's `weight(1f)`, because only the Column the viewer lays out in can
+ * give it the space the header and details card leave.
+ */
+@Composable
+private fun CoverViewerPager(
+    source: CoverSource?,
+    pagerState: PagerState,
+    currentPage: Int,
+    zoom: CoverZoomState,
+    media: MediaNode,
+    modifier: Modifier = Modifier
+) {
+    val coverBg = media.posterColor.toCoverColorOrNull()
+        ?: MaterialTheme.colorScheme.surfaceContainerHighest
+    if (source == null) {
+        Box(modifier = modifier)
+        return
+    }
+    HorizontalPager(
+        state = pagerState,
+        // A zoomed image owns the finger: letting the pager
+        // steal a pan would make a 2.4x cover impossible to
+        // inspect past its own edge.
+        userScrollEnabled = !zoom.isZoomed,
+        pageSpacing = 12.dp,
+        modifier = modifier.testTag("cover_gallery")
+    ) { page ->
+        val url = source.urls.getOrNull(page)
+        if (url == null) return@HorizontalPager
+        AnimatedContent(
+            targetState = url,
+            transitionSpec = {
+                fadeIn(ExpressiveMotion.FastEffects)
+                    .togetherWith(fadeOut(ExpressiveMotion.FastEffects)) using null
+            },
+            contentKey = { it },
+            label = "cover_viewer_image",
+            modifier = Modifier.fillMaxSize()
+        ) { activeUrl ->
+            val painter = rememberAsyncImagePainter(model = activeUrl)
+            CoverArtwork(
+                media = media,
+                painter = painter,
+                // The artwork's own ratio, so a rare
+                // non-2:3 cover - or a wide banner - draws
+                // whole instead of letterboxing inside the
+                // poster's frame.
+                coverAspect = coverAspectOf(painter.intrinsicSize, source),
+                coverBg = coverBg,
+                zoom = zoom,
+                // Both images are composed for the crossfade,
+                // and the pan limits are half the scaled
+                // overflow of one frame - so only the image on
+                // screen may publish its size.
+                reportsFrame = page == currentPage && activeUrl == url,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = 12.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The viewer's sources, in paint order, for one title.
+ *
+ * AniList's poster and banner first, because they are already cached and paint
+ * before any request this function makes; LiveChart's gallery last, because it
+ * arrives late and can be nothing at all. The owner reversed the earlier
+ * no-scrape rule, so the gallery is appended only when the fetch returns one -
+ * a null (failure, no match, manga) means no third pill, and a title with no
+ * visuals falls back to its LiveChart poster rather than losing the source.
+ *
+ * Pure and separate from the composable so the ordering and the fallback are one
+ * readable list rather than three branches inside the dialog's body.
+ */
+private fun buildCoverSources(
+    media: MediaNode,
+    liveChartArtwork: LiveChartArtwork?
+): List<CoverSource> = buildList {
+    media.posterUrl?.let {
+        add(
+            CoverSource(
+                label = "Poster",
+                urls = listOf(it),
+                fallbackAspect = DEFAULT_COVER_ASPECT
+            )
+        )
+    }
+    // AniList banners are about 1900x400. The fallback is only ever read
+    // for the frame before the image reports its real size.
+    media.bannerImage?.let {
+        add(
+            CoverSource(
+                label = "Banner",
+                urls = listOf(it),
+                fallbackAspect = DEFAULT_BANNER_ASPECT
+            )
+        )
+    }
+    liveChartArtwork?.let { artwork ->
+        val urls = artwork.visualUrls.ifEmpty {
+            listOfNotNull(artwork.posterUrl)
+        }
+        if (urls.isNotEmpty()) {
+            add(
+                CoverSource(
+                    label = "LiveChart",
+                    urls = urls,
+                    fallbackAspect = DEFAULT_COVER_ASPECT
+                )
+            )
         }
     }
 }
@@ -422,12 +490,13 @@ private fun rememberLiveChartArtwork(media: MediaNode): LiveChartArtwork? {
 }
 
 /**
- * The viewer's header: what the artwork is, and the two ways out of it.
+ * The header's own row: the format chip, the counter, save and close.
  *
- * The save button copies the CDN's own bytes rather than re-encoding what is on
- * screen, so what lands in the gallery is the highest-quality copy AniList
- * serves - and whichever source is displayed, so a banner saves a banner rather
- * than the poster it was switched from.
+ * Presentation only - [CoverViewerHeader] above it decides *what* the counter says
+ * and *whether* a save may run, so this file's rule holds: the row draws what it
+ * is handed. The save button copies the CDN's own bytes rather than re-encoding
+ * what is on screen, so a banner saves a banner rather than the poster it was
+ * switched from.
  */
 @Composable
 private fun CoverViewerTopBar(
