@@ -16,6 +16,8 @@ import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
+import com.anisequel.data.model.ReceivedMessagesData
+import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaCoverPage
@@ -395,6 +397,18 @@ private class FakeService(
 
     override suspend fun getUserActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> =
         feed()
+
+    override suspend fun getFollowingActivity(
+        request: GraphQLRequest
+    ): GraphQLResponse<ActivityFeedData> = notServed("getFollowingActivity")
+
+    override suspend fun getSentMessages(
+        request: GraphQLRequest
+    ): GraphQLResponse<SentMessagesData> = notServed("getSentMessages")
+
+    override suspend fun getReceivedMessages(
+        request: GraphQLRequest
+    ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
     override suspend fun getCharacterProfile(request: GraphQLRequest): GraphQLResponse<CharacterProfileData> =
         character()

@@ -132,7 +132,7 @@ internal fun ColumnScope.CommentsThread(
             }
 
             state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
-                ThreadLoadError(message = state.loadError!!, onRetry = onRetry)
+                ThreadLoadError(message = state.loadError, onRetry = onRetry)
             }
 
             state.replies.isEmpty() -> item(key = "empty") {

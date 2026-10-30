@@ -6,6 +6,8 @@ import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.EntityPreviewPages
 import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
+import com.anisequel.data.model.ReceivedMessagesData
+import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
@@ -113,6 +115,18 @@ class AniListErrorMappingTest {
         override suspend fun getUserActivity(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getFollowingActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getFollowingActivity")
+
+        override suspend fun getSentMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<SentMessagesData> = notServed("getSentMessages")
+
+        override suspend fun getReceivedMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
         override suspend fun getUserFollowers(
             request: GraphQLRequest
@@ -384,6 +398,18 @@ class RequestCoalescingPolicyTest {
         override suspend fun getUserActivity(
             request: GraphQLRequest
         ): GraphQLResponse<ActivityFeedData> = notServed("getUserActivity")
+
+        override suspend fun getFollowingActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<ActivityFeedData> = notServed("getFollowingActivity")
+
+        override suspend fun getSentMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<SentMessagesData> = notServed("getSentMessages")
+
+        override suspend fun getReceivedMessages(
+            request: GraphQLRequest
+        ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
         override suspend fun getUserFollowers(
             request: GraphQLRequest
