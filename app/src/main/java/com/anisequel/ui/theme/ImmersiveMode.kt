@@ -89,6 +89,7 @@ fun DialogImmersiveEffect(enabled: Boolean = LocalImmersiveMode.current) {
  * Shared by the Activity's root and the full-screen cover viewer's dialog: the
  * two windows hide the same bars and need the same breathing room.
  */
+@Composable
 fun Modifier.immersiveDisplayInsets(immersive: Boolean): Modifier =
     if (immersive) {
         windowInsetsPadding(
