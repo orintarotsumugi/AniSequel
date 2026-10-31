@@ -77,6 +77,7 @@ import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.statusLabel
 import com.anisequel.data.model.studioCredits
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -285,15 +286,38 @@ fun InfoHero(
                 modifier = Modifier.testTag("detail_hero_actions")
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Searching the open web, not just AniList: the question the
+                    // hero answers is "what is this", and the answer can live in a
+                    // wiki, a review or a news post. DuckDuckGo rather than Google
+                    // because it needs no app account to be opened.
+                    HeroIconButton(
+                        icon = AppVectorIcons.Search,
+                        label = "Search the web",
+                        onClick = {
+                            val kind = if (media.isManga) "manga" else "anime"
+                            val query = media.title?.displayTitle.orEmpty().ifBlank {
+                                media.id.toString()
+                            }
+                            openExternalUrlOrCopy(
+                                context,
+                                "https://duckduckgo.com/?q=" + Uri.encode("$query $kind")
+                            )
+                        }
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(22.dp)
+                            .background(Color.White.copy(alpha = 0.18f))
+                    )
                     HeroIconButton(
                         icon = AppVectorIcons.OpenInBrowser,
                         label = "Open on AniList",
+                        // Through the shared opener, not a bare `startActivity` in
+                        // a `runCatching`: a device with no browser used to make
+                        // this tap do nothing at all, silently.
                         onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(media.pageUrl))
-                                )
-                            }
+                            openExternalUrlOrCopy(context, media.pageUrl)
                         }
                     )
                     Box(
