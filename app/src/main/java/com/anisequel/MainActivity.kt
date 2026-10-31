@@ -587,6 +587,10 @@ private fun ImmersiveModeEffect(
  * cutout restores exactly that safety area and nothing else; the bars, when the
  * reader swipes them back, draw over it as usual.
  */
+// `@Composable`, not a plain modifier factory: `windowInsetsPadding` reads the
+// window's insets during composition, so the function that builds it must be a
+// composable even though all it returns is a Modifier.
+@Composable
 private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
     if (immersive) {
         Modifier.windowInsetsPadding(WindowInsets.displayCutout)

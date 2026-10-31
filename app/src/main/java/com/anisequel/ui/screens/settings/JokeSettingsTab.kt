@@ -158,14 +158,13 @@ private val stampChoices = listOf(
 )
 
 /**
- * Who the pill says it is, and the stamp beside the name.
+ * How a line arrives, with a sample that plays it.
  *
- * The toast used to hard-code "Ani-chan" and a fixed sparkle. Both are the app's
- * voice rather than a law - the line arrives on the reader's own phone - so they
- * are editable here. The writes are debounced: a name is typed one character at a
- * time and every keystroke does not need its own disk round trip.
+ * The reveal effects are opt-in, so the card leads with "off by default" and then
+ * hands the decision to a preview rather than to a description: a typewriter judged
+ * by its name is a guess, and the sample uses the toast's own renderer at the same
+ * cadence.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TextEffectCard(
@@ -248,6 +247,15 @@ private fun TextEffectCard(
     }
 }
 
+/**
+ * Who the pill says it is, and the stamp beside the name.
+ *
+ * The toast used to hard-code "Ani-chan" and a fixed sparkle. Both are the app's
+ * voice rather than a law - the line arrives on the reader's own phone - so they
+ * are editable here. The writes are debounced: a name is typed one character at a
+ * time and every keystroke does not need its own disk round trip.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PersonaCard(
     settings: JokeSettings,
