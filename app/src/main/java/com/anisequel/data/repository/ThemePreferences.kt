@@ -711,8 +711,8 @@ class ThemePreferences(context: Context) {
  * cannot disagree about what "as large as it goes" is - the value that is written
  * and the value the screen claims are one.
  */
-const val MIN_FONT_SCALE = 0.85f
-const val MAX_FONT_SCALE = 1.30f
+const val MIN_FONT_SCALE = 0.80f
+const val MAX_FONT_SCALE = 1.40f
 
 /**
  * The title-scroll range, in dp per second.

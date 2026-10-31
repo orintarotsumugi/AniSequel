@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.7.4",
+      "entries": [
+        {
+          "title": "Currently arriving is one row",
+          "detail": "Airing and upcoming titles now share a single strip by default, airing first, so the section above search is one line tall instead of two headings and two rows. The cards already say which group they belong to through their status chip and container colour. Settings > Library > Arriving rows gained \"Separate airing and upcoming\" for readers who want the two labelled groups back, and compact rows follow the same choice. Countdowns share one minute clock per section, the chevron rotates instead of swapping vectors, and the whole header is one click target rather than a button inside a row."
+        },
+        {
+          "title": "Your own font, without the restart",
+          "detail": "Every import now gets a fresh file name and an atomic move into place. Replacing the same path could hand back the previous face from Android's process-wide Typeface cache until the app restarted; a new key cannot. The theme validates and caches the decoded family once per file, so a font that disappeared or came from a restored backup falls back to the system face instead of failing on every screen, and a failed import leaves the current font working."
+        },
+        {
+          "title": "Text size reaches further",
+          "detail": "The reading scale widened from 85-130% to 80-140%, in the same 5% stops, because a reader who needs large text was stopping at the top of the slider rather than at a size that worked. Markdown headings stopped hardcoding 16/18/20sp over their typography roles, which was the one place a bigger reading size visibly did nothing."
+        },
+        {
+          "title": "The waiting page has the page's shape",
+          "detail": "The dashboard skeleton now mirrors the loaded page - stats cards, the arriving strip, search, quick filters, the section header and the recommendation cards - instead of drawing five identical cards. The real content no longer lands as a jump from a page with the wrong rhythm, and one shimmer driver still sweeps the whole stack in step."
+        },
+        {
+          "title": "State changes, not swaps",
+          "detail": "The refresh button crossfades between its icon and its spinner with the app's own springs, so a refresh reads as the same control changing state. The login carousel's progress dots now stretch from their centre inside a reserved slot, in the draw phase, so the rail stops looking like it is sliding while one dot grows."
+        },
+        {
+          "title": "Smaller fixes",
+          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed."
+        }
+      ]
+    },
+    {
       "version": "1.7.3",
       "entries": [
         {

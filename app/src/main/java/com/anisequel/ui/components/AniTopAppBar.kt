@@ -1,6 +1,13 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,16 +178,43 @@ fun AniTopAppBar(
                     .testTag("refresh_button"),
                 interactionSource = refreshSource
             ) {
-                if (isRefreshing) {
-                    ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Icon(
-                        imageVector = AppVectorIcons.Refresh,
-                        contentDescription = "Refresh lists"
-                    )
+                // A crossfade rather than an `if`: the icon and the spinner are
+                // the same control in two states, and swapping them on the frame
+                // the request starts read as the button being replaced. The
+                // spring is the app's own, so Instant still snaps.
+                AnimatedContent(
+                    targetState = isRefreshing,
+                    transitionSpec = {
+                        (
+                            fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                                initialScale = 0.82f,
+                                animationSpec = ExpressiveMotion.FastSpatial
+                            )
+                            ) togetherWith (
+                            fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                                targetScale = 0.82f,
+                                animationSpec = ExpressiveMotion.FastSpatial
+                            )
+                            )
+                    },
+                    label = "refresh_state"
+                ) { refreshing ->
+                    Box(
+                        modifier = Modifier.size(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (refreshing) {
+                            ExpressiveLoadingIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = AppVectorIcons.Refresh,
+                                contentDescription = "Refresh lists"
+                            )
+                        }
+                    }
                 }
             }
 

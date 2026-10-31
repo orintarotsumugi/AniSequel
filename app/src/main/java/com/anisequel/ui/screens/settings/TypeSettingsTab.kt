@@ -272,9 +272,12 @@ private fun TextSizeSection(
                 scope.launch { themePreferences.setFontScale(target) }
             },
             valueRange = MIN_FONT_SCALE..MAX_FONT_SCALE,
-            // Nine stops (85% to 130% in fives): fine enough to matter, coarse
-            // enough that every stop is a deliberate size rather than a pixel nudge.
-            steps = 8,
+            // Thirteen stops (80% to 140% in fives): fine enough to matter,
+            // coarse enough that every stop is a deliberate size rather than a
+            // pixel nudge. The range widened from 85-130 because a reader who
+            // needs large text was stopping at the top of a slider, not at the
+            // size that worked.
+            steps = 11,
             modifier = Modifier.testTag("text_size_slider")
         )
     }

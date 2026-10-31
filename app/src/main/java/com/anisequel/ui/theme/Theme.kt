@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemeMode
@@ -606,20 +605,3 @@ private fun ExpressiveThemeHost(
  * that silently cannot represent the default is a trap for the next person who
  * reaches for it.
  */
-
-/**
- * The reader's imported font, or null when there is none or it can no longer load.
- *
- * The file lives in the app's own storage - `CustomFontStore` copies it there on
- * import - so this is an existence check and a lazy `Font` wrapper. A file that
- * disappeared (cleared data, a failed restore) falls back to the system face rather
- * than failing the theme: a font is a preference, not a dependency. The import path
- * validates the file with a real `Typeface` before it is recorded, which is where
- * the corrupt-file case is actually caught.
- */
-internal fun customFontFamily(path: String?): FontFamily? {
-    if (path.isNullOrBlank()) return null
-    val file = java.io.File(path)
-    if (!file.isFile) return null
-    return runCatching { FontFamily(Font(file)) }.getOrNull()
-}
