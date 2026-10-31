@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -206,17 +207,16 @@ fun InfoHero(
     // 340dp. Held back toward the sheet's own surface, it is still the show's
     // colour and still a colour you can look at.
     val heroBackdrop = lerp(surface, coverColor, BACKDROP_TINT)
-    // The key visual, always - the KDoc above is the long version of why.
+    // The banner when there is one, the key visual before that.
     //
-    // This was `bannerImage ?: posterUrl`, and the `?:` looks harmless: a banner is
-    // fetched for the sheet, so draw it when it is there. What it did on the
-    // ordinary path was swap the artwork mid-open. A sheet opened from the
-    // dashboard starts on the list node, which has no banner, so the hero drew the
-    // poster; the detail then landed, and the backdrop became the banner - a second
-    // full-size download, decode and GPU upload during the entrance animation, in
-    // exchange for the competing 16:9 composition this hero deliberately does not
-    // use.
-    val backdrop = media.posterUrl
+    // The sheet used to draw the key visual twice - as the lockup's cover and again
+    // full-bleed behind it - and never showed the banner AniList actually stores as
+    // a backdrop. The old `bannerImage ?: posterUrl` was reverted because the
+    // summary node has no banner, so the artwork swapped mid-entrance the moment
+    // the detail landed. The crossfade below makes that swap a dissolve instead:
+    // the poster holds the frame while the banner decodes, and the hero ends on the
+    // image that belongs behind a wide composition.
+    val banner = media.bannerImage?.takeIf { it.isNotBlank() }
 
     Box(
         modifier = modifier
@@ -228,25 +228,31 @@ fun InfoHero(
             .heightIn(min = HERO_HEIGHT)
             .background(heroBackdrop)
     ) {
-        if (backdrop != null) {
-            AsyncImage(
-                model = backdrop,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        val scroll = collapse()
-                        // Travels slower than the page, and grows: the image has to
-                        // keep covering the box it is being pulled out of, or a
-                        // parallax on a `Crop` scale exposes an edge.
-                        translationY = scroll * PARALLAX_TRAVEL.toPx()
-                        val zoom = 1f + scroll * PARALLAX_ZOOM
-                        scaleX = zoom
-                        scaleY = zoom
-                        alpha = 1f - scroll * BACKDROP_HANDOFF
-                    }
-            )
+        Crossfade(
+            targetState = banner ?: media.posterUrl,
+            animationSpec = ExpressiveMotion.FastEffects,
+            label = "hero_backdrop"
+        ) { backdrop ->
+            if (backdrop != null) {
+                AsyncImage(
+                    model = backdrop,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val scroll = collapse()
+                            // Travels slower than the page, and grows: the image has
+                            // to keep covering the box it is being pulled out of, or
+                            // a parallax on a `Crop` scale exposes an edge.
+                            translationY = scroll * PARALLAX_TRAVEL.toPx()
+                            val zoom = 1f + scroll * PARALLAX_ZOOM
+                            scaleX = zoom
+                            scaleY = zoom
+                            alpha = 1f - scroll * BACKDROP_HANDOFF
+                        }
+                )
+            }
         }
 
         // Ends on `surface`, not on black: the hero has to hand over to the page
