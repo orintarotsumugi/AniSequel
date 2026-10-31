@@ -586,6 +586,26 @@ internal object JokeLinesShow {
         "The studio's back catalogue is a licensing page and an obituary.",
         "The sequel's script exists, the budget does not, and the forum knows both.",
         "The show was cancelled for being too sad for the slot and too good for the schedule.",
-        "The final key visual has an empty chair and a release date that never happened."
+        "The final key visual has an empty chair and a release date that never happened.",
+        "The sequel was funded by a tax break and cancelled by an audit.",
+        "The finale aired in a timeslot nobody had, against a sports final, and won nothing.",
+        "The author's will names the character, not the estate.",
+        "The anime was finished and then the broadcaster was sold.",
+        "The last episode exists in a vault the rights-holder will not open.",
+        "The studio's comeback was announced as a merger.",
+        "The finale's script was approved posthumously.",
+        "The character's spin-off was greenlit the week the actor's obituary ran.",
+        "The season was pulled after one episode and reviewed as a whole.",
+        "The remaster restored the grain and removed the names.",
+        "The sequel's budget was the first film's marketing.",
+        "The animation was completed by a studio hired to finish the obituary reel.",
+        "The manga is on hiatus and the anime has caught up to the apology.",
+        "The character never got a funeral because the budget had a beach episode.",
+        "The film's last act was storyboarded and never scheduled.",
+        "The show was renewed for a cour and cancelled for the second half of it.",
+        "The soundtrack's deluxe edition includes the cue they cut the death to.",
+        "The final volume omits the chapter where anyone survives.",
+        "The studio shipped the recap to the festival and the ending to nobody.",
+        "The fandom raised the money for a finale and the rights-holder kept it."
     )
 }

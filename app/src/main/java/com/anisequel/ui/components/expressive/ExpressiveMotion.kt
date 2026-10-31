@@ -155,7 +155,12 @@ object ExpressiveMotion {
     val PressSpatialIn: FiniteAnimationSpec<Float> get() =
         spatial(
             expressiveDamping = Spring.DampingRatioNoBouncy,
-            expressiveStiffness = Spring.StiffnessMedium
+            // `High`, not `Medium`: the press is the frame the finger is watching,
+            // and at Medium the squash was still arriving after the touch had
+            // landed. The release keeps its calmer, bouncier spring, so the pair
+            // reads as "down now, up with a little flourish" rather than one
+            // symmetric fade.
+            expressiveStiffness = Spring.StiffnessHigh
         )
 
     /**

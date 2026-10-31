@@ -60,6 +60,14 @@
           "detail": "Fifty more DARK lines about cancellations, hiatuses and productions that did not survive their own schedules, in the pool's own voice. The filter behind every draw is now computed once per switch combination instead of scanning the thousand-line pool on every joke, preview and Settings count, so the toast's arrival no longer depends on how large the pool grows."
         },
         {
+          "title": "The press lands sooner and the pill arrives quicker",
+          "detail": "The press-in spring is stiffer now - the squash is at its target by the frame the finger lands, where the medium spring was still arriving after the touch - while the release keeps its calmer, bouncier return. The joke pill's slide and fade use the fast offset token instead of the pushed-page one, so an aside appears and leaves at the speed of a glance rather than travel."
+        },
+        {
+          "title": "Twenty more ways it ended",
+          "detail": "The dark pool grew again: sequel funding that turned into an audit, a timeslot nobody had, a finale script approved posthumously, a remaster that restored the grain and removed the names, and the fan-funded finale the rights-holder kept. Same voice, same one-per-cycle bag."
+        },
+        {
           "title": "The tier board waits for your list",
           "detail": "Tapping Tiers from a cold start used to build the board before the viewer query answered, and the board read that window as demo mode - so the fixture's titles could be ranked and written into the reader's own DataStore. The tab now draws the same waiting and failure states the Library page does, and builds no ViewModel until it knows whose list it is showing."
         },

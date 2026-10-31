@@ -452,12 +452,17 @@ private fun JokeToastPill(
         // The slide's spec is an `IntOffset` one - `slideInVertically` takes
         // offsets, not floats - which is why this uses the offset token rather
         // than `FastSpatialInt`; the two are not interchangeable.
+        //
+        // `FastSpatialOffset` rather than the calm default: the pill is an aside,
+        // and at the push spring it was still travelling when the reader had
+        // finished glancing at it. The calm spring belongs to pages the reader
+        // chose to open.
         enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-            slideInVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height ->
+            slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                 if (fromBottom) height / 2 else -height / 2
             },
         exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-            slideOutVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height ->
+            slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                 if (fromBottom) height / 2 else -height / 2
             },
         modifier = modifier
