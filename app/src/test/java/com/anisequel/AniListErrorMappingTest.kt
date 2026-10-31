@@ -70,8 +70,8 @@ class AniListErrorMappingTest {
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(
-        request: com.anisequel.data.network.GraphQLRequest
-    ): com.anisequel.data.network.GraphQLResponse<
+        request: com.anisequel.data.model.GraphQLRequest
+    ): com.anisequel.data.model.GraphQLResponse<
         com.anisequel.data.model.SendActivityMessageData
         > = error("This fake does not send messages")
 
@@ -203,13 +203,6 @@ class AniListErrorMappingTest {
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
-    // The fake does not serve direct messages; a test that ever sends one should
-    // fail loudly rather than invent an answer.
-    override suspend fun saveActivityMessage(
-        request: com.anisequel.data.network.GraphQLRequest
-    ): com.anisequel.data.network.GraphQLResponse<
-        com.anisequel.data.model.SendActivityMessageData
-        > = error("This fake does not send messages")
 
         val result = AniListRepositoryImpl(service).getViewer()
         assertTrue("expected a failure, got $result", result.isFailure)
@@ -348,8 +341,8 @@ class RequestCoalescingPolicyTest {
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(
-        request: com.anisequel.data.network.GraphQLRequest
-    ): com.anisequel.data.network.GraphQLResponse<
+        request: com.anisequel.data.model.GraphQLRequest
+    ): com.anisequel.data.model.GraphQLResponse<
         com.anisequel.data.model.SendActivityMessageData
         > = error("This fake does not send messages")
 
