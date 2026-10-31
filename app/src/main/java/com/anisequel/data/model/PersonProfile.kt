@@ -562,6 +562,23 @@ sealed interface PersonProfileState {
         val siteUrl: String?,
         val appearances: List<ProfileAppearance>,
         /**
+         * The name in its own script, when AniList sent one.
+         *
+         * Both profile queries already asked for it and nothing drew it, so a
+         * creator's page said "Hayao Miyazaki" and never 宮崎駿 - the one line of
+         * the hero a reader who knows the person in their own language looks for.
+         * Hidden by the hero when AniList answered nothing.
+         */
+        val nativeName: String? = null,
+        /**
+         * What a creator does - `Director`, `Animator`, ... - in AniList's own order.
+         *
+         * Empty for a character, who does not have an occupation. The staff hero
+         * prints these under the name the way AniList's own page does, replacing the
+         * literal word "Person" that said nothing a reader did not already know.
+         */
+        val occupations: List<String> = emptyList(),
+        /**
          * The people who voiced this character, Japanese before English.
          *
          * Empty for a staff member - a person is not voiced - and for a character
@@ -607,6 +624,7 @@ fun CharacterProfile.toLoadedState(): PersonProfileState.Loaded = PersonProfileS
     description = description,
     siteUrl = siteUrl,
     appearances = media?.titles.orEmpty(),
+    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name?.full },
     voiceActors = media?.voiceActorCredits.orEmpty()
 )
 
@@ -625,6 +643,8 @@ fun StaffProfile.toLoadedState(): PersonProfileState.Loaded = PersonProfileState
     // Primary occupations are passed through so a title credited more than once
     // ("Director" and "Script (eps 17, 21)") keeps the role the person is known for.
     appearances = media?.titlesFor(primaryOccupations.orEmpty()).orEmpty(),
+    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name?.full },
+    occupations = primaryOccupations.orEmpty(),
     // A person is not voiced, so the character-side row stays empty here; what a
     // voice actor *performed* is the other connection and the other row.
     voicedCharacters = characterMedia?.characters.orEmpty()

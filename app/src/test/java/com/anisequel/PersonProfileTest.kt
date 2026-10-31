@@ -22,6 +22,7 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.ui.components.detail.AppearanceFilter
 import com.anisequel.ui.viewmodel.PersonProfileStore
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.squareup.moshi.Moshi
@@ -30,6 +31,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -173,6 +175,58 @@ class PersonProfileTest {
     fun `a staff member has no alias row to show`() {
         val staff = StaffProfile(id = 1, name = MediaName(full = "Hajime Yatate"))
         assertTrue(staff.toLoadedState().aliases.isEmpty())
+    }
+
+    /**
+     * The hero can name a creator in their own script, and say what they do.
+     *
+     * Both fields were already on the wire - the staff query asks for
+     * `name { native }` and `primaryOccupations` - and neither reached the sheet:
+     * a creator's page said "Person" under the romanised name and stopped there.
+     * This pins that the mapper carries them through, because a field dropped
+     * between the payload and the sheet is invisible in every screenshot.
+     */
+    @Test
+    fun `a creator carries their native name and occupations to the sheet`() {
+        val miyazaki = StaffProfile(
+            id = 1,
+            name = MediaName(full = "Hayao Miyazaki", native = "宮崎駿"),
+            primaryOccupations = listOf("Director", "Animator")
+        )
+
+        val loaded = miyazaki.toLoadedState()
+        assertEquals("宮崎駿", loaded.nativeName)
+        assertEquals(listOf("Director", "Animator"), loaded.occupations)
+    }
+
+    /** A native name identical to the shown name would be the same line twice. */
+    @Test
+    fun `a native name equal to the heading is not drawn again`() {
+        val staff = StaffProfile(id = 1, name = MediaName(full = "Kana", native = "Kana"))
+        assertNull(staff.toLoadedState().nativeName)
+    }
+
+    /**
+     * The anime/manga chips have to partition the filmography, not sample it.
+     *
+     * The one failure a screenshot cannot show is a title missing from the
+     * unfiltered list and from the one filter that should contain it - the page
+     * would still look plausible. Every title goes to exactly one half, and the
+     * halves add back up to the whole.
+     */
+    @Test
+    fun `the anime and manga halves of a filmography partition it`() {
+        val anime = ProfileAppearance(id = 1, type = "ANIME")
+        val manga = ProfileAppearance(id = 2, type = "MANGA")
+        val all = listOf(anime, manga)
+
+        assertEquals(all, AppearanceFilter.ALL.applyTo(all))
+        assertEquals(listOf(anime), AppearanceFilter.ANIME.applyTo(all))
+        assertEquals(listOf(manga), AppearanceFilter.MANGA.applyTo(all))
+        assertEquals(
+            AppearanceFilter.ALL.applyTo(all),
+            AppearanceFilter.ANIME.applyTo(all) + AppearanceFilter.MANGA.applyTo(all)
+        )
     }
 
     // ---- the store's two runtime hazards --------------------------------------

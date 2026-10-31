@@ -178,12 +178,6 @@ fun LibraryScreen(
                                 }
                             }
                             if (success != null) {
-                                // The size is part of the subtitle because it is
-                                // the one thing a reader opening this page wants
-                                // before scrolling: how much is here. Counted from
-                                // the anime list, which is the half this title
-                                // describes; the Manga chip carries its own.
-                                val titleCount = success.libraryAnime.size
                                 // The saved copy used to be appended to this
                                 // sentence. It is a sibling beside the name now,
                                 // like the one on Home, because at the end of a

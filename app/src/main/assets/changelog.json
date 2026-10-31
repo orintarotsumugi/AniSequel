@@ -20,6 +20,10 @@
           "detail": "The studio page's bar has two layout buttons: the year shelves it shipped with, or one packed wall with the years dropped. Both open the same title cards and the same sheets; the choice is per visit."
         },
         {
+          "title": "A creator's page introduces them properly",
+          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+        },
+        {
           "title": "The library bar carries its number",
           "detail": "The title count is an animated badge beside the Library name instead of a clause in an ellipsizing subtitle, and the tier trophy rides in a soft capsule so the bar's controls read as one row."
         },

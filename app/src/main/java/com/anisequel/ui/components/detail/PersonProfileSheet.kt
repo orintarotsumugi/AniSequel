@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -52,6 +53,7 @@ import com.anisequel.data.model.VoiceActorCredit
 import com.anisequel.data.model.VoicedCharacter
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
@@ -341,6 +343,21 @@ private fun LoadedPersonProfile(
 private fun personWord(kind: PersonKind): String =
     if (kind == PersonKind.CHARACTER) "character" else "person"
 
+/**
+ * The line under the name on the hero.
+ *
+ * A creator leads with what they do, because that is how AniList introduces them
+ * too - "Director, Animator" is the answer to "who is this?". A character has no
+ * occupation, so the line is the kind itself; "Creator" is the fallback for a
+ * staff member whose occupations AniList did not answer, and it still says more
+ * than "Person" did.
+ */
+private fun heroSubtitle(state: PersonProfileState.Loaded): String = when {
+    state.occupations.isNotEmpty() -> state.occupations.joinToString(" · ")
+    state.kind == PersonKind.STAFF -> "Creator"
+    else -> "Character"
+}
+
 /** The sheet's ceiling: tall enough for a biography, short enough to fit a phone. */
 private val PROFILE_SHEET_MAX_HEIGHT = 620.dp
 
@@ -367,6 +384,7 @@ private fun ProfileHero(state: PersonProfileState.Loaded) {
     // hands over to the body with a visible seam. The sheet's container is
     // `surfaceContainerLow` - see the `ModalBottomSheet` call above.
     val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val context = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -400,6 +418,35 @@ private fun ProfileHero(state: PersonProfileState.Loaded) {
                     )
                 )
         )
+
+        // The escape hatch, on the one part of the page that is on screen the moment
+        // the sheet opens. It used to be only the text button under the body, which
+        // on a creator's page sits under up to twenty-five credits - a reader who
+        // wanted AniList's comment thread had to scroll the whole filmography to
+        // find the link to it.
+        state.siteUrl?.let { siteUrl ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 12.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.34f))
+                    .bouncyPress(pressedScale = 0.9f)
+                    .clickable(onClickLabel = "Open on AniList") {
+                        openExternalUrl(context, siteUrl)
+                    }
+                    .testTag("profile_anilist_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.OpenInBrowser,
+                    contentDescription = "Open on AniList",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
 
         Row(
             modifier = Modifier
@@ -450,12 +497,34 @@ private fun ProfileHero(state: PersonProfileState.Loaded) {
                         spotColor = Color.Black
                     )
                 )
+                // The name in its own script, asked for by both queries and until
+                // now never drawn - a staff page said "Hayao Miyazaki" and never
+                // 宮崎駿. One line: the romanised name above is what the page is
+                // named after, and this is the identifier beside it, not a second
+                // title.
+                state.nativeName?.let { native ->
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = native,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
+                // A creator's occupations where a character says "Character": the
+                // staff hero used to say the literal word "Person", which is the
+                // one thing on the page the reader already knew. "Director ·
+                // Animator" is what AniList's own page leads with, and it is
+                // already on the wire - `primaryOccupations`, not a new request.
                 Text(
-                    text = personWord(state.kind).replaceFirstChar { it.uppercase() },
+                    text = heroSubtitle(state),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.88f),
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (state.aliases.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -463,7 +532,7 @@ private fun ProfileHero(state: PersonProfileState.Loaded) {
                         text = state.aliases.joinToString(" · "),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.78f),
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }

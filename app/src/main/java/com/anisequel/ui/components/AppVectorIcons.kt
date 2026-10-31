@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.automirrored.filled.Comment
+import androidx.compose.material.icons.automirrored.filled.FormatListNumbered
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarViewMonth
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
@@ -57,10 +59,8 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
@@ -170,10 +170,12 @@ object AppVectorIcons {
     // destination *is*, and each of the four was picked because it cannot be
     // mistaken for one of the others at 22dp.
     //
-    // `Insights` rather than `BarChart`: the material set has no `BarChart` at
-    // all, and `Insights` is the icon that is actually a bar chart. Verified
-    // against the material-icons-extended sources rather than assumed, because
-    // a wrong import name here is a build failure discovered in CI.
+    // `Insights` rather than `BarChart`: [StatScore] already uses `BarChart`
+    // for the score-distribution chart on the Stats tab, and a destination tab
+    // wearing the glyph of a chart inside the destination one tap away reads as
+    // a shortcut to that chart rather than as the tab's own page. `Insights`
+    // reads as analytics without being the same drawing, so the two sit on one
+    // screen without being mistaken for each other.
     val ProfileHome = Icons.Default.Home
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
@@ -216,10 +218,16 @@ object AppVectorIcons {
     // One per Stats-tab chart, so the card and its meaning are never a guess.
     val StatSummary = Icons.Default.Insights
     val StatStatus = Icons.Default.RadioButtonChecked
-    val StatFormat = Icons.Default.Smartphone
+    // `Category`, not `Smartphone`: the Format card breaks a list down by TV,
+    // Movie, OVA, ONA and Special. A phone stood for none of those - it read as
+    // "the device this app is on" on a card that is about what was watched.
+    val StatFormat = Icons.Default.Category
     val StatCountry = Icons.Default.Public
     val StatScore = Icons.Default.BarChart
-    val StatEpisodeCount = Icons.Default.Timer
+    // `FormatListNumbered`, not `Timer`: the card counts episodes per bucket -
+    // 1-12, 13-24 - and a stopwatch says "time spent", which is the summary
+    // card above it, not this one.
+    val StatEpisodeCount = Icons.AutoMirrored.Filled.FormatListNumbered
     val StatReleaseYear = Icons.Default.Event
     val StatWatchYear = Icons.Default.CalendarViewMonth
     val StatGenre = Icons.Default.LocalOffer
