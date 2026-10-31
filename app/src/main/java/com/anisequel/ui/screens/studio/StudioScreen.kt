@@ -92,9 +92,8 @@ import com.anisequel.ui.viewmodel.StudioViewModel
  * states it can end in - live in `StudioSections.kt`; this file is about *what the
  * page is*, not how its capsules are drawn.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 fun StudioScreen(
     viewModel: StudioViewModel,
     studioId: Int,
