@@ -426,6 +426,23 @@ fun UserProfileScreen(
                         }
                     }
 
+                    // The layout editor lives on the page's own bar: the palette
+                    // used to float over the header card, where the cover artwork
+                    // and the avatar competed with it.
+                    if (isOwnProfile) {
+                        IconButton(
+                            onClick = { layoutEditorOpen = true },
+                            modifier = Modifier
+                                .testTag("profile_layout_edit")
+                                .bouncyPress(pressedScale = 0.9f)
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Tune,
+                                contentDescription = "Edit profile layout"
+                            )
+                        }
+                    }
+
                     val siteUrl = (uiState as? UserOverviewUiState.Success)?.siteUrl
                     if (siteUrl != null) {
                         IconButton(
@@ -543,11 +560,6 @@ fun UserProfileScreen(
                                 } else {
                                     com.anisequel.domain.profile.ProfileLayout()
                                 },
-                                onEditProfileLayout = if (isOwnProfile) {
-                                    { layoutEditorOpen = true }
-                                } else {
-                                    null
-                                }
                             )
                         }
 

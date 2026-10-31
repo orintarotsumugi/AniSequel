@@ -88,15 +88,7 @@ fun ProfileHomeTab(
      */
     layout: com.anisequel.domain.profile.ProfileLayout =
         com.anisequel.domain.profile.ProfileLayout(),
-    /**
-     * Opens the layout editor, or null when this page is not the viewer's own.
-     *
-     * The control lives on the header because that is the only element the reader
-     * cannot reorder away - a palette button inside a hideable section would vanish
-     * with the section it was meant to bring back.
-     */
-    onEditLayout: (() -> Unit)? = null
-) {
+    ) {
     val context = LocalContext.current
 
     val hasAnyFavourites = state.favouriteAnime.isNotEmpty() ||
@@ -118,27 +110,10 @@ fun ProfileHomeTab(
         state = listState
     ) {
         item(key = "header") {
-            Box {
-                ProfileHeaderCard(
-                    state = state,
-                    modifier = Modifier.testTag("profile_header_card")
-                )
-                if (onEditLayout != null) {
-                    IconButton(
-                        onClick = onEditLayout,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 6.dp, end = 6.dp)
-                            .testTag("profile_layout_edit")
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.Tune,
-                            contentDescription = "Edit profile layout",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
+            ProfileHeaderCard(
+                state = state,
+                modifier = Modifier.testTag("profile_header_card")
+            )
         }
 
         // The stored order, minus hidden sections. The header is not in it: the

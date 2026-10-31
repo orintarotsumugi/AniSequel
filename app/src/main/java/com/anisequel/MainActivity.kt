@@ -601,5 +601,12 @@ private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
         Modifier
     }
 
-/** The least a page's header may sit from the top edge in full screen. */
-private val ImmersiveTopBreathingRoom = 14.dp
+/**
+ * The least a page's header may sit from the top edge in full screen.
+ *
+ * 24dp, not the first attempt's 14: a `TopAppBar` is laid out as if the status
+ * bar existed, and with the bars hidden its icon row was visibly squeezed against
+ * the glass. The value is the status-bar's own height on most devices, so a hidden
+ * bar and a visible one put the header in the same place.
+ */
+private val ImmersiveTopBreathingRoom = 24.dp
