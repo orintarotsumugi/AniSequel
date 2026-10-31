@@ -27,34 +27,81 @@ internal const val EXPORT_LABEL = 0xFFFFFFFF.toInt()
 private const val EXPORT_HEADING = 0xFFFFFFFF.toInt()
 private const val EXPORT_SUBHEADING = 0xB3FFFFFF.toInt()
 
+/** The heading sizes the export offers, as a multiplier on the drawn text. */
+enum class TierExportTitleSize(val scale: Float, val displayName: String) {
+    SMALL(0.8f, "S"),
+    MEDIUM(1f, "M"),
+    LARGE(1.3f, "L")
+}
+
+/** The heading faces the export offers. Kept as generic families so the image uses
+ * the platform's own faces rather than a font the app cannot embed in a PNG. */
+enum class TierExportTitleFont(val displayName: String, val family: String) {
+    SANS("Sans", "sans-serif"),
+    SERIF("Serif", "serif"),
+    MONO("Mono", "monospace")
+}
+
+/**
+ * How the list's name appears at the top of the image.
+ *
+ * A choice for this export rather than a stored preference: the board's own title
+ * settings are about the *screen* (captions under covers), and the export's
+ * heading is a different surface with a different job - a 4K PNG needs its name
+ * legible when it is scaled into a chat window, which is not the size that reads
+ * well on a phone. Hiding it gives the posters the whole page.
+ */
+data class TierExportTitleOptions(
+    val showTitle: Boolean = true,
+    val size: TierExportTitleSize = TierExportTitleSize.MEDIUM,
+    val font: TierExportTitleFont = TierExportTitleFont.SANS
+) {
+    /** The heading band the layout has to reserve, in layout units. */
+    val headerHeight: Float
+        get() = if (showTitle) 22f + TitleLineHeight * size.scale * 2f else 24f
+}
+
+private const val TitleLineHeight = 26f
+
 /**
  * The list's name and its counted subtitle.
  *
  * Both are clipped to the page rather than allowed to widen it, because the title
  * is the one text in the document whose length nobody chose: a list called
  * `My very long tier list of everything I watched in 2024` would otherwise run
- * past the right edge of every export.
+ * past the right edge of every export. Size and face come from the options, and a
+ * hidden heading is skipped outright - the layout has already collapsed its band.
  */
 internal fun drawHeading(
     canvas: Canvas,
     title: String,
     subtitle: String?,
-    width: Float
+    width: Float,
+    options: TierExportTitleOptions
 ) {
+    if (!options.showTitle) return
+
+    val scale = options.size.scale
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = EXPORT_HEADING
-        textSize = 26f
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        textSize = TitleLineHeight * scale
+        typeface = Typeface.create(options.font.family, Typeface.BOLD)
     }
-    canvas.drawText(ellipsize(title, paint, width - 48f), 24f, 54f, paint)
+    val titleY = 22f + TitleLineHeight * scale
+    canvas.drawText(ellipsize(title, paint, width - 48f), 24f, titleY, paint)
 
     if (subtitle != null) {
         val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = EXPORT_SUBHEADING
-            textSize = 14f
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            textSize = 14f * scale
+            typeface = Typeface.create(options.font.family, Typeface.NORMAL)
         }
-        canvas.drawText(ellipsize(subtitle, subtitlePaint, width - 48f), 24f, 78f, subtitlePaint)
+        canvas.drawText(
+            ellipsize(subtitle, subtitlePaint, width - 48f),
+            24f,
+            titleY + 22f * scale,
+            subtitlePaint
+        )
     }
 }
 

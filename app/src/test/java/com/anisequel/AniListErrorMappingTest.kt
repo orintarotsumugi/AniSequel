@@ -67,6 +67,14 @@ class AniListErrorMappingTest {
     private class FakeService(
         private val viewerResponse: () -> GraphQLResponse<ViewerData> = { errorGraphQL("Invalid token") }
     ) : AniListApiService {
+    // The fake does not serve direct messages; a test that ever sends one should
+    // fail loudly rather than invent an answer.
+    override suspend fun saveActivityMessage(
+        request: com.anisequel.data.model.GraphQLRequest
+    ): com.anisequel.data.model.GraphQLResponse<
+        com.anisequel.data.model.SendActivityMessageData
+        > = error("This fake does not send messages")
+
         override suspend fun getViewer(request: GraphQLRequest) = viewerResponse()
         override suspend fun getUserByName(request: GraphQLRequest): GraphQLResponse<UserByNameData> =
             GraphQLResponse(null, listOf(GraphQLError("User not found", 404)))
@@ -195,6 +203,7 @@ class AniListErrorMappingTest {
     }
 
     private suspend fun failureOf(service: AniListApiService): Throwable {
+
         val result = AniListRepositoryImpl(service).getViewer()
         assertTrue("expected a failure, got $result", result.isFailure)
         return result.exceptionOrNull()!!
@@ -329,6 +338,14 @@ private fun errorGraphQL(message: String, status: Int? = null) =
 class RequestCoalescingPolicyTest {
 
     private class CountingService : AniListApiService {
+    // The fake does not serve direct messages; a test that ever sends one should
+    // fail loudly rather than invent an answer.
+    override suspend fun saveActivityMessage(
+        request: com.anisequel.data.model.GraphQLRequest
+    ): com.anisequel.data.model.GraphQLResponse<
+        com.anisequel.data.model.SendActivityMessageData
+        > = error("This fake does not send messages")
+
         val viewerCalls = mutableListOf<GraphQLRequest>()
         val saveCalls = mutableListOf<GraphQLRequest>()
         val userByNameCalls = mutableListOf<GraphQLRequest>()

@@ -34,10 +34,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -49,10 +51,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.repository.ProfileLayoutPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.EntryEditor
@@ -261,6 +265,14 @@ fun UserProfileScreen(
     // bio renders immediately and posters fill in underneath the reader.
     val mediaCovers by overviewViewModel.mediaCovers.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The viewer's own arrangement of the Home tab. The editor writes; the page
+    // behind it reads the same flow, so a toggle lands without a hand-off state.
+    val layoutPreferences = remember(context) { ProfileLayoutPreferences(context) }
+    val profileLayout by layoutPreferences.layout.collectAsState(
+        initial = com.anisequel.domain.profile.ProfileLayout()
+    )
+    var layoutEditorOpen by rememberSaveable { mutableStateOf(false) }
+    val layoutScope = rememberCoroutineScope()
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
@@ -523,7 +535,47 @@ fun UserProfileScreen(
                                 // sheet the cast rows do; null falls back to the
                                 // AniList page.
                                 onOpenCharacter = profiles.onOpenCharacter,
-                                onOpenStaff = profiles.onOpenStaff
+                                onOpenStaff = profiles.onOpenStaff,
+                                // Only the viewer's own page is theirs to arrange;
+                                // somebody else's draws the shipped layout.
+                                profileLayout = if (isOwnProfile) {
+                                    profileLayout
+                                } else {
+                                    com.anisequel.domain.profile.ProfileLayout()
+                                },
+                                onEditProfileLayout = if (isOwnProfile) {
+                                    { layoutEditorOpen = true }
+                                } else {
+                                    null
+                                }
+                            )
+                        }
+
+                        if (layoutEditorOpen) {
+                            ProfileLayoutSheet(
+                                layout = profileLayout,
+                                onMove = { section, direction ->
+                                    layoutScope.launch {
+                                        val moved = profileLayout.move(section, direction)
+                                        layoutPreferences.setOrder(moved.resolvedOrder)
+                                    }
+                                },
+                                onToggle = { section ->
+                                    layoutScope.launch {
+                                        layoutPreferences.setHidden(
+                                            profileLayout.toggle(section).hidden
+                                        )
+                                    }
+                                },
+                                onCharactersTwoColumn = { twoColumn ->
+                                    layoutScope.launch {
+                                        layoutPreferences.setCharactersTwoColumn(twoColumn)
+                                    }
+                                },
+                                onReset = {
+                                    layoutScope.launch { layoutPreferences.reset() }
+                                },
+                                onDismiss = { layoutEditorOpen = false }
                             )
                         }
                     }

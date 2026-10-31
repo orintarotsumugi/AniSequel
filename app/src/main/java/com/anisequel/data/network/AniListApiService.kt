@@ -19,6 +19,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SendActivityMessageData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.StudioData
@@ -235,6 +236,13 @@ interface AniListApiService {
     suspend fun saveActivityReply(
         @Body request: GraphQLRequest
     ): GraphQLResponse<SaveActivityReplyData>
+
+    /** Sends a direct message to one account. Requires a session. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun saveActivityMessage(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<SendActivityMessageData>
 
     /**
      * Deletes one of the viewer's own comments. Requires a session.

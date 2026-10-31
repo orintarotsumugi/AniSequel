@@ -58,6 +58,7 @@ class JokePreferences(private val context: Context) {
         val SPEAKER_NAME = stringPreferencesKey("jokes_speaker_name")
         val STAMP = stringPreferencesKey("jokes_stamp")
         val TEXT_EFFECT = stringPreferencesKey("jokes_text_effect")
+        val COMPACT = booleanPreferencesKey("jokes_compact")
     }
 
     /** The tone storage values that mean "not chosen yet" is "all of them". */
@@ -77,7 +78,8 @@ class JokePreferences(private val context: Context) {
             moments = JokeMoment.fromStorage(preferences[Keys.MOMENTS] ?: emptySet()),
             speakerName = preferences[Keys.SPEAKER_NAME] ?: DEFAULT_SPEAKER_NAME,
             stamp = preferences[Keys.STAMP] ?: DEFAULT_STAMP,
-            textEffect = JokeTextEffect.fromStorage(preferences[Keys.TEXT_EFFECT])
+            textEffect = JokeTextEffect.fromStorage(preferences[Keys.TEXT_EFFECT]),
+            compact = preferences[Keys.COMPACT] ?: false
         )
     }
 
@@ -137,6 +139,13 @@ class JokePreferences(private val context: Context) {
     suspend fun setTextEffect(effect: JokeTextEffect) {
         context.jokeDataStore.edit { preferences ->
             preferences[Keys.TEXT_EFFECT] = effect.storageValue
+        }
+    }
+
+    /** The smallest pill: the line and the heart, no speaker line. */
+    suspend fun setCompact(compact: Boolean) {
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.COMPACT] = compact
         }
     }
 
@@ -226,6 +235,7 @@ class JokePreferences(private val context: Context) {
             preferences.remove(Keys.SPEAKER_NAME)
             preferences.remove(Keys.STAMP)
             preferences.remove(Keys.TEXT_EFFECT)
+            preferences.remove(Keys.COMPACT)
         }
     }
 }

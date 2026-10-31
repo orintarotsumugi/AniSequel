@@ -265,7 +265,12 @@ fun FavouriteCharacterRow(
      */
     onOpen: (FavouriteCharacter) -> Unit,
     modifier: Modifier = Modifier,
-    maxWidth: Dp = ProfileMaxContentWidth
+    maxWidth: Dp = ProfileMaxContentWidth,
+    /**
+     * 1 is the diagonal strip, 2 is the two-column arrangement the profile layout
+     * editor offers. Anything below 1 is treated as 1.
+     */
+    columns: Int = 1
 ) {
     FavouritePersonLane(
         people = characters.map { character ->
@@ -283,7 +288,8 @@ fun FavouriteCharacterRow(
         },
         testTag = "favourite_characters_row",
         modifier = modifier,
-        maxWidth = maxWidth
+        maxWidth = maxWidth,
+        columns = columns
     )
 }
 
@@ -337,6 +343,50 @@ fun FavouriteStaffRow(
  */
 @Composable
 private fun FavouritePersonLane(
+    people: List<PersonRowItem>,
+    testTag: String,
+    modifier: Modifier,
+    maxWidth: Dp,
+    columns: Int = 1
+) {
+    if (columns <= 1) {
+        FavouritePersonStrip(people = people, testTag = testTag, modifier = modifier, maxWidth = maxWidth)
+        return
+    }
+    // Two per row, as plain rows: a second vertical lazy grid inside the page's
+    // LazyColumn would fight the page for the scroll, and this list is small
+    // enough that laying it out directly is both cheaper and simpler.
+    Column(
+        modifier = modifier
+            .widthIn(max = maxWidth)
+            .fillMaxWidth()
+            .testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        people.chunked(columns).forEach { rowPeople ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                rowPeople.forEach { person ->
+                    FavouritePerson(
+                        name = person.name,
+                        subtitle = person.subtitle,
+                        imageUrl = person.imageUrl,
+                        placeholder = person.placeholder,
+                        onClick = person.onClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The single-line strip, which is the shipped arrangement. */
+@Composable
+private fun FavouritePersonStrip(
     people: List<PersonRowItem>,
     testTag: String,
     modifier: Modifier,

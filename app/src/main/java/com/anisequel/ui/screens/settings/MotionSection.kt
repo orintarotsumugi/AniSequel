@@ -4,10 +4,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,6 +45,7 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.expressiveShape
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -94,6 +95,7 @@ internal fun DisplaySection(
  * style's own spring - not a copy of its numbers - so what plays is what every
  * route, card and press in the app will do.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MotionSection(
     themePreferences: ThemePreferences,
@@ -111,14 +113,17 @@ internal fun MotionSection(
         MotionSample(style = settings.motionStyle)
         Spacer(modifier = Modifier.height(10.dp))
 
-        Row(
+        // A wrapping row rather than a horizontally scrolling one: the scrolling
+        // row hid two of the five styles off the right edge on a phone, which read
+        // as "Smooth and Chill were removed" for anyone who did not think to swipe a
+        // row that looks like a static control. All five are visible at once, two
+        // rows at worst.
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
-                // Five styles do not fit a phone as equal segments; a scrolling row
-                // keeps every label readable instead of shrinking them all.
-                .horizontalScroll(rememberScrollState())
                 .testTag("motion_style_row"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MotionStyle.entries.forEach { style ->
                 MotionChip(
@@ -173,6 +178,10 @@ private fun MotionChip(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)
+            // Same press physics as every other control in the app; the chips are
+            // not inside a scroll, so the fallback pointer loop cannot spring under
+            // a scrolling thumb.
+            .bouncyPress(pressedScale = 0.94f)
             .clickable(onClick = onClick)
             .semantics {
                 this.selected = selected
@@ -258,11 +267,14 @@ private fun MotionSample(style: MotionStyle) {
                     .align(Alignment.CenterStart)
                     .size(DotSize)
                     .graphicsLayer {
-                        // Read in the draw phase: the dot moves every frame of the
-                        // sample and nothing about its size or position belongs to
-                        // layout.
-                        translationX = travelPx * progress.value
-                        val dotScale = 1f + 0.12f * progress.value
+                        // Travel is clamped; the grow is not. A spring overshoots
+                        // *past* its target, and letting the dot carry that
+                        // overshoot off the end of the track clipped it against the
+                        // card's rounded edge - which read as a rendering bug. The
+                        // scale keeps the raw value, so Chill and Floaty still show
+                        // their bounce as a pulse at the end.
+                        translationX = travelPx * progress.value.coerceIn(0f, 1f)
+                        val dotScale = 1f + 0.14f * progress.value
                         scaleX = dotScale
                         scaleY = dotScale
                     }

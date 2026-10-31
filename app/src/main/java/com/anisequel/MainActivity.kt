@@ -16,6 +16,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
@@ -582,18 +584,22 @@ private fun ImmersiveModeEffect(
  * Pads the app's root by the display cutout while the system bars are hidden.
  *
  * The bars being hidden also zeroes the screens' `statusBarsPadding()`, which is
- * what lets a page own the whole display - but on a cutout device that padding was
- * the only thing keeping a top app bar out from under the camera. Padding by the
- * cutout restores exactly that safety area and nothing else; the bars, when the
- * reader swipes them back, draw over it as usual.
+ * what lets a page own the whole display - but two things follow from zero. On a
+ * cutout device the padding was the only thing keeping a top app bar out from under
+ * the camera; and on every device a header with no padding at all sits flush against
+ * the glass, which is the "weird top bar" full screen used to open with. The cutout
+ * is unioned with a small comfort inset so the header always has room, and the bars,
+ * when the reader swipes them back, draw over it as usual.
  */
-// `@Composable`, not a plain modifier factory: `windowInsetsPadding` reads the
-// window's insets during composition, so the function that builds it must be a
-// composable even though all it returns is a Modifier.
 @Composable
 private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
     if (immersive) {
-        Modifier.windowInsetsPadding(WindowInsets.displayCutout)
+        Modifier.windowInsetsPadding(
+            WindowInsets.displayCutout.union(WindowInsets(top = ImmersiveTopBreathingRoom))
+        )
     } else {
         Modifier
     }
+
+/** The least a page's header may sit from the top edge in full screen. */
+private val ImmersiveTopBreathingRoom = 14.dp

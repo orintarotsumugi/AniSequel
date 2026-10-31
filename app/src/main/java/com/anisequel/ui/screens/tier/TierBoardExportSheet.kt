@@ -7,16 +7,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,11 +34,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
@@ -105,13 +114,31 @@ internal fun TierExportSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val request = remember(listName, tiers, assignment, candidates, display) {
+    // The heading is this export's own choice, not a stored board setting: what
+    // reads well as a name under a poster on a phone is not what reads well at 4K
+    // in a chat window. Saveable so a rotation mid-choice keeps it.
+    var showTitle by rememberSaveable { mutableStateOf(true) }
+    var titleSizeName by rememberSaveable {
+        mutableStateOf(TierExportTitleSize.MEDIUM.name)
+    }
+    var titleFontName by rememberSaveable {
+        mutableStateOf(TierExportTitleFont.SANS.name)
+    }
+    val titleOptions = TierExportTitleOptions(
+        showTitle = showTitle,
+        size = TierExportTitleSize.entries.firstOrNull { it.name == titleSizeName }
+            ?: TierExportTitleSize.MEDIUM,
+        font = TierExportTitleFont.entries.firstOrNull { it.name == titleFontName }
+            ?: TierExportTitleFont.SANS
+    )
+    val request = remember(listName, tiers, assignment, candidates, display, titleOptions) {
         TierExportRequest(
             listName = listName,
             tiers = tiers,
             assignment = assignment,
             candidates = candidates,
-            display = display
+            display = display,
+            title = titleOptions
         )
     }
     // Kept current rather than captured: the session is remembered for as long as
@@ -148,7 +175,8 @@ internal fun TierExportSheet(
                     assignment = request.assignment,
                     candidates = request.candidates,
                     display = request.display,
-                    targetWidth = quality.width
+                    targetWidth = quality.width,
+                    titleOptions = request.title
                 )
             }
         }
@@ -162,6 +190,10 @@ internal fun TierExportSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                // The sheet gained title controls, so on a short screen the
+                // buttons at the bottom would otherwise sit off the edge with no
+                // way to reach them.
+                .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
                 .testTag("tier_export_sheet")
         ) {
@@ -174,7 +206,8 @@ internal fun TierExportSheet(
             Text(
                 text = "Renders every tier and every ranked poster as one PNG, not " +
                     "just what fits on screen. The current filters - including a " +
-                    "name search - and the board's title settings are kept.",
+                    "name search - and the board's title settings are kept; the " +
+                    "heading below is yours to size, face and hide.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -192,6 +225,16 @@ internal fun TierExportSheet(
                     selected = quality,
                     onSelect = { quality = it },
                     estimate = sizeEstimate
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                TierExportTitlePicker(
+                    showTitle = showTitle,
+                    onShowTitleChange = { showTitle = it },
+                    size = titleOptions.size,
+                    onSizeChange = { titleSizeName = it.name },
+                    font = titleOptions.font,
+                    onFontChange = { titleFontName = it.name },
+                    sampleTitle = request.listName
                 )
             }
 
@@ -379,12 +422,130 @@ private fun TierExportQualityPicker(
 }
 
 /** Everything the render step needs, in the shape the two actions share. */
+/**
+ * The heading's own controls: whether it shows, how big, and in which face.
+ *
+ * The sample under the chips is the preview: the chosen name, at the chosen size
+ * and family, on the export's surface. A size named "L" means nothing until the
+ * reader sees their own list name at it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TierExportTitlePicker(
+    showTitle: Boolean,
+    onShowTitleChange: (Boolean) -> Unit,
+    size: TierExportTitleSize,
+    onSizeChange: (TierExportTitleSize) -> Unit,
+    font: TierExportTitleFont,
+    onFontChange: (TierExportTitleFont) -> Unit,
+    sampleTitle: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Title",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "The list's name at the top of the image.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = showTitle,
+            onCheckedChange = onShowTitleChange,
+            modifier = Modifier.testTag("tier_export_title_switch")
+        )
+    }
+
+    if (!showTitle) return
+
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Size",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TierExportTitleSize.entries.forEach { option ->
+            ExpressiveStateChip(
+                label = option.displayName,
+                selected = option == size,
+                onClick = { onSizeChange(option) },
+                modifier = Modifier.testTag("tier_export_title_size_${option.name}"),
+                minTouchTargetHeight = 48.dp
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(
+        text = "Font",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TierExportTitleFont.entries.forEach { option ->
+            ExpressiveStateChip(
+                label = option.displayName,
+                selected = option == font,
+                onClick = { onFontChange(option) },
+                modifier = Modifier.testTag("tier_export_title_font_${option.name}"),
+                minTouchTargetHeight = 48.dp
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("tier_export_title_sample")
+    ) {
+        Text(
+            text = sampleTitle.ifBlank { "Your tier list" },
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = font.toComposeFamily(),
+                fontSize = (20f * size.scale).sp
+            ),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        )
+    }
+}
+
+private fun TierExportTitleFont.toComposeFamily(): FontFamily = when (this) {
+    TierExportTitleFont.SANS -> FontFamily.SansSerif
+    TierExportTitleFont.SERIF -> FontFamily.Serif
+    TierExportTitleFont.MONO -> FontFamily.Monospace
+}
+
 private data class TierExportRequest(
     val listName: String,
     val tiers: List<TierDefinition>,
     val assignment: TierAssignment,
     val candidates: List<TierCandidate>,
-    val display: TierDisplay
+    val display: TierDisplay,
+    val title: TierExportTitleOptions = TierExportTitleOptions()
 )
 
 /**
@@ -531,6 +692,7 @@ private suspend fun renderTierListImageSafely(
         candidates = request.candidates,
         display = request.display,
         targetWidth = targetWidth,
+        titleOptions = request.title,
         onProgress = onProgress
     )
 } catch (cancellation: CancellationException) {

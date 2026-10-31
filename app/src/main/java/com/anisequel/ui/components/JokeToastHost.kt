@@ -222,6 +222,7 @@ fun JokeToastHost(
         speakerName = settings.displayName,
         stamp = settings.displayStamp,
         textEffect = settings.textEffect,
+        compact = settings.compact,
         isFavourite = joke in favouriteLines,
         onToggleFavourite = { onToggleFavourite(joke) },
         onDismiss = hide,
@@ -440,6 +441,7 @@ private fun JokeToastPill(
     speakerName: String,
     stamp: String,
     textEffect: com.anisequel.domain.jokes.JokeTextEffect,
+    compact: Boolean,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     onDismiss: () -> Unit,
@@ -450,12 +452,17 @@ private fun JokeToastPill(
         // The slide's spec is an `IntOffset` one - `slideInVertically` takes
         // offsets, not floats - which is why this uses the offset token rather
         // than `FastSpatialInt`; the two are not interchangeable.
+        //
+        // `FastSpatialOffset` rather than the calm default: the pill is an aside,
+        // and at the push spring it was still travelling when the reader had
+        // finished glancing at it. The calm spring belongs to pages the reader
+        // chose to open.
         enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-            slideInVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height ->
+            slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                 if (fromBottom) height / 2 else -height / 2
             },
         exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-            slideOutVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height ->
+            slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                 if (fromBottom) height / 2 else -height / 2
             },
         modifier = modifier
@@ -510,6 +517,7 @@ private fun JokeToastPill(
                 speakerName = speakerName,
                 stamp = stamp,
                 textEffect = textEffect,
+                compact = compact,
                 fromBottom = fromBottom,
                 isFavourite = isFavourite,
                 onToggleFavourite = onToggleFavourite,
@@ -537,6 +545,7 @@ private fun JokeToastBody(
     speakerName: String,
     stamp: String,
     textEffect: com.anisequel.domain.jokes.JokeTextEffect,
+    compact: Boolean,
     fromBottom: Boolean,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
@@ -575,12 +584,16 @@ private fun JokeToastBody(
             // "Tap to dismiss" ~3.3:1, both under 4.5:1 for 11sp text. The label
             // and the caption are the two pieces of the pill a reader needs in
             // order to know who is talking and how to get rid of her.
-            Text(
-                text = speakerName,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.86f)
-            )
+            // The speaker line is the first thing a habituated reader can do
+            // without; the stamp stays, because it is the pill's face.
+            if (!compact) {
+                Text(
+                    text = speakerName,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.86f)
+                )
+            }
             // Every new line *starts over*: the text re-enters from the pill's own
             // edge on the same spring the pill itself used, instead of mutating in
             // place under the reader's eyes. A timer that draws a second joke while
@@ -609,7 +622,7 @@ private fun JokeToastBody(
             // "Until tapped" is the one arm where the pill will not leave on its
             // own, so it says so. Every other arm has a timer, and a caption
             // explaining that would be noise on every line.
-            if (staysUntilDismissed) {
+            if (!compact && staysUntilDismissed) {
                 Text(
                     text = "Tap to dismiss",
                     style = MaterialTheme.typography.labelSmall,

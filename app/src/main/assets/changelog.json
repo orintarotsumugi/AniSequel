@@ -1,15 +1,15 @@
 {
   "versions": [
     {
-      "version": "1.7.1",
+      "version": "1.7.2",
       "entries": [
         {
-          "title": "Full screen, by default",
-          "detail": "The app now opens with the status and navigation bars hidden and gives the whole screen to the page. Swipe from an edge and they come back for a moment, then go away again. Appearance has a Full-screen mode switch for readers who want the bars back for good, and the choice is applied by the window itself rather than by a screen, so it survives rotation, dialogs and returning from the browser."
+          "title": "Full screen, when you want it",
+          "detail": "Appearance gained a Full-screen mode switch: hide the status and navigation bars and let the page own the whole display, with an edge swipe bringing them back for a moment. It is off by default - hiding the bars also zeroes every page's status-bar padding, so a top bar with no room above it read as cramped on a plain phone and as broken on a cutout one. While it is on, the root keeps a small top breathing room and the display cutout's own inset, so headers never sit on the glass, and the choice is applied by the window itself so it survives rotation, dialogs and returning from the browser."
         },
         {
-          "title": "Five ways to move, and a sample that shows them",
-          "detail": "Motion gained two new characters beside Instant, Smooth and Chill: Snappy, which is quicker than Smooth and still lands clean, and Floaty, which is slow and soft with a low bounce. The picker is a scrolling row of chips now, and above it a sample plays the chosen style's own spring - a dot travelling a track, the stage colour easing with it - so the difference between two names is something you watch rather than guess. Tap the sample to replay it."
+          "title": "Five ways to move, all of them visible",
+          "detail": "Motion gained two new characters beside Instant, Smooth and Chill: Snappy, which is quicker than Smooth and still lands clean, and Floaty, which is slow and soft with a low bounce. The picker wraps instead of scrolling, so all five are on screen at once - the scrolling row had hidden Smooth and Chill off the right edge and read as if they had been removed. Above it a sample plays the chosen style's own spring - a dot travelling a track, the stage colour easing with it - with the travel clamped so a bouncy spring cannot clip the dot against the card, and the overshoot shown as a pulse instead. Tap the sample to replay."
         },
         {
           "title": "Your own font, at your own size",
@@ -20,8 +20,32 @@
           "detail": "A title too wide for its row - a sequel card, a poster caption, an activity row - now scrolls after a short rest and repeats, leaving titles that fit perfectly still. The speed is a setting on the same Type page, with a sample that moves at the speed you are choosing, and it respects Instant: a reader who asked for no motion does not get a marquee."
         },
         {
+          "title": "The export is yours to style",
+          "detail": "The Export sheet grew a Title section: show or hide the list's name, size it Small / Medium / Large, and set its face to Sans, Serif or Mono - with your actual list name as a live sample, and the promised pixel size recomputed as you change any of it. A hidden title collapses its reserved band so the posters get the space, and the sheet scrolls now that it has more than one control."
+        },
+        {
+          "title": "Arriving is two groups, one card",
+          "detail": "Currently arriving mixed airing shows and announced ones in a single unlabelled strip, where a card with a countdown pill and a card with a start date read as two different components. It is now two labelled groups - Airing now and Upcoming - drawn with the same card at the same cover height and separated only by the card's background colour, so the eye follows the group rather than re-learning a second layout."
+        },
+        {
+          "title": "Genres fold away",
+          "detail": "The whole Genre block in the filter sheet collapses from its own header, chevron and all, with the shared spring and fade tokens; the inner show-all fold and any selected genre still behave as before."
+        },
+        {
+          "title": "Hidden sequels show their faces",
+          "detail": "The hidden-anime rows in the dashboard drew a tinted colour block instead of the entry's cover. They now draw the real 32x44 poster over its tinted placeholder, bounded to the tile, so the sheet can be used to find a title by eye again."
+        },
+        {
+          "title": "Your profile, arranged how you read it",
+          "detail": "The Home tab's blocks - About, favourite anime, manga, characters, staff and studios - now follow a layout you own. A palette button on the header opens the editor: move any block up or down, hide and unhide it without losing its place, switch the character favourites between the single strip and a two-column grid, or reset the lot. The layout is stored on the device, new blocks a later build adds appear instead of being hidden by an old order, and the header stays put because it is the page rather than a block."
+        },
+        {
+          "title": "The inbox can answer",
+          "detail": "Opening a message now gives you a reply box under it: write, choose Public or Private, and send. Private is the default and the note under the box says what changes - a private message stays between the two accounts, a public one also lands on your profile stream. The recipient is the other party of the row you opened, so replying to something you sent goes to the person you sent it to, the confirmation names them, and the draft is per-message and survives rotation. The demo has no account to send from, so there the box stays away."
+        },
+        {
           "title": "Ani-chan can be renamed, and stamped",
-          "detail": "The pill used to be signed \"Ani-chan\" in the code with a fixed sparkle beside it. Jokes now has a Name and stamp card: rename the speaker (blank falls back to the default) and pick the badge glyph from a small palette - a star by default, a heart or a ghost if you prefer - or type any character you like. Both are stored on the device, and the field writes are debounced so typing a name is not a disk write per key."
+          "detail": "The pill used to be signed \"Ani-chan\" in the code with a fixed sparkle beside it. Jokes now has a Name, stamp and size card: rename the speaker (blank falls back to the default), pick the badge glyph from a small palette - a star by default, a heart or a ghost if you prefer - or type any character you like, and switch on a compact pill that shows just the line and the heart. Both fields stay editable while jokes are off, so the pill can be auditioned before the feature is switched on."
         },
         {
           "title": "The pill can type",
@@ -34,6 +58,14 @@
         {
           "title": "More dark lines, and a faster draw",
           "detail": "Fifty more DARK lines about cancellations, hiatuses and productions that did not survive their own schedules, in the pool's own voice. The filter behind every draw is now computed once per switch combination instead of scanning the thousand-line pool on every joke, preview and Settings count, so the toast's arrival no longer depends on how large the pool grows."
+        },
+        {
+          "title": "The press lands sooner and the pill arrives quicker",
+          "detail": "The press-in spring is stiffer now - the squash is at its target by the frame the finger lands, where the medium spring was still arriving after the touch - while the release keeps its calmer, bouncier return. The joke pill's slide and fade use the fast offset token instead of the pushed-page one, so an aside appears and leaves at the speed of a glance rather than travel."
+        },
+        {
+          "title": "Twenty more ways it ended",
+          "detail": "The dark pool grew again: sequel funding that turned into an audit, a timeslot nobody had, a finale script approved posthumously, a remaster that restored the grain and removed the names, and the fan-funded finale the rights-holder kept. Same voice, same one-per-cycle bag."
         },
         {
           "title": "The tier board waits for your list",

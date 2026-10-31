@@ -1,5 +1,7 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,13 +18,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
@@ -83,7 +92,13 @@ fun MessageDetailSheet(
     detail: UserMessagesViewModel.MessageDetail,
     onDismiss: () -> Unit,
     /** Opens the counterpart's profile. The face and name are the link, as on the card. */
-    onOpenUser: (FollowUser) -> Unit
+    onOpenUser: (FollowUser) -> Unit,
+    /** What the reply composer is doing; a fresh state hides every outcome. */
+    reply: UserMessagesViewModel.ReplyState = UserMessagesViewModel.ReplyState(),
+    /** False for the demo: there is no account to send from. */
+    canReply: Boolean = false,
+    onSend: (text: String, isPrivate: Boolean) -> Unit = { _, _ -> },
+    onClearReply: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val message = detail.message
@@ -133,6 +148,19 @@ fun MessageDetailSheet(
                 isPrivate = message.isPrivate == true,
                 siteUrl = message.siteUrl
             )
+
+            // The reply belongs to the message that is open, so it lives in this
+            // sheet rather than on the inbox row: the reader has already decided
+            // who they are answering.
+            if (canReply) {
+                MessageReplyComposer(
+                    messageId = message.id,
+                    recipientName = detail.counterpart?.name,
+                    reply = reply,
+                    onSend = onSend,
+                    onClearReply = onClearReply
+                )
+            }
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
@@ -305,10 +333,180 @@ internal fun MessagesDetailSheetHost(
 ) {
     val detail by messagesViewModel.detail.collectAsStateWithLifecycle()
     val open = detail ?: return
+    val reply by messagesViewModel.reply.collectAsStateWithLifecycle()
 
     MessageDetailSheet(
         detail = open,
         onDismiss = { messagesViewModel.dismissMessage() },
-        onOpenUser = onOpenUser
+        onOpenUser = onOpenUser,
+        reply = reply,
+        canReply = messagesViewModel.canReply,
+        onSend = messagesViewModel::replyToOpenMessage,
+        onClearReply = messagesViewModel::clearReplyState
     )
 }
+
+/**
+ * The reply box under an open message.
+ *
+ * Private by default and switchable to public: a direct message is the private
+ * case, and a reader who wants it on their profile stream can say so in one tap.
+ * The choice is per-send rather than remembered - a preference that quietly made
+ * every reply public because it was chosen once is the kind of persistence that
+ * costs somebody a message.
+ */
+@Composable
+private fun MessageReplyComposer(
+    messageId: Int,
+    recipientName: String?,
+    reply: UserMessagesViewModel.ReplyState,
+    onSend: (text: String, isPrivate: Boolean) -> Unit,
+    onClearReply: () -> Unit
+) {
+    // Keyed on the message: opening a second message must not carry the draft of
+    // the first, and a rotation must not lose the one being typed.
+    var draft by rememberSaveable(messageId) { mutableStateOf("") }
+    var isPrivate by rememberSaveable(messageId) { mutableStateOf(true) }
+
+    // A send that lands clears the box; the confirmation stays until the next
+    // keystroke clears it, so the reader can see which account received it.
+    LaunchedEffect(reply.sentTo) {
+        if (reply.sentTo != null) draft = ""
+    }
+
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Text(
+            text = recipientName?.let { "Reply to $it" } ?: "Reply",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReplyPrivacyChoice(
+                label = "Public",
+                icon = AppVectorIcons.Visibility,
+                selected = !isPrivate,
+                testTag = "message_reply_public",
+                onClick = { isPrivate = false }
+            )
+            ReplyPrivacyChoice(
+                label = "Private",
+                icon = AppVectorIcons.Privacy,
+                selected = isPrivate,
+                testTag = "message_reply_private",
+                onClick = { isPrivate = true }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { next ->
+                draft = next.take(MAX_REPLY_LENGTH)
+                if (reply.sentTo != null || reply.error != null) onClearReply()
+            },
+            placeholder = { Text("Write a message…") },
+            minLines = 2,
+            maxLines = 4,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("message_reply_field")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (isPrivate) {
+                    "Private - only the two of you will see it."
+                } else {
+                    "Public - it also appears on your profile stream."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            FilledTonalButton(
+                onClick = { onSend(draft, isPrivate) },
+                enabled = draft.isNotBlank() && !reply.isSending,
+                modifier = Modifier.testTag("message_reply_send")
+            ) {
+                Text(if (reply.isSending) "Sending…" else "Send")
+            }
+        }
+
+        reply.error?.let { message ->
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        reply.sentTo?.let { name ->
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Sent to $name.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/** One of the two privacy choices. Capsule, selectable, and names its consequence. */
+@Composable
+private fun ReplyPrivacyChoice(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    val container by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "reply_privacy_container_$label"
+    )
+    val content = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(container)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = content,
+            fontWeight = if (selected) {
+                androidx.compose.ui.text.font.FontWeight.SemiBold
+            } else {
+                androidx.compose.ui.text.font.FontWeight.Medium
+            }
+        )
+    }
+}
+
+/** AniList's message cap; the field stops the reader before the server can. */
+private const val MAX_REPLY_LENGTH = 2_000

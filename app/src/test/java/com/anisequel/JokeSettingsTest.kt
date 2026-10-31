@@ -207,6 +207,8 @@ class JokeSettingsTest {
         // The reveal effects are opt-in: a joke pill is not allowed to make the
         // reader wait for a sentence they did not ask to be typed.
         assertEquals(com.anisequel.domain.jokes.JokeTextEffect.NONE, defaults.textEffect)
+        // And so is the compact pill: the full one is what the feature documents.
+        assertFalse(defaults.compact)
     }
 
     @Test

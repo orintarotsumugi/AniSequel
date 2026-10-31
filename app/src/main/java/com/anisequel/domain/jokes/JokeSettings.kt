@@ -297,7 +297,17 @@ data class JokeSettings(
      */
     val stamp: String = DEFAULT_STAMP,
     /** How the line itself arrives. Off unless the reader asks for a reveal. */
-    val textEffect: JokeTextEffect = JokeTextEffect.DEFAULT
+    val textEffect: JokeTextEffect = JokeTextEffect.DEFAULT,
+    /**
+     * Draw the pill with the line and the heart only.
+     *
+     * Off by default. The speaker line and the dismiss caption are useful the
+     * first week and noise by the hundredth joke; a reader who has learned the
+     * pill can ask for the smallest version of it. The stamp still shows - it is
+     * the pill's face - and the caption only appears on the "until tapped" dwell,
+     * where it is the only instruction that matters.
+     */
+    val compact: Boolean = false
 ) {
     /**
      * The single question the host asks before scheduling a wait. Keeping it here

@@ -391,6 +391,19 @@ interface AniListRepository {
         unsupported("postActivityReply")
 
     /**
+     * Sends a direct message to [recipientId].
+     *
+     * [isPrivate] is the composer's public/private choice: AniList keeps a private
+     * message between the two accounts rather than letting it also land on the
+     * sender's profile stream. Requires a session.
+     */
+    suspend fun sendMessage(
+        recipientId: Int,
+        text: String,
+        isPrivate: Boolean
+    ): Result<Int> = unsupported("sendMessage")
+
+    /**
      * Rewrites one of the viewer's own comments, returning the stored reply.
      *
      * [activityId] travels with the edit even though the reply id identifies the

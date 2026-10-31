@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -40,7 +42,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -284,11 +288,11 @@ private fun HiddenSequelRow(
             .testTag("hidden_row_${sequel.sequelId}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // A plain tinted placeholder rather than a network image: the poster
-        // URLs are already in hand for these rows, but this section sits inside
-        // a scrollable sheet that a user opens precisely to *find* something,
-        // and a list of small thumbnails decoding while it scrolls is a worse
-        // trade than a colour block keyed to the entry's own key visual.
+        // The entry's own cover, not only its colour. The colour block was a
+        // decode-while-scrolling trade-off, but this sheet's whole job is finding
+        // a title by eye - a column of tinted rectangles is the one thing that
+        // cannot be done with it. The image is bounded to the 32x44 tile, so the
+        // decode stays cheap.
         Box(
             modifier = Modifier
                 .size(width = 32.dp, height = 44.dp)
@@ -297,7 +301,17 @@ private fun HiddenSequelRow(
                     sequel.coverColor.toCoverColorOrNull()
                         ?: MaterialTheme.colorScheme.surfaceContainerHighest
                 )
-        )
+        ) {
+            val cover = sequel.sequelMedia.posterUrl
+            if (cover != null) {
+                AsyncImage(
+                    model = cover,
+                    contentDescription = "Cover for ${sequel.sequelTitle}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 

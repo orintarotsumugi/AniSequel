@@ -1,6 +1,12 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -235,76 +241,115 @@ fun FilterSortSheet(
 
             // Genre, multi-select. OR semantics, stated in the subtitle
             // because "Action + Comedy" is ambiguous otherwise.
-            Text(
-                text = "Genre",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Show sequels in any of the genres you pick.",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            // Folded by default, but a selected genre on the far side of the fold
-            // is pulled up into the visible set: the chips are the only place the
-            // sheet can show that a genre filter is narrowing the results.
-            var genresExpanded by rememberSaveable { mutableStateOf(false) }
-            val selectedFoldedGenres = remember(filterCriteria.selectedGenres) {
-                animeGenreOptions
-                    .drop(GENRE_PREVIEW_COUNT)
-                    .filter { genre ->
-                        filterCriteria.selectedGenres.any { it.equals(genre, ignoreCase = true) }
-                    }
-            }
-            val visibleGenres = if (genresExpanded) {
-                animeGenreOptions
-            } else {
-                animeGenreOptions.take(GENRE_PREVIEW_COUNT) + selectedFoldedGenres
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+            var genreSectionOpen by rememberSaveable { mutableStateOf(true) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { genreSectionOpen = !genreSectionOpen }
+                    .padding(vertical = 4.dp)
+                    .testTag("genre_section_toggle"),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                visibleGenres.forEach { genre ->
-                    FilterOptionChip(
-                        label = genre,
-                        selected = filterCriteria.selectedGenres.any {
-                            it.equals(genre, ignoreCase = true)
-                        },
-                        onClick = { onToggleGenre(genre) },
-                        testTag = "genre_chip_${genre.lowercase().replace(' ', '_')}"
-                    )
-                }
+                Text(
+                    text = "Genre",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (genreSectionOpen) {
+                        AppVectorIcons.ExpandLess
+                    } else {
+                        AppVectorIcons.ExpandMore
+                    },
+                    contentDescription = if (genreSectionOpen) {
+                        "Collapse genres"
+                    } else {
+                        "Expand genres"
+                    },
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
-            if (animeGenreOptions.size > GENRE_PREVIEW_COUNT) {
-                TextButton(
-                    onClick = { genresExpanded = !genresExpanded },
-                    modifier = Modifier.testTag("genre_expand_toggle")
-                ) {
+            AnimatedVisibility(
+                visible = genreSectionOpen,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        if (genresExpanded) {
-                            "Show fewer genres"
-                        } else {
-                            "Show all ${animeGenreOptions.size} genres"
+                        text = "Show sequels in any of the genres you pick.",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Folded by default, but a selected genre on the far side of the fold
+                    // is pulled up into the visible set: the chips are the only place the
+                    // sheet can show that a genre filter is narrowing the results.
+                    var genresExpanded by rememberSaveable { mutableStateOf(false) }
+                    val selectedFoldedGenres = remember(filterCriteria.selectedGenres) {
+                        animeGenreOptions
+                            .drop(GENRE_PREVIEW_COUNT)
+                            .filter { genre ->
+                                filterCriteria.selectedGenres.any {
+                                    it.equals(genre, ignoreCase = true)
+                                }
+                            }
+                    }
+                    val visibleGenres = if (genresExpanded) {
+                        animeGenreOptions
+                    } else {
+                        animeGenreOptions.take(GENRE_PREVIEW_COUNT) + selectedFoldedGenres
+                    }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.animateContentSize(
+                            animationSpec = ExpressiveMotion.FastSpatialSize
+                        )
+                    ) {
+                        visibleGenres.forEach { genre ->
+                            FilterOptionChip(
+                                label = genre,
+                                selected = filterCriteria.selectedGenres.any {
+                                    it.equals(genre, ignoreCase = true)
+                                },
+                                onClick = { onToggleGenre(genre) },
+                                testTag = "genre_chip_${genre.lowercase().replace(' ', '_')}"
+                            )
                         }
-                    )
-                    Icon(
-                        imageVector = if (genresExpanded) {
-                            AppVectorIcons.ExpandLess
-                        } else {
-                            AppVectorIcons.ExpandMore
-                        },
-                        contentDescription = null,
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .size(18.dp)
-                    )
+                    }
+                    if (animeGenreOptions.size > GENRE_PREVIEW_COUNT) {
+                        TextButton(
+                            onClick = { genresExpanded = !genresExpanded },
+                            modifier = Modifier.testTag("genre_expand_toggle")
+                        ) {
+                            Text(
+                                if (genresExpanded) {
+                                    "Show fewer genres"
+                                } else {
+                                    "Show all ${animeGenreOptions.size} genres"
+                                }
+                            )
+                            Icon(
+                                imageVector = if (genresExpanded) {
+                                    AppVectorIcons.ExpandLess
+                                } else {
+                                    AppVectorIcons.ExpandMore
+                                },
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .padding(start = 4.dp)
+                                    .size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
 

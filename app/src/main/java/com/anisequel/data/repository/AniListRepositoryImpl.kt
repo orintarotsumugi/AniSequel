@@ -2023,6 +2023,23 @@ class AniListRepositoryImpl(
                 followingActivityCache.clear()
             }
 
+    override suspend fun sendMessage(
+        recipientId: Int,
+        text: String,
+        isPrivate: Boolean
+    ): Result<Int> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.SAVE_ACTIVITY_MESSAGE,
+                variables = mapOf(
+                    "recipientId" to recipientId,
+                    "message" to text,
+                    "private" to isPrivate
+                )
+            ),
+            apiService::saveActivityMessage
+        ).mapRequire { it.message?.id ?: error("No response from the message mutation") }
+
     override suspend fun editActivityReply(
         replyId: Int,
         activityId: Int,

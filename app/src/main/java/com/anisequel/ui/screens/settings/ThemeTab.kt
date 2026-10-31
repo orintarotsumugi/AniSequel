@@ -123,9 +123,9 @@ fun ThemeTab(
             themeSettings.retainedTint != RetainedTint.DEFAULT ||
             themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
             themeSettings.appBackgroundColor != null ||
-            // Full screen is the default; only turning it off is a change, so the
+            // Full screen is off by default; turning it on is a change, so the
             // reset row has to offer itself for exactly that case.
-            !themeSettings.immersive
+            themeSettings.immersive
 
         // The button used to appear with a bare `if`, fully drawn on the next
         // frame - so the page jumped by a button's height the moment the reader

@@ -145,6 +145,68 @@ class UserMessagesViewModel(
     /** Closes the detail sheet. */
     fun dismissMessage() {
         _detail.value = null
+        if (!_reply.value.isSending) _reply.value = ReplyState()
+    }
+
+    /**
+     * What the reply composer under the open message is doing.
+     *
+     * [sentTo] is a name rather than a flag because the confirmation reads "Sent to
+     * <name>" - a bare "Sent" leaves the reader wondering which account received
+     * it when the sheet was opened from the sent half of the inbox.
+     */
+    data class ReplyState(
+        val isSending: Boolean = false,
+        val error: String? = null,
+        val sentTo: String? = null
+    )
+
+    private val _reply = MutableStateFlow(ReplyState())
+    val reply: StateFlow<ReplyState> = _reply.asStateFlow()
+
+    /** False for the demo and for any session without a viewer id. */
+    val canReply: Boolean get() = !isDemo && viewerId != null
+
+    /**
+     * Sends [text] to the other party of the message the sheet has open.
+     *
+     * The recipient is the row's *counterpart*, not its messenger: replying to a
+     * message you sent has to go to the person you sent it to. [isPrivate] is the
+     * composer's public/private choice and travels to AniList, which keeps a
+     * private message between the two accounts instead of also placing it on the
+     * sender's profile stream.
+     */
+    fun replyToOpenMessage(text: String, isPrivate: Boolean) {
+        if (!canReply) return
+        val open = _detail.value ?: return
+        val body = text.trim()
+        if (body.isEmpty() || _reply.value.isSending) return
+        val recipientId = open.counterpart?.id
+            ?: if (open.sent) open.message.recipientId else open.message.messengerId
+        if (recipientId == null) {
+            _reply.value = ReplyState(error = "There is no one to reply to on this message.")
+            return
+        }
+        _reply.value = ReplyState(isSending = true)
+        viewModelScope.launch {
+            repositoryResult {
+                aniListRepository.sendMessage(recipientId, body, isPrivate)
+            }.fold(
+                onSuccess = {
+                    _reply.value = ReplyState(sentTo = open.counterpart?.name ?: "them")
+                },
+                onFailure = { failure ->
+                    _reply.value = ReplyState(
+                        error = failure.message ?: "Couldn't send that message."
+                    )
+                }
+            )
+        }
+    }
+
+    /** Drops the composer's last outcome, for a fresh draft or a closed sheet. */
+    fun clearReplyState() {
+        if (!_reply.value.isSending) _reply.value = ReplyState()
     }
 
     // Cursors advance only on success, for the same reason the activity feed's

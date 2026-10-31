@@ -110,6 +110,21 @@ data class SaveActivityReplyData(
 )
 
 /**
+ * Payload of a direct message sent through `SaveActivityMessage`.
+ *
+ * AniList answers with the created message as an activity-shaped object; the only
+ * field this app needs back is its id, because the toast says "Sent" and the sent
+ * list refetches rather than being patched from the response.
+ */
+@JsonClass(generateAdapter = true)
+data class SendActivityMessageData(
+    @Json(name = "SaveActivityMessage") val message: SentMessageId? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SentMessageId(val id: Int? = null)
+
+/**
  * Payload of the reply deletion.
  *
  * `DeleteActivityReply` answers with the shared [Deleted] object - the same
