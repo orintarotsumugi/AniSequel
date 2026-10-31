@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,7 @@ val LocalImmersiveMode = staticCompositionLocalOf { false }
  * and re-showing the bars on its way out would be a flash on the way to the page
  * that already hid them.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun DialogImmersiveEffect(enabled: Boolean = LocalImmersiveMode.current) {
     val view = LocalView.current
