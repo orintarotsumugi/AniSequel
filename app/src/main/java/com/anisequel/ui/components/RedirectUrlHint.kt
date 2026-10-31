@@ -1,7 +1,6 @@
 package com.anisequel.ui.components
 
-import android.content.Intent
-import android.net.Uri
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -92,9 +91,13 @@ fun RedirectUrlHint(
             // action inside this panel matches every other action on the screen.
             SettingsButton(
                 text = "Open AniList developer settings",
+                // Through the shared helper, not a bare `startActivity`: a device
+                // with no browser threw `ActivityNotFoundException` into a
+                // `runCatching` that swallowed it, so the tap did nothing and said
+                // nothing - the failure `OpenExternalUrl` exists to turn into a copy
+                // of the link and a message.
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AniListOAuth.DEVELOPER_SETTINGS_URL))
-                    runCatching { context.startActivity(intent) }
+                    openExternalUrlOrCopy(context, AniListOAuth.DEVELOPER_SETTINGS_URL)
                 },
                 icon = Icons.AutoMirrored.Filled.OpenInNew,
                 variant = SettingsButtonVariant.Text,

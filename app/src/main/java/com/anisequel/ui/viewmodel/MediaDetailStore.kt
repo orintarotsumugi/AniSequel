@@ -190,13 +190,19 @@ class MediaDetailStore(
         if (isDemo || key in friendsInFlight) return
 
         friendsInFlight += key
+        val startedAtGeneration = generation
         scope.launch {
             try {
                 repositoryResult {
                     repository.getMediaFriends(mediaId, mediaType)
                 }.onSuccess { list ->
-                    friendsCache[key] = list
-                    publishFriends(mediaId, list)
+                    // Dropped when the store was cleared while this was on the wire,
+                    // because the answer belongs to a session that has ended - see
+                    // [generation] for what filing it anyway showed the next reader.
+                    if (startedAtGeneration == this@MediaDetailStore.generation) {
+                        friendsCache[key] = list
+                        publishFriends(mediaId, list)
+                    }
                 }
                 // A failed friends load draws no card: see above.
             } finally {
@@ -236,6 +242,7 @@ class MediaDetailStore(
 
         inFlight += key
         _loading.value = _loading.value + mediaId
+        val startedAtGeneration = generation
         scope.launch {
             try {
                 // A repository that throws rather than returning a classified
@@ -248,17 +255,22 @@ class MediaDetailStore(
                 repositoryResult {
                     repository.getMediaDetail(mediaId, mediaType)
                 }.onSuccess { detail ->
-                    cache[key] = detail
-                    publish(mediaId, detail)
-                    // The host's fold is a callback, and `onSuccess` rethrows
-                    // anything its lambda throws - so a listener that fails would
-                    // still have taken the fetch, and the launch, with it. The
-                    // detail is already published at this point; what the host
-                    // does with it is its own problem.
-                    try {
-                        onLoaded?.invoke(mediaId, detail)
-                    } catch (_: Exception) {
-                        // Deliberately swallowed: see above.
+                    // Written only if the store has not been cleared since the
+                    // request went out - see [generation]. The `finally` below still
+                    // cleans up either way.
+                    if (startedAtGeneration == this@MediaDetailStore.generation) {
+                        cache[key] = detail
+                        publish(mediaId, detail)
+                        // The host's fold is a callback, and `onSuccess` rethrows
+                        // anything its lambda throws - so a listener that fails would
+                        // still have taken the fetch, and the launch, with it. The
+                        // detail is already published at this point; what the host
+                        // does with it is its own problem.
+                        try {
+                            onLoaded?.invoke(mediaId, detail)
+                        } catch (_: Exception) {
+                            // Deliberately swallowed: see above.
+                        }
                     }
                 }
                 // A failed detail load is not worth interrupting the user over:
@@ -289,8 +301,26 @@ class MediaDetailStore(
     private fun cacheKey(mediaId: Int, mediaType: String?): MediaCoverKey =
         MediaCoverKey(mediaType?.uppercase(Locale.ROOT) ?: UNSPECIFIED, mediaId)
 
+    /**
+     * Bumped by [clear] and checked by every launch before it writes back.
+     *
+     * Without it a fetch that started before the clear lands after it and re-files
+     * its answer in the cache the clear emptied. For the detail half that is merely a
+     * stale card; for `friends` it is the previous account's friend list filed under
+     * one title, because the query is `isFollowing`-scoped and therefore
+     * viewer-scoped - the sheet reopened after a sign-out then reads other people's
+     * watching history back out of [friendsCache] for the rest of the session. The
+     * repository settles the same question with `listEpoch`; this store needed its
+     * own copy of that answer.
+     */
+    @Volatile
+    private var generation = 0
+
     /** Drops the cache; called when the collection it was built against changes. */
     fun clear() {
+        // Before anything is emptied, so a launch that observes the new value can
+        // never write into the cache this call is clearing.
+        generation++
         cache.clear()
         // Cleared rather than left to drain: a launch that is still in flight for a
         // collection that no longer exists has nothing to fold its answer into, and

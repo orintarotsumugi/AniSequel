@@ -219,11 +219,23 @@ class DashboardViewModel(
      * list had aged. Joining the load instead starts the watch the instant the
      * load settles, without stacking a second fetch on the first.
      */
+    /**
+     * The join described by [onForegrounded], kept so [onBackgrounded] can cancel it.
+     */
+    private var foregroundJoin: Job? = null
+
     fun onForegrounded() {
         if (isDemo) return
         val load = loadJob
         if (load != null && load.isActive) {
-            viewModelScope.launch {
+            // Remembered rather than forgotten, because `viewModelScope` is not
+            // lifecycle-bound. A cold start that goes back to the browser - or to
+            // anything else - while its first load is still running used to land the
+            // join on a screen nobody is looking at and start the freshness watch
+            // there; the timer then re-fetched the most expensive list in the app every
+            // interval for the life of the process, which is precisely what
+            // [onBackgrounded] exists to prevent.
+            foregroundJoin = viewModelScope.launch {
                 load.join()
                 if (!isDemo) freshnessWatch.start()
             }
@@ -238,6 +250,11 @@ class DashboardViewModel(
 
     /** The app has gone to the background; stop spending requests on nobody's screen. */
     fun onBackgrounded() {
+        // The pending join goes too, not only the watch: cancelling the watch alone
+        // left the join free to start it again the moment the load it was waiting on
+        // finished, which is how a backgrounded app resumed polling.
+        foregroundJoin?.cancel()
+        foregroundJoin = null
         freshnessWatch.stop()
     }
 
@@ -587,7 +604,13 @@ class DashboardViewModel(
             // forceRefresh, or this would be served from the list cache and the
             // gesture would do nothing at all - the list would look stuck
             // while the spinner dutifully ran.
-            aniListRepository.getUserAnimeList(viewer.id, forceRefresh = true).fold(
+            //
+            // `repositoryResult`, because a throw on the way to the `Result` would
+            // otherwise reach this `launch` on `viewModelScope`, and an uncaught
+            // exception there is the reported force-stop rather than a message.
+            repositoryResult {
+                aniListRepository.getUserAnimeList(viewer.id, forceRefresh = true)
+            }.fold(
                 onSuccess = { collection ->
                     cachedCollection = collection
                     showingCachedData = false
@@ -1043,13 +1066,16 @@ class DashboardViewModel(
 
         viewModelScope.launch {
             hiddenSequelsPreferences?.let { preferences ->
-                preferences.toggle(sequel.sequelId)
+                // `setHidden`, not `toggle`: the state the gesture means, not the
+                // opposite of whatever the store happened to hold.
+                preferences.setHidden(sequel.sequelId, hidden = nowHidden)
             }
             _eventFlow.emit(
                 if (nowHidden) {
                     DashboardEvent.ShowSnackbar(
                         message = "Hidden \"${sequel.sequelTitle}\".",
-                        actionLabel = "Undo"
+                        actionLabel = "Undo",
+                        undoSequel = sequel
                     )
                 } else {
                     DashboardEvent.ShowSnackbar("\"${sequel.sequelTitle}\" can show up again.")
@@ -1070,7 +1096,10 @@ class DashboardViewModel(
 
         viewModelScope.launch {
             hiddenSequelsPreferences?.let { preferences ->
-                preferences.toggle(sequel.sequelId)
+                // "Not hidden", not "flip what is stored": an Undo tapped after the
+                // entry was already restored from the hidden list used to hide it
+                // again on the way out.
+                preferences.setHidden(sequel.sequelId, hidden = false)
             }
             _eventFlow.emit(
                 DashboardEvent.ShowSnackbar("\"${sequel.sequelTitle}\" can show up again.")

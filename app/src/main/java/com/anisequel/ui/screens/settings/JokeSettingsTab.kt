@@ -5,47 +5,66 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.domain.jokes.DEFAULT_SPEAKER_NAME
+import com.anisequel.domain.jokes.DEFAULT_STAMP
 import com.anisequel.domain.jokes.JokeDwell
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.domain.jokes.JokePosition
 import com.anisequel.domain.jokes.JokeScope
 import com.anisequel.domain.jokes.JokeSettings
+import com.anisequel.domain.jokes.JokeTextEffect
 import com.anisequel.domain.jokes.JokeTone
+import com.anisequel.domain.jokes.MAX_SPEAKER_NAME_LENGTH
+import com.anisequel.domain.jokes.MAX_STAMP_LENGTH
 import com.anisequel.ui.components.AppJokes
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.JokeLineText
 import com.anisequel.ui.components.JokePreviewBus
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * The joke toast's control panel.
  *
  * The cards answer, in the order a reader asks them: whether Ani-chan runs, how
- * often and for how long, where she appears, what she may talk about, which
- * moments invite her, and what has been kept. The preview button is near the end
- * because it is the proof, not a preference - it asks the real host in
- * `AppNavigation` for one line, so what the reader sees is the actual pill at the
- * actual edge rather than a mock drawn in a card.
+ * often and for how long, who she is and what mark she wears, how her lines
+ * arrive, where she appears, what she may talk about, which moments invite her,
+ * and what has been kept. The preview button is near the end because it is the
+ * proof, not a preference - it asks the real host in `AppNavigation` for one
+ * line, so what the reader sees is the actual pill at the actual edge rather
+ * than a mock drawn in a card. The line-style card carries its own sample
+ * because a text effect is judged by watching it, not by reading its name.
  *
  * The master switch and everything else are separate on purpose. "Off but
  * Chatty" is a real state: turning jokes back on should restore the pace, dwell,
@@ -81,6 +100,8 @@ fun JokeSettingsTab(
         )
 
         PaceCard(settings = settings, scope = scope, preferences = jokePreferences)
+        PersonaCard(settings = settings, scope = scope, preferences = jokePreferences)
+        TextEffectCard(settings = settings, scope = scope, preferences = jokePreferences)
         PlacementCard(settings = settings, scope = scope, preferences = jokePreferences)
         TonesCard(settings = settings, scope = scope, preferences = jokePreferences)
         MomentsCard(settings = settings, scope = scope, preferences = jokePreferences)
@@ -109,6 +130,209 @@ private fun AniChanCard(settings: JokeSettings, onEnabledChange: (Boolean) -> Un
             checked = settings.enabled,
             onCheckedChange = onEnabledChange,
             modifier = Modifier.testTag("jokes_switch")
+        )
+    }
+}
+
+/**
+ * The stamps offered beside the free field.
+ *
+ * Text glyphs on purpose, and the one place in the app that draws a symbol the
+ * reader picked rather than a shipped vector: this is the pill's signature, not
+ * chrome. Emoji are included because that is what "customise the star" means to
+ * the person asking for it; the default stays the plain star.
+ */
+private val stampChoices = listOf(
+    "\u2605", // ★
+    "\u2606", // ☆
+    "\u2726", // ✦
+    "\u2727", // ✧
+    "\u2665", // ♥
+    "\u2620", // ☠
+    "\u263E", // ☾
+    "\u273F", // ✿
+    "\u26A1", // ⚡
+    "\uD83C\uDF80", // 🎀
+    "\uD83D\uDC7B", // 👻
+    "\uD83C\uDF5C", // 🍥
+)
+
+/**
+ * Who the pill says it is, and the stamp beside the name.
+ *
+ * The toast used to hard-code "Ani-chan" and a fixed sparkle. Both are the app's
+ * voice rather than a law - the line arrives on the reader's own phone - so they
+ * are editable here. The writes are debounced: a name is typed one character at a
+ * time and every keystroke does not need its own disk round trip.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TextEffectCard(
+    settings: JokeSettings,
+    scope: CoroutineScope,
+    preferences: JokePreferences
+) {
+    // Keyed on the effect so switching the choice replays the sample in the new
+    // style without a second tap; the counter is for replaying the same one.
+    var replay by remember(settings.textEffect) { mutableIntStateOf(0) }
+
+    SectionCard(
+        title = "Line style",
+        icon = AppVectorIcons.TextBold,
+        subtitle = "How a joke arrives, and a sample to judge it by"
+    ) {
+        Text(
+            text = "Off by default. A reveal delays the sentence, so pair a writer " +
+                "with a longer dwell; the sample uses the real speed and the same " +
+                "time budget the toast has.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("joke_text_effect_row")
+        ) {
+            JokeTextEffect.entries.forEach { effect ->
+                JokeChoiceChip(
+                    label = effect.displayName,
+                    selected = settings.textEffect == effect,
+                    enabled = true,
+                    onClick = {
+                        if (effect != settings.textEffect) {
+                            scope.launch { preferences.setTextEffect(effect) }
+                        }
+                    },
+                    testTag = "joke_text_effect_${effect.storageValue}"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.large)
+                .clickable { replay++ }
+                .testTag("joke_text_preview")
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text(
+                    text = "Tap to replay · ${settings.textEffect.displayName}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                // A real line from the pool, drawn by the toast's own renderer at
+                // its own cadence - a mock here would be a second implementation.
+                key(replay) {
+                    JokeLineText(
+                        line = "The sequel was announced with a key visual and no date. That was 2019.",
+                        effect = settings.textEffect,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = settings.textEffect.subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PersonaCard(
+    settings: JokeSettings,
+    scope: CoroutineScope,
+    preferences: JokePreferences
+) {
+    var name by remember(settings.speakerName) { mutableStateOf(settings.speakerName) }
+    var stamp by remember(settings.stamp) { mutableStateOf(settings.stamp) }
+
+    LaunchedEffect(name) {
+        if (name == settings.speakerName) return@LaunchedEffect
+        delay(450)
+        preferences.setSpeakerName(name)
+    }
+    LaunchedEffect(stamp) {
+        if (stamp == settings.stamp) return@LaunchedEffect
+        delay(450)
+        preferences.setStamp(stamp)
+    }
+
+    SectionCard(
+        title = "Name and stamp",
+        icon = AppVectorIcons.EditEntry,
+        subtitle = "Who the pill speaks as, and the mark beside it"
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = { next ->
+                if (next.length <= MAX_SPEAKER_NAME_LENGTH) name = next
+            },
+            label = { Text("Name") },
+            placeholder = { Text(DEFAULT_SPEAKER_NAME) },
+            singleLine = true,
+            enabled = settings.enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("joke_speaker_name")
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "The stamp",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("joke_stamp_row")
+        ) {
+            stampChoices.forEach { choice ->
+                JokeChoiceChip(
+                    label = choice,
+                    selected = settings.stamp == choice,
+                    enabled = settings.enabled,
+                    onClick = {
+                        stamp = choice
+                        scope.launch { preferences.setStamp(choice) }
+                    },
+                    testTag = "joke_stamp_$choice"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        OutlinedTextField(
+            value = stamp,
+            onValueChange = { next ->
+                if (next.length <= MAX_STAMP_LENGTH) stamp = next
+            },
+            label = { Text("Or type your own") },
+            placeholder = { Text(DEFAULT_STAMP) },
+            singleLine = true,
+            enabled = settings.enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("joke_stamp_custom")
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "The name and stamp are yours: they are stored on this device " +
+                "and appear on every line. Preview a joke to see them.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

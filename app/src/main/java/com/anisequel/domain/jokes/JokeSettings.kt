@@ -218,6 +218,53 @@ enum class JokeMoment(
     }
 }
 
+/**
+ * How a line arrives on screen.
+ *
+ * **Off by default.** The pill's job is to say something and go, and a reveal
+ * delays the sentence for the reader who did not ask for one; the app's motion
+ * setting is a whole-app choice, this is a joke-specific flourish. It is offered
+ * because text that writes itself is a genuinely different pleasure from text that
+ * appears, and because the dwell can be raised to match it.
+ *
+ * Only two arms are writers: [FADE_UP] is a single entrance rather than a
+ * character loop, and [NONE] is the shipped behaviour. All of them are the same
+ * text once revealed - the choice changes when it is readable, never what it says.
+ */
+enum class JokeTextEffect(
+    val storageValue: String,
+    val displayName: String,
+    val subtitle: String
+) {
+    NONE("none", "Off", "The line appears all at once."),
+    TYPEWRITER("typewriter", "Typewriter", "Characters arrive one at a time."),
+    WORD_WRITER("word", "Word by word", "Words arrive one at a time."),
+    FADE_UP("fade_up", "Fade up", "The line fades and rises into place.");
+
+    /** True for the arms that reveal text progressively. */
+    val revealsProse: Boolean
+        get() = this == TYPEWRITER || this == WORD_WRITER
+
+    companion object {
+        val DEFAULT = NONE
+
+        fun fromStorage(value: String?): JokeTextEffect =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
+ * Reveal cadence, in milliseconds, and the budget the writers share.
+ *
+ * The per-character step is deliberately brisk; the budget is what keeps a long
+ * line from still typing when a Quick dwell is already taking the pill down. Both
+ * live here so the toast and its Settings preview reveal at exactly the same
+ * speed - a preview that types faster than the product is a lie about the product.
+ */
+const val JOKE_WRITER_CHAR_MILLIS = 26L
+const val JOKE_WRITER_WORD_MILLIS = 90L
+const val JOKE_WRITER_BUDGET_MILLIS = 2_600L
+
 /** Everything the joke toast reads, in one snapshot. */
 data class JokeSettings(
     val enabled: Boolean = true,
@@ -229,7 +276,28 @@ data class JokeSettings(
     val haptics: Boolean = true,
     val tones: Set<JokeTone> = JokeTone.entries.toSet(),
     /** Extra moments beyond the timer. Empty is the shipped, quiet behaviour. */
-    val moments: Set<JokeMoment> = emptySet()
+    val moments: Set<JokeMoment> = emptySet(),
+    /**
+     * What the pill calls itself.
+     *
+     * The toast used to be signed "Ani-chan" in the code. That is the app's voice,
+     * not a law: the line arrives on the reader's own phone and they are allowed to
+     * rename the speaker. Stored trimmed, and read through [displayName] so an
+     * empty value falls back rather than printing a blank name.
+     */
+    val speakerName: String = DEFAULT_SPEAKER_NAME,
+    /**
+     * The glyph in the pill's badge - a reader-chosen stamp, default a star.
+     *
+     * Deliberately a text glyph rather than one of the app's vectors. This one is
+     * *content* the reader authors, like the saved lines, not a piece of chrome the
+     * icon rule in AGENTS.md §2 governs; it ships as "★" and the Settings page
+     * offers a small palette plus a free field, which is how it ends up as anything
+     * from a heart to a ghost.
+     */
+    val stamp: String = DEFAULT_STAMP,
+    /** How the line itself arrives. Off unless the reader asks for a reveal. */
+    val textEffect: JokeTextEffect = JokeTextEffect.DEFAULT
 ) {
     /**
      * The single question the host asks before scheduling a wait. Keeping it here
@@ -237,6 +305,14 @@ data class JokeSettings(
      * the settings screen and the toast.
      */
     val autoJokesEnabled: Boolean get() = enabled && frequency.showsOnItsOwn
+
+    /** [speakerName], or the default when the reader left it blank. */
+    val displayName: String
+        get() = speakerName.trim().takeIf { it.isNotEmpty() } ?: DEFAULT_SPEAKER_NAME
+
+    /** [stamp], or the default star when the reader left it blank. */
+    val displayStamp: String
+        get() = stamp.trim().takeIf { it.isNotEmpty() } ?: DEFAULT_STAMP
 
     /**
      * The tones a draw may use, with "nothing selected" read as "everything".
@@ -261,3 +337,16 @@ data class JokeSettings(
      */
     val isMixed: Boolean get() = activeTones.size == JokeTone.entries.size
 }
+
+/**
+ * The shipped persona, and the bounds the Settings fields accept.
+ *
+ * The glyph is a star rather than the app's sparkle vector on purpose: it is the
+ * reader's stamp, and a text glyph can become any symbol they want without an
+ * asset. Twelve UTF-16 units is enough for a multi-part emoji and short enough
+ * that the badge cannot become a paragraph.
+ */
+const val DEFAULT_SPEAKER_NAME = "Ani-chan"
+const val DEFAULT_STAMP = "\u2605"
+const val MAX_SPEAKER_NAME_LENGTH = 24
+const val MAX_STAMP_LENGTH = 12

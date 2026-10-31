@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.cards
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -157,26 +156,34 @@ fun QuickAddPlanningButton(
 
     val holdDurationMs = (if (holdDurationSeconds == 5) 5000L else 3000L)
 
-    // Animated container background transitioning from primary to info/watching color
     val progressFraction = holdProgressAnim.value
-    val targetContainerColor = when {
-        progressFraction > 0.05f -> androidx.compose.ui.graphics.lerp(
-            MaterialTheme.colorScheme.primary,
-            statusColors.info,
-            progressFraction
-        )
-        else -> MaterialTheme.colorScheme.primary
-    }
 
-    val buttonColor by animateColorAsState(
-        targetValue = targetContainerColor,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "btn_bg_color"
+    // The hold's colour, computed from the hold's own fraction.
+    //
+    // This used to be an `animateColorAsState` whose *target* was this lerp. The
+    // fraction is itself animated (that is what the hold is), so the colour spring was
+    // re-aimed at a new target every frame of a three-second gesture and could never
+    // settle: the fill lagged its own progress, and the whole button recomposed per
+    // frame to keep feeding it. AGENTS.md §3 names this exact shape - animate toward a
+    // settled value - and the old `> 0.05f` branch made it worse by jumping the target
+    // from primary to the lerp's value one frame in.
+    val buttonColor = androidx.compose.ui.graphics.lerp(
+        MaterialTheme.colorScheme.primary,
+        statusColors.info,
+        progressFraction
     )
 
     val buttonScale by animateFloatAsState(
         targetValue = if (isHolding) 0.97f else 1f,
-        animationSpec = ExpressiveMotion.PressSpatial,
+        // The In/Out pair every other control uses (`ExpressiveControls.kt`), rather
+        // than the symmetric spring: press-in and release as different gestures is the
+        // house feel, and a main-screen button that presses differently from a
+        // Settings segment reads as a different kind of control.
+        animationSpec = if (isHolding) {
+            ExpressiveMotion.PressSpatialIn
+        } else {
+            ExpressiveMotion.PressSpatialOut
+        },
         label = "btn_press_scale"
     )
 
@@ -391,9 +398,15 @@ private fun BoxScope.HoldProgressFill(progressFraction: Float) {
     if (progressFraction <= 0.01f) return
     Box(
         modifier = Modifier
-            .fillMaxHeight()
-            .fillMaxWidth(progressFraction)
+            .fillMaxSize()
             .align(Alignment.CenterStart)
+            .graphicsLayer {
+                // A scale from the left edge, not `fillMaxWidth(fraction)`: the width
+                // form re-runs layout on every frame of the hold, and §3 asks for
+                // transforms in the draw phase. Same bar, no measuring.
+                transformOrigin = TransformOrigin(0f, 0.5f)
+                scaleX = progressFraction
+            }
             .background(Color.White.copy(alpha = 0.28f))
     )
 }

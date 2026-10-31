@@ -10,10 +10,17 @@
         <exclude
             domain="file"
             path="datastore/" />
+        <!-- The widget store: handle, counts and watched titles; see backup_rules.xml. -->
+        <exclude
+            domain="shared_pref"
+            path="anisequel_widget_cache.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude
             domain="file"
             path="datastore/" />
+        <exclude
+            domain="shared_pref"
+            path="anisequel_widget_cache.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -60,13 +60,21 @@ private const val HUB_SAVEABLE_KEY = "settings_hub"
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
     APPEARANCE("Appearance", "Theme, background, accent and motion"),
+    // Its own page rather than rows on Appearance: font, size and title motion
+    // change how reading feels on every screen, and each one needs a sample to be
+    // judged by - which is a page, not a switch.
+    TYPE("Type & reading", "Font, text size and scrolling titles"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
     LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
+    // Updates is its own page rather than the top of About: the update check and
+    // the release notes are the two cards a reader comes back to, and they were
+    // sharing a scroll with the crash report and the privacy policy.
+    UPDATES("Updates", "Version, update check and release notes"),
     // "and links" is not padding: the page carries the repository and the issue
-    // tracker, which is where a bug report actually goes. A subtitle that stops at
-    // "privacy" describes four of its six cards.
-    ABOUT("About & support", "Build, updates, privacy and links")
+    // tracker, which is where a bug report actually goes. A subtitle that stopped
+    // at "privacy" would describe three of its four cards.
+    ABOUT("About & support", "Build, privacy and links")
 }
 
 /**
@@ -288,6 +296,12 @@ private fun SettingsRoot(
                     onOpen = onOpen
                 )
                 SettingsRow(
+                    page = SettingsPage.TYPE,
+                    icon = AppVectorIcons.TextBold,
+                    testTag = "settings_row_type",
+                    onOpen = onOpen
+                )
+                SettingsRow(
                     page = SettingsPage.JOKES,
                     icon = AppVectorIcons.AnimeSparkle,
                     testTag = "settings_row_jokes",
@@ -336,6 +350,12 @@ private fun SettingsRoot(
 
             SettingsSectionLabel("About")
             SettingsRows {
+                SettingsRow(
+                    page = SettingsPage.UPDATES,
+                    icon = AppVectorIcons.SystemUpdate,
+                    testTag = "settings_row_updates",
+                    onOpen = onOpen
+                )
                 SettingsRow(
                     page = SettingsPage.ABOUT,
                     icon = AppVectorIcons.SectionAbout,
@@ -419,6 +439,7 @@ private fun SettingsPageContent(
 ) {
     when (page) {
         SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
+        SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,
@@ -435,6 +456,7 @@ private fun SettingsPageContent(
             totalWatchedCount = totalWatchedCount,
             totalMissedCount = totalMissedCount
         )
-        SettingsPage.ABOUT -> InfoSettingsTab(changelogRepository = changelogRepository)
+        SettingsPage.UPDATES -> UpdatesSettingsTab(changelogRepository = changelogRepository)
+        SettingsPage.ABOUT -> InfoSettingsTab()
     }
 }

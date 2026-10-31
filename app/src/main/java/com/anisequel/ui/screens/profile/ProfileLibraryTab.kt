@@ -57,8 +57,10 @@ import com.anisequel.data.model.withListStatus
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.isManga
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -319,7 +321,7 @@ private val filterByStatusToken: Map<String, LibraryFilter> =
  */
 internal fun libraryCounts(
     entries: List<MediaListEntryItem>,
-    favouriteIds: Set<Int>
+    favouriteIds: Set<String>
 ): Map<LibraryFilter, Int> {
     val counts = mutableMapOf<LibraryFilter, Int>()
     counts[LibraryFilter.ALL] = entries.size
@@ -328,8 +330,10 @@ internal fun libraryCounts(
             counts[bucket] = (counts[bucket] ?: 0) + 1
         }
     }
-    if (entries.any { it.media.id in favouriteIds }) {
-        counts[LibraryFilter.FAVOURITES] = entries.count { it.media.id in favouriteIds }
+    if (entries.any { it.media.namespaceKey in favouriteIds }) {
+        counts[LibraryFilter.FAVOURITES] = entries.count {
+            it.media.namespaceKey in favouriteIds
+        }
     }
     return counts
 }
@@ -353,7 +357,7 @@ internal fun filterLibrary(
     entries: List<MediaListEntryItem>,
     type: LibraryType,
     filter: LibraryFilter,
-    favouriteIds: Set<Int> = emptySet(),
+    favouriteIds: Set<String> = emptySet(),
     query: String = ""
 ): List<MediaListEntryItem> {
     val trimmed = query.trim()
@@ -365,7 +369,7 @@ internal fun filterLibrary(
         }
         val filterMatches = when (filter) {
             LibraryFilter.ALL -> true
-            LibraryFilter.FAVOURITES -> entry.media.id in favouriteIds
+            LibraryFilter.FAVOURITES -> entry.media.namespaceKey in favouriteIds
             else -> libraryBucketOf(entry.status) == filter
         }
         val queryMatches = trimmed.isEmpty() ||
@@ -459,7 +463,7 @@ internal fun libraryProgressLabel(entry: MediaListEntryItem): String? {
 fun ProfileLibraryTab(
     animeEntries: List<MediaListEntryItem>,
     mangaEntries: List<MediaListEntryItem>?,
-    favouriteIds: Set<Int>,
+    favouriteIds: Set<String>,
     isLoadingManga: Boolean,
     /**
      * Whether the anime list is still on its way.
@@ -738,12 +742,16 @@ fun ProfileLibraryTab(
         } else {
             items(
                 items = visible,
-                key = { it.media.id },
+                // The namespace and the id, because this grid is the merged one:
+                // `animeEntries + mangaEntries` under the ALL scope, and the two
+                // namespaces share their numbers. Two rows claiming one key is not a
+                // duplicated badge, it is the lazy layout failing on a duplicate key.
+                key = { it.media.namespaceKey },
                 contentType = { "library" }
             ) { entry ->
                 LibraryPoster(
                     entry = entry,
-                    isFavourite = entry.media.id in favouriteIds,
+                    isFavourite = entry.media.namespaceKey in favouriteIds,
                     modifier = Modifier
                         .widthIn(max = ProfileMaxContentWidth)
                         .fillMaxWidth()
@@ -1054,12 +1062,10 @@ private fun LibraryPoster(
         val context = score ?: media.formatLabel.takeIf { it.isNotBlank() }
         val contextIsDistinct = !context.isNullOrBlank() && !title.contains(context, ignoreCase = true)
 
-        Text(
+        MarqueeText(
             text = title,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )
 

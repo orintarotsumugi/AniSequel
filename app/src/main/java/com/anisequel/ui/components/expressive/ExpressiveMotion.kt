@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -203,9 +204,20 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow
             )
+            // Quicker than Smooth, and still no overshoot: a list item has to be at
+            // rest to be read.
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = 0.65f,
                 stiffness = Spring.StiffnessMediumLow
+            )
+            // The slow end of the scale: visibly softer than Chill, on purpose.
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -232,9 +244,17 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -273,9 +293,17 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -304,9 +332,17 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -320,9 +356,17 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -365,9 +409,22 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            // Stiffer than Smooth and still NoBouncy: the "feels immediate, but
+            // still moves" style. Every spatial token reads this branch, so the
+            // whole app's feel changes together.
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = expressiveDamping,
                 stiffness = expressiveStiffness
+            )
+            // Softer and slower than Chill on every axis, with a low bounce that
+            // reads as floating rather than as a wobble.
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -380,12 +437,22 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            // Effects are the non-overshooting half on every style; Snappy only
+            // moves them faster.
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             // `CHILL` and the tokens are one spring: the effects tokens are the
             // calm half of the pair, even in the expressive style. NoBouncy keeps
             // alpha and colour from overshooting their target.
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = stiffness
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 
@@ -398,9 +465,17 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
             com.anisequel.data.repository.MotionStyle.CHILL -> spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = stiffness
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
             )
         }
 }
@@ -522,7 +597,12 @@ fun Modifier.bouncyPress(
                                     val event = awaitPointerEvent(PointerEventPass.Main)
                                     val change = event.changes
                                         .firstOrNull { it.id == down.id }
-                                        ?: event.changes.firstOrNull()
+                                        // `continue`, not another pointer's change:
+                                        // a second finger anywhere on screen was
+                                        // compared against the first finger's down
+                                        // position, and the squash released under a
+                                        // hand that had not let go.
+                                        ?: continue
                                     if (change != null) {
                                         // Squared distance against a squared slop:
                                         // the comparison never needs the square
@@ -564,6 +644,13 @@ fun Modifier.expressiveHoldGesture(
     val haptic = LocalHapticFeedback.current
     val isPressed = remember { mutableStateOf(false) }
 
+    // Read through state rather than captured by `pointerInput(Unit)`, which never
+    // restarts. A lazy slot reused for another title kept the lambda from its first
+    // composition, so holding a recycled card opened the media it used to show - the
+    // same hazard `InfoHero` documents for its title.
+    val currentOnHold by rememberUpdatedState(onHold)
+    val currentOnClick by rememberUpdatedState(onClick)
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed.value) 0.96f else 1f,
         animationSpec = if (isPressed.value) {
@@ -588,10 +675,10 @@ fun Modifier.expressiveHoldGesture(
                 },
                 onLongPress = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onHold()
+                    currentOnHold()
                 },
                 onTap = {
-                    onClick?.invoke()
+                    currentOnClick?.invoke()
                 }
             )
         }

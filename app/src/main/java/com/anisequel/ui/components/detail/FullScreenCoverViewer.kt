@@ -237,7 +237,13 @@ fun FullScreenCoverViewer(
                 exit = fadeOut(ExpressiveMotion.FastEffects) +
                     scaleOut(
                         targetScale = 0.85f,
-                        animationSpec = ExpressiveMotion.DefaultSpatial
+                        // `FastSpatial`, not the slow `DefaultSpatial` the entrance
+                        // uses: the dialog is torn down after a fixed
+                        // [COVER_VIEWER_EXIT_MILLIS], and the first overshoot of the
+                        // slower spring lands about there - so the artwork was being
+                        // deleted mid-bounce. The exit has to settle inside its own
+                        // window; the entrance does not.
+                        animationSpec = ExpressiveMotion.FastSpatial
                     ),
                 modifier = Modifier.fillMaxSize()
             ) {

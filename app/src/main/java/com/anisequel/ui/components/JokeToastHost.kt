@@ -1,5 +1,6 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateColorAsState
@@ -8,12 +9,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -216,6 +219,9 @@ fun JokeToastHost(
         visible = visible,
         fromBottom = settings.position == JokePosition.BOTTOM,
         dwell = settings.dwell,
+        speakerName = settings.displayName,
+        stamp = settings.displayStamp,
+        textEffect = settings.textEffect,
         isFavourite = joke in favouriteLines,
         onToggleFavourite = { onToggleFavourite(joke) },
         onDismiss = hide,
@@ -431,6 +437,9 @@ private fun JokeToastPill(
     visible: Boolean,
     fromBottom: Boolean,
     dwell: JokeDwell,
+    speakerName: String,
+    stamp: String,
+    textEffect: com.anisequel.domain.jokes.JokeTextEffect,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     onDismiss: () -> Unit,
@@ -498,6 +507,10 @@ private fun JokeToastPill(
         ) {
             JokeToastBody(
                 joke = joke,
+                speakerName = speakerName,
+                stamp = stamp,
+                textEffect = textEffect,
+                fromBottom = fromBottom,
                 isFavourite = isFavourite,
                 onToggleFavourite = onToggleFavourite,
                 staysUntilDismissed = dwell.staysUntilDismissed
@@ -521,6 +534,10 @@ private fun JokeToastPill(
 @Composable
 private fun JokeToastBody(
     joke: String,
+    speakerName: String,
+    stamp: String,
+    textEffect: com.anisequel.domain.jokes.JokeTextEffect,
+    fromBottom: Boolean,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     staysUntilDismissed: Boolean
@@ -529,17 +546,24 @@ private fun JokeToastBody(
         modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // The reader's stamp, in place of the fixed sparkle. A pill rather than a
+        // circle because a stamp can be more than one glyph: a 30dp circle clipped
+        // anything past the second character, and the field legitimately accepts a
+        // multi-part emoji.
         Surface(
             shape = RoundedCornerShape(percent = 50),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-            modifier = Modifier.size(30.dp)
+            modifier = Modifier.heightIn(min = 30.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = AppVectorIcons.AnimeSparkle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(17.dp)
+            Box(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stamp,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
                 )
             }
         }
@@ -552,15 +576,36 @@ private fun JokeToastBody(
             // and the caption are the two pieces of the pill a reader needs in
             // order to know who is talking and how to get rid of her.
             Text(
-                text = "Ani-chan",
+                text = speakerName,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.86f)
             )
-            Text(
-                text = joke,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            // Every new line *starts over*: the text re-enters from the pill's own
+            // edge on the same spring the pill itself used, instead of mutating in
+            // place under the reader's eyes. A timer that draws a second joke while
+            // the first is up used to swap the sentence with no motion at all, which
+            // read as the app editing itself mid-sentence.
+            AnimatedContent(
+                targetState = joke,
+                transitionSpec = {
+                    val direction = if (fromBottom) 1 else -1
+                    (slideInVertically(
+                        animationSpec = ExpressiveMotion.FastSpatialOffset
+                    ) { height -> direction * height / 2 } +
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects)) togetherWith
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                },
+                label = "joke_line"
+            ) { line ->
+                // The reader's text effect, resolved here so the toast and its
+                // Settings preview share one implementation - and so INSTANT still
+                // means instant.
+                JokeLineText(
+                    line = line,
+                    effect = textEffect
+                )
+            }
             // "Until tapped" is the one arm where the pill will not leave on its
             // own, so it says so. Every other arm has a timer, and a caption
             // explaining that would be noise on every line.

@@ -191,9 +191,27 @@ object AniSequelWidgetData {
         if (arrivingColor != null) editor.putString(KEY_ARRIVING_COLOR, arrivingColor) else editor.remove(KEY_ARRIVING_COLOR)
         if (activityTitle != null) editor.putString(KEY_ACTIVITY_TITLE, activityTitle) else editor.remove(KEY_ACTIVITY_TITLE)
         if (activityArt != null) editor.putString(KEY_ACTIVITY_ART, activityArt) else editor.remove(KEY_ACTIVITY_ART)
-        // Never cleared: the username is what marks a session as synced, and
-        // removing it would flip every fallback above back to demo data.
+        // Never cleared by an update: the username is what marks a session as
+        // synced, and removing it would flip every fallback above back to demo
+        // data. [clear] is the one path that removes it, and only on sign-out.
         username?.let { editor.putString(KEY_USERNAME, it) }
         editor.apply()
+    }
+
+    /**
+     * Forgets the synced account, because the viewer signed out.
+     *
+     * The username is the flag every read above uses to decide whether the stored
+     * values are a real session or the fixture, and nothing ever removed it - so the
+     * four tiles kept drawing the previous account's handle, counts and top titles
+     * indefinitely after a sign-out, on a launcher anyone holding the phone can see.
+     * Emptying the store puts them back to the placeholder state they have before the
+     * first sync.
+     */
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
     }
 }

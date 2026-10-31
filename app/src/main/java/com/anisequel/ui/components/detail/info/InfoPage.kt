@@ -264,10 +264,11 @@ private fun rememberThemeSongs(media: MediaNode): State<List<ThemeSong>> {
         ?: media.coverImage?.bestUrl
     return produceState(
         initialValue = emptyList(),
+        media.type,
         media.id,
         artwork
     ) {
-        value = AniThemes.repository().themes(media.id, artwork)
+        value = AniThemes.repository().themes(media.id, media.type, artwork)
     }
 }
 

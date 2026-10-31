@@ -165,16 +165,21 @@ internal fun showsMainBar(tab: MainTab?, tierBoardOpen: Boolean): Boolean =
  * How much room a main page's scrolling content leaves for [MainBar], *below the
  * system navigation inset*.
  *
- * This is the bar's own height - 52dp of item, 5dp of padding either side, 12dp of
- * margin - and deliberately **not** the whole clearance. The system inset that
- * follows it is read from the device at draw time by [mainBarClearance], because it
- * is not a constant: a gesture bar, a three-button bar and a cutout are three
- * different heights, and hardcoding the largest of them either wastes space or
- * leaves the last row of a list sitting under the bar. That mismatch is also what
- * produces the "bounce back" snap when the list reaches its end and the padding
- * disagrees with where the bar really is.
+ * This is the bar's own height, and the arithmetic is the bar's own: 52dp of item,
+ * 5dp of padding inside the pill, 12dp of outer padding - 52 + 2x5 + 2x12 = 86. It
+ * used to say 96 with a comment that summed to 74, so every main list carried a
+ * ten-dp strip of nothing under the bar and the last row could not be scrolled flush
+ * with it. The 8dp shadow is deliberately not counted: it is drawn over content
+ * rather than occupying height, which is what an elevated surface is.
+ *
+ * **Not** the whole clearance. The system inset that follows it is read from the
+ * device at draw time by [mainBarClearance], because it is not a constant: a gesture
+ * bar, a three-button bar and a cutout are three different heights, and hardcoding
+ * the largest of them either wastes space or leaves the last row of a list sitting
+ * under the bar. That mismatch is also what produces the "bounce back" snap when the
+ * list reaches its end and the padding disagrees with where the bar really is.
  */
-internal val MainBarClearance: Dp = 96.dp
+internal val MainBarClearance: Dp = 86.dp
 
 /**
  * The bar, plus the device's own navigation inset beneath it.

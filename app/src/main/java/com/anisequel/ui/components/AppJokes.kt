@@ -91,10 +91,29 @@ object AppJokes {
      * draw below return nothing, and a quiet toast with no explanation is harder
      * to diagnose than a slightly wrong filter.
      */
+    /**
+     * The candidate lists, built once per switch combination.
+     *
+     * `poolFor` used to filter the whole pool on every draw, every preview and every
+     * Settings recomposition that asked for a count. The result is a pure function
+     * of the five switches - 31 real combinations - so it is computed on first use
+     * and looked up after that. The text is compiled in; the only work left at draw
+     * time is picking an index, which is also what keeps the toast's arrival
+     * independent of how large the pool grows.
+     */
+    private val poolByTones: Map<Set<JokeTone>, List<Joke>> = buildMap {
+        val tones = JokeTone.entries
+        for (mask in 1 until (1 shl tones.size)) {
+            val selected = tones
+                .filterIndexed { index, _ -> mask and (1 shl index) != 0 }
+                .toSet()
+            put(selected, pool.filter { it.tone in selected })
+        }
+    }
+
     fun poolFor(tones: Set<JokeTone>): List<Joke> {
         if (tones.isEmpty()) return pool
-        val filtered = pool.filter { it.tone in tones }
-        return filtered.ifEmpty { pool }
+        return poolByTones[tones]?.takeIf { it.isNotEmpty() } ?: pool
     }
 
     /** How many lines the current filter can draw from. */

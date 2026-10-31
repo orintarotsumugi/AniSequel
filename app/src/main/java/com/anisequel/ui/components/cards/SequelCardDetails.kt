@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.WavyProgressBar
 import com.anisequel.ui.theme.AniSequelTheme
 
@@ -35,12 +36,14 @@ fun SequelCardDetails(
     val statusColors = AniSequelTheme.statusColors
 
     Column(modifier = modifier) {
-        Text(
+        // A marquee rather than a two-line ellipsis: the sequel's name is the one
+        // fact the card exists for, and "…" on the second line was cutting the part
+        // that distinguishes it from the show the reader already finished.
+        MarqueeText(
             text = sequel.sequelTitle,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            modifier = Modifier.fillMaxWidth()
         )
 
         // Romaji and English title tiles

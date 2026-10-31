@@ -128,14 +128,16 @@ class VersionBaselineTest {
         // The manifest is written *after* a release, so it is allowed to be one
         // version ahead of the baseline on a build that just published - but it
         // must never be behind it, which is what a stale manifest looks like.
-        val manifestPatch = manifestVersion!!.substringAfterLast('.').toIntOrNull() ?: -1
-        val baselinePatch = baseline!!.substringAfterLast('.').toIntOrNull() ?: -1
-
+        //
+        // The whole triple, not the patch: "1.0.9" sorts above "1.0.10" as a number,
+        // and a patch alone says nothing across a minor bump - a correct move from
+        // 1.7.9 to 1.8.0 compared 0 < 9 and failed, which read as a stale manifest on
+        // the one release that was right.
         assertTrue(
             "update.json (${manifestVersion}) is older than the baseline " +
                 "version ($baseline): a stale manifest means an updater would " +
                 "never offer the current build",
-            manifestPatch >= baselinePatch
+            versionAtLeast(manifestVersion!!, baseline!!)
         )
     }
 
@@ -182,5 +184,23 @@ class VersionBaselineTest {
                 "($baselineCode)",
             manifestCode!! >= baselineCode!!
         )
+    }
+
+    /**
+     * `a` is not older than `b`, comparing the dotted components as numbers.
+     *
+     * Components in order, because a version is neither a number nor a string: the
+     * patch alone breaks at a minor bump, and string comparison puts "1.0.10" before
+     * "1.0.9". A missing component counts as zero, so "1.8" and "1.8.0" rank equal.
+     */
+    private fun versionAtLeast(a: String, b: String): Boolean {
+        val left = a.split('.').map { it.toIntOrNull() ?: -1 }
+        val right = b.split('.').map { it.toIntOrNull() ?: -1 }
+        for (index in 0 until maxOf(left.size, right.size)) {
+            val l = left.getOrElse(index) { 0 }
+            val r = right.getOrElse(index) { 0 }
+            if (l != r) return l > r
+        }
+        return true
     }
 }

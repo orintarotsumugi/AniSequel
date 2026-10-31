@@ -36,6 +36,7 @@ import com.anisequel.data.model.ProfileActivity
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
@@ -188,7 +189,7 @@ internal fun ActivityTextCard(
     ) {
         Column(
             modifier = Modifier
-                .animateContentSize()
+                .animateContentSize(ExpressiveMotion.FastSpatialSize)
                 .padding(14.dp)
         ) {
             ActivityAuthorRow(

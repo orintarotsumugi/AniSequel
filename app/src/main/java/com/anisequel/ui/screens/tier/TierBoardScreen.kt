@@ -290,7 +290,11 @@ internal fun TierBoardScreen(
                 onZoom = { sheets.zooming = true },
                 onFilter = { sheets.filtering = true },
                 onDisplay = { sheets.displaying = true },
-                onManage = { sheets.managingTiers = true }
+                // Gated like every other edit path: the manage sheet can empty a
+                // tier, remove one or add one, and a "View only" board that still
+                // offers those from its top bar is a lock that says one thing and
+                // does another.
+                onManage = { whenEditable { sheets.managingTiers = true } }
             )
         }
     ) { scaffoldPadding ->
@@ -354,8 +358,9 @@ internal fun TierBoardScreen(
                             unrankedCount = unranked.size,
                             isSeeding = isSeeding,
                             mediaType = document.mediaType,
-                            onSeed = onSeed,
-                            onAddTitles = { sheets.addingTitles = true }
+                            // Seeding ranks titles, so it is an edit like the rest.
+                            onSeed = { whenEditable(onSeed) },
+                            onAddTitles = { whenEditable { sheets.addingTitles = true } }
                         )
                     }
 

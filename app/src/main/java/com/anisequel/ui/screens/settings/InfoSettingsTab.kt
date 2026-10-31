@@ -39,14 +39,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
-import com.anisequel.data.changelog.ChangelogRepository
-import com.anisequel.data.changelog.ChangelogVersion
 import com.anisequel.data.diagnostics.CrashReports
 import com.anisequel.data.network.AniListOAuth
 import com.anisequel.data.repository.DiagnosticsPreferences
-import com.anisequel.data.update.ReleaseNote
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.ReleaseNotes
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
 import kotlinx.coroutines.Dispatchers
@@ -81,21 +77,10 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun InfoSettingsTab(
-    changelogRepository: ChangelogRepository? = null,
     modifier: Modifier = Modifier
 ) {
-    // Newest block in the changelog file, not a lookup by BuildConfig.VERSION_NAME:
-    // the release workflow advances the patch number past the newest published
-    // release, so the version a build reports is not knowable when the notes are
-    // written and an exact match would always miss. See ChangelogRepository.
-    val changelog = remember(changelogRepository) {
-        changelogRepository?.latestWithNotes()
-    }
-
     SettingsScrollColumn(modifier) {
         BuildCard()
-        UpdateSectionCard()
-        ChangelogSectionCard(changelog = changelog)
         CrashReportCard()
         PrivacyCard()
         HelpLinksCard()
@@ -535,42 +520,3 @@ private const val GITHUB_REPOSITORY_URL = "https://github.com/orintarotsumugi/An
 
 /** Where a crash report goes once it is on the clipboard. */
 private const val GITHUB_ISSUES_URL = "$GITHUB_REPOSITORY_URL/issues"
-
-/**
- * "What's new", rendered from the newest changelog block.
- *
- * The empty case is not an error: a build between releases can have notes for a
- * version it has not shipped yet, and the card must still say something useful
- * rather than render a blank section.
- */
-@Composable
-private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
-    val entries = changelog?.entries
-        ?.filterNot { it.title.isNullOrBlank() }
-        .orEmpty()
-
-    SectionCard(
-        title = "What's new",
-        icon = AppVectorIcons.NewReleases,
-        // A bare version number is not a subtitle - it is the answer to a question
-        // nobody asked, under a heading that already says these are release notes.
-        // The version is only worth naming when it is the version these notes are
-        // for, and the fallback says what the card is instead.
-        subtitle = changelog?.version?.let { "Release notes for $it" } ?: "Release notes"
-    ) {
-        if (entries.isEmpty()) {
-            Text(
-                text = "No release notes for this version yet. They are on the download page in the meantime.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            // The same renderer the update prompt uses: the workflow writes that
-            // manifest's notes from this file, so the two are the same sentences
-            // and had no business looking different.
-            ReleaseNotes(
-                notes = entries.map { ReleaseNote(title = it.title.orEmpty(), detail = it.detail) }
-            )
-        }
-    }
-}

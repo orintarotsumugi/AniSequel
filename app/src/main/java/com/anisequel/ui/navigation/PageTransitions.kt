@@ -164,6 +164,31 @@ internal fun pageEnterDirection(
     }
 
 /**
+ * The fade that rides with a page slide, by the kind of move it is.
+ *
+ * A tab switch is already on the fast offset token; pairing it with the calm
+ * `DefaultEffects` fade made the incoming page still be fading in after the slide
+ * had landed, and a chained tap restarted the fade mid-flight. Pushes keep the
+ * calm fade - they are not raced.
+ */
+private fun pageFade(from: String?, to: String?): FiniteAnimationSpec<Float> =
+    if (tabDirection(from, to) != null) ExpressiveMotion.FastEffects else RouteFadeEffect
+
+/**
+ * The expansion that rides with a page slide, by the kind of move it is.
+ *
+ * Bouncy overshoot is a celebration and belongs to a push the reader chose; on a
+ * tab switch it turns every quick Home -> Library -> Home into three overlapping
+ * wobbles. Tab moves get the fast, clean token and a slightly smaller travel.
+ */
+private fun pageScale(from: String?, to: String?): FiniteAnimationSpec<Float> =
+    if (tabDirection(from, to) != null) ExpressiveMotion.FastSpatial else ExpressiveMotion.BouncySpatial
+
+/** The scale a page starts at; tab moves travel less because they repeat. */
+private fun pageInitialScale(from: String?, to: String?): Float =
+    if (tabDirection(from, to) != null) 0.96f else 0.94f
+
+/**
  * The shared arrival: a short slide, a fade and a small expansion.
  *
  * Extracted so [enterPage] and [popEnterPage] cannot drift apart again - the pop
@@ -171,7 +196,10 @@ internal fun pageEnterDirection(
  */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.slideInPage(
     direction: AnimatedContentTransitionScope.SlideDirection,
-    spring: FiniteAnimationSpec<IntOffset>
+    spring: FiniteAnimationSpec<IntOffset>,
+    fade: FiniteAnimationSpec<Float> = RouteFadeEffect,
+    scale: FiniteAnimationSpec<Float> = ExpressiveMotion.BouncySpatial,
+    initialScale: Float = 0.94f
 ): EnterTransition = slideIntoContainer(
     direction,
     animationSpec = spring,
@@ -180,9 +208,9 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.slideInPage(
     // travel with a growing page reads as this screen expanding out of the one
     // before it, and it keeps both surfaces on screen while they cross.
     initialOffset = { fullWidth -> fullWidth / 4 }
-) + fadeIn(RouteFadeEffect) + scaleIn(
-    initialScale = 0.94f,
-    animationSpec = ExpressiveMotion.BouncySpatial
+) + fadeIn(fade) + scaleIn(
+    initialScale = initialScale,
+    animationSpec = scale
 )
 
 /** A page arriving over the one before it. */
@@ -191,21 +219,33 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
     to: String?
 ): EnterTransition = if (isTierList(to)) {
     slideInVertically(
-        animationSpec = RouteSlideSpring,
+        // `pageSlideSpring`, not the calm `RouteSlideSpring` this used to hardcode:
+        // the board is one of the bar's pages, so arriving at it is a tab switch
+        // whenever the reader tapped Tiers. The fast token is what the bar's own
+        // leave motion is on (`MainChrome` hides it on that token), and the calm
+        // spring is longer than a chained tab tap - the first rise would still be in
+        // flight when the next move started, which is the stutter
+        // `RouteTabSlideSpring` exists to remove. A push onto the board still gets
+        // the calm spring, because that is what `pageSlideSpring` returns for it.
+        animationSpec = pageSlideSpring(from, to),
         // A third of the page rather than all of it: enough travel to read as a
         // rise, short enough that the board's own header is not still arriving
         // when the finger gets there.
         initialOffsetY = { fullHeight -> fullHeight / 3 }
-    ) + fadeIn(RouteFadeEffect) + scaleIn(
+    ) + fadeIn(pageFade(from, to)) + scaleIn(
         initialScale = 0.96f,
-        animationSpec = ExpressiveMotion.BouncySpatial
+        animationSpec = pageScale(from, to)
     )
 } else {
     // `pageSlideSpring` still chooses the fast token for a tab switch and the
-    // calm one for a push; the direction is the only part that differs.
+    // calm one for a push; the fade and the scale follow the same kind of move,
+    // so one transition cannot outlive the other.
     slideInPage(
         direction = pageEnterDirection(from, to, popped = false),
-        spring = pageSlideSpring(from, to)
+        spring = pageSlideSpring(from, to),
+        fade = pageFade(from, to),
+        scale = pageScale(from, to),
+        initialScale = pageInitialScale(from, to)
     )
 }
 
@@ -215,17 +255,19 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.exitPage(
     to: String?,
     popped: Boolean
 ): ExitTransition = when {
-    // The board is leaving: it falls back down the way it came.
+    // The board is leaving: it falls back down the way it came, on the same spring
+    // that brought it in - see [enterPage] for why that is the fast token on a tab
+    // move.
     isTierList(from) -> slideOutVertically(
-        animationSpec = RouteSlideSpring,
+        animationSpec = pageSlideSpring(from, to),
         targetOffsetY = { fullHeight -> fullHeight / 3 }
-    ) + fadeOut(RouteFadeEffect)
+    ) + fadeOut(pageFade(from, to))
     // The board is arriving over this page. It fades and settles back rather than
     // sliding sideways: the board is rising from the bottom edge and the bar is
     // leaving through it, so a third horizontal movement would give the same frame
     // two directions to read. This is the mirror of `popEnterPage`'s fade, which is
     // what the reader sees on the way back.
-    isTierList(to) -> fadeOut(RouteFadeEffect) + scaleOut(
+    isTierList(to) -> fadeOut(pageFade(from, to)) + scaleOut(
         targetScale = 0.98f,
         animationSpec = ExpressiveMotion.FastSpatial
     )
@@ -237,7 +279,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.exitPage(
             // The page being covered barely moves: it is the fixed surface the new
             // one grows over, not a card sliding away.
             targetOffset = { fullWidth -> fullWidth / 12 }
-        ) + fadeOut(RouteFadeEffect) + scaleOut(
+        ) + fadeOut(pageFade(from, to)) + scaleOut(
             targetScale = 0.98f,
             animationSpec = ExpressiveMotion.FastSpatial
         )
@@ -260,13 +302,16 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnterPage(
     from: String?,
     to: String?
 ): EnterTransition = if (isTierList(from)) {
-    fadeIn(RouteFadeEffect) + scaleIn(
+    fadeIn(pageFade(from, to)) + scaleIn(
         initialScale = 0.98f,
         animationSpec = ExpressiveMotion.FastSpatial
     )
 } else {
     slideInPage(
         direction = pageEnterDirection(from, to, popped = true),
-        spring = pageSlideSpring(from, to)
+        spring = pageSlideSpring(from, to),
+        fade = pageFade(from, to),
+        scale = pageScale(from, to),
+        initialScale = pageInitialScale(from, to)
     )
 }

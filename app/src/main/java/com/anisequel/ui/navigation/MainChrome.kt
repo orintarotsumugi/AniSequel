@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +88,18 @@ internal fun BoxScope.MainBarHost(
         if (currentRoute != AppRoutes.TIER_LIST) onTierBoardOpenChange(false)
     }
 
+    // The last tab the route actually named, kept for the frames the bar spends
+    // leaving.
+    //
+    // `currentTab` goes null the moment the destination is not one of the bar's pages
+    // - pushing Settings, or opening the board - and it is null for the whole exit
+    // animation, so the highlight snapped to Home (a tab the reader was not on) and
+    // slid away claiming it. Written after composition rather than during it, so the
+    // exit frames read a settled value while a tab switch still draws from
+    // `currentTab` itself on its first frame.
+    val lastTab = remember { mutableStateOf(MainTab.HOME) }
+    SideEffect { if (currentTab != null) lastTab.value = currentTab }
+
     AnimatedVisibility(
         visible = showsMainBar(currentTab, tierBoardOpen),
         enter = slideInVertically(
@@ -100,10 +113,11 @@ internal fun BoxScope.MainBarHost(
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
         MainBar(
-            // An open board hides the bar, but it is still composed while it
-            // animates out: `MainBar` coerces an unknown selection to the first
-            // tab for that one frame rather than crashing on an index of -1.
-            selected = currentTab ?: MainTab.HOME,
+            // The last real tab, not Home, while the bar animates out - see [lastTab].
+            // An open board still hides the bar; `MainBar` coerces an unknown selection
+            // to the first tab for that one frame rather than crashing on an index of
+            // -1.
+            selected = currentTab ?: lastTab.value,
             tabs = tabs,
             // The largest the viewer's avatar has; the bar falls back to a glyph
             // while it is still unknown.

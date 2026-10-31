@@ -544,7 +544,11 @@ data class MediaTitle(
         get() = english?.takeIf { it.isNotBlank() }
             ?: userPreferred?.takeIf { it.isNotBlank() }
             ?: romaji?.takeIf { it.isNotBlank() }
-            ?: native ?: "Unknown Title"
+            // Blank-checked like the three above it: a node whose only spelling is an
+            // empty `native` rendered an empty title, where [bestTitleOrNull] already
+            // answered null for the same node.
+            ?: native?.takeIf { it.isNotBlank() }
+            ?: "Unknown Title"
 
     /**
      * The same preference order, but null instead of `"Unknown Title"`.

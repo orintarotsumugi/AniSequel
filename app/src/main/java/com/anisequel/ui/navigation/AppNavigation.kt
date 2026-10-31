@@ -1,6 +1,7 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -52,7 +53,16 @@ object AppRoutes {
     const val SETTINGS = "settings"
     const val TIER_LIST = "tier_list"
 
-    fun userDashboard(username: String) = "dashboard_user/$username"
+    /**
+     * The path is encoded, not interpolated raw.
+     *
+     * A `composable()` route is matched exactly, so a name carrying `/`, `#`, `?`
+     * or `%` produced a URI that matched no destination and the tap did nothing
+     * with no error anywhere - the same silent failure [ProfileRoutes.byId]
+     * documents for the query form. Navigation decodes the segment back for
+     * `NavType.StringType`, so the screen still receives the name as typed.
+     */
+    fun userDashboard(username: String) = "dashboard_user/${Uri.encode(username)}"
 }
 
 /** A state that never emits a real dashboard, for when there is no session VM. */
@@ -404,8 +414,17 @@ fun AppNavigation(
     // the stored session may still be being restored - or may not exist, in which
     // case the request has to stay pending until a sign-in resolves it instead of
     // being spent on a login screen.
-    LaunchedEffect(openProfileActivityOnLaunch, authState) {
-        if (openProfileActivityOnLaunch && authState is AuthUiState.Authenticated) {
+    //
+    // `Authenticated` is not yet an identity: it is the token, and the viewer id
+    // and name arrive one query later. Firing on the token alone put the profile
+    // route through its demo fallback, so the reader landed on "OtakuExplorer"'s
+    // fixture - somebody else's invented list - for the length of a round trip,
+    // and for good if that query failed.
+    LaunchedEffect(openProfileActivityOnLaunch, authState, signedInViewer) {
+        if (openProfileActivityOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            signedInViewer != null
+        ) {
             navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
             onProfileActivityOpened()
         }
@@ -419,7 +438,7 @@ fun AppNavigation(
     // host - once per character typed into the dashboard's search box. Hoisting
     // the sync into its own composable confines that invalidation to a scope that
     // draws nothing.
-    WidgetSync(dashboardFlow = dashboardFlow, context = context)
+    WidgetSync(dashboardFlow = dashboardFlow, authState = authState, context = context)
 
     // One provider for every markdown surface in the app: a person's bio, a
     // comment, a draft preview and a title's synopsis all draw AniList link
@@ -491,7 +510,11 @@ fun AppNavigation(
                     aniListRepository = aniListRepository,
                     tierListPreferences = tierListPreferences,
                     signedInViewer = signedInViewer,
-                    onBoardOpenChange = { tierBoardOpen = it }
+                    authenticated = authenticated,
+                    dashboardError = dashboardError,
+                    mainDashboardViewModel = mainDashboardViewModel,
+                    onBoardOpenChange = { tierBoardOpen = it },
+                    onSignInAgain = authViewModel::logout
                 )
 
                 libraryDestinations(

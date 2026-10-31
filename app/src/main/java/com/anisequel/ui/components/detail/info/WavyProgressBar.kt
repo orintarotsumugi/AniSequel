@@ -89,12 +89,17 @@ fun WavyProgressBar(
      */
     trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
     /**
-     * Re-runs the entrance when this changes - the title's id, in practice.
+     * Re-runs the entrance when this changes - the title's identity, in practice.
      *
-     * The "already played" flag is saved so scrolling the card off screen and
-     * back does not replay the fill, but it was saved for the *sheet* rather than
-     * for the title: walking a franchise reuses the same list item, so a new show's
-     * bar appeared already full instead of rising from zero.
+     * The "already played" flag is saved so scrolling the card off screen and back
+     * does not replay the fill, but it was saved for the *sheet* rather than for the
+     * title: walking a franchise reuses the same list item, so a new show's bar
+     * appeared already full instead of rising from zero.
+     *
+     * An id is not an identity on its own, either. A walk crosses the anime/manga
+     * boundary, where `anime/7` and `manga/7` are different shows, so the caller
+     * passes type *and* id (see [InfoProgressCard]); keyed on the id alone the saved
+     * flag survived the crossing and the second title's bar arrived full again.
      */
     entranceKey: Any? = null
 ) {

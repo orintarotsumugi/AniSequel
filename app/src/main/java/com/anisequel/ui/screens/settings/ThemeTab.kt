@@ -59,12 +59,6 @@ private fun ThemeMode.icon(): ImageVector = when (this) {
     ThemeMode.DARK -> AppVectorIcons.ThemeDark
 }
 
-private fun MotionStyle.icon(): ImageVector = when (this) {
-    MotionStyle.INSTANT -> AppVectorIcons.MotionInstant
-    MotionStyle.SMOOTH -> AppVectorIcons.MotionSmooth
-    MotionStyle.CHILL -> AppVectorIcons.MotionChill
-}
-
 /**
  * The dedicated Theme tab.
  *
@@ -93,6 +87,10 @@ fun ThemeTab(
         Spacer(modifier = Modifier.height(14.dp))
 
         AppearanceSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+
+        // Full screen, next to the appearance choices it belongs with - the window
+        // reads the same preference this switch writes.
+        DisplaySection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
         BackgroundSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
@@ -124,7 +122,10 @@ fun ThemeTab(
             !themeSettings.animeThemeRetainColor ||
             themeSettings.retainedTint != RetainedTint.DEFAULT ||
             themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
-            themeSettings.appBackgroundColor != null
+            themeSettings.appBackgroundColor != null ||
+            // Full screen is the default; only turning it off is a change, so the
+            // reset row has to offer itself for exactly that case.
+            !themeSettings.immersive
 
         // The button used to appear with a bare `if`, fully drawn on the next
         // frame - so the page jumped by a button's height the moment the reader
@@ -293,42 +294,6 @@ private fun CanvasChip(
                 maxLines = 1
             )
         }
-    }
-}
-
-@Composable
-private fun MotionSection(
-    themePreferences: ThemePreferences,
-    settings: ThemePreferences.ThemeSettings,
-    scope: CoroutineScope
-) {
-    SectionCard(
-        title = "Motion",
-        icon = AppVectorIcons.SectionMotion,
-        subtitle = "How much the app animates",
-        iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
-        iconContent = MaterialTheme.colorScheme.onTertiaryContainer
-    ) {
-        ExpressivePolygonSegmentedBar(
-            options = MotionStyle.entries.map { style ->
-                SegmentedOption(label = style.displayName, icon = style.icon())
-            },
-            selectedIndex = MotionStyle.entries.indexOf(settings.motionStyle),
-            onSelect = { index ->
-                scope.launch { themePreferences.setMotionStyle(MotionStyle.entries[index]) }
-            },
-            modifier = Modifier.testTag("motion_style_row")
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // Three clauses rather than one long sentence with three "=" signs: the
-        // equals read as a table that had been flattened into prose, and the line
-        // ran to two full widths on a phone.
-        Text(
-            text = "Instant turns motion off. Smooth fades without overshooting. " +
-                "Chill is the full expressive physics.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 

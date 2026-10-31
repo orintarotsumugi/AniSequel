@@ -551,7 +551,15 @@ private fun NavigationItem(
 
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) 0.92f else 1f,
-        animationSpec = ExpressiveMotion.PressSpatial,
+        // The In/Out pair, not the symmetric `PressSpatial`: pressing and releasing
+        // are different gestures here exactly as they are in `bouncyPress` and the
+        // segment control, and a bar that pressed with one spring while a Settings
+        // segment pressed with two read as two different kinds of control.
+        animationSpec = if (pressed) {
+            ExpressiveMotion.PressSpatialIn
+        } else {
+            ExpressiveMotion.PressSpatialOut
+        },
         label = "nav_item_press_scale"
     )
     val selectionScale by animateFloatAsState(

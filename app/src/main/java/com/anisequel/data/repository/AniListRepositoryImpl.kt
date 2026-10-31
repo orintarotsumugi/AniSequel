@@ -49,11 +49,13 @@ import com.squareup.moshi.JsonDataException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * ## This file is over the 700-line ceiling, on purpose
@@ -495,9 +497,16 @@ class AniListRepositoryImpl(
      * mutation just added, and the dashboard's "already planned" gap reappears.
      * A fetch captures this value before it starts and only stores when it is
      * unchanged, which turns the racing write into a miss instead of a stale hit.
+     *
+     * An `AtomicInteger` rather than `@Volatile private var`: `++` on a volatile is
+     * a read and a write with a gap between them, and two mutations that overlap in
+     * that gap - a quick-add landing while the editor's save is still on the wire,
+     * both on their own IO dispatchers - bump the same number and record one
+     * invalidation. The fetch that started before *both* then matches the epoch it
+     * read, and writes a list from before the writes back over the cleared cache.
+     * Which is the exact failure the counter exists to make a miss.
      */
-    @Volatile
-    private var listEpoch = 0
+    private val listEpoch = AtomicInteger(0)
 
     /**
      * What [AniListRepository.listMutationVersion] publishes.
@@ -526,8 +535,10 @@ class AniListRepositoryImpl(
      * user-chosen window; this one is fixed at
      * [VIEWER_PROFILE_WINDOW_MILLIS].
      *
-     * `@Volatile` for the same reason as [listEpoch]: a fetch completes on
-     * whichever dispatcher Retrofit used, and the next read is on main.
+     * Visible across dispatchers rather than synchronised: a fetch completes on
+     * whichever dispatcher Retrofit used and the next read is on main. One
+     * reference assignment is all it takes, so visibility is enough here - unlike
+     * [listEpoch], which has to be atomic because every bump reads it first.
      */
     @Volatile
     private var viewerCache: CachedViewer? = null
@@ -738,14 +749,14 @@ class AniListRepositoryImpl(
      * help the next screen that asks.
      */
     private suspend fun invalidateLists() {
-        listEpoch++
+        listEpoch.incrementAndGet()
         listCache.clear()
         detailCache.clear()
         activityCache.clear()
         overviewCache.clear()
         snapshots?.removeKind(SNAPSHOT_LIST)
         snapshots?.removeKind(SNAPSHOT_OVERVIEW)
-        _listMutationVersion.value++
+        _listMutationVersion.update { it + 1 }
     }
 
     /**
@@ -928,10 +939,10 @@ class AniListRepositoryImpl(
         val key = "user:$userId"
         if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
-        val epoch = listEpoch
+        val epoch = listEpoch.get()
         return fetchFullMediaListCollection(userId = userId, userName = null)
             .rejectUnexpectedEmpty(key)
-            .onSuccess { if (epoch == listEpoch) storeList(key, it) }
+            .onSuccess { if (epoch == listEpoch.get()) storeList(key, it) }
     }
 
     /**
@@ -954,10 +965,10 @@ class AniListRepositoryImpl(
         val key = "user:$userId:manga"
         if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
-        val epoch = listEpoch
+        val epoch = listEpoch.get()
         return fetchFullMediaListCollection(userId = userId, userName = null, listType = LIST_TYPE_MANGA)
             .rejectUnexpectedEmpty(key)
-            .onSuccess { if (epoch == listEpoch) storeList(key, it) }
+            .onSuccess { if (epoch == listEpoch.get()) storeList(key, it) }
     }
 
     override suspend fun getUserAnimeListByUsername(
@@ -971,10 +982,10 @@ class AniListRepositoryImpl(
         val key = "userName:${userName.trim().lowercase(java.util.Locale.ROOT)}"
         if (!forceRefresh) knownList(key)?.let { return Result.success(it) }
 
-        val epoch = listEpoch
+        val epoch = listEpoch.get()
         return fetchFullMediaListCollection(userId = null, userName = userName.trim())
             .rejectUnexpectedEmpty(key)
-            .onSuccess { if (epoch == listEpoch) storeList(key, it) }
+            .onSuccess { if (epoch == listEpoch.get()) storeList(key, it) }
     }
 
     /**
@@ -2109,7 +2120,7 @@ class AniListRepositoryImpl(
         // The epoch bump invalidates any fetch already in flight, so a request
         // that started before sign-out cannot write the previous person's list
         // back into the now-cleared cache.
-        listEpoch++
+        listEpoch.incrementAndGet()
         listCache.clear()
         // Same reasoning for the profile, and it matters more here: the bio and
         // the favourites are the most identifying thing the app holds about

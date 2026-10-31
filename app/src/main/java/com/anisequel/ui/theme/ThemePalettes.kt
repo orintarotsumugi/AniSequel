@@ -41,7 +41,7 @@ data class ThemePalette(
         val SAKURA: ThemePalette = ThemePalette(
             id = "sakura",
             displayName = "Sakura",
-            light = lightColorScheme(
+            light = paletteLight(
                 primary = Color(0xFFC2185B),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFFFD9E2),
@@ -89,7 +89,7 @@ data class ThemePalette(
         val MATCHA: ThemePalette = ThemePalette(
             id = "matcha",
             displayName = "Matcha",
-            light = lightColorScheme(
+            light = paletteLight(
                 primary = Color(0xFF2E7D32),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFC8E6C9),
@@ -137,7 +137,7 @@ data class ThemePalette(
         val JUBITER: ThemePalette = ThemePalette(
             id = "jupiter",
             displayName = "Jupiter",
-            light = lightColorScheme(
+            light = paletteLight(
                 primary = Color(0xFF3948AB),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFC5CBFF),
@@ -185,7 +185,7 @@ data class ThemePalette(
         val AMBER: ThemePalette = ThemePalette(
             id = "amber",
             displayName = "Sunset",
-            light = lightColorScheme(
+            light = paletteLight(
                 primary = Color(0xFFB45309),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFFFDDB0),
@@ -311,4 +311,69 @@ data class ThemePalettePreview(
     val primary: Color,
     val primaryContainer: Color,
     val secondary: Color
+)
+
+/**
+ * A hand-authored palette's light scheme, with the app's navy neutral ladder filled in.
+ *
+ * The four accent palettes used to pass `lightColorScheme` nothing but accents, so
+ * every surface, outline, `onSurfaceVariant`, `inverseSurface` and the surface
+ * container ladder stayed at Material's baseline values - and those are derived from a
+ * purple-grey seed. On Sakura, Matcha, Jupiter or Sunset the sheets, chips, dividers
+ * and app-bar tints therefore sat a visible hue off the palette's own accents, which is
+ * the same drift `Color.kt` documents for the dark tones. Each palette's dark half
+ * already spells the ladder out; this is the light half's copy of it, written once
+ * instead of four times.
+ *
+ * Takes the accent roles by name and fills the rest in - the neutrals are the app's,
+ * not the palette's, which is the whole point.
+ */
+private fun paletteLight(
+    primary: Color,
+    onPrimary: Color,
+    primaryContainer: Color,
+    onPrimaryContainer: Color,
+    inversePrimary: Color,
+    secondary: Color,
+    onSecondary: Color,
+    secondaryContainer: Color,
+    onSecondaryContainer: Color,
+    tertiary: Color,
+    onTertiary: Color,
+    tertiaryContainer: Color,
+    onTertiaryContainer: Color,
+    surfaceTint: Color
+): ColorScheme = lightColorScheme(
+    primary = primary,
+    onPrimary = onPrimary,
+    primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer,
+    inversePrimary = inversePrimary,
+    secondary = secondary,
+    onSecondary = onSecondary,
+    secondaryContainer = secondaryContainer,
+    onSecondaryContainer = onSecondaryContainer,
+    tertiary = tertiary,
+    onTertiary = onTertiary,
+    tertiaryContainer = tertiaryContainer,
+    onTertiaryContainer = onTertiaryContainer,
+    background = LightBgMain,
+    onBackground = LightTextPrimary,
+    surface = LightSurface,
+    onSurface = LightTextPrimary,
+    surfaceVariant = LightSurfaceContainer,
+    onSurfaceVariant = LightTextSecondary,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = LightSurfaceLow,
+    surfaceContainer = LightSurfaceContainer,
+    surfaceContainerHigh = LightSurfaceContainerHigh,
+    surfaceContainerHighest = LightSurfaceContainerHighest,
+    surfaceDim = LightSurfaceDim,
+    surfaceBright = LightSurfaceBright,
+    surfaceTint = surfaceTint,
+    inverseSurface = DarkSurfaceContainer,
+    inverseOnSurface = DarkTextPrimary,
+    outline = LightBorder,
+    outlineVariant = Color(0xFFD8E1EC),
+    scrim = Color(0xFF000000)
 )

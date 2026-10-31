@@ -75,14 +75,21 @@ class LiveChartCoverRepository(
     /**
      * LiveChart's poster and visuals for [queryTitles], via [searchUrl].
      *
-     * The key is the first non-blank title so two spellings of one show do not
-     * occupy two entries; with none to key on the search URL itself is used. An
-     * empty [LiveChartArtwork] is cached for [MISS_TTL_MILLIS] like a failed
+     * Keyed on [searchUrl], which is what the fetch is addressed by and what the
+     * caller keys its own state on (`FullScreenCoverViewer` keys `produceState` on
+     * nothing else). Keying on the first title instead was a collision waiting for a
+     * remake: LiveChart links both `Fruits Basket` (2001) and (2019) under the same
+     * romaji, so the second title opened was served the first one's poster from
+     * memory for the whole day, and their two fetches collapsed into one in-flight
+     * request. Two spellings of *one* show still share an entry, because they share
+     * the show's LiveChart URL.
+     *
+     * An empty [LiveChartArtwork] is cached for [MISS_TTL_MILLIS] like a failed
      * poster lookup, so a title LiveChart does not carry is not re-searched on
      * every open while a dropped request still gets a second chance in minutes.
      */
     suspend fun artwork(searchUrl: String, queryTitles: List<String>): LiveChartArtwork {
-        val key = queryTitles.firstOrNull { it.isNotBlank() } ?: searchUrl
+        val key = searchUrl
         cachedOrNull(key)?.let { return it }
 
         val pending = synchronized(lock) {

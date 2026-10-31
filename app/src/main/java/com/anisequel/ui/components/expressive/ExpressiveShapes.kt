@@ -44,6 +44,31 @@ object ExpressiveShapes {
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val orb: RoundedPolygon get() = MaterialShapes.Cookie9Sided
 
+    // --- Decorative tokens for fixed-square tiles -------------------------------
+    //
+    // The Settings icon tile is a fixed 34dp square, which is the one place a
+    // RoundedPolygon may be drawn: it is authored on a square perimeter, so it is
+    // stretched only by the aspect ratio the layout gives it - and a square is the
+    // one ratio that leaves it alone. Each token below has a real call site on a
+    // SectionCard tile; the rule from the top of this file holds, so a token
+    // added here without a tile to draw it on is still shrinker weight.
+
+    /** A four-sided cookie: a soft square with four rounded lobes. */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val cookie: RoundedPolygon get() = MaterialShapes.Cookie4Sided
+
+    /** A burst: a ring of soft points, which reads as a badge at tile size. */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val burst: RoundedPolygon get() = MaterialShapes.Burst
+
+    /** A diamond: a rounded rhombus. */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val diamond: RoundedPolygon get() = MaterialShapes.Diamond
+
+    /** A flower: petals around a round centre. */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val flower: RoundedPolygon get() = MaterialShapes.Flower
+
     /**
      * A true capsule: straight sides, semicircular ends, at any size.
      *

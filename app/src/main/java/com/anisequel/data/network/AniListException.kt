@@ -132,6 +132,13 @@ internal fun GraphQLError.toAniListException(): AniListException {
             message = "AniList is rate limiting this device. Try again in a moment."
         )
         status == 401 || status == 403 -> sessionExpiredException()
+        // 5xx before the wording checks, like the 429 above: a status carried on a
+        // GraphQL error can arrive on an HTTP 200 (`rateLimitedException`'s note
+        // records that for 429), and `Internal Server Error` on that road fell through
+        // to INVALID_REQUEST - the reader was told the app had a bug, no ServerDown
+        // notice was raised, and the status strip stayed pinned to ONLINE during an
+        // AniList incident.
+        status != null && status in 500..599 -> serverException(code = status)
         status == 404 || text.contains("not found", ignoreCase = true) ->
             AniListException(AniListErrorKind.NOT_FOUND, text)
         reportsAuthFailure -> sessionExpiredException()

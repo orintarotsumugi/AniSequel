@@ -69,7 +69,14 @@ class UpdateController(
 
     /** Asks GitHub whether anything newer exists. */
     fun check() {
-        if (state is UpdateUiState.Checking) return
+        // Never over a running transfer. `MainActivity` checks once per Activity
+        // creation, and a rotation is a new creation: between two progress callbacks
+        // the state passed through `Checking`/`Available`, the dialog offered
+        // Download again, and a second `FileOutputStream` appended to the same
+        // `.part` - two interleaved transfers in one file, which then failed
+        // verification and was reported as a tampered release. The download owns the
+        // state until it settles.
+        if (state is UpdateUiState.Checking || state is UpdateUiState.Downloading) return
         state = UpdateUiState.Checking
 
         scope.launch {

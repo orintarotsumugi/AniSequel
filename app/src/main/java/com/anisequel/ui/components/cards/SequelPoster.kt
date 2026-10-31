@@ -28,10 +28,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
@@ -76,6 +81,14 @@ fun SequelPoster(
                 onHold = { showFullScreen = true },
                 onClick = { showFullScreen = true }
             )
+            // The only way into the cover viewer from a card: tap and hold both
+            // opened it, and neither said so. The image is decorative
+            // (`contentDescription = null`), so without this the control had no name
+            // and no role for TalkBack at all.
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open the cover for ${sequel.sequelMedia.displayName}"
+            }
     ) {
         // Placeholder artwork, shown only until the real cover arrives.
         //

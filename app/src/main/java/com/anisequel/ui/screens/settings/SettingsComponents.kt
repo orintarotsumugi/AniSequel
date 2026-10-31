@@ -29,6 +29,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -72,6 +73,16 @@ fun SectionCard(
     iconContainer: Color = MaterialTheme.colorScheme.secondaryContainer,
     /** The icon drawn on [iconContainer]. */
     iconContent: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    /**
+     * The icon tile's outline.
+     *
+     * Defaults to the theme's small rounded square. The Settings pages that pass
+     * an Expressive polygon here are opting into the decorative family, and the
+     * tile is the only element in the app entitled to it: it is a fixed 34dp
+     * square, and `RoundedPolygon` is authored on a square perimeter - see
+     * `ExpressiveShapes` for what happens when one outlines a wide control.
+     */
+    iconShape: Shape = MaterialTheme.shapes.small,
     content: @Composable () -> Unit
 ) {
     Card(
@@ -89,7 +100,7 @@ fun SectionCard(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(MaterialTheme.shapes.small)
+                            .clip(iconShape)
                             .background(iconContainer),
                         contentAlignment = Alignment.Center
                     ) {

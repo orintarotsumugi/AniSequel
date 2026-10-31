@@ -38,6 +38,21 @@ val MediaNode.posterColor: String? get() = coverImage?.color
 val MediaNode.isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
 
 /**
+ * The media's id with its namespace in front, for the places that need one
+ * comparable value rather than a [MediaCoverKey] - a `LazyGrid` item key and the
+ * favourite-membership set are both of that shape.
+ *
+ * A bare `id` is not an identity: AniList numbers anime and manga independently, so
+ * `anime/21` and `manga/21` are two different shows. The Library grid merges the two
+ * lists and was keyed on the id alone, which is a duplicate-key crash rather than a
+ * wrong badge whenever a reader holds both halves of a number, and the Favourites
+ * filter tested the same bare id, which badges a manga because its anime twin is
+ * hearted. A node whose own `type` is null is anime, [isManga]'s rule, so a summary
+ * node and the detail node for one show agree.
+ */
+val MediaNode.namespaceKey: String get() = "${if (isManga) "MANGA" else "ANIME"}_$id"
+
+/**
  * An AniList music video.
  *
  * `MUSIC` is a `MediaFormat`, not a `MediaType` - the entry still lives in the

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.DashboardUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +46,14 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun WidgetSync(
     dashboardFlow: StateFlow<DashboardUiState?>,
+    /**
+     * The session, because a widget outlives it.
+     *
+     * Only an explicit [AuthUiState.Unauthenticated] clears the tiles - `Restoring`
+     * is a cold start that has not read the token yet, and clearing there would blank
+     * every tile on every launch.
+     */
+    authState: AuthUiState,
     context: Context
 ) {
     val dashboardState by dashboardFlow.collectAsState()
@@ -52,8 +61,10 @@ internal fun WidgetSync(
     val topMissedId = success?.missedSequels?.firstOrNull()?.sequelId
     val topArrivingId = success?.arriving?.firstOrNull()?.mediaId
     val avatarUrl = success?.viewer?.avatar?.large ?: success?.viewer?.avatar?.medium
+    val signedOut = authState is AuthUiState.Unauthenticated
 
     LaunchedEffect(
+        signedOut,
         success?.viewer?.id,
         success?.viewer?.name,
         success?.totalMissedCount,
@@ -63,6 +74,18 @@ internal fun WidgetSync(
         topArrivingId,
         avatarUrl
     ) {
+        if (signedOut) {
+            // Signed out, the tiles go back to their placeholder state instead of
+            // keeping the previous account's handle and titles - see
+            // `AniSequelWidgetData.clear`. The providers still redraw, because the
+            // stored values are what they render from.
+            withContext(Dispatchers.Default) {
+                com.anisequel.ui.widget.AniSequelWidgetData.clear(context)
+                updateAllWidgets(context)
+            }
+            return@LaunchedEffect
+        }
+
         val current = success ?: return@LaunchedEffect
         withContext(Dispatchers.Default) {
             val top = current.missedSequels.firstOrNull()
@@ -83,10 +106,20 @@ internal fun WidgetSync(
                 activityTitle = current.recentActivity.latestTitle,
                 activityArt = avatarUrl
             )
-            com.anisequel.ui.widget.AniSequelWidgetProvider.updateAll(context)
-            com.anisequel.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
-            com.anisequel.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
-            com.anisequel.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
+            updateAllWidgets(context)
         }
     }
+}
+
+/**
+ * Repaints every tile from whatever the widget store now holds.
+ *
+ * Shared by the sync and the sign-out path so the two cannot disagree about which
+ * providers exist.
+ */
+private fun updateAllWidgets(context: Context) {
+    com.anisequel.ui.widget.AniSequelWidgetProvider.updateAll(context)
+    com.anisequel.ui.widget.MissedSequelsWidgetProvider.updateAll(context)
+    com.anisequel.ui.widget.ArrivingSequelsWidgetProvider.updateAll(context)
+    com.anisequel.ui.widget.FeaturedSequelWidgetProvider.updateAll(context)
 }

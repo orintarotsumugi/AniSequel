@@ -397,13 +397,17 @@ private fun link(
     styles: TextLinkStyles,
     onLinkClick: State<((String) -> Unit)?>
 ): LinkAnnotation.Url {
-    val handler = onLinkClick.value
-    val listener = if (handler == null) {
+    // The *presence* of a handler is structural and decided here, because a null
+    // listener is what lets the platform open the URL itself. The handler is read in
+    // the listener, not captured: the `AnnotatedString` is remembered, so a captured
+    // value froze the first composition's lambda - the opposite of what the KDoc
+    // above promises - and a recycled card's link opened the previous item's target.
+    val listener = if (onLinkClick.value == null) {
         null
     } else {
         LinkInteractionListener { annotation ->
             val target = (annotation as? LinkAnnotation.Url)?.url
-            if (target != null) handler(target)
+            if (target != null) onLinkClick.value?.invoke(target)
         }
     }
     return LinkAnnotation.Url(url = url, styles = styles, linkInteractionListener = listener)
