@@ -169,7 +169,11 @@ fun IconCarousel(
             val density = LocalDensity.current
             icons.forEachIndexed { dotIndex, _ ->
                 val selected = dotIndex == index
-                val width by animateFloatAsState(
+                // The state object, not the delegated value: reading `.value`
+                // inside `drawBehind` keeps every frame of the spring in the draw
+                // phase. Reading it here in composition - which `by` would do at
+                // the first use - recomposed the whole rail per frame.
+                val width = animateFloatAsState(
                     targetValue = if (selected) with(density) { 16.dp.toPx() }
                         else with(density) { 6.dp.toPx() },
                     animationSpec = ExpressiveMotion.DefaultEffects,
@@ -186,10 +190,16 @@ fun IconCarousel(
                         .padding(horizontal = 3.dp)
                         .size(width = 16.dp, height = 6.dp)
                         .drawBehind {
+                            val paintedWidth = width.value
                             drawRoundRect(
                                 color = color,
-                                topLeft = Offset.Zero,
-                                size = Size(width = width, height = size.height),
+                                // Centred in the reserved slot: growing from the
+                                // left edge made the gap to the next dot shrink
+                                // while the gap to the previous one grew, so the
+                                // rail looked like it was sliding rather than
+                                // the dot stretching.
+                                topLeft = Offset((size.width - paintedWidth) / 2f, 0f),
+                                size = Size(width = paintedWidth, height = size.height),
                                 cornerRadius = CornerRadius(size.height / 2f)
                             )
                         }

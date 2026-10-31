@@ -289,11 +289,12 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
 /**
  * How the dashboard's airing and upcoming rows behave.
  *
- * Two switches because they answer different questions: hiding the section
+ * Three switches because they answer different questions: hiding the section
  * removes the rows above search entirely (and with them every poster load on the
- * path to a list), while compact keeps the information in plain rows that fetch
- * no artwork - the entire cost of those cards is the image. Compact is
- * meaningless on a hidden section, so it disables along with it.
+ * path to a list), compact keeps the information in plain rows that fetch no
+ * artwork - the entire cost of those cards is the image - and separating the
+ * groups draws the two headings the combined row deliberately omits. Compact is
+ * meaningless on a hidden section, so both dependent switches disable with it.
  */
 @Composable
 private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
@@ -329,6 +330,17 @@ private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
                 scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
             },
             modifier = Modifier.testTag("compact_arriving_switch")
+        )
+        SwitchRow(
+            title = "Separate airing and upcoming",
+            subtitle = "Two labelled rows instead of one. Off keeps the section to " +
+                "a single strip; the cards still say which group they belong to.",
+            checked = settings.separateArrivingGroups,
+            enabled = settings.showArrivingSection,
+            onCheckedChange = { separate ->
+                scope.launch { arrivingPreferences.setSeparateArrivingGroups(separate) }
+            },
+            modifier = Modifier.testTag("separate_arriving_switch")
         )
     }
 }

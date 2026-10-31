@@ -2,6 +2,7 @@ package com.anisequel.ui.screens.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,15 +47,28 @@ import com.anisequel.ui.components.expressive.bouncyPress
 fun ArrivingCard(
     entry: ArrivingEntry,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * The clock the countdown pill is read against.
+     *
+     * Passed in rather than read here so every card in the row shares one
+     * minute ticker. The section owns it; a per-card clock would let two pills
+     * print different minutes for the same episode.
+     */
+    nowMillis: Long = System.currentTimeMillis()
 ) {
     val placeholderTint = entry.coverColor.toCoverColorOrNull()
+    // Shared with the Card's own clickable: without it `bouncyPress` installs a
+    // second pointer loop that does not know a fling from a press, so a finger
+    // resting on a card while the row scrolls left it squashed for the whole
+    // gesture. See `Modifier.bouncyPress`.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Card(
         onClick = onClick,
         modifier = modifier
             .width(148.dp)
-            .bouncyPress(pressedScale = 0.97f)
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
             .testTag("arriving_card_${entry.mediaId}"),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
@@ -66,16 +81,22 @@ fun ArrivingCard(
                 MaterialTheme.colorScheme.surfaceContainerLow
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        interactionSource = interactionSource
     ) {
         // A square cover. The 148x188 strip read as a 1x2 tile beside the
         // dashboard's own square cards, and its extra height was what made a row
         // of them look ragged next to the text under each one.
+        //
+        // The Card already clips its content to `extraLarge`; this box used to
+        // clip itself to the same shape, which rounded the *bottom* corners of
+        // the artwork as well and left a floating tile above the title. One clip,
+        // on the container, gives the cover the card's top corners and a straight
+        // bottom edge for the text block.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(MaterialTheme.shapes.extraLarge)
                 .background(placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
@@ -98,7 +119,7 @@ fun ArrivingCard(
             }
 
             // The countdown / next episode pill rides on the artwork.
-            val countdown = entry.nextAiringCountdown()
+            val countdown = entry.nextAiringCountdown(nowMillis)
             if (countdown != null) {
                 Surface(
                     shape = MaterialTheme.shapes.small,
@@ -147,74 +168,103 @@ fun ArrivingCard(
 
 /**
  * The same list as [ArrivingCard] but without artwork, for lower data/battery consumption.
+ *
+ * Takes the same [ArrivingRow]s as the card layout, so the "separate groups"
+ * choice reaches this mode too. Compact used to flatten the section, which made
+ * the setting silently stop applying the moment the reader turned compact on.
  */
 @Composable
 fun CompactArrivingList(
-    entries: List<ArrivingEntry>,
+    rows: List<ArrivingRow>,
     onEntryClick: (ArrivingEntry) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val total = rows.sumOf { it.entries.size }
+    var drawn = 0
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .testTag("arriving_compact_list")
     ) {
-        entries.forEachIndexed { index, entry ->
-            val placeholderTint = entry.coverColor.toCoverColorOrNull()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onEntryClick(entry) }
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                    .testTag("arriving_compact_row_${entry.mediaId}"),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(
-                            placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Movie,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.size(20.dp)
+        rows.forEach { row ->
+            if (row.label != null) {
+                ArrivingGroupLabel(
+                    label = row.label,
+                    airing = row.airing,
+                    count = row.entries.size
+                )
+            }
+            row.entries.forEach { entry ->
+                CompactArrivingRow(
+                    entry = entry,
+                    onClick = { onEntryClick(entry) }
+                )
+                drawn++
+                if (drawn != total) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
                     )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = entry.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SequelStatusChip(status = entry.status)
-                        Text(
-                            text = arrivalMeta(entry),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
                 }
             }
-            if (index != entries.lastIndex) {
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
+        }
+    }
+}
+
+/** One artwork-free row: the title, its status chip and the schedule line. */
+@Composable
+private fun CompactArrivingRow(
+    entry: ArrivingEntry,
+    onClick: () -> Unit
+) {
+    val placeholderTint = entry.coverColor.toCoverColorOrNull()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .testTag("arriving_compact_row_${entry.mediaId}"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(
+                    placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SequelStatusChip(status = entry.status)
+                Text(
+                    text = arrivalMeta(entry),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -231,7 +281,7 @@ fun arrivalMeta(entry: ArrivingEntry): String = when {
         when {
             episode != null && total != null -> "Ep $episode / $total"
             episode != null -> "Ep $episode"
-            total != null -> "Airing of $total eps"
+            total != null -> "Airing · $total eps"
             else -> "Airing now"
         }
     }

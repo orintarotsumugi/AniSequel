@@ -17,43 +17,32 @@ Not on the Play Store. Every release is a signed universal APK on
 self-contained updater in the app - no Play Services, no AniSequel account, no
 middleman server.
 
-**Jump to:** [What's new](#whats-new---173) | [Features](#features) | [Install](#install) |
+**Jump to:** [What's new](#whats-new---174) | [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
 
 ---
 
-## What's new - 1.7.3
+## What's new - 1.7.4
 
-The polish release: every line of the app was read, then the rough edges were
-polished into features.
+The reading release: one arriving row, a font that changes without a restart, and
+a larger reading scale that reaches every heading.
 
-- **A studio reads two ways.** Year shelves, or one packed wall chosen from the
-  studio page's own bar.
-- **Currently arriving is square.** 1:1 covers, even tiles, and the Airing /
-  Upcoming colour groups.
-- **The hero shows its banner**, crossfading from the poster, and searches the
-  web beside Open on AniList.
-- **A creator's page introduces them.** The staff hero leads with occupations and
-  the native name, filmographies split into All / Anime / Manga, and AniList is
-  one tap away on the artwork itself.
-- **A profile you arrange.** The Home tab's blocks reorder, hide and unhide, and
-  the favourite characters can switch to a two-column grid - edited from a palette
-  button on the header.
-- **An inbox that answers.** Reply to a message with a **Public / Private** choice,
-  private by default, addressed to the other party.
-- **An export you style.** Show or hide the title, size it S/M/L, pick
-  Sans/Serif/Mono, with a live sample and an honest pixel estimate.
-- **Full screen, off by default** - a switch in Appearance, an edge swipe to bring
-  the bars back, a cutout-aware top inset, and a cover viewer that stays full
-  screen instead of bringing the bars back.
-- **Five ways to move** - Instant, Smooth, Snappy, Chill, Floaty - with a sample
-  that plays the chosen spring.
-- **Type & reading** - text size 85-130%, any `.ttf`/`.otf` imported into the app,
-  marquee titles with an adjustable speed, and the option of a typewriter for
-  Ani-chan's jokes.
-- **More dark jokes, and a better pill** - a reader-chosen name and stamp (emoji
-  included), a compact size, and over a thousand lines across five tones.
+- **Currently arriving is one row.** Airing and upcoming share a single strip by
+  default; Settings > Library > Arriving rows offers the two labelled groups back,
+  and compact rows follow the same choice.
+- **A font that changes immediately.** Every import gets a fresh file name and an
+  atomic move, so Android's typeface cache cannot serve the previous face; the
+  theme validates and caches it, and a failed import leaves the old font working.
+- **Text size reaches further.** 80-140% in 5% stops, and markdown headings now
+  scale with it instead of hardcoding their own sizes.
+- **A loading page shaped like the page.** The dashboard skeleton mirrors stats,
+  arriving, search, filters, the section header and the cards, with one shimmer.
+- **State changes, not swaps.** The refresh button crossfades between icon and
+  spinner, and the login carousel's dots stretch from their centre in the draw
+  phase.
+- **Smaller fixes** - "Airing · 12 eps" reads correctly, compact separators hold
+  across group labels, and arriving cards no longer squash during a scroll.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
@@ -68,8 +57,9 @@ and the GitHub release body read.
 - **Franchise traversal, not title matching.** A show's `relations` graph is
   walked in both directions, so renamed continuations, films and side stories are
   found even when the title gives nothing away.
-- **A dashboard of what is due.** Missed sequels, what is arriving (split into
-  **Airing now** and **Upcoming** groups), recent activity, lists and stats.
+- **A dashboard of what is due.** Missed sequels, what is arriving (one row by
+  default, or the **Airing now** and **Upcoming** groups in Settings), recent
+  activity, lists and stats.
 - **Filters that narrow without lying.** Relation type, status, genre (collapsible),
   score and episode floors, a name search, and hidden titles with undo.
 - **Your profile, or anybody's.** Scan a public AniList username without signing

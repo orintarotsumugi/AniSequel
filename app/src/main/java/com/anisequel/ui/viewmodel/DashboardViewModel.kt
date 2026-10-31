@@ -149,6 +149,10 @@ class DashboardViewModel(
     private val _arrivingCompact = MutableStateFlow(false)
     val arrivingCompact: StateFlow<Boolean> = _arrivingCompact.asStateFlow()
 
+    /** Mirror of [ArrivingPreferences]' grouping choice; see [arrivingEnabled]. */
+    private val _arrivingSeparateGroups = MutableStateFlow(false)
+    val arrivingSeparateGroups: StateFlow<Boolean> = _arrivingSeparateGroups.asStateFlow()
+
     /**
      * The interval the user has chosen, mirrored here from the store.
      *
@@ -199,6 +203,7 @@ class DashboardViewModel(
                 preferences.settings.collectLatest { settings ->
                     _arrivingEnabled.value = settings.showArrivingSection
                     _arrivingCompact.value = settings.compactArrivingCards
+                    _arrivingSeparateGroups.value = settings.separateArrivingGroups
                 }
             }
         }

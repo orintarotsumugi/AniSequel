@@ -143,6 +143,7 @@ fun DashboardScreen(
     val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
     val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
     val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
+    val arrivingSeparateGroups by dashboardViewModel.arrivingSeparateGroups.collectAsState()
 
     // The most recently hidden entry used to be mirrored here for the snackbar's
     // Undo. It lives on the event now: one slot could not tell two quick hides apart,
@@ -413,6 +414,7 @@ fun DashboardScreen(
                                         ArrivingSection(
                                             entries = state.arriving,
                                             compact = arrivingCompact,
+                                            separateGroups = arrivingSeparateGroups,
                                             maxWidth = MaxContentWidth,
                                             onEntryClick = {
                                                 selectedArrivingId = it.mediaId
