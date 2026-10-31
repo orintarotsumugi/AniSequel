@@ -70,6 +70,9 @@ import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.theme.DialogImmersiveEffect
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -141,6 +144,11 @@ fun FullScreenCoverViewer(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // A dialog is its own window, so the Activity hiding its bars does not reach
+    // this one: in full screen the viewer used to come back with the status and
+    // navigation bars visible, which is the one place a "full-screen viewer"
+    // cannot have them. See `DialogImmersiveEffect`.
+    val immersive = LocalImmersiveMode.current
     var saveState by remember(media.id) { mutableStateOf(CoverSaveState.IDLE) }
 
     // The gallery's page state lives above the pager because the counter is in
@@ -214,6 +222,7 @@ fun FullScreenCoverViewer(
             dismissOnClickOutside = true
         )
     ) {
+        DialogImmersiveEffect(immersive)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -250,6 +259,11 @@ fun FullScreenCoverViewer(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        // With the bars hidden this window's own status-bar
+                        // padding is zero, so the header would sit on the glass
+                        // and under a cutout - the shared helper restores both,
+                        // exactly as it does for the Activity's root.
+                        .then(Modifier.immersiveDisplayInsets(immersive))
                         .statusBarsPadding()
                         .navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 16.dp),

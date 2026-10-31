@@ -4,7 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.automirrored.filled.Comment
-import androidx.compose.material.icons.automirrored.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -227,7 +227,7 @@ object AppVectorIcons {
     // `FormatListNumbered`, not `Timer`: the card counts episodes per bucket -
     // 1-12, 13-24 - and a stopwatch says "time spent", which is the summary
     // card above it, not this one.
-    val StatEpisodeCount = Icons.AutoMirrored.Filled.FormatListNumbered
+    val StatEpisodeCount = Icons.Default.FormatListNumbered
     val StatReleaseYear = Icons.Default.Event
     val StatWatchYear = Icons.Default.CalendarViewMonth
     val StatGenre = Icons.Default.LocalOffer

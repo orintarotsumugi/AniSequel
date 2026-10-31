@@ -29,7 +29,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "Text size preview scales in the draw phase with one animated factor instead of reflowing per drag tick; full screen re-asserts its bars on every resume, not only on focus; and the top inset in full screen is the status bar's height."
+          "detail": "Text size preview scales in the draw phase with one animated factor instead of reflowing per drag tick; full screen re-asserts its bars on every resume, not only on focus, keeps the status bar's height above the top bar, and the full-screen cover viewer hides the bars in its own window instead of bringing them back."
         }
       ]
     },
