@@ -44,8 +44,8 @@ class TypographyScaleTest {
         val clampedLow = anisequelTypography(0.1f).bodyLarge.fontSize.value
         val atMin = anisequelTypography(MIN_FONT_SCALE).bodyLarge.fontSize.value
 
-        assertEquals(atMax, clampedHigh, 0.001f)
-        assertEquals(atMin, clampedLow, 0.001f)
+        assertEquals(atMax.toDouble(), clampedHigh.toDouble(), 0.001)
+        assertEquals(atMin.toDouble(), clampedLow.toDouble(), 0.001)
     }
 
     @Test
