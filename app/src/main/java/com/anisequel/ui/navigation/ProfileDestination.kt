@@ -108,7 +108,12 @@ object ProfileRoutes {
      */
     const val OWN_DEFAULT = "profile?tab="
 
-    fun byUsername(username: String) = "profile_user/$username"
+    /**
+     * Encoded, for the same reason [byId] encodes its name: a display name is
+     * free text, and a `/`, `#`, `?` or `%` in it built a URI that matched no
+     * destination, which navigates nowhere silently rather than failing.
+     */
+    fun byUsername(username: String) = "profile_user/${Uri.encode(username)}"
 
     /**
      * The by-id route, always with the name query - even when it is empty.

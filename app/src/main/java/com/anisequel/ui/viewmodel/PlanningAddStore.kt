@@ -3,7 +3,9 @@ package com.anisequel.ui.viewmodel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.isManga
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +41,24 @@ data class QuickAddStatus(
 }
 
 /**
+ * The store's key: the media *and* its namespace.
+ *
+ * The sheet walks relations in place, so one host really does hold two subjects in
+ * sequence - and a franchise walk crosses the anime/manga boundary routinely, since
+ * `source` relations are manga. AniList numbers the two independently, so keying by
+ * id alone made `manga/5` inherit the "Added" confirmation and the in-flight flag
+ * that `anime/5` earned, on a title nothing was ever written for. That is the same
+ * collision [MediaCoverKey] was introduced for; the reasoning that this map was
+ * single-subject and therefore safe mistook "one subject at a time" for "one
+ * subject per visit".
+ *
+ * A node whose own `type` is null is counted as anime, which is [isManga]'s rule and
+ * keeps a summary node and the detail node for the same show on one key.
+ */
+fun quickAddKey(media: MediaNode): MediaCoverKey =
+    MediaCoverKey(type = if (media.isManga) "MANGA" else "ANIME", id = media.id)
+
+/**
  * One-tap "Add to Planning" for **any** title the detail sheet is showing.
  *
  * ## Why this is not [DashboardViewModel.addToPlanning]
@@ -51,16 +71,9 @@ data class QuickAddStatus(
  *
  * A title page is now the same page everywhere, so the capability belongs to the
  * sheet rather than to the list that opened it. This store is the whole of that
- * capability: the write, the in-flight flags and the confirmation, keyed by
- * media id so walking a franchise keeps each title's own state.
- *
- * ## Why the media id is the only key
- *
- * The sheet only ever shows one title at a time, and AniList's write is addressed
- * by id, so namespacing this by `type` (the way `MediaDetailStore` must) would
- * buy a second argument on every lookup and nothing else. A manga and an anime
- * sharing a number would only collide if both were open in the same host at the
- * same time, which the sheet's single-subject host cannot do.
+ * capability: the write, the in-flight flags and the confirmation, keyed per title
+ * so walking a franchise keeps each one's own state - see [quickAddKey] for why the
+ * key is a namespace and an id rather than an id alone.
  */
 class PlanningAddStore(
     /**
@@ -72,17 +85,18 @@ class PlanningAddStore(
     private val scope: CoroutineScope,
     private val canWrite: Boolean
 ) {
-    private val _statuses = MutableStateFlow<Map<Int, QuickAddStatus>>(emptyMap())
+    private val _statuses = MutableStateFlow<Map<MediaCoverKey, QuickAddStatus>>(emptyMap())
 
     /** Per-media add state, for the action row to draw its button from. */
-    val statuses: StateFlow<Map<Int, QuickAddStatus>> = _statuses.asStateFlow()
+    val statuses: StateFlow<Map<MediaCoverKey, QuickAddStatus>> = _statuses.asStateFlow()
 
     fun addToPlanning(media: MediaNode) = submit(media, watching = false)
 
     fun addToWatching(media: MediaNode) = submit(media, watching = true)
 
     private fun submit(media: MediaNode, watching: Boolean) {
-        val current = _statuses.value[media.id] ?: QuickAddStatus()
+        val key = quickAddKey(media)
+        val current = _statuses.value[key] ?: QuickAddStatus()
         // A second tap while the first is on the wire would send the same write
         // twice. AniList would accept both, and the second would win - which is
         // the same state with two requests spent.
@@ -90,11 +104,11 @@ class PlanningAddStore(
 
         val repository = repository
         if (!canWrite || repository == null) {
-            update(media.id) { copy(error = SIGN_IN_MESSAGE) }
+            update(key) { copy(error = SIGN_IN_MESSAGE) }
             return
         }
 
-        update(media.id) {
+        update(key) {
             copy(
                 isAddingToPlanning = !watching,
                 isAddingToWatching = watching,
@@ -112,7 +126,7 @@ class PlanningAddStore(
             }
             result.fold(
                 onSuccess = {
-                    update(media.id) {
+                    update(key) {
                         copy(
                             isAddingToPlanning = false,
                             isAddingToWatching = false,
@@ -123,7 +137,7 @@ class PlanningAddStore(
                     }
                 },
                 onFailure = { failure ->
-                    update(media.id) {
+                    update(key) {
                         copy(
                             isAddingToPlanning = false,
                             isAddingToWatching = false,
@@ -139,9 +153,12 @@ class PlanningAddStore(
         }
     }
 
-    private fun update(mediaId: Int, transform: QuickAddStatus.() -> QuickAddStatus) {
-        val current = _statuses.value[mediaId] ?: QuickAddStatus()
-        _statuses.value = _statuses.value + (mediaId to current.transform())
+    private fun update(
+        key: MediaCoverKey,
+        transform: QuickAddStatus.() -> QuickAddStatus
+    ) {
+        val current = _statuses.value[key] ?: QuickAddStatus()
+        _statuses.value = _statuses.value + (key to current.transform())
     }
 
     private companion object {
@@ -160,7 +177,7 @@ class PlanningAddStore(
 class PlanningAddHost internal constructor(
     private val store: PlanningAddStore
 ) {
-    val statuses: StateFlow<Map<Int, QuickAddStatus>> get() = store.statuses
+    val statuses: StateFlow<Map<MediaCoverKey, QuickAddStatus>> get() = store.statuses
 
     val onAddToPlanning: (MediaNode) -> Unit = store::addToPlanning
 

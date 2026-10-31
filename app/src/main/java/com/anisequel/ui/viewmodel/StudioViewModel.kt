@@ -147,10 +147,16 @@ class StudioViewModel(
                     // cap, and one extra title is not a reason to claim another page
                     // exists and then render an empty one.
                     val fullPage = node.media?.nodes.orEmpty().size >= STUDIO_PAGE_SIZE
+                    // Shelves built once, and the count taken from them: a title can
+                    // repeat across a page boundary (the shelf builder dedupes by id),
+                    // so `received.size` claimed more titles than the page draws and
+                    // the footer's "That is all N titles" disagreed with the shelves
+                    // above it.
+                    val shelves = studioYearShelves(received)
                     _state.value = StudioUiState.Success(
                         studio = node,
-                        shelves = studioYearShelves(received),
-                        titleCount = received.size,
+                        shelves = shelves,
+                        titleCount = shelves.sumOf { it.titles.size },
                         hasMore = fullPage,
                         isLoadingMore = false
                     )

@@ -195,7 +195,11 @@ class UserOverviewViewModel(
         if (keys.isEmpty()) return
 
         coverJob = viewModelScope.launch {
-            aniListRepository.getMediaCovers(keys).onSuccess { covers ->
+            // Wrapped like the rest: `getMediaCovers` is a batch the repository
+            // classifies, but a throw on the way back would land here as an
+            // uncaught exception on `viewModelScope` and close the app over a bio's
+            // inline posters. Nothing on this path needs them to arrive.
+            repositoryResult { aniListRepository.getMediaCovers(keys) }.onSuccess { covers ->
                 _mediaCovers.value = covers
             }
         }
@@ -277,7 +281,14 @@ class UserOverviewViewModel(
         _isLoadingManga.value = true
         _mangaError.value = null
         mangaJob = viewModelScope.launch {
-            val result = aniListRepository.getUserMangaList(id, false)
+            // Folded through [repositoryResult] like every other call in this package:
+            // the repository classifies its own failures into the `Result`, but a throw
+            // on the way there - a Moshi failure on an unexpected shape - otherwise
+            // reaches a `launch` on `viewModelScope`, where a supervisor job hands it to
+            // the thread's handler and Android closes the app. Here it also left
+            // [_isLoadingManga] true for the life of the screen, and the guard above
+            // turns every later tap into a no-op, so the chip stops being a retry.
+            val result = repositoryResult { aniListRepository.getUserMangaList(id, false) }
             result.fold(
                 onSuccess = { collection ->
                     _mangaLibrary.value = flattenLibrary(collection)
@@ -326,8 +337,19 @@ class UserOverviewViewModel(
             val list = result.getOrNull() ?: loadedList
                 ?: if (isDemo) null else lastKnownListForScreen()
             loadedList = list
+            // The overview that is current *now*, not the one captured when this
+            // fetch started. A library download is forty sequential chunk requests -
+            // minutes - and a pull-to-refresh that lands inside that window writes a
+            // newer profile document into [loadedOverview] and cancels `loadJob`, but
+            // nothing cancels this one. Publishing the stale capture over it is how
+            // the bio, the favourites and the counts visibly went backwards to
+            // something the reader had just refreshed away, presented as live.
+            //
+            // Not cancelled here either, because the guard above exists to stop this
+            // download being spent twice per tap: throwing away four minutes of
+            // requests to re-issue them would be the worse trade.
             _uiState.value = stateMapper.buildState(
-                overview = overview,
+                overview = loadedOverview ?: overview,
                 list = list,
                 isRefreshing = false,
                 isLibraryLoading = false,

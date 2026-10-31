@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
@@ -72,8 +73,13 @@ fun ProfileBorrowedListTab(
     // AniList rather than a list status, so the Favourites chip tests membership of
     // these ids. Taken from the overview this tab is already rendering, so the grid
     // and the hearted rows on the Home tab cannot disagree.
+    //
+    // Keys rather than ids, because the two favourite connections are two
+    // namespaces: `anime/21` hearted is not `manga/21` hearted, and the grid the
+    // chip filters is the merged one.
     val favouriteIds = remember(state.favouriteAnime, state.favouriteManga) {
-        (state.favouriteAnime + state.favouriteManga).mapNotNullTo(mutableSetOf()) { it.id }
+        (state.favouriteAnime + state.favouriteManga)
+            .mapTo(mutableSetOf()) { it.namespaceKey }
     }
     val remembered = remember { borrowedLibraryView() }
 

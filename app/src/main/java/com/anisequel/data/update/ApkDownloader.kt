@@ -241,6 +241,23 @@ internal class ApkDownloader(private val client: OkHttpClient) {
             return Attempt.Failed(OVERSIZED_MESSAGE, keepPartial = false)
         }
 
+        // A body that ends early is not a Completed download.
+        //
+        // Ending the stream is the only signal a proxy that drops the connection
+        // leaves, and the magic number is at byte 0 - so a truncated APK passed
+        // `looksLikeApk`, failed package parsing, and the caller deleted the `.part`
+        // and reported the release as possibly tampered with. The manifest's declared
+        // size is the one fact that tells "the transfer stopped" apart from "the file
+        // is wrong", and the partial bytes are a valid prefix worth resuming onto.
+        val onDisk = partFile.length()
+        if (declaredSize > 0 && onDisk < declaredSize) {
+            return Attempt.Failed(
+                "The connection dropped before the download finished. " +
+                    "Try again - it resumes where it stopped.",
+                keepPartial = true
+            )
+        }
+
         return Attempt.Completed(written)
     }
 

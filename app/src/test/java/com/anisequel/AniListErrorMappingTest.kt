@@ -36,6 +36,7 @@ import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.network.aniListHttpError
 import com.anisequel.data.network.parseAniListErrorBody
+import com.anisequel.data.network.toAniListException
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
@@ -633,6 +634,19 @@ class AniListLiveResponseClassificationTest {
             AniListErrorKind.INVALID_REQUEST,
             error.kind
         )
+    }
+
+    @Test
+    fun `a server error carried on a graphql entry is a server failure`() {
+        // The status in a GraphQL error need not match the HTTP status of the
+        // response - `rateLimitedException` documents the 429-on-200 road. A 5xx on
+        // that road fell through to INVALID_REQUEST, so an AniList incident read as
+        // "this is a bug on our side", no ServerDown notice was raised, and the
+        // status strip stayed pinned to ONLINE.
+        val error = GraphQLError(message = "Internal Server Error", status = 500)
+            .toAniListException()
+
+        assertEquals(AniListErrorKind.SERVER, error.kind)
     }
 
     @Test

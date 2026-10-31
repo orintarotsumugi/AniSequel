@@ -309,7 +309,16 @@ private fun exportScale(
     if (basePixels <= 0.0) return 1f
     val byWidth = targetWidth.coerceAtLeast(1).toDouble() / width.toDouble()
     val byBudget = sqrt(maxPixels / basePixels)
-    return min(byWidth, byBudget).toFloat().coerceIn(MIN_EXPORT_SCALE, MAX_EXPORT_SCALE)
+    val scale = min(byWidth, byBudget).toFloat()
+        .coerceIn(MIN_EXPORT_SCALE, MAX_EXPORT_SCALE)
+    // A dimension ceiling as well as a pixel budget, and taken out of the scale
+    // rather than left to `allocateBitmap`'s clamp: that clamp shrank the canvas
+    // while the canvas scale stayed put, so an extremely tall board lost its bottom
+    // rows off the edge of the image - and the size the export sheet advertised came
+    // from here, so the estimate and the file disagreed too. Applied after the
+    // readability floor, because the cap is a hard limit and the floor is not.
+    val byDimension = (MAX_EXPORT_DIMENSION / maxOf(width, height, 1f)).toFloat()
+    return min(scale, byDimension)
 }
 
 /**

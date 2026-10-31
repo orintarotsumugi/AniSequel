@@ -149,8 +149,6 @@ fun PersonProfileSheet(
      */
     onOpenCharacter: ((VoicedCharacter) -> Unit)? = null
 ) {
-    val appearancesState = rememberLazyListState()
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -203,9 +201,14 @@ fun PersonProfileSheet(
                 // page inherits the scroll position of the old one: the reader lands
                 // halfway down somebody else's biography.
                 is PersonProfileState.Loaded -> key(state.kind, state.id) {
+                    // Created inside the key rather than handed in from the sheet's
+                    // scope: one `LazyListState` object shared by every person put the
+                    // new person's "Appears in" row at the previous person's offset,
+                    // which is the same inheritance the key above exists to prevent -
+                    // the biography reset, the row did not.
                     LoadedPersonProfile(
                         state = state,
-                        appearancesState = appearancesState,
+                        appearancesState = rememberLazyListState(),
                         onOpenAppearance = onOpenAppearance,
                         onOpenStaff = onOpenStaff,
                         onOpenCharacter = onOpenCharacter

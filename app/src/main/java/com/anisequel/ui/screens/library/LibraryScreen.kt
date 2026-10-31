@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
@@ -310,9 +311,12 @@ fun LibraryScreen(
                         // these ids instead of matching a status string. Taken from the
                         // same overview the profile's Home tab renders, so pinning and
                         // favouriting can never disagree.
+                        //
+                        // Keys rather than ids: the two connections are two namespaces,
+                        // and the grid this filters is their union.
                         val favouriteIds = remember(state.favouriteAnime, state.favouriteManga) {
                             (state.favouriteAnime + state.favouriteManga)
-                                .mapNotNullTo(mutableSetOf()) { it.id }
+                                .mapTo(mutableSetOf()) { it.namespaceKey }
                         }
                         // The grid is the page. The saved-copy pill that used to sit
                         // above it is now part of the bar's subtitle: a row here was

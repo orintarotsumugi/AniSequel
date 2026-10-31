@@ -4,6 +4,7 @@ import com.anisequel.data.model.FuzzyDate
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.screens.profile.LibraryFilter
 import com.anisequel.ui.screens.profile.LibrarySort
@@ -17,6 +18,7 @@ import com.anisequel.ui.screens.profile.sortLibrary
 import com.anisequel.ui.screens.profile.toggleSort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,6 +38,10 @@ import org.junit.Test
  *    person had merely filtered away, which reads as a fact about their account.
  *  - [libraryProgressLabel] decides how a number is worded. A manga badge reading
  *    "Ep 142" is the inconsistency a person who reads both notices at once.
+ *  - The favourites membership is a namespace *and* an id. Bare ids let `manga/2`
+ *    answer to a heart on `anime/2`, and the merged grid that the chip filters then
+ *    held two rows claiming one lazy key, which fails outright rather than looking
+ *    slightly wrong.
  */
 class LibraryFilterTest {
 
@@ -104,6 +110,11 @@ class LibraryFilterTest {
         val entries = listOf(
             entry(id = 1, type = "ANIME", status = "completed"),
             entry(id = 2, type = "ANIME", status = "completed"),
+            // The other namespace's claim on the same number. AniList numbers anime
+            // and manga independently, so a heart on `ANIME_2` says nothing about this
+            // row - and the favourites set used to be bare ids, which said otherwise
+            // and pulled this manga under the chip for a show nobody favourited.
+            entry(id = 2, type = "MANGA", status = "current"),
             entry(id = 3, type = "MANGA", status = "current")
         )
 
@@ -111,10 +122,10 @@ class LibraryFilterTest {
             entries,
             LibraryType.ALL,
             LibraryFilter.FAVOURITES,
-            favouriteIds = setOf(1, 3)
+            favouriteIds = setOf("ANIME_1", "ANIME_2", "MANGA_3")
         )
 
-        assertEquals(listOf(1, 3), result.map { it.media.id })
+        assertEquals(listOf(1, 2, 3), result.map { it.media.id })
     }
 
     @Test
@@ -165,7 +176,7 @@ class LibraryFilterTest {
             entry(id = 2, status = "current")
         )
 
-        val counts = libraryCounts(entries, favouriteIds = setOf(2, 99))
+        val counts = libraryCounts(entries, favouriteIds = setOf("ANIME_2", "ANIME_99"))
 
         // 99 is favourited but not in this list, so it must not be counted.
         assertEquals(1, counts[LibraryFilter.FAVOURITES])
@@ -175,6 +186,20 @@ class LibraryFilterTest {
     fun `an unknown status is filed under no bucket rather than under all`() {
         assertNull(libraryBucketOf(null))
         assertNull(libraryBucketOf("REPEATING_FORTH"))
+    }
+
+    @Test
+    fun `the same number in the other namespace is a different key`() {
+        // The Library grid is `animeEntries + mangaEntries` under the ALL scope and
+        // the favourites set spans both, so a key that is only a number is not an
+        // identity: two rows would claim one lazy key, and a manga would answer to
+        // its anime twin's heart.
+        assertEquals("ANIME_21", entry(id = 21, type = "ANIME").media.namespaceKey)
+        assertEquals("MANGA_21", entry(id = 21, type = "MANGA").media.namespaceKey)
+        assertNotEquals(
+            entry(id = 21, type = "ANIME").media.namespaceKey,
+            entry(id = 21, type = "MANGA").media.namespaceKey
+        )
     }
 
     @Test

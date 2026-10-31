@@ -147,7 +147,17 @@ fun ProfileActivityTab(
             total > 0 && lastVisible >= total - PAGE_TRIGGER_ROWS
         }
     }
-    LaunchedEffect(shouldPage) {
+    // The row count rides along in the key because `shouldPage` is a boolean that can
+    // stay true across a page landing. A page can arrive shorter than
+    // [PAGE_TRIGGER_ROWS] - the repository drops union members and updates for removed
+    // media - and a reader parked at the end of a list that short never saw
+    // `shouldPage` flip false and true again, so the feed simply stopped growing with
+    // `hasMore` still true and nothing on screen saying why. Re-keying re-asks after
+    // every append; the ViewModel's own `isLoadingMore`/`hasMore` guards make the
+    // extra evaluations free.
+    val activityCount =
+        (source.state as? UserActivityViewModel.ActivityState.Success)?.activities?.size ?: 0
+    LaunchedEffect(shouldPage, activityCount) {
         if (shouldPage) source.onLoadNextPage()
     }
 

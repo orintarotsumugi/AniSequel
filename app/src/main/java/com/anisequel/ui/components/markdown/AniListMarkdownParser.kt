@@ -587,7 +587,23 @@ object AniListMarkdownParser {
                 } else {
                     parseDecoded(centerText, depth + 1)
                 }
-                nodes.add(MarkdownNode.CenteredBlock(centerContent))
+                // Images inside the block are marked centred, because nothing else
+                // can: the renderer's Box fills the width and aligns its child to
+                // the start, so the column's own centring never reached the image.
+                // `ImageBlock.centered` existed for this and was never set anywhere,
+                // which left a `~~~center` embed - the standard layout for a
+                // review's hall-of-fame strip - flush left inside a centred block.
+                nodes.add(
+                    MarkdownNode.CenteredBlock(
+                        centerContent.map { child ->
+                            if (child is MarkdownNode.ImageBlock) {
+                                child.copy(centered = true)
+                            } else {
+                                child
+                            }
+                        }
+                    )
+                )
                 continue
             }
 

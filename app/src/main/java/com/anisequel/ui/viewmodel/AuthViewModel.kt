@@ -10,11 +10,14 @@ import com.anisequel.data.network.RedirectResult
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.AuthRepositoryImpl
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed interface AuthUiState {
     /**
@@ -70,6 +73,23 @@ class AuthViewModel(
     @Volatile
     private var hasHandledRedirect = false
 
+    /**
+     * The callback URI that was already acted on, verbatim.
+     *
+     * A second delivery of the *same* URI is the same sign-in, not a new one:
+     * `MainActivity` is `singleTask`, the callback stays attached to the intent,
+     * and relaunching from Recents hands the used code back. Replaying it costs a
+     * `clearDetailCache()` plus a Loading round that throws away the dashboards of
+     * somebody who is already signed in, and re-verifies a token AniList has
+     * already seen.
+     *
+     * Compared by content rather than latched once, because a *new* sign-in - the
+     * one this app supports after a logout - arrives as a different URI carrying a
+     * different token, and must not be swallowed by a flag set by the last one.
+     */
+    @Volatile
+    private var lastHandledRedirect: String? = null
+
     init {
         checkCurrentAuth()
     }
@@ -105,14 +125,19 @@ class AuthViewModel(
     }
 
     fun handleAuthRedirect(uri: Uri?) {
+        val callback = uri?.toString()
+        if (callback != null && callback == lastHandledRedirect) return
+
         when (val result = AniListOAuth.parseRedirect(uri)) {
             is RedirectResult.Success -> {
                 hasHandledRedirect = true
+                lastHandledRedirect = callback
                 saveToken(result.accessToken)
             }
 
             is RedirectResult.Error -> {
                 hasHandledRedirect = true
+                lastHandledRedirect = callback
                 _uiState.value = AuthUiState.Error(
                     // AniList sends `error=access_denied` when the user backs out
                     // of the consent screen. That is not a failure worth
@@ -189,6 +214,21 @@ class AuthViewModel(
                 }
 
                 _uiState.value = AuthUiState.Authenticated(token)
+            } catch (cancelled: CancellationException) {
+                // Not a failure, but it follows an unfinished one: the token is on
+                // disk and AniList was never asked about it, and the invariant the
+                // block below states survives the scope going away.
+                //
+                // The cleanup has to be taken off this coroutine, because on a
+                // cancelled scope a suspend call throws before it reaches the
+                // store. The `catch (Exception)` alone did exactly that, which is
+                // how a redirect that raced the process being backgrounded left an
+                // unverified token behind to be resurrected as Authenticated on the
+                // next cold start.
+                withContext(NonCancellable) {
+                    runCatching { authRepository.clearAccessToken() }
+                }
+                throw cancelled
             } catch (e: Exception) {
                 // The token stayed on disk precisely because the check never
                 // finished. A session that was never verified by AniList must

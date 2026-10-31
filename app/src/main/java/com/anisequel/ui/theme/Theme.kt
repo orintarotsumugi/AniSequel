@@ -21,6 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemeMode
 
 internal val DarkColorScheme = darkColorScheme(
@@ -327,6 +330,19 @@ fun AniSequelTheme(
      */
     animeTintStrength: Float = 1f,
     appBackgroundColor: String? = null,
+    /**
+     * The reader's reading scale, from Settings > Type & reading.
+     *
+     * Applied to the whole type scale in one place - see [anisequelTypography] -
+     * because the alternative, a per-screen `fontSize`, is what this app already
+     * paid for once: a dozen sizes that no setting could reach.
+     */
+    fontScale: Float = 1f,
+    /** An imported font's file path, or null for the system face. */
+    customFontPath: String? = null,
+    /** Scroll speed for titles that outgrow their row, in dp per second. */
+    titleScrollDpPerSecond: Float =
+        com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -489,6 +505,17 @@ fun AniSequelTheme(
     // and it is the scheme the M3 components actually receive.
     val animatedColorScheme = rememberAnimatedColorScheme(colorScheme)
 
+    // The reader's type, resolved once per change: the family from the imported
+    // file (or the system face) and the whole scale at their reading size. Keyed
+    // and remembered because this composable wraps the entire app and rebuilt
+    // sixteen TextStyles on every animation frame of a scheme change otherwise.
+    val customFamily = androidx.compose.runtime.remember(customFontPath) {
+        customFontFamily(customFontPath)
+    }
+    val appTypography = androidx.compose.runtime.remember(fontScale, customFamily) {
+        anisequelTypography(fontScale, customFamily ?: FontFamily.Default)
+    }
+
     CompositionLocalProvider(
         LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors
     ) {
@@ -499,7 +526,28 @@ fun AniSequelTheme(
         ExpressiveThemeHost(
             colorScheme = animatedColorScheme,
             motionStyle = motionStyle,
-            content = content,
+            typography = appTypography,
+            content = {
+                // The title-scroll preference, handed down once. `animates` is false
+                // under INSTANT: a reader who asked for no motion did not ask for
+                // "except the text", and a marquee is the one loop that runs while
+                // they are reading.
+                CompositionLocalProvider(
+                    com.anisequel.ui.components.LocalTitleMotion provides
+                        com.anisequel.ui.components.TitleMotion(
+                            velocity = titleScrollDpPerSecond
+                                .coerceIn(
+                                    com.anisequel.data.repository.MIN_TITLE_SCROLL_DP_PER_SECOND,
+                                    com.anisequel.data.repository.MAX_TITLE_SCROLL_DP_PER_SECOND
+                                )
+                                .dp,
+                            animates = motionStyle !=
+                                com.anisequel.data.repository.MotionStyle.INSTANT
+                        )
+                ) {
+                    content()
+                }
+            },
         )
     }
 }
@@ -531,6 +579,7 @@ private object InstantMotionScheme : MotionScheme {
 private fun ExpressiveThemeHost(
     colorScheme: androidx.compose.material3.ColorScheme,
     motionStyle: com.anisequel.data.repository.MotionStyle,
+    typography: androidx.compose.material3.Typography,
     content: @Composable () -> Unit
 ) {
     MaterialExpressiveTheme(
@@ -538,10 +587,12 @@ private fun ExpressiveThemeHost(
         motionScheme = when (motionStyle) {
             com.anisequel.data.repository.MotionStyle.INSTANT -> InstantMotionScheme
             com.anisequel.data.repository.MotionStyle.SMOOTH -> MotionScheme.standard()
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> MotionScheme.standard()
             com.anisequel.data.repository.MotionStyle.CHILL -> MotionScheme.expressive()
+            com.anisequel.data.repository.MotionStyle.FLOATY -> MotionScheme.expressive()
         },
         shapes = ExpressiveShapes,
-        typography = AniSequelTypography,
+        typography = typography,
         content = content
     )
 }
@@ -555,3 +606,20 @@ private fun ExpressiveThemeHost(
  * that silently cannot represent the default is a trap for the next person who
  * reaches for it.
  */
+
+/**
+ * The reader's imported font, or null when there is none or it can no longer load.
+ *
+ * The file lives in the app's own storage - `CustomFontStore` copies it there on
+ * import - so this is an existence check and a lazy `Font` wrapper. A file that
+ * disappeared (cleared data, a failed restore) falls back to the system face rather
+ * than failing the theme: a font is a preference, not a dependency. The import path
+ * validates the file with a real `Typeface` before it is recorded, which is where
+ * the corrupt-file case is actually caught.
+ */
+internal fun customFontFamily(path: String?): FontFamily? {
+    if (path.isNullOrBlank()) return null
+    val file = java.io.File(path)
+    if (!file.isFile) return null
+    return runCatching { FontFamily(Font(file)) }.getOrNull()
+}

@@ -102,6 +102,15 @@ sealed interface DashboardEvent {
      */
     data class ShowSnackbar(
         val message: String,
-        val actionLabel: String? = null
+        val actionLabel: String? = null,
+        /**
+         * The entry the action puts back, when the action is "Undo" on a hide.
+         *
+         * Carried by the event rather than read from a slot on the screen: the slot
+         * held only the most recently hidden entry, and `collectLatest` cancels the
+         * previous message - so hiding two entries quickly made the first message's
+         * Undo restore the second one, or restore nothing.
+         */
+        val undoSequel: MissedSequel? = null
     ) : DashboardEvent
 }

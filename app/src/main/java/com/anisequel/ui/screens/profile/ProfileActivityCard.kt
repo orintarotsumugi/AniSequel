@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,6 +40,7 @@ import coil.request.ImageRequest
 import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaNode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -340,13 +342,14 @@ private fun ActivityListDetails(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        // Scrolls rather than wrapping: the feed is already dense, and the second
+        // line a long title took pushed the controls down a row on every other card.
+        MarqueeText(
             text = media.title?.displayTitle.orEmpty(),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
         ActivityControls(

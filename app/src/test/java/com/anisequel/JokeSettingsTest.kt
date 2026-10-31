@@ -204,5 +204,23 @@ class JokeSettingsTest {
         assertTrue(defaults.haptics)
         assertEquals(JokeTone.entries.toSet(), defaults.tones)
         assertTrue(defaults.moments.isEmpty())
+        // The reveal effects are opt-in: a joke pill is not allowed to make the
+        // reader wait for a sentence they did not ask to be typed.
+        assertEquals(com.anisequel.domain.jokes.JokeTextEffect.NONE, defaults.textEffect)
+    }
+
+    @Test
+    fun `a blank name or stamp falls back to the shipped persona`() {
+        // The Settings fields are free text, so "cleared" is a state a reader can
+        // reach. It must mean "back to the shipped persona", not a pill signed with
+        // nothing: a blank label under a joke looks like a rendering bug.
+        val cleared = JokeSettings(speakerName = "   ", stamp = "")
+
+        assertEquals(com.anisequel.domain.jokes.DEFAULT_SPEAKER_NAME, cleared.displayName)
+        assertEquals(com.anisequel.domain.jokes.DEFAULT_STAMP, cleared.displayStamp)
+
+        val custom = JokeSettings(speakerName = "  Senpai  ", stamp = " \uD83D\uDC7B ")
+        assertEquals("Senpai", custom.displayName)
+        assertEquals("\uD83D\uDC7B", custom.displayStamp)
     }
 }

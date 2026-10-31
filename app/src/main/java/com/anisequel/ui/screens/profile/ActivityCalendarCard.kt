@@ -145,11 +145,15 @@ fun ActivityCalendarCard(
             AnimatedContent(
                 targetState = showWeek,
                 transitionSpec = {
-                    fadeIn(animationSpec = ExpressiveMotion.FastSpatial) +
+                    // Fades on `FastEffects`, the no-bouncy token, and only the scales
+                    // on `FastSpatial`: an alpha is not a position, so a spring that
+                    // overshoots it is invisible at best and a flicker at worst - the
+                    // rule `PageTransitions` states for every other cross-fade.
+                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
                         scaleIn(
                             animationSpec = ExpressiveMotion.FastSpatial,
                             initialScale = 0.96f
-                        ) togetherWith fadeOut(animationSpec = ExpressiveMotion.FastSpatial) +
+                        ) togetherWith fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
                         scaleOut(
                             animationSpec = ExpressiveMotion.FastSpatial,
                             targetScale = 0.96f

@@ -17,4 +17,13 @@
     <exclude
         domain="file"
         path="datastore/" />
+    <!--
+        The widget store: the signed-in handle, the viewer's counts and the titles
+        of the shows they are watching. Data, not UI state, and the same session
+        reasoning as the token above - it has no business on a device that never
+        signed in.
+    -->
+    <exclude
+        domain="shared_pref"
+        path="anisequel_widget_cache.xml" />
 </full-backup-content>

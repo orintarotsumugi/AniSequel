@@ -49,6 +49,7 @@ import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.SequelInfoChip
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -158,7 +159,11 @@ fun ProfileMessagesTab(
             total > 0 && lastVisible >= total - MESSAGE_PAGE_TRIGGER_ROWS
         }
     }
-    LaunchedEffect(shouldPage) {
+    // Keyed on the row count as well as the boolean: `shouldPage` can stay true
+    // across a short page - the same stall the activity feed documents - and a
+    // reader parked inside the trigger distance otherwise stops paging with `hasMore`
+    // still saying there is more. The ViewModel guards make the extra firings free.
+    LaunchedEffect(shouldPage, messages.size) {
         if (shouldPage) onLoadMore()
     }
 
@@ -376,7 +381,7 @@ private fun MessageCard(
     ) {
         Column(
             modifier = Modifier
-                .animateContentSize()
+                .animateContentSize(ExpressiveMotion.FastSpatialSize)
                 .padding(14.dp)
         ) {
             MessageAuthorRow(

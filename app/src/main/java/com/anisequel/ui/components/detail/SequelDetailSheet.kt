@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
@@ -49,6 +50,7 @@ import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.viewmodel.QuickAddStatus
+import com.anisequel.ui.viewmodel.quickAddKey
 
 /**
  * The sheet that shows one title's Info page.
@@ -140,7 +142,7 @@ fun SequelDetailSheet(
      * repository to write with (the demo), where the row then offers the sign-in
      * line instead.
      */
-    quickAddStatuses: Map<Int, QuickAddStatus> = emptyMap(),
+    quickAddStatuses: Map<MediaCoverKey, QuickAddStatus> = emptyMap(),
     /**
      * Adds the opened title to the viewer's Planning list.
      *
@@ -365,7 +367,7 @@ fun SequelDetailSheet(
                         swipeEnabled = swipeEnabled,
                         onAddToPlanning = onAddToPlanning,
                         onAddToWatching = onAddToWatching,
-                        quickAddStatus = quickAddStatuses[subject.mediaId]
+                        quickAddStatus = quickAddStatuses[quickAddKey(subject.media)]
                             ?: QuickAddStatus(),
                         friends = friends,
                         onAddMediaToPlanning = onAddMediaToPlanning,

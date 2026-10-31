@@ -1,7 +1,9 @@
 package com.anisequel.data.repository
 
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.network.AnimeThemesApi
+import java.util.Locale
 
 /**
  * The title page's openings and endings, kept for a session.
@@ -39,29 +41,45 @@ class ThemeSongsRepository(
     private data class Cached(val songs: List<ThemeSong>, val storedAtMillis: Long)
 
     /**
+     * An id *and* the namespace it belongs to, because a bare id is not an identity.
+     *
+     * AniList numbers anime and manga independently, so `anime/7` and `manga/7` are
+     * two different shows - the same fact [MediaCoverKey] exists to record, and the
+     * reason a reader walking a source relation crosses the two namespaces. Keyed on
+     * the id alone, the manga visited first filed its answer under the number and the
+     * anime then read that back: an empty answer cached for the whole miss window is a
+     * title page whose Openings & Endings row simply is not there, and nothing says it
+     * was never asked.
+     */
+    private fun cacheKey(mediaId: Int, mediaType: String?): MediaCoverKey =
+        MediaCoverKey(type = mediaType?.uppercase(Locale.ROOT).orEmpty(), id = mediaId)
+
+    /**
      * Small, because this is a section rather than a library: the working set is
      * the handful of titles a session visits, and an LRU keeps a long scroll
      * through a studio page from holding every one of them.
      */
-    private val cache = object : LinkedHashMap<Int, Cached>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Cached>): Boolean =
-            size > MAX_ENTRIES
+    private val cache = object : LinkedHashMap<MediaCoverKey, Cached>(16, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<MediaCoverKey, Cached>
+        ): Boolean = size > MAX_ENTRIES
     }
 
-    suspend fun themes(mediaId: Int, artworkUrl: String?): List<ThemeSong> {
+    suspend fun themes(mediaId: Int, mediaType: String?, artworkUrl: String?): List<ThemeSong> {
+        val key = cacheKey(mediaId, mediaType)
         val now = nowMillis()
         synchronized(cache) {
-            cache[mediaId]?.let { cached ->
+            cache[key]?.let { cached ->
                 val ttl = if (cached.songs.isEmpty()) MISS_TTL_MILLIS else HIT_TTL_MILLIS
                 if (now - cached.storedAtMillis <= ttl) return cached.songs
-                cache.remove(mediaId)
+                cache.remove(key)
             }
         }
 
         val songs = api.themes(mediaId, artworkUrl)
 
         synchronized(cache) {
-            cache[mediaId] = Cached(songs, nowMillis())
+            cache[key] = Cached(songs, nowMillis())
         }
         return songs
     }

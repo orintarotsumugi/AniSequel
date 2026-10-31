@@ -121,7 +121,12 @@ internal class TierLibraryPools(
         _isLoadingManga.value = true
         _mangaLoadFailed.value = false
         scope.launch {
-            aniListRepository.getUserMangaList(id, forceRefresh = false).fold(
+            // `repositoryResult`, not the bare call: a throw on the way to the
+            // `Result` would otherwise reach this `launch` and close the app, and the
+            // flag above would stay set so the section could never be asked for again.
+            repositoryResult {
+                aniListRepository.getUserMangaList(id, forceRefresh = false)
+            }.fold(
                 onSuccess = { collection ->
                     setLibrary(
                         collection.lists.orEmpty().flatMap { it.entries.orEmpty() },

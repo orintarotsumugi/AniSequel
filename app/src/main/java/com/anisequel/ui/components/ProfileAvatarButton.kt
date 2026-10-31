@@ -72,7 +72,6 @@ fun ProfileAvatarButton(
 ) {
     Box(
         modifier = modifier
-            .padding(6.dp)
             .then(
                 if (enabled) {
                     Modifier.expressiveHoldGesture(onHold = onClick, onClick = onClick)
@@ -80,6 +79,11 @@ fun ProfileAvatarButton(
                     Modifier
                 }
             )
+            // Inside the gesture, not outside it: a padding *before* a pointer-input
+            // node shrinks the node, so the tap target stayed the 36dp avatar and the
+            // comment promising a padded-out area described something that was not
+            // there. Outside the gesture the target is the 48dp the file claims.
+            .padding(6.dp)
             .semantics {
                 role = Role.Button
                 if (enabled) {

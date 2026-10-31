@@ -53,11 +53,23 @@ fun AnimatedCounterText(
         targetState = count,
         transitionSpec = {
             if (targetState > initialState) {
-                slideInVertically { height -> height / 2 } togetherWith
-                    slideOutVertically { height -> -height / 2 }
+                // The shared offset token, like every other slide in the app. These
+                // four used to pass no spec at all, which is Compose's default spring:
+                // a counter that rolled at its own speed and ignored MotionStyle, so
+                // the digits moved while nothing else on the screen did.
+                slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
+                    height / 2
+                } togetherWith
+                    slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
+                        -height / 2
+                    }
             } else {
-                slideInVertically { height -> -height / 2 } togetherWith
-                    slideOutVertically { height -> height / 2 }
+                slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
+                    -height / 2
+                } togetherWith
+                    slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
+                        height / 2
+                    }
             }
         },
         label = "animated_counter_content",

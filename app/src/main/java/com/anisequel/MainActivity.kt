@@ -6,14 +6,19 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.view.Window
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +43,7 @@ import com.anisequel.ui.navigation.AppNavigation
 import com.anisequel.ui.navigation.RestoringPlaceholder
 import com.anisequel.ui.security.AppLockGate
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.applyImmersiveMode
 import com.anisequel.ui.theme.ThemePalette
 import com.anisequel.ui.viewmodel.AuthViewModel
 import java.lang.ref.WeakReference
@@ -71,6 +77,14 @@ class MainActivity : ComponentActivity() {
      * Activity is stopped.
      */
     private var appLockEnabled = false
+
+    /**
+     * The full-screen choice, mirrored out of the flow so `onWindowFocusChanged`
+     * can re-apply it without composition - the focus callback can arrive before
+     * the composition has a settings value, and re-applying a stale one is how the
+     * bars end up back on a screen that asked for them hidden.
+     */
+    private var immersiveEnabled: Boolean? = null
 
     /**
      * False until the lock preference has actually been read.
@@ -155,14 +169,22 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Handle OAuth deep link if launched via custom scheme. Only on the
-        // first creation: the Intent stays attached to the Activity, so a
-        // rotation used to replay the same callback and re-save the same token
-        // (and, for an error redirect, re-show the error). `onNewIntent` handles
-        // callbacks that arrive while the Activity already exists.
-        if (savedInstanceState == null) {
-            handleDeepLinkIntent(intent)
-        }
+        // Handle OAuth deep link if launched via custom scheme.
+        //
+        // Deliberately *not* guarded on `savedInstanceState == null`, which is what
+        // it used to be: that guard was written to stop a rotation replaying the
+        // callback, and it also dropped the callback that matters most. The sign-in
+        // round trip leaves the process in the browser long enough for Android to
+        // kill it, and the redirect then arrives as a restored launch with a
+        // non-null bundle - so the code the reader just earned was ignored and the
+        // app went back to the login screen they had already passed.
+        //
+        // The replay the guard was protecting against is now impossible by
+        // construction: [AuthViewModel.handleAuthRedirect] recognises an identical
+        // callback URI and ignores it, which also covers `singleTask` re-delivery
+        // from Recents. Idempotency belongs with the thing that is idempotent, not
+        // with the lifecycle callback that happened to be running.
+        handleDeepLinkIntent(intent)
 
         // The widget's tap, on a fresh launch only.
         //
@@ -244,6 +266,15 @@ class MainActivity : ComponentActivity() {
                 )
             )
 
+            // Full screen is the app's default presentation - applied by its own
+            // helper so this method's branching stays about the app's screens.
+            ImmersiveModeEffect(
+                window = window,
+                isLoaded = themeSettings.isLoaded,
+                enabled = themeSettings.immersive,
+                onChoice = { immersiveEnabled = it }
+            )
+
             // `null` until the stored choice has been read, which is why the
             // initial value is not `false`: the two are different answers, and
             // treating "not read yet" as "off" is the flash this guards.
@@ -284,9 +315,16 @@ class MainActivity : ComponentActivity() {
                 // marker left by a downgrade cannot outrank the reader's palette.
                 animeThemeRetainedColorHex = themeSettings.retainedAnimeColorHex,
                 animeTintStrength = themeSettings.retainedTint.strength,
-                appBackgroundColor = themeSettings.appBackgroundColor
+                appBackgroundColor = themeSettings.appBackgroundColor,
+                fontScale = themeSettings.fontScale,
+                customFontPath = themeSettings.customFontPath,
+                titleScrollDpPerSecond = themeSettings.titleScrollDpPerSecond
             ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(immersiveDisplayInsets(themeSettings.immersive))
+                ) {
                     // Held on the themed background until the stored theme and
                     // lock state are in. This used to return an empty Surface,
                     // which was the right colour but a blank first frame - the
@@ -353,8 +391,16 @@ class MainActivity : ComponentActivity() {
      *
      * A no-op unless an update is actually waiting on the permission.
      */
-    override fun onResume() {
-        super.onResume()
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // A transient edge swipe, a dialog dismissal or an OEM's own window pass can
+        // re-show the system bars. Focus returning is the documented moment to put
+        // the chosen state back, and doing it here rather than on a timer means the
+        // bars never linger longer than the system itself showed them.
+        if (hasFocus) immersiveEnabled?.let { window.applyImmersiveMode(it) }
+    }
+
+    override fun onResume() {        super.onResume()
         updateControllerRef?.get()?.onAppResumed()
     }
 
@@ -508,3 +554,46 @@ class MainActivity : ComponentActivity() {
 internal class AppLockStateViewModel : ViewModel() {
     var unlockedSinceLaunch: Boolean = false
 }
+
+/**
+ * Applies the full-screen choice once it is known.
+ *
+ * Guarded on `isLoaded` because the seeded settings cannot tell "the reader chose
+ * windowed" from "nothing has been read yet"; hiding on the seed would re-hide the
+ * bars for someone who turned them back on. Extracted from `onCreate` because the
+ * choice is a window flag rather than a screen - the composition root does not need
+ * one more branch.
+ */
+@Composable
+private fun ImmersiveModeEffect(
+    window: Window,
+    isLoaded: Boolean,
+    enabled: Boolean,
+    onChoice: (Boolean) -> Unit
+) {
+    LaunchedEffect(isLoaded, enabled) {
+        if (!isLoaded) return@LaunchedEffect
+        onChoice(enabled)
+        window.applyImmersiveMode(enabled)
+    }
+}
+
+/**
+ * Pads the app's root by the display cutout while the system bars are hidden.
+ *
+ * The bars being hidden also zeroes the screens' `statusBarsPadding()`, which is
+ * what lets a page own the whole display - but on a cutout device that padding was
+ * the only thing keeping a top app bar out from under the camera. Padding by the
+ * cutout restores exactly that safety area and nothing else; the bars, when the
+ * reader swipes them back, draw over it as usual.
+ */
+// `@Composable`, not a plain modifier factory: `windowInsetsPadding` reads the
+// window's insets during composition, so the function that builds it must be a
+// composable even though all it returns is a Modifier.
+@Composable
+private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
+    if (immersive) {
+        Modifier.windowInsetsPadding(WindowInsets.displayCutout)
+    } else {
+        Modifier
+    }

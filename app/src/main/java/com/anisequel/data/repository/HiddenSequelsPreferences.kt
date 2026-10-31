@@ -45,6 +45,23 @@ class HiddenSequelsPreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Puts [mediaId] in the state the caller *means*, rather than the opposite one.
+     *
+     * `toggle` is only correct when the caller knows the current state, and the two
+     * callers that care do not: a snackbar's Undo can be tapped after the same entry
+     * was already restored from the hidden list or by "show all again", and the
+     * toggle then hid it again - the card vanished the moment the reader asked for it
+     * back. Undo means "not hidden", whatever the store currently says.
+     */
+    suspend fun setHidden(mediaId: Int, hidden: Boolean) {
+        context.hiddenSequelsDataStore.edit { preferences ->
+            val current = parseIds(preferences[KEY_HIDDEN_IDS])
+            val updated = if (hidden) current + mediaId else current - mediaId
+            preferences[KEY_HIDDEN_IDS] = encodeIds(updated)
+        }
+    }
+
     /** Unhides everything, for a "show all again" affordance. */
     suspend fun clear() {
         context.hiddenSequelsDataStore.edit { preferences ->

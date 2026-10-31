@@ -173,13 +173,6 @@ private fun TierBoard(
     // five separate `remember`ed values threaded through every call.
     val drag = remember { TierDragState() }
 
-    // Locking the board while a tile is under the finger must not leave the
-    // ghost behind: the drag pointer handler is about to be removed, so its
-    // `onDragCancel` will never run.
-    LaunchedEffect(dragEnabled) {
-        if (!dragEnabled) drag.reset()
-    }
-
     val tileTitles = display.showTitles && zoom >= TIER_CAPTION_MIN_ZOOM
     val options = remember(widthDp, zoom, display) {
         tierBoardOptions(widthDp = widthDp, zoom = zoom, display = display)
@@ -192,6 +185,18 @@ private fun TierBoard(
             title = listName,
             options = options
         )
+    }
+
+    // Any of these keys changing replaces the drag pointer handler, and a replaced
+    // handler never delivers `onDragCancel`. Locking the board was the case the reset
+    // was written for, but a list rebuild, a stream of incoming candidates, an undo or
+    // a zoom step restart the handler too - and without a reset the ghost and row
+    // highlight froze under the finger while `TierEdgeAutoScroll` (keyed on
+    // `drag.mediaId != null`) kept ticking until the next lift. Unconditional on
+    // purpose: this effect *is* the handler-replaced signal, and clearing an empty
+    // drag costs nothing.
+    LaunchedEffect(dragEnabled, arrangement, zoom) {
+        drag.reset()
     }
     val candidateById = remember(candidates) { candidates.associateBy { it.mediaId } }
 

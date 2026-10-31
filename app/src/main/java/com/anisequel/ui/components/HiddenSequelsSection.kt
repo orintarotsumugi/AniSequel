@@ -2,9 +2,7 @@ package com.anisequel.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,12 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -81,22 +78,17 @@ fun HiddenSequelsSection(
     // otherwise leave an open, empty section behind.
     AnimatedVisibility(
         visible = hiddenSequels.isNotEmpty(),
-        // `IntSize` explicitly, not left to inference: passing a Dp threshold
-        // pins the spring to SpringSpec<Dp>, which is not the
-        // FiniteAnimationSpec<IntSize> these two transitions take. The
-        // threshold itself is an IntSize too, hence IntSize.Zero rather than
-        // a bare 0.
+        // `FastSpatialSize`, not a literal spring: the same open/close gesture is on
+        // seven other sections and every one of them passes this token. The four
+        // copies of `spring<IntSize>(StiffnessMediumLow, IntSize.Zero)` that used to
+        // sit here were exactly the drift §3 warns about - and they also ignored
+        // MotionStyle, so the section expanded at full spring speed in the one mode
+        // that asks for none.
         enter = expandVertically(
-            animationSpec = spring<IntSize>(
-                stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = IntSize.Zero
-            )
+            animationSpec = ExpressiveMotion.FastSpatialSize
         ) + fadeIn(ExpressiveMotion.FastEffects),
         exit = shrinkVertically(
-            animationSpec = spring<IntSize>(
-                stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = IntSize.Zero
-            )
+            animationSpec = ExpressiveMotion.FastSpatialSize
         ) + fadeOut(ExpressiveMotion.FastEffects)
     ) {
         Column(
@@ -116,16 +108,10 @@ fun HiddenSequelsSection(
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(
-                    animationSpec = spring<IntSize>(
-                        stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = IntSize.Zero
-                    )
+                    animationSpec = ExpressiveMotion.FastSpatialSize
                 ) + fadeIn(ExpressiveMotion.FastEffects),
                 exit = shrinkVertically(
-                    animationSpec = spring<IntSize>(
-                        stiffness = Spring.StiffnessMediumLow,
-                        visibilityThreshold = IntSize.Zero
-                    )
+                    animationSpec = ExpressiveMotion.FastSpatialSize
                 ) + fadeOut(ExpressiveMotion.FastEffects)
             ) {
                 Column {
@@ -185,10 +171,12 @@ private fun HiddenSectionHeader(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Rotation and container colour both animate, and both are read while
-    // composing - `Modifier.rotate` and `Modifier.background` take plain values,
-    // so there is no layer to hand them to. These are two-state changes on a
-    // header the user taps, so the cost is bounded; the container colour uses
+    // The chevron's rotation is applied in the draw phase, not through
+    // `Modifier.rotate`: that takes a plain value, so reading the animation while
+    // composing re-runs layout for every frame of the turn, and §3 asks for transforms
+    // in a `graphicsLayer`. The container colour is the one that genuinely has no
+    // layer to hand to - `Modifier.background` takes its colour by value - and that
+    // cost is bounded to the two state changes of a header the user tapped. It uses
     // `FastEffects` (NoBouncy) rather than a spring that can overshoot, because a
     // spring on `Color` interpolates componentwise and an overshoot can push a
     // channel out of gamut mid-flight.
@@ -238,7 +226,7 @@ private fun HiddenSectionHeader(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(16.dp)
-                .rotate(chevronRotation)
+                .graphicsLayer { rotationZ = chevronRotation }
         )
     }
 }

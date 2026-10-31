@@ -8,13 +8,18 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anisequel.domain.jokes.DEFAULT_SPEAKER_NAME
+import com.anisequel.domain.jokes.DEFAULT_STAMP
 import com.anisequel.domain.jokes.JokeDwell
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.domain.jokes.JokePosition
 import com.anisequel.domain.jokes.JokeScope
 import com.anisequel.domain.jokes.JokeSettings
+import com.anisequel.domain.jokes.JokeTextEffect
 import com.anisequel.domain.jokes.JokeTone
+import com.anisequel.domain.jokes.MAX_SPEAKER_NAME_LENGTH
+import com.anisequel.domain.jokes.MAX_STAMP_LENGTH
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -50,6 +55,9 @@ class JokePreferences(private val context: Context) {
         val TONES = stringSetPreferencesKey("jokes_tones")
         val MOMENTS = stringSetPreferencesKey("jokes_moments")
         val FAVOURITES = stringSetPreferencesKey("jokes_favourites")
+        val SPEAKER_NAME = stringPreferencesKey("jokes_speaker_name")
+        val STAMP = stringPreferencesKey("jokes_stamp")
+        val TEXT_EFFECT = stringPreferencesKey("jokes_text_effect")
     }
 
     /** The tone storage values that mean "not chosen yet" is "all of them". */
@@ -66,7 +74,10 @@ class JokePreferences(private val context: Context) {
             // An absent key is the shipped default, which is every tone. Reading
             // it as an empty set would make the first launch draw from nothing.
             tones = JokeTone.fromStorage(preferences[Keys.TONES] ?: allToneValues),
-            moments = JokeMoment.fromStorage(preferences[Keys.MOMENTS] ?: emptySet())
+            moments = JokeMoment.fromStorage(preferences[Keys.MOMENTS] ?: emptySet()),
+            speakerName = preferences[Keys.SPEAKER_NAME] ?: DEFAULT_SPEAKER_NAME,
+            stamp = preferences[Keys.STAMP] ?: DEFAULT_STAMP,
+            textEffect = JokeTextEffect.fromStorage(preferences[Keys.TEXT_EFFECT])
         )
     }
 
@@ -100,6 +111,33 @@ class JokePreferences(private val context: Context) {
 
     suspend fun setHaptics(enabled: Boolean) {
         context.jokeDataStore.edit { it[Keys.HAPTICS] = enabled }
+    }
+
+    /**
+     * The name the pill speaks under.
+     *
+     * Trimmed and bounded here rather than in the field: the field can be a build
+     * behind, and a stored name is rendered inside a 30dp-tall pill - a paragraph
+     * that slipped past a future field would push the joke off its own toast.
+     */
+    suspend fun setSpeakerName(name: String) {
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.SPEAKER_NAME] = name.trim().take(MAX_SPEAKER_NAME_LENGTH)
+        }
+    }
+
+    /** The badge glyph. Blank is allowed and means "use the default star". */
+    suspend fun setStamp(stamp: String) {
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.STAMP] = stamp.trim().take(MAX_STAMP_LENGTH)
+        }
+    }
+
+    /** How the line arrives; [JokeTextEffect.NONE] is the shipped, instant arm. */
+    suspend fun setTextEffect(effect: JokeTextEffect) {
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.TEXT_EFFECT] = effect.storageValue
+        }
     }
 
     /**
@@ -185,6 +223,9 @@ class JokePreferences(private val context: Context) {
             preferences.remove(Keys.HAPTICS)
             preferences.remove(Keys.TONES)
             preferences.remove(Keys.MOMENTS)
+            preferences.remove(Keys.SPEAKER_NAME)
+            preferences.remove(Keys.STAMP)
+            preferences.remove(Keys.TEXT_EFFECT)
         }
     }
 }

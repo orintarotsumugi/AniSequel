@@ -1,6 +1,87 @@
 {
   "versions": [
     {
+      "version": "1.7.1",
+      "entries": [
+        {
+          "title": "Full screen, by default",
+          "detail": "The app now opens with the status and navigation bars hidden and gives the whole screen to the page. Swipe from an edge and they come back for a moment, then go away again. Appearance has a Full-screen mode switch for readers who want the bars back for good, and the choice is applied by the window itself rather than by a screen, so it survives rotation, dialogs and returning from the browser."
+        },
+        {
+          "title": "Five ways to move, and a sample that shows them",
+          "detail": "Motion gained two new characters beside Instant, Smooth and Chill: Snappy, which is quicker than Smooth and still lands clean, and Floaty, which is slow and soft with a low bounce. The picker is a scrolling row of chips now, and above it a sample plays the chosen style's own spring - a dot travelling a track, the stage colour easing with it - so the difference between two names is something you watch rather than guess. Tap the sample to replay it."
+        },
+        {
+          "title": "Your own font, at your own size",
+          "detail": "Settings > Type & reading is a page of its own. Text size scales every style in the app from 85% to 130% with live sample text, and a font can be imported from any .ttf or .otf file: the bytes are copied into the app and validated with the platform's own decoder, so the choice survives the file moving or the app that supplied it being uninstalled. Both choices are applied once in the theme, so every screen and every preview agree."
+        },
+        {
+          "title": "Long titles scroll instead of cutting",
+          "detail": "A title too wide for its row - a sequel card, a poster caption, an activity row - now scrolls after a short rest and repeats, leaving titles that fit perfectly still. The speed is a setting on the same Type page, with a sample that moves at the speed you are choosing, and it respects Instant: a reader who asked for no motion does not get a marquee."
+        },
+        {
+          "title": "Ani-chan can be renamed, and stamped",
+          "detail": "The pill used to be signed \"Ani-chan\" in the code with a fixed sparkle beside it. Jokes now has a Name and stamp card: rename the speaker (blank falls back to the default) and pick the badge glyph from a small palette - a star by default, a heart or a ghost if you prefer - or type any character you like. Both are stored on the device, and the field writes are debounced so typing a name is not a disk write per key."
+        },
+        {
+          "title": "The pill can type",
+          "detail": "A new Line style setting lets a joke arrive one character at a time, one word at a time, or with a soft fade-and-rise; all three are off by default, because the pill's job is to say something and go. A sample in the same card plays the real speed with a real line from the pool - and tap it to replay - so the choice is judged by watching it, not by reading a name. The typewriter counts code points rather than characters, keeps the full line as its spoken description, and yields to the app-wide Instant motion setting."
+        },
+        {
+          "title": "Updates is its own page",
+          "detail": "The updater and the release notes were two-thirds of the way down About, under a subtitle that promised them. They now have their own page on the shelf - version, update check and What's new together - and About keeps the build number, the crash report, privacy and the help links. Same cards, separated by the question they answer."
+        },
+        {
+          "title": "More dark lines, and a faster draw",
+          "detail": "Fifty more DARK lines about cancellations, hiatuses and productions that did not survive their own schedules, in the pool's own voice. The filter behind every draw is now computed once per switch combination instead of scanning the thousand-line pool on every joke, preview and Settings count, so the toast's arrival no longer depends on how large the pool grows."
+        },
+        {
+          "title": "The tier board waits for your list",
+          "detail": "Tapping Tiers from a cold start used to build the board before the viewer query answered, and the board read that window as demo mode - so the fixture's titles could be ranked and written into the reader's own DataStore. The tab now draws the same waiting and failure states the Library page does, and builds no ViewModel until it knows whose list it is showing."
+        },
+        {
+          "title": "A number is not an identity",
+          "detail": "AniList numbers anime and manga independently, and every key that used an id alone could cross that line: the merged library grid could fail on a duplicate key and the Favourites chip badged a manga because its anime twin was hearted; quick-add kept one confirmation for both; the theme-song cache could file one title's openings under another; the LiveChart cache served a remake's poster under the original's title; and the progress wave's entrance carried over. All of them carry the namespace now."
+        },
+        {
+          "title": "Signing in survives the browser trip",
+          "detail": "The OAuth callback was only read when the Activity was created fresh, so a redirect that arrived after Android had killed the process in the background was dropped and the app sat on the login screen the reader had already passed. It is read on every delivery now, an identical replayed callback is ignored, and a token whose verification was cancelled no longer stays behind to be resurrected as a signed-in session on the next launch."
+        },
+        {
+          "title": "An update download cannot start twice",
+          "detail": "Rotating the phone mid-download re-ran the once-per-launch update check, which could offer the download again while the first transfer was still writing - two streams interleaved into one part file, which then failed verification and was blamed on the release. A check is refused while a transfer runs, and a body that ends early is a dropped connection that resumes rather than a complete file that is then called tampered with."
+        },
+        {
+          "title": "The dashboard stops showing the previous profile",
+          "detail": "A library download already running when the profile was refreshed could publish the older overview over the new one, so the bio, favourites and counts visibly went backwards while claiming to be live. The state is rebuilt from whoever is current now, and the repository's invalidation counters are atomic, so two overlapping writes can no longer lose one of them and let a pre-write list back into the cache."
+        },
+        {
+          "title": "Widgets forget an account that signed out",
+          "detail": "The widget store deliberately never removed the username, and nothing else did either - so after a sign-out the four tiles kept drawing the previous account's handle, counts and top titles on the home screen indefinitely. Signing out empties the store and repaints the tiles, widget cover fetches are bounded by a whole-call timeout, and the store joins the session token in being excluded from cloud backup and device transfer."
+        },
+        {
+          "title": "Undo puts back the title it named",
+          "detail": "The dashboard's undo slot held only the most recently hidden entry, so hiding two quickly made the first message's Undo restore the second - and the restore was a toggle, so an entry already brought back from the hidden list was hidden again by the very tap that asked for it. The snackbar carries its own entry, and the store is told the state the caller means."
+        },
+        {
+          "title": "The hold button moves like one control",
+          "detail": "Holding Add to Planning pointed the background colour at a target that moved every frame of the hold, so the spring could never settle and the button recomposed for the gesture's whole length; the fill grew through a layout pass per frame; and the press used a different spring from every other control. The colour is computed from the hold itself, the fill scales in the draw phase, the press uses the shared pair - and the hidden-anime section's four hand-written springs are the shared size token, so they honour the motion style too."
+        },
+        {
+          "title": "The bar's pages move on the bar's spring",
+          "detail": "The tier page is one of the bar's tabs, but it rose and fell on the calm push spring while the bar left on the fast one - a chained tap stuttered and the two halves of one move ran at different speeds. It uses the tab spring now. The bar keeps the tab it was actually on while it animates out instead of snapping to Home, the cover viewer's exit settles inside its own window instead of being torn down mid-bounce, and the counter, the calendar range and the two Read more expansions use the shared tokens."
+        },
+        {
+          "title": "Four palettes get their surfaces back",
+          "detail": "Sakura, Matcha, Jupiter and Sunset only overrode their accent roles, so every sheet, chip, divider and outline stayed at Material's purple-grey defaults while the accents were the palette's own. The app's navy neutral ladder is part of each light scheme now. The bottom bar's clearance is also its real height again - 86dp, not the 96 it claimed - so the last row of a main list no longer stops ten dp short of it."
+        },
+        {
+          "title": "Smaller fixes",
+          "detail": "A server error carried inside a GraphQL error is an AniList outage rather than a bug on our side; a title whose only spelling is blank says Unknown Title instead of nothing; the profile avatar's tap target is the 48dp it claimed; Not interested is no longer pinned to 34dp; a poster has a spoken name for the screen reader; markdown links use the current handler and images inside a centred block are centred; a studio's title count matches the shelves drawn under it; the tier export keeps its whole board inside the bitmap limit; and one person's Appears in row no longer opens at the previous person's scroll."
+        }
+      ]
+    },
+    {
       "version": "1.7.0",
       "entries": [
         {

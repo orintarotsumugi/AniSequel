@@ -163,7 +163,7 @@ fun InfoProgressCard(
             )
         }
     ) {
-        WavyProgressBar(progress = fraction, entranceKey = media.id)
+        WavyProgressBar(progress = fraction, entranceKey = media.type to media.id)
 
         // A tracked title at zero is a real state AniList records the moment a show
         // is added to Planning, and it is the one state this card has no words for:
@@ -595,7 +595,9 @@ fun InfoParentCard(
 
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
+        // The same opacity [InfoCard] was raised to for the same reason: at 0.55 a
+        // retained cover tint shows through the card and fights the body text.
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = modifier.fillMaxWidth()
     ) {

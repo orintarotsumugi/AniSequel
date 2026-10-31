@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
@@ -100,10 +101,25 @@ enum class RetainedTint(
  *  - **Chill** - the full expressive springs. The default: it is what the rest
  *    of the app is designed around.
  */
+/**
+ * How the app animates, as one of five characters.
+ *
+ * [SNAPPY] and [FLOATY] were added beside the original three so the choice spans a
+ * real range rather than "off / plain / expressive": Snappy is for readers who want
+ * the app to feel instant without losing its transitions, Floaty for the opposite -
+ * slow, soft movement on everything. The token mappings in `ExpressiveMotion` give
+ * each one its own physics; the Appearance tab previews them on the spot, because a
+ * name is not a feel.
+ *
+ * Order is the order the picker draws, so a style added at the end stays where the
+ * reader expects it rather than reshuffling the row.
+ */
 enum class MotionStyle(val storageValue: String, val displayName: String) {
     INSTANT("instant", "Instant"),
     SMOOTH("smooth", "Smooth"),
-    CHILL("chill", "Chill");
+    SNAPPY("snappy", "Snappy"),
+    CHILL("chill", "Chill"),
+    FLOATY("floaty", "Floaty");
 
     companion object {
         val DEFAULT = CHILL
@@ -183,6 +199,31 @@ class ThemePreferences(context: Context) {
         val ANIME_THEME_RETAINED_TINT = stringPreferencesKey("anime_theme_retained_tint")
         val ANIME_THEME_REVERT_DURATION = androidx.datastore.preferences.core.intPreferencesKey("anime_theme_revert_duration")
         val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
+
+        /**
+         * Full screen by default: the status and navigation bars start hidden and
+         * come back on a swipe from the edge.
+         *
+         * Stored rather than fixed because the bars still carry the clock and the
+         * gesture hint some readers rely on. Absent means *on* - this is the app's
+         * default presentation now, and an upgrade must not land on the old
+         * windowed one just because the key was never written.
+         */
+        val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
+
+        /** The reading scale applied to every text style, 1.0 = as designed. */
+        val FONT_SCALE = floatPreferencesKey("font_scale")
+
+        /**
+         * A font the reader imported, as an absolute path inside the app's files
+         * directory - copied there rather than referenced by URI so the choice
+         * survives the granting app being uninstalled.
+         */
+        val CUSTOM_FONT_PATH = stringPreferencesKey("custom_font_path")
+        val CUSTOM_FONT_NAME = stringPreferencesKey("custom_font_name")
+
+        /** How fast a title too long for its row scrolls, in dp per second. */
+        val TITLE_SCROLL_VELOCITY = floatPreferencesKey("title_scroll_velocity_dp")
     }
 
     /**
@@ -237,6 +278,21 @@ class ThemePreferences(context: Context) {
         val retainedTint: RetainedTint = RetainedTint.DEFAULT,
         val animeThemeRevertDuration: Int = 300,
         val appBackgroundColor: String? = null,
+        /**
+         * Hide the system bars, on by default.
+         *
+         * See [Keys.IMMERSIVE_MODE]: the default is *true*, so a stored `false` is
+         * the only thing that turns the bars back on.
+         */
+        val immersive: Boolean = true,
+        /** Reading scale for every text style; see [setFontScale]. */
+        val fontScale: Float = 1f,
+        /** The imported font's file path, or null for the system face. */
+        val customFontPath: String? = null,
+        /** The imported font's original file name, for Settings to name it by. */
+        val customFontName: String? = null,
+        /** Scroll speed for titles that outgrow their row, in dp per second. */
+        val titleScrollDpPerSecond: Float = DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     ) {
@@ -289,6 +345,14 @@ class ThemePreferences(context: Context) {
             retainedTint = RetainedTint.fromStorage(preferences[Keys.ANIME_THEME_RETAINED_TINT]),
             animeThemeRevertDuration = preferences[Keys.ANIME_THEME_REVERT_DURATION] ?: 300,
             appBackgroundColor = preferences[Keys.APP_BACKGROUND_COLOR],
+            // `?: true`: absence is the new default, and only an explicit false -
+            // written by the switch - brings the bars back.
+            immersive = preferences[Keys.IMMERSIVE_MODE] ?: true,
+            fontScale = preferences[Keys.FONT_SCALE] ?: 1f,
+            customFontPath = preferences[Keys.CUSTOM_FONT_PATH],
+            customFontName = preferences[Keys.CUSTOM_FONT_NAME],
+            titleScrollDpPerSecond = preferences[Keys.TITLE_SCROLL_VELOCITY]
+                ?: DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
             isLoaded = true
         )
     }
@@ -330,6 +394,54 @@ class ThemePreferences(context: Context) {
     suspend fun setTrueBlack(enabled: Boolean) {
         appContext.themeDataStore.edit { preferences ->
             preferences[Keys.TRUE_BLACK] = enabled
+        }
+    }
+
+    /**
+     * Full-screen mode.
+     *
+     * Only records the choice: the window applies it, and `MainActivity` watches
+     * the same flow - a DataStore write from this screen and a window flag set
+     * somewhere else would be two answers to one question.
+     */
+    suspend fun setImmersive(enabled: Boolean) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.IMMERSIVE_MODE] = enabled
+        }
+    }
+
+    /** The reading scale, clamped to the range Settings offers. */
+    suspend fun setFontScale(scale: Float) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.FONT_SCALE] = scale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
+        }
+    }
+
+    /**
+     * Records the imported font.
+     *
+     * The caller copies the file first and passes the copy's path: a picked
+     * document URI stops working when the app that granted it is uninstalled, and
+     * a font preference that silently reverts to the default months later is
+     * indistinguishable from a bug.
+     */
+    suspend fun setCustomFont(path: String?, name: String?) {
+        appContext.themeDataStore.edit { preferences ->
+            if (path != null) {
+                preferences[Keys.CUSTOM_FONT_PATH] = path
+                preferences[Keys.CUSTOM_FONT_NAME] = name.orEmpty()
+            } else {
+                preferences.remove(Keys.CUSTOM_FONT_PATH)
+                preferences.remove(Keys.CUSTOM_FONT_NAME)
+            }
+        }
+    }
+
+    /** How fast overflowing titles scroll. */
+    suspend fun setTitleScrollSpeed(dpPerSecond: Float) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.TITLE_SCROLL_VELOCITY] =
+                dpPerSecond.coerceIn(MIN_TITLE_SCROLL_DP_PER_SECOND, MAX_TITLE_SCROLL_DP_PER_SECOND)
         }
     }
 
@@ -562,6 +674,10 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.ANIME_THEME_RETAINED_TINT)
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
+            // Back to full screen, which is the default this app ships with.
+            // The reading font, size and title scroll are their own page's choices
+            // and are reset there, not by "Reset appearance".
+            preferences.remove(Keys.IMMERSIVE_MODE)
         }
     }
 
@@ -587,3 +703,23 @@ class ThemePreferences(context: Context) {
         var revertJob: Job? = null
     }
 }
+/**
+ * The reading-scale range Settings > Type & reading offers.
+ *
+ * Bounds live here rather than in the slider so the preference and the control
+ * cannot disagree about what "as large as it goes" is - the value that is written
+ * and the value the screen claims are one.
+ */
+const val MIN_FONT_SCALE = 0.85f
+const val MAX_FONT_SCALE = 1.30f
+
+/**
+ * The title-scroll range, in dp per second.
+ *
+ * A title scrolls only when it does not fit its row, and this is the one number
+ * that makes the effect readable: too slow reads as stuck, too fast is unreadable.
+ * The span covers "very leisurely" to "brisk" without either end being useless.
+ */
+const val MIN_TITLE_SCROLL_DP_PER_SECOND = 24f
+const val MAX_TITLE_SCROLL_DP_PER_SECOND = 140f
+const val DEFAULT_TITLE_SCROLL_DP_PER_SECOND = 60f

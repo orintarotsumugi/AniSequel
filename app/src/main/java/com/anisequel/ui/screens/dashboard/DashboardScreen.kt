@@ -144,10 +144,9 @@ fun DashboardScreen(
     val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
     val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
 
-    // The most recently hidden entry, so the snackbar's Undo can put it back.
-    // Held here rather than inside the ViewModel because the snackbar is what
-    // owns the gesture: the action belongs to the message that offered it.
-    var lastHiddenSequel by remember { mutableStateOf<MissedSequel?>(null) }
+    // The most recently hidden entry used to be mirrored here for the snackbar's
+    // Undo. It lives on the event now: one slot could not tell two quick hides apart,
+    // so the first message's Undo could restore the second entry.
 
     // Re-checks freshness every time the app comes back to the foreground.
     //
@@ -177,8 +176,9 @@ fun DashboardScreen(
                         actionLabel = event.actionLabel
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        lastHiddenSequel?.let(dashboardViewModel::restoreHiddenSequel)
-                        lastHiddenSequel = null
+                        // The entry this message was about, not whatever was hidden
+                        // last: see [DashboardEvent.ShowSnackbar.undoSequel].
+                        event.undoSequel?.let(dashboardViewModel::restoreHiddenSequel)
                     }
                 }
             }
@@ -475,7 +475,6 @@ fun DashboardScreen(
                                             holdDurationSeconds = quickAddSettings.holdDurationSeconds,
                                             swipeEnabled = quickAddSettings.swipeEnabled,
                                             onHide = {
-                                                lastHiddenSequel = item
                                                 dashboardViewModel.toggleHideSequel(item)
                                             },
                                             modifier = Modifier

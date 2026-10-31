@@ -51,6 +51,14 @@ object WidgetCover {
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        // The whole call, not just its phases, because every fetch is serialised on
+        // one thread behind a `goAsync()` result - four providers on a system tick
+        // queue four fetches, and connect + read alone allowed each one twenty-five
+        // seconds. The last callback then landed after the receiver's own timeout,
+        // so `finish()` was void, the process could be killed, and the tiles stayed
+        // on their placeholder. Eight seconds keeps the worst case near the budget
+        // instead of a multiple of it.
+        .callTimeout(8, TimeUnit.SECONDS)
         .build()
 
     /**

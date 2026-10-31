@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -109,8 +110,12 @@ fun SequelCard(
 
                         TextButton(
                             onClick = onHide,
+                            // 34dp overrode the button's own minimum, so the touch
+                            // target was 34dp tall on the busiest list in the app. The
+                            // framework's 48dp guard cannot help a component whose
+                            // outer height is pinned below it.
                             modifier = Modifier
-                                .height(34.dp)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .testTag("hide_sequel_${sequel.sequelId}"),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                         ) {
