@@ -391,6 +391,14 @@ private class FakeService(
     private val staff: () -> GraphQLResponse<StaffProfileData> = { notServed("getStaffProfile") },
     private val saveReply: () -> GraphQLResponse<SaveActivityReplyData> = { notServed("saveActivityReply") }
 ) : AniListApiService {
+    // The fake does not serve direct messages; a test that ever sends one should
+    // fail loudly rather than invent an answer.
+    override suspend fun saveActivityMessage(
+        request: com.anisequel.data.network.GraphQLRequest
+    ): com.anisequel.data.network.GraphQLResponse<
+        com.anisequel.data.model.SendActivityMessageData
+        > = error("This fake does not send messages")
+
 
     override suspend fun getActivityReplies(request: GraphQLRequest): GraphQLResponse<ActivityDetailData> =
         replies()

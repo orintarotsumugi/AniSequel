@@ -346,6 +346,14 @@ class RepositorySnapshotsTest {
  * and an unanswered one fails loudly rather than quietly inventing data.
  */
 private class SnapshotTestService : AniListApiService {
+    // The fake does not serve direct messages; a test that ever sends one should
+    // fail loudly rather than invent an answer.
+    override suspend fun saveActivityMessage(
+        request: com.anisequel.data.network.GraphQLRequest
+    ): com.anisequel.data.network.GraphQLResponse<
+        com.anisequel.data.model.SendActivityMessageData
+        > = error("This fake does not send messages")
+
 
     var viewerRequests = 0
     var listRequests = 0
