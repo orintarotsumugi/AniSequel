@@ -45,6 +45,7 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.expressiveShape
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch

@@ -55,6 +55,7 @@ import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.repository.ProfileLayoutPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.EntryEditor
