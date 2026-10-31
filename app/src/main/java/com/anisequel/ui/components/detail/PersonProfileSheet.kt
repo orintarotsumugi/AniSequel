@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,10 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -345,134 +340,6 @@ private fun personWord(kind: PersonKind): String =
 private val PROFILE_SHEET_MAX_HEIGHT = 620.dp
 
 /**
- * The cover: the portrait behind its own name, and the portrait again as the cover.
- *
- * The title page's hero, at the size a person's artwork can carry it. The artwork is
- * the key visual (see `InfoHero` for why it is the poster and not the banner, and why
- * it is sharp), the scrim does the legibility, and the cover itself is a rounded
- * rectangle - the shape every other cover in the app is.
- *
- * The corner is `extraSmall` (10dp), not `medium` (20dp). On a portrait this narrow
- * 20dp is more than a third of its width rounded away on each side, which stops
- * reading as a cover and starts reading as a lozenge; the same correction was made to
- * every poster on this sheet. See `PersonStaffCredits`.
- *
- * This replaces a header that was one 84dp face clipped to a pill, on the sheet's
- * container colour: a portrait is a rectangle, and a pill drawn around one takes the
- * corners off the art and reads as a placeholder rather than as a cover.
- */
-@Composable
-private fun ProfileHero(state: PersonProfileState.Loaded) {
-    // The scrim has to end on the colour the sheet itself is drawn on, or the cover
-    // hands over to the body with a visible seam. The sheet's container is
-    // `surfaceContainerLow` - see the `ModalBottomSheet` call above.
-    val surface = MaterialTheme.colorScheme.surfaceContainerLow
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(HERO_HEIGHT)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .testTag("profile_hero")
-    ) {
-        if (state.portraitUrl != null) {
-            AsyncImage(
-                model = state.portraitUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-        }
-
-        // Weighted for sharp artwork: light at the top so the art still reads, strong
-        // at the bottom where the name and the cover are. The same stops as the title
-        // page's hero, for the same reason.
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.10f),
-                        0.34f to Color.Black.copy(alpha = 0.24f),
-                        0.60f to Color.Black.copy(alpha = 0.54f),
-                        0.84f to Color.Black.copy(alpha = 0.74f),
-                        1f to surface
-                    )
-                )
-        )
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(PORTRAIT_WIDTH)
-                    .height(PORTRAIT_HEIGHT)
-                    .shadow(
-                        elevation = 16.dp,
-                        shape = MaterialTheme.shapes.extraSmall,
-                        ambientColor = Color.Black,
-                        spotColor = Color.Black
-                    )
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.extraSmall)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .testTag("profile_portrait")
-            ) {
-                AsyncImage(
-                    model = state.portraitUrl,
-                    contentDescription = state.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.name ?: "Unknown",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    // One shadow on one short block of text, exactly as the title
-                    // page's lockup does it: what keeps white type legible over a pale
-                    // portrait without darkening the whole cover.
-                    modifier = Modifier.shadow(
-                        elevation = 6.dp,
-                        shape = RectangleShape,
-                        ambientColor = Color.Black,
-                        spotColor = Color.Black
-                    )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = personWord(state.kind).replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.88f),
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (state.aliases.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = state.aliases.joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.78f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
  * The facts, as label/value capsules.
  *
  * Capsules rather than the two-column grid the title page uses: a person has four or
@@ -626,13 +493,6 @@ private fun VoiceActorRow(credit: VoiceActorCredit, onOpenStaff: ((VoiceActorCre
         }
     }
 }
-
-/** Tall enough for the artwork to be the header, short enough to leave the page below. */
-private val HERO_HEIGHT = 236.dp
-
-/** The cover on the hero: poster proportions, drawn over the artwork it repeats. */
-private val PORTRAIT_WIDTH = 92.dp
-private val PORTRAIT_HEIGHT = 128.dp
 
 /**
  * How many voice actors the sheet lists.

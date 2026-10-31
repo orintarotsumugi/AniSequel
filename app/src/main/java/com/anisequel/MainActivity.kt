@@ -13,20 +13,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
@@ -45,7 +41,9 @@ import com.anisequel.ui.navigation.AppNavigation
 import com.anisequel.ui.navigation.RestoringPlaceholder
 import com.anisequel.ui.security.AppLockGate
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.applyImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.theme.ThemePalette
 import com.anisequel.ui.viewmodel.AuthViewModel
 import java.lang.ref.WeakReference
@@ -322,55 +320,59 @@ class MainActivity : ComponentActivity() {
                 customFontPath = themeSettings.customFontPath,
                 titleScrollDpPerSecond = themeSettings.titleScrollDpPerSecond
             ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(immersiveDisplayInsets(themeSettings.immersive))
+                CompositionLocalProvider(
+                    LocalImmersiveMode provides themeSettings.immersive
                 ) {
-                    // Held on the themed background until the stored theme and
-                    // lock state are in. This used to return an empty Surface,
-                    // which was the right colour but a blank first frame - the
-                    // window had nothing to show and the app looked stopped.
-                    // The same branded placeholder the session read uses is
-                    // drawn instead, so both pre-screen waits look deliberate.
-                    if (!themeSettings.isLoaded || !appLockReady) {
-                        RestoringPlaceholder(message = "Restoring your settings\u2026")
-                        return@Surface
-                    }
-
-                    AppLockGate(
-                        locked = isLocked,
-                        onUnlock = { requestUnlock() }
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(Modifier.immersiveDisplayInsets(themeSettings.immersive))
                     ) {
-                        val updateController = rememberUpdateController()
-                        updateControllerRef = WeakReference(updateController)
-
-                        // One check per launch, after the first frame.
-                        //
-                        // Keyed on a constant so it runs exactly once rather than on
-                        // every recomposition, and deliberately *after* the app is
-                        // usable: a dialog that blocks the first screen while
-                        // GitHub is slow is a worse experience than one that
-                        // arrives a moment later.
-                        LaunchedEffect(Unit) {
-                            updateController.check()
+                        // Held on the themed background until the stored theme and
+                        // lock state are in. This used to return an empty Surface,
+                        // which was the right colour but a blank first frame - the
+                        // window had nothing to show and the app looked stopped.
+                        // The same branded placeholder the session read uses is
+                        // drawn instead, so both pre-screen waits look deliberate.
+                        if (!themeSettings.isLoaded || !appLockReady) {
+                            RestoringPlaceholder(message = "Restoring your settings\u2026")
+                            return@Surface
                         }
 
-                        AppNavigation(
-                            authRepository = authRepository,
-                            authViewModel = authViewModel,
-                            themePreferences = themePreferences,
-                            appLockPreferences = appLockPreferences,
-                            openProfileActivityOnLaunch = openProfileActivityRequest,
-                            onProfileActivityOpened = { openProfileActivityRequest = false }
-                        )
+                        AppLockGate(
+                            locked = isLocked,
+                            onUnlock = { requestUnlock() }
+                        ) {
+                            val updateController = rememberUpdateController()
+                            updateControllerRef = WeakReference(updateController)
 
-                        // A dialog is its own window, so it would draw *over*
-                        // the lock overlay rather than under it. The check can
-                        // still run while locked; the prompt waits until the
-                        // reader has unlocked.
-                        if (!isLocked) {
-                            UpdatePromptHost(controller = updateController)
+                            // One check per launch, after the first frame.
+                            //
+                            // Keyed on a constant so it runs exactly once rather than on
+                            // every recomposition, and deliberately *after* the app is
+                            // usable: a dialog that blocks the first screen while
+                            // GitHub is slow is a worse experience than one that
+                            // arrives a moment later.
+                            LaunchedEffect(Unit) {
+                                updateController.check()
+                            }
+
+                            AppNavigation(
+                                authRepository = authRepository,
+                                authViewModel = authViewModel,
+                                themePreferences = themePreferences,
+                                appLockPreferences = appLockPreferences,
+                                openProfileActivityOnLaunch = openProfileActivityRequest,
+                                onProfileActivityOpened = { openProfileActivityRequest = false }
+                            )
+
+                            // A dialog is its own window, so it would draw *over*
+                            // the lock overlay rather than under it. The check can
+                            // still run while locked; the prompt waits until the
+                            // reader has unlocked.
+                            if (!isLocked) {
+                                UpdatePromptHost(controller = updateController)
+                            }
                         }
                     }
                 }
@@ -402,7 +404,12 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) immersiveEnabled?.let { window.applyImmersiveMode(it) }
     }
 
-    override fun onResume() {        super.onResume()
+    override fun onResume() {
+        super.onResume()
+        // Bars re-shown by an OEM while the app was backgrounded come back hidden:
+        // focus alone is not guaranteed on every device, and this is the documented
+        // moment to re-assert a window flag.
+        immersiveEnabled?.let { window.applyImmersiveMode(it) }
         updateControllerRef?.get()?.onAppResumed()
     }
 
@@ -579,27 +586,3 @@ private fun ImmersiveModeEffect(
         window.applyImmersiveMode(enabled)
     }
 }
-
-/**
- * Pads the app's root by the display cutout while the system bars are hidden.
- *
- * The bars being hidden also zeroes the screens' `statusBarsPadding()`, which is
- * what lets a page own the whole display - but two things follow from zero. On a
- * cutout device the padding was the only thing keeping a top app bar out from under
- * the camera; and on every device a header with no padding at all sits flush against
- * the glass, which is the "weird top bar" full screen used to open with. The cutout
- * is unioned with a small comfort inset so the header always has room, and the bars,
- * when the reader swipes them back, draw over it as usual.
- */
-@Composable
-private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
-    if (immersive) {
-        Modifier.windowInsetsPadding(
-            WindowInsets.displayCutout.union(WindowInsets(top = ImmersiveTopBreathingRoom))
-        )
-    } else {
-        Modifier
-    }
-
-/** The least a page's header may sit from the top edge in full screen. */
-private val ImmersiveTopBreathingRoom = 14.dp

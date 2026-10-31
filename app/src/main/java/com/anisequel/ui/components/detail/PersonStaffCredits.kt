@@ -18,7 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +35,7 @@ import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.model.VoicedCharacter
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
+import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -194,7 +198,21 @@ fun ProfileAppearancesByYear(
     heading: String = "Worked on",
     onOpen: (ProfileAppearance) -> Unit
 ) {
-    val years = remember(appearances) { appearancesByYear(appearances) }
+    // AniList's own staff page splits a filmography into anime and manga, and the
+    // split matters most for the people whose two halves are different careers: a
+    // manga author's page is their serialisations, an anime adaptation of one of
+    // them is somebody else's credit, and read together the years lie about what
+    // they were doing. The chips only appear when the connection actually holds
+    // both - a director with an all-anime filmography has nothing to filter.
+    val hasAnime = remember(appearances) { appearances.any { !it.isManga } }
+    val hasManga = remember(appearances) { appearances.any { it.isManga } }
+    // Keyed on the appearance list rather than saveable: the sheet swaps people
+    // under itself, and a filter must not carry over to the next creator - a
+    // manga-only page opened after a manga filter would look like a page with no
+    // work on it.
+    var filter by remember(appearances) { mutableStateOf(AppearanceFilter.ALL) }
+    val visible = remember(appearances, filter) { filter.applyTo(appearances) }
+    val years = remember(visible) { appearancesByYear(visible) }
 
     Column(
         modifier = Modifier
@@ -202,6 +220,30 @@ fun ProfileAppearancesByYear(
             .testTag("profile_appearances_by_year")
     ) {
         SectionHeading(title = heading, icon = AppVectorIcons.List)
+        if (hasAnime && hasManga) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppearanceFilter.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.label,
+                        selected = filter == option,
+                        onClick = { filter = option },
+                        // These are the only controls that change what the list
+                        // below is, so they get a full tap target rather than the
+                        // chip's natural ~30dp - the same call the messages
+                        // inbox's filter row makes.
+                        minTouchTargetHeight = 40.dp,
+                        modifier = Modifier.testTag(
+                            "profile_work_filter_${option.name.lowercase()}"
+                        )
+                    )
+                }
+            }
+        }
         years.forEach { year ->
             Text(
                 text = year.label,
@@ -284,6 +326,26 @@ private fun AppearanceYearRow(
             ScoreBadge(score = score, modifier = Modifier.padding(start = 10.dp))
         }
     }
+}
+
+/**
+ * The anime/manga split on a creator's filmography.
+ *
+ * Internal rather than private so the split can be tested without a composition:
+ * the one thing this can get wrong is dropping a title from both lists, and a
+ * screenshot of one chip selected cannot show that the other half is complete.
+ */
+internal enum class AppearanceFilter(val label: String) {
+    ALL("All"),
+    ANIME("Anime"),
+    MANGA("Manga");
+
+    fun applyTo(appearances: List<ProfileAppearance>): List<ProfileAppearance> =
+        when (this) {
+            ALL -> appearances
+            ANIME -> appearances.filterNot { it.isManga }
+            MANGA -> appearances.filter { it.isManga }
+        }
 }
 
 /**

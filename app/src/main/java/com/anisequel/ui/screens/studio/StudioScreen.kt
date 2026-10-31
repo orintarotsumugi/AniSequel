@@ -1,5 +1,7 @@
 package com.anisequel.ui.screens.studio
 
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +92,7 @@ import com.anisequel.ui.viewmodel.StudioViewModel
  * states it can end in - live in `StudioSections.kt`; this file is about *what the
  * page is*, not how its capsules are drawn.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StudioScreen(
     viewModel: StudioViewModel,
@@ -147,6 +150,10 @@ fun StudioScreen(
 
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    // Two ways to read a filmography: the year shelves the page shipped with, and
+    // one packed wall with the years dropped. The choice is this visit's, not a
+    // preference - a studio is browsed by mood, and the layout follows the mood.
+    var wallLayout by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // The title the sheet is showing, as the shelf's own node so the sheet has
@@ -206,6 +213,38 @@ fun StudioScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { wallLayout = false },
+                            modifier = Modifier
+                                .testTag("studio_layout_shelves")
+                                .bouncyPress(pressedScale = 0.9f)
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.List,
+                                contentDescription = "Shelf layout",
+                                tint = if (!wallLayout) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                        IconButton(
+                            onClick = { wallLayout = true },
+                            modifier = Modifier
+                                .testTag("studio_layout_wall")
+                                .bouncyPress(pressedScale = 0.9f)
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.ViewGrid,
+                                contentDescription = "Wall layout",
+                                tint = if (wallLayout) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 // `siteUrl` when AniList sent one, derived from the id
@@ -275,21 +314,45 @@ fun StudioScreen(
                         item(key = "studio_empty") { StudioEmpty() }
                     }
 
-                    current.shelves.forEach { shelf ->
-                        item(key = "shelf_header_${shelf.label}") {
-                            StudioShelfHeader(shelf = shelf)
-                        }
-                        item(key = "shelf_row_${shelf.label}") {
-                            LazyRow(
-                                modifier = Modifier.testTag("studio_shelf_${shelf.label}"),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    if (wallLayout) {
+                        item(key = "studio_wall") {
+                            // One packed wall rather than a lazy grid: the page is
+                            // already inside a LazyColumn, and a second lazy
+                            // scroller would fight it for the gesture. Fifty cards
+                            // laid out directly is cheaper than that fight.
+                            FlowRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                                    .testTag("studio_wall"),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                items(items = shelf.titles, key = { it.id }) { media ->
+                                current.shelves.flatMap { it.titles }.forEach { media ->
                                     StudioTitleCard(
                                         media = media,
                                         onClick = { selectedMedia = media }
                                     )
+                                }
+                            }
+                        }
+                    } else {
+                        current.shelves.forEach { shelf ->
+                            item(key = "shelf_header_${shelf.label}") {
+                                StudioShelfHeader(shelf = shelf)
+                            }
+                            item(key = "shelf_row_${shelf.label}") {
+                                LazyRow(
+                                    modifier = Modifier.testTag("studio_shelf_${shelf.label}"),
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(items = shelf.titles, key = { it.id }) { media ->
+                                        StudioTitleCard(
+                                            media = media,
+                                            onClick = { selectedMedia = media }
+                                        )
+                                    }
                                 }
                             }
                         }

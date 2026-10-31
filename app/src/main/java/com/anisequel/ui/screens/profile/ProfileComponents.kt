@@ -368,7 +368,15 @@ private fun FavouritePersonLane(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                // Centred pairs, not a pair huddled against the left edge: two
+                // 84dp portraits on a full-width row left a third of the page
+                // empty and read as a single column with a stray extra face. A
+                // full pair aligns with every other full pair; a lone last one is
+                // centred on its own.
+                horizontalArrangement = Arrangement.spacedBy(
+                    space = 14.dp,
+                    alignment = Alignment.CenterHorizontally
+                )
             ) {
                 rowPeople.forEach { person ->
                     FavouritePerson(

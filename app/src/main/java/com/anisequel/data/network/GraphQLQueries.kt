@@ -136,7 +136,7 @@ object GraphQLQueries {
      * a favourites tree plus a distribution set. Folding them together would mean
      * every cold start parsed all of it to draw a title bar.
      *
-     * The favourites are capped at 12 per branch because that is all a horizontal
+     * The media and studio branches are capped at 12 because that is all a horizontal
      * row shows. AniList allows 25 and will happily send them; the extra thirteen
      * per branch is five branches' worth of image URLs parsed for art that never
      * leaves the screen.
@@ -211,7 +211,10 @@ object GraphQLQueries {
             favourites {
               anime(perPage: 12) { nodes { $FAVOURITE_MEDIA_FIELDS } }
               manga(perPage: 12) { nodes { $FAVOURITE_MEDIA_FIELDS } }
-              characters(perPage: 12) {
+              # The Characters connection takes the full page ceiling: a reader
+              # with fifty pinned characters asked for the grid and the strip to
+              # show them, not the twelve a horizontal row used to need.
+              characters(perPage: 50) {
                 nodes {
                   id
                   name { full native alternative }

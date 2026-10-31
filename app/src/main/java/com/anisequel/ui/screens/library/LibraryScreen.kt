@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -50,6 +51,7 @@ import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.components.expressive.ExpressiveCountBadge
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.navigation.mainBarClearance
@@ -158,31 +160,31 @@ fun LibraryScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text(
-                                text = "Library",
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Library",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1
+                                )
+                                if (success != null && !success.isLibraryLoading) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // The count is a badge beside the name now, not
+                                    // a clause in the subtitle: it is the number a
+                                    // reader opens this page for, and the subtitle's
+                                    // ellipsis was its least reliable home.
+                                    ExpressiveCountBadge(
+                                        count = success.libraryAnime.size
+                                    )
+                                }
+                            }
                             if (success != null) {
-                                // The size is part of the subtitle because it is
-                                // the one thing a reader opening this page wants
-                                // before scrolling: how much is here. Counted from
-                                // the anime list, which is the half this title
-                                // describes; the Manga chip carries its own.
-                                val titleCount = success.libraryAnime.size
                                 // The saved copy used to be appended to this
                                 // sentence. It is a sibling beside the name now,
                                 // like the one on Home, because at the end of a
                                 // single ellipsized line it was the first thing a
                                 // long username cut off - the one part of the
                                 // subtitle that has to survive.
-                                val subtitle = buildString {
-                                    append('@').append(success.username)
-                                    if (!success.isLibraryLoading && titleCount > 0) {
-                                        append(" \u00b7 ").append(titleCount)
-                                        append(if (titleCount == 1) " title" else " titles")
-                                    }
-                                }
+                                val subtitle = "@${success.username}"
                                 // The count arrives a beat after the name does,
                                 // because it comes with the list. A hard swap of a
                                 // line in the bar reads as a glitch; this is the
@@ -222,21 +224,30 @@ fun LibraryScreen(
                         // while looking at that library. In the actions slot it
                         // would read as another place the page goes rather than as
                         // a way of ordering what is on it.
-                        IconButton(
-                            onClick = onOpenTierList,
-                            modifier = Modifier
-                                .testTag("library_open_tier_list_button")
-                                .bouncyPress(pressedScale = 0.9f)
+                        // The trophy rides in a soft capsule of its own, so the
+                        // bar's two controls read as one row of buttons rather
+                        // than an icon stranded between two text lines.
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.padding(start = 4.dp)
                         ) {
-                            // The glyph is a shade under the bar's 24dp rather
-                            // than shrunk to match: it keeps the full 48dp touch
-                            // target, so the button stays easy to hit while
-                            // reading as lighter than the avatar beside it.
-                            Icon(
-                                imageVector = AppVectorIcons.Trophy,
-                                contentDescription = "Open tier list",
-                                modifier = Modifier.size(20.dp)
-                            )
+                            IconButton(
+                                onClick = onOpenTierList,
+                                modifier = Modifier
+                                    .testTag("library_open_tier_list_button")
+                                    .bouncyPress(pressedScale = 0.9f)
+                            ) {
+                                // The glyph is a shade under the bar's 24dp rather
+                                // than shrunk to match: it keeps the full 48dp touch
+                                // target, so the button stays easy to hit while
+                                // reading as lighter than the avatar beside it.
+                                Icon(
+                                    imageVector = AppVectorIcons.Trophy,
+                                    contentDescription = "Open tier list",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 },

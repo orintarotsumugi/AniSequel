@@ -1,8 +1,13 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -198,6 +203,16 @@ private fun TextSizeSection(
         mutableFloatStateOf(committedScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE))
     }
     val ratio = if (committedScale > 0f) draft / committedScale else 1f
+    // The sample scales in the draw phase rather than by re-styling every text
+    // run: multiplying `fontSize` on each drag tick re-laid-out the paragraph on
+    // every frame, which made the preview jump and reflow instead of read like a
+    // zoom. One animated factor smooths it, and the committed write still updates
+    // the real scale on release.
+    val previewScale by animateFloatAsState(
+        targetValue = ratio,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "text_size_preview"
+    )
 
     SectionCard(
         title = "Text size",
@@ -231,21 +246,23 @@ private fun TextSizeSection(
         // the draft/committed ratio shows the would-be size live without waiting
         // for the release write - and without rebuilding the whole type scale
         // every frame.
-        SampleLine(
-            text = "A long title scrolls here, so nothing is cut",
-            base = MaterialTheme.typography.titleLarge.copy(
-                fontSize = MaterialTheme.typography.titleLarge.fontSize * ratio,
-                lineHeight = MaterialTheme.typography.titleLarge.lineHeight * ratio
+        Column(
+            modifier = Modifier.graphicsLayer {
+                scaleX = previewScale
+                scaleY = previewScale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+        ) {
+            SampleLine(
+                text = "A long title scrolls here, so nothing is cut",
+                base = MaterialTheme.typography.titleLarge
             )
-        )
-        SampleLine(
-            text = "Body text at the same size, because a bigger title without " +
-                "bigger reading text would be half a setting.",
-            base = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = MaterialTheme.typography.bodyMedium.fontSize * ratio,
-                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * ratio
+            SampleLine(
+                text = "Body text at the same size, because a bigger title without " +
+                    "bigger reading text would be half a setting.",
+                base = MaterialTheme.typography.bodyMedium
             )
-        )
+        }
 
         Slider(
             value = draft,

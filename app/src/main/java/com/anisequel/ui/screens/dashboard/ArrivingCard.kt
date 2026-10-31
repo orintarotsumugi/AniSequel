@@ -3,6 +3,7 @@ package com.anisequel.ui.screens.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,10 +68,13 @@ fun ArrivingCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
+        // A square cover. The 148x188 strip read as a 1x2 tile beside the
+        // dashboard's own square cards, and its extra height was what made a row
+        // of them look ragged next to the text under each one.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(188.dp)
+                .aspectRatio(1f)
                 .clip(MaterialTheme.shapes.extraLarge)
                 .background(placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
@@ -88,7 +92,7 @@ fun ArrivingCard(
                     contentDescription = "Poster for ${entry.title}",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(188.dp),
+                        .aspectRatio(1f),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -119,6 +123,9 @@ fun ArrivingCard(
                 text = entry.title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
+                // Two lines reserved on every card, so a one-line title does not
+                // make its tile shorter than the one beside it.
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )

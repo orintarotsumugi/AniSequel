@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.7.3",
+      "entries": [
+        {
+          "title": "Currently arriving is square and even",
+          "detail": "The 148x188 poster read as a 1x2 tile beside the dashboard's square cards, and the extra height made a row of them ragged. The cover is 1:1 now, every card reserves two title lines, and the airing/upcoming groups keep their colour separation."
+        },
+        {
+          "title": "The profile arranges itself from its own bar",
+          "detail": "The layout palette moved from a floating button over the header to the profile's app bar, and the two-up character grid is centred as true pairs. The favourites connection now takes AniList's full page ceiling, so a reader with fifty pinned characters sees all fifty instead of twelve."
+        },
+        {
+          "title": "The hero shows the banner, and searches the web",
+          "detail": "The title page's backdrop now prefers the wide `bannerImage` and crossfades to it from the poster, so the sheet no longer paints the key visual twice. The hero's action capsule gained Search the web (DuckDuckGo, title plus anime/manga), and Open on AniList stopped failing silently on a device with no browser."
+        },
+        {
+          "title": "A studio reads two ways",
+          "detail": "The studio page's bar has two layout buttons: the year shelves it shipped with, or one packed wall with the years dropped. Both open the same title cards and the same sheets; the choice is per visit."
+        },
+        {
+          "title": "A creator's page introduces them properly",
+          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+        },
+        {
+          "title": "The library bar carries its number",
+          "detail": "The title count is an animated badge beside the Library name instead of a clause in an ellipsizing subtitle, and the tier trophy rides in a soft capsule so the bar's controls read as one row."
+        },
+        {
+          "title": "Smaller fixes",
+          "detail": "Text size preview scales in the draw phase with one animated factor instead of reflowing per drag tick; full screen re-asserts its bars on every resume, not only on focus, keeps the status bar's height above the top bar, and the full-screen cover viewer hides the bars in its own window instead of bringing them back."
+        }
+      ]
+    },
+    {
       "version": "1.7.2",
       "entries": [
         {
