@@ -17,7 +17,7 @@ Not on the Play Store. Every release is a signed universal APK on
 self-contained updater in the app - no Play Services, no AniSequel account, no
 middleman server.
 
-**Jump to:** [What's new](#whats-new--172) | [Features](#features) | [Install](#install) |
+**Jump to:** [What's new](#whats-new--173) | [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
 
@@ -25,9 +25,15 @@ middleman server.
 
 ## What's new - 1.7.2
 
-The review release: every line of the app was read, then the rough edges were
+The polish releases: every line of the app was read, then the rough edges were
 polished into features.
 
+- **A studio reads two ways.** Year shelves, or one packed wall chosen from the
+  studio page's own bar.
+- **Currently arriving is square.** 1:1 covers, even tiles, and the Airing /
+  Upcoming colour groups.
+- **The hero shows its banner**, crossfading from the poster, and searches the
+  web beside Open on AniList.
 - **A profile you arrange.** The Home tab's blocks reorder, hide and unhide, and
   the favourite characters can switch to a two-column grid - edited from a palette
   button on the header.
