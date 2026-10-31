@@ -17,15 +17,15 @@ Not on the Play Store. Every release is a signed universal APK on
 self-contained updater in the app - no Play Services, no AniSequel account, no
 middleman server.
 
-**Jump to:** [What's new](#whats-new--173) | [Features](#features) | [Install](#install) |
+**Jump to:** [What's new](#whats-new---173) | [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
 
 ---
 
-## What's new - 1.7.2
+## What's new - 1.7.3
 
-The polish releases: every line of the app was read, then the rough edges were
+The polish release: every line of the app was read, then the rough edges were
 polished into features.
 
 - **A studio reads two ways.** Year shelves, or one packed wall chosen from the
@@ -34,6 +34,9 @@ polished into features.
   Upcoming colour groups.
 - **The hero shows its banner**, crossfading from the poster, and searches the
   web beside Open on AniList.
+- **A creator's page introduces them.** The staff hero leads with occupations and
+  the native name, filmographies split into All / Anime / Manga, and AniList is
+  one tap away on the artwork itself.
 - **A profile you arrange.** The Home tab's blocks reorder, hide and unhide, and
   the favourite characters can switch to a two-column grid - edited from a palette
   button on the header.
@@ -42,7 +45,8 @@ polished into features.
 - **An export you style.** Show or hide the title, size it S/M/L, pick
   Sans/Serif/Mono, with a live sample and an honest pixel estimate.
 - **Full screen, off by default** - a switch in Appearance, an edge swipe to bring
-  the bars back, and a cutout-aware top inset when it is on.
+  the bars back, a cutout-aware top inset, and a cover viewer that stays full
+  screen instead of bringing the bars back.
 - **Five ways to move** - Instant, Smooth, Snappy, Chill, Floaty - with a sample
   that plays the chosen spring.
 - **Type & reading** - text size 85-130%, any `.ttf`/`.otf` imported into the app,

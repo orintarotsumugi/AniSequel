@@ -326,7 +326,7 @@ class MainActivity : ComponentActivity() {
                     Surface(
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(immersiveDisplayInsets(themeSettings.immersive))
+                            .then(Modifier.immersiveDisplayInsets(themeSettings.immersive))
                     ) {
                         // Held on the themed background until the stored theme and
                         // lock state are in. This used to return an empty Surface,
