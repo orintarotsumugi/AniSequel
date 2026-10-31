@@ -309,7 +309,7 @@ private fun LazyListScope.favouriteStaffItems(
 }
 
 private fun LazyListScope.favouriteStudioItems(
-    studios: List<com.anisequel.data.model.FavouriteStudio>,
+    studios: List<com.anisequel.data.model.StudioNode>,
     onOpenStudio: (Int, String?) -> Unit
 ) {
     if (studios.isEmpty()) return

@@ -34,6 +34,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -267,7 +268,9 @@ fun UserProfileScreen(
     // The viewer's own arrangement of the Home tab. The editor writes; the page
     // behind it reads the same flow, so a toggle lands without a hand-off state.
     val layoutPreferences = remember(context) { ProfileLayoutPreferences(context) }
-    val profileLayout by layoutPreferences.layout.collectAsStateWithLifecycle()
+    val profileLayout by layoutPreferences.layout.collectAsState(
+        initial = com.anisequel.domain.profile.ProfileLayout()
+    )
     var layoutEditorOpen by rememberSaveable { mutableStateOf(false) }
     val layoutScope = rememberCoroutineScope()
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
