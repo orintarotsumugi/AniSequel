@@ -145,14 +145,29 @@ class UserOverviewQueryTest {
         }
     }
 
+    /**
+     * The characters row asks for a full page; the other four stay at twelve.
+     *
+     * A reader can pin up to fifty characters, and the profile grid draws every
+     * one it is given - asking for twelve cut a reader with more off mid-row, and
+     * the missing faces looked like a sync failure rather than a query cap. The
+     * four horizontal strips still show about four, so their extra edges would be
+     * image URLs parsed for art that never leaves the screen.
+     */
     @Test
-    fun `caps each favourites branch at twelve`() {
-        // AniList allows 25 and will send all of them. The rows show about four;
-        // the rest is image URLs parsed for art that never leaves the screen.
-        val perPage = Regex("""perPage:\s*(\d+)""").findAll(overview).map { it.groupValues[1] }.toList()
+    fun `asks for a full character page and caps the other favourites at twelve`() {
+        val perPage = Regex("""(anime|manga|characters|staff|studios)\(perPage:\s*(\d+)\)""")
+            .findAll(overview)
+            .associate { it.groupValues[1] to it.groupValues[2] }
 
-        assertEquals(5, perPage.size)
-        perPage.forEach { assertEquals("12", it) }
+        assertEquals(
+            setOf("anime", "manga", "characters", "staff", "studios"),
+            perPage.keys
+        )
+        assertEquals("50", perPage["characters"])
+        listOf("anime", "manga", "staff", "studios").forEach { branch ->
+            assertEquals("twelve is still the strip's budget: $branch", "12", perPage[branch])
+        }
     }
 
     @Test
