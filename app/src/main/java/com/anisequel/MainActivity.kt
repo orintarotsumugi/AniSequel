@@ -402,7 +402,12 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) immersiveEnabled?.let { window.applyImmersiveMode(it) }
     }
 
-    override fun onResume() {        super.onResume()
+    override fun onResume() {
+        super.onResume()
+        // Bars re-shown by an OEM while the app was backgrounded come back hidden:
+        // focus alone is not guaranteed on every device, and this is the documented
+        // moment to re-assert a window flag.
+        immersiveEnabled?.let { window.applyImmersiveMode(it) }
         updateControllerRef?.get()?.onAppResumed()
     }
 
