@@ -56,7 +56,14 @@ fun ArrivingCard(
             .testTag("arriving_card_${entry.mediaId}"),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            // The group, not the card type: an airing card and an upcoming card are
+            // the same card at the same cover height. The background is what tells
+            // the two groups apart, so the eye never has to compare layouts.
+            containerColor = if (entry.isAiring) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {

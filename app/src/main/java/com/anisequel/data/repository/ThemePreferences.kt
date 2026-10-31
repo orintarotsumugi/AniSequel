@@ -201,13 +201,14 @@ class ThemePreferences(context: Context) {
         val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
 
         /**
-         * Full screen by default: the status and navigation bars start hidden and
-         * come back on a swipe from the edge.
+         * Full screen: the status and navigation bars hidden, revealed by an edge
+         * swipe.
          *
-         * Stored rather than fixed because the bars still carry the clock and the
-         * gesture hint some readers rely on. Absent means *on* - this is the app's
-         * default presentation now, and an upgrade must not land on the old
-         * windowed one just because the key was never written.
+         * **Off by default.** Hiding the bars also zeroes every screen's
+         * `statusBarsPadding()`, so a top app bar sits flush against the screen
+         * edge - which reads as cramped on a device with no cutout, and as a bug on
+         * one that has. It is a choice the reader makes in Appearance, not the
+         * shape a fresh install lands in.
          */
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
 
@@ -279,12 +280,12 @@ class ThemePreferences(context: Context) {
         val animeThemeRevertDuration: Int = 300,
         val appBackgroundColor: String? = null,
         /**
-         * Hide the system bars, on by default.
+         * Hide the system bars, off by default.
          *
-         * See [Keys.IMMERSIVE_MODE]: the default is *true*, so a stored `false` is
-         * the only thing that turns the bars back on.
+         * See [Keys.IMMERSIVE_MODE]: an absent key means the bars stay, and only an
+         * explicit `true` - written by the switch - hides them.
          */
-        val immersive: Boolean = true,
+        val immersive: Boolean = false,
         /** Reading scale for every text style; see [setFontScale]. */
         val fontScale: Float = 1f,
         /** The imported font's file path, or null for the system face. */
@@ -345,9 +346,9 @@ class ThemePreferences(context: Context) {
             retainedTint = RetainedTint.fromStorage(preferences[Keys.ANIME_THEME_RETAINED_TINT]),
             animeThemeRevertDuration = preferences[Keys.ANIME_THEME_REVERT_DURATION] ?: 300,
             appBackgroundColor = preferences[Keys.APP_BACKGROUND_COLOR],
-            // `?: true`: absence is the new default, and only an explicit false -
-            // written by the switch - brings the bars back.
-            immersive = preferences[Keys.IMMERSIVE_MODE] ?: true,
+            // `?: false`: the bars are the default, and only an explicit true -
+            // written by the switch - hides them.
+            immersive = preferences[Keys.IMMERSIVE_MODE] ?: false,
             fontScale = preferences[Keys.FONT_SCALE] ?: 1f,
             customFontPath = preferences[Keys.CUSTOM_FONT_PATH],
             customFontName = preferences[Keys.CUSTOM_FONT_NAME],
@@ -674,7 +675,7 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.ANIME_THEME_RETAINED_TINT)
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
-            // Back to full screen, which is the default this app ships with.
+            // Back to the bars, which is the default this app ships with.
             // The reading font, size and title scroll are their own page's choices
             // and are reset there, not by "Reset appearance".
             preferences.remove(Keys.IMMERSIVE_MODE)

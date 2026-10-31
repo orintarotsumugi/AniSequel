@@ -98,6 +98,7 @@ internal suspend fun renderTierListImage(
     candidates: List<TierCandidate>,
     display: TierDisplay,
     targetWidth: Int = TIER_EXPORT_WIDTH_ULTRA,
+    titleOptions: TierExportTitleOptions = TierExportTitleOptions(),
     onProgress: suspend (Float) -> Unit = {}
 ): Bitmap? = withContext(Dispatchers.Default) {
     onProgress(0f)
@@ -106,7 +107,8 @@ internal suspend fun renderTierListImage(
         tiers = tiers,
         assignment = assignment,
         candidates = candidates,
-        display = display
+        display = display,
+        titleOptions = titleOptions
     ) ?: return@withContext null
     val layout = plan.layout
     onProgress(EXPORT_PROGRESS_LAYOUT)
@@ -139,7 +141,7 @@ internal suspend fun renderTierListImage(
         canvas.drawColor(EXPORT_BACKGROUND)
         canvas.scale(scale, scale)
 
-        drawHeading(canvas, layout.title, layout.subtitle, layout.width)
+        drawHeading(canvas, layout.title, layout.subtitle, layout.width, titleOptions)
         drawRows(canvas, layout.rows, layout.items, tiers)
         drawItems(
             context = context,
@@ -196,14 +198,16 @@ internal fun estimateTierExportSize(
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
     display: TierDisplay,
-    targetWidth: Int
+    targetWidth: Int,
+    titleOptions: TierExportTitleOptions = TierExportTitleOptions()
 ): TierExportSize? {
     val plan = planTierExport(
         listName = listName,
         tiers = tiers,
         assignment = assignment,
         candidates = candidates,
-        display = display
+        display = display,
+        titleOptions = titleOptions
     ) ?: return null
     val scale = exportScale(
         width = plan.layout.width,
@@ -243,7 +247,8 @@ private fun planTierExport(
     tiers: List<TierDefinition>,
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
-    display: TierDisplay
+    display: TierDisplay,
+    titleOptions: TierExportTitleOptions
 ): TierExportPlan? {
     if (assignment.isEmpty || tiers.isEmpty()) return null
 
@@ -267,7 +272,9 @@ private fun planTierExport(
         itemGap = 8f,
         rowGap = 10f,
         captionHeight = captionBandHeight,
-        headerHeight = 76f,
+        // The heading's own band, sized by the chosen type: a hidden title
+        // collapses to the page's top margin, a Large one reserves what it draws.
+        headerHeight = titleOptions.headerHeight,
         minRowHeight = 56f,
         minCanvasHeight = 480f
     )

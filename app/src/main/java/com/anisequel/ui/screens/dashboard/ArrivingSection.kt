@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +42,7 @@ import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveCountBadge
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -156,26 +158,96 @@ fun ArrivingSection(
                     onEntryClick = onEntryClick
                 )
             } else {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("arriving_lazy_row"),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(items = entries, key = { it.mediaId }) { entry ->
-                        ArrivingCard(
-                            entry = entry,
-                            onClick = { onEntryClick(entry) },
-                            modifier = Modifier.animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
-                        )
-                    }
+                // Releasing and announced rows used to share one unlabelled strip,
+                // so a card with a countdown pill and a card with a start date read
+                // as two different components in the same row. They are the same
+                // card at the same size, separated by their group's colour - which
+                // is the difference the reader needs, without a second card type.
+                val releasing = entries.filter { it.isAiring }
+                val upcoming = entries.filterNot { it.isAiring }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ArrivingGroup(
+                        label = "Airing now",
+                        entries = releasing,
+                        onEntryClick = onEntryClick
+                    )
+                    ArrivingGroup(
+                        label = "Upcoming",
+                        entries = upcoming,
+                        onEntryClick = onEntryClick
+                    )
                 }
             }
+        }
+    }
+}
+
+/**
+ * One labelled strip of [ArrivingCard]s.
+ *
+ * The label is a capsule keyed to the group's own colour, and it is the only
+ * thing that distinguishes the two groups: the cards below it are identical in
+ * size and layout, so a reader's eye follows the colour rather than re-learning a
+ * second card. Empty groups draw nothing.
+ */
+@Composable
+private fun ArrivingGroup(
+    label: String,
+    entries: List<ArrivingEntry>,
+    onEntryClick: (ArrivingEntry) -> Unit
+) {
+    if (entries.isEmpty()) return
+    val airing = entries.first().isAiring
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Surface(
+            shape = ExpressiveShapes.pill,
+            color = if (airing) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            }
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (airing) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+        Text(
+            text = entries.size.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(if (airing) "arriving_lazy_row_airing" else "arriving_lazy_row_upcoming"),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        items(items = entries, key = { it.mediaId }) { entry ->
+            ArrivingCard(
+                entry = entry,
+                onClick = { onEntryClick(entry) },
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                )
+            )
         }
     }
 }

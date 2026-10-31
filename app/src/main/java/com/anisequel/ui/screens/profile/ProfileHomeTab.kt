@@ -72,7 +72,25 @@ fun ProfileHomeTab(
      * created here would be garbage collected with it and the reader would come
      * back to the top of their own favourites.
      */
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    /**
+     * The reader's arrangement of this page.
+     *
+     * Defaulted so every existing caller keeps the shipped order, and passed in by
+     * the screen once the profile-layout preference is wired: the tab draws what it
+     * is given rather than reading a preference of its own, which is what keeps the
+     * editor's preview and the page from disagreeing.
+     */
+    layout: com.anisequel.domain.profile.ProfileLayout =
+        com.anisequel.domain.profile.ProfileLayout(),
+    /**
+     * Opens the layout editor, or null when this page is not the viewer's own.
+     *
+     * The control lives on the header because that is the only element the reader
+     * cannot reorder away - a palette button inside a hideable section would vanish
+     * with the section it was meant to bring back.
+     */
+    onEditLayout: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -95,119 +113,146 @@ fun ProfileHomeTab(
         state = listState
     ) {
         item(key = "header") {
-            ProfileHeaderCard(
-                state = state,
-                modifier = Modifier.testTag("profile_header_card")
-            )
-        }
-
-        item(key = "about") {
-            if (state.about != null) {
-                AboutCard(about = state.about, mediaCovers = mediaCovers)
-            } else {
-                NoBioNote()
-            }
-        }
-
-        if (state.favouriteAnime.isNotEmpty()) {
-            item(key = "favourite_anime") {
-                ProfileSectionHeader(
-                    title = "Favourite Anime",
-                    icon = AppVectorIcons.FavouriteAnime,
-                    trailing = "${state.favouriteAnime.size}",
-                    modifier = Modifier.padding(horizontal = 16.dp)
+            Box {
+                ProfileHeaderCard(
+                    state = state,
+                    modifier = Modifier.testTag("profile_header_card")
                 )
-            }
-            item(key = "favourite_anime_row") {
-                FavouriteMediaRow(
-                    items = state.favouriteAnime,
-                    onOpen = onOpenDetail
-                )
-            }
-        }
-
-        if (state.favouriteManga.isNotEmpty()) {
-            item(key = "favourite_manga") {
-                ProfileSectionHeader(
-                    title = "Favourite Manga",
-                    icon = AppVectorIcons.FavouriteManga,
-                    trailing = "${state.favouriteManga.size}",
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            item(key = "favourite_manga_row") {
-                FavouriteMediaRow(
-                    items = state.favouriteManga,
-                    onOpen = onOpenDetail
-                )
-            }
-        }
-
-        // Characters and staff are two different bonds, so they get two headings.
-        //
-        // They were merged into one "Favourite People" section for density - a
-        // profile with twelve characters and no staff spent one heading and one row
-        // instead of two of each. That read AniList's two connections as one list of
-        // people, and they are not: a character is a figure the account likes, a
-        // staff member is a professional whose work they follow, and the caption
-        // under each portrait already tells the two apart. The app keeps them as two
-        // lists, so the split costs one heading on the profiles that pin both.
-        if (state.favouriteCharacters.isNotEmpty()) {
-            item(key = "favourite_characters") {
-                ProfileSectionHeader(
-                    title = "Favourite Characters",
-                    icon = AppVectorIcons.FavouriteCharacters,
-                    trailing = "${state.favouriteCharacters.size}",
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            item(key = "favourite_characters_row") {
-                FavouriteCharacterRow(
-                    characters = state.favouriteCharacters,
-                    onOpen = { character ->
-                        val open = onOpenCharacter
-                        if (open != null) open(character.id)
-                        else character.siteUrl?.let { openExternalUrl(context, it) }
+                if (onEditLayout != null) {
+                    IconButton(
+                        onClick = onEditLayout,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 6.dp, end = 6.dp)
+                            .testTag("profile_layout_edit")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Tune,
+                            contentDescription = "Edit profile layout",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                )
+                }
             }
         }
 
-        if (state.favouriteStaff.isNotEmpty()) {
-            item(key = "favourite_staff") {
-                ProfileSectionHeader(
-                    title = "Favourite Staff",
-                    icon = AppVectorIcons.FavouriteStaff,
-                    trailing = "${state.favouriteStaff.size}",
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            item(key = "favourite_staff_row") {
-                FavouriteStaffRow(
-                    staff = state.favouriteStaff,
-                    onOpen = { member ->
-                        val open = onOpenStaff
-                        if (open != null) open(member.id)
-                        else member.siteUrl?.let { openExternalUrl(context, it) }
+        // The stored order, minus hidden sections. The header is not in it: the
+        // page's identity is not a block the reader can reorder away.
+        layout.visibleSections.forEach { section ->
+            when (section) {
+                com.anisequel.domain.profile.ProfileSection.ABOUT -> item(key = "about") {
+                    if (state.about != null) {
+                        AboutCard(about = state.about, mediaCovers = mediaCovers)
+                    } else {
+                        NoBioNote()
                     }
-                )
-            }
-        }
+                }
 
-        if (state.favouriteStudios.isNotEmpty()) {
-            item(key = "favourite_studios") {
-                ProfileSectionHeader(
-                    title = "Favourite Studios",
-                    icon = AppVectorIcons.FavouriteStudios,
-                    trailing = "${state.favouriteStudios.size}",
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            item(key = "favourite_studio_row") {
-                FavouriteStudioRow(
-                    studios = state.favouriteStudios,
-                    onOpenStudio = onOpenStudio
-                )
+                com.anisequel.domain.profile.ProfileSection.FAVOURITE_ANIME -> {
+                    if (state.favouriteAnime.isNotEmpty()) {
+                        item(key = "favourite_anime") {
+                            ProfileSectionHeader(
+                                title = "Favourite Anime",
+                                icon = AppVectorIcons.FavouriteAnime,
+                                trailing = "${state.favouriteAnime.size}",
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        item(key = "favourite_anime_row") {
+                            FavouriteMediaRow(
+                                items = state.favouriteAnime,
+                                onOpen = onOpenDetail
+                            )
+                        }
+                    }
+                }
+
+                com.anisequel.domain.profile.ProfileSection.FAVOURITE_MANGA -> {
+                    if (state.favouriteManga.isNotEmpty()) {
+                        item(key = "favourite_manga") {
+                            ProfileSectionHeader(
+                                title = "Favourite Manga",
+                                icon = AppVectorIcons.FavouriteManga,
+                                trailing = "${state.favouriteManga.size}",
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        item(key = "favourite_manga_row") {
+                            FavouriteMediaRow(
+                                items = state.favouriteManga,
+                                onOpen = onOpenDetail
+                            )
+                        }
+                    }
+                }
+
+                // Characters and staff are two different bonds, so they get two
+                // headings - see the note this block used to carry in place.
+                com.anisequel.domain.profile.ProfileSection.FAVOURITE_CHARACTERS -> {
+                    if (state.favouriteCharacters.isNotEmpty()) {
+                        item(key = "favourite_characters") {
+                            ProfileSectionHeader(
+                                title = "Favourite Characters",
+                                icon = AppVectorIcons.FavouriteCharacters,
+                                trailing = "${state.favouriteCharacters.size}",
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        item(key = "favourite_characters_row") {
+                            FavouriteCharacterRow(
+                                characters = state.favouriteCharacters,
+                                columns = if (layout.charactersTwoColumn) 2 else 1,
+                                onOpen = { character ->
+                                    val open = onOpenCharacter
+                                    if (open != null) open(character.id)
+                                    else character.siteUrl?.let { openExternalUrl(context, it) }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                com.anisequel.domain.profile.ProfileSection.FAVOURITE_STAFF -> {
+                    if (state.favouriteStaff.isNotEmpty()) {
+                        item(key = "favourite_staff") {
+                            ProfileSectionHeader(
+                                title = "Favourite Staff",
+                                icon = AppVectorIcons.FavouriteStaff,
+                                trailing = "${state.favouriteStaff.size}",
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        item(key = "favourite_staff_row") {
+                            FavouriteStaffRow(
+                                staff = state.favouriteStaff,
+                                onOpen = { member ->
+                                    val open = onOpenStaff
+                                    if (open != null) open(member.id)
+                                    else member.siteUrl?.let { openExternalUrl(context, it) }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                com.anisequel.domain.profile.ProfileSection.FAVOURITE_STUDIOS -> {
+                    if (state.favouriteStudios.isNotEmpty()) {
+                        item(key = "favourite_studios") {
+                            ProfileSectionHeader(
+                                title = "Favourite Studios",
+                                icon = AppVectorIcons.FavouriteStudios,
+                                trailing = "${state.favouriteStudios.size}",
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        item(key = "favourite_studio_row") {
+                            FavouriteStudioRow(
+                                studios = state.favouriteStudios,
+                                onOpenStudio = onOpenStudio
+                            )
+                        }
+                    }
+                }
             }
         }
 

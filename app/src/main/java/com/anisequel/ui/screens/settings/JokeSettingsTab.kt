@@ -248,12 +248,14 @@ private fun TextEffectCard(
 }
 
 /**
- * Who the pill says it is, and the stamp beside the name.
+ * Who the pill says it is, the stamp beside the name, and how much the pill shows.
  *
  * The toast used to hard-code "Ani-chan" and a fixed sparkle. Both are the app's
  * voice rather than a law - the line arrives on the reader's own phone - so they
- * are editable here. The writes are debounced: a name is typed one character at a
- * time and every keystroke does not need its own disk round trip.
+ * are editable here. The fields stay editable while the master switch is off, like
+ * the preview button: a reader auditioning the pill should not have to enable a
+ * feature they are still deciding about. Writes are debounced, and compared after
+ * trimming, so typing a trailing space does not fight the stored value.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -266,20 +268,20 @@ private fun PersonaCard(
     var stamp by remember(settings.stamp) { mutableStateOf(settings.stamp) }
 
     LaunchedEffect(name) {
-        if (name == settings.speakerName) return@LaunchedEffect
+        if (name.trim() == settings.speakerName.trim()) return@LaunchedEffect
         delay(450)
         preferences.setSpeakerName(name)
     }
     LaunchedEffect(stamp) {
-        if (stamp == settings.stamp) return@LaunchedEffect
+        if (stamp.trim() == settings.stamp.trim()) return@LaunchedEffect
         delay(450)
         preferences.setStamp(stamp)
     }
 
     SectionCard(
-        title = "Name and stamp",
+        title = "Name, stamp and size",
         icon = AppVectorIcons.EditEntry,
-        subtitle = "Who the pill speaks as, and the mark beside it"
+        subtitle = "Who the pill speaks as, and how much of it shows"
     ) {
         OutlinedTextField(
             value = name,
@@ -289,7 +291,6 @@ private fun PersonaCard(
             label = { Text("Name") },
             placeholder = { Text(DEFAULT_SPEAKER_NAME) },
             singleLine = true,
-            enabled = settings.enabled,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("joke_speaker_name")
@@ -311,7 +312,7 @@ private fun PersonaCard(
                 JokeChoiceChip(
                     label = choice,
                     selected = settings.stamp == choice,
-                    enabled = settings.enabled,
+                    enabled = true,
                     onClick = {
                         stamp = choice
                         scope.launch { preferences.setStamp(choice) }
@@ -330,7 +331,6 @@ private fun PersonaCard(
             label = { Text("Or type your own") },
             placeholder = { Text(DEFAULT_STAMP) },
             singleLine = true,
-            enabled = settings.enabled,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("joke_stamp_custom")
@@ -341,6 +341,16 @@ private fun PersonaCard(
                 "and appear on every line. Preview a joke to see them.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        SwitchRow(
+            title = "Compact pill",
+            subtitle = "The line and the heart only - no speaker line, no caption.",
+            checked = settings.compact,
+            onCheckedChange = { compact ->
+                scope.launch { preferences.setCompact(compact) }
+            },
+            modifier = Modifier.testTag("joke_compact_switch")
         )
     }
 }

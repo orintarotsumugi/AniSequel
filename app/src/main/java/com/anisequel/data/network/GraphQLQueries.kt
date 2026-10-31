@@ -1648,6 +1648,31 @@ object GraphQLQueries {
      * The response is the created reply, which is exactly the shape the sheet
      * appends to its list, so a successful post needs no refetch.
      */
+    /**
+     * Sends a direct message to `recipientId`.
+     *
+     * `SaveActivityMessage`, **not** [SAVE_ACTIVITY_REPLY]: the reply mutation
+     * posts a comment on an activity, where this one delivers a message to one
+     * account. `private` is the composer's public/private choice - AniList treats a
+     * private message as one between the two accounts rather than one that also
+     * lands on the sender's profile stream.
+     */
+    val SAVE_ACTIVITY_MESSAGE = """
+        mutation SaveActivityMessage(
+            ${'$'}recipientId: Int,
+            ${'$'}message: String,
+            ${'$'}private: Boolean
+        ) {
+          SaveActivityMessage(
+              recipientId: ${'$'}recipientId,
+              message: ${'$'}message,
+              private: ${'$'}private
+          ) {
+            id
+          }
+        }
+    """.trimIndent()
+
     val SAVE_ACTIVITY_REPLY = """
         mutation SaveActivityReply(${'$'}activityId: Int, ${'$'}text: String) {
           SaveActivityReply(activityId: ${'$'}activityId, text: ${'$'}text) {

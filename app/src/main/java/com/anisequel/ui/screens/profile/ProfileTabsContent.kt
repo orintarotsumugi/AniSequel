@@ -185,6 +185,11 @@ internal fun ProfileTabsContent(
     overviewViewModel: UserOverviewViewModel,
     /** Whether the list tab is offered at all. See [profileTabs]. */
     isOwnProfile: Boolean,
+    /** The viewer's own arrangement of the Home tab; shipped page by default. */
+    profileLayout: com.anisequel.domain.profile.ProfileLayout =
+        com.anisequel.domain.profile.ProfileLayout(),
+    /** Opens the layout editor; null on somebody else's page. */
+    onEditProfileLayout: (() -> Unit)? = null,
     activityViewModel: UserActivityViewModel,
     followingViewModel: UserActivityViewModel,
     messagesViewModel: UserMessagesViewModel,
@@ -411,7 +416,9 @@ internal fun ProfileTabsContent(
                         onOpenCharacter = onOpenCharacter,
                         onOpenStaff = onOpenStaff,
                         listState = homeListState,
-                        mediaCovers = mediaCovers
+                        mediaCovers = mediaCovers,
+                        layout = profileLayout,
+                        onEditLayout = onEditProfileLayout
                     )
                 }
             }
