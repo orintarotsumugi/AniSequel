@@ -6,6 +6,7 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.view.Window
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -264,17 +266,14 @@ class MainActivity : ComponentActivity() {
                 )
             )
 
-            // Full screen is the app's default presentation, so the bars are hidden
-            // from the first frame the choice is known - not when the switch is first
-            // visited. Guarded on `isLoaded` because the seeded settings above cannot
-            // tell "the reader chose windowed" from "nothing has been read yet", and
-            // hiding on the seed would re-hide the bars for someone who turned them
-            // back on.
-            LaunchedEffect(themeSettings.isLoaded, themeSettings.immersive) {
-                if (!themeSettings.isLoaded) return@LaunchedEffect
-                immersiveEnabled = themeSettings.immersive
-                window.applyImmersiveMode(themeSettings.immersive)
-            }
+            // Full screen is the app's default presentation - applied by its own
+            // helper so this method's branching stays about the app's screens.
+            ImmersiveModeEffect(
+                window = window,
+                isLoaded = themeSettings.isLoaded,
+                enabled = themeSettings.immersive,
+                onChoice = { immersiveEnabled = it }
+            )
 
             // `null` until the stored choice has been read, which is why the
             // initial value is not `false`: the two are different answers, and
@@ -324,23 +323,7 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (themeSettings.immersive) {
-                                // The bars being hidden also zeroes the screens'
-                                // `statusBarsPadding()`, which is what lets the page
-                                // own the whole display - but on a device with a
-                                // camera cutout that padding was the only thing
-                                // keeping a top app bar out from under the notch.
-                                // Padding by the cutout at the root restores exactly
-                                // that safety area and nothing else; the bars, when
-                                // the reader swipes them back, draw over it as usual.
-                                Modifier.windowInsetsPadding(
-                                    WindowInsets.displayCutout
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
+                        .then(immersiveDisplayInsets(themeSettings.immersive))
                 ) {
                     // Held on the themed background until the stored theme and
                     // lock state are in. This used to return an empty Surface,
@@ -571,3 +554,42 @@ class MainActivity : ComponentActivity() {
 internal class AppLockStateViewModel : ViewModel() {
     var unlockedSinceLaunch: Boolean = false
 }
+
+/**
+ * Applies the full-screen choice once it is known.
+ *
+ * Guarded on `isLoaded` because the seeded settings cannot tell "the reader chose
+ * windowed" from "nothing has been read yet"; hiding on the seed would re-hide the
+ * bars for someone who turned them back on. Extracted from `onCreate` because the
+ * choice is a window flag rather than a screen - the composition root does not need
+ * one more branch.
+ */
+@Composable
+private fun ImmersiveModeEffect(
+    window: Window,
+    isLoaded: Boolean,
+    enabled: Boolean,
+    onChoice: (Boolean) -> Unit
+) {
+    LaunchedEffect(isLoaded, enabled) {
+        if (!isLoaded) return@LaunchedEffect
+        onChoice(enabled)
+        window.applyImmersiveMode(enabled)
+    }
+}
+
+/**
+ * Pads the app's root by the display cutout while the system bars are hidden.
+ *
+ * The bars being hidden also zeroes the screens' `statusBarsPadding()`, which is
+ * what lets a page own the whole display - but on a cutout device that padding was
+ * the only thing keeping a top app bar out from under the camera. Padding by the
+ * cutout restores exactly that safety area and nothing else; the bars, when the
+ * reader swipes them back, draw over it as usual.
+ */
+private fun immersiveDisplayInsets(immersive: Boolean): Modifier =
+    if (immersive) {
+        Modifier.windowInsetsPadding(WindowInsets.displayCutout)
+    } else {
+        Modifier
+    }

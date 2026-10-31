@@ -590,10 +590,10 @@ private fun JokeToastBody(
                 targetState = joke,
                 transitionSpec = {
                     val direction = if (fromBottom) 1 else -1
-                    (slideInVertically(
+                    slideInVertically(
                         animationSpec = ExpressiveMotion.FastSpatialOffset
                     ) { height -> direction * height / 2 } +
-                        fadeIn(animationSpec = ExpressiveMotion.FastEffects)) togetherWith
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
                         fadeOut(animationSpec = ExpressiveMotion.FastEffects)
                 },
                 label = "joke_line"
