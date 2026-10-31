@@ -253,4 +253,11 @@ expensive way. The short version:
 
 ## License
 
-No license file has been added yet.
+**MIT** — see [LICENSE](LICENSE).
+
+Use the code, fork it, ship it, or build the app into something of your own,
+commercially or not. The one condition is **attribution**: keep the copyright
+and licence notice with any copy or substantial portion of the code, and credit
+the original author — **Rintarotsumugi**
+([github.com/orintarotsumugi](https://github.com/orintarotsumugi)) — wherever
+this code, or an app or service built from it, is distributed or published.
