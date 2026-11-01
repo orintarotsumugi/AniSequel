@@ -22,6 +22,38 @@ class CommentWindowQueryTest {
     fun `the window document fragments both feed members the sheet can open`() {
         assertTrue(window.contains("... on ListActivity"))
         assertTrue("a text post must not answer an empty thread", window.contains("... on TextActivity"))
+        // A direct message is a MessageActivity, and the inbox opens the same sheet
+        // on it. `Activity(id:)` returns `ActivityUnion`, so a member the document
+        // does not fragment answers an object with no selected fields - a message
+        // with replies on it, shown as an empty thread, with nothing saying why.
+        assertTrue(
+            "a message must not answer an empty thread either",
+            window.contains("... on MessageActivity")
+        )
+    }
+
+    /**
+     * The three members, in both reads.
+     *
+     * The whole-thread document and the windowed one are separate strings, and a
+     * fragment added to one of them is the kind of change that leaves the other
+     * behind - which shows up as the *fallback* path (chat view off) answering
+     * differently from the default one on the same message.
+     */
+    @Test
+    fun `every thread read fragments every member the sheet can be opened on`() {
+        val documents = listOf(
+            "the window" to window,
+            "the whole thread" to GraphQLQueries.GET_ACTIVITY_REPLIES
+        )
+        documents.forEach { (name, document) ->
+            listOf("ListActivity", "TextActivity", "MessageActivity").forEach { member ->
+                assertTrue(
+                    "$name must fragment $member or answer its id with an empty object",
+                    document.contains("... on $member")
+                )
+            }
+        }
     }
 
     @Test

@@ -193,8 +193,19 @@ class CommentThreadStore(
         val unseenNewComments: Int = 0,
         /** When the thread was last checked for new comments, epoch millis. */
         val lastCheckedAtMillis: Long = 0L,
-        /** Why the last Older or background check failed, without hiding any rows. */
-        val windowError: String? = null
+        /** Why the last Older page failed to arrive, without hiding any rows. */
+        val windowError: String? = null,
+        /**
+         * Why the last background check failed, without hiding any rows.
+         *
+         * Kept apart from [windowError] because the two need different retries: an
+         * Older page that did not arrive is retried by asking for that page again,
+         * while a check that did not arrive is retried by re-reading the newest end.
+         * One field for both made the banner under a failed refresh run the Older
+         * action, which walked the thread backwards instead of fetching the
+         * comments that had not come, and the reader saw nothing happen.
+         */
+        val refreshError: String? = null
     )
 
     private val _state = MutableStateFlow<CommentsState?>(null)
@@ -296,10 +307,14 @@ class CommentThreadStore(
                         replies = latest.replies.filterNot { it.id == reply.id } + reply,
                         // The reader's own comment is the newest row in the thread,
                         // so the window takes it in rather than counting it as
-                        // something that arrived unasked.
+                        // something that arrived unasked. One row, because that is
+                        // all that arrived: growing the window to the whole fetched
+                        // list also moved every row a reader who had scrolled up was
+                        // reading, which is the thing the "N new" pill exists to
+                        // avoid doing to them.
                         replyCount = latest.replyCount + 1,
-                        shownRows = if (latest.isChatView) {
-                            maxOf(latest.shownRows, latest.replies.size + 1)
+                        shownRows = if (latest.isChatView && latest.shownRows > 0) {
+                            latest.shownRows + 1
                         } else {
                             latest.shownRows
                         },
@@ -336,28 +351,42 @@ class CommentThreadStore(
         val reply = current.replies[index]
         val wasLiked = reply.isLiked ?: return
 
-        val optimistic = reply.copy(
-            isLiked = !wasLiked,
-            likeCount = ((reply.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
-        )
-
         /**
-         * Writes [replacement] and moves *this reply's* in-flight marker only.
+         * Writes *this reply's like state* onto whichever row is on screen now.
          *
-         * It used to replace the whole pending set with the snapshot taken before
-         * the tap. Two hearts tapped in quick succession therefore raced: the
-         * first answer was written with a set that predated the second tap, which
-         * cleared the second reply's marker while its request was still out - and
-         * a second tap on it was then accepted, toggling the server twice for one
-         * visible heart. Removing and adding one id, on the live state, is what
-         * makes the markers independent.
+         * It used to replace the row with an object built from the snapshot taken
+         * before the tap. That is the whole comment, not just the heart: a background
+         * check that refreshed the thread while the request was out - the author
+         * edited it, somebody else liked it - had its answer written back over by the
+         * stale copy, so a tap on a heart could restore text that no longer existed
+         * and a count three likes short. Two fields, applied to the live row, is the
+         * whole job.
+         *
+         * It also moves *this reply's* in-flight marker only. Replacing the whole
+         * pending set with the pre-tap snapshot made two hearts tapped in quick
+         * succession race: the first answer was written with a set that predated the
+         * second tap, which cleared the second reply's marker while its request was
+         * still out - and a second tap on it was then accepted, toggling the server
+         * twice for one visible heart.
          */
-        fun write(replacement: ActivityReply, pending: Boolean) {
+        fun write(liked: Boolean, likeCount: Int, pending: Boolean) {
             val live = _state.value ?: return
             val at = live.replies.indexOfFirst { it.id == replyId }
-            if (at < 0) return
+            if (at < 0) {
+                // The comment is gone - deleted, or a refresh that dropped it - so
+                // there is no row to write. The marker still has to go: an id left in
+                // the pending set reads as a request in flight forever, and a comment
+                // that comes back with the same id would refuse its first tap.
+                if (!pending && replyId in live.pendingReplyLikes) {
+                    _state.value = live.copy(pendingReplyLikes = live.pendingReplyLikes - replyId)
+                }
+                return
+            }
+            val row = live.replies[at]
             _state.value = live.copy(
-                replies = live.replies.toMutableList().also { it[at] = replacement },
+                replies = live.replies.toMutableList().also {
+                    it[at] = row.copy(isLiked = liked, likeCount = likeCount)
+                },
                 pendingReplyLikes = if (pending) {
                     live.pendingReplyLikes + replyId
                 } else {
@@ -366,18 +395,18 @@ class CommentThreadStore(
             )
         }
 
-        write(optimistic, pending = true)
+        // The optimistic count is the tapped row's own count, moved by one: the row
+        // was just read from the live state, so at this moment they are the same row.
+        val optimisticCount = ((reply.likeCount ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+        write(!wasLiked, optimisticCount, pending = true)
 
         scope.launch {
             repositoryResult { repository.toggleActivityReplyLike(replyId) }.fold(
                 onSuccess = { result ->
-                    write(
-                        optimistic.copy(isLiked = result.isLiked, likeCount = result.likeCount),
-                        pending = false
-                    )
+                    write(result.isLiked, result.likeCount, pending = false)
                 },
                 onFailure = {
-                    write(reply, pending = false)
+                    write(wasLiked, reply.likeCount ?: 0, pending = false)
                 }
             )
         }

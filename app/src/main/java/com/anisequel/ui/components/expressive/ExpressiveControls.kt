@@ -172,7 +172,16 @@ fun ExpressiveTabBar(
 }
 
 /**
- * A segmented bar styled with MaterialShapes polygons and vector icons with playful bounciness.
+ * The app's segmented bar: one equal-weight strip, vector glyphs, and a press
+ * spring on each segment.
+ *
+ * The claim here used to be that it is "styled with MaterialShapes polygons". It
+ * is not - it rounds each segment with `RoundedCornerShape`, and that distinction
+ * is the whole reason. `RoundedPolygon.toShape()` is authored on a square
+ * perimeter and stretched onto whatever `Size` it is given, so handing a segment's
+ * wide, short cell a `MaterialShapes.Pill` outlines a 38dp-tall ellipse with a
+ * polygon's worth of corners in it (AGENTS.md §3, and `ExpressiveShapesTest`).
+ * Anyone tempted to put the expressive shapes back should read that first.
  */
 @Composable
 fun ExpressivePolygonSegmentedBar(

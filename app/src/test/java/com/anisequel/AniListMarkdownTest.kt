@@ -5,6 +5,8 @@ import com.anisequel.ui.components.markdown.InlineToken
 import com.anisequel.ui.components.markdown.MAX_RICH_IMAGE_WIDTH_DP
 import com.anisequel.ui.components.markdown.MarkdownNode
 import com.anisequel.ui.components.markdown.clampedImageWidthDp
+import com.anisequel.ui.components.markdown.clampedImageWidthPercent
+import com.anisequel.ui.components.markdown.containsEmbeddedImage
 import com.anisequel.ui.components.markdown.tryParseTable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1047,10 +1049,65 @@ class AniListMarkdownTest {
     @Test
     fun `an ordinary image width is preserved`() {
         assertEquals(220, clampedImageWidthDp("220"))
-        assertEquals(0, clampedImageWidthDp("0"))
+        // `img0(...)` is not a narrow image, it is no image: 0 used to clamp to
+        // itself and the renderer asked Compose for a 0dp box, so the embed was
+        // invisible in the posted comment while the composer's preview had shown
+        // it. An unreadable size degrades to the full width, as the KDoc promises,
+        // and a size of nothing is unreadable.
+        assertNull("zero is not a width", clampedImageWidthDp("0"))
+        assertNull("a negative is not a width either", clampedImageWidthDp("-20"))
         assertNull("a size-less image fills the width", clampedImageWidthDp(null))
         assertNull("a percentage is the renderer's job", clampedImageWidthDp("50%"))
     }
+
+    @Test
+    fun `a percentage width is a fraction of the column, and none is the whole column`() {
+        assertEquals(0.5f, clampedImageWidthPercent("50%"))
+        assertEquals(
+            "a share over the column cannot be drawn past it",
+            1f,
+            clampedImageWidthPercent("150%")
+        )
+        assertNull("an empty percent is no image, not a sliver", clampedImageWidthPercent("0%"))
+        assertNull("pixels are the other helper's job", clampedImageWidthPercent("220"))
+        assertNull(clampedImageWidthPercent(null))
+    }
+
+    /**
+     * A server-drawn SVG banner is an image, on its own line.
+     *
+     * `coil-svg` is registered for exactly this file, `CentredBioImageTest` proves the
+     * same URL renders inside `img100%(…)`, and the extension list these three patterns
+     * share left `svg` out - so the bare line, which is the form AniList's own editor
+     * writes, stayed a blue underline.
+     */
+    @Test
+    fun `a bare svg line is an image and not a link`() {
+        val nodes = AniListMarkdownParser.parse("https://static.anilist.co/card.svg")
+        assertTrue(
+            "expected an ImageBlock, got ${nodes.map { it::class.simpleName }}",
+            nodes.singleOrNull() is MarkdownNode.ImageBlock
+        )
+    }
+
+    /**
+     * An image inside a link is still an image.
+     *
+     * `[![cover](a.gif)](target)` nests the image token inside the link, and the
+     * paragraph only looked at top-level tokens - so a banner bio's linked GIF drew
+     * the word "Image", in the expanded render as much as the collapsed one.
+     */
+    @Test
+    fun `a linked image mid-paragraph counts as an embedded image`() {
+        val nodes = AniListMarkdownParser.parse("look: [![cover](https://x/a.gif)](https://x/t)")
+        val paragraph = nodes.singleOrNull() as? MarkdownNode.Paragraph
+        assertNotNull("the line should still parse as a paragraph", paragraph)
+        assertTrue(
+            "the image is one level down, inside the link",
+            paragraph!!.inlines.containsEmbeddedImage()
+        )
+    }
+
 
     /**
      * The parse cache, proved by identity rather than by timing.
@@ -1122,4 +1179,34 @@ class AniListMarkdownTest {
         nodes.filterIsInstance<MarkdownNode.Paragraph>()
             .flatMap { paragraph -> paragraph.inlines.filterIsInstance<InlineToken.Plain>() }
             .joinToString("") { it.text }
+
+    /**
+     * What a reader actually hides behind a spoiler: a picture.
+     *
+     * The block used to tokenise the payload as inline text, so the revealed
+     * spoiler drew `img(url)` or the word "Image" where the reveal was supposed to
+     * be - the annotated string has nowhere to put a bitmap. The payload is now
+     * re-parsed as blocks, and only when it really holds an image: the text case
+     * has to keep the single `Text` it always had, so a spoiler of words does not
+     * pay for a second parse or change shape.
+     */
+    @Test
+    fun `a spoiler whose payload is an image carries the image block`() {
+        val image = AniListMarkdownParser.parse("~!img(https://x/a.gif)!~").singleOrNull()
+            as? MarkdownNode.SpoilerBlock
+        assertNotNull("the line should parse as a spoiler block", image)
+        assertTrue(
+            "the payload has to reach the image renderer",
+            image!!.blocks.any { it is MarkdownNode.ImageBlock }
+        )
+
+        val words = AniListMarkdownParser.parse("~!the villain survives!~").singleOrNull()
+            as? MarkdownNode.SpoilerBlock
+        assertNotNull(words)
+        assertTrue(
+            "a spoiler of words stays exactly the text it was",
+            words!!.blocks.isEmpty() && words.inlines.isNotEmpty()
+        )
+    }
+
 }

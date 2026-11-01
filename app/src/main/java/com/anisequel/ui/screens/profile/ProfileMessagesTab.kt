@@ -48,6 +48,7 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -123,6 +124,15 @@ fun ProfileMessagesTab(
      * tap lands rather than waiting on a lookup it would have to do anyway.
      */
     onOpenMessage: (MessageNode) -> Unit,
+    /**
+     * Opens the comment thread on one message.
+     *
+     * A direct message is a `MessageActivity`, and AniList gives it replies the way
+     * it gives any other activity one - so this is the same sheet the Activity tab's
+     * comment button opens. The row travels with it for the same reason
+     * [onOpenMessage]'s does: it carries the reply count the thread is aimed with.
+     */
+    onOpenComments: (MessageNode) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     /**
@@ -224,6 +234,7 @@ fun ProfileMessagesTab(
                         nowEpochSecond = nowEpochSecond,
                         onOpenUser = onOpenUser,
                         onOpenMessage = onOpenMessage,
+                        onOpenComments = onOpenComments,
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)
                             .fillMaxWidth()
@@ -345,6 +356,7 @@ private fun MessageCard(
     nowEpochSecond: Long,
     onOpenUser: (FollowUser) -> Unit,
     onOpenMessage: (MessageNode) -> Unit,
+    onOpenComments: (MessageNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val body = message.message ?: return
@@ -414,7 +426,9 @@ private fun MessageCard(
             MessageFooter(
                 sent = sent,
                 isPrivate = message.isPrivate == true,
-                siteUrl = message.siteUrl
+                siteUrl = message.siteUrl,
+                replyCount = message.replyCount ?: 0,
+                onOpenComments = { onOpenComments(message) }
             )
         }
     }
@@ -512,13 +526,21 @@ private fun MessageExpandToggle(
 
 /**
  * The chip row under the body: the direction again, the privacy flag when AniList
- * says the message was private, and the link out to the site.
+ * says the message was private, the comment count, and the link out to the site.
+ *
+ * The count is an action, not a label. A `MessageActivity` carries replies like any
+ * other activity, and the feed's cards have always offered them; the inbox did not,
+ * so a conversation could be read here but commented on only by leaving for the
+ * site. It draws even at zero, exactly as [ProfileActivityCard]'s does, because the
+ * control that opens an empty thread is the control that lets you start one.
  */
 @Composable
 private fun MessageFooter(
     sent: Boolean,
     isPrivate: Boolean,
     siteUrl: String?,
+    replyCount: Int,
+    onOpenComments: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -541,6 +563,15 @@ private fun MessageFooter(
                 label = "Private"
             )
         }
+        EngagementAction(
+            icon = AppVectorIcons.ActivityReplies,
+            count = replyCount,
+            active = false,
+            enabled = true,
+            contentDescription = "Comments",
+            onClick = onOpenComments,
+            modifier = Modifier.testTag("message_comments_button")
+        )
         Spacer(modifier = Modifier.weight(1f))
         // Only when the row is a real AniList activity. The demo's
         // fixtures carry no URL, and a made-up one would open an

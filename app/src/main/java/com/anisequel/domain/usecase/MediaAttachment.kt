@@ -115,9 +115,35 @@ object MediaAttachment {
      * parser matches it only when it is the whole line - which is why inserts go
      * through `insertBlock` rather than being dropped into a sentence.
      */
-    fun embedMarkdown(url: String, width: String? = null): String {
+    /**
+     * How the embed sits in the comment: on its own, inside a centred span, or
+     * behind a spoiler's lid.
+     *
+     * All three are markup the site's own editor writes and this app's parser
+     * renders, which is the rule every control in the composer is held to - a
+     * marker the parser does not understand would post as a line of literal
+     * markup in front of everybody.
+     */
+    enum class EmbedFraming { Plain, Centred, Spoiler }
+
+    fun embedMarkdown(
+        url: String,
+        width: String? = null,
+        framing: EmbedFraming = EmbedFraming.Plain
+    ): String {
         val suffix = width?.takeIf { WIDTH_PATTERNS.any { pattern -> pattern.matches(it) } }
-        return if (suffix == null) "img($url)" else "img$suffix($url)"
+        val image = if (suffix == null) "img($url)" else "img$suffix($url)"
+        return when (framing) {
+            EmbedFraming.Plain -> image
+            // The centred span is a block of its own, fences on lines of their own:
+            // `~~~img(...)~~~` on one line is not what the parser matches, and the
+            // Centre control on the format bar already writes it this way.
+            EmbedFraming.Centred -> "~~~\n$image\n~~~"
+            // The one-line form, because the block spoiler is matched against a
+            // whole line - and the image inside it only renders at all since the
+            // spoiler's payload started being re-parsed as blocks.
+            EmbedFraming.Spoiler -> "~!$image!~"
+        }
     }
 
     /**

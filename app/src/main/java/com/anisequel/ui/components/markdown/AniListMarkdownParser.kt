@@ -155,9 +155,15 @@ object AniListMarkdownParser {
      * before the request is made - and it is matched case-insensitively because
      * hosts are not consistent about the casing. The scheme is optional, for the
      * protocol-relative addresses described above.
+     *
+     * `svg` belongs with the rest: `coil-svg` is registered for exactly the
+     * server-drawn banner a bio links to, and `CentredBioImageTest` proves the same
+     * file renders inside `img100%(…svg)`. It was missing from all three extension
+     * lists, so the bare line - the form AniList's own editor writes - stayed a blue
+     * underline while the tagged form drew.
      */
     private val BARE_IMAGE_URL_PATTERN = Regex(
-        """^(?:https?:)?//\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
+        """^(?:https?:)?//\S+\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?\S*)?$""",
         RegexOption.IGNORE_CASE
     )
 
@@ -322,7 +328,7 @@ object AniListMarkdownParser {
      * that happens to contain a doubled one.
      */
     private val INLINE_PROTOCOL_RELATIVE_IMAGE = Regex(
-        """(?<![\w:])//\S+?\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?""",
+        """(?<![\w:])//\S+?\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?\S*)?""",
         RegexOption.IGNORE_CASE
     )
     /**
@@ -356,7 +362,17 @@ object AniListMarkdownParser {
      */
     private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
     /** Whether an auto-linked URL points at an image, so it can be embedded. */
-    private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
+    /**
+     * Only a cheap "could this be an image" test, so that a text spoiler never
+     * pays for a second parse. The block walk makes the real decision; this is a
+     * guard against re-parsing "the villain survives" as markdown.
+     */
+    private val IMAGE_MARKUP_HINT = Regex(
+        """(!\[|img\d*\(|\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?|$))""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
     /**
@@ -513,19 +529,6 @@ object AniListMarkdownParser {
         if (text.isBlank()) emptyList() else listOf(MarkdownNode.Paragraph(listOf(InlineToken.Plain(text))))
 
     /**
-     * The block loop, over text whose line endings and `<br>`s are already
-     * normalised and whose escapes are already decoded.
-     *
-     * Split out of [parse] because a centered block re-parses the slice of lines
-     * it collected, and that slice has been through [decodeHtmlEntities] once
-     * already. Calling [parse] from there decoded it a second time, so
-     * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
-     * happened to sit inside `~~~center`.
-     *
-     * [depth] counts nested centered blocks, the only re-entry point, and is
-     * capped at [MAX_BLOCK_DEPTH].
-     */
-    /**
      * The image a whole line stands for, or null when the line is not one.
      *
      * Extracted from the block walk because the walk has too many branches to read
@@ -600,7 +603,7 @@ object AniListMarkdownParser {
      * Re-parsing the inner text as a block is the whole trick: the whole-line image
      * forms are matched with `matchEntire`, and the inner text *is* a whole line
      * once the tildes are off. Anything that does not come back as exactly one
-     [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
+     * [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
      * paragraph path, which is what leaves `~~~Just some centred text~~~` and
      * `~~~https://anilist.co/anime/1~~~` drawing what they drew before.
      *
@@ -613,6 +616,50 @@ object AniListMarkdownParser {
         val parsed = runCatching { parseDecoded(inner, depth + 1) }.getOrNull() ?: return null
         val image = parsed.singleOrNull() as? MarkdownNode.ImageBlock ?: return null
         return image.copy(centered = true)
+    }
+
+    /**
+     * The block loop, over text whose line endings and `<br>`s are already
+     * normalised and whose escapes are already decoded.
+     *
+     * Split out of [parse] because a centered block re-parses the slice of lines
+     * it collected, and that slice has been through [decodeHtmlEntities] once
+     * already. Calling [parse] from there decoded it a second time, so
+     * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
+     * happened to sit inside `~~~center`.
+     *
+     * [depth] counts nested centered blocks, the only re-entry point, and is
+     * capped at [MAX_BLOCK_DEPTH].
+     */
+    /**
+     * The content of a `~!...!~` block, re-parsed as blocks.
+     *
+     * The same move [centredSingleImage] makes for `~~~...~~~`, for the same
+     * reason: the whole-line image forms are matched by the *block* walk, so a
+     * spoiler whose payload is an image - which is the common use of a spoiler on
+     * AniList - has to be re-parsed rather than tokenised as inline text.
+     *
+     * Empty for the case that already worked: plain words in a spoiler keep the
+     * single annotated `Text` they always had, so this cannot change how a text
+     * spoiler looks or costs. Nested spoilers are dropped for the same reason the
+     * centred block caps depth: a lid inside a lid has no readable answer.
+     */
+    private fun spoilerBlocks(inner: String, depth: Int): List<MarkdownNode> {
+        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return emptyList()
+        if (!IMAGE_MARKUP_HINT.containsMatchIn(inner)) return emptyList()
+        val parsed = runCatching { parseDecoded(inner, depth + 1) }
+            .getOrNull()
+            // Only what a `Text` cannot carry. The words stay on the annotated
+            // string they already used, so a text spoiler is untouched by this -
+            // and a spoiler whose payload is a title link keeps drawing the link
+            // it always drew rather than a cover card the block path would need
+            // media lookups to produce.
+            ?.filter { it is MarkdownNode.ImageBlock || it is MarkdownNode.VideoBlock }
+            .orEmpty()
+        // Empty is the answer for a spoiler with no picture in it, and the renderer
+        // reads that as "draw the text you already drew" - so there is nothing to
+        // gate here beyond the filter above.
+        return parsed
     }
 
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
@@ -885,7 +932,12 @@ object AniListMarkdownParser {
             val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(trimmedLine)
             if (spoilerMatch != null) {
                 val content = spoilerMatch.groupValues[1].trim()
-                nodes.add(MarkdownNode.SpoilerBlock(parseInlines(content)))
+                nodes.add(
+                    MarkdownNode.SpoilerBlock(
+                        inlines = parseInlines(content),
+                        blocks = spoilerBlocks(content, depth)
+                    )
+                )
                 i++
                 continue
             }

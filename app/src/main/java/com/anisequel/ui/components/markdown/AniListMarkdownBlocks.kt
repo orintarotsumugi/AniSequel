@@ -215,7 +215,12 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
             // cap. Fit keeps the whole image inside the same box.
             contentScale = ContentScale.Fit,
             placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-            error = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
+            // Not the sparkle again. A dead embed - a catbox file past its retention,
+            // a 403 from a hotlink-guarded host, a decode that threw - looked exactly
+            // like a slow one, forever, which is the same invisibility `ImageUserAgentTest`
+            // records as the cause of the original 403 bug: the reader cannot tell a
+            // picture on its way from a picture that is never coming.
+            error = rememberVectorPainter(AppVectorIcons.Warning)
         )
     }
 }
@@ -237,8 +242,8 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
  * that same full width rather than to something zero-sized and invisible.
  */
 private fun imageWidthModifier(width: String?): Modifier {
-    val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull()
-    if (percent != null) return Modifier.fillMaxWidth(percent.coerceIn(1, 100) / 100f)
+    val percent = clampedImageWidthPercent(width)
+    if (percent != null) return Modifier.fillMaxWidth(percent)
     val pixels = clampedImageWidthDp(width)
     return if (pixels != null) Modifier.width(pixels.dp) else Modifier.fillMaxWidth()
 }
@@ -363,15 +368,30 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = buildInlineAnnotatedString(
-                        spoiler.inlines,
-                        onLinkClick = { openExternalUrlOrCopy(context, it) }
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Column(modifier = Modifier.padding(12.dp)) {
+                    if (spoiler.inlines.isNotEmpty()) {
+                        Text(
+                            text = buildInlineAnnotatedString(
+                                spoiler.inlines,
+                                onLinkClick = { openExternalUrlOrCopy(context, it) }
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // The picture the reader hid, once the lid is up. These come from
+                    // the same content re-parsed as blocks - see
+                    // [MarkdownNode.SpoilerBlock] - because an annotated string has
+                    // nowhere to put a bitmap and used to print `img(url)` or the
+                    // word "Image" where the reveal was supposed to be.
+                    spoiler.blocks.forEach { node ->
+                        when (node) {
+                            is MarkdownNode.ImageBlock -> RenderImage(node)
+                            is MarkdownNode.VideoBlock -> RenderVideo(node)
+                            else -> Unit
+                        }
+                    }
+                }
             }
         }
     }

@@ -42,7 +42,7 @@ class ProfileBioCollapseTest {
 
         assertTrue(
             "a bio with ${6} blocks should be collapsible, its length is only ${bio.length}",
-            isBioCollapsible(bio, blockCount = 6)
+            isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
         )
     }
 
@@ -54,7 +54,7 @@ class ProfileBioCollapseTest {
 
         assertFalse(
             "a two-block bio of ${bio.length} characters has nothing to expand",
-            isBioCollapsible(bio, blockCount = 2)
+            isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
         )
     }
 
@@ -65,7 +65,7 @@ class ProfileBioCollapseTest {
         // long paragraph with no toggle and no line clamp at all.
         val bio = "a".repeat(COLLAPSED_CHAR_HINT + 1)
 
-        assertTrue(isBioCollapsible(bio, blockCount = 1))
+        assertTrue(isBioCollapsible(bio, AniListMarkdownParser.parse(bio)))
     }
 
     @Test
@@ -75,18 +75,56 @@ class ProfileBioCollapseTest {
         // This goes through the real parser rather than a hand-passed count so
         // that a change to how blocks are split shows up here.
         val bio = listOf("one", "two", "three", "four", "five").joinToString("\n\n")
-        val blocks = AniListMarkdownParser.parse(bio).size
+        val nodes = AniListMarkdownParser.parse(bio)
+        val blocks = nodes.size
 
         assertTrue(
             "expected five one-line paragraphs to parse as separate blocks, got $blocks",
             blocks > MARKDOWN_COLLAPSED_BLOCK_LIMIT
         )
-        assertTrue(isBioCollapsible(bio, blockCount = blocks))
+        assertTrue(isBioCollapsible(bio, nodes))
     }
 
     @Test
     fun `a one line bio is never collapsible`() {
-        assertFalse(isBioCollapsible("hi", blockCount = 1))
+        assertFalse(isBioCollapsible("hi", AniListMarkdownParser.parse("hi")))
+    }
+
+    /**
+     * An image in the bio wins over both thresholds.
+     *
+     * A collapsed bio is drawn as one clamped `Text`, and a `Text` has nowhere to
+     * put a bitmap - so collapsing a bio that carries a banner showed the reader
+     * the word "Image" until they pressed "Show more", which is the opposite of
+     * what those bios are written to do.
+     *
+     * All three spellings, because they parse to different nodes and checking only
+     * the inline one was the first version's miss: AniList's own editor writes the
+     * whole-line form.
+     */
+    @Test
+    fun `a bio that embeds an image is never collapsible`() {
+        val filler = "filler ".repeat(80)
+        // The length rule has to be live for this input, or the three assertions
+        // below would pass for the wrong reason - a bio nobody would collapse in
+        // the first place proves nothing about the image rule.
+        assertTrue(
+            "the same text without an image is long enough to collapse",
+            isBioCollapsible(filler, AniListMarkdownParser.parse(filler))
+        )
+        listOf(
+            // Blank line between the embed and the text: a single newline is a
+            // lazy continuation, which folds the URL into the sentence and leaves
+            // a link rather than the whole-line image these fixtures are about.
+            "https://static.anilist.co/banner.gif\n\n$filler",
+            "![cover](https://static.anilist.co/banner.gif) $filler",
+            "img100%(https://static.anilist.co/banner.gif)\n\n$filler"
+        ).forEach { bio ->
+            assertFalse(
+                "with an image in it the card shows the whole bio",
+                isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
+            )
+        }
     }
 }
 

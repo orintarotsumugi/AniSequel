@@ -37,12 +37,14 @@ data class ActivityReply(
 /**
  * Payload of the activity-with-replies query.
  *
- * `Activity(id:)` returns `ActivityUnion`, so the document fragments the two
- * members the feed can open a thread for, `ListActivity` and `TextActivity`. A
- * member the fragments do not match comes back as an object with no selected
- * fields, and an id that no longer exists as null; both read as an empty thread
- * through `replies.orEmpty()`. The feed only contains those two, but a stale id
- * could still resolve to something else.
+ * `Activity(id:)` returns `ActivityUnion`, so the document fragments the three
+ * members a comment thread can be opened on: `ListActivity`, `TextActivity` and
+ * `MessageActivity` (a direct message is an activity, and it carries replies like
+ * any other). A member the fragments do not match comes back as an object with no
+ * selected fields, and an id that no longer exists as null; both read as an empty
+ * thread through `replies.orEmpty()`. The feed only contains the first two, but a
+ * stale id could still resolve to something else - and the messages tab opens the
+ * same sheet on the third.
  */
 @JsonClass(generateAdapter = true)
 data class ActivityDetailData(

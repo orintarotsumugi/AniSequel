@@ -109,6 +109,9 @@ fun InfoCharactersSection(
 }
 
 @Composable
+/**
+ * One cast row: the character's art and name beside the actor who plays them.
+ */
 private fun CharacterCard(
     edge: MediaCharacterEdge,
     /** Opens this character's profile sheet, by AniList id. Null draws a caption. */

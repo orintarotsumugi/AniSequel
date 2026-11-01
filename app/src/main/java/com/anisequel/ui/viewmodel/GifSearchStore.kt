@@ -72,18 +72,32 @@ class GifSearchStore(
      * pretending to be a library - a durable history of images somebody pasted into
      * a public comment is a thing to think about before shipping, not a side effect
      * of a picker.
+     *
+     * A [GifResult] is kept rather than its URL, because the strip draws the tile and
+     * the tile is only safe when it is the provider's small copy: an animated
+     * drawable is decoded at its **intrinsic** frame size however it is displayed,
+     * and [com.anisequel.data.network.SafebooruGifs] rejects a full-size animation
+     * for exactly that reason. Keeping the embed URL alone threw the tile's whole
+     * budget away and put up to twelve full-resolution animations - the catalogue
+     * runs to 5200x5200 - in one scrolling grid, which is an OutOfMemoryError rather
+     * than a preview. The dimensions come back with the record so the guard still
+     * applies.
+     *
+     * Its own flow rather than a field of [State], because every `State(...)` in this
+     * class is a fresh search clearing the grid, and the strip survives one.
      */
-    private val usedUrls = ArrayDeque<String>()
+    private val _recent = MutableStateFlow<List<GifResult>>(emptyList())
+    val recent: StateFlow<List<GifResult>> = _recent.asStateFlow()
 
-    /** Records a pick and returns the strip's contents, newest first. */
-    fun rememberUsed(url: String) {
-        usedUrls.remove(url)
-        usedUrls.addFirst(url)
-        while (usedUrls.size > MAX_USED) usedUrls.removeLast()
+    /** Records a pick: newest first, one copy of an embed, capped at [MAX_USED]. */
+    fun rememberUsed(gif: GifResult) {
+        _recent.value = (
+            listOf(gif) + _recent.value.filterNot { it.embedUrl == gif.embedUrl }
+            ).take(MAX_USED)
     }
 
     /** The recent picks, in the order the grid should show them. */
-    fun usedThisSession(): List<String> = usedUrls.toList()
+    fun usedThisSession(): List<GifResult> = _recent.value
 
     /** Rewrites the query and schedules the search it deserves. */
     fun setQuery(query: String) {
@@ -128,7 +142,14 @@ class GifSearchStore(
         _state.value = _state.value.copy(isSearching = true, error = null, note = null)
         val result = repositoryResult { provider.search(query, cursor = null) }
         val current = _state.value
-        if (current.query != query) return
+        if (current.query != query) {
+            // The field moved on, so this answer belongs to nothing - but the
+            // "searching" flag was set *for* this query, and a newer search only
+            // raises it again behind its own debounce. Returning without lowering it
+            // left the skeleton shimmering over a grid that would never arrive.
+            _state.value = current.copy(isSearching = false)
+            return
+        }
         result.fold(
             onSuccess = { page ->
                 _state.value = current.copy(
@@ -168,7 +189,13 @@ class GifSearchStore(
             _state.value = _state.value.copy(isLoadingMore = true, error = null)
             val result = repositoryResult { provider.search(current.query, cursor) }
             val latest = _state.value
-            if (latest.query != current.query) return@launch
+            if (latest.query != current.query) {
+                // The same race as the first search, with the same reason: the
+                // "loading more" flag belongs to the request that just gave up, and
+                // nothing else is going to lower it.
+                _state.value = latest.copy(isLoadingMore = false)
+                return@launch
+            }
             result.fold(
                 onSuccess = { page ->
                     val seen = latest.results.mapTo(HashSet()) { it.id }

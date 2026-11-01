@@ -58,7 +58,7 @@ fun RenderParagraph(
     onOverflow: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val hasImage = paragraph.inlines.any { it is InlineToken.Image }
+    val hasImage = paragraph.inlines.containsEmbeddedImage()
 
     if (!hasImage || maxLines < Int.MAX_VALUE) {
         val annotated = buildInlineAnnotatedString(
@@ -112,7 +112,11 @@ fun RenderParagraph(
                 // full-line one are the same size, shape and tap target - there is
                 // one image treatment in the markdown stack, not two.
                 is InlineSegment.Image -> RenderImage(
-                    MarkdownNode.ImageBlock(url = segment.token.url, alt = segment.token.alt)
+                    MarkdownNode.ImageBlock(
+                        url = segment.token.url,
+                        alt = segment.token.alt,
+                        targetUrl = segment.targetUrl
+                    )
                 )
             }
         }
@@ -122,7 +126,14 @@ fun RenderParagraph(
 /** A run of consecutive text tokens, or a single inline image. */
 private sealed interface InlineSegment {
     data class TextRun(val tokens: List<InlineToken>) : InlineSegment
-    data class Image(val token: InlineToken.Image) : InlineSegment
+
+    /**
+     * [targetUrl] is set when the image was written inside a link - the site's
+     * `[![cover](img)](target)` - so the drawn image keeps the tap the author gave
+     * it. `RenderImage` already supports it; the paragraph used to drop the link and
+     * show the image's alt text instead.
+     */
+    data class Image(val token: InlineToken.Image, val targetUrl: String? = null) : InlineSegment
 }
 
 /**
@@ -141,11 +152,21 @@ private fun List<InlineToken>.toInlineSegments(): List<InlineSegment> {
     }
 
     forEach { token ->
-        if (token is InlineToken.Image) {
-            flushRun()
-            segments.add(InlineSegment.Image(token))
-        } else {
+        val embedded = when (token) {
+            is InlineToken.Image -> token to null
+            // A link whose whole label is one image *is* that image, tappable. This
+            // is how a banner bio writes `[![cover](img)](target)`; the token tree
+            // nests the image inside the link, the walker only looked at top-level
+            // tokens, and the paragraph drew the word "Image" instead of the GIF.
+            is InlineToken.Link ->
+                (token.children.singleOrNull() as? InlineToken.Image)?.let { it to token.url }
+            else -> null
+        }
+        if (embedded == null) {
             run.add(token)
+        } else {
+            flushRun()
+            segments.add(InlineSegment.Image(embedded.first, embedded.second))
         }
     }
     flushRun()

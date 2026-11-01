@@ -12,8 +12,22 @@ import com.anisequel.data.security.TokenCipher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+/**
+ * Chat view is on by default: a window is strictly less work than the whole
+ * thread, and the reader who wants the old behaviour can turn it off one tap
+ * deeper than the one that would have to be taken to notice it was missing.
+ */
 private const val DEFAULT_CHAT_VIEW = true
+
+/** Polling is on with it, and separately switchable - see [CommentMediaSettings]. */
 private const val DEFAULT_POLLING = true
+
+/**
+ * Strangers are opt-in. The site-wide stream is the one feed in the app that is
+ * full of people the reader did not choose to follow, and it spends the same
+ * ~30-requests-a-minute budget the dashboard, the list and the friends feed draw
+ * on - so it ships off and is turned on once, in Settings.
+ */
 private const val DEFAULT_GLOBAL_FEED = false
 private val Context.commentMediaDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "anisequel_comment_media"
@@ -59,22 +73,7 @@ class MediaPreferences(
     private val cipher: TokenCipher = KeystoreTokenCipher(TENOR_KEY_ALIAS)
 ) {
 
-    /**
- * Chat view is on by default: a window is strictly less work than the whole
- * thread, and the reader who wants the old behaviour can turn it off one tap
- * deeper than the one that would have to be taken to notice it was missing.
- */
-
-/** Polling is on with it, and separately switchable - see [CommentMediaSettings]. */
-
-/**
- * Strangers are opt-in. The site-wide stream is the one feed in the app that is
- * full of people the reader did not choose to follow, and it spends the same
- * ~30-requests-a-minute budget the dashboard, the list and the friends feed draw
- * on - so it ships off and is turned on once, in Settings.
- */
-
-private object Keys {
+    private object Keys {
         val CHAT_VIEW = booleanPreferencesKey("comment_chat_view")
         val POLL_COMMENTS = booleanPreferencesKey("comment_poll_new")
         val TENOR_KEY_ENCRYPTED = stringPreferencesKey("tenor_api_key_encrypted")

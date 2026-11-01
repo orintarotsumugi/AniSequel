@@ -23,31 +23,18 @@ middleman server.
 
 ---
 
-## What's new - 1.7.4
+## What's new - 1.7.7
 
-The reading release: one arriving row, a font that changes without a restart, and
-a larger reading scale that reaches every heading.
+The conversation release: comments on messages as well as posts, a comment thread that behaves like a chat to its oldest page, and a GIF picker that stopped decoding originals.
 
-- **Currently arriving is one row.** Airing and upcoming share a single strip by
-  default; Settings > Library > Arriving rows offers the two labelled groups back,
-  and compact rows follow the same choice.
-- **A font that changes immediately.** Every import gets a fresh file name and an
-  atomic move, so Android's typeface cache cannot serve the previous face; the
-  theme validates and caches it, and a failed import leaves the old font working.
-- **Text size reaches further.** 80-140% in 5% stops, and markdown headings now
-  scale with it instead of hardcoding their own sizes.
-- **A loading page shaped like the page.** The dashboard skeleton mirrors stats,
-  arriving, search, filters, the section header and the cards, with one shimmer.
-- **State changes, not swaps.** The refresh button crossfades between icon and
-  spinner, and the login carousel's dots stretch from their centre in the draw
-  phase.
-- **The banner arrives whole.** The hero draws its banner at its own ratio
-  across the top instead of stretched to cover, and cover artwork no longer
-  shows its own colour as a line along its top edge.
-- **Smaller fixes** - "Airing · 12 eps" reads correctly, compact separators hold
-  across group labels, arriving cards no longer squash during a scroll, and the
-  info page fixes a stale countdown, skipped section entrances and the "Ended"
-  tense on unreleased titles.
+- **Comment on a message.** A direct message is an activity, and AniList gives it replies like any other one - so the inbox row and the open message both carry a Comments button that opens the same thread the Activity feed uses, with liking, quoting, editing and deleting.
+- **Comments reach their oldest page.** Older stopped one page short: the step back was asked twice, so the first 25 comments of any thread longer than 50 were unreachable while the row above the list kept promising them.
+- **A failed refresh retries the refresh.** A background check that did not arrive shared its error field with a missing Older page, so the banner's Retry walked the thread backwards instead of fetching the comments that had not come.
+- **A like leaves the comment alone.** Tapping a heart wrote back the whole comment as it was before the tap.
+- **Posting keeps your place in a thread.** Posting into a thread you had scrolled up in revealed every comment the app had fetched.
+- **GIF tiles stop decoding originals.** The picker treated any sample ending in .gif as a thumbnail.
+- **A spoiler can hold a picture, and the GIF picker decides how an embed sits** - the payload of `~!...!~` is re-parsed as blocks, so a hidden reveal shows the reveal, and a picked GIF can go in normal, centred or spoiled beside its width.
+- **Smaller fixes** - a comment that lands and an Older page that arrives now slide into place instead of jumping, the text-size preview follows the finger, and the GIF width row keeps showing which width is chosen.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
@@ -59,66 +46,48 @@ and the GitHub release body read.
 
 ### Find what you missed
 
-- **Franchise traversal, not title matching.** A show's `relations` graph is
   walked in both directions, so renamed continuations, films and side stories are
   found even when the title gives nothing away.
-- **A dashboard of what is due.** Missed sequels, what is arriving (one row by
   default, or the **Airing now** and **Upcoming** groups in Settings), recent
   activity, lists and stats.
-- **Filters that narrow without lying.** Relation type, status, genre (collapsible),
   score and episode floors, a name search, and hidden titles with undo.
-- **Your profile, or anybody's.** Scan a public AniList username without signing
   in. Read-only, and the UI says so before a write can fail.
 
 ### Read a title completely
 
-- **One page per title**: synopsis, categories, themes, cast, crew, studios,
   openings and endings, the rest of the franchise, friends' progress, and an entry
   editor on a second capsule.
-- **Studios and people are destinations too.** Every credit opens the studio's
   filmography; every face opens the character, staff or voice-actor sheet.
-- **Long titles scroll** instead of being cut, on cards, captions and activity rows.
 
 ### Keep your list
 
-- **Home, Library, Tiers, Profile.** A floating capsule at the bottom, holding a
   hold-to-swipe gesture; Tiers is opt-in for the bar and also reachable from the
   Library trophy and the profile.
-- **One-tap Planning.** OAuth against your own AniList account. Tap to plan, hold
   or swipe to start watching, from any recommendation or title page.
-- **A tier list you build your own way.** Rows are yours to rename, recolour,
   add, remove and reorder - the S/A/B/C/D/F template is a default, not a cage -
   and each row carries an editable AniList score band, so one tap seeds the
   whole board from your own scores. Anime and manga rank on separate shelves,
   because AniList numbers them independently and id 1 is both *Cowboy Bebop*
   and *Monster*.
-- **Ranking is physical.** A tray of your unranked titles sits under the board;
   dragging a poster names a row *and* a position, with a caret marking the seam
   it lands on and edge-scroll reaching past the screen - and dropping it back on
   the tray un-ranks it. Sheets do the same job one-handed, word search and
   status/genre/studio filters narrow the pool, every edit undoes and redoes, and
   a lock turns the board into read-only browsing that still scrolls and zooms.
-- **Zoom and share the board.** Pinch it from 35% to 200%, choose whether
   captions sit under or on the covers, and export one full-board PNG at up to
   4K - rendered from the same layout the screen drew, not a screenshot of the
   viewport, with the heading's own show/size/font controls and a lossless SVG
   renderer behind it. The lists save as local projects in a library that offers
   to resume the last one you opened.
-- **Stats and social.** Score distribution, heatmaps, weekly charts, favourites,
   followers and an inbox you can reply from.
 
 ### Make it yours
 
-- **Material 3 Expressive throughout** - spring physics, expressive shapes, a
   blurred key visual behind every title, and a theme that can follow the cover you
   are looking at.
-- **Five motion styles**, with a preview; type size and font of your own; five
   palettes, Material You, true black, and background canvases.
-- **Ani-chan**, the joke pill: name, stamp, compact mode, five tones (dark
   included), and optional typewriter / word-by-word / fade-up reveals - all off
   unless asked for.
-- **Full screen on request**, cutout-safe, with the bars one edge-swipe away.
-- **Four home-screen widgets**, a real updater, and a crash-report flow that is
   off until you turn it on.
 
 ### Deliberate non-goals
@@ -171,7 +140,6 @@ domain/      use cases, tier list, profile layout, motion  (pure Kotlin, no Andr
 data/        Retrofit + GraphQL, repositories, snapshots, updater
 ```
 
-- **Three layers, one rule.** `ui/` is Compose screens plus `StateFlow` and
   ViewModels; the one place it is not Compose is `ui/widget/`, which the launcher
   inflates in its own process. `domain/` is pure Kotlin - the use cases
   (`FindMissedSequelsUseCase`, `FindArrivingEntriesUseCase`,
@@ -179,23 +147,19 @@ data/        Retrofit + GraphQL, repositories, snapshots, updater
   the motion geometry - with no Android imports. `data/` is Retrofit, Moshi,
   OkHttp, `AniListApiService` with its query strings in `GraphQLQueries.kt`,
   `AuthRepository` and the OAuth token in DataStore, and `SnapshotStore`.
-- **One backend, and it is AniList's.** No AniSequel server. AniList speaks only
   GraphQL, so every "endpoint" is a POST to `/graphql` with a query string body.
   `AuthInterceptor` adds the OAuth token; `RateLimitInterceptor` absorbs AniList's
   burst limiter; `RequestCoalescer` collapses identical in-flight queries. The
   update manifest gets its own `OkHttpClient`, so the AniList interceptor can
   never attach a bearer token to a public file.
-- **The list is expensive and goes stale.** One `MediaListCollection` is the
   biggest request the app makes against an API of roughly thirty a minute. The
   repository reuses it for the interval chosen in Settings, and
   `ListFreshnessWatch` re-checks on every resume and every return to the
   dashboard - never in the background, because WorkManager cannot run that often
   and would burn the request budget on a list nobody is reading.
-- **Closing the app does not throw the list away.** `SnapshotStore` keeps one
   atomic JSON file per kind, with the window that kind deserves: thirty minutes
   for the viewer, the refresh interval for lists, a day for a title's facts. A
   mutation or a sign-out takes the disk copy with it.
-- **The updater is its own small system**: manifest from a release asset, a
   resumable `.part` download, and three checks - zip magic, package name,
   signature - before anything reaches the installer. See [UPDATER.md](UPDATER.md).
 

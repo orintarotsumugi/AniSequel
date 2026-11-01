@@ -293,6 +293,9 @@ fun ProfileActivityPage(
                     // sheet is drawn from - see `MessageDetailSheet` for why that
                     // means the sheet opens on the tap's own frame.
                     onOpenMessage = { message -> messagesViewModel.openMessage(message) },
+                    // The same sheet the Activity cards open, aimed at the message's
+                    // own activity id - see `UserMessagesViewModel.comments`.
+                    onOpenComments = { message -> messagesViewModel.openComments(message) },
                     contentPadding = contentPadding,
                     listState = messagesListState
                 )

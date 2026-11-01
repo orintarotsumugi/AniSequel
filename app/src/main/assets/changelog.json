@@ -1,6 +1,71 @@
 {
   "versions": [
     {
+      "version": "1.7.7",
+      "entries": [
+        {
+          "title": "Comment on a message",
+          "detail": "A direct message is an activity, and AniList gives it replies like any other one - so the inbox row and the open message both carry a Comments button that opens the same thread the Activity feed uses, with liking, quoting, editing and deleting. Reading a conversation and talking about it no longer means leaving the app. The windowed read that chat view actually uses was still missing the message member, which is why a thread opened on a DM came back empty."
+        },
+        {
+          "title": "Comments reach their oldest page",
+          "detail": "Older stopped one page short: the step back was asked twice, so the first 25 comments of any thread longer than 50 were unreachable while the row above the list kept promising them."
+        },
+        {
+          "title": "A failed refresh retries the refresh",
+          "detail": "A background check that did not arrive shared its error field with a missing Older page, so the banner's Retry walked the thread backwards instead of fetching the comments that had not come."
+        },
+        {
+          "title": "A like leaves the comment alone",
+          "detail": "Tapping a heart wrote back the whole comment as it was before the tap. If the thread refreshed while that request was out, the older text and count came back over the newer ones. A like now changes only the heart."
+        },
+        {
+          "title": "Posting keeps your place in a thread",
+          "detail": "Posting into a thread you had scrolled up in revealed every comment the app had fetched. The window grows by the one comment that arrived now, which is yours."
+        },
+        {
+          "title": "GIF tiles stop decoding originals",
+          "detail": "The picker treated any sample ending in .gif as a thumbnail. Measured against a live page, fifteen of twenty posts answer the sample URL equal to the file URL with no smaller copy at all - so up to twenty-four full-resolution animations, some 5200x5200, decoded into one grid. A sample now counts as a sample only when it is a different file and its own dimensions fit; otherwise the tile is the site's thumbnail still, and the comment still embeds the full animation."
+        },
+        {
+          "title": "Recent GIFs draw as thumbnails, and update live",
+          "detail": "The recent-picks strip rebuilt each tile from the embed URL, which threw the tile budget away and left the strip stale until something else redrew the screen. It keeps the picked result now, and shows it the moment you pick it."
+        },
+        {
+          "title": "Six reactions above an empty GIF search",
+          "detail": "The picker offers laughing, crying, angry, surprised, confused and blush before you type. Each was checked against the live index for animated results at the safe rating rather than guessed - smiling and wave return nothing there, and a chip that searches into an empty grid reads as a broken app."
+        },
+        {
+          "title": "Photo uploads reach the host, and explain themselves",
+          "detail": "catbox answers over both address families behind its CDN, and on a connection with broken IPv6 the app gave up at the first failed route while a working address was in the list. When a browser-check page intercepts the request instead, the composer now says what it knows rather than showing you a line of HTML."
+        },
+        {
+          "title": "Swiping the navigation bar no longer opens your inbox",
+          "detail": "Holding the bar and shoving it sideways moved less than one destination, and the bar asked did it move by whether the highlighted tab had changed - so a short drag counted as a still hold and fired the hold shortcut, which is the jump to Messages. Travel decides it now, a swipe that comes back asks for nothing, and the bar's own ring stops leaking touches to whatever it floats over."
+        },
+        {
+          "title": "Animated bio images actually animate",
+          "detail": "A bio that embeds an image is no longer collapsed behind Show more: a collapsed bio is drawn as plain text, which has nowhere to put a picture, so the banner GIF a bio was built around appeared as the word Image. An image written inside a link renders as the picture and stays tappable, a bare .svg banner line is an image like the tagged form always was, and a dead embed finally looks dead instead of slow."
+        },
+        {
+          "title": "Comments and GIF tiles move rather than jump",
+          "detail": "A comment that lands, an Older page arriving, a delete and a new page of results all re-laid the list out in one frame. They slide into place now, on the same springs the library grid uses."
+        },
+        {
+          "title": "The text-size preview follows your finger",
+          "detail": "The sample animated toward a value that changed on every tick of the slider, so it lagged the thumb it was supposed to be following and never settled mid-drag."
+        },
+        {
+          "title": "A spoiler can hold a picture",
+          "detail": "Hiding a reveal behind ~!...!~ showed the reader the words \"Image\" or a line of img(url) once they opened it: a spoiler drew its payload as styled text, and text has nowhere to put a picture. The payload is re-parsed now, so the thing people actually spoil - a colour, a character shot, a final frame - appears. A spoiler of words is untouched."
+        },
+        {
+          "title": "The GIF picker decides how the embed sits",
+          "detail": "Alongside the width, a picked GIF can now go in normally, centred across the thread, or behind a spoiler's lid - the three framings AniList's own editor writes, so the preview is what other readers will see rather than markup they have to decode."
+        }
+      ]
+    },
+    {
       "version": "1.7.6",
       "entries": [
         {
@@ -119,7 +184,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing \u00b7 12 eps\" instead of \"Airing \u00b7 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
+          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
         }
       ]
     },
@@ -144,7 +209,7 @@
         },
         {
           "title": "A creator's page introduces them properly",
-          "detail": "The staff hero now leads with the creator's occupations - Director \u00b7 Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
         },
         {
           "title": "The library bar carries its number",
@@ -2238,7 +2303,7 @@
         },
         {
           "title": "Widgets stop naming shows they are not showing",
-          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to \u2026\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
         },
         {
           "title": "The activity tile shows your face",
@@ -2259,7 +2324,7 @@
         },
         {
           "title": "A Featured Sequel widget",
-          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe \u2014 a large poster, its title, what it is a sequel to and how many are waiting \u2014 so the recommendation is readable before you even open the app."
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
         },
         {
           "title": "See who liked an activity",
@@ -2276,11 +2341,11 @@
       "entries": [
         {
           "title": "In-app details from the Activity feed and Currently Arriving",
-          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet \u2014 synopsis, community scores, rankings, genres, specs and an AniList link \u2014 instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
         },
         {
           "title": "The detail sheet adapts to what it is showing",
-          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to \u2026\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
         }
       ]
     },
@@ -2289,7 +2354,7 @@
       "entries": [
         {
           "title": "Retain Anime Color keeps the colour",
-          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts \u2014 no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
         },
         {
           "title": "Theme tab, rebuilt around Material 3 Expressive",
@@ -2302,7 +2367,7 @@
       "entries": [
         {
           "title": "GIFs and images in bios and comments",
-          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence \u2014 like a GIF between two words \u2014 are embedded in the flow and animate inline."
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
         },
         {
           "title": "AniList links get a preview card",
@@ -2314,7 +2379,7 @@
         },
         {
           "title": "Theme screen, reorganised",
-          "detail": "Settings > Theme is now grouped into clear sections \u2014 appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
         },
         {
           "title": "Theme switching is snappier",

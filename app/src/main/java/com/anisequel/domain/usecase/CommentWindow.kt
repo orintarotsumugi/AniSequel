@@ -84,6 +84,24 @@ object CommentWindow {
         (replyCount - loadedCount).coerceAtLeast(0)
 
     /**
+     * How many of the fetched rows the thread draws.
+     *
+     * The window is a number of rows taken from the newest end, so the rows on
+     * screen are the last [shownRows] of [repliesLoaded] - unless everything is
+     * revealed, or chat view is off and [shownRows] is 0 for the whole list.
+     *
+     * It is asked here rather than at each call site because two places answer it
+     * and they have to agree: the list slices its rows with it, and the scroll that
+     * follows a comment this session just posted counts the Older row with it,
+     * because that row sits above the list and moves every index below it. Asked
+     * once from `replies.size` and once from the slice, the two disagreed on a
+     * thread the reader had scrolled up in, and the scroll stopped on the comment
+     * above the one they had written.
+     */
+    fun visibleRowCount(repliesLoaded: Int, shownRows: Int): Int =
+        if (shownRows in 1 until repliesLoaded) shownRows else repliesLoaded
+
+    /**
      * How many rows a refresh may push out of sight.
      *
      * New replies are appended, so a reader parked halfway up a thread loses the

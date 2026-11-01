@@ -11,9 +11,11 @@ import com.anisequel.data.network.isNoMatchesBody
 import com.anisequel.data.network.isSafeRating
 import com.anisequel.data.network.toGifPage
 import com.anisequel.data.network.FlexibleStringAdapter
+import com.anisequel.data.network.GifResult
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,6 +49,8 @@ class GifSearchParseTest {
                 rating = "general",
                 width = 500,
                 height = 500,
+                sampleWidth = 300,
+                sampleHeight = 269,
                 tags = "holo_(spice_and_wolf) animated_gif"
             ),
             // A post whose rating field disagrees with the query's filter. The
@@ -83,10 +87,18 @@ class GifSearchParseTest {
         // cell is, so the original GIF is only used for a tile while it is a size the
         // grid can hold several of. Past that the tile is the JPEG still, and the
         // comment still embeds the full animation.
+        //
+        // The fixtures now carry the sample's own dimensions because the live API
+        // does, and that is the whole test: fifteen of the twenty posts in a real page
+        // of `animated_gif rating:general` answer `sample_url` equal to `file_url` with
+        // `sample_width: 0` beside them. Judging a sample by its extension alone
+        // called those originals thumbnails and loaded twenty full-resolution GIFs
+        // into one grid, which is the picker stalling and then the sheet dying.
         val animatedSample = SafebooruPost(
             fileUrl = "https://safebooru.org/images/1/a.gif",
             sampleUrl = "https://safebooru.org/images/1/a_sample.gif",
-            width = 900, height = 400
+            width = 900, height = 400,
+            sampleWidth = 500, sampleHeight = 222
         )
         assertEquals(
             "https://safebooru.org/images/1/a_sample.gif",
@@ -107,14 +119,31 @@ class GifSearchParseTest {
 
         val posterSizedGif = SafebooruPost(
             fileUrl = "https://safebooru.org/images/1/c.gif",
-            sampleUrl = "https://safebooru.org/images/1/c_sample.jpg",
+            sampleUrl = "https://safebooru.org/images/1/c.gif",
             previewUrl = "https://safebooru.org/thumbnails/1/c.jpg",
-            width = 5200, height = 5200
+            width = 5200, height = 5200,
+            sampleWidth = 0, sampleHeight = 0
         )
         assertEquals(
-            "a 27-megapixel frame is not going into a 104dp cell",
-            "https://safebooru.org/images/1/c_sample.jpg",
+            "a 27-megapixel frame is not going into a 104dp cell, and the site's own " +
+                "thumbnail is what belongs there",
+            "https://safebooru.org/thumbnails/1/c.jpg",
             booruTileUrl(posterSizedGif)
+        )
+
+        // The same answer as the live posts that do have a second copy, only too big
+        // a copy to draw twenty of.
+        val sampleOverBudget = SafebooruPost(
+            fileUrl = "https://safebooru.org/images/1/f.gif",
+            sampleUrl = "https://safebooru.org/images/1/f_sample.gif",
+            previewUrl = "https://safebooru.org/thumbnails/1/f.jpg",
+            width = 4000, height = 3000,
+            sampleWidth = 2000, sampleHeight = 1500
+        )
+        assertEquals(
+            "a sample that is not small enough is no sample",
+            "https://safebooru.org/thumbnails/1/f.jpg",
+            booruTileUrl(sampleOverBudget)
         )
 
         val dimensionsUnknown = SafebooruPost(
@@ -136,6 +165,51 @@ class GifSearchParseTest {
         assertFalse(fitsTileBudget(4000, 40))
         assertFalse("an unknown size is not assumed small", fitsTileBudget(null, 500))
         assertFalse(fitsTileBudget(0, 0))
+    }
+
+    /**
+     * The wire shape, taken from a live answer rather than from memory.
+     *
+     * Every other case in this file builds `SafebooruPost` objects, which pins the
+     * mapping and says nothing about the response: Safebooru's `page=dapi&s=post`
+     * answers a **bare JSON array** with `file_url`, `sample_url`, `preview_url` and
+     * `sample_width` on each post, where other booru deployments wrap the list in
+     * `{"post": [...]}`. A client that guessed wrong fails every search with
+     * "answered with something unreadable" - an empty picker with an error line, in
+     * the app's default provider, with nothing in the tests to say which shape was
+     * right. This body is a trimmed real page of `animated_gif rating:general`.
+     */
+    @Test
+    fun `the live array payload maps to the fields the picker reads`() {
+        val body = """
+            [{"preview_url":"https://safebooru.org/thumbnails/855/thumbnail_d5cb.jpg",
+              "sample_url":"https://safebooru.org/images/855/d5cb.gif",
+              "file_url":"https://safebooru.org/images/855/d5cb.gif",
+              "directory":855,"width":560,"height":449,"id":7285006,
+              "image":"d5cb.gif","rating":"general","sample":false,
+              "sample_height":0,"sample_width":0,"score":null,
+              "tags":"1boy 1girl animated animated_gif calem_(pokemon) eyewear"}]
+        """.trimIndent()
+        val posts = com.squareup.moshi.Types.newParameterizedType(
+            List::class.java,
+            SafebooruPost::class.java
+        ).let { moshi.adapter<List<SafebooruPost?>>(it).fromJson(body) }
+
+        val post = posts?.single()
+        assertEquals("7285006", post?.id?.toString())
+        assertEquals("general", post?.rating)
+        assertEquals(560, post?.width ?: 0)
+        assertEquals(0, post?.sampleWidth ?: -1)
+
+        // `sample_url` is the original here, which the tile rule has to notice.
+        val page = posts.toGifPage()
+        val gif = page.results.single()
+        assertEquals("https://safebooru.org/images/855/d5cb.gif", gif.embedUrl)
+        assertEquals(
+            "560x449 is inside the cell budget, so this one may animate in the grid",
+            "https://safebooru.org/images/855/d5cb.gif",
+            gif.gridUrl
+        )
     }
 
     @Test
@@ -231,17 +305,58 @@ class GifSearchParseTest {
             scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
             provider = com.anisequel.data.network.SafebooruGifs()
         )
-        (1..14).forEach { store.rememberUsed("https://x/$it.gif") }
+        (1..14).forEach { store.rememberUsed(gif(it)) }
         assertEquals(
             "capped at the sheet's own constant",
             com.anisequel.ui.viewmodel.GifSearchStore.MAX_USED,
             store.usedThisSession().size
         )
-        assertEquals("https://x/14.gif", store.usedThisSession().first())
-        store.rememberUsed("https://x/9.gif")
-        assertEquals("a repeat moves to the front rather than doubling", 1, store.usedThisSession().count { it == "https://x/9.gif" })
-        assertEquals("https://x/9.gif", store.usedThisSession().first())
+        assertEquals("https://x/14.gif", store.usedThisSession().first().embedUrl)
+        store.rememberUsed(gif(9))
+        assertEquals(
+            "a repeat moves to the front rather than doubling",
+            1,
+            store.usedThisSession().count { it.embedUrl == "https://x/9.gif" }
+        )
+        assertEquals("https://x/9.gif", store.usedThisSession().first().embedUrl)
     }
+
+    /**
+     * The strip has to draw the tile the picker drew, not the file the comment gets.
+     *
+     * The recents were once stored as bare embed URLs, and the strip rebuilt a
+     * result from them with `gridUrl = embedUrl` and no dimensions - which threw
+     * away [com.anisequel.data.network.fitsTileBudget]'s whole reason for existing.
+     * An animated drawable is decoded at its intrinsic frame size however small the
+     * cell is, and the booru catalogue runs to 5200x5200, so twelve recent picks in
+     * one grid was an OutOfMemoryError and not a preview.
+     */
+    @Test
+    fun `a recent pick keeps the small copy the grid drew`() {
+        val store = com.anisequel.ui.viewmodel.GifSearchStore(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            provider = com.anisequel.data.network.SafebooruGifs()
+        )
+        store.rememberUsed(gif(1, gridUrl = "https://x/sample1.jpg"))
+        val recent = store.usedThisSession().single()
+        assertEquals("https://x/1.gif", recent.embedUrl)
+        assertNotEquals(
+            "the strip must not be handed the full animation",
+            recent.embedUrl,
+            recent.gridUrl
+        )
+        assertEquals("the tile budget still has dimensions to judge", 5200, recent.width ?: 0)
+        assertEquals(5200, recent.height ?: 0)
+    }
+
+    private fun gif(index: Int, gridUrl: String = "https://x/tile$index.gif") = GifResult(
+        id = index.toString(),
+        embedUrl = "https://x/$index.gif",
+        gridUrl = gridUrl,
+        title = null,
+        width = 5200,
+        height = 5200
+    )
 
     @Test
     fun `the tag index gets the hint about matching tags and the keyed index does not`() {

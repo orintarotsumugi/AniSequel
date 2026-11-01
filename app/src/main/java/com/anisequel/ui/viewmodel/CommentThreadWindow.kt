@@ -74,6 +74,14 @@ internal class CommentThreadWindow(
     private var openJob: Job? = null
 
     /**
+     * The background check for new comments that is in flight, if one is.
+     *
+     * See [checkForNewComments]: the poll fires on a timer, and a check that is
+     * still running when the next one is due would count its own new rows twice.
+     */
+    private var checkJob: Job? = null
+
+    /**
      * Opens the comment thread for [activityId] and loads it.
      *
      * If this is the thread that was just closed, its comments are drawn
@@ -206,7 +214,7 @@ internal class CommentThreadWindow(
                 state.value = if (asRefresh) {
                     current.copy(
                         isRefreshing = false,
-                        windowError = message,
+                        refreshError = message,
                         lastCheckedAtMillis = System.currentTimeMillis()
                     )
                 } else {
@@ -234,61 +242,120 @@ internal class CommentThreadWindow(
         isRefresh: Boolean
     ): CommentThreadStore.CommentsState {
         val incoming = window.replies
-        val oldestFetched = incoming.minOfOrNull { it.id }
-
-        // Three different merges, because three different things arrived.
-        //
-        // A refresh of the newest page replaces everything from the oldest reply it
-        // carried onward: that is what drops a deleted comment, picks up an edit,
-        // and notices a like changed - all of which the userscript this imitates
-        // discovered by re-reading the tail rather than trusting its own copy.
-        //
-        // An Older page is *prepended*. It can never replace: the rows below it are
-        // the ones the reader is looking at, and a page of comments from an hour
-        // earlier arriving on its own would leave the thread with a hole where the
-        // present used to be.
-        //
-        // Anything else is the re-aim: the page that was aimed at with a stale count
-        // is discarded, because it was never the newest page.
-        val merged = when {
-            incoming.isEmpty() && isRefresh -> replies
-            isRefresh && oldestFetched != null ->
-                replies.filter { it.id < oldestFetched } + incoming
-            window.page < oldestPage -> incoming + replies
-            else -> incoming
-        }
-        val unique = merged.distinctBy { it.id }
-        val unseen = if (isRefresh) {
-            unique.count { reply -> replies.none { it.id == reply.id } }
-        } else {
-            0
-        }
-        val grown = if (isRefresh && unseen > 0 && shownRows in 1 until replies.size) {
-            // The reader had scrolled up into older rows. Taking in new comments
-            // silently is the same as moving their place, so the window grows to hold
-            // both what was on screen and what arrived.
-            CommentWindow.grownRowCount(shownRows, unseen)
-        } else if (!isRefresh && window.page < oldestPage) {
-            shownRows + incoming.size
-        } else {
-            shownRows
-        }
+        val prepending = window.page < oldestPage
+        val merged = mergedReplies(replies, incoming, window.page, oldestPage, isRefresh)
+            .distinctBy { it.id }
+        val unseen = unseenCount(replies, merged, isRefresh)
         return copy(
             isLoading = false,
             isRefreshing = false,
-            replies = unique,
+            replies = merged,
             replyCount = window.replyCount,
-            oldestPage = when {
-                window.page < oldestPage -> window.page
-                isRefresh -> oldestPage
-                else -> window.page
-            },
-            shownRows = grown,
+            oldestPage = nextOldestPage(window.page, oldestPage, isRefresh),
+            shownRows = grownWindowRows(
+                shownRows = shownRows,
+                fetchedRows = replies.size,
+                incomingRows = incoming.size,
+                unseen = unseen,
+                isRefresh = isRefresh,
+                prepending = prepending
+            ),
             unseenNewComments = if (isRefresh) unseen else unseenNewComments,
             lastCheckedAtMillis = System.currentTimeMillis(),
-            windowError = null,
+            // Each kind of request answers for its own failure only. An Older page
+            // that arrived does not excuse a background check that did not, and the
+            // banner left on screen has to name the request its Retry can actually
+            // make again.
+            windowError = if (isRefresh) windowError else null,
+            refreshError = if (isRefresh) null else refreshError,
             loadError = if (isRefresh) loadError else null
         )
+    }
+
+    /**
+     * Which of the three merges this page needs, because three different things
+     * arrive under one name.
+     *
+     * A refresh of the newest page replaces everything from the oldest reply it
+     * carried onward: that is what drops a deleted comment, picks up an edit and
+     * notices a like changed - the userscript this imitates discovered the thread
+     * by re-reading its tail rather than trusting its own copy.
+     *
+     * An Older page is *prepended*. It can never replace: the rows below it are the
+     * ones the reader is looking at, and a page of comments from an hour earlier
+     * arriving on its own would leave the thread with a hole where the present was.
+     *
+     * Anything else is the re-aim, and the page aimed at with a stale count is
+     * discarded because it was never the newest one.
+     */
+    private fun mergedReplies(
+        onScreen: List<ActivityReply>,
+        incoming: List<ActivityReply>,
+        page: Int,
+        oldestPage: Int,
+        isRefresh: Boolean
+    ): List<ActivityReply> = when {
+        incoming.isEmpty() && isRefresh -> onScreen
+        isRefresh -> {
+            val oldest = incoming.minOfOrNull { it.id }
+            if (oldest == null) onScreen else onScreen.filter { it.id < oldest } + incoming
+        }
+        page < oldestPage -> incoming + onScreen
+        else -> incoming
+    }
+
+    /**
+     * How many merged rows were not on screen before this refresh - the number the
+     * "N new" pill prints. Only a refresh can find new rows: an Older page is
+     * already on the reader's other side, and counting it would announce comments
+     * the reader just asked for as though they had arrived unseen.
+     */
+    private fun unseenCount(
+        previous: List<ActivityReply>,
+        merged: List<ActivityReply>,
+        isRefresh: Boolean
+    ): Int = if (!isRefresh) {
+        0
+    } else {
+        merged.count { reply -> previous.none { it.id == reply.id } }
+    }
+
+    /**
+     * The window after the merge.
+     *
+     * A refresh grows the window by what arrived, but only for a reader who had
+     * scrolled up into rows that were fetched and not drawn: taking in new comments
+     * silently is the same as moving their place. A reader parked at the newest end
+     * wants the new rows, not a taller window.
+     *
+     * An Older page grows by the rows it prepended - the window is counted from the
+     * newest end, so a page that arrives above it has to be inside the number or the
+     * reader presses Older and sees nothing.
+     */
+    private fun grownWindowRows(
+        shownRows: Int,
+        fetchedRows: Int,
+        incomingRows: Int,
+        unseen: Int,
+        isRefresh: Boolean,
+        prepending: Boolean
+    ): Int = when {
+        isRefresh && unseen > 0 &&
+            CommentWindow.visibleRowCount(fetchedRows, shownRows) < fetchedRows ->
+            CommentWindow.grownRowCount(shownRows, unseen)
+        !isRefresh && prepending -> shownRows + incomingRows
+        else -> shownRows
+    }
+
+    /**
+     * The oldest page now in hand. An Older page moves the marker back; a refresh
+     * keeps it where it was (it re-read the newest end, not an older one); the
+     * re-aim replaces it with the page that was actually fetched.
+     */
+    private fun nextOldestPage(page: Int, oldestPage: Int, isRefresh: Boolean): Int = when {
+        page < oldestPage -> page
+        isRefresh -> oldestPage
+        else -> page
     }
 
     /**
@@ -300,7 +367,9 @@ internal class CommentThreadWindow(
     fun loadOlder() {
         val current = state.value ?: return
         if (current.isLoadingOlder || !current.isChatView) return
-        if (current.shownRows in 1 until current.replies.size) {
+        if (CommentWindow.visibleRowCount(current.replies.size, current.shownRows) <
+            current.replies.size
+        ) {
             state.value = current.copy(
                 shownRows = (current.shownRows + CommentWindow.PAGE_SIZE)
                     .coerceAtMost(current.replies.size)
@@ -308,7 +377,18 @@ internal class CommentThreadWindow(
             return
         }
         val page = CommentWindow.olderPage(current.oldestPage) ?: return
-        if (!CommentWindow.hasOlder(page, current.replyCount, current.replies.size)) return
+        // [CommentWindow.hasOlder] is asked about the page that is *on screen*, and
+        // works out for itself whether an older one exists. Handing it `page` - which
+        // `olderPage` had already moved back one - made it do that twice, so the walk
+        // stopped one page short: at oldestPage 2 it answered "nothing older" and the
+        // first 25 comments of any thread longer than 50 were unreachable, while the
+        // row above the list still said "Older 25" and did nothing when tapped.
+        if (!CommentWindow.hasOlder(
+                page = current.oldestPage,
+                replyCount = current.replyCount,
+                loadedCount = current.replies.size
+            )
+        ) return
         state.value = current.copy(isLoadingOlder = true, windowError = null)
         scope.launch {
             val result = repositoryResult {
@@ -346,7 +426,14 @@ internal class CommentThreadWindow(
     fun checkForNewComments(atBottom: Boolean) {
         val current = state.value ?: return
         if (isDemo || !current.isChatView || current.isLoading || current.isRefreshing) return
-        scope.launch {
+        // A request already out means this one would be answered against rows the
+        // first is about to merge in, and the second count of "what is new" is then
+        // zero - the pill a reader was owed disappears. The guard is a job rather
+        // than `isRefreshing` because that flag is the sheet's "the rows are still
+        // readable" signal, and a background check that ended on an early return
+        // would leave it set and the header spinning.
+        if (checkJob?.isActive == true) return
+        checkJob = scope.launch {
             loadWindow(
                 activityId = current.activityId,
                 page = CommentWindow.lastPage(current.replyCount),

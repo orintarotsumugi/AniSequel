@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,12 +40,16 @@ class CommentChatWindowTest {
         val requestedPages = mutableListOf<Int>()
         var wholeThreadReads = 0
 
+        /** Makes the paged read fail, for a background check that has to say so. */
+        var failWindowReads = false
+
         override suspend fun getActivityReplyWindow(
             activityId: Int,
             page: Int,
             perPage: Int
         ): Result<ActivityReplyWindow> {
             requestedPages += page
+            if (failWindowReads) return Result.failure(IllegalStateException("the socket closed"))
             // AniList's paging, exactly: replies ascend by id, a page is a slice of
             // that order, and a page past the last one answers empty while still
             // reporting the real count.
@@ -147,6 +152,59 @@ class CommentChatWindowTest {
             after.replies.first().id
         )
         assertEquals(35, after.replies.size)
+    }
+
+    /**
+     * The walk back has to finish.
+     *
+     * Sixty replies are three pages, and Older used to stop on the second one. The
+     * caller stepped back a page and then asked the domain whether a step back was
+     * possible, so the question was answered twice and its answer at page 2 was
+     * "no, there is nothing older than page 1" about a page the sheet was not on.
+     * The oldest 25 comments of any thread longer than 50 were unreachable, while
+     * the row above the list went on reading "Older 25" and did nothing when pressed.
+     */
+    @Test
+    fun `older walks all the way back to the first page`() = runTest {
+        val repository = WindowRepository(thread(60))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+
+        store.loadOlder()
+        runCurrent()
+        store.loadOlder()
+        runCurrent()
+
+        assertEquals(listOf(3, 2, 1), repository.requestedPages)
+        val state = store.state.value!!
+        assertEquals(1, state.oldestPage)
+        assertEquals("every page of the thread is in hand", 60, state.replies.size)
+    }
+
+    /**
+     * A failed check is not a failed Older page.
+     *
+     * Both used to land in `windowError`, and the banner under the list read that
+     * field as the Older failure: the Retry it offered asked for an older page after
+     * a refresh that had not arrived, which moved the reader backwards and still
+     * did not bring the comments they were waiting for.
+     */
+    @Test
+    fun `a failed background check names its own retry`() = runTest {
+        val repository = WindowRepository(thread(40))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 40, chatView = true)
+        runCurrent()
+        repository.failWindowReads = true
+
+        store.checkForNewComments(atBottom = true)
+        runCurrent()
+
+        val state = store.state.value!!
+        assertEquals("the socket closed", state.refreshError)
+        assertNull("there is no older page being retried", state.windowError)
+        assertFalse("the header is not still spinning", state.isRefreshing)
     }
 
     @Test

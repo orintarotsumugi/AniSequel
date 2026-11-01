@@ -709,4 +709,15 @@ fun UserProfileScreen(
         messagesViewModel = messagesViewModel,
         onOpenUser = onOpenUser
     )
+
+    // The thread on a message, which is the activity sheet pointed at a
+    // `MessageActivity` id: AniList gives a direct message replies the way it gives
+    // any activity one, so commenting and replying there are the same feature the
+    // feed already has rather than a second implementation to keep in step.
+    MessagesCommentsSheetHost(
+        messagesViewModel = messagesViewModel,
+        likersViewModel = activityViewModel,
+        viewerId = viewerId,
+        canPost = viewerId != null
+    )
 }

@@ -333,7 +333,6 @@ fun ActivityCommentsSheet(
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
-                    onGifUsed = { url -> gifStore.rememberUsed(url) },
                     onCancel = onDismissReplyAction,
                     onSubmit = onSubmitReplyEdit,
                     title = "Edit Comment",
@@ -354,7 +353,6 @@ fun ActivityCommentsSheet(
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
-                    onGifUsed = { url -> gifStore.rememberUsed(url) },
                     onCancel = { composing = false },
                     onSubmit = {
                         val text = draft.text.trim()
@@ -553,12 +551,24 @@ private fun ScrollToPostedReply(
         val row = postedReplyRow(
             replies = state.replies,
             postedReplyId = posted,
-            // The thread shows one banner row for either failure, and one Older row
-            // when the window does not cover the thread; both push every reply down
-            // by one, and the scroll has to count them the way the list does.
-            hasBannerRow = state.loadError != null || state.windowError != null,
-            hasOlderRow = state.isChatView &&
-                CommentWindow.hiddenCount(state.replyCount, state.replies.size) > 0
+            // The thread shows one banner row for any failed request, and one Older
+            // row when the window does not cover the thread; both push every reply
+            // down by one, and the scroll has to count them the way the list does.
+            // That means the Older row's own condition - the rows *drawn*, not the
+            // rows fetched: on a thread the reader had scrolled up in the two differ,
+            // and counting the fetched ones here said "no Older row" while the list
+            // was drawing one, so the scroll landed a row short of the comment just
+            // posted. [CommentWindow.visibleRowCount] is the one answer both sides use.
+            hasBannerRow = state.loadError != null ||
+                state.windowError != null ||
+                state.refreshError != null,
+            hasOlderRow = state.isChatView && CommentWindow.hiddenCount(
+                replyCount = state.replyCount,
+                loadedCount = CommentWindow.visibleRowCount(
+                    repliesLoaded = state.replies.size,
+                    shownRows = state.shownRows
+                )
+            ) > 0
         )
         if (row < 0) return@LaunchedEffect
         // An index past the end is clamped by `animateScrollToItem`, so a thread

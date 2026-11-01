@@ -289,12 +289,12 @@ fun ExpressiveNavigationBar(
                 .shadow(elevation = 8.dp, shape = ExpressiveShapes.pill, clip = false)
                 .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(5.dp)
-                .onSizeChanged { barWidth = it.width }
-                .graphicsLayer {
-                    scaleX = holdScale
-                    scaleY = holdScale
-                }
+                // The gesture region is the whole pill, the 5dp ring around the row
+                // included - which is why this sits *before* that padding rather than
+                // after it. With `pointerInput` inside the padding the ring was
+                // neither an item nor a gesture region, so a down that landed on it
+                // carried on through the floating bar to whatever it happened to be
+                // covering: a message card, which opened the thread.
                 .pointerInput(destinations.size) {
                     awaitEachGesture {
                         holdThenSwipe(
@@ -307,6 +307,17 @@ fun ExpressiveNavigationBar(
                             onHold = holdDestination
                         )
                     }
+                }
+                // These three follow the gesture handler rather than leading it, and
+                // each is load-bearing in silence: the ring is the bar's inset, the
+                // measurement is what `stepPx` divides, and the layer is the hold
+                // scale. Lose one and the bar simply looks tighter, or a swipe stops
+                // knowing how far a destination is.
+                .padding(5.dp)
+                .onSizeChanged { barWidth = it.width }
+                .graphicsLayer {
+                    scaleX = holdScale
+                    scaleY = holdScale
                 },
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -373,6 +384,60 @@ fun ExpressiveNavigationBar(
  * and a hold that goes nowhere was, until now, a gesture that only ever lifted the
  * bar and then did nothing.
  */
+/**
+ * What a finished hold-and-swipe actually asked for.
+ *
+ * Extracted as a pure decision because the gesture itself cannot be unit tested
+ * here: there is no `androidTest` source set and no `createComposeRule` in the JVM
+ * suite, so the house pattern for pointer behaviour - `TierDragLogicTest`,
+ * `MainTabsTest` - is to pull the arithmetic out and pin that.
+ */
+internal sealed interface NavGesture {
+    /** Nothing the bar should act on. */
+    data object None : NavGesture
+
+    /** A finger that stayed where it landed: the hold shortcut. */
+    data class Hold(val index: Int) : NavGesture
+
+    /** A drag that ended on a different destination: switch to it. */
+    data class Switch(val index: Int) : NavGesture
+}
+
+/**
+ * The one rule the bar's gesture turns on.
+ *
+ * The shortcut belongs to a hold the finger never left, and a drag belongs to the
+ * destination it ended on - decided by [travelledPx], the distance the finger
+ * covered, and not by whether the *index* changed on the way. The index only moves
+ * once a drag has passed a whole destination width (95-126dp on a phone), so
+ * judging "did it move" by the index classified every shorter drag as a still hold,
+ * and the ordinary hold-and-shove-left on the profile ended up firing the inbox
+ * shortcut. An out-and-back drag travels further than slop and settles where it
+ * started, so it is now the no-op it always was: nothing was asked for.
+ */
+internal fun navGestureDecision(
+    startIndex: Int,
+    settledIndex: Int,
+    travelledPx: Float,
+    touchSlopPx: Float,
+    hasHoldShortcut: Boolean
+): NavGesture = when {
+    travelledPx > touchSlopPx ->
+        if (settledIndex == startIndex) NavGesture.None else NavGesture.Switch(settledIndex)
+    hasHoldShortcut -> NavGesture.Hold(settledIndex)
+    else -> NavGesture.None
+}
+
+/**
+ * Where a held drag ended, and how far the finger actually went.
+ *
+ * [travelledPx] is the sum of every move, which is not the same number as the
+ * remainder `swipeSelection` banks against whole destination steps and zeroes at
+ * either end of the bar: that one exists to do the tab arithmetic and cannot answer
+ * whether the finger moved at all.
+ */
+private data class SwipeOutcome(val index: Int, val travelledPx: Float)
+
 private suspend fun AwaitPointerEventScope.holdThenSwipe(
     startIndex: () -> Int,
     lastIndex: Int,
@@ -393,11 +458,11 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
     onPreview(start)
     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
-    // Whether the preview ever moved off `start`. The shortcut belongs to the hold
-    // alone, and a swipe that travelled out and came back is the finger changing its
-    // mind rather than asking for anything - so it stays the no-op it was.
-    var moved = false
-    var settled: Int? = null
+    // The gesture is decided once the finger lifts, in [navGestureDecision]: the
+    // shortcut belongs to a hold the finger never left, and a drag that travelled
+    // out and came back is the finger changing its mind rather than asking for
+    // anything.
+    var settled: SwipeOutcome? = null
     try {
         settled = swipeSelection(
             down = down,
@@ -405,10 +470,7 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
             lastIndex = lastIndex,
             stepPx = stepPx,
             haptic = haptic,
-            onPreview = { index ->
-                if (index != start) moved = true
-                onPreview(index)
-            }
+            onPreview = onPreview
         )
     } finally {
         // `finally`, not after the call: a key change (the tier tab being switched
@@ -418,10 +480,21 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
         //
         // The commit happens *before* the preview closes so the bar never flashes
         // the tab the swipe started from between the two writes.
-        val destination = settled
-        if (destination != null) {
-            val shortcut = if (moved) null else onHold
-            if (shortcut != null) shortcut(destination) else onSwitch(destination)
+        val outcome = settled
+        if (outcome != null) {
+            when (
+                navGestureDecision(
+                    startIndex = start,
+                    settledIndex = outcome.index,
+                    travelledPx = outcome.travelledPx,
+                    touchSlopPx = viewConfiguration.touchSlop,
+                    hasHoldShortcut = onHold != null
+                )
+            ) {
+                is NavGesture.Hold -> onHold?.invoke(outcome.index)
+                is NavGesture.Switch -> onSwitch(outcome.index)
+                NavGesture.None -> Unit
+            }
         }
         onPreview(null)
     }
@@ -470,9 +543,11 @@ private suspend fun AwaitPointerEventScope.swipeSelection(
     stepPx: Float,
     haptic: HapticFeedback,
     onPreview: (Int) -> Unit
-): Int? {
+): SwipeOutcome? {
     var index = startIndex()
     var travel = 0f
+    // Every move, either direction, counted once: see [SwipeOutcome].
+    var travelled = 0f
 
     fun moveTo(next: Int) {
         if (next == index) return
@@ -491,7 +566,8 @@ private suspend fun AwaitPointerEventScope.swipeSelection(
         // release returned the starting tab and the swipe cancelled itself.
         val deltaX = change.positionChange().x
         change.consume()
-        if (!change.pressed) return index
+        travelled += kotlin.math.abs(deltaX)
+        if (!change.pressed) return SwipeOutcome(index, travelled)
 
         travel += deltaX
 
