@@ -87,7 +87,13 @@ private const val COLLAPSED_CHAR_HINT = 280
  */
 internal fun isBioCollapsible(about: String, nodes: List<MarkdownNode>): Boolean {
     val embedsImage = nodes.any { node ->
-        node is MarkdownNode.Paragraph && node.inlines.containsEmbeddedImage()
+        // Two forms, because the editor writes two. A whole-line embed - the bare
+        // URL, `img(url)`, `img100%(url)`, a centred `~~~` block - comes back as an
+        // ImageBlock, and that is the shape AniList's own composer produces for a
+        // banner; an image *inside* a sentence is an inline token in a paragraph.
+        // Checking only the second one left the common case collapsed.
+        node is MarkdownNode.ImageBlock ||
+            (node is MarkdownNode.Paragraph && node.inlines.containsEmbeddedImage())
     }
     if (embedsImage) return false
     return about.length > COLLAPSED_CHAR_HINT ||

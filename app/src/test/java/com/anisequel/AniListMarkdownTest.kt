@@ -1113,12 +1113,22 @@ class AniListMarkdownTest {
         // A clamped paragraph is one `Text`, and a `Text` cannot hold a bitmap: the
         // image came out as its alt text until the reader pressed Show more, which
         // is the opposite of what a banner bio is for.
-        val withImage = "https://static.anilist.co/banner.gif " + "filler ".repeat(80)
-        val imageNodes = AniListMarkdownParser.parse(withImage)
-        assertFalse(
-            "a long bio with an image in it is shown whole",
-            com.anisequel.ui.screens.profile.isBioCollapsible(withImage, imageNodes)
-        )
+        // The whole-line form, which is what AniList's own editor writes for a
+        // banner, and the inline form - both have to count, because they parse to
+        // different nodes and checking only one was the first version's miss.
+        listOf(
+            "https://static.anilist.co/banner.gif\n" + "filler ".repeat(80),
+            "![cover](https://static.anilist.co/banner.gif) " + "filler ".repeat(80),
+            "img100%(https://static.anilist.co/banner.gif)\n" + "filler ".repeat(80)
+        ).forEach { withImage ->
+            assertFalse(
+                "a long bio with an image in it is shown whole: $withImage",
+                com.anisequel.ui.screens.profile.isBioCollapsible(
+                    withImage,
+                    AniListMarkdownParser.parse(withImage)
+                )
+            )
+        }
 
         val textOnly = "filler ".repeat(120)
         assertTrue(
