@@ -1658,3 +1658,104 @@ mounted even when jokes are off: an explicit request is not the ambient feature.
 The Settings-side AniList check no longer reads the failure copy's quip pool. It
 is a diagnostic the reader asked for, so every line is fixed copy; the random
 voice belongs to the ambient toast, where nobody is waiting for a verdict.
+
+## The comment sheet is a chat, and the file host is a second service
+
+AniList's `Activity(id:){replies}` has **no arguments**. It is the thread's whole
+comment list in one response, and the busiest text posts on the site run to
+thousands. That was invisible while threads were small and is the reason opening a
+comment sheet on a popular post was the slowest thing in the app: one request, one
+parse and a list of a hundred-odd rows for a reader who wanted the last screen of
+the conversation.
+
+So the sheet reads `Page(page, perPage){activityReplies(activityId)}` - one page -
+and the newest comments are on the **last** page, because replies come back in
+ascending id order. That fact is verified against the live API rather than assumed,
+and [CommentWindow](app/src/main/java/com/anisequel/domain/usecase/CommentWindow.kt)
+holds the arithmetic: `ceil(replyCount / perPage)` aims the first request, and the
+count that arrives with the page is checked against the aim, because the feed card's
+own count is minutes stale on a thread people are posting to. A guess that lands on
+the same page is not re-requested; a guess that hides the newest page costs exactly
+one more request, and never a second re-aim.
+
+`GET_ACTIVITY_REPLIES` stays, and is what the sheet uses when a reader turns
+Settings ▸ AniList ▸ **Chat view** off. It is not dead code and it is not a
+compatibility shim: it is the other answer to "show me this conversation", and the
+one that is a single request for a short thread either way.
+
+Row grouping - hiding the avatar and name when the person above is still speaking -
+is [CommentGrouping](app/src/main/java/com/anisequel/domain/usecase/CommentGrouping.kt),
+and it requires the *same depth* as well as the same author. `ReplyThreader` indents
+an answer under what it answers; merging across that indent would draw somebody's
+answer as a continuation of the wrong message, which is a claim about the
+conversation rather than a saving on pixels.
+
+Polling is a separate switch from the window for one reason: opening at the newest
+message is one request, and staying current is one every fifteen seconds. AniList
+budgets roughly thirty requests a minute, so a reader on a metered connection may
+want the first and not the second.
+
+**Attachments go to catbox.moe.** AniList has nowhere to put a file, so "attach"
+means "hand it to a host and paste the address". Catbox takes an anonymous upload -
+no account, no key, no OAuth - and serves the file unchanged at `files.catbox.moe`,
+which is the only reason this can be offered without asking anybody to register for
+a credential. The price is retention: anonymous files are kept until two years of no
+views, so an embed on a comment nobody reads can disappear. Settings says so, because
+a dead image six months later should be a thing the reader chose.
+[CatboxApi](app/src/main/java/com/anisequel/data/network/CatboxApi.kt) is its own
+`OkHttpClient` with no interceptors - the shared one attaches the reader's bearer
+token, and a file host has no business receiving it. The host answers a refusal with
+HTTP 200 and prose, so "is the body a `files.catbox.moe` URL" is the whole success
+test, pinned in `CatboxUploadProtocolTest`.
+
+GIF search answers the same way twice: **Openverse**, anonymous, filtered to
+`.gif` by its `extension` argument, and **Tenor v2** when the reader has pasted a
+key. Tenor's public key-free API was discontinued - `g.tenor.com/v1` now returns
+`{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
+rejects the old key - which is why the anonymous default is a Creative Commons index
+rather than a reaction-GIF catalogue, and why the empty-result sentence says so
+instead of blaming the app. A key is never committed: `KeystoreIntegrityTest` is not
+the reason so much as the same reasoning - a bundled credential is a shared rate
+limit and a public secret.
+
+Storing that key is why `KeystoreTokenCipher` now takes its alias. A decrypt failure
+deletes the keystore entry, deliberately, because an invalidated key is worse than no
+key - and a reader's unreadable GIF key must not be able to destroy the entry their
+AniList token is sealed under, which would sign them out of the account to fix a
+setting.
+
+## A centred image, and why the parser could not see one
+
+`~~~img100%(https://…/card.svg)~~~` is what AniList's own editor writes for a
+centred banner, and the API answers the same bio as
+`<center><img width='100%' src='…'></center>`. The app printed the markup as a
+centred sentence. Every whole-line image form in
+[AniListMarkdownParser](app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt)
+is matched with `matchEntire` on the **source line**, and inside a single-line
+`~~~…~~~` span the source line is the whole span including the tildes - so the image
+code could never be the whole line, and the centred branch went straight to the
+paragraph builder. `centredSingleImage` re-parses the inner text as a block and keeps
+the result only when it is exactly one `ImageBlock`, which leaves centred prose and
+centred AniList media cards on their old path. The width suffix travels with the
+node, so `img100%` is a banner and `img220` stays a strip.
+
+The second half was not a parser bug at all: an SVG could not be *decoded*.
+Android's `ImageDecoder` - the only decoder this app registered, and the one that
+runs at `minSdk = 31` - reads PNG, JPEG, GIF, WebP and HEIF. A bio card drawn live by
+a server arrives as `image/svg+xml` and failed silently, so the image area was an
+error placeholder over a picture the site itself shows. `coil-svg` registers
+`SvgDecoder` beside it. **AndroidSVG is a partial implementation of a large
+specification**: a card that nests `data:` images, `@font-face` fonts or animated
+WebP inside itself may draw incompletely, which is a limit of the format on Android
+rather than something this registration can fix.
+
+## The window colour, seen only in a fast tap
+
+Every page arrives scaled to 94% while fading up, and the page it covers fades out
+at 98%. For a few frames neither is full-size and neither is solid, so what shows
+through is the `Box` behind the `NavHost` - which had no background, and whose
+fallback is the platform window, painted black. A double tap on the Settings icon
+was therefore a black screen between two correctly themed screens. The fix is one
+`Modifier.background(MaterialTheme.colorScheme.background)` on that container: the
+cross-fade is the app's motion language and stays, and what was missing was a
+surface behind it.
