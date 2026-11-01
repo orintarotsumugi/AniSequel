@@ -12,6 +12,8 @@ import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
+import com.anisequel.data.model.ActivityReplyWindowData
+import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaDetailData
@@ -346,6 +348,9 @@ class RepositorySnapshotsTest {
  * and an unanswered one fails loudly rather than quietly inventing data.
  */
 private class SnapshotTestService : AniListApiService {
+        override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> = throw UnsupportedOperationException("not needed by this test")
+        override suspend fun getActivityReplyWindow(request: GraphQLRequest): GraphQLResponse<ActivityReplyWindowData> = throw UnsupportedOperationException("not needed by this test")
+        override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLResponse<ActivityReplyLikersData> = throw UnsupportedOperationException("not needed by this test")
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(

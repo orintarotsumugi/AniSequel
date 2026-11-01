@@ -35,7 +35,7 @@ class CommentChatWindowTest {
     private class WindowRepository(
         var replies: List<ActivityReply>,
         var serverCount: Int = replies.size
-    ) : AniListRepository {
+    ) : AniListRepository by UnsupportedRepository {
         val requestedPages = mutableListOf<Int>()
         var wholeThreadReads = 0
 
@@ -216,4 +216,23 @@ class CommentChatWindowTest {
             repository.requestedPages.isEmpty()
         )
     }
+}
+
+/**
+ * Every repository call the chat-window tests do not exercise.
+ *
+ * The interface has abstract members (a repository that cannot answer them is a
+ * bug, not a default), so the double delegates here rather than restating thirty
+ * signatures - and a test that accidentally reaches one of them fails loudly with
+ * this name in the stack, which is the useful kind of noise.
+ */
+private object UnsupportedRepository : AniListRepository {
+    override suspend fun getViewer(): Result<com.anisequel.data.model.ViewerProfile> = throw UnsupportedOperationException()
+    override suspend fun getUserByName(userName: String): Result<com.anisequel.data.model.ViewerProfile> = throw UnsupportedOperationException()
+    override suspend fun getUserAnimeList(userId: Int, forceRefresh: Boolean): Result<com.anisequel.data.model.MediaListCollection> = throw UnsupportedOperationException()
+    override suspend fun getUserAnimeListByUsername(userName: String, forceRefresh: Boolean): Result<com.anisequel.data.model.MediaListCollection> = throw UnsupportedOperationException()
+    override suspend fun getMediaDetail(mediaId: Int, mediaType: String?): Result<com.anisequel.data.model.MediaNode> = throw UnsupportedOperationException()
+    override suspend fun addToPlanning(mediaId: Int): Result<com.anisequel.data.model.SimpleMediaListEntry> = throw UnsupportedOperationException()
+    override fun getDemoProfile(): com.anisequel.data.model.ViewerProfile = throw UnsupportedOperationException()
+    override fun getDemoAnimeList(): com.anisequel.data.model.MediaListCollection = throw UnsupportedOperationException()
 }

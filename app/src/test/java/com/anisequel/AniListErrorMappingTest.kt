@@ -8,6 +8,8 @@ import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
+import com.anisequel.data.model.ActivityReplyWindowData
+import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
@@ -65,7 +67,10 @@ import java.io.IOException
 class AniListErrorMappingTest {
 
     private class FakeService(
-        private val viewerResponse: () -> GraphQLResponse<ViewerData> = { errorGraphQL("Invalid token") }
+        private val viewerResponse: () -> GraphQLResponse<ViewerData> = {
+        override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> = throw UnsupportedOperationException("not needed by this test")
+        override suspend fun getActivityReplyWindow(request: GraphQLRequest): GraphQLResponse<ActivityReplyWindowData> = throw UnsupportedOperationException("not needed by this test")
+        override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLResponse<ActivityReplyLikersData> = throw UnsupportedOperationException("not needed by this test") errorGraphQL("Invalid token") }
     ) : AniListApiService {
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.

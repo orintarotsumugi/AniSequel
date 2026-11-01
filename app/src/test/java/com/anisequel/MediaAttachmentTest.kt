@@ -98,6 +98,18 @@ class MediaAttachmentTest {
     }
 
     @Test
+    fun `an embed carries the width the reader chose, and nothing else`() {
+        assertEquals("img(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif"))
+        assertEquals("img220(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif", "220"))
+        assertEquals("img100%(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif", "100%"))
+        // A width the parser would not read back is dropped rather than written:
+        // `imgwibble(url)` is not an image, it is a line of text in somebody's
+        // comment, and the author sees it only after posting.
+        assertEquals("img(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif", "wibble"))
+        assertEquals("img(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif", "-20"))
+    }
+
+    @Test
     fun `the stored name keeps an extension that matches the bytes`() {
         assertEquals("screenshot.png", MediaAttachment.storageFileName("image/png", "Screenshot"))
         // The picker's name lies; the mime type the sniffer agreed with does not.

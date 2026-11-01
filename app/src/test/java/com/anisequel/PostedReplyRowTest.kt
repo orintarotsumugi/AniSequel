@@ -62,6 +62,7 @@ class PostedReplyRowTest {
 
     @Test
     fun `an older-comments row above the thread counts like the banner does`() {
+        val replies = listOf(reply(1), reply(2), reply(3))
         // Chat view opens one page of a long thread and puts an Older control above
         // it. Both that row and a failure banner sit over the replies, and either
         // one alone shifts the posted comment down by one - so the arithmetic adds

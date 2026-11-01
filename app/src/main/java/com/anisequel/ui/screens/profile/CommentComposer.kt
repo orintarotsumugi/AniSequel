@@ -114,6 +114,10 @@ internal fun CommentComposer(
     modifier: Modifier = Modifier
 ) {
     var pane by rememberSaveable { mutableIntStateOf(PANE_WRITE) }
+    // The width a picked GIF is inserted at. Defaulted to the site's own strip
+    // width rather than "original": a full-size animation dropped into a comment is
+    // the one embed that pushes the whole thread off the screen.
+    var gifWidth by rememberSaveable { mutableStateOf("220") }
     var pendingInsert by remember { mutableStateOf<InsertKind?>(null) }
     val showingGifs = pane == PANE_GIFS
 
@@ -161,9 +165,12 @@ internal fun CommentComposer(
         )
 
         when {
-            showingGifs -> gifPane { url ->
-                insertBlockAt(MediaAttachment.embedMarkdown(url))
-                pane = PANE_WRITE
+            showingGifs -> {
+                GifWidthRow(gifWidth) { gifWidth = it }
+                gifPane { url ->
+                    insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth))
+                    pane = PANE_WRITE
+                }
             }
 
             pane == PANE_PREVIEW -> DraftBody(
@@ -397,6 +404,56 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(14.dp)
             )
+        }
+    }
+}
+
+/**
+ * The widths a picked GIF can be inserted at.
+ *
+ * AniList's own editor offers exactly this choice, and it matters more on a phone
+ * than on a desktop: a comment thread is read on a 360dp screen, so an original
+ * 720px animation is a wall that pushes the conversation away. "Original" stays
+ * first in the list because some GIFs *are* their size - a 60px sprite row blown up
+ * to 220 is a blur - but it is not the default.
+ */
+@Composable
+private fun GifWidthRow(selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        (listOf<String?>(null) + MediaAttachment.EMBED_WIDTHS).forEach { width ->
+            val label = width ?: "Original"
+            val isSelected = width == selected
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(
+                        if (isSelected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+                    )
+                    .clickable(onClickLabel = "Insert at $label width") { onSelect(width ?: "") }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("comment_gif_width_$label")
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
     }
 }

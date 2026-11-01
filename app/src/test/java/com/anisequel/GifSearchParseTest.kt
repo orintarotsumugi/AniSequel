@@ -7,6 +7,7 @@ import com.anisequel.data.network.toGifPage
 import com.anisequel.data.network.FlexibleStringAdapter
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

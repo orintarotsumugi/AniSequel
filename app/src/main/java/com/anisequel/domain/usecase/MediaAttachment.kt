@@ -105,7 +105,22 @@ object MediaAttachment {
      * parser matches it only when it is the whole line - which is why inserts go
      * through `insertBlock` rather than being dropped into a sentence.
      */
-    fun embedMarkdown(url: String): String = "img($url)"
+    fun embedMarkdown(url: String, width: String? = null): String {
+        val suffix = width?.takeIf { WIDTH_PATTERNS.any { pattern -> pattern.matches(it) } }
+        return if (suffix == null) "img($url)" else "img$suffix($url)"
+    }
+
+    /**
+     * The widths AniList's own editor writes.
+     *
+     * A bare number is pixels and a percent is a share of the column, which is why
+     * both are accepted and anything else is dropped: the parser reads
+     * `(\d+%|\d+)` before the parenthesis, and `imgwibble(url)` is not an image at
+     * all - it is a line of text in somebody's comment.
+     */
+    val EMBED_WIDTHS: List<String> = listOf("220", "400", "50%", "100%")
+
+    private val WIDTH_PATTERNS = listOf(Regex("""\d+"""), Regex("""\d+%"""))
 
     /**
      * The part name to send with the file.
