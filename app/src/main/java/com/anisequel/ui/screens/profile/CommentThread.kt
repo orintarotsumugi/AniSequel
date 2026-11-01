@@ -506,7 +506,7 @@ private fun ChatScrollEffects(
  */
 @Composable
 @Suppress("LongParameterList")
-private fun ThreadList(
+private fun ColumnScope.ThreadList(
     state: CommentThreadStore.CommentsState,
     viewerId: Int?,
     canPost: Boolean,

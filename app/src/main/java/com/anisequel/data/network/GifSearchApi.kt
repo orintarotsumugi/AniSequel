@@ -184,6 +184,33 @@ class TenorGifs(
 
 
 /** Tenor v2's search response. */
+/**
+ * Tenor's media map, flattened to the two URLs this app needs.
+ *
+ * `gif` is the embed, `tinygif` is the tile, and `previewgif` is the fallback for a
+ * record that carries only the smallest copy. A result with no GIF URL at all is
+ * dropped rather than embedded as a blank. Top-level and internal so a renamed
+ * field shows up in a JVM test rather than as an empty grid in somebody's picker.
+ */
+internal fun TenorResponse.toGifPage(): GifPage {
+    val rows = results.orEmpty().filterNotNull().mapNotNull { entry ->
+        val formats = entry.mediaFormats ?: return@mapNotNull null
+        val embed = formats.gif?.url ?: formats.tinygif?.url ?: formats.previewGif?.url
+            ?: return@mapNotNull null
+        val grid = formats.tinygif?.url ?: formats.previewGif?.url ?: embed
+        val dims = formats.gif?.dims
+        GifResult(
+            id = entry.id ?: embed,
+            embedUrl = embed,
+            gridUrl = grid,
+            title = entry.title,
+            width = dims?.getOrNull(0),
+            height = dims?.getOrNull(1)
+        )
+    }
+    return GifPage(results = rows, next = next?.takeIf { rows.isNotEmpty() })
+}
+
 @JsonClass(generateAdapter = true)
 internal data class TenorResponse(
     val results: List<TenorEntry?>? = null,
