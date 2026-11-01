@@ -110,6 +110,8 @@ internal fun CommentComposer(
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
     onPickFromDevice: () -> Unit,
+    /** Records a picked GIF so the next empty search offers it again. */
+    onGifUsed: (String) -> Unit = {},
     gifPane: @Composable ColumnScope.((String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -169,6 +171,7 @@ internal fun CommentComposer(
                 GifWidthRow(gifWidth) { gifWidth = it }
                 gifPane { url ->
                     insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth))
+                    onGifUsed(url)
                     pane = PANE_WRITE
                 }
             }

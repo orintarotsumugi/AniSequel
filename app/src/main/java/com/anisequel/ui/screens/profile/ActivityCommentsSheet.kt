@@ -322,6 +322,7 @@ fun ActivityCommentsSheet(
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
+                    onGifUsed = { url -> gifStore.rememberUsed(url) },
                     onCancel = { composing = false },
                     onSubmit = {
                         val text = draft.text.trim()

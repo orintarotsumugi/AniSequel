@@ -89,6 +89,10 @@ internal fun ColumnScope.GifBrowser(
     // a delegated property, so the compiler will not promise it stays non-null
     // between the check and the use.
     val errorMessage = state.error
+    // Read once per recomposition: the strip is what an empty search shows, so a
+    // reader who comes back to the picker is looking at their last picks, not at a
+    // blinking "type to search".
+    val recent = store.usedThisSession()
 
     val nearEnd by remember {
         derivedStateOf {
@@ -134,6 +138,11 @@ internal fun ColumnScope.GifBrowser(
         )
 
         state.isSearching && state.results.isEmpty() -> GifSkeleton(Modifier.weight(1f))
+
+        state.query.isBlank() && recent.isNotEmpty() -> RecentGifGrid(
+            urls = recent,
+            onUse = onUse
+        )
 
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
@@ -279,3 +288,42 @@ private fun GifMessage(icon: ImageVector, text: String, action: (() -> Unit)?, m
 }
 
 private const val SKELETON_TILES = 9
+
+/**
+ * The picks this sheet has already used, in a grid.
+ *
+ * The reference picker does this and it is the single most useful thing in a GIF
+ * picker: the reaction you want is usually one you used earlier in the same
+ * conversation. It is session-scoped - see [GifSearchStore.rememberUsed] - so
+ * nothing here remembers an image into another session without being told to.
+ */
+@Composable
+private fun ColumnScope.RecentGifGrid(
+    urls: List<String>,
+    onUse: (String) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 104.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .testTag("comment_gif_recent")
+    ) {
+        items(urls, key = { it }) { url ->
+            GifTile(
+                gif = GifResult(
+                    id = url,
+                    embedUrl = url,
+                    gridUrl = url,
+                    title = null,
+                    width = null,
+                    height = null
+                ),
+                onUse = { onUse(url) }
+            )
+        }
+    }
+}

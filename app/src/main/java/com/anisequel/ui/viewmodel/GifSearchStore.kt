@@ -63,6 +63,28 @@ class GifSearchStore(
     private var searchJob: Job? = null
     private var pageJob: Job? = null
 
+    /**
+     * The GIFs this sheet has already put into a draft, newest first.
+     *
+     * An empty search box shows them, which is the picker's answer to the most
+     * common second visit: the reader is back for the same reaction they used a
+     * minute ago. It is session-scoped and says so in the panel rather than
+     * pretending to be a library - a durable history of images somebody pasted into
+     * a public comment is a thing to think about before shipping, not a side effect
+     * of a picker.
+     */
+    private val usedUrls = ArrayDeque<String>()
+
+    /** Records a pick and returns the strip's contents, newest first. */
+    fun rememberUsed(url: String) {
+        usedUrls.remove(url)
+        usedUrls.addFirst(url)
+        while (usedUrls.size > MAX_USED) usedUrls.removeLast()
+    }
+
+    /** The recent picks, in the order the grid should show them. */
+    fun usedThisSession(): List<String> = usedUrls.toList()
+
     /** Rewrites the query and schedules the search it deserves. */
     fun setQuery(query: String) {
         val current = _state.value
@@ -170,5 +192,8 @@ class GifSearchStore(
         const val DEBOUNCE_MILLIS = 450L
 
         const val BLANK_QUERY_NOTE = "Type to search for a GIF."
+
+        /** How many recent picks the empty search shows. */
+        const val MAX_USED = 12
     }
 }
