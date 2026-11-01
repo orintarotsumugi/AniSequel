@@ -146,6 +146,130 @@ internal fun prefixLines(
     val block = text.substring(lineStart, lineEnd)
     if (block.isEmpty()) {
         val inserted = text.substring(0, lineStart) + prefix + text.substring(lineStart)
+        val caret = lineStart + prefix.length
+        return DraftEdit(inserted, caret, caret)
+    }
+
+    // A blank line inside the selection stays blank: a `> ` on an empty line is a
+    // quote mark that quotes nothing, and it shows up in the posted comment.
+    val lines = block.split("\n")
+    val mapped = lines.map { line -> if (line.isBlank()) line else prefix + line }
+    val newText = text.substring(0, lineStart) + mapped.joinToString("\n") + text.substring(lineEnd)
+
+    /**
+     * Where an index in the block lands once each line has been rewritten.
+     *
+     * Each line can gain a prefix or gain nothing, so the shift depends on which
+     * line the index is in - and walking it is the only way to get the *start* of
+     // selection right. Adding the total number of characters inserted (the old
+     // behaviour) pushed a selection that began mid-block past its own beginning:
+     // quoting two lines of a three-line paragraph marked the wrong text, and the
+     // next press of the button acted on that.
+     */
+    fun shift(index: Int): Int {
+        var remaining = index
+        var rebuilt = lineStart
+        for (line in lines.indices) {
+            val oldLength = lines[line].length
+            if (remaining < oldLength) return rebuilt + remaining
+            if (remaining == oldLength) return rebuilt + mapped[line].length
+            remaining -= oldLength + 1
+            rebuilt += mapped[line].length + 1
+        }
+        return rebuilt
+    }
+
+    return DraftEdit(newText, shift(from - lineStart), shift(to - lineStart))
+}
+
+/**
+ * Replaces the selection with [snippet] and puts the cursor after it.
+ *
+ * Used by the attach dialog, where the inserted text is already complete and
+ * there is nothing left to type inside it.
+ */
+internal fun insertSnippet(
+    text: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    snippet: String
+): DraftEdit {
+    val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val newText = text.substring(0, from) + snippet + text.substring(to)
+    val cursor = from + snippet.length
+    return DraftEdit(newText, cursor, cursor)
+}
+
+/**
+ * Prefixes a draft with `@name` for a reply to [name].
+ *
+ * AniList has no parent pointer on an activity reply: a reply is threaded by the
+ * leading mention in its text, which is why the other clients' "Replying to X"
+ * chip is backed by an `@X` the author can still delete. The mention goes in
+ * once, and the cursor lands at the end so the reader keeps typing their comment
+ * rather than having to step over the handle they did not write.
+ *
+ * A blank name -- a reply whose author AniList did not send -- leaves the draft
+ * untouched: `@ ` is not a mention, it is a broken one.
+ */
+internal fun startReplyTo(text: String, name: String): DraftEdit {
+    val handle = name.trim().removePrefix("@").trim()
+    if (handle.isEmpty()) return DraftEdit(text, text.length, text.length)
+    val mention = "@$handle"
+    if (text == mention || text.startsWith("$mention ")) {
+        return DraftEdit(text, text.length, text.length)
+    }
+    val newText = "$mention $text"
+    return DraftEdit(newText, newText.length, newText.length)
+}
+
+/**
+ * Whether an attachment field holds something the parser can render.
+ *
+ * Only `http(s)` is accepted. The comment is shown to other people and the
+ * renderer only embeds an absolute URL: a relative path, a `data:` payload or
+ * anything else the type-it-yourself field allows would be stored as literal
+ * text in the comment, which is worse than refusing the insert.
+ */
+internal fun isAttachableImageUrl(raw: String): Boolean {
+    val trimmed = raw.trim()
+    val scheme = when {
+        trimmed.startsWith("https://", ignoreCase = true) -> "https://"
+        trimmed.startsWith("http://", ignoreCase = true) -> "http://"
+        else -> return false
+    }
+    return trimmed.length > scheme.length && !trimmed.contains(' ')
+}
+
+/**
+ * Prefixes every line the selection touches, for the block-level markup.
+ *
+ * A header, a quote and a list are all "this line, not this span": AniList's
+ * parser matches them at the start of a line, so a control that wrapped the
+ * selection in `# ` would put the hash in the middle of a sentence. The lines the
+ * reader has actually selected get the prefix; with a bare caret the current line
+ * is the target, because pressing Quote and then typing is the ordinary order.
+ *
+ * Removing a prefix is not offered. A toolbar that adds and removes on a toggle
+ * has to remember what it did to each line, and a comment is plain text that the
+ * author can edit by hand - the second press of Header making a second `#` is the
+ * honest behaviour, and the one the reader can undo with Backspace.
+ */
+internal fun prefixLines(
+    text: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    prefix: String
+): DraftEdit {
+    val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val lineStart = text.lastIndexOf('\n', (from - 1).coerceAtLeast(0))
+        .let { if (it < 0) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', to).let { if (it < 0) text.length else it }
+    val block = text.substring(lineStart, lineEnd)
+    if (block.isEmpty()) {
+        val inserted = text.substring(0, lineStart) + prefix + text.substring(lineStart)
         return DraftEdit(inserted, lineStart + prefix.length, lineStart + prefix.length)
     }
     val prefixed = block.lines().joinToString("\n") { line ->

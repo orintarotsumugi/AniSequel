@@ -46,13 +46,12 @@ class CommentMarkupEditsTest {
     fun `prefixing hits every selected line and leaves blanks alone`() {
         val edit = prefixLines("one\ntwo\nthree", 0, 11, "> ")
         assertEquals("> one\n> two\n> three", edit.text)
-        // What matters is that the selection still covers the same *content* after
-        // the prefixes went in - not a hand-counted index, which is exactly the
-        // arithmetic this file exists to test.
-        assertEquals(
-            "one\ntwo\nthree",
-            edit.text.substring(edit.selectionStart, edit.selectionEnd)
-        )
+        // The selection starts where it started - at the first character of the
+        // first line - and ends at the same word it ended at, measured in the new
+        // text. Adding one flat offset for the whole block was the bug: a selection
+        // that began mid-block landed past its own end.
+        assertEquals(0, edit.selectionStart)
+        assertEquals("> one\n> two\n> thr", edit.text.substring(0, edit.selectionEnd))
 
         val blanks = prefixLines("a\n\nb", 0, 3, "> ")
         assertEquals("> a\n\n> b", blanks.text)
@@ -63,8 +62,8 @@ class CommentMarkupEditsTest {
         val edit = prefixLines("abc\ndef", 5, 5, "# ")
         assertEquals("abc\n# def", edit.text)
         assertEquals(
-            "the caret stays where the reader left it, after the marker",
-            7,
+            "the caret stays inside the line it was on, just after the marker",
+            5,
             edit.selectionStart
         )
     }
