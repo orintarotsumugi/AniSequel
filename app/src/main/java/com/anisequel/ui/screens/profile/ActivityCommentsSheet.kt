@@ -192,17 +192,64 @@ fun ActivityCommentsSheet(
     // and restoring the "we are waiting" half without it would swallow the answer.
     var awaitingPost by remember { mutableStateOf(false) }
 
-    // Attachments. AniList has nowhere to put a file, so a photo leaves the app for
-    // catbox.moe and comes back as the URL that gets written into the comment -
-    // which is why the note is kept beside the composer rather than in the store:
-    // the reader is looking at the field they are typing, and the upload belongs to
-    // the draft, not to the thread.
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val catbox = remember { CatboxApi() }
-    var isUploading by remember { mutableStateOf(false) }
-    var uploadNote by remember { mutableStateOf<String?>(null) }
+    // Rewriting one of the viewer's own comments is the composer again, not a
+    // second editor in an `AlertDialog`. The draft still lives in the store
+    // (the edit is anchored to a reply id, and the response outlives a
+    // recomposition), so this `TextFieldValue` is the field's own value while
+    // every change is mirrored back through `onReplyActionDraft`.
+    //
+    // Keyed on the reply id: the store reseeds its draft from the comment when
+    // the mode moves to EDIT, and a cancelled edit must start from the text on
+    // screen rather than from whatever the last attempt left behind.
+    val editing = state.action?.takeIf {
+        it.mode == CommentThreadStore.ReplyAction.Mode.EDIT
+    }
+    var editDraft by remember(editing?.replyId) {
+        mutableStateOf(
+            TextFieldValue(
+                text = editing?.draft.orEmpty(),
+                selection = TextRange(editing?.draft?.length ?: 0)
+            )
+        )
+    }
 
+    fun insertIntoDraft(edit: DraftEdit) {
+        draft = draft.withDraftEdit(edit)
+    }
+
+    // Attachments. AniList has nowhere to put a file, so a photo leaves the app
+    // for catbox.moe and comes back as the URL that gets written into the
+    // comment - which is why the note is kept beside the composer rather than
+    // in the store: the reader is looking at the field they are typing, and the
+    // upload belongs to the draft, not to the thread.
+    //
+    // Two instances, because the two drafts are two fields: a photo picked while
+    // editing must land in the edit field, not in the new-comment draft waiting
+    // behind it.
+    val photo = rememberPhotoAttachment { url ->
+        insertIntoDraft(
+            insertBlock(
+                draft.text,
+                draft.selection.start,
+                draft.selection.end,
+                MediaAttachment.embedMarkdown(url)
+            )
+        )
+    }
+    val editPhoto = rememberPhotoAttachment { url ->
+        val next = editDraft.withDraftEdit(
+            insertBlock(
+                editDraft.text,
+                editDraft.selection.start,
+                editDraft.selection.end,
+                MediaAttachment.embedMarkdown(url)
+            )
+        )
+        editDraft = next
+        onReplyActionDraft(next.text)
+    }
+
+    val scope = rememberCoroutineScope()
     val safebooru = remember { SafebooruGifs() }
     // Tenor when the reader has a key for it, Safebooru when they have not. The
     // booru is the default because it answers with anime GIFs and asks for nothing:
@@ -213,45 +260,6 @@ fun ActivityCommentsSheet(
             scope = scope,
             provider = tenorApiKey?.takeIf { it.isNotBlank() }?.let { TenorGifs(it) } ?: safebooru
         )
-    }
-
-    fun insertIntoDraft(edit: DraftEdit) {
-        draft = draft.withDraftEdit(edit)
-    }
-
-    fun embedUrl(url: String) {
-        insertIntoDraft(
-            insertBlock(
-                draft.text,
-                draft.selection.start,
-                draft.selection.end,
-                MediaAttachment.embedMarkdown(url)
-            )
-        )
-    }
-
-    val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        isUploading = true
-        uploadNote = "Uploading…"
-        scope.launch {
-            PickedImageReader.read(context, uri)
-                .mapCatching { image ->
-                    catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
-                }
-                .fold(
-                    onSuccess = { url ->
-                        embedUrl(url)
-                        uploadNote = null
-                    },
-                    onFailure = { failure ->
-                        uploadNote = failure.message ?: "The upload did not go through."
-                    }
-                )
-            isUploading = false
-        }
     }
 
     // A post is a round trip, and the editor has to stay open for it: on success
@@ -295,30 +303,54 @@ fun ActivityCommentsSheet(
                 // thread keeps a little more than it used to: the header, three
                 // comments and the write bar is the common case, and 78% cut the
                 // last one off.
-                .fillMaxHeight(if (composing) 0.92f else 0.82f)
+                .fillMaxHeight(if (composing || editing != null) 0.92f else 0.82f)
                 // Above the list's own scroll, so leftover upward fling velocity
                 // is spent here instead of bouncing the already-expanded sheet.
                 .nestedScroll(rememberSheetFlingGuard(sheetState))
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                 .testTag("activity_comments_sheet")
         ) {
-            if (composing) {
-                CommentComposer(
+            when {
+                // An edit replaces the thread exactly as writing a new comment
+                // does, with the same header, preview, format bar, counter and
+                // attachment controls. It used to be a bare `OutlinedTextField`
+                // in an `AlertDialog`: no markup, no preview, and a second editor
+                // to keep in step with the first.
+                editing != null -> CommentComposer(
+                    draft = editDraft,
+                    onDraftChange = { next ->
+                        val clipped = clipDraft(next)
+                        editDraft = clipped
+                        onReplyActionDraft(clipped.text)
+                    },
+                    replyToName = null,
+                    onClearReplyTo = {},
+                    isPosting = editing.isBusy,
+                    postError = editing.error,
+                    uploadNote = editPhoto.note,
+                    isUploading = editPhoto.isUploading,
+                    onPickFromDevice = editPhoto.launch,
+                    gifPane = { onUse ->
+                        GifBrowser(store = gifStore, onUse = onUse)
+                    },
+                    onGifUsed = { url -> gifStore.rememberUsed(url) },
+                    onCancel = onDismissReplyAction,
+                    onSubmit = onSubmitReplyEdit,
+                    title = "Edit Comment",
+                    submitLabel = "Save",
+                    busyLabel = "Saving..."
+                )
+
+                composing -> CommentComposer(
                     draft = draft,
                     onDraftChange = { draft = clipDraft(it) },
                     replyToName = replyToName,
                     onClearReplyTo = { replyToName = null },
                     isPosting = state.isPosting,
                     postError = state.postError,
-                    uploadNote = uploadNote,
-                    isUploading = isUploading,
-                    onPickFromDevice = {
-                        photoPicker.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                            )
-                        )
-                    },
+                    uploadNote = photo.note,
+                    isUploading = photo.isUploading,
+                    onPickFromDevice = photo.launch,
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
@@ -334,8 +366,8 @@ fun ActivityCommentsSheet(
                         }
                     }
                 )
-            } else {
-                CommentsThread(
+
+                else -> CommentsThread(
                     state = state,
                     viewerId = viewerId,
                     canPost = canPost,
@@ -381,15 +413,14 @@ fun ActivityCommentsSheet(
         }
     }
 
-    // Sibling of the sheet rather than a row in it: `AlertDialog` opens a window
-    // of its own, so the anchor script would not survive the list recycling the
-    // row anyway, and the dialog has to outlive the row that opened it - an edit
-    // in flight is anchored to an id, not to a position.
+    // The menu and the delete confirmation, as siblings of the sheet rather than
+    // rows in it: `AlertDialog` opens a window of its own, so the anchor script
+    // would not survive the list recycling the row anyway, and the dialog has to
+    // outlive the row that opened it. The edit step is the sheet's own composer
+    // pane instead - see the `when` above.
     ReplyActionPane(
         action = state.action,
         onMode = onReplyActionMode,
-        onDraftChange = onReplyActionDraft,
-        onSubmitEdit = onSubmitReplyEdit,
         onSubmitDelete = onSubmitReplyDelete,
         onDismiss = onDismissReplyAction
     )
@@ -417,6 +448,64 @@ private fun clipDraft(value: TextFieldValue): TextFieldValue {
             value.selection.start.coerceIn(0, text.length),
             value.selection.end.coerceIn(0, text.length)
         )
+    )
+}
+
+/**
+ * One draft's photo picker: the launcher, and the upload it is currently doing.
+ *
+ * The picker is a round trip through catbox.moe, so it has to report two things
+ * the field must draw - "Uploading…" and why an upload failed - beside the
+ * composer. Pulled out of [ActivityCommentsSheet] because the edit pane needs
+ * the same picker against a different draft, and two copies of the upload would
+ * drift the first time either was fixed.
+ */
+private data class PhotoAttachment(
+    val launch: () -> Unit,
+    val isUploading: Boolean,
+    val note: String?
+)
+
+@Composable
+private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachment {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val catbox = remember { CatboxApi() }
+    var isUploading by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+
+    val picker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        isUploading = true
+        note = "Uploading…"
+        scope.launch {
+            PickedImageReader.read(context, uri)
+                .mapCatching { image ->
+                    catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                }
+                .fold(
+                    onSuccess = { url ->
+                        onUploaded(url)
+                        note = null
+                    },
+                    onFailure = { failure ->
+                        note = failure.message ?: "The upload did not go through."
+                    }
+                )
+            isUploading = false
+        }
+    }
+
+    return PhotoAttachment(
+        launch = {
+            picker.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        },
+        isUploading = isUploading,
+        note = note
     )
 }
 
@@ -510,18 +599,20 @@ internal fun postedReplyRow(
 }
 
 /**
- * The manage dialog, drawn as a sibling of the sheet.
+ * The manage dialog's menu and delete confirmation, drawn as a sibling of the
+ * sheet.
  *
  * `AlertDialog` opens a window of its own, so the anchor script would not
  * survive the list recycling the row anyway, and the dialog has to outlive the
  * row that opened it - an edit in flight is anchored to an id, not to a position.
+ *
+ * EDIT is absent here on purpose: it is the sheet's own composer pane, not a
+ * window on top of it (see [ActivityCommentsSheet]).
  */
 @Composable
 private fun ReplyActionPane(
     action: CommentThreadStore.ReplyAction?,
     onMode: (CommentThreadStore.ReplyAction.Mode) -> Unit,
-    onDraftChange: (String) -> Unit,
-    onSubmitEdit: () -> Unit,
     onSubmitDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -529,8 +620,6 @@ private fun ReplyActionPane(
         ReplyActionDialog(
             action = action,
             onMode = onMode,
-            onDraftChange = onDraftChange,
-            onSubmitEdit = onSubmitEdit,
             onSubmitDelete = onSubmitDelete,
             onDismiss = onDismiss
         )

@@ -91,7 +91,16 @@ data class ActivityFeedSource(
      * cannot be somebody else - the profile feed, where the answer is "the page
      * you are already on".
      */
-    val onOpenAuthor: ((FollowUser) -> Unit)? = null
+    val onOpenAuthor: ((FollowUser) -> Unit)? = null,
+    /**
+     * Opens the conversation with a card's author, or null where there is nobody
+     * to message.
+     *
+     * Set on the friends and site-wide feeds, where every row is a different
+     * person. The profile's own feed leaves it null: its author is the page's
+     * owner, and on the viewer's own profile that is the viewer.
+     */
+    val onMessageAuthor: ((FollowUser) -> Unit)? = null
 )
 
 /**
@@ -128,6 +137,13 @@ fun ProfileActivityTab(
      */
     listState: LazyListState = rememberLazyListState(),
     onOpenDetail: (MediaNode) -> Unit = {},
+    /**
+     * The signed-in viewer's id, so a card authored by the reader does not offer
+     * to message themself. Null leaves every message control in place, which is
+     * the same safe half as [ActivityFeedSource.onMessageAuthor]: a caller that
+     * did not know the id simply gets a control the ViewModel refuses.
+     */
+    viewerId: Int? = null,
     nowEpochSecond: Long = rememberNowEpochSecond()
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
@@ -227,6 +243,7 @@ fun ProfileActivityTab(
         activityFeedItems(
             source = source,
             nowEpochSecond = nowEpochSecond,
+            viewerId = viewerId,
             onOpenDetail = onOpenDetail
         )
     }
@@ -256,6 +273,7 @@ fun ProfileActivityTab(
 private fun LazyListScope.activityFeedItems(
     source: ActivityFeedSource,
     nowEpochSecond: Long,
+    viewerId: Int?,
     onOpenDetail: (MediaNode) -> Unit
 ) {
     when (val activityState = source.state) {
@@ -294,6 +312,8 @@ private fun LazyListScope.activityFeedItems(
                     // passes it once, through the source. Falling back to the
                     // row's own `user` is what lets one card serve both.
                     val author = activity.user
+                    val messageAuthor = source.onMessageAuthor
+                    val messageTarget = author?.takeIf { it.id != viewerId }
                     ActivityCard(
                         activity = activity,
                         userName = source.userName ?: author?.name,
@@ -316,6 +336,13 @@ private fun LazyListScope.activityFeedItems(
                         // the author tap to go.
                         onOpenAuthor = if (source.onOpenAuthor != null && author != null) {
                             { source.onOpenAuthor(author) }
+                        } else {
+                            null
+                        },
+                        // The same rule, and the same refusal for the reader's
+                        // own row: messaging yourself is not a conversation.
+                        onMessageAuthor = if (messageAuthor != null && messageTarget != null) {
+                            { messageAuthor(messageTarget) }
                         } else {
                             null
                         }

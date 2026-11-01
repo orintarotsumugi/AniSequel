@@ -56,13 +56,16 @@ import java.time.format.DateTimeFormatter
  * The tapped row is the one the reader meant to open, and in a thread assembled
  * from two sources it is not necessarily the newest. It gets a rule rather than a
  * banner: a message that is marked by *looking different from itself* is easier to
- * find in a column of bubbles than one with a caption over it.
+ * find in a column of bubbles than one with a caption over it. A conversation
+ * opened from a friend's name has no tapped row, so `highlightId` is null and
+ * nothing is marked.
  */
 @Composable
 internal fun ConversationBody(
     messages: List<MessageNode>,
     viewerId: Int?,
-    highlightId: Int,
+    /** The tapped row's id, or null for a conversation opened without one. */
+    highlightId: Int?,
     hasEarlier: Boolean,
     onLoadEarlier: () -> Unit,
     modifier: Modifier = Modifier

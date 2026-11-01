@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,7 +68,11 @@ import com.anisequel.ui.viewmodel.UserMessagesViewModel
  * Each segment keeps its own scroll position, hoisted by the screen and passed
  * through. Sharing one would drop the reader halfway down the friends feed when
  * they switched back to their own history - the two lists have unrelated
- * lengths and nothing in common but their card shape.
+ * lengths and nothing in common but their card shape. The site-wide stream is
+ * hoisted the same way: it used to create its `LazyListState` inside the
+ * `AnimatedContent` branch, which is exactly the mistake described in
+ * `ProfileTabsContent`, and every switch away from Global put the reader back at
+ * the top of a stream they had scrolled.
  *
  * ## The segment can be asked for by name
  *
@@ -115,6 +121,7 @@ fun ProfileActivityPage(
     modifier: Modifier = Modifier,
     activityListState: LazyListState = rememberLazyListState(),
     followingListState: LazyListState = rememberLazyListState(),
+    globalListState: LazyListState = rememberLazyListState(),
     messagesListState: LazyListState = rememberLazyListState()
 ) {
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
@@ -193,7 +200,10 @@ fun ProfileActivityPage(
         onOpenLikers = { globalViewModel.openLikers(it) },
         // Every row is a different person, and each card's author row opens their
         // profile - the same hop the friends feed and the Social tab make.
-        onOpenAuthor = onOpenUser
+        onOpenAuthor = onOpenUser,
+        // The same rows carry a way to write to that person: the sheet is the
+        // inbox's own conversation view, opened on a name instead of a message.
+        onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
     )
     val friendsFeed = ActivityFeedSource(
         state = followingState,
@@ -209,7 +219,8 @@ fun ProfileActivityPage(
         onOpenLikers = { followingViewModel.openLikers(it) },
         // Every row is a different person in this feed, and each card's
         // author row opens their profile - the same hop the Social tab makes.
-        onOpenAuthor = onOpenUser
+        onOpenAuthor = onOpenUser,
+        onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
     )
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -254,6 +265,7 @@ fun ProfileActivityPage(
                     source = friendsFeed,
                     contentPadding = contentPadding,
                     listState = followingListState,
+                    viewerId = messagesState.viewerId,
                     onOpenDetail = onOpenDetail
                 )
 
@@ -275,7 +287,8 @@ fun ProfileActivityPage(
                 SEGMENT_GLOBAL -> ProfileActivityTab(
                     source = globalFeed,
                     contentPadding = contentPadding,
-                    listState = rememberLazyListState(),
+                    listState = globalListState,
+                    viewerId = messagesState.viewerId,
                     onOpenDetail = onOpenDetail
                 )
 
@@ -283,6 +296,7 @@ fun ProfileActivityPage(
                     source = ownFeed,
                     contentPadding = contentPadding,
                     listState = activityListState,
+                    viewerId = messagesState.viewerId,
                     onOpenDetail = onOpenDetail
                 )
             }
@@ -306,12 +320,26 @@ internal const val SEGMENT_MESSAGES = 2
 internal const val SEGMENT_GLOBAL = 3
 
 /**
- * The chip row that switches between the tab's three views.
+ * The chip row that switches between the tab's views.
  *
  * Labels, not icons: the segment's job is to name a list, and "Messages" is the
  * word a reader would think of. The mailbox and the group glyph are still carried
  * by the feed headings below, where they have room to be read as decoration
  * rather than as the only label on a control.
+ *
+ * ## Why the row scrolls instead of dividing the width
+ *
+ * The chips used to carry `Modifier.weight(1f)` each, which looked right as a
+ * segmented control and stopped being right the moment there were four of them:
+ * on a 411dp phone each got about 88dp, minus 28dp of chip padding, leaving
+ * roughly 60dp for a label. "Messages" is wider than that at the default text
+ * size, and the shared chip's `Text` has no line limit, so turning Global on
+ * wrapped the longest labels onto a second line - the capsules grew to different
+ * heights and the row read as broken text rather than as a control. A weight
+ * cannot both fill the width and guarantee room for the text, so the chips are
+ * sized by their labels and the row scrolls when their sum is wider than the
+ * screen, which is the pattern AniList's own profile uses. Three chips fit with
+ * room to spare and sit at the row's start.
  */
 @Composable
 private fun ActivitySegments(
@@ -321,7 +349,7 @@ private fun ActivitySegments(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -329,31 +357,27 @@ private fun ActivitySegments(
             label = "Activity",
             selected = selected == SEGMENT_ACTIVITY,
             onClick = { onSelect(SEGMENT_ACTIVITY) },
-            testTag = "profile_segment_activity",
-            modifier = Modifier.weight(1f)
+            testTag = "profile_segment_activity"
         )
         SegmentChip(
             label = "Friends",
             selected = selected == SEGMENT_FRIENDS,
             onClick = { onSelect(SEGMENT_FRIENDS) },
-            testTag = "profile_segment_friends",
-            modifier = Modifier.weight(1f)
+            testTag = "profile_segment_friends"
         )
         if (showGlobalSegment) {
             SegmentChip(
                 label = "Global",
                 selected = selected == SEGMENT_GLOBAL,
                 onClick = { onSelect(SEGMENT_GLOBAL) },
-                testTag = "profile_segment_global",
-                modifier = Modifier.weight(1f)
+                testTag = "profile_segment_global"
             )
         }
         SegmentChip(
             label = "Messages",
             selected = selected == SEGMENT_MESSAGES,
             onClick = { onSelect(SEGMENT_MESSAGES) },
-            testTag = "profile_segment_messages",
-            modifier = Modifier.weight(1f)
+            testTag = "profile_segment_messages"
         )
     }
 }
@@ -372,7 +396,7 @@ private fun SegmentChip(
         onClick = onClick,
         // The tab switch above this is a 44dp-tall capsule. A row of chips half
         // its height underneath would be the smallest targets on the page, and
-        // they are the only way into two of its three views.
+        // they are the only way into the tab's other views.
         minTouchTargetHeight = 44.dp,
         modifier = modifier.testTag(testTag)
     )

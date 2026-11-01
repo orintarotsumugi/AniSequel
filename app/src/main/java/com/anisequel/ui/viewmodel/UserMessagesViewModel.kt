@@ -113,7 +113,16 @@ class UserMessagesViewModel(
      * right direction.
      */
     data class MessageDetail(
-        val message: MessageNode,
+        /**
+         * The row that was tapped, or null when the sheet was opened from a name
+         * rather than from the inbox.
+         *
+         * A conversation can start before its first message exists - tapping
+         * "Message" on a friend's activity is exactly that - so the sheet cannot
+         * require a row. Null means the sheet shows the conversation (possibly
+         * empty) and the reply box, with no highlight and no sent/received chip.
+         */
+        val message: MessageNode?,
         val sent: Boolean,
         val counterpart: FollowUser?
     )
@@ -140,6 +149,29 @@ class UserMessagesViewModel(
             message = message,
             sent = message.isSentBy(viewerId),
             counterpart = message.counterpartFor(viewerId)
+        )
+    }
+
+    /**
+     * Opens the conversation with [user], whether or not one exists yet.
+     *
+     * This is the way in from a friend's activity card. There is no row to carry
+     * in - the reader tapped a person, not a message - so the sheet opens on the
+     * thread assembled from the inbox and on the reply box underneath it. The
+     * inbox is asked for here rather than left to the Messages segment: a reader
+     * who has never opened that tab still expects the conversation they just
+     * asked for, not an empty sheet until they visit another screen.
+     *
+     * Messaging yourself is refused: the server would reject it, and a sheet
+     * that offers a reply box for it is a control that can only fail.
+     */
+    fun openConversation(user: FollowUser) {
+        if (user.id == viewerId) return
+        loadFirstPages()
+        _detail.value = MessageDetail(
+            message = null,
+            sent = false,
+            counterpart = user
         )
     }
 
@@ -183,7 +215,7 @@ class UserMessagesViewModel(
         val body = text.trim()
         if (body.isEmpty() || _reply.value.isSending) return
         val recipientId = open.counterpart?.id
-            ?: if (open.sent) open.message.recipientId else open.message.messengerId
+            ?: open.message?.let { if (open.sent) it.recipientId else it.messengerId }
         if (recipientId == null) {
             _reply.value = ReplyState(error = "There is no one to reply to on this message.")
             return
@@ -193,8 +225,28 @@ class UserMessagesViewModel(
             repositoryResult {
                 aniListRepository.sendMessage(recipientId, body, isPrivate)
             }.fold(
-                onSuccess = {
-                    _reply.value = ReplyState(sentTo = open.counterpart?.name ?: "them")
+                onSuccess = { messageId ->
+                    // The send answered with the new message's id, so the sheet
+                    // can show what was just written without waiting for the
+                    // inbox to page again. This is what made a conversation read
+                    // as one-sided: the reply landed, the box cleared, and the
+                    // message only appeared after a manual refresh.
+                    val counterpart = open.counterpart
+                    val sent = MessageNode(
+                        id = messageId,
+                        message = body,
+                        isPrivate = isPrivate,
+                        createdAt = (System.currentTimeMillis() / 1000).toInt(),
+                        recipientId = recipientId,
+                        messengerId = viewerId,
+                        recipient = counterpart
+                    )
+                    updateSource(MessageFilter.SENT) { current ->
+                        current.copy(
+                            messages = (listOf(sent) + current.messages).distinctBy { it.id }
+                        )
+                    }
+                    _reply.value = ReplyState(sentTo = counterpart?.name ?: "them")
                 },
                 onFailure = { failure ->
                     _reply.value = ReplyState(

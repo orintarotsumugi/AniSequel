@@ -2125,6 +2125,13 @@ class AniListRepositoryImpl(
             ),
             apiService::saveActivityMessage
         ).mapRequire { it.message?.id ?: error("No response from the message mutation") }
+            .onSuccess {
+                // The sent inbox's first page is now one message short of the
+                // truth. Dropping the cache is cheaper than patching a page whose
+                // window may have moved, and it is what keeps a re-entry from
+                // hiding the message that was just sent.
+                sentMessagesCache.clear()
+            }
 
     override suspend fun editActivityReply(
         replyId: Int,

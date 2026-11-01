@@ -99,7 +99,9 @@ fun ActivityCard(
     likePending: Boolean = false,
     nowEpochSecond: Long? = null,
     /** Opens the author's profile; null on the profile's own feed. */
-    onOpenAuthor: (() -> Unit)? = null
+    onOpenAuthor: (() -> Unit)? = null,
+    /** Opens the conversation with the author; null where there is no one to message. */
+    onMessageAuthor: (() -> Unit)? = null
 ) {
     when {
         activity.media != null -> ActivityListCard(
@@ -113,7 +115,8 @@ fun ActivityCard(
             onOpenDetail = onOpenDetail,
             likePending = likePending,
             nowEpochSecond = nowEpochSecond,
-            onOpenAuthor = onOpenAuthor
+            onOpenAuthor = onOpenAuthor,
+            onMessageAuthor = onMessageAuthor
         )
         activity.isTextPost -> ActivityTextCard(
             activity = activity,
@@ -125,7 +128,8 @@ fun ActivityCard(
             onOpenLikers = onOpenLikers,
             likePending = likePending,
             nowEpochSecond = nowEpochSecond,
-            onOpenAuthor = onOpenAuthor
+            onOpenAuthor = onOpenAuthor,
+            onMessageAuthor = onMessageAuthor
         )
     }
 }
@@ -150,7 +154,9 @@ private fun ActivityListCard(
      */
     nowEpochSecond: Long? = null,
     /** Opens the author's profile; null on the profile's own feed. */
-    onOpenAuthor: (() -> Unit)? = null
+    onOpenAuthor: (() -> Unit)? = null,
+    /** Opens the conversation with the author; null where there is no one to message. */
+    onMessageAuthor: (() -> Unit)? = null
 ) {
     // Read before the early return below rather than after it: the card has nothing
     // to draw without a media node, and a `Local` read that only happens on some
@@ -205,7 +211,8 @@ private fun ActivityListCard(
                     createdAt = activity.createdAt,
                     nowEpochSecond = nowEpochSecond,
                     avatarSize = 28.dp,
-                    onOpenAuthor = onOpenAuthor
+                    onOpenAuthor = onOpenAuthor,
+                    onMessageAuthor = onMessageAuthor
                 )
 
                 Row {

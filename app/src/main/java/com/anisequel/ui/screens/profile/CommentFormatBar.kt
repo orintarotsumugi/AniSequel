@@ -98,6 +98,8 @@ internal fun ComposerBottomBar(
     onAskKind: (InsertKind) -> Unit,
     onPickFromDevice: () -> Unit,
     onToggleGifs: () -> Unit,
+    submitLabel: String?,
+    busyLabel: String,
     onSubmit: () -> Unit
 ) {
     Column(
@@ -315,10 +317,11 @@ internal fun ComposerBottomBar(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = when {
-                        isBusy -> "Posting..."
+                        isBusy -> busyLabel
                         // The same word the header uses. A new comment used to read
                         // "Post Reply" here, which named a reply that was not being
                         // written.
+                        submitLabel != null -> submitLabel
                         replyToName != null -> "Post Reply"
                         else -> "Post Comment"
                     }
@@ -414,7 +417,11 @@ private fun FormatAction(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(20.dp)
+            // No `size`: these were drawn at 20dp inside the 48dp target, which
+            // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
+            // built from - visibly smaller than the Material `List` glyph that
+            // sits in the same row. The glyph now uses the vector's own 24dp
+            // default, the same correction the tier-list trophy needed.
         )
     }
 }

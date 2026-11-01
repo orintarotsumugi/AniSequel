@@ -113,6 +113,18 @@ internal fun CommentComposer(
     /** Records a picked GIF so the next empty search offers it again. */
     onGifUsed: (String) -> Unit = {},
     gifPane: @Composable ColumnScope.((String) -> Unit) -> Unit,
+    /**
+     * Overrides the header's title.
+     *
+     * Null keeps the composer's own "Write a Comment" / "Write a Reply". The edit
+     * pane passes "Edit Comment" so the same editor does not greet somebody
+     * rewriting an existing comment with a prompt to write a new one.
+     */
+    title: String? = null,
+    /** The send button's idle label; null keeps "Post Comment" / "Post Reply". */
+    submitLabel: String? = null,
+    /** The send button's label while a request is out. */
+    busyLabel: String = "Posting...",
     modifier: Modifier = Modifier
 ) {
     var pane by rememberSaveable { mutableIntStateOf(PANE_WRITE) }
@@ -160,6 +172,7 @@ internal fun CommentComposer(
     Column(modifier = modifier.fillMaxWidth()) {
         ComposerHeader(
             replyToName = replyToName,
+            title = title,
             pane = pane,
             isPosting = isPosting,
             onCancel = onCancel,
@@ -208,6 +221,8 @@ internal fun CommentComposer(
             onAskKind = { kind -> pendingInsert = kind },
             onPickFromDevice = onPickFromDevice,
             onToggleGifs = { pane = if (showingGifs) PANE_WRITE else PANE_GIFS },
+            submitLabel = submitLabel,
+            busyLabel = busyLabel,
             onSubmit = onSubmit
         )
     }
@@ -249,6 +264,7 @@ private const val PANE_GIFS = 2
 @Composable
 private fun ComposerHeader(
     replyToName: String?,
+    title: String?,
     pane: Int,
     isPosting: Boolean,
     onCancel: () -> Unit,
@@ -264,9 +280,11 @@ private fun ComposerHeader(
             Text("Cancel")
         }
         Text(
-            text = when (pane) {
-                PANE_GIFS -> "Choose a GIF"
-                else -> if (replyToName != null) "Write a Reply" else "Write a Comment"
+            text = when {
+                pane == PANE_GIFS -> "Choose a GIF"
+                title != null -> title
+                replyToName != null -> "Write a Reply"
+                else -> "Write a Comment"
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
