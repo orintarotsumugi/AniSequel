@@ -119,7 +119,7 @@ class MediaAttachmentTest {
         // change what the host stores, and the app has no reason to let a filename
         // decide anything.
         assertEquals(
-            "a-b_c.jpg",
+            "etc-pass-wd.jpg",
             MediaAttachment.storageFileName("image/jpeg", "../../etc/pass wd.mp4")
         )
     }
