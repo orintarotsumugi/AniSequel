@@ -1,12 +1,12 @@
 package com.anisequel
 
-import com.anisequel.data.network.OpenverseResponse
+import com.anisequel.data.network.SafebooruPost
 import com.anisequel.data.network.TenorResponse
+import com.anisequel.data.network.booruTags
 import com.anisequel.data.network.toGifPage
 import com.anisequel.data.network.FlexibleStringAdapter
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,34 +25,39 @@ class GifSearchParseTest {
     private inline fun <reified T : Any> adapter() = moshi.adapter(T::class.java)
 
     @Test
-    fun `openverse answers with files, a thumbnail and a page count`() {
-        val json = """
-            {"result_count":240,"page_count":12,"page_size":20,"page":1,
-             "results":[
-               {"id":"a1","title":"Cat Fish","foreign_landing_url":"https://flickr/1",
-                "url":"https://live.staticflickr.com/3313/3481540500_c846c62863_b.gif",
-                "thumbnail":"https://live.staticflickr.com/3313/3481540500_q80.gif",
-                "width":640,"height":480},
-               {"id":"a2","title":"No file","url":null,"thumbnail":null}
-             ]}
-        """.trimIndent()
-        val page = adapter<OpenverseResponse>().fromJson(json)!!.toGifPage(page = 1)
-
-        assertEquals("a result with no file URL cannot be embedded", 1, page.results.size)
+    fun `a booru post list becomes tiles and embeds, and a non-general rating is dropped`() {
+        val posts = listOf(
+            SafebooruPost(
+                id = 7283385,
+                fileUrl = "https://safebooru.org/images/855/holo.gif",
+                sampleUrl = "https://safebooru.org/images/855/holo.gif",
+                previewUrl = "https://safebooru.org/thumbnails/855/holo.jpg",
+                rating = "g",
+                width = 500,
+                height = 500,
+                tags = "holo_(spice_and_wolf) animated_gif"
+            ),
+            // A post whose rating field disagrees with the query's filter. The
+            // tag is a request to the site, not a guarantee, and this app puts the
+            // result into a comment other people read.
+            SafebooruPost(id = 1, fileUrl = "https://safebooru.org/images/9/q.gif", rating = "q"),
+            SafebooruPost(id = 2, fileUrl = null, rating = "g"),
+            null
+        )
+        val page = posts.toGifPage()
+        assertEquals(1, page.results.size)
         val gif = page.results.single()
-        assertEquals("a1", gif.id)
-        assertTrue("the comment must carry the file itself", gif.embedUrl.endsWith("_b.gif"))
-        assertEquals("https://live.staticflickr.com/3313/3481540500_q80.gif", gif.gridUrl)
-        assertEquals(640, gif.width)
-        assertEquals(240, page.totalCount)
-        assertEquals("2", page.next)
+        assertEquals("7283385", gif.id)
+        assertEquals("https://safebooru.org/images/855/holo.gif", gif.embedUrl)
+        assertEquals("https://safebooru.org/thumbnails/855/holo.jpg", gif.gridUrl)
+        assertEquals("holo (spice and wolf) animated gif", gif.title)
     }
 
     @Test
-    fun `openverse stops paging on its last page`() {
-        val json = """{"result_count":20,"page_count":1,"results":[{"id":"a","url":"https://x/y.gif"}]}"""
-        val page = adapter<OpenverseResponse>().fromJson(json)!!.toGifPage(page = 1)
-        assertNull("page 1 of 1 has nothing after it", page.next)
+    fun `a search phrase becomes booru tags without losing tags the reader typed`() {
+        assertEquals("spice_and_wolf holo", booruTags("spice and wolf holo"))
+        assertEquals("holo_(spice_and_wolf) apple", booruTags("holo_(spice_and_wolf) apple"))
+        assertEquals("", booruTags("   "))
     }
 
     @Test
@@ -85,16 +90,10 @@ class GifSearchParseTest {
 
     @Test
     fun `an anonymous provider is allowed to have a narrow catalogue`() {
-        // The empty-result sentence belongs to Openverse only; a Tenor miss is a
+        // The tag-search hint belongs to the booru only; a Tenor miss is a
         // miss, and telling the reader about the CC catalogue would be a guess about
         // an index that has no such hole.
-        assertEquals(
-            true,
-            com.anisequel.data.network.OpenverseGifs().catalogueIsNarrow
-        )
-        assertEquals(
-            false,
-            com.anisequel.data.network.TenorGifs("key").catalogueIsNarrow
-        )
+        assertFalse(com.anisequel.data.network.SafebooruGifs().catalogueIsNarrow)
+        assertFalse(com.anisequel.data.network.TenorGifs("key").catalogueIsNarrow)
     }
 }

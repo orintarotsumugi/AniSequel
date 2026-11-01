@@ -425,9 +425,9 @@ private fun CommentMediaCard(context: android.content.Context) {
             text = "Photos you attach are uploaded to catbox.moe and the comment " +
                 "carries the link. Files uploaded without a catbox account are kept " +
                 "until they go two years without a single view, so an image on a " +
-                "comment nobody reads can disappear. GIF searches use Openverse, an " +
-                "anonymous Creative Commons index - it needs no key, and its " +
-                "catalogue is not reaction GIFs. A Tenor key below switches the " +
+                "comment nobody reads can disappear. GIF search runs against Safebooru, " +
+                "asked for animated GIFs at general rating only - no key, no " +
+                "account, and an anime catalogue. A Tenor key below switches it to " +
                 "search to Tenor's own catalogue.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -471,7 +471,7 @@ private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
             Text(
                 text = when {
                     saved -> "Saved on this device, encrypted."
-                    currentKey != null -> "A key is stored. Leave this empty and save to go back to Openverse."
+                    currentKey != null -> "A key is stored. Leave this empty and save to go back to Safebooru."
                     else -> "Free from Google Cloud for Tenor v2. Stored encrypted, never sent anywhere else."
                 },
                 style = MaterialTheme.typography.bodySmall

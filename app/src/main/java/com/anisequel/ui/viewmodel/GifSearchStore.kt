@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * A GIF index charges for patience. Typing "naruto" on a phone keyboard is nine
  * keystrokes, and asking for results after every one of them is nine requests and
  * eight sets of tiles that get replaced before they finished loading - and both
- * Openverse's anonymous tier and a reader's own Tenor key are rate limited, so the
+ * Safebooru rate-limits anonymous callers and a Tenor key has its own quota, so the
  * ninth request of a burst is the one that comes back empty. One search per pause
  * is what a picker looks like from the inside: the tiles settle, and the budget
  * goes to searches the reader actually meant.
@@ -161,9 +161,8 @@ class GifSearchStore(
 
     private fun emptyNote(query: String): String = when {
         !provider.catalogueIsNarrow -> "Nothing found for \"$query\"."
-        else -> "Nothing found for \"$query\" - this index carries Creative Commons " +
-            "media, so a reaction GIF may simply not be in it. A Tenor key in " +
-            "Settings searches the reaction catalogue instead."
+        else -> "No animated GIF tagged \"$query\" there. Boorus match tags rather " +
+            "than sentences, so try fewer words, or one name like \"holo\"."
     }
 
     companion object {

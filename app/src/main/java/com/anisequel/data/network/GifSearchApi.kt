@@ -3,6 +3,7 @@ package com.anisequel.data.network
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -24,10 +25,10 @@ import okhttp3.Request
  * turned MIME search off at the API level. Something had to give, so the app offers
  * the two that actually answer:
  *
- * - **Openverse**, anonymous, no account and no key, filtered to `.gif` files by
- *   its `extension` argument. Its index is Creative Commons media, so an
- *   anime-specific query can come back empty - that is a real limit and the panel
- *   says so rather than pretending the search broke.
+ * - **Safebooru**, anonymous, no account and no key, asked for `animated_gif` at
+ *   `rating:general`. Its catalogue is anime, which is what a reader on AniList is
+ *   looking for, and this is the source the browser GIF pickers in that community
+ *   already use.
  * - **Tenor v2**, when the reader has pasted their own key in Settings. This is
  *   what a reaction-GIF picker used to be, with the coverage that implies, and the
  *   key is theirs, obtained free from Google.
@@ -48,21 +49,20 @@ interface GifSearchApi {
      * Whether an empty answer is a gap in this provider's catalogue rather than a
      * miss.
      *
-     * Openverse indexes Creative Commons media, so a search for an anime reaction
-     * can legitimately return nothing and the reader deserves to know that, and to
-     * know what would have found it. A reaction-GIF index with the same empty answer
-     * means only that the query was obscure, and the long explanation would be a
-     * guess about a catalogue that has no such hole.
+     * A booru matches tags, not sentences, so an obscure phrase can legitimately
+     * return nothing - and the reader deserves the sentence that says to try fewer
+     * words rather than a grid that looks broken. A tagged catalogue like Tenor's
+     * has no such hole, so it does not get the explanation.
      */
     val catalogueIsNarrow: Boolean get() = false
 
     /**
      * One page of results for [query].
      *
-     * [cursor] is whatever the previous page said to ask for next - a page number
-     * for Openverse, a `pos` token for Tenor - which is why it is a string and not
-     * an int: the two providers do not page the same way and neither should have to
-     * pretend to. Null asks for the first page.
+     * [cursor] is whatever the previous page said to ask for next - a zero-based
+     * post index for Safebooru, a `pos` token for Tenor - which is why it is a
+     * string and not an int: the providers do not page the same way and neither
+     * should have to pretend to. Null asks for the first page.
      *
      * A blank query is not a search: the caller is expected not to ask, and
      * implementations answer an empty page rather than an error, so a picker that
@@ -103,95 +103,10 @@ data class GifPage(
  */
 class GifSearchFailure(message: String) : IOException(message)
 
-/** Openverse's anonymous image search, asked for animated GIFs only. */
-class OpenverseGifs(
-    private val client: OkHttpClient = defaultClient(),
-    moshi: Moshi = NetworkClient.json
-) : GifSearchApi {
-
-    override val catalogueIsNarrow: Boolean get() = true
-
-    private val adapter = moshi.adapter(OpenverseResponse::class.java)
-
-    override suspend fun search(query: String, cursor: String?): Result<GifPage> =
-        withContext(Dispatchers.IO) {
-            val term = query.trim()
-            if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
-
-            val built = runCatching {
-                ENDPOINT.toHttpUrl().newBuilder()
-                    .addQueryParameter("q", term)
-                    // `extension=gif` is what makes this a GIF picker rather than a
-                    // photo search: Openverse filters the served file's extension,
-                    // and a thumbnail-heavy index would otherwise answer with stills.
-                    .addQueryParameter("extension", "gif")
-                    .addQueryParameter("page", firstPageOf(cursor).toString())
-                    .addQueryParameter("page_size", PAGE_SIZE.toString())
-                    .build()
-            }
-            val request = built.getOrNull()?.let {
-                Request.Builder()
-                    .url(it)
-                    .header("Accept", "application/json")
-                    // Anonymous use of this API is rate limited and the throttle is
-                    // keyed on the caller's identity, so a descriptive UA is both
-                    // what the API asks for and the only way to be a distinct client.
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-            } ?: return@withContext Result.failure(GifSearchFailure("That search could not be built."))
-
-            try {
-                client.newCall(request).execute().use { response ->
-                    val body = response.body?.string().orEmpty()
-                    if (response.code == 401 || response.code == 429) {
-                        return@withContext Result.failure(
-                            GifSearchFailure("The GIF index is rate limiting searches. Try again shortly.")
-                        )
-                    }
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(GifSearchFailure(describe(response.code)))
-                    }
-                    val parsed = runCatching { adapter.fromJson(body) }.getOrNull()
-                        ?: return@withContext Result.failure(
-                            GifSearchFailure("The GIF index answered with something unreadable.")
-                        )
-                    Result.success(parsed.toGifPage(page = firstPageOf(cursor)))
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Result.failure(GifSearchFailure("Could not reach the GIF index."))
-            }
-        }
-
-    /** The page a cursor names, or the first one. */
-    private fun firstPageOf(cursor: String?): Int =
-        (cursor?.toIntOrNull() ?: 1).coerceAtLeast(1)
-
-    private fun describe(status: Int): String = when {
-        status == 402 -> "The GIF index has stopped answering anonymous searches."
-        status in 500..599 -> "The GIF index is not answering right now (HTTP $status)."
-        else -> "The GIF index refused that search (HTTP $status)."
-    }
-
-    companion object {
-        private const val ENDPOINT = "https://api.openverse.org/v1/images/"
-        private const val USER_AGENT = "AniSequel (Android; GIF search)"
-        private const val PAGE_SIZE = 20
-
-        internal fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
-            .callTimeout(20, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .build()
-    }
-}
-
 /** Tenor v2, with the reader's own key. */
 class TenorGifs(
     private val apiKey: String,
-    private val client: OkHttpClient = OpenverseGifs.defaultClient(),
+    private val client: OkHttpClient = SafebooruGifs.defaultClient(),
     moshi: Moshi = NetworkClient.json
 ) : GifSearchApi {
 
@@ -203,7 +118,7 @@ class TenorGifs(
             if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
             if (apiKey.isBlank()) {
                 return@withContext Result.failure(
-                    GifSearchFailure("No Tenor key is saved. Add one in Settings, or leave it blank to search Openverse.")
+                    GifSearchFailure("No Tenor key is saved. Add one in Settings, or leave it blank to search Safebooru.")
                 )
             }
 
@@ -268,83 +183,6 @@ class TenorGifs(
 }
 
 
-/**
- * Openverse's page shape, mapped.
- *
- * `url` is the file itself and `thumbnail` is the small preview; either can be
- * null for a record the index has not finished processing, and a GIF with no file
- * URL cannot be embedded, so such a row is dropped here rather than drawn as a
- * broken tile that the reader can tap.
- *
- * Top-level and internal because it is pure mapping over a response body: pinning
- * it in a JVM test is the only way to know a renamed field shows up as an empty
- * grid rather than as a silent hole in production.
- */
-internal fun OpenverseResponse.toGifPage(page: Int): GifPage {
-        val rows = results.orEmpty().filterNotNull().mapNotNull { row ->
-            val file = row.url?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
-            GifResult(
-                id = row.id ?: file,
-                embedUrl = file,
-                gridUrl = row.thumbnail?.takeIf { it.startsWith("http") } ?: file,
-                title = row.title,
-                width = row.width,
-                height = row.height
-            )
-        }
-        val more = (pageCount ?: 0) > page
-        return GifPage(
-            results = rows,
-            next = if (more) (page + 1).toString() else null,
-            totalCount = resultCount
-        )
-    }
-
-/** Openverse's search response, as far as this app cares. */
-@JsonClass(generateAdapter = true)
-internal data class OpenverseResponse(
-    @Json(name = "result_count") val resultCount: Int? = null,
-    @Json(name = "page_count") val pageCount: Int? = null,
-    @Json(name = "results") val results: List<OpenverseImage?>? = null
-)
-
-@JsonClass(generateAdapter = true)
-internal data class OpenverseImage(
-    val id: String? = null,
-    val title: String? = null,
-    val url: String? = null,
-    val thumbnail: String? = null,
-    val width: Int? = null,
-    val height: Int? = null
-)
-
-
-/**
- * Tenor's media map, flattened to the two URLs this app needs.
- *
- * `gif` is the embed, `tinygif` is the tile, and `previewgif` is the fallback for
- * a record that carries only the smallest copy. A result with no GIF URL at all is
- * dropped rather than embedded as a blank.
- */
-internal fun TenorResponse.toGifPage(): GifPage {
-        val rows = results.orEmpty().filterNotNull().mapNotNull { entry ->
-            val formats = entry.mediaFormats ?: return@mapNotNull null
-            val embed = formats.gif?.url ?: formats.tinygif?.url ?: formats.previewGif?.url
-                ?: return@mapNotNull null
-            val grid = formats.tinygif?.url ?: formats.previewGif?.url ?: embed
-            val dims = formats.gif?.dims
-            GifResult(
-                id = entry.id ?: embed,
-                embedUrl = embed,
-                gridUrl = grid,
-                title = entry.title,
-                width = dims?.getOrNull(0),
-                height = dims?.getOrNull(1)
-            )
-        }
-        return GifPage(results = rows, next = next?.takeIf { rows.isNotEmpty() })
-    }
-
 /** Tenor v2's search response. */
 @JsonClass(generateAdapter = true)
 internal data class TenorResponse(
@@ -371,3 +209,162 @@ internal data class TenorFormat(
     val url: String? = null,
     val dims: List<Int>? = null
 )
+/**
+ * Safebooru's anonymous JSON API, asked for animated GIFs at general rating only.
+ *
+ * ## Why this is the default
+ *
+ * It answers with **anime** reaction GIFs and it needs no key, no account and no
+ * signup - which is precisely what Openverse could not do (a Creative Commons
+ * index has no `spice and wolf` GIFs to give you) and what Tenor used to do before
+ * it retired its public API. This is also the source the browser GIF pickers in
+ * this community already reach for, so a reader who has used one meets the same
+ * catalogue here.
+ *
+ * ## What is filtered, and twice
+ *
+ * `rating:general` goes into the query, and a post whose own `rating` field is not
+ * `g` is dropped on the way out. A booru is user-tagged: the filter argument is a
+ * request, not a guarantee, and this app ships an image picker into a comments
+ * section that other people read. The tag is also the reason the search box says
+ * "tags" - boorus match `spice_and_wolf holo`, not a sentence, so the query is
+ * rewritten into that shape rather than passed through.
+ */
+class SafebooruGifs(
+    private val client: OkHttpClient = defaultClient(),
+    moshi: Moshi = NetworkClient.json
+) : GifSearchApi {
+
+    private val adapter = moshi.adapter<List<SafebooruPost?>>(
+        Types.newParameterizedType(List::class.java, SafebooruPost::class.java)
+    )
+
+    override val catalogueIsNarrow: Boolean get() = false
+
+    override suspend fun search(query: String, cursor: String?): Result<GifPage> =
+        withContext(Dispatchers.IO) {
+            val tags = booruTags(query)
+            if (tags.isBlank()) return@withContext Result.success(GifPage(emptyList()))
+
+            val built = runCatching {
+                ENDPOINT.toHttpUrl().newBuilder()
+                    .addQueryParameter("page", "dapi")
+                    .addQueryParameter("s", "post")
+                    .addQueryParameter("q", "index")
+                    .addQueryParameter("json", "1")
+                    .addQueryParameter("limit", PAGE_SIZE.toString())
+                    // `pid` is the index here, zero-based: `page` is already taken by
+                    // the API selector, and asking for page 2 of a post list would ask
+                    // the API itself to switch pages.
+                    .addQueryParameter("pid", (cursor?.toIntOrNull() ?: 0).coerceAtLeast(0).toString())
+                    .addQueryParameter("tags", "$REQUIRED_TAGS $tags")
+                    .build()
+            }
+            val request = built.getOrNull()?.let {
+                Request.Builder()
+                    .url(it)
+                    .header("Accept", "application/json")
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+            } ?: return@withContext Result.failure(GifSearchFailure("That search could not be built."))
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(
+                            GifSearchFailure("Safebooru refused that search (HTTP ${response.code}).")
+                        )
+                    }
+                    val body = response.body?.string().orEmpty()
+                    val parsed = runCatching { adapter.fromJson(body) }.getOrNull()
+                        ?: return@withContext Result.failure(
+                            GifSearchFailure("Safebooru answered with something unreadable.")
+                        )
+                    val page = parsed.toGifPage()
+                    val index = cursor?.toIntOrNull() ?: 0
+                    Result.success(
+                        page.copy(next = if (page.results.size >= PAGE_SIZE) (index + 1).toString() else null)
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(GifSearchFailure("Could not reach Safebooru."))
+            }
+        }
+
+    companion object {
+        private const val ENDPOINT = "https://safebooru.org/index.php"
+
+        /** The rating the catalogue is limited to, whatever the tags say. */
+        private const val REQUIRED_TAGS = "animated_gif rating:general"
+        private const val PAGE_SIZE = 24
+        private const val USER_AGENT = "AniSequel (Android; GIF search)"
+
+        internal fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+}
+
+/**
+ * A search phrase as booru tags.
+ *
+ * A booru matches tags, not sentences: `spice and wolf holo` has to become
+ * `spice_and_wolf holo` or the search returns nothing, which is the same
+ * translation every booru front end does. Words the reader already wrote with
+ * underscores are left alone, so somebody who knows the tag syntax is not fighting
+ * the rewrite; stop words (`a`, `and`, `of`, `the`) drop out because they are never
+ * tags and they break the phrase otherwise.
+ */
+internal fun booruTags(query: String): String =
+    query.trim()
+        .split(Regex("""\s+"""))
+        .filterNot { it.lowercase() in DROP_WORDS }
+        .joinToString(" ") { word -> word.ifBlank { return@joinToString "" }.replace(' ', '_') }
+
+private val DROP_WORDS = setOf("a", "an", "and", "of", "the", "with", "in", "on")
+
+/** One Safebooru post, as far as this picker cares. */
+@JsonClass(generateAdapter = true)
+internal data class SafebooruPost(
+    val id: Int? = null,
+    @Json(name = "file_url") val fileUrl: String? = null,
+    @Json(name = "sample_url") val sampleUrl: String? = null,
+    @Json(name = "preview_url") val previewUrl: String? = null,
+    val rating: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val tags: String? = null
+)
+
+/**
+ * Safebooru's post list, flattened to the two URLs the picker needs.
+ *
+ * `file_url` is the GIF a comment should carry, `sample_url` the smaller copy a
+ * grid tile should draw - on a booru the sample of an animation is often the same
+ * file, which is why the fallback chain ends at the original rather than at a
+ * thumbnail that would look wrong blown up in a comment. A post without a file URL
+ * cannot be embedded and is dropped; a post whose rating is not general is dropped
+ * too, whatever the query asked for.
+ */
+internal fun List<SafebooruPost?>?.toGifPage(): GifPage {
+    val rows = this.orEmpty().filterNotNull().mapNotNull { post ->
+        if (post.rating != null && post.rating!!.lowercase() != "g") return@mapNotNull null
+        val embed = post.fileUrl ?: post.sampleUrl ?: return@mapNotNull null
+        if (!embed.startsWith("http")) return@mapNotNull null
+        GifResult(
+            id = post.id?.toString() ?: embed,
+            embedUrl = embed,
+            gridUrl = post.sampleUrl ?: post.previewUrl ?: embed,
+            title = post.tags?.split(' ')?.take(6)?.joinToString(" ")?.replace('_', ' '),
+            width = post.width,
+            height = post.height
+        )
+    }
+    return GifPage(results = rows, next = null, totalCount = rows.size)
+}
+

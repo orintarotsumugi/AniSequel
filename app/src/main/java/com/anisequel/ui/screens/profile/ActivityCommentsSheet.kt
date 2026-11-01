@@ -33,7 +33,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.network.CatboxApi
-import com.anisequel.data.network.OpenverseGifs
+import com.anisequel.data.network.SafebooruGifs
 import com.anisequel.data.network.TenorGifs
 import com.anisequel.data.repository.PickedImageReader
 import com.anisequel.domain.usecase.CommentWindow
@@ -203,11 +203,15 @@ fun ActivityCommentsSheet(
     var isUploading by remember { mutableStateOf(false) }
     var uploadNote by remember { mutableStateOf<String?>(null) }
 
-    val openverse = remember { OpenverseGifs() }
-    val gifStore = remember(openverse, tenorApiKey) {
+    val safebooru = remember { SafebooruGifs() }
+    // Tenor when the reader has a key for it, Safebooru when they have not. The
+    // booru is the default because it answers with anime GIFs and asks for nothing:
+    // Tenor's public API is discontinued, and a reader who has not registered a
+    // Google key still gets a working picker.
+    val gifStore = remember(safebooru, tenorApiKey) {
         GifSearchStore(
             scope = scope,
-            provider = tenorApiKey?.takeIf { it.isNotBlank() }?.let { TenorGifs(it) } ?: openverse
+            provider = tenorApiKey?.takeIf { it.isNotBlank() }?.let { TenorGifs(it) } ?: safebooru
         )
     }
 

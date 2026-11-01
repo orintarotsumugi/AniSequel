@@ -13,7 +13,7 @@
         },
         {
           "title": "A GIF search in the composer",
-          "detail": "A GIF button opens a search inside the editor: results come from Openverse, an anonymous Creative Commons index that needs no key and no account, and tapping a tile drops it into your draft as an animated embed. Tenor's public key-free API was discontinued, so the Settings page takes your own Tenor key if you want the reaction catalogue instead - stored encrypted on the device, and never sent anywhere but Tenor."
+          "detail": "A GIF button opens a search inside the editor: results come from Safebooru, asked for animated GIFs at general rating only, with no key and no account - the same source the browser GIF pickers in this community already use, and the one that actually has anime in it. A search phrase is turned into tags for you (spice and wolf holo becomes spice_and_wolf holo), tiles load as you scroll, and tapping one drops it into your draft as an embed. Tenor's public key-free API was discontinued, so the Settings page takes your own Tenor key if you would rather search Tenor's catalogue - stored encrypted on the device and sent nowhere else."
         },
         {
           "title": "The format bar, rebuilt",
