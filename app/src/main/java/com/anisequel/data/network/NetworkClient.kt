@@ -3,6 +3,7 @@ package com.anisequel.data.network
 import android.content.Context
 import coil.ImageLoader
 import coil.decode.ImageDecoderDecoder
+import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.anisequel.BuildConfig
@@ -287,6 +288,20 @@ object NetworkClient {
                 // its classes out of the release, while the artifact stays for
                 // the decoder that actually runs.
                 add(ImageDecoderDecoder.Factory())
+                // SVG, because the platform decoder is not a general image decoder:
+                // it reads PNG, JPEG, GIF, WebP and HEIF and nothing else, and an
+                // `image/svg+xml` response is none of those. Bio banners drawn live by
+                // a server arrive as SVG, so without this the parser's centred
+                // `ImageBlock` rendered an error placeholder over a picture AniList
+                // itself shows.
+                //
+                // AndroidSVG is a partial implementation of a large specification.
+                // Cards that nest `data:` images, `@font-face` fonts or animated WebP
+                // inside the SVG may draw incompletely; that is a limit of the decoder,
+                // not something this registration can fix, and it is stated rather
+                // than discovered by a reader wondering why one banner is missing its
+                // text.
+                add(SvgDecoder.Factory())
             }
             .build()
 

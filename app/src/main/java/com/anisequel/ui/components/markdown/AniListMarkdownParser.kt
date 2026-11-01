@@ -525,6 +525,27 @@ object AniListMarkdownParser {
      * [depth] counts nested centered blocks, the only re-entry point, and is
      * capped at [MAX_BLOCK_DEPTH].
      */
+    /**
+     * The image a single-line centred span is standing for, or null.
+     *
+     * Re-parsing the inner text as a block is the whole trick: the whole-line image
+     * forms are matched with `matchEntire`, and the inner text *is* a whole line
+     * once the tildes are off. Anything that does not come back as exactly one
+     [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
+     * paragraph path, which is what leaves `~~~Just some centred text~~~` and
+     * `~~~https://anilist.co/anime/1~~~` drawing what they drew before.
+     *
+     * The width suffix survives because it is on the node, not on the text:
+     * `img100%(...)` is a full-bleed banner and `img220(...)` is a fixed strip, and
+     * flattening them to "an image" is how a bio's banner became a thumbnail.
+     */
+    private fun centredSingleImage(inner: String, depth: Int): MarkdownNode.ImageBlock? {
+        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return null
+        val parsed = runCatching { parseDecoded(inner, depth + 1) }.getOrNull() ?: return null
+        val image = parsed.singleOrNull() as? MarkdownNode.ImageBlock ?: return null
+        return image.copy(centered = true)
+    }
+
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 
@@ -545,12 +566,27 @@ object AniListMarkdownParser {
             // A single centred line: `~~~text~~~`.
             val tildeCentered = TILDE_CENTER_PATTERN.matchEntire(trimmedLine)
             if (tildeCentered != null) {
-                // Through the shared paragraph builder, so an AniList link inside
-                // `~~~...~~~` becomes a card exactly as it does outside it. This
-                // branch used to build the `Paragraph` itself and was therefore the
-                // one paragraph path that never lifted media links: identical text
-                // drew a card un-centred and a plain link centred.
-                nodes.addAll(paragraphNodes(tildeCentered.groupValues[1].trim(), centered = true))
+                val inner = tildeCentered.groupValues[1].trim()
+                // A centred image first, because the paragraph path cannot make
+                // one: every whole-line image form - `img(url)`, `img220(url)`,
+                // `![alt](url)`, `[img(url)](target)` - is matched with
+                // `matchEntire` on *the source line*, and inside `~~~...~~~` the
+                // line is the whole span including the tildes. So a bio whose only
+                // content is `~~~img100%(https://…/card.svg)~~~` - which is what
+                // AniList's own editor writes for a centred banner - used to print
+                // the code as a centred sentence with a link. AniList answers the
+                // same bio with `<center><img width='100%' …></center>`.
+                val centredImage = centredSingleImage(inner, depth)
+                if (centredImage != null) {
+                    nodes.add(centredImage)
+                } else {
+                    // Through the shared paragraph builder, so an AniList link inside
+                    // `~~~...~~~` becomes a card exactly as it does outside it. This
+                    // branch used to build the `Paragraph` itself and was therefore the
+                    // one paragraph path that never lifted media links: identical text
+                    // drew a card un-centred and a plain link centred.
+                    nodes.addAll(paragraphNodes(inner, centered = true))
+                }
                 i++
                 continue
             }

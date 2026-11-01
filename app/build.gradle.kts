@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.7.4"
-val BASELINE_VERSION_CODE = 374
+val BASELINE_VERSION_NAME = "1.7.5"
+val BASELINE_VERSION_CODE = 375
 
 plugins {
   alias(libs.plugins.android.application)
@@ -232,6 +232,13 @@ dependencies {
   // tried with "Unresolved reference 'ImageDecoderDecoder'". The unreachable
   // `GifDecoder` call site is gone, so R8 prunes those classes instead.
   implementation(libs.coil.gif)
+  // The SVG decoder `NetworkClient.createImageLoader` registers. AniList bios can
+  // carry a server-drawn `image/svg+xml` card - `~~~img100%(…card.svg)~~~` is what
+  // the site's own editor writes for a centred banner - and Android's platform
+  // decoder, which is everything this app had, does not read SVG at all: the card
+  // loaded as a failure and the bio looked broken. Costs `androidsvg-aar`; see the
+  // version note in `gradle/libs.versions.toml` before treating it as tidy-able.
+  implementation(libs.coil.svg)
   implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
