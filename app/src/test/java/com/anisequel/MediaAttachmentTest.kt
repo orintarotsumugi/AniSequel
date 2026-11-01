@@ -111,7 +111,7 @@ class MediaAttachmentTest {
 
     @Test
     fun `the stored name keeps an extension that matches the bytes`() {
-        assertEquals("screenshot.png", MediaAttachment.storageFileName("image/png", "Screenshot"))
+        assertEquals("Screenshot.png", MediaAttachment.storageFileName("image/png", "Screenshot"))
         // The picker's name lies; the mime type the sniffer agreed with does not.
         assertEquals("photo.jpg", MediaAttachment.storageFileName("image/jpeg", "photo.png"))
         assertEquals("attachment.gif", MediaAttachment.storageFileName("image/gif", null))

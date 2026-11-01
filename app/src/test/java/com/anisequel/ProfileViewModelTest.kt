@@ -159,6 +159,19 @@ class ProfileViewModelTest {
             return repliesResult
         }
 
+        override suspend fun getActivityReplyWindow(
+            activityId: Int,
+            page: Int,
+            perPage: Int
+        ): Result<com.anisequel.data.model.ActivityReplyWindow> {
+            // Chat view is the default read, so a test that seeds repliesResult
+            // still gets those replies - as the one page that holds all of them.
+            repliesFetchCount++
+            return repliesResult.map {
+                com.anisequel.data.model.ActivityReplyWindow(it, it.size, page)
+            }
+        }
+
         override suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> {
             postReplyFetchCount++
             return postReplyResult

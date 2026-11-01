@@ -160,6 +160,14 @@ class ReplyLikeQueryTest {
         val comments = File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
+        ).readText() +
+        // The row left CommentThread.kt when the sheet was split again: the list
+        // keeps what is on screen, CommentRows.kt keeps the row itself. Both are
+        // read here, because the claim is that the control is declared once - not
+        // which of the two files holds it this month.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
         ).readText()
 
         assertTrue("the shared control is public:", shared.contains("fun EngagementAction("))
@@ -188,6 +196,14 @@ class ReplyLikeQueryTest {
         val comments = File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
+        ).readText() +
+        // The row left CommentThread.kt when the sheet was split again: the list
+        // keeps what is on screen, CommentRows.kt keeps the row itself. Both are
+        // read here, because the claim is that the control is declared once - not
+        // which of the two files holds it this month.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
         ).readText()
 
         assertTrue(

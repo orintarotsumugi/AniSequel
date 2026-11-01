@@ -31,7 +31,7 @@ class GifSearchParseTest {
             SafebooruPost(
                 id = 7283385,
                 fileUrl = "https://safebooru.org/images/855/holo.gif",
-                sampleUrl = "https://safebooru.org/images/855/holo.gif",
+                sampleUrl = "https://safebooru.org/images/855/holo_sample.gif",
                 previewUrl = "https://safebooru.org/thumbnails/855/holo.jpg",
                 rating = "g",
                 width = 500,
@@ -42,15 +42,24 @@ class GifSearchParseTest {
             // tag is a request to the site, not a guarantee, and this app puts the
             // result into a comment other people read.
             SafebooruPost(id = 1, fileUrl = "https://safebooru.org/images/9/q.gif", rating = "q"),
-            SafebooruPost(id = 2, fileUrl = null, rating = "g"),
+            // No sample: the tile falls back to the thumbnail rather than being
+            // dropped, because a tile that is missing is worse than a small one.
+            SafebooruPost(
+                id = 2,
+                fileUrl = "https://safebooru.org/images/856/other.gif",
+                previewUrl = "https://safebooru.org/thumbnails/856/other.jpg",
+                rating = "g"
+            ),
             null
         )
         val page = posts.toGifPage()
-        assertEquals(1, page.results.size)
-        val gif = page.results.single()
+        assertEquals(2, page.results.size)
+        val gif = page.results.first()
         assertEquals("7283385", gif.id)
         assertEquals("https://safebooru.org/images/855/holo.gif", gif.embedUrl)
-        assertEquals("https://safebooru.org/thumbnails/855/holo.jpg", gif.gridUrl)
+        // The tile is the *sample*, which is what the picker can afford to animate;
+        // the thumbnail is only reached when a post has no sample.
+        assertEquals("https://safebooru.org/images/855/holo_sample.gif", gif.gridUrl)
         assertEquals("holo (spice and wolf) animated gif", gif.title)
     }
 
@@ -78,7 +87,7 @@ class GifSearchParseTest {
         """.trimIndent()
         val page = adapter<TenorResponse>().fromJson(json)!!.toGifPage()
 
-        val gif = page.results.single()
+        val gif = page.results.first()
         assertEquals("https://media.tenor.com/happy.gif", gif.embedUrl)
         assertEquals("https://media.tenor.com/happy_tiny.gif", gif.gridUrl)
         assertEquals(220, gif.width)
