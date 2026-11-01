@@ -4,6 +4,8 @@ import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
+import com.anisequel.data.model.ActivityReplyLikersData
+import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.DeleteMediaListEntryData
 import com.anisequel.data.model.EntityPreviewPages
@@ -208,6 +210,26 @@ interface AniListApiService {
     suspend fun getActivityReplies(
         @Body request: GraphQLRequest
     ): GraphQLResponse<ActivityDetailData>
+
+    /**
+     * One page of an activity's replies, with the thread's reply count.
+     *
+     * The chat view's read: it is the only way to reach the newest comments of a
+     * long thread without downloading the thread. See
+     * [GraphQLQueries.GET_ACTIVITY_REPLY_WINDOW].
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getActivityReplyWindow(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityReplyWindowData>
+
+    /** The people who liked one comment. Opened from a comment's heart. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getActivityReplyLikers(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityReplyLikersData>
 
     /** The people who liked one activity. Opened with the likers sheet. */
     @POST("/")

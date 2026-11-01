@@ -159,6 +159,12 @@ class UserActivityViewModel(
      */
     data class LikersState(
         val activityId: Int,
+        /**
+         * Set when the sheet shows who liked a **comment** rather than who liked the
+         * activity. The guard is the pair: a response for a comment of a thread the
+         * reader already closed must not paint over the thread they opened next.
+         */
+        val replyId: Int? = null,
         val isLoading: Boolean = false,
         val likers: List<FollowUser> = emptyList(),
         val loadError: String? = null
@@ -518,11 +524,30 @@ class UserActivityViewModel(
         }
     }
 
-    /** Opens the comment thread for [activityId] and loads it. */
-    fun openComments(activityId: Int) = commentThread.open(activityId)
+    /**
+     * Opens the comment thread for [activityId].
+     *
+     * [knownReplyCount] is the feed card's own count, which aims the first page of a
+     * windowed thread at its newest end; [chatView] is the reader's Settings switch,
+     * handed in at the door so this class stays out of where preferences come from.
+     */
+    fun openComments(activityId: Int, knownReplyCount: Int = 0, chatView: Boolean = true) =
+        commentThread.open(activityId, knownReplyCount, chatView)
 
     /** Likes or un-likes one comment. */
     fun toggleReplyLike(replyId: Int) = commentThread.toggleReplyLike(replyId)
+
+    /** Reveals the next page of older comments in an open thread. */
+    fun loadOlderComments() = commentThread.loadOlder()
+
+    /** Takes in the comments a background check found. */
+    fun revealNewComments() = commentThread.revealNewComments()
+
+    /** Checks the newest page once; the flag says whether the reader is at the end. */
+    fun checkForNewComments(atBottom: Boolean) = commentThread.checkForNewComments(atBottom)
+
+    /** How long the comment sheet waits between its background checks. */
+    val commentPollIntervalMillis: Long get() = commentThread.pollIntervalMillis
 
     fun closeComments() = commentThread.close()
 
@@ -562,6 +587,37 @@ class UserActivityViewModel(
 
     fun dismissLikers() {
         _likers.value = null
+    }
+
+    /**
+     * Opens the likers sheet for one comment.
+     *
+     * The same sheet and the same rows: `ActivityReply.likes` is the identical
+     * unpaginated `[User]` an activity's is, so only the id differs.
+     */
+    fun openReplyLikers(activityId: Int, replyId: Int) {
+        _likers.value = LikersState(activityId = activityId, replyId = replyId, isLoading = true)
+        viewModelScope.launch {
+            val result = if (isDemo) {
+                Result.success(emptyList())
+            } else {
+                repositoryResult { aniListRepository.getActivityReplyLikers(replyId) }
+            }
+            val current = _likers.value?.takeIf { it.replyId == replyId } ?: return@launch
+            _likers.value = result.fold(
+                onSuccess = { likers -> current.copy(isLoading = false, likers = likers, loadError = null) },
+                onFailure = { error ->
+                    current.copy(isLoading = false, loadError = error.message ?: "Couldn't load likes.")
+                }
+            )
+        }
+    }
+
+    /** Re-runs whichever likers read the open sheet asked for. */
+    fun retryLikers() {
+        val current = _likers.value ?: return
+        val replyId = current.replyId
+        if (replyId != null) openReplyLikers(current.activityId, replyId) else openLikers(current.activityId)
     }
 
     /** Posts [text] as a comment on the open thread. */

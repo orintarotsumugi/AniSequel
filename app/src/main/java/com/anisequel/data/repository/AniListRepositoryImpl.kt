@@ -9,6 +9,9 @@ import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.ActivityReplyLikersData
+import com.anisequel.data.model.ActivityReplyWindow
+import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
@@ -1965,6 +1968,48 @@ class AniListRepositoryImpl(
             // null. Both are "nobody to show", not a failure, so the sheet still
             // opens and says so.
             data.activity?.likes.orEmpty()
+        }
+
+    override suspend fun getActivityReplyWindow(
+        activityId: Int,
+        page: Int,
+        perPage: Int
+    ): Result<ActivityReplyWindow> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_ACTIVITY_REPLY_WINDOW,
+                variables = mapOf(
+                    "activityId" to activityId,
+                    "page" to page,
+                    "perPage" to perPage
+                )
+            ),
+            apiService::getActivityReplyWindow
+        ).map { data ->
+            // A retired activity id answers the aliased `Activity` node as null and
+            // the page as an empty window; both read as "no comments", which opens
+            // the sheet on an empty thread rather than failing it. The distinct is
+            // for the sheet's own `key = { it.id }` on a LazyColumn: duplicate keys
+            // crash the list, and a page boundary that shifts under a concurrent
+            // post is the one way two copies of one reply can reach a list.
+            ActivityReplyWindow(
+                replies = data.window?.activityReplies.orEmpty().distinctBy { it.id },
+                replyCount = data.activity?.replyCount ?: 0,
+                page = page
+            )
+        }
+
+    override suspend fun getActivityReplyLikers(replyId: Int): Result<List<FollowUser>> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_ACTIVITY_REPLY_LIKERS,
+                variables = mapOf("replyId" to replyId)
+            ),
+            apiService::getActivityReplyLikers
+        ).map { data ->
+            // The same reduction as the activity's likers: a reply that no longer
+            // exists answers null, and that is "nobody to show", not a failure.
+            data.reply?.likes.orEmpty()
         }
 
     override suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =

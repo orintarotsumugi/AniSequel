@@ -2,6 +2,7 @@ package com.anisequel.data.repository
 
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.ActivityReplyWindow
 import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.EntityPreviewKey
@@ -351,6 +352,30 @@ interface AniListRepository {
      */
     suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
         unsupported("getActivityReplies")
+
+    /**
+     * One page of an activity's comment thread, oldest first within the page, with
+     * the server's total alongside it.
+     *
+     * The chat view's read. [com.anisequel.domain.usecase.CommentWindow] works out
+     * which [page] holds the newest replies; this method does not sort or guess -
+     * it asks AniList for that page and reports the count that came back with it.
+     */
+    suspend fun getActivityReplyWindow(
+        activityId: Int,
+        page: Int,
+        perPage: Int
+    ): Result<ActivityReplyWindow> = unsupported("getActivityReplyWindow")
+
+    /**
+     * The people who liked one comment.
+     *
+     * Defaults to an empty list for the same reason [getActivityLikes] does: the
+     * answer is readable without a session, so a repository that cannot serve it
+     * says "nobody" rather than throwing.
+     */
+    suspend fun getActivityReplyLikers(replyId: Int): Result<List<FollowUser>> =
+        Result.success(emptyList())
 
     /**
      * The people who liked one activity.

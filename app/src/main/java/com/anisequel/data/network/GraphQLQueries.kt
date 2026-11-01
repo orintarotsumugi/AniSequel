@@ -1386,6 +1386,91 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The newest window of one activity's comment thread, plus the count that
+     * says where the window belongs.
+     *
+     * ## Why paging exists when [GET_ACTIVITY_REPLIES] already works
+     *
+     * `Activity(id:){replies}` has no arguments at all: it is AniList's whole
+     * comment list in one response, and the busiest threads on the site run to
+     * thousands of them. A thread that size is a page of JSON, a parse and a
+     * hundred-odd composed rows for a person who wanted to read the last screen
+     * of it - which is exactly what a comment sheet is used for. This document
+     * asks for one `Page` of replies instead, and the sheet fetches backwards
+     * from the end only when the reader presses Older.
+     *
+     * ## Which page is the newest
+     *
+     * `Page.activityReplies` returns replies in ascending id order, so the last
+     * page is the newest end - verified against the live API rather than inferred,
+     * because a descending assumption here would open every thread at its oldest
+     * comments. The caller therefore asks for `ceil(replyCount / perPage)`, which
+     * is why [GET_ACTIVITY_REPLIES]'s `replyCount` is selected here too: it comes
+     * back in the same request as the page it is needed to place.
+     *
+     * The two aliases are not decoration. `Activity` and `Page` are both root
+     * fields of this one request, and aliasing them to `activity` and `window`
+     * keeps the payload model lowercase like every other model in
+     * [com.anisequel.data.model] instead of needing `@Json` on two fields.
+     *
+     * `Activity(id:)` returns `ActivityUnion`, so both feed members are still
+     * fragmented here for the same reason [GET_ACTIVITY_REPLIES] fragments them:
+     * a document with only the `ListActivity` member answers a text post's id with
+     * an empty object, which reads as a commentless post.
+     */
+    val GET_ACTIVITY_REPLY_WINDOW = """
+        query GetActivityReplyWindow(${'$'}activityId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
+          activity: Activity(id: ${'$'}activityId) {
+            ... on ListActivity {
+              id
+              replyCount
+            }
+            ... on TextActivity {
+              id
+              replyCount
+            }
+          }
+          window: Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            activityReplies(activityId: ${'$'}activityId) {
+              id
+              text
+              likeCount
+              isLiked
+              createdAt
+              user {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The people who liked one comment.
+     *
+     * `ActivityReply` is a root field and `likes` on it is a plain `[User]`, the
+     * same unpaginated list an activity's likers come back as, so one request
+     * answers the whole sheet. It is its own document rather than a field on the
+     * window above because a thread of twenty-five loaded comments does not need
+     * twenty-five liker lists: the sheet asks when a reader long-presses one heart.
+     */
+    val GET_ACTIVITY_REPLY_LIKERS = """
+        query GetActivityReplyLikers(${'$'}replyId: Int) {
+          ActivityReply(id: ${'$'}replyId) {
+            id
+            likeCount
+            likes {
+              id
+              name
+              avatar { large medium }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * The people who liked one activity.
      *
      * `ListActivity.likes` and `TextActivity.likes` are plain `[User]`, not

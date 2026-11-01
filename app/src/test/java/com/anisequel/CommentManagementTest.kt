@@ -528,6 +528,25 @@ class CommentManagementTest {
             return Result.success(replies)
         }
 
+        override suspend fun getActivityReplyWindow(
+            activityId: Int,
+            page: Int,
+            perPage: Int
+        ): Result<com.anisequel.data.model.ActivityReplyWindow> {
+            // The window is what chat view reads, and it is now the default read,
+            // so the same page answers both shapes: every reply on page one, with
+            // the count that says the thread is one page long.
+            repliesFetchCount++
+            if (throwOnLoad) throw IllegalStateException("the socket closed under us")
+            return Result.success(
+                com.anisequel.data.model.ActivityReplyWindow(
+                    replies = replies,
+                    replyCount = replies.size,
+                    page = page
+                )
+            )
+        }
+
         override suspend fun postActivityReply(activityId: Int, text: String): Result<ActivityReply> {
             postReplyFetchCount++
             return postResult
