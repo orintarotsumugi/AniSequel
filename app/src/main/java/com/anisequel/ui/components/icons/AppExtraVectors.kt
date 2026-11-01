@@ -347,9 +347,9 @@ object AppExtraVectors {
     /**
      * Underline, for the comment composer's format bar.
      *
-     * Drawn as the letter rather than the Material glyph because the bar already
-     * carries hand-built Bold, Italic and Spoiler, and one imported shape in that
-     * row sits at a different weight and corner radius than its neighbours.
+     * Drawn as the letter rather than the Material glyph: the bar already carries
+     * hand-built Bold, Italic and Spoiler, and an imported shape sits at a
+     * different weight and corner radius than its neighbours.
      */
     val TextUnderline: ImageVector by lazy {
         ImageVector.Builder(
@@ -443,9 +443,9 @@ object AppExtraVectors {
     /**
      * A quote: two turned blocks over a rule.
      *
-     * Used twice over - the composer's block-quote control and the row's "quote this
-     * comment" action - because both mean the same thing to a reader, and a second
-     * glyph for the same idea is one more to learn.
+     * Used twice over - the block-quote control and the row's "quote this comment"
+     * action - because both mean the same thing, and a second glyph for the same
+     * idea is one more to learn.
      */
     val TextQuote: ImageVector by lazy {
         ImageVector.Builder(
@@ -621,8 +621,8 @@ object AppExtraVectors {
     /**
      * A video embed: a frame with a play mark inside it.
      *
-     * The composer's YouTube control. AniList turns `youtube(id)` into a player in
-     * the comment, so the control promises a video rather than a link.
+     * The composer's YouTube control: AniList turns `youtube(id)` into a player, so
+     * the control promises a video rather than a link.
      */
     val YouTubeEmbed: ImageVector by lazy {
         ImageVector.Builder(
