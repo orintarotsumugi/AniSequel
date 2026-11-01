@@ -103,10 +103,18 @@ object PickedImageReader {
         // non-null array is a different type to Kotlin's invariant generics, not a
         // wider one - the call simply does not resolve.
         val projection = arrayOf<String?>(OpenableColumns.DISPLAY_NAME)
-        val cursor = resolver.query(uri, projection) ?: return@runCatching null
+        // All five arguments, because `ContentResolver.query` is overloaded and the
+        // two-argument form is not the one Kotlin resolves against this SDK: leaving
+        // the trailing arguments out resolved a signature that wanted three more
+        // parameters, and the cursor's own methods then looked unresolved.
+        val cursor = resolver.query(uri, projection, null, null, null) ?: return@runCatching null
         cursor.use {
             val column = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (column >= 0 && it.moveToFirst()) it.getString(column)?.takeIf { name -> name.isNotBlank() } else null
+            if (column >= 0 && it.moveToFirst()) {
+                it.getString(column)?.takeIf { name -> name.isNotBlank() }
+            } else {
+                null
+            }
         }
     }.getOrNull()
 

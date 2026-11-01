@@ -2,10 +2,9 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,39 +33,38 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import java.time.Instant
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import java.time.Instant
 
 /**
- * One comment row.
+ * One comment: a face, a name and a time, the body, and what the reader can do
+ * about it.
  *
  * ## The row the sheet always had, and the one chat view adds
  *
  * [isContinuation] is the difference between the two shapes, and it is the whole
  * reason a thread of nine comments by one person stops costing nine headers. A
- * continuation draws no avatar, no name and no timestamp: the reader has just seen
- * who is speaking, and the third repetition of the same face is not information,
- * it is the thing that makes a conversation look like a list. [CommentGrouping]
- * decides which rows that applies to, from the author, the gap in seconds and the
- * thread depth - so a continuation is only ever claimed for a row that really is
- * the previous message continued.
+ * continuation draws no avatar, no name and no header line: the reader has just
+ * seen who is speaking, and the third repetition of the same face is not
+ * information - it is the thing between the eye and the sentence it came for.
+ * [com.anisequel.domain.usecase.CommentGrouping] decides which rows that applies
+ * to, from the author id, the gap in seconds and the thread depth, so a merged
+ * header is only ever claimed for a row that really is the one above it continued.
  *
  * Continuations keep the indent and the controls. Dropping the controls with the
- * header would mean a person who posted four times in a row could not like or
- * quote three of them, and a wrong like on a comment thread is not something the
- * reader can walk back.
+ * header would mean a person who posted four times could not like or quote three
+ * of them, and a wrong like on somebody's comment is not something the reader can
+ * walk back.
  *
- * ## Why the row's taps are what they are
+ * ## Why the controls are where they are
  *
- * The heart is the one control with a second gesture: a hold opens the people who
- * liked that comment, mirroring the activity card, which has had that gesture for
- * the same reason - a count without names is only half an answer. Quote and Reply
- * are labelled rather than icon-only, because on this row a bare arrow beside a
- * bare heart with a number is two glyphs to guess between.
+ * Left-aligned under the body rather than pushed to the sheet's edges: a body can
+ * be a multi-line quote or an image, and a right-aligned overflow would sit at the
+ * end of whatever line happened to be last.
  */
 @Composable
 internal fun CommentRow(
@@ -100,11 +99,8 @@ internal fun CommentRow(
     ) {
         if (isContinuation) {
             // The column the avatar would occupy, kept rather than collapsed: the
-            // bodies of a burst of messages then line up with the bodies of the
-            // rows that carry a header, which is what makes the group read as one
-            // block. The time the header would have shown is drawn in its place,
-            // small and at the end of the line, so a continuation is still a
-            // timestamped message - it is the *speaker* that is already known.
+            // bodies of a burst of messages then line up with the bodies of the rows
+            // that carry a header, which is what makes the group read as one block.
             Spacer(modifier = Modifier.width(46.dp))
         } else {
             CommentAvatar(
@@ -149,16 +145,17 @@ internal fun CommentRow(
 }
 
 /**
- * The row's controls: heart, Reply, Quote, the continuation's time, and the manage
+ * The row's controls: heart, Reply, Quote, a continuation's time, and the manage
  * dot.
  *
- * Extracted from the row because the row is about *a comment* - who, when, what -
+ * Split out of the row because the row is about *a comment* - who, when, what -
  * and this is about what the reader can do about it, which is the half that grows
- * whenever a control is added. The bar scrolls rather than clips: heart, Reply,
- * Quote, the timestamp and the manage dot are five targets under one body, and a
- * threaded comment starts 56dp in from the edge, so on a 360dp phone the last
- * control ran off the screen - and that is the one that edits or deletes your own
- * comment.
+ * every time a control is added.
+ *
+ * The bar scrolls rather than clips. Heart, Reply, Quote, the timestamp and the
+ * manage dot are five targets under one body, and a threaded comment starts 56dp
+ * in from the edge: on a 360dp phone the last control ran off the screen, and the
+ * one that edits or deletes your own comment is the worst one to hide.
  */
 @Composable
 private fun CommentRowActions(
@@ -175,81 +172,77 @@ private fun CommentRowActions(
     onQuote: () -> Unit,
     onManage: () -> Unit
 ) {
+    val liked = reply.isLiked == true
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically
     ) {
-                // The same control the activity card draws, shared rather than
-                // re-declared here - `EngagementAction`.
-                EngagementAction(
-                icon = if (reply.isLiked == true) {
-                    AppVectorIcons.ActivityLiked
-                } else {
-                    AppVectorIcons.ActivityNotLiked
-                },
-                count = reply.likeCount ?: 0,
-                active = reply.isLiked == true,
-                // Null `isLiked` means AniList did not answer, which is what a
-                // signed-out reader gets. Disabled rather than drawn-as-unliked,
-                // so the control is never something that looks live and does
-                // nothing.
-                enabled = reply.isLiked != null && !likePending,
-                contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
-                onClick = onLike,
-                // The hold asks whose. A comment's like count used to be the
-                // only answer the row had, while the card above it had always
-                // offered the names.
-                onLongClick = if (reply.likeCount.orZero() > 0) onShowLikers else null,
-                modifier = Modifier.testTag("activity_reply_like_button")
-                )
-                if (canReply) {
-                Spacer(modifier = Modifier.width(4.dp))
-                CommentTextAction(
-                    label = "Reply",
-                    icon = AppVectorIcons.ActivityReplies,
-                    onClickLabel = "Reply to ${reply.user?.name.orEmpty()}",
-                    tag = "activity_reply_reply_button",
-                    onClick = { onReply(reply.user?.name.orEmpty()) }
-                )
-                }
-                if (canQuote) {
-                Spacer(modifier = Modifier.width(4.dp))
-                CommentTextAction(
-                    label = "Quote",
-                    icon = AppVectorIcons.TextQuote,
-                    onClickLabel = "Quote this comment",
-                    tag = "activity_reply_quote_button",
-                    onClick = onQuote
-                )
-                }
-                if (isContinuation) {
-                CommentTimestamp(reply.createdAt, nowEpochSecond)
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (canManage) {
-                CommentManageButton(onClick = onManage)
-                }
-            }
-: Int = this ?: 0
+        // The same control the activity card draws, shared rather than re-declared
+        // here - `EngagementAction`.
+        EngagementAction(
+            icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
+            count = reply.likeCount ?: 0,
+            active = liked,
+            // Null `isLiked` means AniList did not answer, which is what a
+            // signed-out reader gets. Disabled rather than drawn-as-unliked, so the
+            // control is never something that looks live and does nothing.
+            enabled = reply.isLiked != null && !likePending,
+            contentDescription = if (liked) "Unlike comment" else "Like comment",
+            onClick = onLike,
+            // The hold asks whose. A comment's like count used to be the only answer
+            // the row had, while the card above it had always offered the names.
+            onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
+            modifier = Modifier.testTag("activity_reply_like_button")
+        )
+        if (canReply) {
+            Spacer(modifier = Modifier.width(4.dp))
+            val name = reply.user?.name.orEmpty()
+            CommentTextAction(
+                label = "Reply",
+                icon = AppVectorIcons.ActivityReplies,
+                onClickLabel = "Reply to $name",
+                tag = "activity_reply_reply_button",
+                onClick = { onReply(name) }
+            )
+        }
+        if (canQuote) {
+            Spacer(modifier = Modifier.width(4.dp))
+            CommentTextAction(
+                label = "Quote",
+                icon = AppVectorIcons.TextQuote,
+                onClickLabel = "Quote this comment",
+                tag = "activity_reply_quote_button",
+                onClick = onQuote
+            )
+        }
+        if (isContinuation) {
+            CommentTimestamp(reply.createdAt, nowEpochSecond)
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (canManage) {
+            CommentManageButton(onClick = onManage)
+        }
+    }
+}
 
 /**
- * The time, on a header row after the name and on a continuation row at the end
- * of the controls.
+ * The time, after the name on a header row and at the end of the controls on a
+ * continuation row.
  *
- * A continuation still needs it: "they said this, then this, then this" is one
- * turn of a conversation, and "an hour later, again" is a different thing. It is
- * the header that is redundant, not the timestamp.
+ * A continuation still needs it: "they said this, then this, then this" is one turn
+ * of a conversation, and "an hour later, again" is a different thing. It is the
+ * header that is redundant, not the timestamp.
  */
 @Composable
 private fun CommentTimestamp(createdAt: Int?, nowEpochSecond: Long?) {
     if (createdAt == null) return
     Spacer(modifier = Modifier.width(8.dp))
     Text(
-        // `nowEpochSecond` is the profile's minute-tick (see `ProfileClock`): the
-        // sheet re-renders on it so "12m" becomes "1h" while the reader is still
-        // looking at it. Null falls back to the clock on the device.
         text = formatRelativeSeconds(
             createdAt,
+            // `nowEpochSecond` is the profile's minute-tick (see `ProfileClock`), so
+            // "12m" becomes "1h" while the reader is still looking at it. Null falls
+            // back to the clock on the device.
             nowEpochSecond?.let { Instant.ofEpochSecond(it) } ?: Instant.now()
         ),
         style = MaterialTheme.typography.labelSmall,
@@ -311,9 +304,8 @@ private fun CommentTextAction(
  * A tap target of its own rather than a long press on the row: the sheet's only
  * hold gesture elsewhere (the heart) opens likers, and nothing about a comment's
  * body says "hold me to edit this". 48dp, the platform's minimum touch target,
- * rather than the 36dp box that was sized to its glyph - manage is the one
- * control in the row that changes somebody's comment, and it was also the
- * hardest to hit.
+ * rather than the 36dp box that was sized to its glyph - manage is the one control
+ * in the row that changes somebody's comment, and it was also the hardest to hit.
  */
 @Composable
 private fun CommentManageButton(onClick: () -> Unit) {
@@ -345,9 +337,9 @@ private fun CommentManageButton(onClick: () -> Unit) {
 
 @Composable
 private fun ReplyBody(text: String?) {
-    // A child composable rather than an early return in this one: `remember`
-    // after a return is a conditional composable call, and a reply whose text
-    // AniList omitted would then occupy the slot the parser state wants.
+    // A child composable rather than an early return in the row: `remember` after a
+    // return is a conditional composable call, and a reply whose text AniList
+    // omitted would then occupy the slot the parser state wants.
     if (!text.isNullOrBlank()) MarkdownBody(text)
 }
 
@@ -362,10 +354,9 @@ private fun MarkdownBody(text: String) {
 
 @Composable
 private fun CommentAvatar(url: String?, name: String) {
-    val shape = CircleShape
     val base = Modifier
         .size(34.dp)
-        .clip(shape)
+        .clip(CircleShape)
     if (url != null) {
         AsyncImage(
             model = url,
@@ -432,9 +423,9 @@ internal fun CommentOlderRow(
                 text = if (isLoading) {
                     "Loading…"
                 } else {
-                    // The number is the thread's own count rather than a vague
-                    // "older": a reader deciding whether to read back through nine
-                    // hundred comments needs to know it is nine hundred.
+                    // The thread's own count rather than a vague "older": a reader
+                    // deciding whether to read back through nine hundred comments
+                    // needs to know it is nine hundred.
                     "Older  $hiddenCount"
                 },
                 style = MaterialTheme.typography.labelLarge,
@@ -448,48 +439,41 @@ internal fun CommentOlderRow(
  * The pill that says the conversation moved while you were reading it.
  *
  * A count, not an arrow, because the number is the question the reader is asking -
- * and it is drawn outside the list, over the composer bar, so it cannot be missed
- * by a reader who is parked three pages back. Tapping it does two things the store
- * has already decided: the new rows come into the window, and the list goes to
- * them.
+ * and it floats over the bottom of the list rather than sitting in it, so it cannot
+ * be missed by a reader parked three pages back. Tapping it does the two things the
+ * store has already decided: the new rows come into the window, and the list goes
+ * to them.
  */
 @Composable
 internal fun NewCommentsPill(count: Int, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    Box(
+    Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 6.dp),
-        contentAlignment = Alignment.Center
+            .defaultMinSize(minHeight = 40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = "Read the new comments",
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("activity_comments_new_pill"),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .defaultMinSize(minHeight = 40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClickLabel = "Read the new comments",
-                    onClick = onClick
-                )
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .testTag("activity_comments_new_pill"),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.ActivityReplies,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "$count new",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White
-            )
-        }
+        Icon(
+            imageVector = AppVectorIcons.ActivityReplies,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$count new",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White
+        )
     }
 }

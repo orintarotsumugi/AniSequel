@@ -145,6 +145,7 @@ private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Bo
  * border on the text: a message marked by *looking different from itself* is easier
  * to find in a column of bubbles than one with a caption over it.
  */
+@Composable
 private fun bubbleModifier(sent: Boolean, highlighted: Boolean): Modifier {
     val shape = RoundedCornerShape(
         topStart = if (sent) 18.dp else 6.dp,

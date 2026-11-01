@@ -225,6 +225,8 @@ internal fun ProfileTabsContent(
         com.anisequel.domain.profile.ProfileLayout(),
     activityViewModel: UserActivityViewModel,
     followingViewModel: UserActivityViewModel,
+    /** The site-wide stream, for the fourth Activity segment when it is switched on. */
+    globalViewModel: UserActivityViewModel,
     messagesViewModel: UserMessagesViewModel,
     /**
      * The signed-in viewer's id.
@@ -379,6 +381,7 @@ internal fun ProfileTabsContent(
                     1 -> ProfileActivityPage(
                         activityViewModel = activityViewModel,
                         followingViewModel = followingViewModel,
+                        globalViewModel = globalViewModel,
                         messagesViewModel = messagesViewModel,
                         // The demo has fixtures for both viewer feeds, so the
                         // segments are part of the demo's tour of the screen -

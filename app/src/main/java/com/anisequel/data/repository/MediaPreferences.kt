@@ -12,6 +12,9 @@ import com.anisequel.data.security.TokenCipher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+private const val DEFAULT_CHAT_VIEW = true
+private const val DEFAULT_POLLING = true
+private const val DEFAULT_GLOBAL_FEED = false
 private val Context.commentMediaDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "anisequel_comment_media"
 )
@@ -61,10 +64,8 @@ class MediaPreferences(
  * thread, and the reader who wants the old behaviour can turn it off one tap
  * deeper than the one that would have to be taken to notice it was missing.
  */
-private const val DEFAULT_CHAT_VIEW = true
 
 /** Polling is on with it, and separately switchable - see [CommentMediaSettings]. */
-private const val DEFAULT_POLLING = true
 
 /**
  * Strangers are opt-in. The site-wide stream is the one feed in the app that is
@@ -72,7 +73,6 @@ private const val DEFAULT_POLLING = true
  * ~30-requests-a-minute budget the dashboard, the list and the friends feed draw
  * on - so it ships off and is turned on once, in Settings.
  */
-private const val DEFAULT_GLOBAL_FEED = false
 
 private object Keys {
         val CHAT_VIEW = booleanPreferencesKey("comment_chat_view")

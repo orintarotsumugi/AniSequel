@@ -603,17 +603,15 @@ object AppExtraVectors {
                 stroke = SolidColor(Color.White),
                 strokeLineWidth = 1.8f,
                 strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round,
-                block = block
-            )
+                strokeLineJoin = StrokeJoin.Round
+            ) { block() }
         }
 
         fun fill(block: PathBuilder.() -> Unit) {
             builder.path(
                 fill = SolidColor(Color.White),
-                pathFillType = PathFillType.NonZero,
-                block = block
-            )
+                pathFillType = PathFillType.NonZero
+            ) { block() }
         }
 
         fun rule(x1: Float, y1: Float, x2: Float, y2: Float) {

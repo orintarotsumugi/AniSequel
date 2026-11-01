@@ -272,7 +272,7 @@ fun ProfileActivityPage(
                     listState = messagesListState
                 )
 
-                shownSegment == SEGMENT_GLOBAL -> ProfileActivityTab(
+                SEGMENT_GLOBAL -> ProfileActivityTab(
                     source = globalFeed,
                     contentPadding = contentPadding,
                     listState = rememberLazyListState(),
