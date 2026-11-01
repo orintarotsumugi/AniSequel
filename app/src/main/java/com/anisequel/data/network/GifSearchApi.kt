@@ -280,7 +280,7 @@ class SafebooruGifs(
                         ?: return@withContext Result.failure(
                             GifSearchFailure("Safebooru answered with something unreadable.")
                         )
-                    val page = parsed.toGifPage()
+                    val page = parsed?.toGifPage() ?: GifPage(emptyList())
                     val index = cursor?.toIntOrNull() ?: 0
                     Result.success(
                         page.copy(next = if (page.results.size >= PAGE_SIZE) (index + 1).toString() else null)
