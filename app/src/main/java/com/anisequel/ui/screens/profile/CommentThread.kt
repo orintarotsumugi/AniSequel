@@ -159,108 +159,24 @@ internal fun ColumnScope.CommentsThread(
         onCheckForNewComments = onCheckForNewComments
     )
 
-    val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
-
-    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            // The list is keyed by reply id, and a repeated key is a hard
-            // `IllegalArgumentException` in Compose. The store guarantees one entry
-            // per id; see `CommentsState.replies`.
-            state = listState,
-            contentPadding = PaddingValues(bottom = 8.dp)
-        ) {
-            when {
-                state.isLoading -> item(key = "loading") {
-                    // The rows that are coming, at the sizes they will have. A
-                    // spinner here was the one waiting state in the app whose shape
-                    // was already known and thrown away.
-                    //
-                    // The shimmer is owned by this item rather than by the sheet: an
-                    // infinite transition composed above the list kept ticking while
-                    // comments were on screen and while the editor covered them, for
-                    // a skeleton that was not drawn. Composed here, it exists only
-                    // for as long as the waiting state does.
-                    CommentRowsSkeleton(phase = rememberShimmerPhase())
-                }
-
-                state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
-                    ThreadLoadError(message = state.loadError, onRetry = onRetry)
-                }
-
-                state.replies.isEmpty() -> item(key = "empty") {
-                    ThreadEmptyState(canPost = canPost)
-                }
-
-                else -> {
-                    val note = state.windowError ?: state.loadError
-                    if (note != null) {
-                        // Two different failures, one shape: an Older page that did
-                        // not arrive and a refresh that did not arrive both leave the
-                        // rows on screen readable, and both need a retry that does not
-                        // throw away what the reader is looking at.
-                        item(key = if (state.windowError != null) "window_error" else "refresh_error") {
-                            RefreshErrorBanner(
-                                message = note,
-                                onRetry = if (state.windowError != null) onLoadOlder else onRetry
-                            )
-                        }
-                    }
-                    if (state.isChatView && hiddenCount > 0) {
-                        item(key = "older", contentType = "older") {
-                            CommentOlderRow(
-                                hiddenCount = hiddenCount,
-                                isLoading = state.isLoadingOlder,
-                                onClick = onLoadOlder
-                            )
-                        }
-                    }
-                    items(
-                        items = visible,
-                        key = { it.id },
-                        contentType = { "reply" }
-                    ) { reply ->
-                        CommentRow(
-                            reply = reply,
-                            indent = replyDepths[reply.id] ?: 0,
-                            isContinuation = reply.id in continuations,
-                            likePending = reply.id in state.pendingReplyLikes,
-                            canManage = viewerId != null && reply.user?.id == viewerId,
-                            // A reply is addressed by a leading `@name`, so without an
-                            // author name there is nothing to insert, even for a
-                            // signed-in reader.
-                            canReply = canPost && !reply.user?.name.isNullOrBlank(),
-                            canQuote = canPost && !reply.text.isNullOrBlank(),
-                            onLike = { onLikeReply(reply.id) },
-                            onShowLikers = { onShowCommentLikers(reply.id) },
-                            onReply = onReply,
-                            onQuote = { onQuote(reply) },
-                            onManage = { onManageReply(reply.id) },
-                            nowEpochSecond = nowEpochSecond
-                        )
-                    }
-                }
-            }
-        }
-
-        if (state.unseenNewComments > 0) {
-            // Floating over the bottom of the list. A row *in* the list would be
-            // below the newest comment the reader has not seen yet, which is the
-            // wrong way round for something that announces what arrived.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp)
-            ) {
-                NewCommentsPill(
-                    count = state.unseenNewComments,
-                    onClick = {
-                        onRevealNewComments()
-                    }
-                )
-            }
-        }
-    }
+    ThreadList(
+        state = state,
+        viewerId = viewerId,
+        canPost = canPost,
+        listState = listState,
+        visible = visible,
+        replyDepths = replyDepths,
+        continuations = continuations,
+        onRetry = onRetry,
+        onLoadOlder = onLoadOlder,
+        onReply = onReply,
+        onQuote = onQuote,
+        onLikeReply = onLikeReply,
+        onManageReply = onManageReply,
+        onShowCommentLikers = onShowCommentLikers,
+        onRevealNewComments = onRevealNewComments,
+        nowEpochSecond = nowEpochSecond
+    )
 
     CommentEntryBar(canPost = canPost, onClick = onStartCompose)
 }
@@ -575,4 +491,139 @@ private fun ChatScrollEffects(
             }
         }
     }
+}
+
+/**
+ * The list itself: which waiting state is drawn, the rows that sit above the
+ * comments, the comments, and the pill that floats over the bottom of it all.
+ *
+ * Split out of the thread because the two have different reasons to change. The
+ * thread works out *what* is on screen - the window, the depths, the grouping,
+ * where the reader is parked; this draws the answer, so a new waiting state or a
+ * new row type lands here and a new paging rule lands above. It also keeps the
+ * branch count in either function small enough to read in one screen, which is
+ * the difference between a list of states you can check and a wall you cannot.
+ */
+@Composable
+@Suppress("LongParameterList")
+private fun ThreadList(
+    state: CommentThreadStore.CommentsState,
+    viewerId: Int?,
+    canPost: Boolean,
+    listState: LazyListState,
+    visible: List<ActivityReply>,
+    replyDepths: Map<Int, Int>,
+    continuations: Set<Int>,
+    onRetry: () -> Unit,
+    onLoadOlder: () -> Unit,
+    onReply: (String) -> Unit,
+    onQuote: (ActivityReply) -> Unit,
+    onLikeReply: (Int) -> Unit,
+    onManageReply: (Int) -> Unit,
+    onShowCommentLikers: (Int) -> Unit,
+    onRevealNewComments: () -> Unit,
+    nowEpochSecond: Long?
+) {
+val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
+
+Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        // The list is keyed by reply id, and a repeated key is a hard
+        // `IllegalArgumentException` in Compose. The store guarantees one entry
+        // per id; see `CommentsState.replies`.
+        state = listState,
+        contentPadding = PaddingValues(bottom = 8.dp)
+    ) {
+        when {
+            state.isLoading -> item(key = "loading") {
+                // The rows that are coming, at the sizes they will have. A
+                // spinner here was the one waiting state in the app whose shape
+                // was already known and thrown away.
+                //
+                // The shimmer is owned by this item rather than by the sheet: an
+                // infinite transition composed above the list kept ticking while
+                // comments were on screen and while the editor covered them, for
+                // a skeleton that was not drawn. Composed here, it exists only
+                // for as long as the waiting state does.
+                CommentRowsSkeleton(phase = rememberShimmerPhase())
+            }
+
+            state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
+                ThreadLoadError(message = state.loadError, onRetry = onRetry)
+            }
+
+            state.replies.isEmpty() -> item(key = "empty") {
+                ThreadEmptyState(canPost = canPost)
+            }
+
+            else -> {
+                val note = state.windowError ?: state.loadError
+                if (note != null) {
+                    // Two different failures, one shape: an Older page that did
+                    // not arrive and a refresh that did not arrive both leave the
+                    // rows on screen readable, and both need a retry that does not
+                    // throw away what the reader is looking at.
+                    item(key = if (state.windowError != null) "window_error" else "refresh_error") {
+                        RefreshErrorBanner(
+                            message = note,
+                            onRetry = if (state.windowError != null) onLoadOlder else onRetry
+                        )
+                    }
+                }
+                if (state.isChatView && hiddenCount > 0) {
+                    item(key = "older", contentType = "older") {
+                        CommentOlderRow(
+                            hiddenCount = hiddenCount,
+                            isLoading = state.isLoadingOlder,
+                            onClick = onLoadOlder
+                        )
+                    }
+                }
+                items(
+                    items = visible,
+                    key = { it.id },
+                    contentType = { "reply" }
+                ) { reply ->
+                    CommentRow(
+                        reply = reply,
+                        indent = replyDepths[reply.id] ?: 0,
+                        isContinuation = reply.id in continuations,
+                        likePending = reply.id in state.pendingReplyLikes,
+                        canManage = viewerId != null && reply.user?.id == viewerId,
+                        // A reply is addressed by a leading `@name`, so without an
+                        // author name there is nothing to insert, even for a
+                        // signed-in reader.
+                        canReply = canPost && !reply.user?.name.isNullOrBlank(),
+                        canQuote = canPost && !reply.text.isNullOrBlank(),
+                        onLike = { onLikeReply(reply.id) },
+                        onShowLikers = { onShowCommentLikers(reply.id) },
+                        onReply = onReply,
+                        onQuote = { onQuote(reply) },
+                        onManage = { onManageReply(reply.id) },
+                        nowEpochSecond = nowEpochSecond
+                    )
+                }
+            }
+        }
+    }
+
+    if (state.unseenNewComments > 0) {
+        // Floating over the bottom of the list. A row *in* the list would be
+        // below the newest comment the reader has not seen yet, which is the
+        // wrong way round for something that announces what arrived.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 4.dp)
+        ) {
+            NewCommentsPill(
+                count = state.unseenNewComments,
+                onClick = {
+                    onRevealNewComments()
+                }
+            )
+        }
+    }
+}
 }
