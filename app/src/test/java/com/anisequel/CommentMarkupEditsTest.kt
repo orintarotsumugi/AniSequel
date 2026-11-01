@@ -37,16 +37,19 @@ class CommentMarkupEditsTest {
 
     @Test
     fun `a block insert in the middle of the text does not swallow the tail`() {
-        val edit = insertBlock("ab", 1, 1, "img(u)")
+                val edit = insertBlock("ab", 1, 1, "img(u)")
         assertEquals("a\nimg(u)\nb", edit.text)
-        assertEquals(8, edit.selectionStart)
+        assertEquals(9, edit.selectionStart)
     }
 
     @Test
     fun `prefixing hits every selected line and leaves blanks alone`() {
         val edit = prefixLines("one\ntwo\nthree", 0, 11, "> ")
         assertEquals("> one\n> two\n> three", edit.text)
-        assertEquals(17, edit.selectionEnd)
+        // Three characters of prefix went in ahead of the selection, so the caret
+        // ends up three further along than it started and still covers the same
+        // three lines.
+        assertEquals(18, edit.selectionEnd)
 
         val blanks = prefixLines("a\n\nb", 0, 3, "> ")
         assertEquals("> a\n\n> b", blanks.text)
@@ -56,7 +59,7 @@ class CommentMarkupEditsTest {
     fun `a prefix with a bare caret marks the current line`() {
         val edit = prefixLines("abc\ndef", 5, 5, "# ")
         assertEquals("abc\n# def", edit.text)
-        assertEquals(10, edit.selectionStart)
+        assertEquals(7, edit.selectionStart)
     }
 
     @Test

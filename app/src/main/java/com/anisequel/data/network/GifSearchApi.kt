@@ -340,12 +340,14 @@ class SafebooruGifs(
 /**
  * A search phrase as booru tags.
  *
- * A booru matches tags, not sentences: `spice and wolf holo` has to become
- * `spice_and_wolf holo` or the search returns nothing, which is the same
- * translation every booru front end does. Words the reader already wrote with
- * underscores are left alone, so somebody who knows the tag syntax is not fighting
- * the rewrite; stop words (`a`, `and`, `of`, `the`) drop out because they are never
- * tags and they break the phrase otherwise.
+ * A booru matches tags, not sentences: a search for `spice and wolf holo` has to
+ * become tag words or it returns nothing. Stop words (`a`, `and`, `of`, `the`) are
+ * dropped, because they are never part of a tag and a phrase containing them
+ * matches nothing; what is left is passed as space-separated tags, which the site
+ * ANDs together. Tags the reader spelled with underscores are left exactly as
+ * written, so somebody who knows the syntax is not fighting the rewrite - this does
+ * not try to know that `spice and wolf` is one tag, which needs the site's tag list
+ * to guess and would guess wrong.
  */
 internal fun booruTags(query: String): String =
     query.trim()
