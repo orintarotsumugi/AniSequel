@@ -37,7 +37,7 @@ class CommentMarkupEditsTest {
 
     @Test
     fun `a block insert in the middle of the text does not swallow the tail`() {
-                val edit = insertBlock("ab", 1, 1, "img(u)")
+        val edit = insertBlock("ab", 1, 1, "img(u)")
         assertEquals("a\nimg(u)\nb", edit.text)
         assertEquals(9, edit.selectionStart)
     }
