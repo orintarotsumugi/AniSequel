@@ -113,9 +113,12 @@ class ProfileBioCollapseTest {
             isBioCollapsible(filler, AniListMarkdownParser.parse(filler))
         )
         listOf(
-            "https://static.anilist.co/banner.gif\n$filler",
+            // Blank line between the embed and the text: a single newline is a
+            // lazy continuation, which folds the URL into the sentence and leaves
+            // a link rather than the whole-line image these fixtures are about.
+            "https://static.anilist.co/banner.gif\n\n$filler",
             "![cover](https://static.anilist.co/banner.gif) $filler",
-            "img100%(https://static.anilist.co/banner.gif)\n$filler"
+            "img100%(https://static.anilist.co/banner.gif)\n\n$filler"
         ).forEach { bio ->
             assertFalse(
                 "with an image in it the card shows the whole bio",
