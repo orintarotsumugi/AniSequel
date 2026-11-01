@@ -349,7 +349,7 @@ class GifSearchParseTest {
         assertEquals(5200, recent.height ?: 0)
     }
 
-    private fun gif(index: Long, gridUrl: String = "https://x/tile$index.gif") = GifResult(
+    private fun gif(index: Int, gridUrl: String = "https://x/tile$index.gif") = GifResult(
         id = index.toString(),
         embedUrl = "https://x/embed$index.gif",
         gridUrl = gridUrl,
