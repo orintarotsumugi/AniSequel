@@ -117,3 +117,203 @@ internal fun isAttachableImageUrl(raw: String): Boolean {
     }
     return trimmed.length > scheme.length && !trimmed.contains(' ')
 }
+
+/**
+ * Prefixes every line the selection touches, for the block-level markup.
+ *
+ * A header, a quote and a list are all "this line, not this span": AniList's
+ * parser matches them at the start of a line, so a control that wrapped the
+ * selection in `# ` would put the hash in the middle of a sentence. The lines the
+ * reader has actually selected get the prefix; with a bare caret the current line
+ * is the target, because pressing Quote and then typing is the ordinary order.
+ *
+ * Removing a prefix is not offered. A toolbar that adds and removes on a toggle
+ * has to remember what it did to each line, and a comment is plain text that the
+ * author can edit by hand - the second press of Header making a second `#` is the
+ * honest behaviour, and the one the reader can undo with Backspace.
+ */
+internal fun prefixLines(
+    text: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    prefix: String
+): DraftEdit {
+    val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val lineStart = text.lastIndexOf('\n', (from - 1).coerceAtLeast(0))
+        .let { if (it < 0) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', to).let { if (it < 0) text.length else it }
+    val block = text.substring(lineStart, lineEnd)
+    if (block.isEmpty()) {
+        val inserted = text.substring(0, lineStart) + prefix + text.substring(lineStart)
+        return DraftEdit(inserted, lineStart + prefix.length, lineStart + prefix.length)
+    }
+    val lines = block.split("\n")
+    // A blank line inside the selection stays blank: a `> ` on an empty line is a
+    // quote mark that quotes nothing, and it shows up in the posted comment.
+    val mapped = lines.map { line -> if (line.isBlank()) line else prefix + line }
+    val newText =
+        text.substring(0, lineStart) + mapped.joinToString("\n") + text.substring(lineEnd)
+
+    // Where an index inside the block lands after the rewrite. Each line gains its
+    // own prefix or gains nothing, so the offset depends on the line the index is
+    // in - and a selection that starts mid-block has to be moved by the prefixes
+    // that came *before* it, not by every prefix in the block. The first version of
+    // this added one flat total to both ends, which pushed a selection beginning on
+    // the second line of a paragraph past its own end: quoting part of a
+    // multi-line comment marked the wrong text, and the next press of the button
+    // acted on that.
+    fun shift(index: Int): Int {
+        var remaining = index
+        var rebuilt = lineStart
+        for (position in lines.indices) {
+            val oldLength = lines[position].length
+            val gained = mapped[position].length - oldLength
+            if (remaining <= oldLength) return rebuilt + gained + remaining
+            remaining -= oldLength + 1
+            rebuilt += mapped[position].length + 1
+        }
+        return rebuilt
+    }
+
+    return DraftEdit(newText, shift(from - lineStart), shift(to - lineStart))
+}
+
+/**
+ * Inserts block-level markup - an embed, a centred span - on its own line.
+ *
+ * AniList's `img(url)`, `youtube(id)` and `webm(url)` are matched only when the
+ * whole line is the tag, so an insert that dropped them beside a word would store
+ * literal markup in the comment. This pads the line breaks the parser needs and
+ * leaves the caret after the block, ready for the next sentence.
+ */
+internal fun insertBlock(
+    text: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    block: String
+): DraftEdit {
+    val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val snippet = buildString {
+        // Newlines are appended conditionally rather than concatenated around
+        // parenthesised `if`s: `x + (if (c) "\n" else "") + y` only reads
+        // correctly with its parentheses, and the version without them silently
+        // folds the tail into the `else` branch.
+        if (from > 0 && text[from - 1] != '\n') append('\n')
+        append(block)
+        if (to < text.length && text[to] != '\n') append('\n')
+    }
+    val newText = text.substring(0, from) + snippet + text.substring(to)
+    val cursor = from + snippet.length
+    return DraftEdit(newText, cursor, cursor)
+}
+
+/** `[selected](url)`, or `[label](url)` with nothing selected. */
+internal fun linkMarkdown(
+    text: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    url: String
+): DraftEdit {
+    val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
+    val label = text.substring(from, to).ifBlank { url }
+    return insertSnippet(text, from, to, "[$label]($url)")
+}
+
+/** What the composer's "more markup" dialog is being asked to produce. */
+internal enum class InsertKind {
+    /** `img(url)` - a block image, the site's own tag. */
+    IMAGE,
+
+    /** `youtube(id-or-url)` - the site plays it in place. */
+    YOUTUBE,
+
+    /** `webm(url)` - the site's video embed. */
+    WEBM,
+
+    /** `[label](url)` over the selection. */
+    LINK;
+
+    /** The label and the placeholder the dialog shows for this kind. */
+    val label: String
+        get() = when (this) {
+            IMAGE -> "Image"
+            YOUTUBE -> "YouTube"
+            WEBM -> "WebM video"
+            LINK -> "Link"
+        }
+
+    val placeholder: String
+        get() = when (this) {
+            IMAGE -> "https://.../picture.png"
+            YOUTUBE -> "https://www.youtube.com/watch?v=..."
+            WEBM -> "https://.../clip.webm"
+            LINK -> "https://..."
+        }
+
+    /** Whether the value has to be a URL the app will accept. */
+    val wantsUrl: Boolean
+        get() = this != YOUTUBE
+}
+
+/**
+ * The markup one insert kind produces from a value.
+ *
+ * A YouTube id is accepted as well as a link because that is what AniList itself
+ * takes - `youtube(dQw4w9WgXcQ)` and `youtube(https://youtu.be/dQw4w9WgXcQ)` both
+ * render - and a composer that insisted on the full URL would refuse the form the
+ * site's own documentation leads with.
+ */
+internal fun embedMarkdown(kind: InsertKind, value: String): String = when (kind) {
+    InsertKind.IMAGE -> "img(${value.trim()})"
+    InsertKind.YOUTUBE -> "youtube(${value.trim().removeYouTubeWrapper()})"
+    InsertKind.WEBM -> "webm(${value.trim()})"
+    InsertKind.LINK -> value.trim()
+}
+
+/** Strips the watch-url wrapper down to the bare video id. */
+private fun String.removeYouTubeWrapper(): String {
+    val id = listOf("watch?v=", "youtu.be/", "embed/", "shorts/", "v=")
+        .firstOrNull { contains(it, ignoreCase = true) }
+        ?: return this
+    return substringAfter(id, this).substringBefore('&').substringBefore('?')
+}
+
+/**
+ * Whether a value the reader typed can become [kind]'s markup.
+ *
+ * A YouTube id or link goes through if it has any content at all, since both
+ * forms are valid; every other kind needs an absolute http(s) URL for the same
+ * reason [isAttachableImageUrl] does - a relative path or a `data:` payload is
+ * stored as literal text the renderer cannot embed, and the author finds that out
+ * after the comment is already public.
+ */
+internal fun isUsableInsert(kind: InsertKind, raw: String): Boolean {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return false
+    if (kind == InsertKind.YOUTUBE) return true
+    return isAttachableImageUrl(trimmed)
+}
+
+/**
+ * The quote block a "Quote" action puts into the draft.
+ *
+ * Every line of the quoted comment goes behind `> `, and a blank line follows for
+ * the answer - AniList renders a quoted block, and a reply that ran its own first
+ * sentence onto the end of the quote is what the site's own quote button avoids by
+ * inserting the break. The author's name leads the block only when the quoted text
+ * does not already start with a mention, because quoting a reply into a thread that
+ * was about to @-mention the same person should not say it twice.
+ */
+internal fun quoteBlock(text: String, authorName: String?): String {
+    val body = text.trim().lines().joinToString("\n") { line -> "> $line" }
+    val who = authorName?.trim()?.takeIf { it.isNotEmpty() }
+    val credit = if (who != null && !text.trimStart().startsWith("@$who")) {
+        "$who wrote\n"
+    } else {
+        ""
+    }
+    return "$credit$body\n\n"
+}

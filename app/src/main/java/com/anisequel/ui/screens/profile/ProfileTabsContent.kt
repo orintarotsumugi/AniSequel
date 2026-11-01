@@ -34,13 +34,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
+import androidx.compose.ui.platform.LocalContext
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.repository.CommentMediaSettings
+import com.anisequel.data.repository.MediaPreferences
 import com.anisequel.domain.usecase.canBrowseProfileLibrary
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
+import androidx.compose.runtime.remember
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.UserOverviewUiState
@@ -117,6 +121,16 @@ internal fun ActivityEngagementSheets(
     viewerId: Int?,
     canPost: Boolean
 ) {
+    val context = LocalContext.current
+    // The two switches the sheet obeys and the one key it might hold. Read here,
+    // at the host that already owns the sheet's callbacks, rather than passed down
+    // from the navigation graph: a comment sheet is the only place in the app that
+    // uploads a file or searches for a GIF, so nobody else needs to carry these.
+    val mediaPreferences = remember { MediaPreferences(context.applicationContext) }
+    val mediaSettings by mediaPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = CommentMediaSettings()
+    )
+
     val commentsState by activityViewModel.comments.collectAsStateWithLifecycle()
     commentsState?.let { comments ->
         ActivityCommentsSheet(
@@ -124,9 +138,30 @@ internal fun ActivityEngagementSheets(
             canPost = canPost,
             viewerId = viewerId,
             onDismiss = { activityViewModel.closeComments() },
-            onRetry = { activityViewModel.openComments(comments.activityId) },
+            // Retrying keeps the mode the thread opened in: a window that failed
+            // mid-scroll should not silently become a whole-thread fetch because the
+            // Settings switch moved while it was on screen.
+            onRetry = {
+                activityViewModel.openComments(
+                    activityId = comments.activityId,
+                    knownReplyCount = comments.replyCount,
+                    chatView = comments.isChatView
+                )
+            },
             onPost = { activityViewModel.postComment(it) },
             onLikeReply = { activityViewModel.toggleReplyLike(it) },
+            onShowCommentLikers = { replyId ->
+                activityViewModel.openReplyLikers(comments.activityId, replyId)
+            },
+            onLoadOlder = { activityViewModel.loadOlderComments() },
+            onRevealNewComments = { activityViewModel.revealNewComments() },
+            onCheckForNewComments = { atBottom ->
+                activityViewModel.checkForNewComments(atBottom)
+            },
+            pollIntervalMillis = activityViewModel.commentPollIntervalMillis,
+            polling = mediaSettings.pollForNewComments,
+            tenorApiKey = mediaSettings.tenorApiKey,
+            nowEpochSecond = rememberNowEpochSecond(),
             onOpenReplyActions = { activityViewModel.openReplyActions(it) },
             onReplyActionMode = { activityViewModel.setReplyActionMode(it) },
             onReplyActionDraft = { activityViewModel.updateReplyActionDraft(it) },
@@ -141,7 +176,7 @@ internal fun ActivityEngagementSheets(
         ActivityLikersSheet(
             state = likers,
             onDismiss = { activityViewModel.dismissLikers() },
-            onRetry = { activityViewModel.openLikers(likers.activityId) }
+            onRetry = { activityViewModel.retryLikers() }
         )
     }
 }
@@ -190,6 +225,8 @@ internal fun ProfileTabsContent(
         com.anisequel.domain.profile.ProfileLayout(),
     activityViewModel: UserActivityViewModel,
     followingViewModel: UserActivityViewModel,
+    /** The site-wide stream, for the fourth Activity segment when it is switched on. */
+    globalViewModel: UserActivityViewModel,
     messagesViewModel: UserMessagesViewModel,
     /**
      * The signed-in viewer's id.
@@ -344,6 +381,7 @@ internal fun ProfileTabsContent(
                     1 -> ProfileActivityPage(
                         activityViewModel = activityViewModel,
                         followingViewModel = followingViewModel,
+                        globalViewModel = globalViewModel,
                         messagesViewModel = messagesViewModel,
                         // The demo has fixtures for both viewer feeds, so the
                         // segments are part of the demo's tour of the screen -

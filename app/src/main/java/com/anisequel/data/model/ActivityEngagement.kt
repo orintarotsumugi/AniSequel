@@ -59,6 +59,54 @@ data class ActivityDetail(
 )
 
 /**
+ * Payload of one page of a comment thread, with the count that places the page.
+ *
+ * Both halves arrive in the same request (see
+ * [com.anisequel.data.network.GraphQLQueries.GET_ACTIVITY_REPLY_WINDOW]) and
+ * neither is enough alone: the window is what draws, and the count is what says
+ * how much of the thread is still above it. [replyCount] survives as a nullable
+ * because an activity id that no longer exists answers `null` for the aliased
+ * `Activity` node, and a page fetched anyway is an empty window rather than a
+ * crash on a thread that was deleted while it was open.
+ */
+@JsonClass(generateAdapter = true)
+data class ActivityReplyWindowData(
+    val activity: ActivityDetail? = null,
+    val window: ActivityReplyPage? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ActivityReplyPage(
+    val activityReplies: List<ActivityReply>? = null
+)
+
+/**
+ * One fetched page of replies and the server's total for the thread.
+ *
+ * The repository's own type rather than the payload: the sheet needs to know both
+ * how many rows it holds and how many exist, and neither is meaningful without the
+ * other - a window of twenty-five out of twenty-five is the whole thread, and a
+ * window of twenty-five out of nine hundred is an invitation to load older.
+ */
+data class ActivityReplyWindow(
+    val replies: List<ActivityReply>,
+    val replyCount: Int,
+    val page: Int
+)
+
+/**
+ * Payload of the liked-by list for one comment.
+ *
+ * [ActivityLikesNode] is reused rather than duplicated: the selection is the same
+ * `id likeCount likes{ id name avatar }` an activity's likers sheet asks for, and
+ * the row it draws is the same circle.
+ */
+@JsonClass(generateAdapter = true)
+data class ActivityReplyLikersData(
+    @Json(name = "ActivityReply") val reply: ActivityLikesNode? = null
+)
+
+/**
  * Payload of the likes-on-an-activity query.
  *
  * `likes` is a plain `[User]` - AniList does not paginate it - so the whole list

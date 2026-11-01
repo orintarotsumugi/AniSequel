@@ -367,6 +367,67 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The site's own activity stream - everybody, not only the people the viewer
+     * follows.
+     *
+     * This is [GET_FOLLOWING_ACTIVITY] without `isFollowing: true`, and that is the
+     * whole difference: AniList's `Page.activities` takes no `userId` requirement,
+     * so an unfiltered, newest-first page is what the site's own "All activity"
+     * page shows. It is a *pull* feed - there is no subscription and no cursor
+     * beyond the page number - and it is the same union the two sibling feeds
+     * select, which is why the two fragments are copied here rather than shared:
+     * every feed document in this file lists its own selection so a change to one
+     * card cannot silently change another.
+     *
+     * Behind a setting and off by default. A profile tab that shows strangers is
+     * not what this app is for, and AniList's request budget is shared: the
+     * dashboard, the list, the friends feed and this stream are all drawing on the
+     * same ~30 requests a minute, and a feed nobody asked for spends them.
+     */
+    val GET_GLOBAL_ACTIVITY = """
+        query GetGlobalActivity(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
+              ... on ListActivity {
+                id
+                status
+                progress
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+                media {
+                  id
+                  type
+                  format
+                  episodes
+                  chapters
+                  volumes
+                  title { english romaji native }
+                  coverImage { extraLarge large color }
+                  bannerImage
+                  siteUrl
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * Messages the viewer has sent, newest first.
      *
      * `messengerId` is the sender's id - AniList's message model calls the
@@ -1380,6 +1441,91 @@ object GraphQLQueries {
                   avatar { large medium }
                 }
               }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The newest window of one activity's comment thread, plus the count that
+     * says where the window belongs.
+     *
+     * ## Why paging exists when [GET_ACTIVITY_REPLIES] already works
+     *
+     * `Activity(id:){replies}` has no arguments at all: it is AniList's whole
+     * comment list in one response, and the busiest threads on the site run to
+     * thousands of them. A thread that size is a page of JSON, a parse and a
+     * hundred-odd composed rows for a person who wanted to read the last screen
+     * of it - which is exactly what a comment sheet is used for. This document
+     * asks for one `Page` of replies instead, and the sheet fetches backwards
+     * from the end only when the reader presses Older.
+     *
+     * ## Which page is the newest
+     *
+     * `Page.activityReplies` returns replies in ascending id order, so the last
+     * page is the newest end - verified against the live API rather than inferred,
+     * because a descending assumption here would open every thread at its oldest
+     * comments. The caller therefore asks for `ceil(replyCount / perPage)`, which
+     * is why [GET_ACTIVITY_REPLIES]'s `replyCount` is selected here too: it comes
+     * back in the same request as the page it is needed to place.
+     *
+     * The two aliases are not decoration. `Activity` and `Page` are both root
+     * fields of this one request, and aliasing them to `activity` and `window`
+     * keeps the payload model lowercase like every other model in
+     * [com.anisequel.data.model] instead of needing `@Json` on two fields.
+     *
+     * `Activity(id:)` returns `ActivityUnion`, so both feed members are still
+     * fragmented here for the same reason [GET_ACTIVITY_REPLIES] fragments them:
+     * a document with only the `ListActivity` member answers a text post's id with
+     * an empty object, which reads as a commentless post.
+     */
+    val GET_ACTIVITY_REPLY_WINDOW = """
+        query GetActivityReplyWindow(${'$'}activityId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
+          activity: Activity(id: ${'$'}activityId) {
+            ... on ListActivity {
+              id
+              replyCount
+            }
+            ... on TextActivity {
+              id
+              replyCount
+            }
+          }
+          window: Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            activityReplies(activityId: ${'$'}activityId) {
+              id
+              text
+              likeCount
+              isLiked
+              createdAt
+              user {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The people who liked one comment.
+     *
+     * `ActivityReply` is a root field and `likes` on it is a plain `[User]`, the
+     * same unpaginated list an activity's likers come back as, so one request
+     * answers the whole sheet. It is its own document rather than a field on the
+     * window above because a thread of twenty-five loaded comments does not need
+     * twenty-five liker lists: the sheet asks when a reader long-presses one heart.
+     */
+    val GET_ACTIVITY_REPLY_LIKERS = """
+        query GetActivityReplyLikers(${'$'}replyId: Int) {
+          ActivityReply(id: ${'$'}replyId) {
+            id
+            likeCount
+            likes {
+              id
+              name
+              avatar { large medium }
             }
           }
         }

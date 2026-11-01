@@ -525,6 +525,96 @@ object AniListMarkdownParser {
      * [depth] counts nested centered blocks, the only re-entry point, and is
      * capped at [MAX_BLOCK_DEPTH].
      */
+    /**
+     * The image a whole line stands for, or null when the line is not one.
+     *
+     * Extracted from the block walk because the walk has too many branches to read
+     * as a list of forms, and because these six share one rule that is easy to break
+     * from the inside: each is matched with `matchEntire`, so an image code in the
+     * middle of a sentence is deliberately left to the inline path. The order is the
+     * resolution order - most specific first - and it is the order the site uses.
+     */
+    private fun standaloneImageLine(trimmedLine: String): MarkdownNode? {
+        // Linked images: [![Alt](imgUrl)](targetUrl) or [img(imgUrl)](targetUrl)
+        LINKED_MD_IMG_PATTERN.matchEntire(trimmedLine)?.let { match ->
+            val alt = match.groupValues[1].takeIf { it.isNotBlank() }
+            val imgUrl = match.groupValues[2]
+            val targetUrl = match.groupValues[3]
+            return MarkdownNode.ImageBlock(
+                url = absoluteImageUrl(imgUrl),
+                alt = alt,
+                targetUrl = targetUrl
+            )
+        }
+
+        LINKED_ANILIST_IMG_PATTERN.matchEntire(trimmedLine)?.let { match ->
+            // Group 1 is the size (`220` or `50%`), which used to be matched and
+            // dropped; 2 is the image and 3 the target the cover opens.
+            return MarkdownNode.ImageBlock(
+                url = absoluteImageUrl(match.groupValues[2]),
+                targetUrl = match.groupValues[3],
+                width = match.groupValues[1].takeIf { it.isNotEmpty() }
+            )
+        }
+
+        // AniList / Markdown standalone images
+        ANILIST_IMG_PATTERN.matchEntire(trimmedLine)?.let { match ->
+            val url = match.groupValues[2].ifEmpty { match.groupValues[3] }
+            return MarkdownNode.ImageBlock(
+                url = absoluteImageUrl(url),
+                alt = null,
+                width = match.groupValues[1].takeIf { it.isNotEmpty() }
+            )
+        }
+
+        MD_IMG_PATTERN.matchEntire(trimmedLine)?.let { match ->
+            val alt = match.groupValues[1].takeIf { it.isNotBlank() }
+            return MarkdownNode.ImageBlock(url = absoluteImageUrl(match.groupValues[2]), alt = alt)
+        }
+
+        // A raw `<img src="...">` tag on a line of its own, which AniList
+        // descriptions can carry and which used to print as literal markup. A tag
+        // inside a sentence is left to the inline path rather than having the
+        // sentence pulled into the image; a tag with no usable `src` falls through
+        // to the paragraph, where the inline handler keeps it as written.
+        HTML_IMG_TAG_PATTERN.matchEntire(trimmedLine)?.let { match ->
+            val htmlImage = htmlTagImage(match.value)
+            if (htmlImage != null) {
+                return MarkdownNode.ImageBlock(url = htmlImage.first, alt = htmlImage.second)
+            }
+        }
+
+        // A bare image/GIF URL on its own line, which AniList shows as the image
+        // itself. Without this it fell through to the paragraph path and rendered
+        // as a link.
+        if (BARE_IMAGE_URL_PATTERN.matches(trimmedLine)) {
+            return MarkdownNode.ImageBlock(url = absoluteImageUrl(trimmedLine))
+        }
+
+        return null
+    }
+
+    /**
+     * The image a single-line centred span is standing for, or null.
+     *
+     * Re-parsing the inner text as a block is the whole trick: the whole-line image
+     * forms are matched with `matchEntire`, and the inner text *is* a whole line
+     * once the tildes are off. Anything that does not come back as exactly one
+     [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
+     * paragraph path, which is what leaves `~~~Just some centred text~~~` and
+     * `~~~https://anilist.co/anime/1~~~` drawing what they drew before.
+     *
+     * The width suffix survives because it is on the node, not on the text:
+     * `img100%(...)` is a full-bleed banner and `img220(...)` is a fixed strip, and
+     * flattening them to "an image" is how a bio's banner became a thumbnail.
+     */
+    private fun centredSingleImage(inner: String, depth: Int): MarkdownNode.ImageBlock? {
+        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return null
+        val parsed = runCatching { parseDecoded(inner, depth + 1) }.getOrNull() ?: return null
+        val image = parsed.singleOrNull() as? MarkdownNode.ImageBlock ?: return null
+        return image.copy(centered = true)
+    }
+
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 
@@ -545,12 +635,27 @@ object AniListMarkdownParser {
             // A single centred line: `~~~text~~~`.
             val tildeCentered = TILDE_CENTER_PATTERN.matchEntire(trimmedLine)
             if (tildeCentered != null) {
-                // Through the shared paragraph builder, so an AniList link inside
-                // `~~~...~~~` becomes a card exactly as it does outside it. This
-                // branch used to build the `Paragraph` itself and was therefore the
-                // one paragraph path that never lifted media links: identical text
-                // drew a card un-centred and a plain link centred.
-                nodes.addAll(paragraphNodes(tildeCentered.groupValues[1].trim(), centered = true))
+                val inner = tildeCentered.groupValues[1].trim()
+                // A centred image first, because the paragraph path cannot make
+                // one: every whole-line image form - `img(url)`, `img220(url)`,
+                // `![alt](url)`, `[img(url)](target)` - is matched with
+                // `matchEntire` on *the source line*, and inside `~~~...~~~` the
+                // line is the whole span including the tildes. So a bio whose only
+                // content is `~~~img100%(https://…/card.svg)~~~` - which is what
+                // AniList's own editor writes for a centred banner - used to print
+                // the code as a centred sentence with a link. AniList answers the
+                // same bio with `<center><img width='100%' …></center>`.
+                val centredImage = centredSingleImage(inner, depth)
+                if (centredImage != null) {
+                    nodes.add(centredImage)
+                } else {
+                    // Through the shared paragraph builder, so an AniList link inside
+                    // `~~~...~~~` becomes a card exactly as it does outside it. This
+                    // branch used to build the `Paragraph` itself and was therefore the
+                    // one paragraph path that never lifted media links: identical text
+                    // drew a card un-centred and a plain link centred.
+                    nodes.addAll(paragraphNodes(inner, centered = true))
+                }
                 i++
                 continue
             }
@@ -655,79 +760,16 @@ object AniListMarkdownParser {
                 continue
             }
 
-            // Linked images: [![Alt](imgUrl)](targetUrl) or [img(imgUrl)](targetUrl)
-            val linkedMdImgMatch = LINKED_MD_IMG_PATTERN.matchEntire(trimmedLine)
-            if (linkedMdImgMatch != null) {
-                val alt = linkedMdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
-                val imgUrl = linkedMdImgMatch.groupValues[2]
-                val targetUrl = linkedMdImgMatch.groupValues[3]
-                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(imgUrl), alt = alt, targetUrl = targetUrl))
-                i++
-                continue
-            }
-
-            val linkedAnilistImgMatch = LINKED_ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
-            if (linkedAnilistImgMatch != null) {
-                // Group 1 is the size (`220` or `50%`), which used to be matched
-                // and dropped; 2 is the image and 3 the target the cover opens.
-                val imgUrl = linkedAnilistImgMatch.groupValues[2]
-                val targetUrl = linkedAnilistImgMatch.groupValues[3]
-                nodes.add(
-                    MarkdownNode.ImageBlock(
-                        url = absoluteImageUrl(imgUrl),
-                        targetUrl = targetUrl,
-                        width = linkedAnilistImgMatch.groupValues[1].takeIf { it.isNotEmpty() }
-                    )
-                )
-                i++
-                continue
-            }
-
-            // AniList / Markdown standalone images
-            val anilistImgMatch = ANILIST_IMG_PATTERN.matchEntire(trimmedLine)
-            if (anilistImgMatch != null) {
-                val url = anilistImgMatch.groupValues[2].ifEmpty { anilistImgMatch.groupValues[3] }
-                nodes.add(
-                    MarkdownNode.ImageBlock(
-                        url = absoluteImageUrl(url),
-                        alt = null,
-                        width = anilistImgMatch.groupValues[1].takeIf { it.isNotEmpty() }
-                    )
-                )
-                i++
-                continue
-            }
-
-            val mdImgMatch = MD_IMG_PATTERN.matchEntire(trimmedLine)
-            if (mdImgMatch != null) {
-                val alt = mdImgMatch.groupValues[1].takeIf { it.isNotBlank() }
-                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(mdImgMatch.groupValues[2]), alt = alt))
-                i++
-                continue
-            }
-
-            // A raw `<img src="...">` tag on a line of its own, which AniList
-            // descriptions can carry and which used to print as literal markup.
-            // The line has to be *nothing but* the tag - `matchEntire` - so a tag
-            // inside a sentence is left to the inline path below rather than
-            // having the sentence pulled into the image. A tag with no usable
-            // `src` falls through to the paragraph, where the inline handler
-            // keeps it as the text the author wrote.
-            val htmlImgTag = HTML_IMG_TAG_PATTERN.matchEntire(trimmedLine)
-            if (htmlImgTag != null) {
-                val htmlImage = htmlTagImage(htmlImgTag.value)
-                if (htmlImage != null) {
-                    nodes.add(MarkdownNode.ImageBlock(url = htmlImage.first, alt = htmlImage.second))
-                    i++
-                    continue
-                }
-            }
-
-            // A bare image/GIF URL on its own line, which AniList shows as the
-            // image itself. Without this it fell through to the paragraph path and
-            // rendered as a link.
-            if (BARE_IMAGE_URL_PATTERN.matches(trimmedLine)) {
-                nodes.add(MarkdownNode.ImageBlock(url = absoluteImageUrl(trimmedLine)))
+            // Every whole-line image form in one call: a linked markdown or AniList
+            // image, a standalone `img(url)` / `img220(url)` / `![alt](url)`, a raw
+            // `<img src>` and a bare image URL. They are listed in
+            // [standaloneImageLine] because each is only an image when the line is
+            // *nothing but* the form, and their order is the order the site resolves
+            // them - a linked `[![a](i)](t)` has to be tried before the bare `![a](i)`
+            // that is inside it.
+            val standaloneImage = standaloneImageLine(trimmedLine)
+            if (standaloneImage != null) {
+                nodes.add(standaloneImage)
                 i++
                 continue
             }

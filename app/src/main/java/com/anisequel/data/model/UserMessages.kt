@@ -122,3 +122,27 @@ data class UserMessagesPage(
     val messages: List<MessageNode>,
     val hasMore: Boolean
 )
+
+/**
+ * Whether this message is one leg of the conversation between [viewerId] and
+ * [counterpartId], in either direction.
+ *
+ * AniList's `Page.activities` has no recipient filter, so a conversation cannot be
+ * asked for as a unit - it is assembled from the two lists the app can fetch:
+ * messages the viewer sent, and messages addressed to them. That makes this check
+ * the whole of the filtering, and it is why both ids are compared as a *set*: a
+ * message I wrote has me as messenger and them as recipient, and their reply has it
+ * the other way round, and the conversation is both.
+ *
+ * A message missing either id does not qualify. A notification that carried a
+ * stripped `MessageActivity` is not evidence of who the other party was, and
+ * guessing from the displayed name would put two similar-named people in one thread.
+ */
+fun MessageNode.isWith(counterpartId: Int?, viewerId: Int?): Boolean {
+    if (counterpartId == null || viewerId == null) return false
+    val messenger = messengerId ?: return false
+    val recipient = recipientId ?: return false
+    return (messenger == viewerId && recipient == counterpartId) ||
+        (messenger == counterpartId && recipient == viewerId)
+}
+

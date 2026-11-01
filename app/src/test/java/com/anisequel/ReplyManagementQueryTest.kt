@@ -204,6 +204,14 @@ class ReplyManagementQueryTest {
         ).readText() + File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentThread.kt"
+        ).readText() +
+        // The row left CommentThread.kt when the sheet was split again: the list
+        // keeps what is on screen, CommentRows.kt keeps the row itself. Both are
+        // read here, because the claim is that the control is declared once - not
+        // which of the two files holds it this month.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
         ).readText()
         val store = File(
             findProjectRoot(),
@@ -261,7 +269,7 @@ class ReplyManagementQueryTest {
         assertTrue(
             "the row it scrolls to accounts for the retry banner a failed refresh " +
                 "puts above the replies, or the scroll stops one row short:\n$sheet",
-            sheet.contains("postedReplyRow(") && sheet.contains("hasRefreshBanner")
+            sheet.contains("postedReplyRow(") && sheet.contains("hasBannerRow")
         )
         assertTrue(
             "the store is what records it, on the post that succeeded:\n$store",

@@ -1,6 +1,8 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -448,7 +450,21 @@ fun AppNavigation(
     // the app's only composition root, a surface gets covers by rendering its
     // document with `AniListMarkdownWithCovers` and nothing else.
     ProvideMediaCovers(aniListRepository) {
-        Box(modifier = modifier.fillMaxSize()) {
+        // Opaque, and that is the point.
+        //
+        // A page arrives scaled to 94% and fading up while the page it covers
+        // fades out and settles to 98%: for a few frames neither of them is
+        // full-size and neither is solid, so what shows through is whatever this
+        // Box is painted. With no background here it was the Activity window - and
+        // the platform default is black, so a fast double tap on the Settings icon
+        // (or any chained navigation) flashed the whole screen black between two
+        // screens that were both perfectly themed. The fade is the app's motion
+        // language and stays; the surface behind it is what was missing.
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,

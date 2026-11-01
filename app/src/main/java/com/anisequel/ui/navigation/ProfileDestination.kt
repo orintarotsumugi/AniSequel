@@ -286,6 +286,22 @@ fun ProfileDestination(
         )
     )
 
+    // The site-wide stream. Same class, third mode, and no `userId` for the same
+    // reason the friends feed has none: whose profile this is has no bearing on
+    // whose activity AniList is listing. It is built whether or not the reader has
+    // turned the segment on in Settings, because building a ViewModel costs nothing
+    // until its first page is asked for.
+    val globalViewModel: UserActivityViewModel = viewModel(
+        key = "$viewModelKey:global",
+        factory = UserActivityViewModel.Factory(
+            aniListRepository = repository,
+            userId = null,
+            viewerId = viewerId,
+            isDemo = isDemo,
+            globalFeed = true
+        )
+    )
+
     // The inbox. Takes the viewer id rather than the profile's: the messages are
     // the reader's own, and the screen hides the segment on anybody else's page.
     val messagesViewModel: UserMessagesViewModel = viewModel(
@@ -315,6 +331,7 @@ fun ProfileDestination(
         overviewViewModel = overviewViewModel,
         activityViewModel = activityViewModel,
         followingViewModel = followingViewModel,
+        globalViewModel = globalViewModel,
         messagesViewModel = messagesViewModel,
         socialViewModel = socialViewModel,
         // Carries the tapped person, id and all. Not `username` from screen

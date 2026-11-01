@@ -9,6 +9,9 @@ import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.model.ActivityReplyLikersData
+import com.anisequel.data.model.ActivityReplyWindow
+import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
@@ -582,6 +585,15 @@ class AniListRepositoryImpl(
      * not throw away the other's pages; both share the same TTL.
      */
     private val followingActivityCache =
+        ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
+
+    /**
+     * Pages of the site-wide stream. Its own map, because a key that names only a
+     * page number would collide the two feeds the moment they shared one - and both
+     * are cleared together on a write, since they carry the same activity rows and a
+     * like must not disagree with itself depending on which tab was opened last.
+     */
+    private val globalActivityCache =
         ConcurrentHashMap<String, CachedValue<UserActivityPage>>()
 
     /**
@@ -1816,6 +1828,30 @@ class AniListRepositoryImpl(
         }
     }
 
+    override suspend fun getGlobalActivity(
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<UserActivityPage> {
+        val key = "global:page:$page"
+        if (!forceRefresh) cachedValue(globalActivityCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_GLOBAL_ACTIVITY,
+                variables = mapOf(
+                    "page" to page,
+                    "perPage" to ACTIVITY_PAGE_SIZE
+                )
+            ),
+            apiService::getGlobalActivity
+        ).map { data ->
+            val feedPage = parseActivityFeed(data)
+            storeValue(globalActivityCache, key, feedPage)
+            feedPage
+        }
+    }
+
+
     override suspend fun getSentMessages(
         messengerId: Int,
         page: Int,
@@ -1967,6 +2003,48 @@ class AniListRepositoryImpl(
             data.activity?.likes.orEmpty()
         }
 
+    override suspend fun getActivityReplyWindow(
+        activityId: Int,
+        page: Int,
+        perPage: Int
+    ): Result<ActivityReplyWindow> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_ACTIVITY_REPLY_WINDOW,
+                variables = mapOf(
+                    "activityId" to activityId,
+                    "page" to page,
+                    "perPage" to perPage
+                )
+            ),
+            apiService::getActivityReplyWindow
+        ).map { data ->
+            // A retired activity id answers the aliased `Activity` node as null and
+            // the page as an empty window; both read as "no comments", which opens
+            // the sheet on an empty thread rather than failing it. The distinct is
+            // for the sheet's own `key = { it.id }` on a LazyColumn: duplicate keys
+            // crash the list, and a page boundary that shifts under a concurrent
+            // post is the one way two copies of one reply can reach a list.
+            ActivityReplyWindow(
+                replies = data.window?.activityReplies.orEmpty().distinctBy { it.id },
+                replyCount = data.activity?.replyCount ?: 0,
+                page = page
+            )
+        }
+
+    override suspend fun getActivityReplyLikers(replyId: Int): Result<List<FollowUser>> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_ACTIVITY_REPLY_LIKERS,
+                variables = mapOf("replyId" to replyId)
+            ),
+            apiService::getActivityReplyLikers
+        ).map { data ->
+            // The same reduction as the activity's likers: a reply that no longer
+            // exists answers null, and that is "nobody to show", not a failure.
+            data.reply?.likes.orEmpty()
+        }
+
     override suspend fun toggleActivityLike(activityId: Int): Result<ActivityLikeState> =
         execute(
             GraphQLRequest(
@@ -1989,6 +2067,7 @@ class AniListRepositoryImpl(
             // depending on which tab was opened second.
             activityCache.clear()
             followingActivityCache.clear()
+            globalActivityCache.clear()
         }
 
     override suspend fun toggleActivityReplyLike(replyId: Int): Result<ActivityLikeState> =
@@ -2027,6 +2106,7 @@ class AniListRepositoryImpl(
                 // which carry the same activity under different keys.
                 activityCache.clear()
                 followingActivityCache.clear()
+                globalActivityCache.clear()
             }
 
     override suspend fun sendMessage(
@@ -2078,6 +2158,7 @@ class AniListRepositoryImpl(
                 // feeds hold the same activity, so both are dropped.
                 activityCache.clear()
                 followingActivityCache.clear()
+                globalActivityCache.clear()
             }
 
     /**
@@ -2164,6 +2245,7 @@ class AniListRepositoryImpl(
         // above their keys cannot keep two accounts apart on their own. Clearing
         // here is the entire account boundary for them.
         followingActivityCache.clear()
+        globalActivityCache.clear()
         sentMessagesCache.clear()
         receivedMessagesCache.clear()
         // And the same again for the disk tier. This is the half that outlives

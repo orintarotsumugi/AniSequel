@@ -8,6 +8,8 @@ import com.anisequel.data.model.GraphQLError
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
+import com.anisequel.data.model.ActivityReplyWindowData
+import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
@@ -67,6 +69,16 @@ class AniListErrorMappingTest {
     private class FakeService(
         private val viewerResponse: () -> GraphQLResponse<ViewerData> = { errorGraphQL("Invalid token") }
     ) : AniListApiService {
+    // Not exercised here: a test that reaches one of these should fail
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> =
+        throw UnsupportedOperationException("getGlobalActivity is not served by this double")
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getActivityReplyWindow(request: GraphQLRequest): GraphQLResponse<ActivityReplyWindowData> =
+        throw UnsupportedOperationException("getActivityReplyWindow is not served by this double")
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLResponse<ActivityReplyLikersData> =
+        throw UnsupportedOperationException("getActivityReplyLikers is not served by this double")
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(
@@ -338,6 +350,15 @@ private fun errorGraphQL(message: String, status: Int? = null) =
 class RequestCoalescingPolicyTest {
 
     private class CountingService : AniListApiService {
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> =
+        throw UnsupportedOperationException("getGlobalActivity is not served by this double")
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getActivityReplyWindow(request: GraphQLRequest): GraphQLResponse<ActivityReplyWindowData> =
+        throw UnsupportedOperationException("getActivityReplyWindow is not served by this double")
+    // loudly with this name in the stack rather than invent an answer.
+    override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLResponse<ActivityReplyLikersData> =
+        throw UnsupportedOperationException("getActivityReplyLikers is not served by this double")
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(

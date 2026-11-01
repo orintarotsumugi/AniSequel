@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
+import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.cards.SequelInfoChip
@@ -48,6 +50,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
+import com.anisequel.ui.viewmodel.conversationMessages
 
 /**
  * One message read whole, inside the app.
@@ -98,7 +101,18 @@ fun MessageDetailSheet(
     /** False for the demo: there is no account to send from. */
     canReply: Boolean = false,
     onSend: (text: String, isPrivate: Boolean) -> Unit = { _, _ -> },
-    onClearReply: () -> Unit = {}
+    onClearReply: () -> Unit = {},
+    /**
+     * The whole conversation this message belongs to, oldest first.
+     *
+     * Assembled by [com.anisequel.ui.viewmodel.conversationMessages] from the two
+     * inbox halves; empty from a caller that has not wired it, which draws just the
+     * opened message as the sheet always did.
+     */
+    conversation: List<MessageNode> = emptyList(),
+    viewerId: Int? = null,
+    hasEarlier: Boolean = false,
+    onLoadEarlier: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val message = detail.message
@@ -131,18 +145,18 @@ fun MessageDetailSheet(
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            // The whole body, unclamped - this is where all of it lives. Null only
-            // for a row the repository did not drop: the card does not draw a
-            // message with no text, and neither does the sheet.
-            message.message?.let { body ->
-                AniListMarkdownWithCovers(
-                    markdown = body,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                        .testTag("message_detail_body")
-                )
-            }
+            // The thread, not just the tapped row. The opened message is still the
+            // one that is marked; what is around it is the reason the sheet exists -
+            // a reply box with no record of what is being replied to is a form, not
+            // a conversation.
+            ConversationBody(
+                messages = conversation.ifEmpty { listOf(message) },
+                viewerId = viewerId,
+                highlightId = message.id,
+                hasEarlier = hasEarlier,
+                onLoadEarlier = onLoadEarlier,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
 
             MessageDetailFooter(
                 isPrivate = message.isPrivate == true,
@@ -335,6 +349,11 @@ internal fun MessagesDetailSheetHost(
     val open = detail ?: return
     val reply by messagesViewModel.reply.collectAsStateWithLifecycle()
 
+    val inbox by messagesViewModel.state.collectAsStateWithLifecycle()
+    val conversation = remember(open, inbox) {
+        conversationMessages(inbox, open.counterpart?.id, inbox.viewerId)
+    }
+
     MessageDetailSheet(
         detail = open,
         onDismiss = { messagesViewModel.dismissMessage() },
@@ -342,7 +361,11 @@ internal fun MessagesDetailSheetHost(
         reply = reply,
         canReply = messagesViewModel.canReply,
         onSend = messagesViewModel::replyToOpenMessage,
-        onClearReply = messagesViewModel::clearReplyState
+        onClearReply = messagesViewModel::clearReplyState,
+        conversation = conversation,
+        viewerId = inbox.viewerId,
+        hasEarlier = inbox.received.hasMore || inbox.sent.hasMore,
+        onLoadEarlier = { messagesViewModel.loadMoreConversation() }
     )
 }
 

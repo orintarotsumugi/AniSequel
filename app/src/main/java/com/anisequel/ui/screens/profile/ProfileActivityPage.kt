@@ -25,7 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.data.repository.CommentMediaSettings
+import com.anisequel.data.repository.MediaPreferences
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
 import com.anisequel.domain.usecase.ActivityCalendar
@@ -78,6 +82,8 @@ fun ProfileActivityPage(
     activityViewModel: UserActivityViewModel,
     /** The viewer's friends feed. Only meaningful when [showViewerSegments]. */
     followingViewModel: UserActivityViewModel,
+    /** The site-wide stream, offered as a fourth chip when the reader turns it on. */
+    globalViewModel: UserActivityViewModel,
     /** The viewer's inbox: sent and received, filtered. */
     messagesViewModel: UserMessagesViewModel,
     /**
@@ -113,7 +119,22 @@ fun ProfileActivityPage(
 ) {
     val activityState by activityViewModel.state.collectAsStateWithLifecycle()
     val followingState by followingViewModel.state.collectAsStateWithLifecycle()
+    val globalState by globalViewModel.state.collectAsStateWithLifecycle()
     val messagesState by messagesViewModel.state.collectAsStateWithLifecycle()
+
+    // Chat view is the reader's call, and it is read at the door a thread is opened
+    // through rather than inside the store: a thread that began as a window stays
+    // one however the switch moves afterwards, and the store has no business
+    // knowing where a preference lives. The application context is what the
+    // DataStore delegate is keyed on, so a second screen asking for the same file
+    // gets the same instance rather than a crash.
+    val context = LocalContext.current
+    val mediaPreferences = remember(context) { MediaPreferences(context.applicationContext) }
+    val mediaSettings by mediaPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = CommentMediaSettings()
+    )
+    val chatView = mediaSettings.chatView
+    val showGlobalSegment = mediaSettings.globalActivityFeed
 
     // Saved, because the page is disposed and recreated by the profile's own tab
     // switch: a reader who left the inbox on "Sent" and came back should not be
@@ -130,7 +151,14 @@ fun ProfileActivityPage(
     // A profile that does not offer the segments can never be showing one. The
     // saved value is kept rather than reset, so returning to an own profile
     // restores the last choice.
-    val shownSegment = if (showViewerSegments) segment else SEGMENT_ACTIVITY
+    // Turning the setting off while the stream is open cannot leave a chip on
+    // screen that no longer exists; the reader goes back to their own feed rather
+    // than to a blank frame under a segment that cannot be selected.
+    val shownSegment = when {
+        !showViewerSegments -> SEGMENT_ACTIVITY
+        segment == SEGMENT_GLOBAL && !showGlobalSegment -> SEGMENT_ACTIVITY
+        else -> segment
+    }
 
     // The two feeds have the same identity except for whose rows they are and
     // what the heading calls them. Built here rather than as fields on the
@@ -145,11 +173,27 @@ fun ProfileActivityPage(
         onRetry = { activityViewModel.retry() },
         onRefresh = { activityViewModel.refresh() },
         onLike = { activityViewModel.toggleLike(it) },
-        onOpenComments = { activityViewModel.openComments(it) },
+        onOpenComments = { id, count -> activityViewModel.openComments(id, count, chatView) },
         onOpenLikers = { activityViewModel.openLikers(it) },
         calendar = calendar,
         userName = userName,
         userAvatar = userAvatar
+    )
+    val globalFeed = ActivityFeedSource(
+        state = globalState,
+        title = "Everything on AniList",
+        icon = AppVectorIcons.ProfileSocial,
+        emptyMessage = "No public activity to show",
+        onLoadFirstPage = { globalViewModel.loadFirstPage() },
+        onLoadNextPage = { globalViewModel.loadNextPage() },
+        onRetry = { globalViewModel.retry() },
+        onRefresh = { globalViewModel.refresh() },
+        onLike = { globalViewModel.toggleLike(it) },
+        onOpenComments = { id, count -> globalViewModel.openComments(id, count, chatView) },
+        onOpenLikers = { globalViewModel.openLikers(it) },
+        // Every row is a different person, and each card's author row opens their
+        // profile - the same hop the friends feed and the Social tab make.
+        onOpenAuthor = onOpenUser
     )
     val friendsFeed = ActivityFeedSource(
         state = followingState,
@@ -161,7 +205,7 @@ fun ProfileActivityPage(
         onRetry = { followingViewModel.retry() },
         onRefresh = { followingViewModel.refresh() },
         onLike = { followingViewModel.toggleLike(it) },
-        onOpenComments = { followingViewModel.openComments(it) },
+        onOpenComments = { id, count -> followingViewModel.openComments(id, count, chatView) },
         onOpenLikers = { followingViewModel.openLikers(it) },
         // Every row is a different person in this feed, and each card's
         // author row opens their profile - the same hop the Social tab makes.
@@ -173,6 +217,7 @@ fun ProfileActivityPage(
             ActivitySegments(
                 selected = shownSegment,
                 onSelect = { segment = it },
+                showGlobalSegment = showGlobalSegment,
                 modifier = Modifier
                     .widthIn(max = ProfileMaxContentWidth)
                     .fillMaxWidth()
@@ -227,6 +272,13 @@ fun ProfileActivityPage(
                     listState = messagesListState
                 )
 
+                SEGMENT_GLOBAL -> ProfileActivityTab(
+                    source = globalFeed,
+                    contentPadding = contentPadding,
+                    listState = rememberLazyListState(),
+                    onOpenDetail = onOpenDetail
+                )
+
                 else -> ProfileActivityTab(
                     source = ownFeed,
                     contentPadding = contentPadding,
@@ -247,6 +299,13 @@ internal const val SEGMENT_FRIENDS = 1
 internal const val SEGMENT_MESSAGES = 2
 
 /**
+ * The site-wide stream. Numbered past [SEGMENT_MESSAGES] rather than inserted at
+ * two, because the profile route names these indices in its URL and a renumbered
+ * segment would silently open a different chip than the link asked for.
+ */
+internal const val SEGMENT_GLOBAL = 3
+
+/**
  * The chip row that switches between the tab's three views.
  *
  * Labels, not icons: the segment's job is to name a list, and "Messages" is the
@@ -258,6 +317,7 @@ internal const val SEGMENT_MESSAGES = 2
 private fun ActivitySegments(
     selected: Int,
     onSelect: (Int) -> Unit,
+    showGlobalSegment: Boolean,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -279,6 +339,15 @@ private fun ActivitySegments(
             testTag = "profile_segment_friends",
             modifier = Modifier.weight(1f)
         )
+        if (showGlobalSegment) {
+            SegmentChip(
+                label = "Global",
+                selected = selected == SEGMENT_GLOBAL,
+                onClick = { onSelect(SEGMENT_GLOBAL) },
+                testTag = "profile_segment_global",
+                modifier = Modifier.weight(1f)
+            )
+        }
         SegmentChip(
             label = "Messages",
             selected = selected == SEGMENT_MESSAGES,

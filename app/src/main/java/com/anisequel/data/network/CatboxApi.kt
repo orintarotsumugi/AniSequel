@@ -1,0 +1,154 @@
+package com.anisequel.data.network
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+
+/**
+ * Uploads one image to catbox.moe and returns the URL it is served at.
+ *
+ * ## Why the app needs a host at all
+ *
+ * AniList has no upload endpoint. Its own composer asks for an image *URL*, which
+ * is fine on a desktop with ten tabs open and useless on a phone holding the photo
+ * they want to post. This class is the missing half: the reader picks a file, it
+ * goes to a host, and the URL that comes back is written into the comment as
+ * `img(...)`. Nothing about it is AniList-specific - it is the same shape as
+ * [AnimeThemesApi] and [LiveChartPosterApi], one third party, one small surface.
+ *
+ * ## Why catbox, and what that costs
+ *
+ * It takes an anonymous upload with no account, no key and no OAuth, over HTTPS,
+ * and serves the file back at `files.catbox.moe` unchanged - which is the only
+ * reason an app like this can offer "attach a photo" without asking anybody to
+ * register for an API key first. The price is retention: files uploaded without an
+ * account are kept until they have two years of no hits, so a comment's image can
+ * go away on a thread nobody visits. That is stated in Settings rather than hidden,
+ * because a reader who finds a dead embed six months later should be able to
+ * remember what they chose.
+ *
+ * ## Never the AniList token
+ *
+ * The client below is its own [OkHttpClient] with no interceptors, for the same
+ * reason [AnimeThemesApi], [LiveChartPosterApi], the widget's cover loader and the
+ * update client keep theirs: the shared client attaches the reader's bearer token
+ * to every request, and a file host has no business receiving a credential for
+ * their whole AniList account.
+ */
+class CatboxApi(
+    private val client: OkHttpClient = defaultClient()
+) {
+
+    /**
+     * Uploads [bytes] as [fileName] and returns the served URL.
+     *
+     * Fails with an [UploadFailure] whose message is safe to show: the host answers
+     * errors as plain prose ("Invalid file type.", "The file ... is too large"),
+     * which is more useful to the reader than "HTTP 200", and it is the whole
+     * response body when that body is not a URL - so a Cloudflare page or a rate
+     * limit notice reaches the composer as something they can read instead of a
+     * silent spinner that stops.
+     */
+    suspend fun upload(
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String
+    ): Result<String> {
+        if (bytes.isEmpty()) return Result.failure(UploadFailure("There was nothing to upload."))
+
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("reqtype", "fileupload")
+            .addFormDataPart(
+                "fileToUpload",
+                fileName,
+                bytes.toRequestBody(mimeType.toMediaType())
+            )
+            .build()
+        val request = Request.Builder()
+            .url(UPLOAD_URL)
+            // The host is a small site behind a CDN that has been known to block
+            // requests with no client identity at all; a plain descriptive UA is
+            // what every other catbox client sends.
+            .header("User-Agent", USER_AGENT)
+            .post(body)
+            .build()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty().trim()
+                    if (!response.isSuccessful) {
+                        Result.failure(UploadFailure(describe(response.code, text)))
+                    } else if (isServedUrl(text)) {
+                        Result.success(text)
+                    } else {
+                        // HTTP 200 with a refusal in the body is this API's normal
+                        // error shape - there is no status code to branch on, only
+                        // the text.
+                        Result.failure(
+                            UploadFailure(shorten(text.ifBlank { "The host returned no URL." }))
+                        )
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // A cancelled upload is not a failed one: the reader closed the
+                // sheet or dismissed the composer, and the file is still theirs.
+                throw e
+            } catch (e: IOException) {
+                Result.failure(UploadFailure("Could not reach catbox.moe - check the connection."))
+            } catch (e: Exception) {
+                Result.failure(UploadFailure(e.message ?: "The upload failed."))
+            }
+        }
+    }
+
+    private fun describe(status: Int, text: String): String = when (status) {
+        429 -> "catbox.moe is rate limiting uploads. Try again in a minute."
+        in 500..599 -> "catbox.moe is not taking uploads right now (HTTP $status)."
+        else -> shorten(text.ifBlank { "catbox.moe refused the upload (HTTP $status)." })
+    }
+
+    private fun shorten(text: String): String {
+        val line = text.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+        return if (line.length <= MAX_REASON_CHARS) line else line.take(MAX_REASON_CHARS) + "…"
+    }
+
+    companion object {
+        private const val UPLOAD_URL = "https://catbox.moe/user/api.php"
+        private const val SERVED_HOST = "https://files.catbox.moe/"
+        private const val MAX_REASON_CHARS = 160
+        private const val USER_AGENT = "AniSequel (Android; comment attachments)"
+
+        /** Whether a response body is the URL of the file that was just stored. */
+        fun isServedUrl(text: String): Boolean =
+            text.startsWith(SERVED_HOST, ignoreCase = true) &&
+                text.length > SERVED_HOST.length &&
+                !text.any { it.isWhitespace() }
+
+        internal fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            // An upload is the slowest thing this app does on a phone connection:
+            // a megabyte of photo over LTE takes longer than any JSON read, and a
+            // timeout sized for the AniList API would abort it mid-transfer and
+            // blame the reader's file.
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+    }
+}
+
+/**
+ * An upload that did not happen, with a message written for the composer rather
+ * than for a log: the reader is holding a file they chose and a reason is the only
+ * thing that tells them what to do next.
+ */
+class UploadFailure(message: String) : IOException(message)

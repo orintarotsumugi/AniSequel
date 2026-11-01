@@ -124,6 +124,17 @@ androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shape
 # classes - but the artifact itself is load-bearing.
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coilCompose" }
+# SVG decoding, for the bio cards AniList's own editor writes. Same version line
+# as every other Coil artifact - they are released together and a mismatched pair
+# of them is a class-not-found at runtime rather than a build failure.
+#
+# Verified against the published artifact, not a release note:
+# `coil-svg-2.7.0.aar` contains `coil/decode/SvgDecoder$Factory.class`, and the
+# POM pulls `com.caverock:androidsvg-aar:1.4` at runtime. That is the cost: an
+# SVG parser in every APK, so this dependency draws one kind of image and nothing
+# else. It is scoped `implementation`, not `debugImplementation`, because the
+# images are in the release too.
+coil-svg = { group = "io.coil-kt", name = "coil-svg", version.ref = "coilCompose" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }

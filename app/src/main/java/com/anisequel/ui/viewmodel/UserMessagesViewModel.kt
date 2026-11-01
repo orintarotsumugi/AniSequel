@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
+import com.anisequel.data.model.isWith
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.Job
@@ -287,6 +288,19 @@ class UserMessagesViewModel(
             MessageFilter.RECEIVED -> loadMore(MessageFilter.RECEIVED)
             MessageFilter.SENT -> loadMore(MessageFilter.SENT)
         }
+    }
+
+    /**
+     * Loads one more page of **both** sources, for the conversation view.
+     *
+     * [loadNextPage] follows the tab's filter, which is right for a list and wrong
+     * for a thread: a conversation is assembled from both sides whatever the inbox
+     * happens to be showing, and asking only the side the filter picked is how the
+     * reader's own older messages stay unreachable behind an open sheet.
+     */
+    fun loadMoreConversation() {
+        loadMore(MessageFilter.RECEIVED)
+        loadMore(MessageFilter.SENT)
     }
 
     private fun loadMore(source: MessageFilter) {
@@ -611,3 +625,29 @@ internal fun visibleLoadMoreError(state: UserMessagesViewModel.UiState): String?
         MessageFilter.SENT -> state.sent.loadMoreError
     }
 }
+
+/**
+ * The conversation with one person, oldest first.
+ *
+ * The inbox is two independent paged sources, because AniList can only be asked for
+ * one side of an exchange at a time - `Page.activities` has no recipient filter -
+ * and the sheet that shows a conversation needs them interleaved and read in the
+ * order they happened, which is the opposite of the inbox's newest-first.
+ *
+ * Sorting ascending is what makes the detail sheet a chat rather than a list of
+ * receipts: the newest message sits at the bottom, where a reply is written, and
+ * the reader scrolls *up* for older ones the way they would in any other messenger.
+ *
+ * Top-level and pure, like the inbox's own merge helpers, so the ordering and the
+ * pair-matching are checkable without a coroutine harness.
+ */
+internal fun conversationMessages(
+    state: UserMessagesViewModel.UiState,
+    counterpartId: Int?,
+    viewerId: Int?
+): List<MessageNode> =
+    (state.received.messages + state.sent.messages)
+        .distinctBy { it.id }
+        .filter { it.isWith(counterpartId, viewerId) }
+        .sortedBy { it.createdAt ?: 0 }
+

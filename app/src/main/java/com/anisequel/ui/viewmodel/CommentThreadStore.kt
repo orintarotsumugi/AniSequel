@@ -143,104 +143,112 @@ class CommentThreadStore(
          * hide its first comments behind an effect nobody asked for.
          */
         val postedReplyId: Int? = null,
+        /**
+         * Whether this thread was opened as a window or as the whole list.
+         *
+         * Carried in the state rather than read from Settings at draw time,
+         * because a thread that started as a window has to keep behaving as one
+         * even if the switch is flipped elsewhere while it is open - and because
+         * Older, the "N new" affordance and the row grouping all have to agree
+         * with how the rows were fetched.
+         */
+        val isChatView: Boolean = false,
         /** The manage dialog: its visibility, its step, and its request. */
-        val action: ReplyAction? = null
+        val action: ReplyAction? = null,
+        /**
+         * How many replies the thread has, as the server said on the last read.
+         *
+         * This is the number that places the window - the newest replies live on
+         * page `ceil(replyCount / perPage)` - and it is the number the Older
+         * button prints. It comes from the API rather than from
+         * [replies].size because the two are deliberately different in chat view:
+         * the list holds what has been fetched, the count holds what exists.
+         */
+        val replyCount: Int = 0,
+        /**
+         * The lowest page fetched, so Older knows what to ask for next.
+         *
+         * Meaningless in full-thread mode, where everything arrived at once.
+         */
+        val oldestPage: Int = 1,
+        /**
+         * How many of the fetched replies are drawn.
+         *
+         * Zero means "all of them", which is what full-thread mode uses. In chat
+         * view the first screen is one page and Older grows the number; keeping it
+         * separate from the size of [replies] is what lets Older show already
+         * fetched rows without a second request.
+         */
+        val shownRows: Int = 0,
+        /** True while an Older page is on its way. */
+        val isLoadingOlder: Boolean = false,
+        /**
+         * Comments that arrived since the reader last looked at the bottom.
+         *
+         * The sheet draws this as a "N new" affordance rather than scrolling,
+         * because a thread that jumped to a new message while the reader was
+         * halfway up it moved the text they were reading off the top of the
+         * screen. Reading a conversation should not cost your place in it.
+         */
+        val unseenNewComments: Int = 0,
+        /** When the thread was last checked for new comments, epoch millis. */
+        val lastCheckedAtMillis: Long = 0L,
+        /** Why the last Older or background check failed, without hiding any rows. */
+        val windowError: String? = null
     )
 
     private val _state = MutableStateFlow<CommentsState?>(null)
     val state: StateFlow<CommentsState?> = _state.asStateFlow()
 
     /**
-     * The thread most recently closed, and the activity it belongs to.
+     * Which part of the thread is on screen.
      *
-     * One entry, deliberately: this is the "I dismissed the sheet by accident"
-     * case, not an offline cache. Keeping every thread would grow for as long as
-     * the app is open and would need an eviction rule that nothing else here
-     * wants; keeping the last one costs one list and makes the reopen instant.
-     * The activity id is stored rather than inferred, because the next thread
-     * the reader opens is usually a different one and must not be shown somebody
-     * else's comments for a frame.
+     * The read lives in [CommentThreadWindow] rather than here: it changes when
+     * the reply documents change, while everything below changes when a mutation
+     * does. One state flow is shared, and it is passed in rather than mirrored, so
+     * a windowed fetch and a posted comment cannot each have their own idea of the
+     * thread - which is the one way a `LazyColumn` key gets duplicated and the
+     * sheet crashes.
      */
-    private var cachedActivityId: Int? = null
-    private var cachedReplies: List<ActivityReply> = emptyList()
+    private val window = CommentThreadWindow(
+        repository = repository,
+        scope = scope,
+        isDemo = isDemo,
+        state = _state
+    )
 
     /**
-     * The fetch for the currently open thread.
+     * Opens the thread for [activityId].
      *
-     * Cancelled rather than merely ignored on the next open. The activity-id
-     * guard below discards a response for a *different* thread, but opening the
-     * same thread twice - close and reopen in quick succession, which is what a
-     * dismiss-by-accident looks like - left two requests racing, and the older
-     * one could land last and overwrite the newer thread's replies (including a
-     * comment posted in between).
+     * [knownReplyCount] is the feed card's own count, used to aim the first page at
+     * the newest replies; zero (a caller that does not know) aims at page one, which
+     * is the same answer for any thread shorter than a page. [chatView] is the
+     * reader's Settings switch, read by the caller rather than here so the store
+     * does not need to know where a preference comes from.
      */
-    private var openJob: Job? = null
+    fun open(activityId: Int, knownReplyCount: Int = 0, chatView: Boolean = true) =
+        window.open(activityId, knownReplyCount, chatView)
 
-    /**
-     * Opens the comment thread for [activityId] and loads it.
-     *
-     * If this is the thread that was just closed, its comments are drawn
-     * immediately and the fetch becomes a refresh: [CommentsState.isLoading]
-     * stays false, [CommentsState.isRefreshing] is true, and a failure leaves
-     * the rows where they are with [CommentsState.loadError] set. See
-     * [CommentsState.isRefreshing] for the problem that fixed.
-     */
-    fun open(activityId: Int) {
-        openJob?.cancel()
-        val cached = if (cachedActivityId == activityId) cachedReplies else emptyList()
-        _state.value = CommentsState(
-            activityId = activityId,
-            isLoading = cached.isEmpty(),
-            isRefreshing = cached.isNotEmpty(),
-            replies = cached
-        )
-        openJob = scope.launch {
-            val result = if (isDemo) {
-                Result.success(emptyList())
-            } else {
-                // `repositoryResult`, not a bare call: a repository that throws
-                // instead of answering returns a failure here, which this fold
-                // draws as the thread's error row. A bare call left the throw to
-                // the coroutine, and the coroutine took the app with it.
-                repositoryResult { repository.getActivityReplies(activityId) }
-            }
-            // Discard a response for a thread the user has already closed or
-            // replaced: the state is only written if it is still this thread.
-            val current = _state.value?.takeIf { it.activityId == activityId } ?: return@launch
-            result.fold(
-                onSuccess = { replies ->
-                    _state.value = current.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        // First occurrence wins: the sheet draws one row per id, and
-                        // the server's order is the conversation's order - see the
-                        // unique-key note on [CommentsState.replies].
-                        replies = replies.distinctBy { it.id },
-                        loadError = null
-                    )
-                },
-                onFailure = { error ->
-                    _state.value = current.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        // The seeded rows stay: an error banner over a thread the
-                        // reader can still read is better than replacing it with
-                        // the error - and the retry is the banner's own button.
-                        loadError = error.message ?: "Couldn't load comments."
-                    )
-                }
-            )
-        }
-    }
+    /** The page of comments older than everything on screen. */
+    fun loadOlder() = window.loadOlder()
+
+    /** Re-reads the newest page; [atBottom] decides whether the reader is moved. */
+    fun checkForNewComments(atBottom: Boolean) = window.checkForNewComments(atBottom)
+
+    /** Takes in the comments a background check found, and clears the count. */
+    fun revealNewComments() = window.revealNewComments()
+
+    /** How long the sheet waits between background checks. */
+    val pollIntervalMillis: Long get() = CommentThreadWindow.POLL_INTERVAL_MILLIS
 
     fun close() {
         val current = _state.value ?: return
-        // Snapshot before the state is nulled. Replies, not the whole state: the
-        // error, the draft and the manage dialog all describe a request or a
-        // choice that has no meaning once the sheet is gone, and carrying them
-        // into the next open is how a stale error appears under a fresh thread.
-        cachedActivityId = current.activityId
-        cachedReplies = current.replies
+        // Snapshot before the state is nulled. Replies and the window, not the
+        // rest of the state: the error, the draft and the manage dialog all
+        // describe a request or a choice that has no meaning once the sheet is
+        // gone, and carrying them into the next open is how a stale error appears
+        // under a fresh thread.
+        window.capture(current)
         _state.value = null
     }
 
@@ -286,6 +294,15 @@ class CommentThreadStore(
                         // server's copy is the authoritative one, and two rows keyed
                         // by one id is the crash [CommentsState.replies] describes.
                         replies = latest.replies.filterNot { it.id == reply.id } + reply,
+                        // The reader's own comment is the newest row in the thread,
+                        // so the window takes it in rather than counting it as
+                        // something that arrived unasked.
+                        replyCount = latest.replyCount + 1,
+                        shownRows = if (latest.isChatView) {
+                            maxOf(latest.shownRows, latest.replies.size + 1)
+                        } else {
+                            latest.shownRows
+                        },
                         // Recorded so the sheet can bring the new comment into
                         // view. See [CommentsState.postedReplyId].
                         postedReplyId = reply.id
@@ -489,6 +506,7 @@ class CommentThreadStore(
                     if (latest.action?.replyId != reply.id) return@fold
                     _state.value = latest.copy(
                         replies = latest.replies.filterNot { it.id == reply.id },
+                        replyCount = (latest.replyCount - 1).coerceAtLeast(0),
                         action = null
                     )
                 },

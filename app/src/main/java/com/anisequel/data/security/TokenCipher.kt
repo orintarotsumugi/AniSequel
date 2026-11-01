@@ -53,8 +53,19 @@ interface TokenCipher {
  * cipher for every encryption and must be stored beside the ciphertext - GCM
  * fails loudly if it is reused, which is the behaviour that makes the format
  * safe to rewrite on every sign-in.
+ *
+ * ## Why the alias is a constructor argument
+ *
+ * The app now stores a second kind of secret (a reader's GIF-provider key) beside
+ * the AniList token, and the two must not share a keystore entry. `decrypt` deletes
+ * its key when it cannot read a payload, because an invalidated key is worse than no
+ * key - and one unreadable GIF key must not be able to log the reader out of AniList
+ * by destroying the entry their bearer token is sealed under. Each caller names its
+ * own alias and takes its own damage.
  */
-class KeystoreTokenCipher : TokenCipher {
+class KeystoreTokenCipher(
+    private val keyAlias: String = KEY_ALIAS
+) : TokenCipher {
 
     override fun encrypt(plaintext: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -83,12 +94,12 @@ class KeystoreTokenCipher : TokenCipher {
 
     private fun key(): SecretKey {
         val store = keyStore()
-        (store.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        (store.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
         generator.init(
             KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
+                keyAlias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -103,7 +114,7 @@ class KeystoreTokenCipher : TokenCipher {
         KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
     private fun forgetKey() {
-        runCatching { keyStore().deleteEntry(KEY_ALIAS) }
+        runCatching { keyStore().deleteEntry(keyAlias) }
     }
 
     private fun encode(bytes: ByteArray): String =
