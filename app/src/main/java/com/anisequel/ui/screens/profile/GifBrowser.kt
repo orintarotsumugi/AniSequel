@@ -324,7 +324,6 @@ private fun GifSuggestionRow(onPick: (String) -> Unit) {
 /** Verified against a live page of `animated_gif rating:general`, not guessed. */
 private val GIF_SUGGESTIONS = listOf("laughing", "crying", "angry", "surprised", "confused", "blush")
 
-/** One animated result, tapped to put it in the comment.
 /** One animated result, tapped to put it in the comment. */
 @Composable
 private fun GifTile(
