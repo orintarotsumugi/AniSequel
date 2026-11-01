@@ -656,7 +656,10 @@ object AniListMarkdownParser {
             // media lookups to produce.
             ?.filter { it is MarkdownNode.ImageBlock || it is MarkdownNode.VideoBlock }
             .orEmpty()
-        return parsed.takeIf { it.isNotEmpty() }
+        // Empty is the answer for a spoiler with no picture in it, and the renderer
+        // reads that as "draw the text you already drew" - so there is nothing to
+        // gate here beyond the filter above.
+        return parsed
     }
 
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
