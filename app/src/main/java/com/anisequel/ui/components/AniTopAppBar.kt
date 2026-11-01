@@ -185,16 +185,17 @@ fun AniTopAppBar(
                 AnimatedContent(
                     targetState = isRefreshing,
                     transitionSpec = {
-                        (
-                            fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                        // `togetherWith` binds looser than `+`, so the enter and
+                        // exit groups need no parentheses around them.
+                        fadeIn(ExpressiveMotion.FastEffects) +
+                            scaleIn(
                                 initialScale = 0.82f,
                                 animationSpec = ExpressiveMotion.FastSpatial
-                            )
-                            ) togetherWith (
-                            fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                            ) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects) +
+                            scaleOut(
                                 targetScale = 0.82f,
                                 animationSpec = ExpressiveMotion.FastSpatial
-                            )
                             )
                     },
                     label = "refresh_state"
