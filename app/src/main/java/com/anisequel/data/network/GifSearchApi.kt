@@ -26,7 +26,7 @@ import okhttp3.Request
  * the two that actually answer:
  *
  * - **Safebooru**, anonymous, no account and no key, asked for `animated_gif` at
- *   `rating:general`. Its catalogue is anime, which is what a reader on AniList is
+ *   `rating:safe`. Its catalogue is anime, which is what a reader on AniList is
  *   looking for, and this is the source the browser GIF pickers in that community
  *   already use.
  * - **Tenor v2**, when the reader has pasted their own key in Settings. This is
@@ -238,7 +238,7 @@ internal data class TenorFormat(
     val dims: List<Int>? = null
 )
 /**
- * Safebooru's anonymous JSON API, asked for animated GIFs at general rating only.
+ * Safebooru's anonymous JSON API, asked for animated GIFs at its safe rating only.
  *
  * ## Why this is the default
  *
@@ -251,14 +251,18 @@ internal data class TenorFormat(
  *
  * ## What is filtered, and twice
  *
- * `rating:general` goes into the query, and a post whose own `rating` field is not in
+ * `rating:safe` goes into the query, and a post whose own `rating` field is not in
  * the safe set is dropped on the way out ([isSafeRating] - the site spells its ratings
- * out as `general`/`safe`, so the check is a set of strings, not one letter). A booru
+ * out as `safe`/`general`, so the check is a set of strings, not one letter). A booru
  * is user-tagged: the filter argument is a
  * request, not a guarantee, and this app ships an image picker into a comments
  * section that other people read. The tag is also the reason the search box says
  * "tags" - boorus match `spice_and_wolf holo`, not a sentence, so the query is
  * rewritten into that shape rather than passed through.
+ *
+ * The spelling matters as much as the filter: this used to ask for
+ * `rating:general`, which the site does not know, so it matched nothing and every
+ * search answered an empty page. See [REQUIRED_TAGS].
  */
 class SafebooruGifs(
     private val client: OkHttpClient = defaultClient(),
@@ -291,7 +295,7 @@ class SafebooruGifs(
                     // the API selector, and asking for page 2 of a post list would ask
                     // the API itself to switch pages.
                     .addQueryParameter("pid", (cursor?.toIntOrNull() ?: 0).coerceAtLeast(0).toString())
-                    .addQueryParameter("tags", "$REQUIRED_TAGS $tags")
+                    .addQueryParameter("tags", booruSearchTags(query))
                     .build()
             }
             val request = built.getOrNull()?.let {
@@ -341,8 +345,6 @@ class SafebooruGifs(
     companion object {
         private const val ENDPOINT = "https://safebooru.org/index.php"
 
-        /** The rating the catalogue is limited to, whatever the tags say. */
-        private const val REQUIRED_TAGS = "animated_gif rating:general"
         private const val PAGE_SIZE = 24
         private const val USER_AGENT = "AniSequel (Android; GIF search)"
 
@@ -374,6 +376,28 @@ internal fun booruTags(query: String): String =
         .joinToString(" ") { word -> word.ifBlank { return@joinToString "" }.replace(' ', '_') }
 
 private val DROP_WORDS = setOf("a", "an", "and", "of", "the", "with", "in", "on")
+
+/**
+ * The whole `tags` parameter a booru search sends.
+ *
+ * Top-level and internal so the rating spelling is pinned by a JVM test: it is
+ * the one argument whose wrong value does not fail, it answers an empty page.
+ */
+internal fun booruSearchTags(query: String): String = "$REQUIRED_TAGS ${booruTags(query)}".trim()
+
+/**
+ * The rating the catalogue is limited to, whatever the tags say.
+ *
+ * `rating:safe`, not `rating:general`. The site's DAPI does not reject a rating
+ * value it does not know; it simply matches nothing, and a search for
+ * `animated_gif rating:general holo` answers HTTP 200 with an **empty body** -
+ * which is this provider's "no matches". Every search in the picker therefore
+ * came back empty regardless of the query, while the same tags with
+ * `rating:safe` return the catalogue. The response's own `rating` field is
+ * spelled `safe` too (see [isSafeRating]); the request and the filter have to
+ * agree or one of them is decorative.
+ */
+internal const val REQUIRED_TAGS = "animated_gif rating:safe"
 
 /** One Safebooru post, as far as this picker cares. */
 @JsonClass(generateAdapter = true)
@@ -471,7 +495,11 @@ internal fun booruTileUrl(post: SafebooruPost): String? {
     val sampleIsAnimation = sample != null && sample.isGifUrl()
     if (sampleIsAnimation) return sample
     if (file != null && file.isGifUrl() && fitsTileBudget(post.width, post.height)) return file
-    return sample ?: file ?: post.previewUrl?.takeIf { it.startsWith("http") }
+    // A still wins over an animation this grid cannot afford. The old fallback
+    // was `sample ?: file` and returned the poster-sized GIF it had just refused
+    // to draw, so the one case the budget existed for was the one case it did not
+    // cover - and a 5200x5200 frame in a 104dp cell is a crash, not a preview.
+    return sample ?: post.previewUrl?.takeIf { it.startsWith("http") } ?: file
 }
 
 /**

@@ -165,9 +165,18 @@ object PickedImageReader {
             }
             val out = ByteArrayOutputStream()
             image.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            val jpeg = out.toByteArray()
+            // The source's size was checked against the HEIC ceiling, but the
+            // JPEG is a different file and can still be over the host's limit.
+            // Checked here so the reader gets "that file is too large" rather
+            // than a fourteen-second upload and a refusal from catbox.
+            val verdict = MediaAttachment.verdictFor("image/jpeg", jpeg.size.toLong())
+            if (verdict != MediaAttachment.Verdict.Accept) {
+                return Result.failure(IllegalStateException(MediaAttachment.reasonFor(verdict)))
+            }
             Result.success(
                 PickedImage(
-                    bytes = out.toByteArray(),
+                    bytes = jpeg,
                     fileName = MediaAttachment.storageFileName("image/jpeg", declaredName),
                     mimeType = "image/jpeg"
                 )

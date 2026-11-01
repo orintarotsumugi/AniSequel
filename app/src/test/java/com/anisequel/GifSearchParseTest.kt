@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.data.network.SafebooruPost
 import com.anisequel.data.network.TenorResponse
 import com.anisequel.data.network.booruNextCursor
+import com.anisequel.data.network.booruSearchTags
 import com.anisequel.data.network.booruTags
 import com.anisequel.data.network.booruTileUrl
 import com.anisequel.data.network.fitsTileBudget
@@ -169,6 +170,20 @@ class GifSearchParseTest {
         assertEquals("2", booruNextCursor(rawPostCount = 24, requestedLimit = 24, cursor = "1"))
         assertNull(booruNextCursor(rawPostCount = 4, requestedLimit = 24, cursor = null))
         assertEquals("1", booruNextCursor(rawPostCount = 24, requestedLimit = 24, cursor = "not-a-number"))
+    }
+
+    @Test
+    fun `the booru request asks for the rating spelling the site actually knows`() {
+        // The picker asked for `rating:general` for a release. Safebooru's tag
+        // index does not know that value; it does not reject it either, it matches
+        // nothing and answers HTTP 200 with an empty body - the same shape as a
+        // genuine miss. Every search therefore came back empty while the same
+        // tags with `rating:safe` returned the catalogue, which is also the
+        // spelling the response's own `rating` field uses.
+        val tags = booruSearchTags("holo")
+        assertTrue("the safe-rating filter has to be in the request", tags.contains("rating:safe"))
+        assertFalse("rating:general matches nothing on this index", tags.contains("rating:general"))
+        assertEquals("animated_gif rating:safe holo", tags)
     }
 
     @Test

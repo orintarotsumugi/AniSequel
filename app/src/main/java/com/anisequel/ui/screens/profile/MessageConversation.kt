@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import java.time.Instant
@@ -28,17 +29,80 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * A message conversation, oldest at the top and newest at the bottom.
+ * One line of a conversation, from either source.
  *
- * ## Why the sheet shows more than the message that was tapped
+ * The sheet draws two kinds of row that are not the same type on the wire: the
+ * inbox's `MessageNode`s (one message each, with a sender and a recipient) and the
+ * open message's `ActivityReply`s (the thread AniList keeps under the message). A
+ * conversation is both, in time order, so both are reduced to this before they
+ * reach a bubble - the alternative was two lists that looked identical and could
+ * not be interleaved.
  *
- * AniList's inbox is a list of single messages, and a conversation is what a reader
- * opens one of them to read. Rendering only the tapped row left the sheet as a
- * sender with no record: the answer went in, and the question stayed back on the
- * list. The two halves of an exchange are fetched separately, because
- * `Page.activities` has no recipient filter, and
- * [com.anisequel.ui.viewmodel.conversationMessages] interleaves them here - which
- * is the whole reason the sheet can be a thread at all.
+ * [key] is prefixed because the two id namespaces are different: reply 12 and
+ * message 12 are not the same row, and a keyed list that conflated them would drop
+ * one of them on screen.
+ */
+internal data class ConversationLine(
+    val key: String,
+    val body: String,
+    val authorId: Int?,
+    val authorName: String?,
+    val createdAt: Int?,
+    val sentByViewer: Boolean,
+    val highlight: Boolean
+)
+
+/**
+ * The conversation the sheet draws: the inbox's matched messages and the open
+ * message's replies, oldest first.
+ *
+ * A message can be both - the message the sheet was opened from lives in the inbox
+ * *and* is the activity whose replies were fetched - so the two are de-duplicated
+ * on [ConversationLine.key] before sorting. That matters most for the message the
+ * reader opened: drawing it twice (once as a row, once as the thread's head) is
+ * the kind of duplicate a `LazyColumn` keys rows to avoid, and here the row would
+ * not even be the same object.
+ *
+ * Top-level and pure so the ordering, the direction and the de-duplication are
+ * testable without a Compose runtime.
+ */
+internal fun conversationLines(
+    messages: List<MessageNode>,
+    replies: List<ActivityReply>,
+    viewerId: Int?,
+    highlightMessageId: Int? = null
+): List<ConversationLine> {
+    val fromMessages = messages.mapNotNull { message ->
+        val body = message.message?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        ConversationLine(
+            key = "m:${message.id}",
+            body = body,
+            authorId = message.messengerId,
+            authorName = message.messenger?.name,
+            createdAt = message.createdAt,
+            sentByViewer = message.isSentBy(viewerId),
+            highlight = message.id == highlightMessageId
+        )
+    }
+    val fromReplies = replies.mapNotNull { reply ->
+        val body = reply.text?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        ConversationLine(
+            key = "r:${reply.id}",
+            body = body,
+            authorId = reply.user?.id,
+            authorName = reply.user?.name,
+            createdAt = reply.createdAt,
+            sentByViewer = reply.user?.id != null && reply.user?.id == viewerId,
+            highlight = false
+        )
+    }
+    return (fromMessages + fromReplies)
+        .distinctBy { it.key }
+        .sortedBy { it.createdAt ?: 0 }
+}
+
+/**
+ * A conversation, oldest at the top and newest at the bottom.
  *
  * ## Bubbles, and why this one place uses them
  *
@@ -53,19 +117,16 @@ import java.time.format.DateTimeFormatter
  *
  * ## The highlight
  *
- * The tapped row is the one the reader meant to open, and in a thread assembled
- * from two sources it is not necessarily the newest. It gets a rule rather than a
- * banner: a message that is marked by *looking different from itself* is easier to
- * find in a column of bubbles than one with a caption over it. A conversation
- * opened from a friend's name has no tapped row, so `highlightId` is null and
- * nothing is marked.
+ * The tapped row is the one the reader meant to open, and in a timeline assembled
+ * from an inbox and a reply thread it is not necessarily the newest. It gets a rule
+ * rather than a banner: a message that is marked by *looking different from
+ * itself* is easier to find in a column of bubbles than one with a caption over
+ * it. A conversation opened from a friend's name has no tapped row, so nothing is
+ * marked.
  */
 @Composable
 internal fun ConversationBody(
-    messages: List<MessageNode>,
-    viewerId: Int?,
-    /** The tapped row's id, or null for a conversation opened without one. */
-    highlightId: Int?,
+    lines: List<ConversationLine>,
     hasEarlier: Boolean,
     onLoadEarlier: () -> Unit,
     modifier: Modifier = Modifier
@@ -90,20 +151,16 @@ internal fun ConversationBody(
             }
         }
 
-        messages.forEach { message ->
-            ConversationRow(
-                message = message,
-                sent = message.messengerId != null && message.messengerId == viewerId,
-                highlighted = message.id == highlightId
-            )
+        lines.forEach { line ->
+            ConversationRow(line = line)
         }
     }
 }
 
-/** One bubble and its time. */
+/** One bubble, its author and its time. */
 @Composable
-private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Boolean) {
-    val body = message.message ?: return
+private fun ConversationRow(line: ConversationLine) {
+    val sent = line.sentByViewer
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -116,22 +173,30 @@ private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Bo
                 .widthIn(max = 460.dp)
                 .testTag("message_conversation_row")
         ) {
-            Box(modifier = bubbleModifier(sent, highlighted)) {
+            Box(modifier = bubbleModifier(sent, line.highlight)) {
                 // The same renderer the comment thread and the cards use, so a
                 // message with an image, a spoiler or an AniList link in it shows
                 // the image, hides the spoiler and draws the poster - the body of a
                 // message is AniList Markdown, not plain text.
                 AniListMarkdownWithCovers(
-                    markdown = body,
+                    markdown = line.body,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
             Spacer(modifier = Modifier.height(2.dp))
+            // Who wrote it, then when. In a one-to-one thread the side of the
+            // bubble says whose voice it is, but a reply thread can also contain
+            // the message the sheet was opened from - a second row from the same
+            // person - and a name costs one short line where guessing costs a
+            // misread. "You" rather than the viewer's own handle, for the same
+            // reason the inbox card says it.
+            val who = if (sent) "You" else line.authorName
+            val whenText = line.createdAt?.let { formatConversationTime(it) }
             Text(
-                text = message.createdAt?.let { formatConversationTime(it) }.orEmpty(),
+                text = listOfNotNull(who, whenText).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (line.highlight) FontWeight.SemiBold else FontWeight.Normal,
                 textAlign = if (sent) TextAlign.End else TextAlign.Start,
                 maxLines = 1
             )

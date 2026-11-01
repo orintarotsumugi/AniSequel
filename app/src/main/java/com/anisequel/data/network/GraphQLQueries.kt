@@ -1397,11 +1397,14 @@ object GraphQLQueries {
      * that needs them, so it is the only thing that asks.
      *
      * `Activity(id:)` returns `ActivityUnion`, so the fragments are required.
-     * Both members this feed can open a thread for are listed: the sheet is
-     * reachable from a list card and from a text post, and a thread query with
-     * only the `ListActivity` fragment would answer a text post's id with an
-     * empty object - an open sheet showing zero comments on a post that has
-     * them.
+     * The three members that can be opened are listed: a list card, a text post,
+     * and a **message**. A thread query with only the `ListActivity` fragment
+     * answers a text post's id with an empty object - an open sheet showing zero
+     * comments on a post that has them - and `MessageActivity` was missing for
+     * the same reason, so every DM thread read empty. A message is a thread the
+     * same way a post is: the message is the activity and the exchange is its
+     * replies, which is why `UserMessagesViewModel` reads the conversation from
+     * here rather than assembling it from inbox pages.
      */
     val GET_ACTIVITY_REPLIES = """
         query GetActivityReplies(${'$'}activityId: Int) {
@@ -1425,6 +1428,24 @@ object GraphQLQueries {
               }
             }
             ... on TextActivity {
+              id
+              isLiked
+              likeCount
+              replyCount
+              replies {
+                id
+                text
+                likeCount
+                isLiked
+                createdAt
+                user {
+                  id
+                  name
+                  avatar { large medium }
+                }
+              }
+            }
+            ... on MessageActivity {
               id
               isLiked
               likeCount

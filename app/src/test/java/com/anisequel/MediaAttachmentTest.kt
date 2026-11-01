@@ -62,6 +62,26 @@ class MediaAttachmentTest {
     }
 
     @Test
+    fun `a phone photo is accepted because it is converted before it leaves`() {
+        // HEIC/HEIF are deliberately not in SUPPORTED_TYPES - no browser renders
+        // them - but that set was checked *before* the recode branch, which made
+        // the conversion unreachable and refused the one format an Android camera
+        // writes with "only images can be attached".
+        assertEquals(
+            MediaAttachment.Verdict.Accept,
+            MediaAttachment.verdictFor("image/heif", 5_000_000L)
+        )
+        assertEquals(
+            MediaAttachment.Verdict.Accept,
+            MediaAttachment.verdictFor("image/heic", MediaAttachment.MAX_FILE_BYTES)
+        )
+        assertEquals(
+            MediaAttachment.Verdict.TooLarge,
+            MediaAttachment.verdictFor("image/heic", MediaAttachment.MAX_FILE_BYTES + 1)
+        )
+    }
+
+    @Test
     fun `an empty file is its own answer`() {
         assertEquals(MediaAttachment.Verdict.Empty, MediaAttachment.verdictFor("image/png", 0L))
         assertEquals(MediaAttachment.Verdict.Empty, MediaAttachment.verdictFor("image/png", -1L))

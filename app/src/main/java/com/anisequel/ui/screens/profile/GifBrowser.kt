@@ -149,7 +149,14 @@ internal fun ColumnScope.GifBrowser(
 
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
-            text = state.note ?: errorMessage ?: "Nothing found.",
+            // A blank box is not a search that found nothing: it is a box nobody
+            // has typed in yet, and "Nothing found." under it read as a provider
+            // failure on the pane's first frame.
+            text = state.note ?: errorMessage ?: if (state.query.isBlank()) {
+                GifSearchStore.BLANK_QUERY_NOTE
+            } else {
+                "Nothing found."
+            },
             action = if (errorMessage != null) {
                 { store.searchNow() }
             } else {
