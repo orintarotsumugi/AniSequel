@@ -1708,15 +1708,28 @@ token, and a file host has no business receiving it. The host answers a refusal 
 HTTP 200 and prose, so "is the body a `files.catbox.moe` URL" is the whole success
 test, pinned in `CatboxUploadProtocolTest`.
 
-GIF search answers the same way twice: **Openverse**, anonymous, filtered to
-`.gif` by its `extension` argument, and **Tenor v2** when the reader has pasted a
-key. Tenor's public key-free API was discontinued - `g.tenor.com/v1` now returns
+GIF search answers from two places: **Safebooru**, anonymous, asked for
+`animated_gif` at `rating:general`, and **Tenor v2** when the reader has pasted a
+key. Both were chosen by elimination against the live services rather than against
+documentation: Tenor's public key-free API is gone (`g.tenor.com/v1` returns
 `{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
-rejects the old key - which is why the anonymous default is a Creative Commons index
-rather than a reaction-GIF catalogue, and why the empty-result sentence says so
-instead of blaming the app. A key is never committed: `KeystoreIntegrityTest` is not
-the reason so much as the same reasoning - a bundled credential is a shared rate
-limit and a public secret.
+rejects the same string), Giphy's beta keys answer 401, DuckDuckGo's image endpoint
+replies with a bot challenge, Wikimedia Commons has MIME search disabled at the API
+("Miser Mode"), and **Openverse - which does answer anonymously and was the default
+for one CI cycle - indexes Creative Commons media, so `anime reaction` returns zero
+tiles.** What is left that is anonymous *and* anime is a booru, which is also what
+the browser GIF pickers in this community already use.
+
+Two rules come with that choice. `rating:general` goes into the query **and** a post
+whose own rating field is not general is dropped on the way out: a booru is
+user-tagged, a filter argument is a request rather than a guarantee, and this picker
+puts an image into a comment that other people read. And a phrase is rewritten into
+tags (`spice and wolf holo` becomes `spice_and_wolf holo`) because a booru matches
+tags, not sentences - tags the reader already spelled with underscores are left
+alone, so somebody who knows the syntax is not fighting the rewrite.
+
+A key is never committed: `KeystoreIntegrityTest` is not the reason so much as the
+same reasoning - a bundled credential is a shared rate limit and a public secret.
 
 Storing that key is why `KeystoreTokenCipher` now takes its alias. A decrypt failure
 deletes the keystore entry, deliberately, because an invalidated key is worse than no
