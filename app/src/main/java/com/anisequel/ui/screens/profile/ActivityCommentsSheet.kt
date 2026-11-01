@@ -383,18 +383,32 @@ fun ActivityCommentsSheet(
                     onQuote = { reply ->
                         // The quote is an edit like any other the bar makes: it goes
                         // in at the caret, the draft is clipped to the API's ceiling,
-                        // and the reader keeps typing under it. AniList threads a
-                        // reply by the leading `@name`, which is why quoting offers
-                        // the author's name as the credit line rather than assuming
-                        // the block alone says whose it is.
-                        insertIntoDraft(
+                        // and the reader keeps typing under it.
+                        //
+                        // It also has to thread. AniList puts no parent pointer on a
+                        // reply - the leading `@name` is the whole mechanism - so
+                        // quoting somebody without mentioning them posted a comment at
+                        // the root of the thread, and the grouping then merged it as a
+                        // continuation of the *quoting* reader, which is the one thing
+                        // a quote should not look like. The credit line names the
+                        // author to the reader; the mention is what makes the site
+                        // put the comment under their post.
+                        val name = reply.user?.name?.trim()?.takeIf { it.isNotEmpty() }
+                        val mentioned = startReplyTo(draft.text, name.orEmpty())
+                        val quote = quoteBlock(
+                            text = reply.text.orEmpty(),
+                            authorName = name,
+                            addressedTo = name
+                        )
+                        draft = mentioned.withDraftEdit(
                             insertBlock(
-                                draft.text,
-                                draft.selection.start,
-                                draft.selection.end,
-                                quoteBlock(reply.text.orEmpty(), reply.user?.name)
+                                mentioned.text,
+                                mentioned.selectionStart,
+                                mentioned.selectionEnd,
+                                quote
                             )
                         )
+                        replyToName = name
                         composing = true
                     },
                     onLikeReply = onLikeReply,
