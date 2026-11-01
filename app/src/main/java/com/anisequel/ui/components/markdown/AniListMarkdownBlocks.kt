@@ -368,15 +368,30 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = buildInlineAnnotatedString(
-                        spoiler.inlines,
-                        onLinkClick = { openExternalUrlOrCopy(context, it) }
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Column(modifier = Modifier.padding(12.dp)) {
+                    if (spoiler.inlines.isNotEmpty()) {
+                        Text(
+                            text = buildInlineAnnotatedString(
+                                spoiler.inlines,
+                                onLinkClick = { openExternalUrlOrCopy(context, it) }
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // The picture the reader hid, once the lid is up. These come from
+                    // the same content re-parsed as blocks - see
+                    // [MarkdownNode.SpoilerBlock] - because an annotated string has
+                    // nowhere to put a bitmap and used to print `img(url)` or the
+                    // word "Image" where the reveal was supposed to be.
+                    spoiler.blocks.forEach { node ->
+                        when (node) {
+                            is MarkdownNode.ImageBlock -> RenderImage(node)
+                            is MarkdownNode.VideoBlock -> RenderVideo(node)
+                            else -> Unit
+                        }
+                    }
+                }
             }
         }
     }

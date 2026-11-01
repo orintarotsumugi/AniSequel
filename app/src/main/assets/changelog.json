@@ -54,6 +54,14 @@
         {
           "title": "The text-size preview follows your finger",
           "detail": "The sample animated toward a value that changed on every tick of the slider, so it lagged the thumb it was supposed to be following and never settled mid-drag."
+        },
+        {
+          "title": "A spoiler can hold a picture",
+          "detail": "Hiding a reveal behind ~!...!~ showed the reader the words \"Image\" or a line of img(url) once they opened it: a spoiler drew its payload as styled text, and text has nowhere to put a picture. The payload is re-parsed now, so the thing people actually spoil - a colour, a character shot, a final frame - appears. A spoiler of words is untouched."
+        },
+        {
+          "title": "The GIF picker decides how the embed sits",
+          "detail": "Alongside the width, a picked GIF can now go in normally, centred across the thread, or behind a spoiler's lid - the three framings AniList's own editor writes, so the preview is what other readers will see rather than markup they have to decode."
         }
       ]
     },

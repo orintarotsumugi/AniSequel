@@ -129,6 +129,37 @@ class MediaAttachmentTest {
         assertEquals("img(https://x/a.gif)", MediaAttachment.embedMarkdown("https://x/a.gif", "-20"))
     }
 
+    /**
+     * The three framings the GIF pane offers, as markup the parser reads back.
+     *
+     * A width the parser would not recognise is dropped rather than written, and
+     * the same rule applies here: an unrecognised framing falls back to the bare
+     * embed, because a comment is public the moment it is posted and a line of
+     * literal `~~~` in front of everybody cannot be unposted.
+     */
+    @Test
+    fun `an embed can go in centred or behind a spoiler`() {
+        assertEquals(
+            "img220(https://x/a.gif)",
+            MediaAttachment.embedMarkdown(
+                "https://x/a.gif", "220", MediaAttachment.EmbedFraming.Plain
+            )
+        )
+        assertEquals(
+            "~~~\nimg220(https://x/a.gif)\n~~~",
+            MediaAttachment.embedMarkdown(
+                "https://x/a.gif", "220", MediaAttachment.EmbedFraming.Centred
+            )
+        )
+        assertEquals(
+            "the block spoiler is matched whole-line, so it stays on one line",
+            "~!img(https://x/a.gif)!~",
+            MediaAttachment.embedMarkdown(
+                "https://x/a.gif", null, MediaAttachment.EmbedFraming.Spoiler
+            )
+        )
+    }
+
     @Test
     fun `the stored name keeps an extension that matches the bytes`() {
         assertEquals("Screenshot.png", MediaAttachment.storageFileName("image/png", "Screenshot"))

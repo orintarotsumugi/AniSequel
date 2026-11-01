@@ -1179,4 +1179,34 @@ class AniListMarkdownTest {
         nodes.filterIsInstance<MarkdownNode.Paragraph>()
             .flatMap { paragraph -> paragraph.inlines.filterIsInstance<InlineToken.Plain>() }
             .joinToString("") { it.text }
+
+    /**
+     * What a reader actually hides behind a spoiler: a picture.
+     *
+     * The block used to tokenise the payload as inline text, so the revealed
+     * spoiler drew `img(url)` or the word "Image" where the reveal was supposed to
+     * be - the annotated string has nowhere to put a bitmap. The payload is now
+     * re-parsed as blocks, and only when it really holds an image: the text case
+     * has to keep the single `Text` it always had, so a spoiler of words does not
+     * pay for a second parse or change shape.
+     */
+    @Test
+    fun `a spoiler whose payload is an image carries the image block`() {
+        val image = AniListMarkdownParser.parse("~!img(https://x/a.gif)!~").singleOrNull()
+            as? MarkdownNode.SpoilerBlock
+        assertNotNull("the line should parse as a spoiler block", image)
+        assertTrue(
+            "the payload has to reach the image renderer",
+            image!!.blocks.any { it is MarkdownNode.ImageBlock }
+        )
+
+        val words = AniListMarkdownParser.parse("~!the villain survives!~").singleOrNull()
+            as? MarkdownNode.SpoilerBlock
+        assertNotNull(words)
+        assertTrue(
+            "a spoiler of words stays exactly the text it was",
+            words!!.blocks.isEmpty() && words.inlines.isNotEmpty()
+        )
+    }
+
 }

@@ -142,6 +142,12 @@ internal fun CommentComposer(
     // [MediaAttachment.embedMarkdown] reads any value it cannot parse - the empty
     // one included - as "no width", which is the bare `img(url)` the site writes.
     var gifWidth by rememberSaveable { mutableStateOf("220") }
+    // Stored as the enum name because `rememberSaveable` will not carry an enum
+    // through a Bundle without a custom saver, and a row that reset to "Normal"
+    // after a rotation the reader did not ask for is worse than a String.
+    var gifFramingName by rememberSaveable { mutableStateOf(MediaAttachment.EmbedFraming.Plain.name) }
+    val gifFraming = MediaAttachment.EmbedFraming.entries
+        .firstOrNull { it.name == gifFramingName } ?: MediaAttachment.EmbedFraming.Plain
     var pendingInsert by remember { mutableStateOf<InsertKind?>(null) }
     val showingGifs = pane == PANE_GIFS
 
@@ -192,8 +198,9 @@ internal fun CommentComposer(
         when {
             showingGifs -> {
                 GifWidthRow(gifWidth) { gifWidth = it }
+                GifFramingRow(gifFraming) { gifFramingName = it.name }
                 gifPane { url ->
-                    insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth))
+                    insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth, gifFraming))
                     pane = PANE_WRITE
                 }
             }
@@ -437,6 +444,60 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
         }
     }
 }
+
+/**
+ * Whether the picked GIF goes in on its own, centred, or behind a spoiler.
+ *
+ * Beside the width row rather than in the format bar, because it belongs to the
+ * embed about to be inserted: a reader choosing a reaction GIF is often choosing
+ * one that spoils something, and the alternative - inserting it and then wrapping
+ * the line by hand in `~!...!~` on a phone keyboard - is not a thing anybody does.
+ */
+@Composable
+private fun GifFramingRow(selected: MediaAttachment.EmbedFraming, onSelect: (MediaAttachment.EmbedFraming) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MediaAttachment.EmbedFraming.entries.forEach { framing ->
+            val label = when (framing) {
+                MediaAttachment.EmbedFraming.Plain -> "Normal"
+                MediaAttachment.EmbedFraming.Centred -> "Centred"
+                MediaAttachment.EmbedFraming.Spoiler -> "Spoiler"
+            }
+            val isSelected = framing == selected
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(
+                        if (isSelected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+                    )
+                    .clickable(onClickLabel = "Insert as $label") { onSelect(framing) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("comment_gif_framing_$label")
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+        }
+    }
+}
+
 
 /**
  * The widths a picked GIF can be inserted at.

@@ -33,6 +33,7 @@ The conversation release: comments on messages as well as posts, a comment threa
 - **A like leaves the comment alone.** Tapping a heart wrote back the whole comment as it was before the tap.
 - **Posting keeps your place in a thread.** Posting into a thread you had scrolled up in revealed every comment the app had fetched.
 - **GIF tiles stop decoding originals.** The picker treated any sample ending in .gif as a thumbnail.
+- **A spoiler can hold a picture, and the GIF picker decides how an embed sits** - the payload of `~!...!~` is re-parsed as blocks, so a hidden reveal shows the reveal, and a picked GIF can go in normal, centred or spoiled beside its width.
 - **Smaller fixes** - a comment that lands and an Older page that arrives now slide into place instead of jumping, the text-size preview follows the finger, and the GIF width row keeps showing which width is chosen.
 
 The full block-by-block notes live in

@@ -362,6 +362,16 @@ object AniListMarkdownParser {
      */
     private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
     /** Whether an auto-linked URL points at an image, so it can be embedded. */
+    /**
+     * Only a cheap "could this be an image" test, so that a text spoiler never
+     * pays for a second parse. The block walk makes the real decision; this is a
+     * guard against re-parsing "the villain survives" as markdown.
+     */
+    private val IMAGE_MARKUP_HINT = Regex(
+        """(!\[|img\d*\(|\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?|$))""",
+        RegexOption.IGNORE_CASE
+    )
+
     private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
@@ -621,6 +631,34 @@ object AniListMarkdownParser {
      * [depth] counts nested centered blocks, the only re-entry point, and is
      * capped at [MAX_BLOCK_DEPTH].
      */
+    /**
+     * The content of a `~!...!~` block, re-parsed as blocks.
+     *
+     * The same move [centredSingleImage] makes for `~~~...~~~`, for the same
+     * reason: the whole-line image forms are matched by the *block* walk, so a
+     * spoiler whose payload is an image - which is the common use of a spoiler on
+     * AniList - has to be re-parsed rather than tokenised as inline text.
+     *
+     * Empty for the case that already worked: plain words in a spoiler keep the
+     * single annotated `Text` they always had, so this cannot change how a text
+     * spoiler looks or costs. Nested spoilers are dropped for the same reason the
+     * centred block caps depth: a lid inside a lid has no readable answer.
+     */
+    private fun spoilerBlocks(inner: String, depth: Int): List<MarkdownNode> {
+        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return emptyList()
+        if (!IMAGE_MARKUP_HINT.containsMatchIn(inner)) return emptyList()
+        val parsed = runCatching { parseDecoded(inner, depth + 1) }
+            .getOrNull()
+            // Only what a `Text` cannot carry. The words stay on the annotated
+            // string they already used, so a text spoiler is untouched by this -
+            // and a spoiler whose payload is a title link keeps drawing the link
+            // it always drew rather than a cover card the block path would need
+            // media lookups to produce.
+            ?.filter { it is MarkdownNode.ImageBlock || it is MarkdownNode.VideoBlock }
+            .orEmpty()
+        return parsed.takeIf { it.isNotEmpty() }
+    }
+
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 
@@ -891,7 +929,12 @@ object AniListMarkdownParser {
             val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(trimmedLine)
             if (spoilerMatch != null) {
                 val content = spoilerMatch.groupValues[1].trim()
-                nodes.add(MarkdownNode.SpoilerBlock(parseInlines(content)))
+                nodes.add(
+                    MarkdownNode.SpoilerBlock(
+                        inlines = parseInlines(content),
+                        blocks = spoilerBlocks(content, depth)
+                    )
+                )
                 i++
                 continue
             }

@@ -89,7 +89,22 @@ sealed interface MarkdownNode {
         val centered: Boolean = false
     ) : MarkdownNode
     data class VideoBlock(val url: String, val isYoutube: Boolean) : MarkdownNode
-    data class SpoilerBlock(val inlines: List<InlineToken>) : MarkdownNode
+    /**
+     * A hidden block. [inlines] is what it always was - the text to show once the
+     * lid is lifted - and [blocks] is the same content re-parsed as blocks, which
+     * is only non-empty when that content holds something an annotated string
+     * cannot carry: an image.
+     *
+     * Before this, `~!img(url)!~` and `~!![alt](x.gif)!~` opened to the literal
+     * markup or the word "Image": the spoiler drew one `Text`, and a `Text` has
+     * nowhere to put a bitmap, so the one thing a reader hides behind a spoiler on
+     * AniList - a reveal, a colour palette, a character shot - was the one thing
+     * the spoiler could not show.
+     */
+    data class SpoilerBlock(
+        val inlines: List<InlineToken>,
+        val blocks: List<MarkdownNode> = emptyList()
+    ) : MarkdownNode
     data class TableBlock(
         val headers: List<List<InlineToken>>,
         val rows: List<List<List<InlineToken>>>
