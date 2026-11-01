@@ -302,6 +302,19 @@ interface AniListRepository {
     ): Result<UserActivityPage> = unsupported("getFollowingActivity")
 
     /**
+     * The site's own activity stream: everybody's list edits and text posts,
+     * newest first, with no relation to who the viewer follows.
+     *
+     * Not a default of [getFollowingActivity] with a flag: the answer is a
+     * different set of rows, it is cached under its own key because clearing the
+     * friends feed must not clear it, and most readers never want it at all.
+     */
+    suspend fun getGlobalActivity(
+        page: Int,
+        forceRefresh: Boolean = false
+    ): Result<UserActivityPage> = unsupported("getGlobalActivity")
+
+    /**
      * One page of messages the viewer sent, newest first.
      *
      * [messengerId] is the signed-in viewer's id - AniList filters messages by

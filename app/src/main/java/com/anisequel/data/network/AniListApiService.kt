@@ -171,6 +171,17 @@ interface AniListApiService {
         @Body request: GraphQLRequest
     ): GraphQLResponse<ActivityFeedData>
 
+    /**
+     * The site-wide activity stream. The same response shape as the other two
+     * feeds, because it is the same union - see
+     * [GraphQLQueries.GET_GLOBAL_ACTIVITY] for why it is behind a setting.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getGlobalActivity(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ActivityFeedData>
+
     /** Messages the viewer sent. The inbox has no activity listing; see [getReceivedMessages]. */
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")

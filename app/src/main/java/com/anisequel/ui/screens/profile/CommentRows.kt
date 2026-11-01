@@ -130,71 +130,107 @@ internal fun CommentRow(
             }
             ReplyBody(text = reply.text)
             Spacer(modifier = Modifier.height(2.dp))
-            // The action bar scrolls rather than clips. Heart, Reply, Quote, the
-            // timestamp and the manage dot are five targets under one body, and a
-            // threaded comment already starts 56dp in from the edge: on a 360dp
-            // phone the last control ran off the screen, and the one control that
-            // edits or deletes your own comment is the worst one to hide.
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // The same control the activity card draws, shared rather than
-                // re-declared here - `EngagementAction`.
-                EngagementAction(
-                    icon = if (reply.isLiked == true) {
-                        AppVectorIcons.ActivityLiked
-                    } else {
-                        AppVectorIcons.ActivityNotLiked
-                    },
-                    count = reply.likeCount ?: 0,
-                    active = reply.isLiked == true,
-                    // Null `isLiked` means AniList did not answer, which is what a
-                    // signed-out reader gets. Disabled rather than drawn-as-unliked,
-                    // so the control is never something that looks live and does
-                    // nothing.
-                    enabled = reply.isLiked != null && !likePending,
-                    contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
-                    onClick = onLike,
-                    // The hold asks whose. A comment's like count used to be the
-                    // only answer the row had, while the card above it had always
-                    // offered the names.
-                    onLongClick = if (reply.likeCount.orZero() > 0) onShowLikers else null,
-                    modifier = Modifier.testTag("activity_reply_like_button")
-                )
-                if (canReply) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    CommentTextAction(
-                        label = "Reply",
-                        icon = AppVectorIcons.ActivityReplies,
-                        onClickLabel = "Reply to ${reply.user?.name.orEmpty()}",
-                        tag = "activity_reply_reply_button",
-                        onClick = { onReply(reply.user?.name.orEmpty()) }
-                    )
-                }
-                if (canQuote) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    CommentTextAction(
-                        label = "Quote",
-                        icon = AppVectorIcons.TextQuote,
-                        onClickLabel = "Quote this comment",
-                        tag = "activity_reply_quote_button",
-                        onClick = onQuote
-                    )
-                }
-                if (isContinuation) {
-                    CommentTimestamp(reply.createdAt, nowEpochSecond)
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (canManage) {
-                    CommentManageButton(onClick = onManage)
-                }
-            }
+            CommentRowActions(
+                reply = reply,
+                isContinuation = isContinuation,
+                likePending = likePending,
+                canManage = canManage,
+                canReply = canReply,
+                canQuote = canQuote,
+                nowEpochSecond = nowEpochSecond,
+                onLike = onLike,
+                onShowLikers = onShowLikers,
+                onReply = onReply,
+                onQuote = onQuote,
+                onManage = onManage
+            )
         }
     }
 }
 
-private fun Int?.orZero(): Int = this ?: 0
+/**
+ * The row's controls: heart, Reply, Quote, the continuation's time, and the manage
+ * dot.
+ *
+ * Extracted from the row because the row is about *a comment* - who, when, what -
+ * and this is about what the reader can do about it, which is the half that grows
+ * whenever a control is added. The bar scrolls rather than clips: heart, Reply,
+ * Quote, the timestamp and the manage dot are five targets under one body, and a
+ * threaded comment starts 56dp in from the edge, so on a 360dp phone the last
+ * control ran off the screen - and that is the one that edits or deletes your own
+ * comment.
+ */
+@Composable
+private fun CommentRowActions(
+    reply: ActivityReply,
+    isContinuation: Boolean,
+    likePending: Boolean,
+    canManage: Boolean,
+    canReply: Boolean,
+    canQuote: Boolean,
+    nowEpochSecond: Long?,
+    onLike: () -> Unit,
+    onShowLikers: () -> Unit,
+    onReply: (String) -> Unit,
+    onQuote: () -> Unit,
+    onManage: () -> Unit
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+                // The same control the activity card draws, shared rather than
+                // re-declared here - `EngagementAction`.
+                EngagementAction(
+                icon = if (reply.isLiked == true) {
+                    AppVectorIcons.ActivityLiked
+                } else {
+                    AppVectorIcons.ActivityNotLiked
+                },
+                count = reply.likeCount ?: 0,
+                active = reply.isLiked == true,
+                // Null `isLiked` means AniList did not answer, which is what a
+                // signed-out reader gets. Disabled rather than drawn-as-unliked,
+                // so the control is never something that looks live and does
+                // nothing.
+                enabled = reply.isLiked != null && !likePending,
+                contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
+                onClick = onLike,
+                // The hold asks whose. A comment's like count used to be the
+                // only answer the row had, while the card above it had always
+                // offered the names.
+                onLongClick = if (reply.likeCount.orZero() > 0) onShowLikers else null,
+                modifier = Modifier.testTag("activity_reply_like_button")
+                )
+                if (canReply) {
+                Spacer(modifier = Modifier.width(4.dp))
+                CommentTextAction(
+                    label = "Reply",
+                    icon = AppVectorIcons.ActivityReplies,
+                    onClickLabel = "Reply to ${reply.user?.name.orEmpty()}",
+                    tag = "activity_reply_reply_button",
+                    onClick = { onReply(reply.user?.name.orEmpty()) }
+                )
+                }
+                if (canQuote) {
+                Spacer(modifier = Modifier.width(4.dp))
+                CommentTextAction(
+                    label = "Quote",
+                    icon = AppVectorIcons.TextQuote,
+                    onClickLabel = "Quote this comment",
+                    tag = "activity_reply_quote_button",
+                    onClick = onQuote
+                )
+                }
+                if (isContinuation) {
+                CommentTimestamp(reply.createdAt, nowEpochSecond)
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (canManage) {
+                CommentManageButton(onClick = onManage)
+                }
+            }
+: Int = this ?: 0
 
 /**
  * The time, on a header row after the name and on a continuation row at the end

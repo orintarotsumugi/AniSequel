@@ -405,6 +405,20 @@ private fun CommentMediaCard(context: android.content.Context) {
             modifier = Modifier.testTag("settings_poll_comments")
         )
 
+        SwitchRow(
+            title = "Global activity feed",
+            subtitle = "Adds a fourth chip to the Activity tab listing everybody's " +
+                "list edits and text posts on AniList, not only the people you " +
+                "follow. Off by default: it is the one feed here full of strangers, " +
+                "and it spends the same request budget the dashboard and your list " +
+                "draw on.",
+            checked = settings.globalActivityFeed,
+            onCheckedChange = { enabled ->
+                scope.launch { preferences.setGlobalActivityFeed(enabled) }
+            },
+            modifier = Modifier.testTag("settings_global_feed")
+        )
+
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(

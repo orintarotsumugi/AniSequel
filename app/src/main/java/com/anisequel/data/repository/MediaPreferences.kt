@@ -44,7 +44,8 @@ private val Context.commentMediaDataStore: DataStore<Preferences> by preferences
 data class CommentMediaSettings(
     val chatView: Boolean = DEFAULT_CHAT_VIEW,
     val pollForNewComments: Boolean = DEFAULT_POLLING,
-    val tenorApiKey: String? = null
+    val tenorApiKey: String? = null,
+    val globalActivityFeed: Boolean = DEFAULT_GLOBAL_FEED
 ) {
     /** Whether a GIF picker should use Tenor rather than the anonymous default. */
     val usesTenor: Boolean get() = !tenorApiKey.isNullOrBlank()
@@ -65,10 +66,19 @@ private const val DEFAULT_CHAT_VIEW = true
 /** Polling is on with it, and separately switchable - see [CommentMediaSettings]. */
 private const val DEFAULT_POLLING = true
 
+/**
+ * Strangers are opt-in. The site-wide stream is the one feed in the app that is
+ * full of people the reader did not choose to follow, and it spends the same
+ * ~30-requests-a-minute budget the dashboard, the list and the friends feed draw
+ * on - so it ships off and is turned on once, in Settings.
+ */
+private const val DEFAULT_GLOBAL_FEED = false
+
 private object Keys {
         val CHAT_VIEW = booleanPreferencesKey("comment_chat_view")
         val POLL_COMMENTS = booleanPreferencesKey("comment_poll_new")
         val TENOR_KEY_ENCRYPTED = stringPreferencesKey("tenor_api_key_encrypted")
+        val GLOBAL_FEED = booleanPreferencesKey("global_activity_feed")
     }
 
     val settings: Flow<CommentMediaSettings> = context.commentMediaDataStore.data.map { preferences ->
@@ -78,6 +88,7 @@ private object Keys {
             // Unreadable ciphertext means the keystore key was invalidated, which is
             // not a question to ask again on every read: the value is treated as
             // never having been set, and the next save overwrites it.
+            globalActivityFeed = preferences[Keys.GLOBAL_FEED] ?: DEFAULT_GLOBAL_FEED,
             tenorApiKey = preferences[Keys.TENOR_KEY_ENCRYPTED]
                 ?.let { cipher.decrypt(it) }?.takeIf { it.isNotBlank() }
         )
@@ -110,12 +121,24 @@ private object Keys {
         }
     }
 
+    /**
+     * Whether the Activity tab offers the site-wide stream.
+     *
+     * Off by default: it is the one feed in the app full of strangers, and it
+     * spends the same ~30-requests-a-minute budget the dashboard, the list and the
+     * friends feed are drawing on. A reader who wants it turns it on once.
+     */
+    suspend fun setGlobalActivityFeed(enabled: Boolean) {
+        context.commentMediaDataStore.edit { it[Keys.GLOBAL_FEED] = enabled }
+    }
+
     /** Back to the shipped defaults, including forgetting the key. */
     suspend fun reset() {
         context.commentMediaDataStore.edit { preferences ->
             preferences.remove(Keys.CHAT_VIEW)
             preferences.remove(Keys.POLL_COMMENTS)
             preferences.remove(Keys.TENOR_KEY_ENCRYPTED)
+            preferences.remove(Keys.GLOBAL_FEED)
         }
     }
 

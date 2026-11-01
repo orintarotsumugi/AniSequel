@@ -169,6 +169,8 @@ fun UserProfileScreen(
      * rows coming from everyone the viewer follows instead of one person.
      */
     followingViewModel: UserActivityViewModel,
+    /** The site-wide stream, in `globalFeed` mode. See [followingViewModel]. */
+    globalViewModel: UserActivityViewModel,
     /** The viewer's sent and received messages, shown as the third segment. */
     messagesViewModel: UserMessagesViewModel,
     socialViewModel: UserSocialViewModel,
@@ -538,6 +540,7 @@ fun UserProfileScreen(
                                 isOwnProfile = isOwnProfile,
                                 activityViewModel = activityViewModel,
                                 followingViewModel = followingViewModel,
+                                globalViewModel = globalViewModel,
                                 messagesViewModel = messagesViewModel,
                                 // The viewer's id, which decides whether the two
                                 // viewer-only segments can be offered at all.
@@ -675,6 +678,12 @@ fun UserProfileScreen(
     // independently and each ViewModel owns one open thread - sharing the sheet
     // state would have the profile feed's comment thread open over a card in the
     // friends feed.
+    ActivityEngagementSheets(
+        activityViewModel = globalViewModel,
+        viewerId = viewerId,
+        canPost = viewerId != null
+    )
+
     ActivityEngagementSheets(
         activityViewModel = followingViewModel,
         viewerId = viewerId,

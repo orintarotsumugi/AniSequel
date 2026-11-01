@@ -150,48 +150,14 @@ internal fun ColumnScope.CommentsThread(
         )
     }
 
-    val isAtBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            last == null || last.index >= info.totalItemsCount - 2
-        }
-    }
-
-    // A chat opens at its newest message. AniList's own page opens at the top of
-    // the thread and scrolls you down as replies arrive; in a sheet that has just
-    // fetched one window of a nine-hundred-comment conversation, starting at row
-    // zero would show the reader a windowful of nothing they asked for.
-    //
-    // Keyed on the thread, and one-shot: a reader who scrolls up to read something
-    // and then posts a comment must not be dragged back down, and the posted-reply
-    // scroll in the sheet owns that case.
-    var anchored by remember(state.activityId) { mutableStateOf(false) }
-    LaunchedEffect(state.activityId, state.isLoading, visible.size) {
-        if (
-            state.isChatView && !anchored && !state.isLoading && visible.isNotEmpty()
-        ) {
-            anchored = true
-            // One frame, so the list has measured its items before being placed at
-            // the end of them: `scrollToItem` on a layout that has not run yet
-            // lands on index zero, which is the bug this effect replaces.
-            withFrameNanos { }
-            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
-        }
-    }
-
-    // The timer. One per open thread, reading `isAtBottom` when it fires rather
-    // than being rebuilt on every scroll - restarting the effect on a scroll would
-    // reset the interval, and a reader who kept scrolling would keep postponing the
-    // check they are waiting for.
-    if (polling && state.isChatView && !state.isLoading) {
-        LaunchedEffect(state.activityId, pollIntervalMillis) {
-            while (isActive) {
-                delay(pollIntervalMillis)
-                onCheckForNewComments(isAtBottom)
-            }
-        }
-    }
+    ChatScrollEffects(
+        state = state,
+        visibleCount = visible.size,
+        listState = listState,
+        polling = polling,
+        pollIntervalMillis = pollIntervalMillis,
+        onCheckForNewComments = onCheckForNewComments
+    )
 
     val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
 
@@ -548,5 +514,65 @@ private fun WriteCommentBar(onClick: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+
+/**
+ * The two things a chat does that a list does not: it opens at its newest message,
+ * and it keeps asking whether the conversation moved while it was on screen.
+ *
+ * Split out of the thread because neither has anything to do with drawing rows -
+ * both are about *where the reader is*, and they are the part of this sheet that
+ * changes when the paging or the polling rules change.
+ */
+@Composable
+private fun ChatScrollEffects(
+    state: CommentThreadStore.CommentsState,
+    visibleCount: Int,
+    listState: LazyListState,
+    polling: Boolean,
+    pollIntervalMillis: Long,
+    onCheckForNewComments: (Boolean) -> Unit
+) {
+    val isAtBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= info.totalItemsCount - 2
+        }
+    }
+
+    // A chat opens at its newest message. AniList's own page opens at the top of
+    // the thread and scrolls you down as replies arrive; in a sheet that has just
+    // fetched one window of a nine-hundred-comment conversation, starting at row
+    // zero would show the reader a windowful of nothing they asked for.
+    //
+    // Keyed on the thread, and one-shot: a reader who scrolls up to read something
+    // and then posts a comment must not be dragged back down, and the posted-reply
+    // scroll in the sheet owns that case.
+    var anchored by remember(state.activityId) { mutableStateOf(false) }
+    LaunchedEffect(state.activityId, state.isLoading, visibleCount) {
+        if (state.isChatView && !anchored && !state.isLoading && visibleCount > 0) {
+            anchored = true
+            // One frame, so the list has measured its items before being placed at
+            // the end of them: `scrollToItem` on a layout that has not run yet
+            // lands on index zero, which is the bug this effect replaces.
+            withFrameNanos { }
+            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+        }
+    }
+
+    // The timer. One per open thread, reading `isAtBottom` when it fires rather
+    // than being rebuilt on every scroll - restarting the effect on a scroll would
+    // reset the interval, and a reader who kept scrolling would keep postponing the
+    // check they are waiting for.
+    if (polling && state.isChatView && !state.isLoading) {
+        LaunchedEffect(state.activityId, pollIntervalMillis) {
+            while (isActive) {
+                delay(pollIntervalMillis)
+                onCheckForNewComments(isAtBottom)
+            }
+        }
     }
 }

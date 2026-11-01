@@ -77,7 +77,18 @@ class UserActivityViewModel(
      * The author of each row comes from the row itself in this mode
      * (`ProfileActivity.user`), because every card is a different person.
      */
-    private val followingOnly: Boolean = false
+    private val followingOnly: Boolean = false,
+    /**
+     * True for the site-wide stream: everybody's list edits and text posts, newest
+     * first, with no relation to who the reader follows.
+     *
+     * A third flag rather than a value on `followingOnly`, because the two are not
+     * the same question - one asks whose follow list to read, the other asks whether
+     * to filter at all - and a single enum would have to be threaded through the
+     * factory, the demo fixtures and the cache keys to say what two booleans say at
+     * the one place they are read.
+     */
+    private val globalFeed: Boolean = false
 ) : ViewModel() {
 
     sealed interface ActivityState {
@@ -412,6 +423,9 @@ class UserActivityViewModel(
                         hasMore = false
                     )
                 )
+                globalFeed -> repositoryResult {
+                    aniListRepository.getGlobalActivity(page, forceRefresh)
+                }
                 followingOnly -> repositoryResult {
                     aniListRepository.getFollowingActivity(page, forceRefresh)
                 }
@@ -685,7 +699,8 @@ class UserActivityViewModel(
         private val userId: Int? = null,
         private val viewerId: Int? = null,
         private val isDemo: Boolean = false,
-        private val followingOnly: Boolean = false
+        private val followingOnly: Boolean = false,
+        private val globalFeed: Boolean = false
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserActivityViewModel(
@@ -693,7 +708,8 @@ class UserActivityViewModel(
             userId = userId,
             viewerId = viewerId,
             isDemo = isDemo,
-            followingOnly = followingOnly
+            followingOnly = followingOnly,
+            globalFeed = globalFeed
         ) as T
     }
 }

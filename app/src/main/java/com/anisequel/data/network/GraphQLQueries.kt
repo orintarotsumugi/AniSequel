@@ -367,6 +367,67 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The site's own activity stream - everybody, not only the people the viewer
+     * follows.
+     *
+     * This is [GET_FOLLOWING_ACTIVITY] without `isFollowing: true`, and that is the
+     * whole difference: AniList's `Page.activities` takes no `userId` requirement,
+     * so an unfiltered, newest-first page is what the site's own "All activity"
+     * page shows. It is a *pull* feed - there is no subscription and no cursor
+     * beyond the page number - and it is the same union the two sibling feeds
+     * select, which is why the two fragments are copied here rather than shared:
+     * every feed document in this file lists its own selection so a change to one
+     * card cannot silently change another.
+     *
+     * Behind a setting and off by default. A profile tab that shows strangers is
+     * not what this app is for, and AniList's request budget is shared: the
+     * dashboard, the list, the friends feed and this stream are all drawing on the
+     * same ~30 requests a minute, and a feed nobody asked for spends them.
+     */
+    val GET_GLOBAL_ACTIVITY = """
+        query GetGlobalActivity(${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            activities(type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
+              ... on ListActivity {
+                id
+                status
+                progress
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+                media {
+                  id
+                  type
+                  format
+                  episodes
+                  chapters
+                  volumes
+                  title { english romaji native }
+                  coverImage { extraLarge large color }
+                  bannerImage
+                  siteUrl
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+                createdAt
+                likeCount
+                replyCount
+                isLiked
+                siteUrl
+                user { id name avatar { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * Messages the viewer has sent, newest first.
      *
      * `messengerId` is the sender's id - AniList's message model calls the
