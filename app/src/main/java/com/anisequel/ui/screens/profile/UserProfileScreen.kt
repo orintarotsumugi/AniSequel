@@ -678,6 +678,13 @@ fun UserProfileScreen(
         canPost = viewerId != null
     )
 
+    // The new-activity composer. A sibling of the tab content for the same reason
+    // every other sheet here is: the Activity tab is disposed by the profile's tab
+    // `AnimatedContent`, and a `ModalBottomSheet` drawn from inside it would be
+    // torn down mid-post. Only the profile's own feed can open one - see
+    // `ProfileActivityPage` - so this host reads that ViewModel and nothing else.
+    ActivityComposerSheetHost(activityViewModel = activityViewModel)
+
     // The friends feed's own sheets, from its own ViewModel. They exist as a
     // second call rather than a shared one because the two feeds page and fail
     // independently and each ViewModel owns one open thread - sharing the sheet

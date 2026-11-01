@@ -5,6 +5,7 @@ import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SaveTextActivityData
 import com.anisequel.data.model.ToggleLikeData
 import com.anisequel.data.network.FlexibleStringAdapter
 import com.squareup.moshi.Moshi
@@ -96,6 +97,33 @@ class ActivityEngagementJsonTest {
         assertEquals(100, reply.id)
         assertEquals("Well said", reply.text)
         assertEquals("Josh", reply.user!!.name)
+    }
+
+    @Test
+    fun `reads the created text activity from the save mutation`() {
+        // A text activity is a union member with no media, and the feed decides
+        // which card draws from exactly that - so the mutation's answer has to
+        // parse as [ProfileActivity] rather than as a reply that happens to have
+        // text. `typename` is omitted here because AniList does not select it, and
+        // `isTextPost` has to be true without it.
+        val json = """
+            {"data":{"SaveTextActivity":{
+              "id":790700001,
+              "text":"Finished the new season tonight.",
+              "createdAt":1726930000,
+              "likeCount":0,
+              "replyCount":0,
+              "isLiked":false,
+              "siteUrl":"https://anilist.co/activity/790700001"
+            }}}
+        """.trimIndent()
+
+        val post = parse<SaveTextActivityData>(json).activity!!
+        assertEquals(790700001, post.id)
+        assertEquals("Finished the new season tonight.", post.text)
+        assertTrue(post.isTextPost)
+        assertEquals(0, post.likeCount)
+        assertEquals(false, post.isLiked)
     }
 
     @Test

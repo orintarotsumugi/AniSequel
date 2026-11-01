@@ -31,6 +31,7 @@ import com.anisequel.data.model.PageInfo
 import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.model.ProfileAppearances
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SaveTextActivityData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StaffProfileData
@@ -438,6 +439,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
 
     override suspend fun saveActivityReply(request: GraphQLRequest): GraphQLResponse<SaveActivityReplyData> =
         saveReply()
+
+    override suspend fun saveTextActivity(
+        request: GraphQLRequest
+    ): GraphQLResponse<SaveTextActivityData> = notServed("saveTextActivity")
 
     override suspend fun getViewer(request: GraphQLRequest): GraphQLResponse<ViewerData> =
         notServed("getViewer")

@@ -208,6 +208,32 @@ class UserActivityViewModel(
     val likers: StateFlow<LikersState?> = _likers.asStateFlow()
 
     /**
+     * The new-activity composer.
+     *
+     * Its state and its one write live in [ActivityComposerStore] rather than here:
+     * see that file's KDoc for the split. This ViewModel keeps the delegating calls
+     * because it is the one state holder the profile screen talks to, and the feed
+     * is the composer's one collaborator - a posted activity lands at the top of it.
+     */
+    private val composerStore = ActivityComposerStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        enabled = !isDemo && !followingOnly && !globalFeed && viewerId != null,
+        onPosted = { post -> insertPostedActivity(post) }
+    )
+
+    val composer: StateFlow<ActivityComposerStore.ComposerState?> get() = composerStore.state
+
+    /**
+     * Whether this feed may post a new activity.
+     *
+     * False for the friends and site-wide feeds, which are *selections* rather than
+     * somebody's page, and false without a session. The screen also hides the
+     * control off the viewer's own profile; this is the half a caller cannot forget.
+     */
+    val canCompose: Boolean get() = composerStore.enabled
+
+    /**
      * The detail sheet's store is not held here.
      *
      * An activity row's own media node is a thin summary - title, cover, format,
@@ -383,6 +409,40 @@ class UserActivityViewModel(
     fun retry() {
         started = false
         fetch(forceRefresh = true)
+    }
+
+    /** Opens the new-activity composer, if this feed may post one. */
+    fun openComposer() = composerStore.open()
+
+    /** Rewrites the composer's draft, clipped to `SaveTextActivity`'s ceiling. */
+    fun updateComposerDraft(text: String) = composerStore.updateDraft(text)
+
+    /** Closes the composer, unless its post is still in flight. */
+    fun dismissComposer() = composerStore.dismiss()
+
+    /** Posts the composer's draft as a text activity. */
+    fun submitTextActivity() = composerStore.post()
+
+    /**
+     * Puts a just-posted activity at the top of the feed.
+     *
+     * A feed that has never loaded still shows the post - it is the one row the
+     * reader just wrote and confirmed - and then asks for the first page over it so
+     * the rest of the history arrives underneath. The id guard is what keeps the
+     * insert from being undone by [refresh] on a profile whose owner id has not
+     * resolved yet: there is no page to fetch for, but the post is still real.
+     */
+    private fun insertPostedActivity(post: ProfileActivity) {
+        started = true
+        val current = _state.value
+        if (current is ActivityState.Success) {
+            _state.value = current.copy(
+                activities = (listOf(post) + current.activities).distinctBy { it.id }
+            )
+            return
+        }
+        _state.value = ActivityState.Success(activities = listOf(post), hasMore = false)
+        if (userId != null || !requiresUserId()) refresh()
     }
 
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {

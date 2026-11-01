@@ -200,6 +200,11 @@ class UserMessagesViewModel(
      */
     fun openConversation(user: FollowUser) {
         if (user.id == viewerId) return
+        // A confirmation belongs to the sheet that earned it. Opening a
+        // conversation from the Global feed must not greet the reader with the
+        // last person's "Sent to ..." - the same rule [openMessage] follows, and
+        // the one this path used to skip.
+        if (!_reply.value.isSending) _reply.value = ReplyState()
         loadFirstPages()
         // A conversation that has not started has no activity and therefore no
         // replies. Clearing the previous thread is what stops the sheet from

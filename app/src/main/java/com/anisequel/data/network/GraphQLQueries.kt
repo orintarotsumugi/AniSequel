@@ -1899,6 +1899,34 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * Posts a text activity - a status update - to the viewer's own stream.
+     *
+     * `SaveTextActivity` is a different mutation from [SAVE_ACTIVITY_REPLY] and
+     * [SAVE_ACTIVITY_MESSAGE]: this one writes a top-level post with no parent
+     * activity and no recipient. AniList's own schema documents `text` as Min 5,
+     * Max 10000 (checked against the live mutation reference, not guessed), which
+     * is why the composer's floor is five characters rather than the two a comment
+     * needs.
+     *
+     * The selection is the same row shape the profile feed draws, so the new post
+     * can be inserted at the top of the loaded page without a refetch - a post
+     * that only appears after scrolling away and back reads as a failed write.
+     */
+    val SAVE_TEXT_ACTIVITY = """
+        mutation SaveTextActivity(${'$'}text: String) {
+          SaveTextActivity(text: ${'$'}text) {
+            id
+            text
+            createdAt
+            likeCount
+            replyCount
+            isLiked
+            siteUrl
+          }
+        }
+    """.trimIndent()
+
+    /**
      * Deletes one of the viewer's own comments.
      *
      * `DeleteActivityReply` is its own mutation because a comment is its own

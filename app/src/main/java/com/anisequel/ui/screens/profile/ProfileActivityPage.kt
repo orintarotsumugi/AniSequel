@@ -1,8 +1,11 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -184,7 +187,17 @@ fun ProfileActivityPage(
         onOpenLikers = { activityViewModel.openLikers(it) },
         calendar = calendar,
         userName = userName,
-        userAvatar = userAvatar
+        userAvatar = userAvatar,
+        // The compose action is the viewer's own, and only on their own page:
+        // `showViewerSegments` is exactly "this is the signed-in reader's profile",
+        // and `canCompose` is the half that also refuses a session-less or demo
+        // route. A post written from a friend's page would file the reader's words
+        // under that page's heading.
+        onCompose = if (showViewerSegments && activityViewModel.canCompose) {
+            { activityViewModel.openComposer() }
+        } else {
+            null
+        }
     )
     val globalFeed = ActivityFeedSource(
         state = globalState,
@@ -365,7 +378,26 @@ private fun ActivitySegments(
             onClick = { onSelect(SEGMENT_FRIENDS) },
             testTag = "profile_segment_friends"
         )
-        if (showGlobalSegment) {
+        SegmentChip(
+            label = "Messages",
+            selected = selected == SEGMENT_MESSAGES,
+            onClick = { onSelect(SEGMENT_MESSAGES) },
+            testTag = "profile_segment_messages"
+        )
+        // Global comes last, and after Messages on purpose. It used to sit
+        // between Friends and Messages, which on a 411dp phone pushed Messages -
+        // the segment every reader has - past the right edge of a row that scrolls
+        // without saying so. Turning the opt-in stream on then made the inbox look
+        // like it had vanished, which is the report this order fixes. Ascending
+        // indices still match the visual order, so the feed transition's
+        // forward/backward direction stays truthful.
+        AnimatedVisibility(
+            visible = showGlobalSegment,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                expandHorizontally(animationSpec = ExpressiveMotion.FastSpatialSize),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                shrinkHorizontally(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
             SegmentChip(
                 label = "Global",
                 selected = selected == SEGMENT_GLOBAL,
@@ -373,12 +405,6 @@ private fun ActivitySegments(
                 testTag = "profile_segment_global"
             )
         }
-        SegmentChip(
-            label = "Messages",
-            selected = selected == SEGMENT_MESSAGES,
-            onClick = { onSelect(SEGMENT_MESSAGES) },
-            testTag = "profile_segment_messages"
-        )
     }
 }
 

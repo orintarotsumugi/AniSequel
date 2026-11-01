@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +46,7 @@ import com.anisequel.domain.usecase.ActivityCalendar
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
@@ -100,7 +104,16 @@ data class ActivityFeedSource(
      * person. The profile's own feed leaves it null: its author is the page's
      * owner, and on the viewer's own profile that is the viewer.
      */
-    val onMessageAuthor: ((FollowUser) -> Unit)? = null
+    val onMessageAuthor: ((FollowUser) -> Unit)? = null,
+    /**
+     * Opens the new-activity composer, or null where there is nothing to post to.
+     *
+     * Only the viewer's own feed passes one: a text activity is written to the
+     * viewer's account, so the control would be a button that files a post about
+     * the reader under somebody else's name on their page. See
+     * `UserActivityViewModel.canCompose`.
+     */
+    val onCompose: (() -> Unit)? = null
 )
 
 /**
@@ -218,15 +231,29 @@ fun ProfileActivityTab(
                 ?.size
                 ?.takeIf { it > 0 }
                 ?.toString()
-            ProfileSectionHeader(
-                title = source.title,
-                icon = source.icon,
-                trailing = loadedCount,
+            // The heading and the compose action share one row, the way AniList's
+            // own Activity header pairs "Recent Activity" with its plus. The
+            // header keeps `weight(1f)` so a long feed title ellipsises rather than
+            // pushing the button off the edge.
+            Row(
                 modifier = Modifier
                     .widthIn(max = ProfileMaxContentWidth)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProfileSectionHeader(
+                    title = source.title,
+                    icon = source.icon,
+                    trailing = loadedCount,
+                    modifier = Modifier.weight(1f)
+                )
+                val compose = source.onCompose
+                if (compose != null) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    ComposeActivityButton(onClick = compose)
+                }
+            }
         }
 
         // Under the heading it belongs to: a failed refresh is news about this
@@ -323,7 +350,17 @@ private fun LazyListScope.activityFeedItems(
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp)
+                            // A post that was just written lands at the top of this
+                            // list, and a refresh can move rows under the reader's
+                            // thumb. `animateItem` is what makes the new row arrive
+                            // with the same spring as the rest of the app instead
+                            // of appearing between two frames.
+                            .animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            ),
                         onLike = { source.onLike(activity.id) },
                         onComments = {
                             source.onOpenComments(activity.id, activity.replyCount ?: 0)
@@ -513,6 +550,32 @@ private fun ActivityFeedEnd() {
             .padding(vertical = 16.dp)
             .testTag("activity_feed_end")
     )
+}
+
+/**
+ * The Activity heading's compose action.
+ *
+ * A filled circle, like AniList's own plus: on this tab it is the one control
+ * that creates rather than reads, so it is the one that wears the primary
+ * container. The press spring is the same one every other button here uses, so a
+ * tap on it feels like a tap on the feed's hearts rather than like a different
+ * kind of control.
+ */
+@Composable
+private fun ComposeActivityButton(onClick: () -> Unit) {
+    FilledIconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(38.dp)
+            .bouncyPress(pressedScale = 0.9f)
+            .testTag("activity_compose_button")
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.NewActivity,
+            contentDescription = "Write a new activity",
+            modifier = Modifier.size(18.dp)
+        )
+    }
 }
 
 @Composable

@@ -1,15 +1,8 @@
 package com.anisequel.ui.components.detail.info
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -22,35 +15,48 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 /**
  * The hero's full-width artwork, under the scrim and the lockup.
  *
- * ## Two treatments, not one stretched cover fit
+ * ## Why this draws nothing if the Crossfade is not given the box
  *
- * It used to be one `Crop` fit for both images. For the key visual that is right:
- * a 2:3 poster covers a 340dp hero by cropping its top and bottom, and what is
- * left is still the artwork the reader recognised from the row they tapped. For
- * the banner it was wrong in two ways at once. An AniList banner is about
- * 1900x400; covering the hero's box scales it up over 2x and throws away the
- * left and right thirds - the artwork arrives blurry and "stretched", which is
- * exactly what a key art *strip* is not meant to be. And the rounded pixel
- * destination of `Crop` could come out a row short of the box, so the hero's
- * own accent-tinted backdrop showed as a coloured line across the top.
+ * The hero is a `Box`, and this is the first thing in it. It used to pass no
+ * modifier to `Crossfade` while both of its branches sized themselves with
+ * `matchParentSize()`. `matchParentSize` is the one modifier that takes the
+ * parent's size *without contributing to it*, and `Crossfade` measures its own
+ * box from its largest child - so the pair measured to zero and neither the
+ * banner nor the key visual was ever laid out. The page showed only the hero's
+ * placeholder tint, which is exactly the report: AniList stores a wide
+ * `bannerImage` for every title and the Info page never appeared to use it.
  *
- * So the banner now draws at its own ratio, full width, flush with the hero's
- * top edge: whole, sharp, and nothing of it stretched. The space it leaves
- * below is what the scrim's own gradient was always ending on - the sheet's
- * surface - and the lockup sits on that fade rather than on art it would fight.
- * The key visual keeps the full-bleed treatment.
+ * Handing the Crossfade `Modifier.matchParentSize()` fixes the measurement: it
+ * fills the hero, and each branch then fills the Crossfade. That is the only
+ * structural thing this file needs from its caller.
  *
- * ## Why both branches still cover as they collapse
+ * ## Why the banner fills the hero rather than sitting in a native-ratio strip
  *
- * The parallax is a draw-phase transform (see [collapse]'s contract on
- * `InfoHero`): the backdrop lags the page by [PARALLAX_TRAVEL] and the full
- * bleed grows by [PARALLAX_ZOOM] so it keeps covering the box it is pulled out
- * of. The lag can only ever expose the top of the box above the viewport's cut
- * line - the page scrolls the whole collapse distance for every unit of
- * collapse, and `PARALLAX_TRAVEL` is far less - so the banner strip lags without
- * a floor. The full bleed additionally starts 1% over-covered
- * ([FULL_BLEED_OVERDRAW]): no sub-pixel rounding can then reach the accent
- * behind the image.
+ * A second, more visible bug hid behind the first. The banner branch drew at
+ * AniList's own ~1900x400 ratio, top-aligned - about 86dp on a phone - so even
+ * once it measured, it read as a tinted band above a mostly empty hero. The
+ * banner is the title's artwork, and the hero is the one place the page can show
+ * it: it is now full-bleed, cropped, and anchored at the top, with the scrim's
+ * bottom fade handing the artwork over to the page body. The key visual keeps the
+ * same full-bleed treatment, so the two images the sheet can receive look like
+ * two versions of the same backdrop rather than two different components.
+ *
+ * ## Why both images share a branch
+ *
+ * The dissolve is what matters, not where each image came from: the summary node
+ * arrives without a banner, so the first frame draws the poster and the detail
+ * response crossfades the banner in over it. A `Crossfade` whose content is the
+ * same drawing on both states is exactly that dissolve, and it is one
+ * `AsyncImage` instead of two that could drift.
+ *
+ * ## The parallax
+ *
+ * [collapse] is read inside `graphicsLayer`, so the travel is a draw-phase
+ * transform: the page can scroll at 120Hz over an image the layout has not
+ * touched. The backdrop lags the page by [PARALLAX_TRAVEL] and grows by
+ * [PARALLAX_ZOOM], so it keeps covering the box it is pulled out of, and starts
+ * [FULL_BLEED_OVERDRAW] over-covered so no sub-pixel rounding can expose the
+ * accent behind it as a coloured line.
  */
 @Composable
 internal fun BoxScope.InfoHeroBackdrop(
@@ -58,50 +64,22 @@ internal fun BoxScope.InfoHeroBackdrop(
     posterUrl: String?,
     collapse: () -> Float
 ) {
-    // The banner's own ratio, once it reports one. The fallback only sizes the
-    // frames before the decode lands, and a frame that is wrong by a hair is
-    // re-measured on arrival - `Crop` guarantees no gap at either point.
-    var bannerAspect by remember(banner) { mutableFloatStateOf(0f) }
-
     Crossfade(
         targetState = banner ?: posterUrl,
         animationSpec = ExpressiveMotion.FastEffects,
-        label = "hero_backdrop"
+        label = "hero_backdrop",
+        // The whole fix: without this the Crossfade is measured from children
+        // that all use `matchParentSize`, which contributes no size of its own.
+        modifier = Modifier.matchParentSize()
     ) { backdrop ->
-        when {
-            backdrop == null -> Unit
-            backdrop == banner -> Box(
-                modifier = Modifier.matchParentSize(),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                AsyncImage(
-                    model = backdrop,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopCenter,
-                    onSuccess = { state ->
-                        val size = state.painter.intrinsicSize
-                        if (size.width > 0f && size.height > 0f) {
-                            bannerAspect = size.width / size.height
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(
-                            if (bannerAspect > 0f) bannerAspect else DEFAULT_BANNER_ASPECT
-                        )
-                        .graphicsLayer {
-                            val scroll = collapse()
-                            translationY = scroll * PARALLAX_TRAVEL.toPx()
-                            alpha = 1f - scroll * BACKDROP_HANDOFF
-                        }
-                        .unseamedCover()
-                )
-            }
-            else -> AsyncImage(
+        if (backdrop != null) {
+            AsyncImage(
                 model = backdrop,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                // Top-anchored, because a wide banner's most useful pixels are its
+                // top edge and a centre crop would cut the same faces twice.
+                alignment = Alignment.TopCenter,
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
@@ -112,13 +90,11 @@ internal fun BoxScope.InfoHeroBackdrop(
                         scaleY = zoom
                         alpha = 1f - scroll * BACKDROP_HANDOFF
                     }
+                    .unseamedCover()
             )
         }
     }
 }
-
-/** AniList's banner shape (about 1900x400), used until the image reports its own. */
-private const val DEFAULT_BANNER_ASPECT = 1900f / 400f
 
 /** How far the backdrop lags the page, at full collapse. */
 private val PARALLAX_TRAVEL = 64.dp

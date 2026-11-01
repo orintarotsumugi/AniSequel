@@ -376,6 +376,24 @@ internal class CommentThreadWindow(
         cachedWindow = ThreadWindow(closed.replyCount, closed.oldestPage, closed.shownRows)
     }
 
+    /**
+     * Drops a reply from the last-closed snapshot.
+     *
+     * The delete's answer can land after the sheet is gone - the normal thing to do
+     * after tapping Delete is to swipe the thread away - and `capture` ran before
+     * it. Without this the snapshot still held the removed comment, so reopening
+     * the thread drew it again until the refresh landed, and a refresh that failed
+     * left it there for good. The count moves with it for the same reason: the
+     * window's arithmetic has to describe the rows it is holding.
+     */
+    fun forgetReply(activityId: Int, replyId: Int) {
+        if (cachedActivityId != activityId) return
+        cachedReplies = cachedReplies.filterNot { it.id == replyId }
+        cachedWindow = cachedWindow.copy(
+            replyCount = (cachedWindow.replyCount - 1).coerceAtLeast(0)
+        )
+    }
+
     companion object {
         /**
          * How often an open, visible sheet asks whether the thread has new

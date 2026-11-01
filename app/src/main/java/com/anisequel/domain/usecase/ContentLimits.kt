@@ -29,6 +29,20 @@ object ContentLimits {
     /** `SaveActivityReply.text` maximum, in characters. */
     const val REPLY_MAX = 8000
 
+    /**
+     * `SaveTextActivity.text` minimum, in characters.
+     *
+     * Five, not two. A text activity is a top-level post and AniList gives it a
+     * stricter floor than a comment - documented as Min 5, Max 10000 on the live
+     * mutation reference. Reusing [REPLY_MIN] here would enable Post on a
+     * four-character status that the server refuses, which is the same round-trip
+     * mistake [checkReply]'s KDoc describes.
+     */
+    const val STATUS_MIN = 5
+
+    /** `SaveTextActivity.text` maximum, in characters. */
+    const val STATUS_MAX = 10_000
+
     /** Why [checkReply] refused a draft, or [Valid]. */
     enum class ReplyVerdict {
         /** Sendable. */
@@ -70,4 +84,40 @@ object ContentLimits {
      */
     fun clipReply(text: String): String =
         if (text.length <= REPLY_MAX) text else text.take(REPLY_MAX)
+
+    /** Why [checkStatus] refused a text activity's draft, or [StatusVerdict.Valid]. */
+    enum class StatusVerdict {
+        /** Sendable. */
+        Valid,
+
+        /** Nothing but whitespace - the floor is about content, not keystrokes. */
+        Blank,
+
+        /** Trimmed text shorter than [STATUS_MIN]. */
+        TooShort,
+
+        /** Longer than [STATUS_MAX]; the field should have stopped accepting it. */
+        TooLong
+    }
+
+    /**
+     * Checks a text-activity draft against `SaveTextActivity`'s window.
+     *
+     * The same trim-then-measure rule [checkReply] follows, for the same reason:
+     * the store sends the trimmed text, so a draft of spaces around four
+     * characters is four characters to AniList.
+     */
+    fun checkStatus(text: String): StatusVerdict {
+        val trimmed = text.trim()
+        return when {
+            trimmed.isEmpty() -> StatusVerdict.Blank
+            trimmed.length < STATUS_MIN -> StatusVerdict.TooShort
+            trimmed.length > STATUS_MAX -> StatusVerdict.TooLong
+            else -> StatusVerdict.Valid
+        }
+    }
+
+    /** A text-activity draft clipped to [STATUS_MAX]. See [clipReply]. */
+    fun clipStatus(text: String): String =
+        if (text.length <= STATUS_MAX) text else text.take(STATUS_MAX)
 }

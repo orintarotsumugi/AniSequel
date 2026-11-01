@@ -2109,6 +2109,23 @@ class AniListRepositoryImpl(
                 globalActivityCache.clear()
             }
 
+    override suspend fun postTextActivity(text: String): Result<ProfileActivity> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.SAVE_TEXT_ACTIVITY,
+                variables = mapOf("text" to text)
+            ),
+            apiService::saveTextActivity
+        ).mapRequire { it.activity.require("No response from the activity mutation") }
+            .onSuccess {
+                // The profile feed's first page is now one row short of the truth.
+                // The site-wide feed carries the same new post, so its cached pages
+                // are dropped too. The friends feed is deliberately left alone: it
+                // lists people the viewer follows, and the viewer is not one of them.
+                activityCache.clear()
+                globalActivityCache.clear()
+            }
+
     override suspend fun sendMessage(
         recipientId: Int,
         text: String,
@@ -2156,8 +2173,21 @@ class AniListRepositoryImpl(
                 variables = mapOf("id" to replyId)
             ),
             apiService::deleteActivityReply
-        ).map { }
-            .onSuccess {
+        ).mapRequire { data ->
+            // `deleted` is the server's answer, and it is the only confirmation
+            // this mutation gives. It used to be discarded, so a resolver that
+            // answered `deleted: false` - an id that had already gone, or a reply
+            // the account does not own - still arrived here as a success and the
+            // sheet removed a row that was never deleted. The reader then reopened
+            // the thread and found the comment back, which reads as a broken
+            // Delete rather than as an answer the app ignored.
+            if (data.deleted?.deleted != true) {
+                throw AniListException(
+                    kind = AniListErrorKind.UNKNOWN,
+                    message = "AniList did not delete that comment."
+                )
+            }
+        }.onSuccess {
                 // The cached pages carry the pre-delete reply count, and unlike a
                 // like there is no toggle back: dropping them is cheaper than
                 // patching each page in place and is what stops a re-entry

@@ -4,6 +4,22 @@
       "version": "1.7.6",
       "entries": [
         {
+          "title": "Write a new activity",
+          "detail": "The Activity tab's heading now carries a compose button. It opens a Material 3 sheet for a text post - Markdown, a live counter and AniList's own 5-character floor - and the stored post is inserted at the top of the feed the moment it lands, without a refetch. Only your own profile offers it: a text activity is written to your account, so posting it from somebody else's page would file your words under their heading."
+        },
+        {
+          "title": "The Info page uses AniList's banner",
+          "detail": "The hero's backdrop was measured from a crossfade that had no size of its own and two children that all took the parent's size without contributing any - so it measured to zero and neither the banner nor the poster ever drew, leaving the placeholder tint. The crossfade now fills the hero, and the wide banner AniList stores for a title crossfades in over the key visual as a full-bleed, top-anchored crop instead of the thin 86dp strip it used to be."
+        },
+        {
+          "title": "Deleting a comment sticks",
+          "detail": "A delete used to be trusted unconditionally: even an answer of `deleted: false` removed the row locally, and the comment came back on the next open. The mutation's own confirmation is now required, the last-closed thread's snapshot drops the removed reply when the answer lands after the sheet is gone, and the chat window's visible-row count shrinks with the list so Older keeps its place."
+        },
+        {
+          "title": "Global no longer hides Messages",
+          "detail": "The opt-in Global chip used to sit between Friends and Messages, which pushed Messages past the right edge of a row that scrolls without saying so - turning the stream on made the inbox look like it had vanished. Global is now the last chip and animates in when the setting is turned on, so the three everyday segments stay exactly where they were. A conversation opened from a Global row also starts with a clean reply box rather than the previous person's confirmation."
+        },
+        {
           "title": "Edit reply in comments",
           "detail": "Replies to comments can now be edited with the full composer: the same header, preview, format bar, counter and GIF picker that writing a new comment uses. Edit mode starts from the existing comment's text, and changes are saved back to the comment thread."
         },
