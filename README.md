@@ -41,13 +41,13 @@ a larger reading scale that reaches every heading.
 - **State changes, not swaps.** The refresh button crossfades between icon and
   spinner, and the login carousel's dots stretch from their centre in the draw
   phase.
-- **The banner arrives whole.** The hero draws a banner at its own ratio across
-  its top instead of stretching it 2x to cover, and cover-fitted artwork can no
-  longer show the cover's own colour as a line along its top edge.
+- **The banner arrives whole.** The hero draws its banner at its own ratio
+  across the top instead of stretched to cover, and cover artwork no longer
+  shows its own colour as a line along its top edge.
 - **Smaller fixes** - "Airing · 12 eps" reads correctly, compact separators hold
   across group labels, arriving cards no longer squash during a scroll, and the
-  info page fixes its stale countdown, skipped entrances, "Ended" tense on
-  unreleased titles and a dozen-odd recomposition costs per open.
+  info page fixes a stale countdown, skipped section entrances and the "Ended"
+  tense on unreleased titles.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
@@ -86,10 +86,24 @@ and the GitHub release body read.
   Library trophy and the profile.
 - **One-tap Planning.** OAuth against your own AniList account. Tap to plan, hold
   or swipe to start watching, from any recommendation or title page.
-- **A tier list, local and shareable.** Saved as projects, dragged positionally,
-  filtered by status, genre, studio and name, locked into view-only browsing, and
-  exported as one full-board PNG up to 4K - with a lossless SVG renderer behind it
-  and the heading's own show/size/font controls.
+- **A tier list you build your own way.** Rows are yours to rename, recolour,
+  add, remove and reorder - the S/A/B/C/D/F template is a default, not a cage -
+  and each row carries an editable AniList score band, so one tap seeds the
+  whole board from your own scores. Anime and manga rank on separate shelves,
+  because AniList numbers them independently and id 1 is both *Cowboy Bebop*
+  and *Monster*.
+- **Ranking is physical.** A tray of your unranked titles sits under the board;
+  dragging a poster names a row *and* a position, with a caret marking the seam
+  it lands on and edge-scroll reaching past the screen - and dropping it back on
+  the tray un-ranks it. Sheets do the same job one-handed, word search and
+  status/genre/studio filters narrow the pool, every edit undoes and redoes, and
+  a lock turns the board into read-only browsing that still scrolls and zooms.
+- **Zoom and share the board.** Pinch it from 35% to 200%, choose whether
+  captions sit under or on the covers, and export one full-board PNG at up to
+  4K - rendered from the same layout the screen drew, not a screenshot of the
+  viewport, with the heading's own show/size/font controls and a lossless SVG
+  renderer behind it. The lists save as local projects in a library that offers
+  to resume the last one you opened.
 - **Stats and social.** Score distribution, heatmaps, weekly charts, favourites,
   followers and an inbox you can reply from.
 
