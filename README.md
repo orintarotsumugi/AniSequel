@@ -41,8 +41,13 @@ a larger reading scale that reaches every heading.
 - **State changes, not swaps.** The refresh button crossfades between icon and
   spinner, and the login carousel's dots stretch from their centre in the draw
   phase.
+- **The banner arrives whole.** The hero draws a banner at its own ratio across
+  its top instead of stretching it 2x to cover, and cover-fitted artwork can no
+  longer show the cover's own colour as a line along its top edge.
 - **Smaller fixes** - "Airing · 12 eps" reads correctly, compact separators hold
-  across group labels, and arriving cards no longer squash during a scroll.
+  across group labels, arriving cards no longer squash during a scroll, and the
+  info page fixes its stale countdown, skipped entrances, "Ended" tense on
+  unreleased titles and a dozen-odd recomposition costs per open.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app

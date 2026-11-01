@@ -36,6 +36,7 @@ import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.SequelStatusChip
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -113,7 +114,8 @@ fun ArrivingCard(
                     contentDescription = "Poster for ${entry.title}",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1f),
+                        .aspectRatio(1f)
+                        .unseamedCover(),
                     contentScale = ContentScale.Crop
                 )
             }

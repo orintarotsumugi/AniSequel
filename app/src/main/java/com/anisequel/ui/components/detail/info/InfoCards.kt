@@ -386,10 +386,10 @@ fun InfoSpecsCard(
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    val studios = media.studioCredits
+    val studios = remember(media) { media.studioCredits }
     // The split described above: main credits here, the rest have their own row.
     // `filter`, not `firstOrNull()`: several studios routinely share the main flag.
-    val mainStudios = studios.filter { it.isMain }
+    val mainStudios = remember(studios) { studios.filter { it.isMain } }
 
     // The next episode, for a show the reader has *not* added to their list. The
     // progress card states it for a title they have started; a currently airing
@@ -401,71 +401,82 @@ fun InfoSpecsCard(
     // disagree by up to a minute.
     val untrackedAiring = if (media.hasProgressCard) null else rememberAiringCountdown(media)
 
-    val facts = buildList {
-        if (media.isManga) {
-            // A zero from AniList means "not known yet", not "none": an ongoing
-            // manga reports 0 chapters until a count is published, and the card
-            // used to print "Chapters 0" as though the series were empty. The
-            // volume row is omitted rather than shown as 0 for the same reason -
-            // "Volumes 0" beside "Chapters TBA" read as a contradiction.
-            add("Chapters" to (media.chapters?.takeIf { it > 0 }?.toString() ?: "TBA"))
-            media.volumes?.takeIf { it > 0 }?.let { add("Volumes" to it.toString()) }
-        } else {
-            add("Episodes" to (media.episodes?.takeIf { it > 0 }?.toString() ?: "TBA"))
-            // AniList's `duration` is the length of *one episode*, not of the
-            // series. The row was labelled "Duration", which read as the whole
-            // runtime - a twelve-episode show said "24m" as though it were
-            // twenty-four minutes long. Manga carry no episode length, so the
-            // row only exists on the anime side of this branch.
-            media.duration?.takeIf { it > 0 }?.let { minutes ->
-                add("Episode length" to if (minutes == 1) "1 min" else "${minutes}m")
+    // Memoised on the title and the countdown it embeds: the grid is a walk over
+    // the node, and the card recomposes several times per open (and every minute
+    // while a countdown ticks) with nothing in it changed.
+    val facts = remember(media, untrackedAiring) {
+        buildList {
+            if (media.isManga) {
+                // A zero from AniList means "not known yet", not "none": an ongoing
+                // manga reports 0 chapters until a count is published, and the card
+                // used to print "Chapters 0" as though the series were empty. The
+                // volume row is omitted rather than shown as 0 for the same reason -
+                // "Volumes 0" beside "Chapters TBA" read as a contradiction.
+                add("Chapters" to (media.chapters?.takeIf { it > 0 }?.toString() ?: "TBA"))
+                media.volumes?.takeIf { it > 0 }?.let { add("Volumes" to it.toString()) }
+            } else {
+                add("Episodes" to (media.episodes?.takeIf { it > 0 }?.toString() ?: "TBA"))
+                // AniList's `duration` is the length of *one episode*, not of the
+                // series. The row was labelled "Duration", which read as the whole
+                // runtime - a twelve-episode show said "24m" as though it were
+                // twenty-four minutes long. Manga carry no episode length, so the
+                // row only exists on the anime side of this branch.
+                media.duration?.takeIf { it > 0 }?.let { minutes ->
+                    add("Episode length" to if (minutes == 1) "1 min" else "${minutes}m")
+                }
             }
-        }
-        // The values are printed as their own helpers spell them. This grid used
-        // to uppercase some of them ("WINTER 2019", "FINISHED") and not others
-        // ("TV", "Original"), so one card mixed two typographic conventions -
-        // and `InfoFact` already uppercases the *label*, which is where the
-        // distinction belongs.
-        media.seasonLabel?.let { add("Season" to it) }
-        // The detail query has always carried `countryOfOrigin`; the grid never
-        // read it. A raw "JP" is a database leaking, so the model spells it.
-        media.countryLabel?.let { add("Country" to it) }
-        // Score, status and format are deliberately absent: the hero's chips
-        // already state all three, and printing them again eight lines down made
-        // the page look like it had two sources that disagreed about the title.
-        //
-        // Only anime carry `nextAiringEpisode`, so this is "Next episode" and not
-        // a manga branch that could never run.
-        untrackedAiring?.let { countdown ->
-            add(
-                "Next episode" to
-                    listOfNotNull(media.airingEpisodeNumber?.toString(), countdown)
-                        .joinToString(" · ")
-            )
-        }
-        media.sourceLabel?.let { add("Source" to it) }
-        media.meanScore?.let { add("Mean score" to "$it%") }
-        media.popularity?.takeIf { it > 0 }?.let {
-            // A six-digit popularity was printed in full and wrapped the cell onto
-            // a second line; "187.5K" is the same fact in the space it has.
-            add("Popularity" to compactCount(it))
-        }
-        media.releaseLabel.takeIf { it != "TBA" }?.let {
-            // "Started Apr 5, 2027" is a tense the date does not have. AniList
-            // reports a start date for unreleased titles too.
-            add((if (media.hasNotAired) "Starts" else "Started") to it)
-        }
-        // When it finished, which the card could not say at all: the start date
-        // was the only date in the response the grid read. The label follows the
-        // status rather than the date, because "Ends" on a finished show is as
-        // wrong as "Finished" on one still airing.
-        media.endDate?.takeIf { it.year != null }?.let { end ->
-            val label = when {
-                media.status.equals("FINISHED", ignoreCase = true) -> "Finished"
-                media.status.equals("RELEASING", ignoreCase = true) -> "Ends"
-                else -> "Ended"
+            // The values are printed as their own helpers spell them. This grid used
+            // to uppercase some of them ("WINTER 2019", "FINISHED") and not others
+            // ("TV", "Original"), so one card mixed two typographic conventions -
+            // and `InfoFact` already uppercases the *label*, which is where the
+            // distinction belongs.
+            media.seasonLabel?.let { add("Season" to it) }
+            // The detail query has always carried `countryOfOrigin`; the grid never
+            // read it. A raw "JP" is a database leaking, so the model spells it.
+            media.countryLabel?.let { add("Country" to it) }
+            // Score, status and format are deliberately absent: the hero's chips
+            // already state all three, and printing them again eight lines down made
+            // the page look like it had two sources that disagreed about the title.
+            // `meanScore` was dropped for the same reason in the other direction: it
+            // is the hero's rating a second time under a different name - and an
+            // unrated title answers 0, which every row beside it already suppresses.
+            //
+            // Only anime carry `nextAiringEpisode`, so this is "Next episode" and not
+            // a manga branch that could never run.
+            untrackedAiring?.let { countdown ->
+                add(
+                    "Next episode" to
+                        listOfNotNull(media.airingEpisodeNumber?.toString(), countdown)
+                            .joinToString(" · ")
+                )
             }
-            add(label to end.formatted)
+            media.sourceLabel?.let { add("Source" to it) }
+            media.popularity?.takeIf { it > 0 }?.let {
+                // A six-digit popularity was printed in full and wrapped the cell onto
+                // a second line; "187.5K" is the same fact in the space it has.
+                add("Popularity" to compactCount(it))
+            }
+            media.releaseLabel.takeIf { it != "TBA" }?.let {
+                // "Started Apr 5, 2027" is a tense the date does not have. AniList
+                // reports a start date for unreleased titles too.
+                add((if (media.hasNotAired) "Starts" else "Started") to it)
+            }
+            // When it finished, which the card could not say at all: the start date
+            // was the only date in the response the grid read. The label follows the
+            // status rather than the date, because "Ends" on a finished show is as
+            // wrong as "Finished" on one still airing.
+            media.endDate?.takeIf { it.year != null }?.let { end ->
+                val label = when {
+                    media.status.equals("FINISHED", ignoreCase = true) -> "Finished"
+                    media.status.equals("RELEASING", ignoreCase = true) -> "Ends"
+                    // An announced title carries a planned end date just the same;
+                    // the `else` arm used to call it "Ended", so the grid said
+                    // "Starts Apr 2027" and "Ended Sep 2027" two rows apart.
+                    media.hasNotAired -> "Ends"
+                    else -> "Ended"
+                }
+                add(label to end.formatted)
+            }
         }
     }
 

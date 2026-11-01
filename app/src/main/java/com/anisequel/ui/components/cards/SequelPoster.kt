@@ -116,7 +116,8 @@ fun SequelPoster(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .unseamedCover(),
                 contentScale = ContentScale.Crop
             )
         }

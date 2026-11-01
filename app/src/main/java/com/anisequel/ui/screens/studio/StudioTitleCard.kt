@@ -38,6 +38,7 @@ import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 
@@ -102,7 +103,9 @@ fun StudioTitleCard(
                     model = url,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .unseamedCover()
                 )
             }
 

@@ -35,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -281,12 +282,14 @@ private fun TitleRows(rows: List<Pair<String, String>>, border: BorderStroke) {
 private fun TitleRow(label: String, value: String, border: BorderStroke) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    // Keyed on the tap count rather than on `copied`: re-writing `true` changes
+    // no state, so a boolean-keyed effect never restarts and a second tap
+    // truncates the acknowledgement instead of restarting the window.
+    var copyTick by remember { mutableIntStateOf(0) }
 
-    // Keyed on `copied` rather than on the row being composed, so the
-    // acknowledgement starts when the tap happens and a second tap restarts the
-    // window instead of leaving the control stuck on its tick.
-    LaunchedEffect(copied) {
-        if (!copied) return@LaunchedEffect
+    LaunchedEffect(copyTick) {
+        if (copyTick == 0) return@LaunchedEffect
+        copied = true
         delay(COPY_CONFIRMATION_MILLIS)
         copied = false
     }
@@ -331,7 +334,7 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
                     .bouncyPress(pressedScale = 0.9f)
                     .clickable(role = Role.Button) {
                         copy(context, label, value)
-                        copied = true
+                        copyTick++
                     }
             ) {
                 Box(contentAlignment = Alignment.Center) {

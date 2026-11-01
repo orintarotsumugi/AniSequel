@@ -46,14 +46,21 @@ import kotlinx.coroutines.delay
  * reloaded. The effect is unconditional and checks the flag inside itself rather
  * than being wrapped in `if (!played)`, because leaving that `LaunchedEffect` in
  * the composition would cancel the spring the moment the flag flipped.
+ *
+ * [entranceKey] carries *which title* the flag belongs to. The page's item keys
+ * are constant strings ("synopsis", "specs"), and following a relation swaps the
+ * title under the same keys - so without it the saved flag from the title the
+ * reader left said "already played", and the new title's sections appeared all
+ * at once instead of being laid out. `WavyProgressBar` had exactly this bug and
+ * names the same fix.
  */
 @Composable
-fun Modifier.sectionReveal(index: Int): Modifier {
+fun Modifier.sectionReveal(index: Int, entranceKey: Any? = null): Modifier {
     if (ExpressiveMotion.speed == MotionStyle.INSTANT) return this
 
-    var played by rememberSaveable { mutableStateOf(false) }
-    val progress = remember { Animatable(if (played) 1f else 0f) }
-    LaunchedEffect(Unit) {
+    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
+    val progress = remember(entranceKey) { Animatable(if (played) 1f else 0f) }
+    LaunchedEffect(entranceKey) {
         if (played) return@LaunchedEffect
         delay((index.coerceIn(0, MAX_STAGGERED_SECTIONS) * STAGGER_MILLIS).toLong())
         // Marked before the spring rather than after it: a card can be scrolled out

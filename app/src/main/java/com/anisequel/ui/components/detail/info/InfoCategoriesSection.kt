@@ -119,7 +119,11 @@ fun InfoCategoriesSection(
                 GroupLabel("Tags")
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = tags.size.toString(),
+                    // The count the chips agree with. It used to be `tags.size`,
+                    // which counts the spoiler tags that live in their own
+                    // collapsible strip below - so the heading announced "20"
+                    // over six chips and a "+8 more".
+                    text = visible.size.toString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

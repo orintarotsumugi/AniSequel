@@ -24,8 +24,12 @@
           "detail": "The refresh button crossfades between its icon and its spinner with the app's own springs, so a refresh reads as the same control changing state. The login carousel's progress dots now stretch from their centre inside a reserved slot, in the draw phase, so the rail stops looking like it is sliding while one dot grows."
         },
         {
+          "title": "The banner arrives whole",
+          "detail": "The info hero cover-fitted its banner like a poster: an AniList banner is about 1900x400, so covering a 340dp hero scaled it up past 2x and cropped away its left and right thirds - the wide key art landed blurry and stretched. It now draws at its own ratio across the hero's top, whole and sharp, while the key visual keeps the full-bleed treatment it always had. And the cover's own extracted colour can no longer show as a bright line across the top edge of stretched artwork: every cover-fitted image now over-covers its box by one percent in the draw phase, which no pixel rounding can out-scale - the poster, the hero, the arriving and studio cards, and the full-screen viewer."
+        },
+        {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed."
+          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement the comment promised, and a friend AniList lists twice can no longer crash the row. The page also does less work per recomposition: the Details grid, studio splits and link lists are now derived once per title."
         }
       ]
     },

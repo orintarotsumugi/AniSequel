@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
+import com.anisequel.ui.components.cards.unseamedCover
 
 /**
  * The artwork and its gestures, split out of [FullScreenCoverViewer].
@@ -196,8 +197,15 @@ internal fun CoverArtwork(
             Image(
                 painter = painter,
                 contentDescription = media.displayName,
-                modifier = Modifier.matchParentSize(),
-                contentScale = ContentScale.Fit
+                // The frame above is sized to the image's *own* ratio, so Crop
+                // draws the same pixels Fit drew - except never one short. Fit
+                // rounds its destination, and the missing row landed at the top
+                // edge as a line of `coverBg`, the cover's own colour, which
+                // grew with every pinch. See [unseamedCover].
+                modifier = Modifier
+                    .matchParentSize()
+                    .unseamedCover(),
+                contentScale = ContentScale.Crop
             )
         }
     }

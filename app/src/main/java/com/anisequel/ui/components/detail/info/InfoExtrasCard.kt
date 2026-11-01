@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -154,9 +155,10 @@ fun InfoExtrasCard(
  * clipboard is a service a device could theoretically not publish, and a copy row
  * that crashes the title page is worse than one that does nothing.
  *
- * The `LaunchedEffect` is keyed on [copied] rather than on the row being composed, so
- * the acknowledgement starts when the tap happens and a second tap restarts the
- * window instead of leaving the row stuck on "Link copied".
+ * The `LaunchedEffect` is keyed on the tap counter rather than on `copied` or on
+ * the row being composed, so the acknowledgement starts when the tap happens and
+ * a second tap restarts the window instead of leaving the row stuck on
+ * "Link copied" - or, keyed on the boolean alone, quietly cutting it short.
  */
 @Composable
 private fun CopyLinkRow(
@@ -166,9 +168,16 @@ private fun CopyLinkRow(
 ) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    // Keyed on the *tap*, not on `copied`. Writing `true` again while the
+    // acknowledgement is already showing changes no state, so a `copied`-keyed
+    // effect never restarts and a second tap truncates the window instead of
+    // restarting it - the claim this row's own comment makes. A counter changes
+    // on every copy, and restarting the effect is what restarting the window is.
+    var copyTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(copied) {
-        if (!copied) return@LaunchedEffect
+    LaunchedEffect(copyTick) {
+        if (copyTick == 0) return@LaunchedEffect
+        copied = true
         delay(COPY_CONFIRMATION_MILLIS)
         copied = false
     }
@@ -196,7 +205,7 @@ private fun CopyLinkRow(
             onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                 clipboard?.setPrimaryClip(ClipData.newPlainText(title, url))
-                copied = true
+                copyTick++
             }
         )
     }

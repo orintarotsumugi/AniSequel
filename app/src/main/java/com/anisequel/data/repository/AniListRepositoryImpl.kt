@@ -1925,8 +1925,14 @@ class AniListRepositoryImpl(
             // Filtered, mapped and sorted here rather than in the card: the same
             // title opened twice must come back in the same order, and the cached
             // answer is the one the second open reads.
+            //
+            // `distinctBy` is load-bearing, not tidying: the friends row keys its
+            // `LazyRow` on `userId`, and AniList can answer with the same user
+            // twice when they hold two entries for one title - a duplicate key
+            // crashes the list ("Key was already used") rather than drawing twice.
             data.page?.mediaList.orEmpty()
                 .mapNotNull { it.toMediaFriend() }
+                .distinctBy { it.userId }
                 .sortedForDisplay()
         }.onSuccess { storeValue(friendsCache, key, it) }
     }
