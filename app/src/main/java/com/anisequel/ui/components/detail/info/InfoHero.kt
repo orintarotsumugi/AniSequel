@@ -91,15 +91,19 @@ import kotlinx.coroutines.delay
 /**
  * The Info page's hero: the artwork, behind its own title.
  *
- * ## Why the backdrop is the key visual rather than a banner
+ * ## Why the first frame is the key visual and the banner arrives after it
  *
- * The sheet used to lead with the banner, with the title lockup over a dark scrim.
- * A banner is a 16:9 frame of whatever the studio put on the poster edge, and
- * cropped into a hero it competes with the title sitting on top of it. The key
- * visual is the artwork a reader already recognises from the row they tapped, and
- * it also makes the hero honest for the common case: the dashboard's list query
- * does not fetch `bannerImage` at all, so a banner-led hero started as a flat grey
- * slab for every sheet opened from the dashboard.
+ * The dashboard's list query does not fetch `bannerImage`, so a hero that waited
+ * for a banner started as a flat grey slab for every sheet opened from the
+ * dashboard. The key visual is always in hand - it is the artwork the reader just
+ * tapped - so it is drawn first and the banner dissolves in over it when the
+ * detail response lands. [InfoHeroBackdrop] owns that crossfade.
+ *
+ * The sheet used to lead with the banner alone, with the title lockup over a dark
+ * scrim, and a banner cropped into a hero can compete with the title sitting on
+ * top of it. That is why the scrim below is weighted for sharp art rather than
+ * for the banner: whichever of the two is on screen, the lockup has its own
+ * gradient to sit on.
  *
  * ## Why the artwork is sharp and the scrim does the work
  *
@@ -214,8 +218,9 @@ fun InfoHero(
     // a backdrop. The old `bannerImage ?: posterUrl` was reverted because the
     // summary node has no banner, so the artwork swapped mid-entrance the moment
     // the detail landed. The crossfade in [InfoHeroBackdrop] makes that swap a
-    // dissolve instead, and gives each image the treatment its own ratio asks
-    // for: the banner as a strip at its native shape, the key visual full-bleed.
+    // dissolve instead, and both images are drawn full-bleed from their top edge -
+    // see that file for the sizing bug that used to keep either from drawing at
+    // all.
     val banner = media.bannerImage?.takeIf { it.isNotBlank() }
 
     Box(

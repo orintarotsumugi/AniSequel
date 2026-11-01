@@ -264,6 +264,7 @@ internal fun ProfileTabsContent(
     // above: the segment's `AnimatedContent` disposes the feed it leaves, so a
     // state created inside would reset the friends feed on every switch back.
     val followingListState = rememberLazyListState()
+    val globalListState = rememberLazyListState()
     val messagesListState = rememberLazyListState()
     val statsListState = rememberLazyListState()
     val socialGridState = rememberLazyGridState()
@@ -404,6 +405,7 @@ internal fun ProfileTabsContent(
                         contentPadding = padding,
                         activityListState = activityListState,
                         followingListState = followingListState,
+                        globalListState = globalListState,
                         messagesListState = messagesListState
                     )
 

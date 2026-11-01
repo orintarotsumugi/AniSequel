@@ -151,6 +151,18 @@ data class ToggleLikeResult(
     val likeCount: Int? = null
 )
 
+/**
+ * Payload of the text-activity mutation.
+ *
+ * AniList answers with the stored `TextActivity`, which is the same union member
+ * the profile feed parses into [ProfileActivity] - so the created post can be
+ * dropped straight into the feed's own row type instead of being re-fetched.
+ */
+@JsonClass(generateAdapter = true)
+data class SaveTextActivityData(
+    @Json(name = "SaveTextActivity") val activity: ProfileActivity? = null
+)
+
 /** Payload of the reply mutation. */
 @JsonClass(generateAdapter = true)
 data class SaveActivityReplyData(

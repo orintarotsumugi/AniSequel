@@ -80,6 +80,16 @@ object MediaAttachment {
         if (sizeBytes <= 0L) return Verdict.Empty
         val normalised = mimeType?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
             ?: return Verdict.UnsupportedType
+        // A type this app re-encodes before uploading is judged by the size it
+        // arrives at, not by whether the host would accept it as it is. HEIC is
+        // deliberately absent from SUPPORTED_TYPES because no browser renders it,
+        // but checking that set first made the recode branch unreachable: a phone
+        // photo was refused as "only images can be attached" before
+        // PickedImageReader ever got to convert it, which is exactly the file an
+        // Android camera writes.
+        if (normalised in RECODE_REQUIRED_TYPES) {
+            return if (sizeBytes > MAX_FILE_BYTES) Verdict.TooLarge else Verdict.Accept
+        }
         if (normalised !in SUPPORTED_TYPES) return Verdict.UnsupportedType
         val ceiling = if (normalised == "image/gif") MAX_GIF_BYTES else MAX_FILE_BYTES
         return if (sizeBytes > ceiling) Verdict.TooLarge else Verdict.Accept

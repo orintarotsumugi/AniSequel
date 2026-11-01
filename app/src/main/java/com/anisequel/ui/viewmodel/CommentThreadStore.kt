@@ -502,11 +502,30 @@ class CommentThreadStore(
                     // while the confirmation was in flight.
                     onReplyCountDelta(current.activityId, -1)
                     val latest = _state.value?.takeIf { it.activityId == current.activityId }
-                        ?: return@fold
+                    if (latest == null) {
+                        // The sheet was closed before the delete landed. The
+                        // snapshot `capture` took on the way out still holds the
+                        // reply, and it would be drawn again on the next open
+                        // until a refresh replaced it - which is the delete that
+                        // looks like it did not stick.
+                        window.forgetReply(current.activityId, reply.id)
+                        return@fold
+                    }
                     if (latest.action?.replyId != reply.id) return@fold
                     _state.value = latest.copy(
                         replies = latest.replies.filterNot { it.id == reply.id },
                         replyCount = (latest.replyCount - 1).coerceAtLeast(0),
+                        // The window has to shrink with the list. In chat view
+                        // `shownRows` is how many fetched rows are drawn, so
+                        // leaving it at the old size made the Older arithmetic
+                        // believe one more row was visible than existed - the
+                        // next Older press then revealed a page that was already
+                        // on screen and looked like it did nothing.
+                        shownRows = if (latest.isChatView && latest.shownRows > 0) {
+                            (latest.shownRows - 1).coerceAtLeast(1)
+                        } else {
+                            latest.shownRows
+                        },
                         action = null
                     )
                 },

@@ -73,10 +73,13 @@ import com.anisequel.ui.viewmodel.GifSearchStore
  *
  * ## The grid
  *
- * Adaptive square cells, animated by Coil's decoder - which is why a tile draws the
- * *tiny* copy of the GIF while the comment gets the full one
- * ([GifResult.embedUrl]): twenty full-size animations in a scrolling grid is a
- * memory warning, and a tile has no room to show the difference anyway.
+ * Adaptive square cells, animated by Coil's decoder. A tile draws
+ * [GifResult.gridUrl] - the provider's small copy - and the comment gets the full file
+ * at [GifResult.embedUrl]. Which copy is "small" is decided by the provider rather
+ * than assumed: on Safebooru the sample is a shrunken animation for most GIFs and a
+ * JPEG still for the rest, so the tile moves when it can and shows a still when the
+ * only animation on offer is a poster-sized one that would not survive twenty of them
+ * on screen at once.
  */
 @Composable
 internal fun ColumnScope.GifBrowser(
@@ -146,7 +149,14 @@ internal fun ColumnScope.GifBrowser(
 
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
-            text = state.note ?: errorMessage ?: "Nothing found.",
+            // A blank box is not a search that found nothing: it is a box nobody
+            // has typed in yet, and "Nothing found." under it read as a provider
+            // failure on the pane's first frame.
+            text = state.note ?: errorMessage ?: if (state.query.isBlank()) {
+                GifSearchStore.BLANK_QUERY_NOTE
+            } else {
+                "Nothing found."
+            },
             action = if (errorMessage != null) {
                 { store.searchNow() }
             } else {

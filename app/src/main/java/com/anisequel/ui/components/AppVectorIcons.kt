@@ -153,6 +153,12 @@ object AppVectorIcons {
     // The library's "make one" action. Named for what it makes, not for the shape
     // it is drawn with, so the day it is redrawn nobody has to rename a screen.
     val NewList = Icons.Default.Add
+
+    // The Activity tab's "write a post" action. Deliberately a second name for
+    // the same glyph rather than reusing [NewList]: the two are different writes
+    // on different tabs, and a screen asking for `NewActivity` should not break
+    // the day the list icon changes shape.
+    val NewActivity = Icons.Default.Add
     val ExpandMore = Icons.Default.ExpandMore
     val ExpandLess = Icons.Default.ExpandLess
 

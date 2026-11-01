@@ -429,6 +429,18 @@ interface AniListRepository {
         unsupported("postActivityReply")
 
     /**
+     * Posts [text] as a new text activity on the viewer's own stream.
+     *
+     * A top-level post rather than a reply: there is no activity to hang it off,
+     * which is why the answer is a whole [com.anisequel.data.model.ProfileActivity]
+     * the feed can insert rather than an `ActivityReply`. Requires a session, and
+     * `text` must satisfy `ContentLimits.checkStatus` - `SaveTextActivity`
+     * documents Min 5, Max 10000.
+     */
+    suspend fun postTextActivity(text: String): Result<ProfileActivity> =
+        unsupported("postTextActivity")
+
+    /**
      * Sends a direct message to [recipientId].
      *
      * [isPrivate] is the composer's public/private choice: AniList keeps a private

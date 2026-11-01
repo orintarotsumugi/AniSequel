@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,7 +83,18 @@ internal fun ActivityAuthorRow(
     createdAt: Int?,
     nowEpochSecond: Long?,
     avatarSize: Dp,
-    onOpenAuthor: (() -> Unit)? = null
+    onOpenAuthor: (() -> Unit)? = null,
+    /**
+     * Opens the conversation with this author, or null where there is no one to
+     * message - the profile's own feed, where the author is the page's owner and
+     * often the reader.
+     *
+     * A name in a feed is the shortest path to "tell this person something", and
+     * it is the same path AniList's own app offers. The control is drawn in the
+     * author strip rather than in the engagement row because it is about *who*
+     * wrote the row, not about the row itself.
+     */
+    onMessageAuthor: (() -> Unit)? = null
 ) {
     if (userName == null && userAvatar == null && createdAt == null) return
     Row(
@@ -137,6 +151,24 @@ internal fun ActivityAuthorRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        if (onMessageAuthor != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onMessageAuthor)
+                    .testTag("activity_message_author"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.ProfileMessages,
+                    contentDescription = "Message ${userName ?: "this person"}",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
     }
 }
 
@@ -162,7 +194,9 @@ internal fun ActivityTextCard(
     likePending: Boolean,
     nowEpochSecond: Long?,
     /** Opens the author's profile; null on the profile's own feed. See [ActivityAuthorRow]. */
-    onOpenAuthor: (() -> Unit)? = null
+    onOpenAuthor: (() -> Unit)? = null,
+    /** Opens the conversation with the author; null where there is no one to message. */
+    onMessageAuthor: (() -> Unit)? = null
 ) {
     val text = activity.text ?: return
     val interactionSource = remember { MutableInteractionSource() }
@@ -198,7 +232,8 @@ internal fun ActivityTextCard(
                 createdAt = activity.createdAt,
                 nowEpochSecond = nowEpochSecond,
                 avatarSize = 40.dp,
-                onOpenAuthor = onOpenAuthor
+                onOpenAuthor = onOpenAuthor,
+                onMessageAuthor = onMessageAuthor
             )
 
             AniListMarkdownWithCovers(

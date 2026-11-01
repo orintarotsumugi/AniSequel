@@ -28,6 +28,7 @@ import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.NextAiringEpisode
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SaveTextActivityData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfileData
@@ -539,6 +540,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     override suspend fun saveActivityReply(
         request: GraphQLRequest
     ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+    override suspend fun saveTextActivity(
+        request: GraphQLRequest
+    ): GraphQLResponse<SaveTextActivityData> = notServed("saveTextActivity")
 
     override suspend fun deleteActivityReply(
         request: GraphQLRequest

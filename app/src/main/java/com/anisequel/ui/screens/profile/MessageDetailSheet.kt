@@ -39,6 +39,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
@@ -53,15 +54,20 @@ import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.conversationMessages
 
 /**
- * One message read whole, inside the app.
+ * A message - and the conversation around it - read whole, inside the app.
  *
- * ## It never loads
+ * ## The row draws first; the replies follow
  *
- * The sheet is drawn from the row that was tapped
- * ([UserMessagesViewModel.MessageDetail]), and that row is already in memory -
- * the inbox the card list is drawing is the sheet's only source of content. So
- * there is no request behind opening it, no skeleton, and no spinner: the body is
- * text the app downloaded to draw the card, and it is on screen on frame one.
+ * Opened from the inbox, the message itself needs no request: it came from the row
+ * that was tapped ([UserMessagesViewModel.MessageDetail]), so its body is on
+ * screen on frame one. The *conversation* is a request - the message is an AniList
+ * activity and its thread is that activity's replies - and it arrives underneath
+ * the row, with a retry in its place when it does not.
+ *
+ * Opened from a friend's activity, there is no row to draw - the reader tapped a
+ * person - so the ViewModel asks for the inbox and the sheet shows the thread it
+ * can assemble, or [NoMessagesYet] above the reply box. The conversation can also
+ * start at nothing, which is why the empty state is a sentence and not a failure.
  *
  * The markdown's AniList preview cards *do* enrich afterwards, through the same
  * cover and entity loaders every other markdown surface uses, and a badge without
@@ -110,6 +116,17 @@ fun MessageDetailSheet(
      * opened message as the sheet always did.
      */
     conversation: List<MessageNode> = emptyList(),
+    /**
+     * AniList's reply thread for the open message, oldest first.
+     *
+     * A message is an activity and the exchange under it is that activity's
+     * replies - see [com.anisequel.ui.viewmodel.UserMessagesViewModel.ThreadState].
+     * The sheet draws those replies and the inbox's matched messages as one
+     * timeline, because a reader does not care which of the two queries a line came
+     * from.
+     */
+    thread: UserMessagesViewModel.ThreadState = UserMessagesViewModel.ThreadState(),
+    onRetryThread: () -> Unit = {},
     viewerId: Int? = null,
     hasEarlier: Boolean = false,
     onLoadEarlier: () -> Unit = {}
@@ -149,33 +166,136 @@ fun MessageDetailSheet(
             // one that is marked; what is around it is the reason the sheet exists -
             // a reply box with no record of what is being replied to is a form, not
             // a conversation.
-            ConversationBody(
-                messages = conversation.ifEmpty { listOf(message) },
-                viewerId = viewerId,
-                highlightId = message.id,
-                hasEarlier = hasEarlier,
-                onLoadEarlier = onLoadEarlier,
-                modifier = Modifier.padding(vertical = 12.dp)
-            )
+            //
+            // `message` is null when the sheet was opened from a name rather than
+            // from a row, and the thread can also be genuinely empty: a reader who
+            // has never messaged this person gets the start of a conversation, not
+            // a blank sheet above a reply box.
+            // The inbox's matched rows *and* the open message's replies. The
+            // opened message is usually in both, which is why the reduction
+            // de-duplicates on the source-prefixed key rather than on the id.
+            val messages = conversation.ifEmpty { listOfNotNull(message) }
+            val threadError = thread.error
+            val lines = remember(messages, thread.replies, viewerId, message?.id) {
+                conversationLines(
+                    messages = messages,
+                    replies = thread.replies,
+                    viewerId = viewerId,
+                    highlightMessageId = message?.id
+                )
+            }
+            when {
+                lines.isNotEmpty() -> ConversationBody(
+                    lines = lines,
+                    hasEarlier = hasEarlier,
+                    onLoadEarlier = onLoadEarlier,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+                // An empty thread can mean three things, and the sheet used to
+                // draw "no messages yet" for all of them: the request is still
+                // out, it failed, or the two accounts have genuinely never
+                // exchanged one. Only the last is a sentence about the reader.
+                thread.isLoading -> MessageThreadStatus(
+                    message = "Loading the conversation…",
+                    action = null,
+                    onAction = {}
+                )
+                threadError != null -> MessageThreadStatus(
+                    message = threadError,
+                    action = "Try again",
+                    onAction = onRetryThread
+                )
+                else -> NoMessagesYet(counterpartName = detail.counterpart?.name)
+            }
 
             MessageDetailFooter(
-                isPrivate = message.isPrivate == true,
-                siteUrl = message.siteUrl
+                isPrivate = message?.isPrivate == true,
+                siteUrl = message?.siteUrl
             )
 
             // The reply belongs to the message that is open, so it lives in this
             // sheet rather than on the inbox row: the reader has already decided
-            // who they are answering.
+            // who they are answering. With no row - a conversation opened from an
+            // activity - the counterpart's id still keys the draft, so switching
+            // people never carries the previous text across.
             if (canReply) {
                 MessageReplyComposer(
-                    messageId = message.id,
+                    messageId = message?.id ?: detail.counterpart?.id ?: 0,
                     recipientName = detail.counterpart?.name,
                     reply = reply,
+                    // A reply inside an existing message inherits that message's
+                    // privacy: the mutation has no privacy argument, and offering
+                    // a Public/Private switch there promised a choice the API does
+                    // not have. A brand-new conversation still chooses.
+                    threadPrivate = message?.isPrivate,
                     onSend = onSend,
                     onClearReply = onClearReply
                 )
             }
             Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+/**
+ * What a conversation that has not started yet says.
+ *
+ * Drawn instead of [ConversationBody] when there is no message at all: the sheet
+ * was opened from a friend's activity, or the two accounts have never exchanged
+ * one. The reply box below is the action, so this only has to say that the
+ * emptiness is expected rather than a failed load.
+ */
+@Composable
+private fun NoMessagesYet(counterpartName: String?) {
+    Text(
+        text = if (counterpartName != null) {
+            "No messages with $counterpartName yet. Write the first one below."
+        } else {
+            "No messages yet. Write the first one below."
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 24.dp)
+            .testTag("message_conversation_empty")
+    )
+}
+
+/**
+ * A line where the conversation would be, for a thread that is still loading or
+ * failed to load.
+ *
+ * Deliberately not the reply box above nothing: the box is still below, and a
+ * reader looking at "no messages yet" while the request is out would answer a
+ * conversation that may already have an answer in it. The retry is the one action
+ * the failure has.
+ */
+@Composable
+private fun MessageThreadStatus(message: String, action: String?, onAction: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("message_thread_status")
+        )
+        if (action != null) {
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier
+                    .bouncyPress(pressedScale = 0.95f)
+                    .testTag("message_thread_retry")
+            ) {
+                Text(action)
+            }
         }
     }
 }
@@ -198,7 +318,7 @@ private fun MessageDetailHeader(
     onOpenUser: (FollowUser) -> Unit
 ) {
     val counterpart = detail.counterpart
-    val createdAt = detail.message.createdAt
+    val createdAt = detail.message?.createdAt
 
     Row(
         modifier = Modifier
@@ -237,12 +357,16 @@ private fun MessageDetailHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SequelInfoChip(
-                        icon = if (detail.sent) {
-                            AppVectorIcons.ActivitySend
-                        } else {
-                            AppVectorIcons.MessageReceived
+                        icon = when {
+                            detail.message == null -> AppVectorIcons.ProfileMessages
+                            detail.sent -> AppVectorIcons.ActivitySend
+                            else -> AppVectorIcons.MessageReceived
                         },
-                        label = if (detail.sent) "Sent" else "Received"
+                        label = when {
+                            detail.message == null -> "Conversation"
+                            detail.sent -> "Sent"
+                            else -> "Received"
+                        }
                     )
                     if (createdAt != null) {
                         Text(
@@ -328,7 +452,8 @@ private fun MessageDetailFooter(
 }
 
 /**
- * Draws [MessageDetailSheet] when the inbox has an open row, and nothing otherwise.
+ * Draws [MessageDetailSheet] when the inbox has an open row or a conversation has
+ * been opened from a name, and nothing otherwise.
  *
  * Its own composable, and called by the screen rather than by the tab, for the
  * reason [ActivityEngagementSheets] gives: a `ModalBottomSheet` is a window of its
@@ -353,6 +478,10 @@ internal fun MessagesDetailSheetHost(
     val conversation = remember(open, inbox) {
         conversationMessages(inbox, open.counterpart?.id, inbox.viewerId)
     }
+    // The message's own AniList reply thread. Collected here rather than inside
+    // the sheet so a reply landing recomposes the sheet's body and not the
+    // profile page behind it - the same reason the inbox is collected here.
+    val thread by messagesViewModel.thread.collectAsStateWithLifecycle()
 
     MessageDetailSheet(
         detail = open,
@@ -363,6 +492,8 @@ internal fun MessagesDetailSheetHost(
         onSend = messagesViewModel::replyToOpenMessage,
         onClearReply = messagesViewModel::clearReplyState,
         conversation = conversation,
+        thread = thread,
+        onRetryThread = messagesViewModel::retryThread,
         viewerId = inbox.viewerId,
         hasEarlier = inbox.received.hasMore || inbox.sent.hasMore,
         onLoadEarlier = { messagesViewModel.loadMoreConversation() }
@@ -372,16 +503,28 @@ internal fun MessagesDetailSheetHost(
 /**
  * The reply box under an open message.
  *
- * Private by default and switchable to public: a direct message is the private
- * case, and a reader who wants it on their profile stream can say so in one tap.
- * The choice is per-send rather than remembered - a preference that quietly made
- * every reply public because it was chosen once is the kind of persistence that
- * costs somebody a message.
+ * ## Two kinds of reply
+ *
+ * A reply to an existing message goes into that message's thread and inherits its
+ * privacy, so there is nothing to choose and the chip above the field states the
+ * audience instead of offering it. A conversation opened from a friend's name has
+ * no message yet, and *that* is the one case with a choice: Private by default and
+ * switchable to Public, per send rather than remembered - a preference that
+ * quietly made every new message public because it was chosen once is the kind of
+ * persistence that costs somebody a message.
  */
 @Composable
 private fun MessageReplyComposer(
     messageId: Int,
     recipientName: String?,
+    /**
+     * The open message's privacy, or null for a conversation that has none yet.
+     *
+     * Null is the only case that offers the Public/Private switch, because it is
+     * the only case where the choice exists: a reply to an existing message
+     * inherits that message's audience on AniList's side.
+     */
+    threadPrivate: Boolean? = null,
     reply: UserMessagesViewModel.ReplyState,
     onSend: (text: String, isPrivate: Boolean) -> Unit,
     onClearReply: () -> Unit
@@ -407,24 +550,26 @@ private fun MessageReplyComposer(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ReplyPrivacyChoice(
-                label = "Public",
-                icon = AppVectorIcons.Visibility,
-                selected = !isPrivate,
-                testTag = "message_reply_public",
-                onClick = { isPrivate = false }
-            )
-            ReplyPrivacyChoice(
-                label = "Private",
-                icon = AppVectorIcons.Privacy,
-                selected = isPrivate,
-                testTag = "message_reply_private",
-                onClick = { isPrivate = true }
-            )
-        }
+        if (threadPrivate == null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReplyPrivacyChoice(
+                    label = "Public",
+                    icon = AppVectorIcons.Visibility,
+                    selected = !isPrivate,
+                    testTag = "message_reply_public",
+                    onClick = { isPrivate = false }
+                )
+                ReplyPrivacyChoice(
+                    label = "Private",
+                    icon = AppVectorIcons.Privacy,
+                    selected = isPrivate,
+                    testTag = "message_reply_private",
+                    onClick = { isPrivate = true }
+                )
+            }
 
-        Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+        }
         OutlinedTextField(
             value = draft,
             onValueChange = { next ->
@@ -442,17 +587,18 @@ private fun MessageReplyComposer(
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (isPrivate) {
-                    "Private - only the two of you will see it."
-                } else {
-                    "Public - it also appears on your profile stream."
+                text = when {
+                    threadPrivate == true -> "Private - only the two of you will see this reply."
+                    threadPrivate == false -> "Public - this reply is visible on AniList."
+                    isPrivate -> "Private - only the two of you will see it."
+                    else -> "Public - it also appears on your profile stream."
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
             FilledTonalButton(
-                onClick = { onSend(draft, isPrivate) },
+                onClick = { onSend(draft, threadPrivate ?: isPrivate) },
                 enabled = draft.isNotBlank() && !reply.isSending,
                 modifier = Modifier.testTag("message_reply_send")
             ) {

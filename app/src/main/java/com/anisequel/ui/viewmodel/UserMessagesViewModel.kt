@@ -3,9 +3,9 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
-import com.anisequel.data.model.isWith
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.Job
@@ -13,15 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/**
- * Which half of the viewer's messages a chip is asking for.
- *
- * [ALL] is not a source: it is the merge of the other two, which is why every
- * load and retry in [UserMessagesViewModel] resolves it to one or both of them
- * and never fetches "all" as if it were a document of its own.
- */
-enum class MessageFilter { ALL, RECEIVED, SENT }
 
 /**
  * State holder for the Messages tab: what the viewer sent, what arrived, and
@@ -113,7 +104,16 @@ class UserMessagesViewModel(
      * right direction.
      */
     data class MessageDetail(
-        val message: MessageNode,
+        /**
+         * The row that was tapped, or null when the sheet was opened from a name
+         * rather than from the inbox.
+         *
+         * A conversation can start before its first message exists - tapping
+         * "Message" on a friend's activity is exactly that - so the sheet cannot
+         * require a row. Null means the sheet shows the conversation (possibly
+         * empty) and the reply box, with no highlight and no sent/received chip.
+         */
+        val message: MessageNode?,
         val sent: Boolean,
         val counterpart: FollowUser?
     )
@@ -129,24 +129,149 @@ class UserMessagesViewModel(
     val detail: StateFlow<MessageDetail?> = _detail.asStateFlow()
 
     /**
-     * Opens [message] in the detail sheet.
+     * The reply thread AniList keeps for the message that is open.
      *
-     * Writes the state and nothing else: no request goes out, because everything
-     * the sheet draws - body, sender, timestamp, privacy flag, site URL - arrived
-     * with the list the row is sitting in.
+     * A site message is an activity, and the exchange under it is that
+     * activity's replies - the same shape a comment thread has, and the reason
+     * the site's own message page can show a conversation an inbox cannot. The
+     * inbox is single messages - sent paged by `messengerId`, received only where
+     * a notification exists - so matching those pages by id pair is how a thread
+     * used to be assembled, and why it stopped at page one and missed replies
+     * written on the site.
+     *
+     * [messageId] is the activity the replies belong to. It is held separately
+     * from [UserMessagesViewModel.MessageDetail.message] so a late answer for a
+     * sheet that has been closed, or reopened on somebody else, has somewhere to
+     * be recognised as stale and dropped.
+     */
+    data class ThreadState(
+        val messageId: Int? = null,
+        val replies: List<ActivityReply> = emptyList(),
+        val isLoading: Boolean = false,
+        val loaded: Boolean = false,
+        val error: String? = null
+    )
+
+    private val _thread = MutableStateFlow(ThreadState())
+    val thread: StateFlow<ThreadState> = _thread.asStateFlow()
+
+    /**
+     * The request that reads the open thread. Cancelled when a different message
+     * is opened, so a slow answer for the previous one cannot land over it.
+     */
+    private var threadJob: Job? = null
+
+    /**
+     * Opens [message] in the detail sheet and asks AniList for its thread.
+     *
+     * The row costs nothing: its body, sender, timestamp, privacy flag and site
+     * URL arrived with the list it is in, so the sheet draws on the tap's frame.
+     * The request is for the replies *under* it, which the inbox does not have;
+     * a failure leaves the row readable with a retry where the thread should be.
      */
     fun openMessage(message: MessageNode) {
+        // A "Sent to <name>" confirmation belongs to the sheet that earned it.
+        // Opening a different message must not greet the reader with the last
+        // one's outcome above a box they have not written in yet.
+        if (!_reply.value.isSending) _reply.value = ReplyState()
         _detail.value = MessageDetail(
             message = message,
             sent = message.isSentBy(viewerId),
             counterpart = message.counterpartFor(viewerId)
+        )
+        // Every message is a thread, whether it was opened from the inbox or
+        // from a friend's name - that is what makes a private exchange read like
+        // the public comment thread it mirrors.
+        loadThread(message.id)
+    }
+
+    /**
+     * Opens the conversation with [user], whether or not one exists yet.
+     *
+     * This is the way in from a friend's activity card. There is no row to carry
+     * in - the reader tapped a person, not a message - so the sheet opens on the
+     * thread assembled from the inbox and on the reply box underneath it. The
+     * inbox is asked for here rather than left to the Messages segment: a reader
+     * who has never opened that tab still expects the conversation they just
+     * asked for, not an empty sheet until they visit another screen.
+     *
+     * Messaging yourself is refused: the server would reject it, and a sheet
+     * that offers a reply box for it is a control that can only fail.
+     */
+    fun openConversation(user: FollowUser) {
+        if (user.id == viewerId) return
+        // A confirmation belongs to the sheet that earned it. Opening a
+        // conversation from the Global feed must not greet the reader with the
+        // last person's "Sent to ..." - the same rule [openMessage] follows, and
+        // the one this path used to skip.
+        if (!_reply.value.isSending) _reply.value = ReplyState()
+        loadFirstPages()
+        // A conversation that has not started has no activity and therefore no
+        // replies. Clearing the previous thread is what stops the sheet from
+        // drawing the last person's messages over this one's blank page.
+        threadJob?.cancel()
+        _thread.value = ThreadState()
+        _detail.value = MessageDetail(
+            message = null,
+            sent = false,
+            counterpart = user
         )
     }
 
     /** Closes the detail sheet. */
     fun dismissMessage() {
         _detail.value = null
+        threadJob?.cancel()
+        _thread.value = ThreadState()
         if (!_reply.value.isSending) _reply.value = ReplyState()
+    }
+
+    /**
+     * Reads the thread AniList holds for [messageId], once per open message.
+     *
+     * A repeat call while the same thread is loaded or loading is free - the same
+     * lazy rule the inbox's sources follow. [forceReRead] is the retry after a
+     * failure, and the only caller that may spend a second request on it.
+     */
+    fun loadThread(messageId: Int, forceReRead: Boolean = false) {
+        // The demo has no server-side activities: its fixtures carry no thread,
+        // and asking the network for one of its ids would spend a request on a
+        // row that does not exist. The inbox halves still draw the conversation.
+        if (isDemo) return
+        val current = _thread.value
+        if (!forceReRead && current.messageId == messageId && (current.isLoading || current.loaded)) {
+            return
+        }
+        threadJob?.cancel()
+        _thread.value = ThreadState(messageId = messageId, isLoading = true)
+        threadJob = viewModelScope.launch {
+            repositoryResult {
+                aniListRepository.getActivityReplies(messageId)
+            }.fold(
+                onSuccess = { replies ->
+                    if (_thread.value.messageId != messageId) return@fold
+                    _thread.value = ThreadState(
+                        messageId = messageId,
+                        replies = replies.distinctBy { it.id },
+                        loaded = true
+                    )
+                },
+                onFailure = { failure ->
+                    if (_thread.value.messageId != messageId) return@fold
+                    _thread.value = ThreadState(
+                        messageId = messageId,
+                        loaded = true,
+                        error = failure.message ?: "Couldn't load this conversation."
+                    )
+                }
+            )
+        }
+    }
+
+    /** Re-reads the open thread after its fetch failed. */
+    fun retryThread() {
+        val messageId = _detail.value?.message?.id ?: return
+        loadThread(messageId, forceReRead = true)
     }
 
     /**
@@ -171,19 +296,34 @@ class UserMessagesViewModel(
     /**
      * Sends [text] to the other party of the message the sheet has open.
      *
+     * ## Two paths, because there are two situations
+     *
+     * An open message is an AniList activity with a reply thread, so the reply
+     * belongs *in* that thread - `SaveActivityReply`, the same mutation the
+     * site's own message page posts. A conversation opened from a friend's name
+     * has no activity yet, so it starts one with `SaveMessage` and [isPrivate] is
+     * the composer's public/private choice for that new message. The old code
+     * sent a new message in both cases, which is what made a thread read as a list
+     * of receipts: the answer landed beside the conversation instead of in it.
+     *
      * The recipient is the row's *counterpart*, not its messenger: replying to a
-     * message you sent has to go to the person you sent it to. [isPrivate] is the
-     * composer's public/private choice and travels to AniList, which keeps a
-     * private message between the two accounts instead of also placing it on the
-     * sender's profile stream.
+     * message you sent has to go to the person you sent it to.
      */
     fun replyToOpenMessage(text: String, isPrivate: Boolean) {
         if (!canReply) return
         val open = _detail.value ?: return
         val body = text.trim()
         if (body.isEmpty() || _reply.value.isSending) return
+
+        val openMessage = open.message
+        if (openMessage != null) {
+            postThreadReply(openMessage.id, body, open.counterpart?.name)
+            return
+        }
+
+        // There is no open activity on this path, so the counterpart is the only
+        // id there is to address. `message` is null by the branch above.
         val recipientId = open.counterpart?.id
-            ?: if (open.sent) open.message.recipientId else open.message.messengerId
         if (recipientId == null) {
             _reply.value = ReplyState(error = "There is no one to reply to on this message.")
             return
@@ -193,12 +333,67 @@ class UserMessagesViewModel(
             repositoryResult {
                 aniListRepository.sendMessage(recipientId, body, isPrivate)
             }.fold(
-                onSuccess = {
-                    _reply.value = ReplyState(sentTo = open.counterpart?.name ?: "them")
+                onSuccess = { messageId ->
+                    // The send answered with the new message's id, so the sheet
+                    // can show what was just written without waiting for the
+                    // inbox to page again. This is what made a conversation read
+                    // as one-sided: the reply landed, the box cleared, and the
+                    // message only appeared after a manual refresh.
+                    val counterpart = open.counterpart
+                    val sent = MessageNode(
+                        id = messageId,
+                        message = body,
+                        isPrivate = isPrivate,
+                        createdAt = (System.currentTimeMillis() / 1000).toInt(),
+                        recipientId = recipientId,
+                        messengerId = viewerId,
+                        recipient = counterpart
+                    )
+                    updateSource(MessageFilter.SENT) { current ->
+                        current.copy(
+                            messages = (listOf(sent) + current.messages).distinctBy { it.id }
+                        )
+                    }
+                    _reply.value = ReplyState(sentTo = counterpart?.name ?: "them")
                 },
                 onFailure = { failure ->
                     _reply.value = ReplyState(
                         error = failure.message ?: "Couldn't send that message."
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * Posts [body] into the open message's AniList reply thread.
+     *
+     * The reply is appended from the mutation's own answer rather than re-reading
+     * the whole thread: `SaveActivityReply` returns the stored reply, its author
+     * and its timestamp, so the reader sees the message they just sent without a
+     * second round trip. A reply to a private message is private because the
+     * activity is - there is no privacy argument to pass, which is the other half
+     * of why a thread reply and a new message are two different calls.
+     */
+    private fun postThreadReply(activityId: Int, body: String, counterpartName: String?) {
+        _reply.value = ReplyState(isSending = true)
+        viewModelScope.launch {
+            repositoryResult {
+                aniListRepository.postActivityReply(activityId, body)
+            }.fold(
+                onSuccess = { reply ->
+                    if (_thread.value.messageId == activityId) {
+                        _thread.value = _thread.value.copy(
+                            replies = (_thread.value.replies + reply).distinctBy { it.id },
+                            loaded = true,
+                            error = null
+                        )
+                    }
+                    _reply.value = ReplyState(sentTo = counterpartName ?: "them")
+                },
+                onFailure = { failure ->
+                    _reply.value = ReplyState(
+                        error = failure.message ?: "Couldn't send that reply."
                     )
                 }
             )
@@ -507,147 +702,3 @@ class UserMessagesViewModel(
         ) as T
     }
 }
-
-/**
- * The rows the visible filter should draw, newest first.
- *
- * [MessageFilter.ALL] merges the two sources and re-sorts them: each source is
- * already newest-first on its own, but interleaving two ordered lists is not an
- * ordering, and a merged inbox that showed older messages above newer ones
- * would read as broken. De-duplicated on the id for the same reason the ViewModel
- * de-duplicates each append - an overlap between the two sources is not expected,
- * but a repeated key in a `LazyColumn` is a crash, not a cosmetic issue.
- *
- * Top-level and internal rather than a method so the rule is testable without a
- * coroutine harness; the snippet of logic has no state of its own.
- */
-internal fun visibleMessages(state: UserMessagesViewModel.UiState): List<MessageNode> =
-    when (state.filter) {
-        MessageFilter.ALL -> (state.received.messages + state.sent.messages)
-            .distinctBy { it.id }
-            .sortedByDescending { it.createdAt ?: 0 }
-        MessageFilter.RECEIVED -> state.received.messages
-        MessageFilter.SENT -> state.sent.messages
-    }
-
-/**
- * True once every source the visible filter needs has answered.
- *
- * Read by the empty state, not by the list: an inbox that has not loaded yet and
- * one that loaded and was empty both have no rows, and only the second deserves
- * "No messages yet". Without this the tab flashed the empty orb for a frame
- * before the first request even started.
- */
-internal fun visibleLoaded(state: UserMessagesViewModel.UiState): Boolean =
-    when (state.filter) {
-        MessageFilter.ALL -> state.received.loaded && state.sent.loaded
-        MessageFilter.RECEIVED -> state.received.loaded
-        MessageFilter.SENT -> state.sent.loaded
-    }
-
-/** True while a first page the visible filter needs is in flight. */
-internal fun visibleLoading(state: UserMessagesViewModel.UiState): Boolean =
-    when (state.filter) {
-        MessageFilter.ALL -> state.received.isLoading || state.sent.isLoading
-        MessageFilter.RECEIVED -> state.received.isLoading
-        MessageFilter.SENT -> state.sent.isLoading
-    }
-
-/** True while the next page of any source the visible filter shows is in flight. */
-internal fun visibleLoadingMore(state: UserMessagesViewModel.UiState): Boolean =
-    when (state.filter) {
-        MessageFilter.ALL -> state.received.isLoadingMore || state.sent.isLoadingMore
-        MessageFilter.RECEIVED -> state.received.isLoadingMore
-        MessageFilter.SENT -> state.sent.isLoadingMore
-    }
-
-/** True when there is another page behind the rows the visible filter shows. */
-internal fun visibleHasMore(state: UserMessagesViewModel.UiState): Boolean =
-    when (state.filter) {
-        // Either source having more means the merged list is not finished.
-        MessageFilter.ALL -> state.received.hasMore || state.sent.hasMore
-        MessageFilter.RECEIVED -> state.received.hasMore
-        MessageFilter.SENT -> state.sent.hasMore
-    }
-
-/**
- * The full-page error, or null when there is anything to draw.
- *
- * Only a filter with no rows at all may show an error page. Under [ALL], one
- * half failing while the other arrived must not throw away the rows that did
- * load - that is what [visibleSourceError] is for.
- */
-internal fun visibleError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isNotEmpty()) return null
-    return when (state.filter) {
-        MessageFilter.ALL -> state.received.error ?: state.sent.error
-        MessageFilter.RECEIVED -> state.received.error
-        MessageFilter.SENT -> state.sent.error
-    }
-}
-
-/**
- * A compact line above rows that did load, or null when nothing needs saying.
- *
- * Covers the failure that must not replace the list: one half of the merged view
- * failing while the other arrived. It is drawn above the rows rather than at the
- * foot because the missing rows are not necessarily at the bottom - under [ALL]
- * the failed half's rows are missing from *throughout* the merged list.
- *
- * Kept apart from [visibleLoadMoreError] because the two retries do different
- * things: this one asks for the source that never arrived, while a paging retry
- * appends the page after the rows on screen.
- */
-internal fun visibleSourceError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isEmpty()) return null
-    return when (state.filter) {
-        MessageFilter.ALL -> if (state.received.error != null || state.sent.error != null) {
-            "Some messages couldn't load."
-        } else {
-            null
-        }
-        MessageFilter.RECEIVED -> state.received.error
-        MessageFilter.SENT -> state.sent.error
-    }
-}
-
-/**
- * The next page's failure, for the footer's retry.
- *
- * Only when rows are on screen: a failure with nothing above it is
- * [visibleError]'s page, not a footer notice under nothing.
- */
-internal fun visibleLoadMoreError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isEmpty()) return null
-    return when (state.filter) {
-        MessageFilter.ALL -> state.received.loadMoreError ?: state.sent.loadMoreError
-        MessageFilter.RECEIVED -> state.received.loadMoreError
-        MessageFilter.SENT -> state.sent.loadMoreError
-    }
-}
-
-/**
- * The conversation with one person, oldest first.
- *
- * The inbox is two independent paged sources, because AniList can only be asked for
- * one side of an exchange at a time - `Page.activities` has no recipient filter -
- * and the sheet that shows a conversation needs them interleaved and read in the
- * order they happened, which is the opposite of the inbox's newest-first.
- *
- * Sorting ascending is what makes the detail sheet a chat rather than a list of
- * receipts: the newest message sits at the bottom, where a reply is written, and
- * the reader scrolls *up* for older ones the way they would in any other messenger.
- *
- * Top-level and pure, like the inbox's own merge helpers, so the ordering and the
- * pair-matching are checkable without a coroutine harness.
- */
-internal fun conversationMessages(
-    state: UserMessagesViewModel.UiState,
-    counterpartId: Int?,
-    viewerId: Int?
-): List<MessageNode> =
-    (state.received.messages + state.sent.messages)
-        .distinctBy { it.id }
-        .filter { it.isWith(counterpartId, viewerId) }
-        .sortedBy { it.createdAt ?: 0 }
-

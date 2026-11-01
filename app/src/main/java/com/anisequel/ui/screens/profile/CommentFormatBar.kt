@@ -98,6 +98,8 @@ internal fun ComposerBottomBar(
     onAskKind: (InsertKind) -> Unit,
     onPickFromDevice: () -> Unit,
     onToggleGifs: () -> Unit,
+    submitLabel: String?,
+    busyLabel: String,
     onSubmit: () -> Unit
 ) {
     Column(
@@ -131,19 +133,22 @@ internal fun ComposerBottomBar(
         }
         postError?.let { NoteLine(it, MaterialTheme.colorScheme.error, null) }
 
+        // The controls get a row of their own.
+        //
+        // They used to share one Row with the counter and the Post button, and a
+        // `weight(1f)` scroll strip beside a ~150dp button left room for three
+        // 48dp controls on a phone: the bar appeared to have exactly three
+        // buttons, with the other fourteen hidden behind a horizontal scroll
+        // nobody could see was there. Post is still at the right edge, on a line
+        // below, so it never scrolls away and the strip gets the full width.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
                 FormatAction(
                     icon = AppVectorIcons.PhotoUpload,
                     label = "Attach a photo from the device",
@@ -279,6 +284,12 @@ internal fun ComposerBottomBar(
                 )
             }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 // The API's own ceiling, and the field's: they are the same
                 // number because the field clips with `ContentLimits`. An embedded
@@ -292,6 +303,8 @@ internal fun ComposerBottomBar(
                     .padding(horizontal = 8.dp)
                     .testTag("activity_comment_counter")
             )
+
+            Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = onSubmit,
@@ -315,10 +328,11 @@ internal fun ComposerBottomBar(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = when {
-                        isBusy -> "Posting..."
+                        isBusy -> busyLabel
                         // The same word the header uses. A new comment used to read
                         // "Post Reply" here, which named a reply that was not being
                         // written.
+                        submitLabel != null -> submitLabel
                         replyToName != null -> "Post Reply"
                         else -> "Post Comment"
                     }
@@ -414,7 +428,11 @@ private fun FormatAction(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(20.dp)
+            // No `size`: these were drawn at 20dp inside the 48dp target, which
+            // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
+            // built from - visibly smaller than the Material `List` glyph that
+            // sits in the same row. The glyph now uses the vector's own 24dp
+            // default, the same correction the tier-list trophy needed.
         )
     }
 }

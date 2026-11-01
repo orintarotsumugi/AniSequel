@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -367,15 +366,16 @@ fun UserProfileScreen(
                                     .testTag("profile_open_tier_list_button")
                                     .bouncyPress(pressedScale = 0.9f)
                             ) {
-                                // The glyph is a shade under the bar's 24dp rather
-                                // than shrunk to match: it keeps the full 48dp touch
-                                // target, so the button stays easy to hit while
-                                // reading as lighter than the back arrow and the
-                                // AniList link beside it.
+                                // 24dp, the size of every other icon in this bar.
+                                // It was 20dp, with a comment claiming the smaller
+                                // glyph read as "lighter" - but the neighbours are
+                                // all at the default 24dp, so the trophy did not
+                                // read as lighter, it read as the one control that
+                                // had been shrunk. The 48dp IconButton target was
+                                // never the problem; the ink was.
                                 Icon(
                                     imageVector = AppVectorIcons.Trophy,
-                                    contentDescription = "Open tier list",
-                                    modifier = Modifier.size(20.dp)
+                                    contentDescription = "Open tier list"
                                 )
                             }
                         }
@@ -410,11 +410,16 @@ fun UserProfileScreen(
                             onClick = {
                                 overviewViewModel.refresh()
                                 activityViewModel.refreshIfStarted()
-                                // The two viewer feeds refresh only if their
-                                // segment has been opened: a page-level refresh
-                                // must not spend requests on an inbox nobody has
-                                // looked at.
+                                // The viewer feeds refresh only if their segment
+                                // has been opened: a page-level refresh must not
+                                // spend requests on an inbox nobody has looked at.
                                 followingViewModel.refreshIfStarted()
+                                // The site-wide stream is the fourth of those segments,
+                                // and leaving it out of this list meant Refresh did
+                                // nothing while the reader was looking straight at
+                                // it - the one segment whose rows the button was
+                                // drawn over.
+                                globalViewModel.refreshIfStarted()
                                 messagesViewModel.refreshIfStarted()
                             },
                             modifier = Modifier
@@ -672,6 +677,13 @@ fun UserProfileScreen(
         // it has no viewer id.
         canPost = viewerId != null
     )
+
+    // The new-activity composer. A sibling of the tab content for the same reason
+    // every other sheet here is: the Activity tab is disposed by the profile's tab
+    // `AnimatedContent`, and a `ModalBottomSheet` drawn from inside it would be
+    // torn down mid-post. Only the profile's own feed can open one - see
+    // `ProfileActivityPage` - so this host reads that ViewModel and nothing else.
+    ActivityComposerSheetHost(activityViewModel = activityViewModel)
 
     // The friends feed's own sheets, from its own ViewModel. They exist as a
     // second call rather than a shared one because the two feeds page and fail

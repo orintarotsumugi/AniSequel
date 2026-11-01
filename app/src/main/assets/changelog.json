@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "1.7.6",
+      "entries": [
+        {
+          "title": "Write a new activity",
+          "detail": "The Activity tab's heading now carries a compose button. It opens a Material 3 sheet for a text post - Markdown, a live counter and AniList's own 5-character floor - and the stored post is inserted at the top of the feed the moment it lands, without a refetch. Only your own profile offers it: a text activity is written to your account, so posting it from somebody else's page would file your words under their heading."
+        },
+        {
+          "title": "The Info page uses AniList's banner",
+          "detail": "The hero's backdrop was measured from a crossfade that had no size of its own and two children that all took the parent's size without contributing any - so it measured to zero and neither the banner nor the poster ever drew, leaving the placeholder tint. The crossfade now fills the hero, and the wide banner AniList stores for a title crossfades in over the key visual as a full-bleed, top-anchored crop instead of the thin 86dp strip it used to be."
+        },
+        {
+          "title": "Deleting a comment sticks",
+          "detail": "A delete used to be trusted unconditionally: even an answer of `deleted: false` removed the row locally, and the comment came back on the next open. The mutation's own confirmation is now required, the last-closed thread's snapshot drops the removed reply when the answer lands after the sheet is gone, and the chat window's visible-row count shrinks with the list so Older keeps its place."
+        },
+        {
+          "title": "Global no longer hides Messages",
+          "detail": "The opt-in Global chip used to sit between Friends and Messages, which pushed Messages past the right edge of a row that scrolls without saying so - turning the stream on made the inbox look like it had vanished. Global is now the last chip and animates in when the setting is turned on, so the three everyday segments stay exactly where they were. A conversation opened from a Global row also starts with a clean reply box rather than the previous person's confirmation."
+        },
+        {
+          "title": "Edit reply in comments",
+          "detail": "Replies to comments can now be edited with the full composer: the same header, preview, format bar, counter and GIF picker that writing a new comment uses. Edit mode starts from the existing comment's text, and changes are saved back to the comment thread."
+        },
+        {
+          "title": "Comment composer bottom-row icons",
+          "detail": "The icons in the composer's bottom row were consistently 20dp inside their 48dp touch targets, making 24dp vectors look undersized. All glyphs now render at the vector's own 24dp default and the same 48dp target size as the rest of the bar, so they touch-target and visually match the other controls."
+        },
+        {
+          "title": "Reply from a friend's activity",
+          "detail": "Tapping a person's name in the Activity or Global feed now opens a fresh conversation with that author, rather than showing the viewer's own messages. The inbox is fetched and a blank reply box is shown, so the reader can write the first message. A reader cannot message themselves - the server would reject it and the UI disables it."
+        },
+        {
+          "title": "View messages from friend activity",
+          "detail": "From a friend's activity row (Friends or Global feed), the author row now carries a message entry point. Tapping it opens a conversation with that author, even if no prior messages exist. This works the same way as opening from the Messages tab: a thread is assembled from both halves of the inbox, with a reply box underneath."
+        },
+        {
+          "title": "Message threads mirror AniList's",
+          "detail": "Opening a private message now loads that message's own AniList thread - the message and every reply, from either account - instead of matching whatever the inbox and notification pages happened to contain. Replies post into the same thread with SaveActivityReply, which is the mutation the site's own message page uses, so a private exchange reads the same as a public one and nothing is sent as a fresh top-level message. A message from two years ago still shows the whole conversation."
+        },
+        {
+          "title": "GIF search returns results again",
+          "detail": "Safebooru filters on rating:safe, and the picker was asking for rating:general - a value the site does not know, which matches nothing and answers an empty page for every query. The request now uses the same spelling the response's own rating field carries, so searches for a character or a show return the catalogue again."
+        },
+        {
+          "title": "Camera photos can be attached",
+          "detail": "HEIC and HEIF photos were being refused as unsupported image types before the app reached its own re-encode step, so the one format an Android camera writes could not be attached at all. Those two are now accepted and converted to JPEG, and the converted file is checked against the host's size limit before it is uploaded."
+        },
+        {
+          "title": "The composer's bar fits its controls",
+          "detail": "The format controls now take a full row of their own, with the counter and the Post button on a second row, instead of sharing width with them. More controls are visible at once, the Post button never scrolls away, and a poster-sized GIF tile falls back to the provider's still image rather than drawing a 27-megapixel frame in a 104dp cell."
+        }
+      ]
+    },
+    {
       "version": "1.7.5",
       "entries": [
         {
@@ -66,7 +119,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
+          "detail": "An airing title with no next episode number now reads \"Airing \u00b7 12 eps\" instead of \"Airing \u00b7 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
         }
       ]
     },
@@ -91,7 +144,7 @@
         },
         {
           "title": "A creator's page introduces them properly",
-          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+          "detail": "The staff hero now leads with the creator's occupations - Director \u00b7 Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
         },
         {
           "title": "The library bar carries its number",
@@ -2185,7 +2238,7 @@
         },
         {
           "title": "Widgets stop naming shows they are not showing",
-          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to \u2026\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
         },
         {
           "title": "The activity tile shows your face",
@@ -2206,7 +2259,7 @@
         },
         {
           "title": "A Featured Sequel widget",
-          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe \u2014 a large poster, its title, what it is a sequel to and how many are waiting \u2014 so the recommendation is readable before you even open the app."
         },
         {
           "title": "See who liked an activity",
@@ -2223,11 +2276,11 @@
       "entries": [
         {
           "title": "In-app details from the Activity feed and Currently Arriving",
-          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet \u2014 synopsis, community scores, rankings, genres, specs and an AniList link \u2014 instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
         },
         {
           "title": "The detail sheet adapts to what it is showing",
-          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to \u2026\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
         }
       ]
     },
@@ -2236,7 +2289,7 @@
       "entries": [
         {
           "title": "Retain Anime Color keeps the colour",
-          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts \u2014 no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
         },
         {
           "title": "Theme tab, rebuilt around Material 3 Expressive",
@@ -2249,7 +2302,7 @@
       "entries": [
         {
           "title": "GIFs and images in bios and comments",
-          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence \u2014 like a GIF between two words \u2014 are embedded in the flow and animate inline."
         },
         {
           "title": "AniList links get a preview card",
@@ -2261,7 +2314,7 @@
         },
         {
           "title": "Theme screen, reorganised",
-          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+          "detail": "Settings > Theme is now grouped into clear sections \u2014 appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
         },
         {
           "title": "Theme switching is snappier",

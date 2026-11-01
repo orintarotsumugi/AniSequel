@@ -27,6 +27,7 @@ import com.anisequel.data.model.FollowersData
 import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SaveTextActivityData
 import com.anisequel.data.model.StaffProfileData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ToggleLikeData
@@ -176,6 +177,10 @@ class AniListErrorMappingTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun saveTextActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<SaveTextActivityData> = notServed("saveTextActivity")
 
         override suspend fun deleteActivityReply(
             request: GraphQLRequest
@@ -477,6 +482,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun saveActivityReply(
             request: GraphQLRequest
         ): GraphQLResponse<SaveActivityReplyData> = notServed("saveActivityReply")
+
+        override suspend fun saveTextActivity(
+            request: GraphQLRequest
+        ): GraphQLResponse<SaveTextActivityData> = notServed("saveTextActivity")
 
         override suspend fun deleteActivityReply(
             request: GraphQLRequest

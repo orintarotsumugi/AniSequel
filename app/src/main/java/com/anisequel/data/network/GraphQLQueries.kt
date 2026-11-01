@@ -1397,11 +1397,14 @@ object GraphQLQueries {
      * that needs them, so it is the only thing that asks.
      *
      * `Activity(id:)` returns `ActivityUnion`, so the fragments are required.
-     * Both members this feed can open a thread for are listed: the sheet is
-     * reachable from a list card and from a text post, and a thread query with
-     * only the `ListActivity` fragment would answer a text post's id with an
-     * empty object - an open sheet showing zero comments on a post that has
-     * them.
+     * The three members that can be opened are listed: a list card, a text post,
+     * and a **message**. A thread query with only the `ListActivity` fragment
+     * answers a text post's id with an empty object - an open sheet showing zero
+     * comments on a post that has them - and `MessageActivity` was missing for
+     * the same reason, so every DM thread read empty. A message is a thread the
+     * same way a post is: the message is the activity and the exchange is its
+     * replies, which is why `UserMessagesViewModel` reads the conversation from
+     * here rather than assembling it from inbox pages.
      */
     val GET_ACTIVITY_REPLIES = """
         query GetActivityReplies(${'$'}activityId: Int) {
@@ -1425,6 +1428,24 @@ object GraphQLQueries {
               }
             }
             ... on TextActivity {
+              id
+              isLiked
+              likeCount
+              replyCount
+              replies {
+                id
+                text
+                likeCount
+                isLiked
+                createdAt
+                user {
+                  id
+                  name
+                  avatar { large medium }
+                }
+              }
+            }
+            ... on MessageActivity {
               id
               isLiked
               likeCount
@@ -1873,6 +1894,34 @@ object GraphQLQueries {
               name
               avatar { large medium }
             }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * Posts a text activity - a status update - to the viewer's own stream.
+     *
+     * `SaveTextActivity` is a different mutation from [SAVE_ACTIVITY_REPLY] and
+     * [SAVE_ACTIVITY_MESSAGE]: this one writes a top-level post with no parent
+     * activity and no recipient. AniList's own schema documents `text` as Min 5,
+     * Max 10000 (checked against the live mutation reference, not guessed), which
+     * is why the composer's floor is five characters rather than the two a comment
+     * needs.
+     *
+     * The selection is the same row shape the profile feed draws, so the new post
+     * can be inserted at the top of the loaded page without a refetch - a post
+     * that only appears after scrolling away and back reads as a failed write.
+     */
+    val SAVE_TEXT_ACTIVITY = """
+        mutation SaveTextActivity(${'$'}text: String) {
+          SaveTextActivity(text: ${'$'}text) {
+            id
+            text
+            createdAt
+            likeCount
+            replyCount
+            isLiked
+            siteUrl
           }
         }
     """.trimIndent()

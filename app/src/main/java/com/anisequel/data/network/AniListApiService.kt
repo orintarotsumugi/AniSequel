@@ -21,6 +21,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SaveActivityReplyData
+import com.anisequel.data.model.SaveTextActivityData
 import com.anisequel.data.model.SendActivityMessageData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SentMessagesData
@@ -276,6 +277,19 @@ interface AniListApiService {
     suspend fun saveActivityMessage(
         @Body request: GraphQLRequest
     ): GraphQLResponse<SendActivityMessageData>
+
+    /**
+     * Posts a text activity to the viewer's own stream. Requires a session.
+     *
+     * Not a reply and not a message: there is no parent activity and no recipient,
+     * which is why this is [saveTextActivity] rather than a fourth call through
+     * [saveActivityReply].
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun saveTextActivity(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<SaveTextActivityData>
 
     /**
      * Deletes one of the viewer's own comments. Requires a session.

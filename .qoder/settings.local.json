@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr:*)",
+      "Bash(cd /home/lost/Music/Anisequel && gh run list --branch fix/navigation-motion-and-tier-covers --limit 2)",
+      "Bash(grep -rn \"AniListErrorKind\" app/src/main/java/com/anisequel/data/network/AniListApiService.kt app/src/main/java/com/anisequel/data/network/*.kt | head -20)"
+    ]
+  }
+}

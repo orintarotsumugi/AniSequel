@@ -208,6 +208,32 @@ class UserActivityViewModel(
     val likers: StateFlow<LikersState?> = _likers.asStateFlow()
 
     /**
+     * The new-activity composer.
+     *
+     * Its state and its one write live in [ActivityComposerStore] rather than here:
+     * see that file's KDoc for the split. This ViewModel keeps the delegating calls
+     * because it is the one state holder the profile screen talks to, and the feed
+     * is the composer's one collaborator - a posted activity lands at the top of it.
+     */
+    private val composerStore = ActivityComposerStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        enabled = !isDemo && !followingOnly && !globalFeed && viewerId != null,
+        onPosted = { post -> insertPostedActivity(post) }
+    )
+
+    val composer: StateFlow<ActivityComposerStore.ComposerState?> get() = composerStore.state
+
+    /**
+     * Whether this feed may post a new activity.
+     *
+     * False for the friends and site-wide feeds, which are *selections* rather than
+     * somebody's page, and false without a session. The screen also hides the
+     * control off the viewer's own profile; this is the half a caller cannot forget.
+     */
+    val canCompose: Boolean get() = composerStore.enabled
+
+    /**
      * The detail sheet's store is not held here.
      *
      * An activity row's own media node is a thin summary - title, cover, format,
@@ -305,6 +331,22 @@ class UserActivityViewModel(
     }
 
     /**
+     * Whether this feed is addressed by one person's id.
+     *
+     * [followingOnly] and [globalFeed] are *selections* - everyone the viewer
+     * follows, or the whole site - so neither is a profile and neither has an id
+     * to require. This used to be spelled out as
+     * `userId == null && !isDemo && !followingOnly` in both call sites below, and
+     * the site-wide feed was added as a third mode without being added to that
+     * list. Opening Global therefore matched the "no id" guard: [loadFirstPage]
+     * set the state to [ActivityState.Loading] and returned, and because nothing
+     * had been asked for the spinner never resolved. One predicate, read by both
+     * places, is the difference between a mode that is a mode and a mode that is
+     * three copies of the same condition waiting to disagree.
+     */
+    private fun requiresUserId(): Boolean = !isDemo && !followingOnly && !globalFeed
+
+    /**
      * Fetch the first page, once.
      *
      * Guarded rather than idempotent because the Activity tab is re-entered every
@@ -314,7 +356,7 @@ class UserActivityViewModel(
      */
     fun loadFirstPage(forceRefresh: Boolean = false) {
         if (started && !forceRefresh) return
-        if (userId == null && !isDemo && !followingOnly) {
+        if (userId == null && requiresUserId()) {
             _state.value = ActivityState.Loading("Loading recent activity...")
             return
         }
@@ -369,9 +411,43 @@ class UserActivityViewModel(
         fetch(forceRefresh = true)
     }
 
+    /** Opens the new-activity composer, if this feed may post one. */
+    fun openComposer() = composerStore.open()
+
+    /** Rewrites the composer's draft, clipped to `SaveTextActivity`'s ceiling. */
+    fun updateComposerDraft(text: String) = composerStore.updateDraft(text)
+
+    /** Closes the composer, unless its post is still in flight. */
+    fun dismissComposer() = composerStore.dismiss()
+
+    /** Posts the composer's draft as a text activity. */
+    fun submitTextActivity() = composerStore.post()
+
+    /**
+     * Puts a just-posted activity at the top of the feed.
+     *
+     * A feed that has never loaded still shows the post - it is the one row the
+     * reader just wrote and confirmed - and then asks for the first page over it so
+     * the rest of the history arrives underneath. The id guard is what keeps the
+     * insert from being undone by [refresh] on a profile whose owner id has not
+     * resolved yet: there is no page to fetch for, but the post is still real.
+     */
+    private fun insertPostedActivity(post: ProfileActivity) {
+        started = true
+        val current = _state.value
+        if (current is ActivityState.Success) {
+            _state.value = current.copy(
+                activities = (listOf(post) + current.activities).distinctBy { it.id }
+            )
+            return
+        }
+        _state.value = ActivityState.Success(activities = listOf(post), hasMore = false)
+        if (userId != null || !requiresUserId()) refresh()
+    }
+
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {
         val currentId = userId
-        if (currentId == null && !isDemo && !followingOnly) {
+        if (currentId == null && requiresUserId()) {
             _state.value = ActivityState.Error(
                 "AniList does not serve activity by name, and this profile was opened without an id."
             )

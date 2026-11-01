@@ -89,8 +89,18 @@ class GifSearchStore(
     fun setQuery(query: String) {
         val current = _state.value
         if (query == current.query) return
-        _state.value = current.copy(query = query, error = null)
+        // Both jobs, not just the search: a page from the *previous* query that
+        // is still in flight would otherwise land later and clear the flag it
+        // set, and a state left with `isLoadingMore = true` blocks every future
+        // page of the new search behind a spinner that never stops.
         searchJob?.cancel()
+        pageJob?.cancel()
+        _state.value = current.copy(
+            query = query,
+            error = null,
+            isLoadingMore = false,
+            next = null
+        )
         if (query.isBlank()) {
             // Clearing the field clears the grid with it. Leaving another search's
             // results under an empty field is how a reader taps a GIF they did not
@@ -109,6 +119,8 @@ class GifSearchStore(
         val query = _state.value.query
         if (query.isBlank()) return
         searchJob?.cancel()
+        pageJob?.cancel()
+        _state.value = _state.value.copy(isLoadingMore = false)
         searchJob = scope.launch { runFirstSearch(query) }
     }
 
@@ -121,6 +133,7 @@ class GifSearchStore(
             onSuccess = { page ->
                 _state.value = current.copy(
                     isSearching = false,
+                    isLoadingMore = false,
                     results = page.results,
                     next = page.next,
                     error = null,
@@ -130,6 +143,7 @@ class GifSearchStore(
             onFailure = { error ->
                 _state.value = current.copy(
                     isSearching = false,
+                    isLoadingMore = false,
                     results = emptyList(),
                     next = null,
                     error = error.message ?: "The GIF search did not answer."

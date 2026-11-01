@@ -26,7 +26,7 @@ import okhttp3.Request
  * the two that actually answer:
  *
  * - **Safebooru**, anonymous, no account and no key, asked for `animated_gif` at
- *   `rating:general`. Its catalogue is anime, which is what a reader on AniList is
+ *   `rating:safe`. Its catalogue is anime, which is what a reader on AniList is
  *   looking for, and this is the source the browser GIF pickers in that community
  *   already use.
  * - **Tenor v2**, when the reader has pasted their own key in Settings. This is
@@ -74,7 +74,8 @@ interface GifSearchApi {
 /**
  * One page of GIFs.
  *
- * [gridUrl] is what the picker draws (small, and animated); [embedUrl] is what the
+ * [gridUrl] is what the picker draws (the small copy, animated whenever the provider
+ * has an animation small enough for a tile); [embedUrl] is what the
  * comment gets, because the URL a reader pastes into a comment has to be the file
  * itself, at full size, not the thumbnail a search index uses to save bandwidth.
  */
@@ -237,7 +238,7 @@ internal data class TenorFormat(
     val dims: List<Int>? = null
 )
 /**
- * Safebooru's anonymous JSON API, asked for animated GIFs at general rating only.
+ * Safebooru's anonymous JSON API, asked for animated GIFs at its safe rating only.
  *
  * ## Why this is the default
  *
@@ -250,12 +251,18 @@ internal data class TenorFormat(
  *
  * ## What is filtered, and twice
  *
- * `rating:general` goes into the query, and a post whose own `rating` field is not
- * `g` is dropped on the way out. A booru is user-tagged: the filter argument is a
+ * `rating:safe` goes into the query, and a post whose own `rating` field is not in
+ * the safe set is dropped on the way out ([isSafeRating] - the site spells its ratings
+ * out as `safe`/`general`, so the check is a set of strings, not one letter). A booru
+ * is user-tagged: the filter argument is a
  * request, not a guarantee, and this app ships an image picker into a comments
  * section that other people read. The tag is also the reason the search box says
  * "tags" - boorus match `spice_and_wolf holo`, not a sentence, so the query is
  * rewritten into that shape rather than passed through.
+ *
+ * The spelling matters as much as the filter: this used to ask for
+ * `rating:general`, which the site does not know, so it matched nothing and every
+ * search answered an empty page. See [REQUIRED_TAGS].
  */
 class SafebooruGifs(
     private val client: OkHttpClient = defaultClient(),
@@ -266,7 +273,11 @@ class SafebooruGifs(
         Types.newParameterizedType(List::class.java, SafebooruPost::class.java)
     )
 
-    override val catalogueIsNarrow: Boolean get() = false
+    // A booru matches tags, not sentences, so an empty answer is usually a gap in
+    // the index rather than a provider failure, and the reader needs the "try fewer
+    // words" sentence to know which. This was `false`, which meant every miss on
+    // this provider got the flat "Nothing found" line meant for Tenor.
+    override val catalogueIsNarrow: Boolean get() = true
 
     override suspend fun search(query: String, cursor: String?): Result<GifPage> =
         withContext(Dispatchers.IO) {
@@ -284,7 +295,7 @@ class SafebooruGifs(
                     // the API selector, and asking for page 2 of a post list would ask
                     // the API itself to switch pages.
                     .addQueryParameter("pid", (cursor?.toIntOrNull() ?: 0).coerceAtLeast(0).toString())
-                    .addQueryParameter("tags", "$REQUIRED_TAGS $tags")
+                    .addQueryParameter("tags", booruSearchTags(query))
                     .build()
             }
             val request = built.getOrNull()?.let {
@@ -303,14 +314,25 @@ class SafebooruGifs(
                         )
                     }
                     val body = response.body?.string().orEmpty()
+                    // An unknown tag combination answers HTTP 200 with *no body at
+                    // all* - not `[]`, nothing. That is the site's "no matches", and
+                    // it used to fall through to the parser, fail there and tell the
+                    // reader Safebooru had answered with something unreadable.
+                    if (isNoMatchesBody(body)) {
+                        return@withContext Result.success(GifPage(emptyList()))
+                    }
                     val parsed = runCatching { adapter.fromJson(body) }.getOrNull()
                         ?: return@withContext Result.failure(
                             GifSearchFailure("Safebooru answered with something unreadable.")
                         )
-                    val page = parsed?.toGifPage() ?: GifPage(emptyList())
-                    val index = cursor?.toIntOrNull() ?: 0
+                    val page = parsed.toGifPage()
+                    // Pagination asks the *server's* page how full it was, not the
+                    // filtered one. Dropping a post for its rating, or a tile for
+                    // having no file, shortens `page.results` below the requested
+                    // limit while the site still had rows behind it, so a search that
+                    // had three pages left would stop after the first.
                     Result.success(
-                        page.copy(next = if (page.results.size >= PAGE_SIZE) (index + 1).toString() else null)
+                        page.copy(next = booruNextCursor(parsed.size, PAGE_SIZE, cursor))
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -323,8 +345,6 @@ class SafebooruGifs(
     companion object {
         private const val ENDPOINT = "https://safebooru.org/index.php"
 
-        /** The rating the catalogue is limited to, whatever the tags say. */
-        private const val REQUIRED_TAGS = "animated_gif rating:general"
         private const val PAGE_SIZE = 24
         private const val USER_AGENT = "AniSequel (Android; GIF search)"
 
@@ -357,6 +377,28 @@ internal fun booruTags(query: String): String =
 
 private val DROP_WORDS = setOf("a", "an", "and", "of", "the", "with", "in", "on")
 
+/**
+ * The whole `tags` parameter a booru search sends.
+ *
+ * Top-level and internal so the rating spelling is pinned by a JVM test: it is
+ * the one argument whose wrong value does not fail, it answers an empty page.
+ */
+internal fun booruSearchTags(query: String): String = "$REQUIRED_TAGS ${booruTags(query)}".trim()
+
+/**
+ * The rating the catalogue is limited to, whatever the tags say.
+ *
+ * `rating:safe`, not `rating:general`. The site's DAPI does not reject a rating
+ * value it does not know; it simply matches nothing, and a search for
+ * `animated_gif rating:general holo` answers HTTP 200 with an **empty body** -
+ * which is this provider's "no matches". Every search in the picker therefore
+ * came back empty regardless of the query, while the same tags with
+ * `rating:safe` return the catalogue. The response's own `rating` field is
+ * spelled `safe` too (see [isSafeRating]); the request and the filter have to
+ * agree or one of them is decorative.
+ */
+internal const val REQUIRED_TAGS = "animated_gif rating:safe"
+
 /** One Safebooru post, as far as this picker cares. */
 @JsonClass(generateAdapter = true)
 internal data class SafebooruPost(
@@ -373,22 +415,23 @@ internal data class SafebooruPost(
 /**
  * Safebooru's post list, flattened to the two URLs the picker needs.
  *
- * `file_url` is the GIF a comment should carry, `sample_url` the smaller copy a
- * grid tile should draw - on a booru the sample of an animation is often the same
- * file, which is why the fallback chain ends at the original rather than at a
- * thumbnail that would look wrong blown up in a comment. A post without a file URL
- * cannot be embedded and is dropped; a post whose rating is not general is dropped
- * too, whatever the query asked for.
+ * `file_url` is the GIF a comment should carry. The tile is the harder choice and
+ * [booruTileUrl] decides it: the site's `sample_url` is a shrunken **animation** for
+ * most GIFs and a **still JPEG** for the rest, and the thumbnail is always a JPEG, so
+ * "smallest file" and "the thing that moves" are not the same URL.
+ *
+ * A post without a file URL cannot be embedded and is dropped; a post whose rating is
+ * not in the safe set is dropped too, whatever the query asked for.
  */
 internal fun List<SafebooruPost?>?.toGifPage(): GifPage {
     val rows = this.orEmpty().filterNotNull().mapNotNull { post ->
-        if (post.rating != null && post.rating!!.lowercase() != "g") return@mapNotNull null
+        if (!isSafeRating(post.rating)) return@mapNotNull null
         val embed = post.fileUrl ?: post.sampleUrl ?: return@mapNotNull null
         if (!embed.startsWith("http")) return@mapNotNull null
         GifResult(
             id = post.id?.toString() ?: embed,
             embedUrl = embed,
-            gridUrl = post.sampleUrl ?: post.previewUrl ?: embed,
+            gridUrl = booruTileUrl(post) ?: embed,
             title = post.tags?.split(' ')?.take(6)?.joinToString(" ")?.replace('_', ' '),
             width = post.width,
             height = post.height
@@ -397,3 +440,82 @@ internal fun List<SafebooruPost?>?.toGifPage(): GifPage {
     return GifPage(results = rows, next = null, totalCount = rows.size)
 }
 
+/**
+ * Whether a response body is Safebooru's way of saying "that search matched
+ * nothing": an empty body, or an empty array.
+ *
+ * The site gives no JSON at all for a tag combination it cannot resolve, which is a
+ * legitimate answer and not a broken one - so it must not reach the parser, where it
+ * reads as a corrupt response and blames the provider.
+ */
+internal fun isNoMatchesBody(body: String): Boolean =
+    body.isBlank() || body.trim() == "[]"
+
+/**
+ * The post index to ask for next, or null when this page was not full.
+ *
+ * [rawPostCount] is what the site returned *before* this app filtered any of it: a
+ * page emptied by the rating check is still a full page of posts, and treating it as
+ * a short one ended the search at its first page.
+ */
+internal fun booruNextCursor(rawPostCount: Int, requestedLimit: Int, cursor: String?): String? =
+    if (rawPostCount >= requestedLimit) ((cursor?.toIntOrNull() ?: 0) + 1).toString() else null
+
+/**
+ * The rating strings that mean "safe to put in a comment other people read".
+ *
+ * Safebooru's own API spells its ratings out - a post answers `rating: "general"` or
+ * `rating: "safe"`, never the one-letter form this check used to compare against.
+ * Matching only `"g"` therefore dropped **every** post, and the picker drew an empty
+ * grid over a search that had just returned twenty-four. Both spellings are accepted
+ * because the rule is about the content, not about the string the site happens to
+ * use today, and `rating:` is a request the site can ignore rather than a guarantee.
+ */
+internal fun isSafeRating(rating: String?): Boolean =
+    rating == null || rating.lowercase() in SAFE_RATINGS
+
+private val SAFE_RATINGS = setOf("g", "general", "s", "safe")
+
+/**
+ * Which copy of a post the picker's tile should draw.
+ *
+ * Prefer the animated sample. When the sample is a JPEG still - which is a fifth of
+ * them - fall back to the post's own GIF, but only while that file is small enough to
+ * belong in a 104dp cell: an animated drawable is decoded at its **intrinsic** frame
+ * size however it is displayed, and this catalogue carries GIFs up to 5200x5200, so
+ * twenty of those in a scrolling grid is a crash rather than a preview. A post whose
+ * dimensions the response did not give is treated as too big for the same reason.
+ *
+ * For a file over the budget the tile is the still, and the comment still gets
+ * [GifResult.embedUrl] - the reader embeds the full animation either way.
+ */
+internal fun booruTileUrl(post: SafebooruPost): String? {
+    val sample = post.sampleUrl?.takeIf { it.startsWith("http") }
+    val file = post.fileUrl?.takeIf { it.startsWith("http") }
+    val sampleIsAnimation = sample != null && sample.isGifUrl()
+    if (sampleIsAnimation) return sample
+    if (file != null && file.isGifUrl() && fitsTileBudget(post.width, post.height)) return file
+    // A still wins over an animation this grid cannot afford. The old fallback
+    // was `sample ?: file` and returned the poster-sized GIF it had just refused
+    // to draw, so the one case the budget existed for was the one case it did not
+    // cover - and a 5200x5200 frame in a 104dp cell is a crash, not a preview.
+    return sample ?: post.previewUrl?.takeIf { it.startsWith("http") } ?: file
+}
+
+/**
+ * The ceiling for one tile's animation: [TILE_MAX_PIXELS] in total, with no edge past
+ * [TILE_MAX_EDGE]. Both halves are needed - a 4000x40 strip is 160k pixels and still
+ * 4000 wide.
+ */
+internal fun fitsTileBudget(width: Int?, height: Int?): Boolean {
+    if (width == null || height == null) return false
+    if (width <= 0 || height <= 0) return false
+    return width.toLong() * height.toLong() <= TILE_MAX_PIXELS &&
+        maxOf(width, height) <= TILE_MAX_EDGE
+}
+
+private fun String.isGifUrl(): Boolean = endsWith(".gif", ignoreCase = true)
+
+/** Roughly the largest sample the site serves, so an animated sample is always in. */
+private const val TILE_MAX_PIXELS = 1_500_000L
+private const val TILE_MAX_EDGE = 1_500
