@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -80,6 +79,7 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -213,9 +213,9 @@ fun InfoHero(
     // full-bleed behind it - and never showed the banner AniList actually stores as
     // a backdrop. The old `bannerImage ?: posterUrl` was reverted because the
     // summary node has no banner, so the artwork swapped mid-entrance the moment
-    // the detail landed. The crossfade below makes that swap a dissolve instead:
-    // the poster holds the frame while the banner decodes, and the hero ends on the
-    // image that belongs behind a wide composition.
+    // the detail landed. The crossfade in [InfoHeroBackdrop] makes that swap a
+    // dissolve instead, and gives each image the treatment its own ratio asks
+    // for: the banner as a strip at its native shape, the key visual full-bleed.
     val banner = media.bannerImage?.takeIf { it.isNotBlank() }
 
     Box(
@@ -228,32 +228,11 @@ fun InfoHero(
             .heightIn(min = HERO_HEIGHT)
             .background(heroBackdrop)
     ) {
-        Crossfade(
-            targetState = banner ?: media.posterUrl,
-            animationSpec = ExpressiveMotion.FastEffects,
-            label = "hero_backdrop"
-        ) { backdrop ->
-            if (backdrop != null) {
-                AsyncImage(
-                    model = backdrop,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .graphicsLayer {
-                            val scroll = collapse()
-                            // Travels slower than the page, and grows: the image has
-                            // to keep covering the box it is being pulled out of, or
-                            // a parallax on a `Crop` scale exposes an edge.
-                            translationY = scroll * PARALLAX_TRAVEL.toPx()
-                            val zoom = 1f + scroll * PARALLAX_ZOOM
-                            scaleX = zoom
-                            scaleY = zoom
-                            alpha = 1f - scroll * BACKDROP_HANDOFF
-                        }
-                )
-            }
-        }
+        InfoHeroBackdrop(
+            banner = banner,
+            posterUrl = media.posterUrl,
+            collapse = collapse
+        )
 
         // Ends on `surface`, not on black: the hero has to hand over to the page
         // body without a visible seam, and the sheet's own container is `surface`.
@@ -361,7 +340,7 @@ fun InfoHero(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
-                .sectionReveal(0)
+                .sectionReveal(0, entranceKey = media.id to media.type)
                 .graphicsLayer {
                     val scroll = collapse()
                     // Up, while the backdrop goes down: the two halves of the hero
@@ -415,7 +394,9 @@ fun InfoHero(
                     // description here too would announce the poster twice.
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
+                    modifier = Modifier
+                        .matchParentSize()
+                        .unseamedCover()
                 )
                 // Decorative. The poster itself is the clickable thing and carries
                 // the title as its `contentDescription`, so this badge was a second
@@ -673,29 +654,13 @@ private fun HeroChip(
 
 private val HERO_HEIGHT = 340.dp
 
-/** How far the backdrop lags the page, at full collapse. */
-private val PARALLAX_TRAVEL = 64.dp
-
-/** How much the backdrop grows by the time the hero is out of the way. */
-private const val PARALLAX_ZOOM = 0.16f
-
-/**
- * How much of the backdrop is gone once the hero has fully collapsed.
- *
- * Half, not all: at the end of the collapse the hero is still 140dp tall on screen,
- * and a backdrop that had faded out completely would expose the container colour
- * underneath for the rest of the artwork's travel. Half of it also leaves the show's
- * own palette on screen for the handover into the page.
- */
-private const val BACKDROP_HANDOFF = 0.5f
-
 /**
  * How far the hero's placeholder sits toward the show's colour.
  *
- * Under `ContentScale.Crop` the poster covers this box once it decodes, so the
- * number only governs the loading frames and the seam at the edges. A full-strength
- * accent is a light panel in a dark sheet; none of it is the flat grey the hero used
- * to be, which is the one thing the cover colour was extracted to avoid.
+ * It governs the frames before the artwork decodes, the region under the banner
+ * strip, and the wash the collapsing backdrop fades into. A full-strength
+ * accent is a light panel in a dark sheet; none of it is the flat grey the hero
+ * used to be, which is the one thing the cover colour was extracted to avoid.
  */
 private const val BACKDROP_TINT = 0.45f
 

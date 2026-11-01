@@ -56,7 +56,9 @@ fun InfoWhereToWatchCard(
     links: List<MediaExternalLink>,
     modifier: Modifier = Modifier
 ) {
-    val available = links.filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
+    val available = remember(links) {
+        links.filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
+    }
     if (available.isEmpty()) return
 
     val context = LocalContext.current

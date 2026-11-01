@@ -56,10 +56,21 @@ internal fun rememberAiringCountdown(media: MediaNode): String? {
 
     val countdown by produceState(
         initialValue = if (resumed) media.airingCountdown() else null,
+        media.id,
+        media.type,
         airingAt,
         resumed
     ) {
-        if (!resumed || airingAt == null) return@produceState
+        if (!resumed || airingAt == null) {
+            // `value` lives in a `remember` the keys do not reset, and a media
+            // swap can arrive on this guard path: the detail of the next title
+            // landing takes `airingAt` from set to null, the producer restarts,
+            // and returned without saying so - leaving the *previous* title's
+            // countdown printed under a show that has nothing scheduled. Null
+            // is the answer the callers hide on, so the guard has to write it.
+            value = null
+            return@produceState
+        }
         while (true) {
             value = media.airingCountdown()
             delay(COUNTDOWN_TICK_MILLIS)

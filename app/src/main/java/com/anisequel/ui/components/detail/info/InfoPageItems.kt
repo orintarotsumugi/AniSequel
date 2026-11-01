@@ -86,15 +86,22 @@ internal fun LazyListScope.infoPageItems(
 ) {
     val media = subject.media
 
+    // The entrance identity for every section below. The item keys are constant
+    // strings, so without this the saved "already played" flag from the title the
+    // reader left would skip the stagger for the one they just opened - see
+    // [sectionReveal]. The type is part of it because `anime/7` and `manga/7` are
+    // different shows sharing a number.
+    val revealKey = subject.mediaId to media.type
+
     // Only a franchise recommendation has a parent; an arriving or activity row is
     // a show the viewer already tracks. The safe call is the one branch in this
     // list, and it earns itself: the card needs a non-null sequel, and there is no
     // honest `visible` flag for "there is no parent to draw".
     subject.sequel?.let { sequel ->
-        cardItem(key = "parent", index = 1) { InfoParentCard(sequel = sequel, modifier = it) }
+        cardItem(key = "parent", index = 1, entranceKey = revealKey) { InfoParentCard(sequel = sequel, modifier = it) }
     }
 
-    cardItem(key = "actions", index = 2) {
+    cardItem(key = "actions", index = 2, entranceKey = revealKey) {
         DetailActionRow(
             subject = subject,
             canWriteToAniList = canWriteToAniList,
@@ -114,6 +121,7 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "progress",
         index = 3,
+        entranceKey = revealKey,
         visible = sections.hasProgressCard
     ) { InfoProgressCard(media = media, modifier = it) }
 
@@ -124,20 +132,22 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "friends",
         index = 4,
+        entranceKey = revealKey,
         visible = friends.isNotEmpty()
     ) { InfoFriendsCard(friends = friends, media = media, modifier = it) }
 
     cardItem(
         key = "streaming",
         index = 5,
+        entranceKey = revealKey,
         visible = sections.streamingLinks.isNotEmpty()
     ) { InfoWhereToWatchCard(links = sections.streamingLinks, modifier = it) }
 
-    cardItem(key = "synopsis", index = 6) {
+    cardItem(key = "synopsis", index = 6, entranceKey = revealKey) {
         InfoSynopsisCard(media = media, isDetailLoading = isDetailLoading, modifier = it)
     }
 
-    cardItem(key = "specs", index = 7) {
+    cardItem(key = "specs", index = 7, entranceKey = revealKey) {
         InfoSpecsCard(
             media = media,
             isDetailLoading = isDetailLoading,
@@ -152,6 +162,7 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "categories",
         index = 8,
+        entranceKey = revealKey,
         visible = sections.hasCategories
     ) { InfoCategoriesSection(media = media, modifier = it) }
 
@@ -160,6 +171,7 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "external_links",
         index = 9,
+        entranceKey = revealKey,
         visible = sections.hasExternalLinks
     ) { InfoExternalLinksSection(media = media, modifier = it) }
 
@@ -169,6 +181,7 @@ internal fun LazyListScope.infoPageItems(
     rowItem(
         key = "theme_songs",
         index = 10,
+        entranceKey = revealKey,
         visible = themeSongs.isNotEmpty()
     ) { InfoThemeSongsSection(themes = themeSongs, modifier = it) }
 
@@ -178,6 +191,7 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "meta_rows",
         index = 11,
+        entranceKey = revealKey,
         visible = sections.hasMetaRows
     ) { InfoMetaRowsSection(media = media, modifier = it) }
 
@@ -187,6 +201,7 @@ internal fun LazyListScope.infoPageItems(
     cardItem(
         key = "rankings",
         index = 12,
+        entranceKey = revealKey,
         visible = sections.hasRankings
     ) { AnimeRankingsSection(media = media, modifier = it) }
 
@@ -197,22 +212,25 @@ internal fun LazyListScope.infoPageItems(
     rowItem(
         key = "cast",
         index = 13,
+        entranceKey = revealKey,
         visible = sections.hasCast
     ) { InfoCharactersSection(media = media, onOpenCharacter = onOpenCharacter, modifier = it) }
 
     rowItem(
         key = "relations",
         index = 14,
+        entranceKey = revealKey,
         visible = sections.hasRelations
     ) { InfoRelationsSection(media = media, onOpen = onOpenMedia, modifier = it) }
 
     rowItem(
         key = "staff",
         index = 15,
+        entranceKey = revealKey,
         visible = sections.hasStaff
     ) { InfoStaffSection(media = media, onOpenStaff = onOpenStaff, modifier = it) }
 
-    cardItem(key = "extras", index = 16) {
+    cardItem(key = "extras", index = 16, entranceKey = revealKey) {
         InfoExtrasCard(media = media, onOpenCover = onOpenCover, modifier = it)
     }
 }
@@ -235,11 +253,14 @@ internal fun LazyListScope.infoPageItems(
 private fun LazyListScope.cardItem(
     key: String,
     index: Int,
+    entranceKey: Any? = null,
     visible: Boolean = true,
     content: @Composable (Modifier) -> Unit
 ) {
     if (!visible) return
-    item(key = key, contentType = "info_card") { content(Modifier.infoSection(index)) }
+    item(key = key, contentType = "info_card") {
+        content(Modifier.infoSection(index, entranceKey))
+    }
 }
 
 /**
@@ -255,11 +276,14 @@ private fun LazyListScope.cardItem(
 private fun LazyListScope.rowItem(
     key: String,
     index: Int,
+    entranceKey: Any? = null,
     visible: Boolean = true,
     content: @Composable (Modifier) -> Unit
 ) {
     if (!visible) return
-    item(key = key, contentType = "info_row") { content(Modifier.sectionReveal(index)) }
+    item(key = key, contentType = "info_row") {
+        content(Modifier.sectionReveal(index, entranceKey))
+    }
 }
 
 /**
@@ -273,8 +297,8 @@ private fun LazyListScope.rowItem(
  * two files.
  */
 @Composable
-private fun Modifier.infoSection(index: Int): Modifier =
-    padding(horizontal = PAGE_INSET).sectionReveal(index)
+private fun Modifier.infoSection(index: Int, entranceKey: Any? = null): Modifier =
+    padding(horizontal = PAGE_INSET).sectionReveal(index, entranceKey)
 
 /**
  * The page's section decisions, taken once per [MediaNode].

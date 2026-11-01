@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,10 +55,14 @@ fun InfoExternalLinksSection(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
-    val links = media.externalLinks.orEmpty()
-        .filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
-        .filterNot { it.type.equals(STREAMING_LINK_TYPE, ignoreCase = true) }
-        .distinctBy { (it.site + it.url).lowercase(Locale.ROOT) }
+    // Memoised like the page's other derived lists: these are walks over the
+    // node's link payload, and the page recomposes several times per open.
+    val links = remember(media) {
+        media.externalLinks.orEmpty()
+            .filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
+            .filterNot { it.type.equals(STREAMING_LINK_TYPE, ignoreCase = true) }
+            .distinctBy { (it.site + it.url).lowercase(Locale.ROOT) }
+    }
     if (links.isEmpty()) return
 
     val context = LocalContext.current

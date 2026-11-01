@@ -44,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.MediaCover
@@ -57,10 +56,13 @@ import java.util.Locale
 
 @Composable
 fun RenderHeader(header: MarkdownNode.Header) {
+    // No hardcoded `fontSize`: the role already carries the size, and overriding
+    // it with `sp` literals put every heading outside the reader's type scale -
+    // the one place a "scale every text style" setting visibly stopped working.
     val style = when (header.level) {
-        1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        2 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        3 -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+        2 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        3 -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
         else -> MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
     }
     val context = LocalContext.current

@@ -1,12 +1,12 @@
 package com.anisequel.ui.screens.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,19 +20,20 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +44,11 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveCountBadge
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberIsResumed
+import kotlinx.coroutines.delay
+
+/** A minute, because the countdown's smallest unit is a minute. */
+private const val ARRIVING_COUNTDOWN_TICK_MILLIS = 60_000L
 
 /**
  * The viewer's own list, split out into what is airing now and what has not
@@ -57,9 +62,15 @@ import com.anisequel.ui.components.expressive.bouncyPress
  * missing". So this section ignores the filter criteria entirely and hides
  * itself when there is nothing to report.
  *
- * Includes an interactive collapse/expand toggle button with smooth spring
- * animation so users can tuck it away if they want to focus immediately on
- * missed sequels.
+ * The shipped layout is **one row**, airing first. The two-group layout that
+ * preceded it spent a second heading and a second strip of vertical space above
+ * the recommendations, and the cards already carry the Airing / Upcoming
+ * distinction in their own status chip and container colour. Splitting the
+ * groups is still offered in Settings for readers who want the headings.
+ *
+ * Includes an interactive collapse/expand toggle with a spring-driven chevron
+ * so the section can be tucked away when the reader wants the recommendations
+ * immediately.
  */
 @Composable
 fun ArrivingSection(
@@ -67,11 +78,13 @@ fun ArrivingSection(
     maxWidth: Dp,
     onEntryClick: (ArrivingEntry) -> Unit,
     compact: Boolean = false,
+    separateGroups: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (entries.isEmpty()) return
 
     var isExpanded by rememberSaveable { mutableStateOf(true) }
+    val rows = remember(entries, separateGroups) { arrivingRows(entries, separateGroups) }
 
     Column(
         modifier = modifier
@@ -79,64 +92,11 @@ fun ArrivingSection(
             .fillMaxWidth()
             .testTag("arriving_section")
     ) {
-        val interactionSource = remember { MutableInteractionSource() }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    role = Role.Button,
-                    onClickLabel = if (isExpanded) "Collapse Currently arriving" else "Expand Currently arriving",
-                    onClick = { isExpanded = !isExpanded }
-                )
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .testTag("arriving_section_header"),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f, fill = false)
-            ) {
-                Text(
-                    text = "Currently arriving",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                ExpressiveCountBadge(count = entries.size)
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "From your list",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                IconButton(
-                    onClick = { isExpanded = !isExpanded },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .bouncyPress(pressedScale = 0.9f)
-                        .testTag("arriving_toggle_button")
-                ) {
-                    Icon(
-                        imageVector = if (isExpanded) AppVectorIcons.ExpandLess else AppVectorIcons.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse Currently arriving" else "Expand Currently arriving",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
+        ArrivingSectionHeader(
+            expanded = isExpanded,
+            count = entries.size,
+            onToggle = { isExpanded = !isExpanded }
+        )
 
         AnimatedVisibility(
             visible = isExpanded,
@@ -154,28 +114,26 @@ fun ArrivingSection(
                 // the screen is up. A compact section therefore loads nothing and
                 // recomposes nothing on a schedule.
                 CompactArrivingList(
-                    entries = entries,
+                    rows = rows,
                     onEntryClick = onEntryClick
                 )
             } else {
-                // Releasing and announced rows used to share one unlabelled strip,
-                // so a card with a countdown pill and a card with a start date read
-                // as two different components in the same row. They are the same
-                // card at the same size, separated by their group's colour - which
-                // is the difference the reader needs, without a second card type.
-                val releasing = entries.filter { it.isAiring }
-                val upcoming = entries.filterNot { it.isAiring }
+                // One clock for the whole section, started only when an airing
+                // entry actually has something to count down to and stopped when
+                // the section is collapsed or the app is not resumed.
+                val nowMillis = rememberArrivingNow(
+                    hasCountdown = rows.any { row ->
+                        row.entries.any { it.isAiring && it.nextAiringAt != null }
+                    }
+                )
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    ArrivingGroup(
-                        label = "Airing now",
-                        entries = releasing,
-                        onEntryClick = onEntryClick
-                    )
-                    ArrivingGroup(
-                        label = "Upcoming",
-                        entries = upcoming,
-                        onEntryClick = onEntryClick
-                    )
+                    rows.forEach { row ->
+                        ArrivingStrip(
+                            row = row,
+                            nowMillis = nowMillis,
+                            onEntryClick = onEntryClick
+                        )
+                    }
                 }
             }
         }
@@ -183,21 +141,145 @@ fun ArrivingSection(
 }
 
 /**
- * One labelled strip of [ArrivingCard]s.
+ * The collapsible header: label, count, and a chevron that rotates.
  *
- * The label is a capsule keyed to the group's own colour, and it is the only
- * thing that distinguishes the two groups: the cards below it are identical in
- * size and layout, so a reader's eye follows the colour rather than re-learning a
- * second card. Empty groups draw nothing.
+ * The chevron rotates rather than swapping two vectors so the affordance reads
+ * as one control opening and closing. Rotation is applied in the draw phase; a
+ * `Modifier.rotate(angle)` would read the animation during composition and
+ * re-run layout on every frame of the turn.
+ *
+ * The whole row is the only click target. It used to contain a separate
+ * `IconButton` with the same action, which gave TalkBack two buttons for one
+ * toggle and put two overlapping semantics nodes on the same strip.
  */
 @Composable
-private fun ArrivingGroup(
-    label: String,
-    entries: List<ArrivingEntry>,
+private fun ArrivingSectionHeader(
+    expanded: Boolean,
+    count: Int,
+    onToggle: () -> Unit
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "arriving_chevron_rotation"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = if (expanded) {
+                    "Collapse Currently arriving"
+                } else {
+                    "Expand Currently arriving"
+                },
+                onClick = onToggle
+            )
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .testTag("arriving_section_header"),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            Text(
+                text = "Currently arriving",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ExpressiveCountBadge(count = count)
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "From your list",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Icon(
+                imageVector = AppVectorIcons.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer { rotationZ = chevronRotation }
+            )
+        }
+    }
+}
+
+/**
+ * One strip: an optional group label and its horizontal row of cards.
+ *
+ * In the combined layout [ArrivingRow.label] is null and no heading is drawn.
+ * The cards themselves are the same in both layouts, which is what lets the
+ * reader switch the grouping without relearning the card.
+ */
+@Composable
+private fun ArrivingStrip(
+    row: ArrivingRow,
+    nowMillis: Long,
     onEntryClick: (ArrivingEntry) -> Unit
 ) {
-    if (entries.isEmpty()) return
-    val airing = entries.first().isAiring
+    if (row.entries.isEmpty()) return
+
+    if (row.label != null) {
+        ArrivingGroupLabel(
+            label = row.label,
+            airing = row.airing,
+            count = row.entries.size
+        )
+    }
+
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(
+                when {
+                    row.label == null -> "arriving_lazy_row_combined"
+                    row.airing -> "arriving_lazy_row_airing"
+                    else -> "arriving_lazy_row_upcoming"
+                }
+            ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        items(items = row.entries, key = { it.mediaId }) { entry ->
+            ArrivingCard(
+                entry = entry,
+                nowMillis = nowMillis,
+                onClick = { onEntryClick(entry) },
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                )
+            )
+        }
+    }
+}
+
+/**
+ * The capsule naming a separated group.
+ *
+ * Keyed to the group's own colour rather than to its first entry, so an empty or
+ * mixed list can never colour the heading with the wrong half's role.
+ */
+@Composable
+internal fun ArrivingGroupLabel(
+    label: String,
+    airing: Boolean,
+    count: Int
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,28 +308,35 @@ private fun ArrivingGroup(
             )
         }
         Text(
-            text = entries.size.toString(),
+            text = count.toString(),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(if (airing) "arriving_lazy_row_airing" else "arriving_lazy_row_upcoming"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+}
+
+/**
+ * The section's clock, shared by every countdown pill.
+ *
+ * One `produceState` for the row rather than one per card: a reader with eight
+ * airing shows would otherwise keep eight independent minute timers, and two
+ * cards could disagree about the same minute. It is gated on `rememberIsResumed`
+ * for the same reason every other clock in the app is - a screen behind another
+ * app has nobody reading its countdown.
+ */
+@Composable
+private fun rememberArrivingNow(hasCountdown: Boolean): Long {
+    val resumed = rememberIsResumed()
+    val now by produceState(
+        initialValue = System.currentTimeMillis(),
+        hasCountdown,
+        resumed
     ) {
-        items(items = entries, key = { it.mediaId }) { entry ->
-            ArrivingCard(
-                entry = entry,
-                onClick = { onEntryClick(entry) },
-                modifier = Modifier.animateItem(
-                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                )
-            )
+        if (!resumed || !hasCountdown) return@produceState
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(ARRIVING_COUNTDOWN_TICK_MILLIS)
         }
     }
+    return now
 }
