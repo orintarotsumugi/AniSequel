@@ -77,7 +77,24 @@ internal fun List<InlineToken>.containsEmbeddedImage(): Boolean = any { token ->
 sealed interface MarkdownNode {
     data class Header(val level: Int, val inlines: List<InlineToken>) : MarkdownNode
     data class Paragraph(val inlines: List<InlineToken>, val centered: Boolean = false) : MarkdownNode
-    data class Blockquote(val inlines: List<InlineToken>) : MarkdownNode
+
+    /**
+     * A `>` run.
+     *
+     * [inlines] is the flat form it always was, and [blocks] is the same content
+     * re-parsed as blocks. The parser fills exactly one of the two: a quoted
+     * sentence stays an annotated string, and a quote of a comment that carried an
+     * image, an embed or a second paragraph becomes nested blocks, because an
+     * annotated string has nowhere to put a bitmap and a single joined line has
+     * nowhere to put a paragraph break.
+     *
+     * [AniListMarkdownParser] keeps the second form out of the case that does not
+     * need it, so a plain quote is untouched by this field's existence.
+     */
+    data class Blockquote(
+        val inlines: List<InlineToken>,
+        val blocks: List<MarkdownNode> = emptyList()
+    ) : MarkdownNode
     data class CodeBlock(val language: String?, val code: String) : MarkdownNode
     data class ListBlock(val ordered: Boolean, val items: List<List<InlineToken>>) : MarkdownNode
     data class CheckListBlock(val items: List<CheckListItem>) : MarkdownNode
@@ -191,19 +208,24 @@ private fun <K> previewKeysIn(
     fun walk(node: MarkdownNode) {
         when (node) {
             is MarkdownNode.AniListPreviewBlock -> keyOf(node)?.let(keys::add)
-            // Only these two nest. Walking into every other node type would be
-            // dead code today and a source of surprises the day another gains a
+            // Only these nest. Walking into every other node type would be dead
+            // code today and a source of surprises the day another gains a
             // `children` field.
             is MarkdownNode.CenteredBlock -> node.children.forEach(::walk)
+            // A quote or a revealed spoiler can hold a card of its own, and not
+            // walking in is how the collector and the renderer disagreed about
+            // which posters to fetch: the nested view draws the card, and a key
+            // nobody collected is a card that reads its own title from the URL
+            // with no artwork beside it.
+            is MarkdownNode.Blockquote -> node.blocks.forEach(::walk)
+            is MarkdownNode.SpoilerBlock -> node.blocks.forEach(::walk)
             is MarkdownNode.Header,
             is MarkdownNode.Paragraph,
-            is MarkdownNode.Blockquote,
             is MarkdownNode.CodeBlock,
             is MarkdownNode.ListBlock,
             is MarkdownNode.CheckListBlock,
             is MarkdownNode.ImageBlock,
             is MarkdownNode.VideoBlock,
-            is MarkdownNode.SpoilerBlock,
             is MarkdownNode.TableBlock,
             MarkdownNode.Divider -> Unit
         }

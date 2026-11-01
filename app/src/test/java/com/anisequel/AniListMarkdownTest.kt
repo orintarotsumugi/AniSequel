@@ -1199,6 +1199,10 @@ class AniListMarkdownTest {
             "the payload has to reach the image renderer",
             image!!.blocks.any { it is MarkdownNode.ImageBlock }
         )
+        assertTrue(
+            "and the tag that became the picture must not also print above it",
+            image.inlines.isEmpty()
+        )
 
         val words = AniListMarkdownParser.parse("~!the villain survives!~").singleOrNull()
             as? MarkdownNode.SpoilerBlock
@@ -1206,6 +1210,89 @@ class AniListMarkdownTest {
         assertTrue(
             "a spoiler of words stays exactly the text it was",
             words!!.blocks.isEmpty() && words.inlines.isNotEmpty()
+        )
+    }
+
+    /**
+     * The other thing a reader hides behind a spoiler on AniList: a clip.
+     *
+     * `spoilerBlocks` gated on an image-only hint, so `~!youtube(id)!~` never
+     * reached the block walk at all and the lid opened on the literal tag.
+     */
+    @Test
+    fun `a spoiler whose payload is a video carries the video block`() {
+        val spoiler = AniListMarkdownParser.parse("~!youtube(dQw4w9WgXcQ)!~").singleOrNull()
+            as? MarkdownNode.SpoilerBlock
+        assertNotNull("the line should parse as a spoiler block", spoiler)
+        val video = spoiler!!.blocks.singleOrNull() as? MarkdownNode.VideoBlock
+        assertNotNull("the payload has to reach the video renderer", video)
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", video!!.url)
+        assertTrue("and the tag must not be printed as its own text", spoiler.inlines.isEmpty())
+    }
+
+    /**
+     * A quote of a comment that had structure in it.
+     *
+     * The composer's Quote button prefixes *every* line of the comment it quotes,
+     * and the collector then joined the run into one annotated string - so quoting
+     * a comment that carried a picture or an embed put `img(https://…)` inside the
+     * quote bar, and quoting one with a blank line in it ran its two paragraphs
+     * together. The content goes back through the block walk whenever there is
+     * anything for that walk to find.
+     */
+    @Test
+    fun `a quote of a comment with embeds keeps them as blocks`() {
+        val image = AniListMarkdownParser.parse("> img(https://x/a.gif)").singleOrNull()
+            as? MarkdownNode.Blockquote
+        assertNotNull("the line should parse as a quote", image)
+        assertTrue(
+            "the quoted picture has to reach the image renderer",
+            image!!.blocks.any { it is MarkdownNode.ImageBlock } && image.inlines.isEmpty()
+        )
+
+        val video = AniListMarkdownParser.parse("> youtube(dQw4w9WgXcQ)").singleOrNull()
+            as? MarkdownNode.Blockquote
+        assertNotNull(video)
+        val embed = video!!.blocks.singleOrNull() as? MarkdownNode.VideoBlock
+        assertNotNull("a quoted embed cannot live in an annotated string", embed)
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", embed!!.url)
+    }
+
+    @Test
+    fun `a quote keeps the paragraphs it was quoted with`() {
+        val quote = AniListMarkdownParser.parse("> one\n>\n> two").singleOrNull()
+            as? MarkdownNode.Blockquote
+        assertNotNull(quote)
+        val paragraphs = quote!!.blocks.filterIsInstance<MarkdownNode.Paragraph>()
+        assertEquals("two quoted paragraphs, not one joined line", 2, paragraphs.size)
+    }
+
+    /**
+     * The case that already worked, pinned so the re-parse cannot eat it.
+     *
+     * A quote of a sentence is one italic line of text, and Markdown joins the
+     * wrapped lines of a single paragraph into one - both of those are what the
+     * flat node draws, and neither may turn into a nested view just because the
+     * quote is long enough to have been written on two lines.
+     */
+    @Test
+    fun `a quote of prose stays the flat text it was`() {
+        val single = AniListMarkdownParser.parse("> just words").singleOrNull()
+            as? MarkdownNode.Blockquote
+        assertNotNull(single)
+        assertTrue("no blocks for a quote of one line", single!!.blocks.isEmpty())
+        assertEquals(
+            "just words",
+            single.inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+        )
+
+        val wrapped = AniListMarkdownParser.parse("> wrapped one\n> wrapped two").singleOrNull()
+            as? MarkdownNode.Blockquote
+        assertNotNull(wrapped)
+        assertTrue("a wrapped paragraph is still one flat quoted line", wrapped!!.blocks.isEmpty())
+        assertEquals(
+            "wrapped one wrapped two",
+            wrapped.inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
         )
     }
 
