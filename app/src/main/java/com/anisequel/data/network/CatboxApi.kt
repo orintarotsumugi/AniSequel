@@ -112,7 +112,8 @@ class CatboxApi(
     private fun describe(status: Int, text: String): String = when (status) {
         429 -> "catbox.moe is rate limiting uploads. Try again in a minute."
         in 500..599 -> "catbox.moe is not taking uploads right now (HTTP $status)."
-        else -> shorten(text.ifBlank { "catbox.moe refused the upload (HTTP $status)." })
+        else -> readableProse(text)
+            ?: "catbox.moe refused the upload (HTTP $status)."
     }
 
 

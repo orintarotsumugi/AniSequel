@@ -90,7 +90,6 @@ internal fun ColumnScope.GifBrowser(
     onUse: (String) -> Unit
 ) {
     val state by store.state.collectAsStateWithLifecycle()
-    val gridState = rememberLazyGridState()
     // A local, because a smart cast onto `state.error` is not possible: `state` is
     // a delegated property, so the compiler will not promise it stays non-null
     // between the check and the use.
@@ -101,16 +100,6 @@ internal fun ColumnScope.GifBrowser(
     // pane is still open, and a plain function call here only refreshed when
     // something else happened to recompose this composition.
     val recent by store.recent.collectAsStateWithLifecycle()
-
-    val nearEnd by remember {
-        derivedStateOf {
-            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            last >= gridState.layoutInfo.totalItemsCount - 6
-        }
-    }
-    LaunchedEffect(nearEnd, state.next, state.isLoadingMore) {
-        if (nearEnd && state.next != null && !state.isLoadingMore) store.loadMore()
-    }
 
     OutlinedTextField(
         value = TextFieldValue(state.query),
@@ -176,11 +165,7 @@ internal fun ColumnScope.GifBrowser(
             // A blank box is not a search that found nothing: it is a box nobody
             // has typed in yet, and "Nothing found." under it read as a provider
             // failure on the pane's first frame.
-            text = state.note ?: errorMessage ?: if (state.query.isBlank()) {
-                GifSearchStore.BLANK_QUERY_NOTE
-            } else {
-                "Nothing found."
-            },
+            text = emptyStateNote(state, errorMessage),
             action = if (errorMessage != null) {
                 { store.searchNow() }
             } else {
@@ -189,65 +174,112 @@ internal fun ColumnScope.GifBrowser(
             modifier = Modifier.weight(1f)
         )
 
-        else -> {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 104.dp),
-                state = gridState,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .testTag("comment_gif_grid")
-            ) {
-                items(state.results, key = { it.id }) { gif ->
-                    GifTile(
-                        modifier = Modifier.animateItem(
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                        ),
-                        gif = gif,
-                        onUse = {
-                            // Recorded here rather than by whoever receives the URL,
-                            // because this is the last place the tile's dimensions are
-                            // known: the strip that shows the pick back has to draw the
-                            // same small copy the grid drew, not the full animation.
-                            store.rememberUsed(gif)
-                            onUse(gif.embedUrl)
-                        }
+        else -> GifResultsGrid(store = store, state = state, onUse = onUse)
+    }
+}
+
+/**
+ * The results grid, its own scroll state, and the paging that belongs to it.
+ *
+ * Split out of [GifBrowser] because the pane's job is choosing which of five
+ * states to draw - an error, a waiting skeleton, the recent strip, an empty index,
+ * or results - and none of that is the grid's business. Everything here only
+ * matters once there are tiles: the state the reader is scrolling, the end-of-list
+ * test that asks for the next page, the spinner that says one is coming, and the
+ * line that says it failed.
+ */
+@Composable
+private fun ColumnScope.GifResultsGrid(
+    store: GifSearchStore,
+    state: GifSearchStore.State,
+    onUse: (String) -> Unit
+) {
+    val gridState = rememberLazyGridState()
+    val nearEnd by remember {
+        derivedStateOf {
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= gridState.layoutInfo.totalItemsCount - 6
+        }
+    }
+    // Asked for when the last rows come into view, not when they are drawn: a page
+    // that is fetched the moment it is *needed* is the difference between a picker
+    // and a rate-limit notice, and `next` is the provider's own "there is more".
+    LaunchedEffect(nearEnd, state.next, state.isLoadingMore) {
+        if (nearEnd && state.next != null && !state.isLoadingMore) store.loadMore()
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 104.dp),
+        state = gridState,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .testTag("comment_gif_grid")
+    ) {
+        items(state.results, key = { it.id }) { gif ->
+            GifTile(
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                ),
+                gif = gif,
+                onUse = {
+                    // Recorded here rather than by whoever receives the URL, because
+                    // this is the last place the tile's dimensions are known: the
+                    // strip that shows the pick back has to draw the same small copy
+                    // the grid drew, not the full animation.
+                    store.rememberUsed(gif)
+                    onUse(gif.embedUrl)
+                }
+            )
+        }
+        if (state.isLoadingMore) {
+            // Its own item, so the spinner that says "more coming" does not shift
+            // the tiles that are already on screen.
+            item(key = "gif_loading_more") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (state.isLoadingMore) {
-                    // Its own item, so the spinner that says "more coming" does not
-                    // shift the tiles that are already on screen.
-                    item(key = "gif_loading_more") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ExpressiveLoadingIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-            state.error?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-                )
             }
         }
     }
+    // A page that failed to arrive leaves the ones already drawn readable, and the
+    // line says so rather than replacing the grid with an error state.
+    state.error?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+        )
+    }
 }
+
+/**
+ * The sentence under the "nothing here" icon.
+ *
+ * A blank box is not a search that found nothing - it is a box nobody has typed in
+ * yet - and drawing "Nothing found." on the pane's first frame read as a provider
+ * failure. The note the store already carries wins over both.
+ */
+private fun emptyStateNote(state: GifSearchStore.State, error: String?): String =
+    state.note ?: error ?: if (state.query.isBlank()) {
+        GifSearchStore.BLANK_QUERY_NOTE
+    } else {
+        "Nothing found."
+    }
 
 /**
  * The six reactions offered above an empty search.
@@ -431,6 +463,7 @@ private fun ColumnScope.RecentGifGrid(
                 ),
                 gif = gif,
                 onUse = { onPick(gif) }
+            )
         }
     }
 }

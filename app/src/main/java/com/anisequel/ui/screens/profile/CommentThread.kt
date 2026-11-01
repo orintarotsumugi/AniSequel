@@ -629,6 +629,7 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             fadeInSpec = ExpressiveMotion.ListItemFadeIn,
                             fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                         )
+                    )
                 }
             }
         }
