@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
@@ -50,32 +52,50 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
+import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
 /**
- * The comment editor, lifted out of the thread sheet.
+ * The comment editor.
  *
  * ## The shape, and where it comes from
  *
- * This is AniList's own composer: a Cancel / title / Preview header, the reply
- * target as a chip above the field, a full-height box rather than a two-line
- * strip, and one bottom bar holding the format controls, the character counter
- * and the Post button. The point of copying it is that it is the editor people
- * already know: the field is big enough to see a paragraph, the Preview step lets
- * them check their markdown before it lands, and the counter says how much of the
- * 8,000 they have used instead of refusing on send.
+ * This is AniList's own composer, widened: a Cancel / title / Preview header, the
+ * reply target as a chip above the field, a full-height box rather than a two-line
+ * strip, and one bottom bar holding the format controls, the character counter and
+ * the Post button. The point of copying it is that it is the editor people already
+ * know - the field is big enough to see a paragraph, Preview shows what readers will
+ * get rather than an approximation, and the counter says how much of the 8,000 has
+ * been used instead of refusing on send.
+ *
+ * ## Why the bar is long
+ *
+ * AniList's comment markup is a dialect, not a subset: block quotes, headings,
+ * centred spans, `img(url)`, `youtube(id)`, `webm(url)`, spoilers, `@mentions`. The
+ * bar offers every one of them the app's own parser renders, because a composer
+ * that writes a marker the reader's parser does not understand produces a preview
+ * that disagrees with the posted comment - and a phone keyboard has no `~!` on it,
+ * which is why a control has to exist rather than the documentation.
+ *
+ * The controls are in scrolling groups, divided by a hairline. Seventeen icons in
+ * one undivided row is a strip to hunt through; four groups - media, emphasis,
+ * blocks, embeds - is a strip you can find something in, and the order is by
+ * frequency: the two things a phone is actually holding come first, where a thumb
+ * starts.
  *
  * ## Why the draft is not owned here
  *
- * [draft] and [replyToName] live in the sheet above. A successful post clears
- * them, and Cancel closes this pane while keeping the text - both are decisions
- * about the whole thread, not about the editor - and a draft recalled from
- * `rememberSaveable` after the pane was disposed is what makes Cancel safe.
+ * [draft] and [replyToName] live in the sheet above. A successful post clears them
+ * and Cancel closes this pane while keeping the text - both are decisions about the
+ * whole thread, not about the editor - and a draft recalled from `rememberSaveable`
+ * after the pane was disposed is what makes Cancel safe.
  *
- * Preview and the attach dialog are local because they mean nothing outside an
- * open editor.
+ * [gifPane] is a slot rather than a call into a store: this composable's job is the
+ * draft and the controls around it. Who searches, what the results are and where
+ * they came from belongs to the sheet, which hands in a function that is given the
+ * "the reader chose this GIF" callback and inserts the result itself.
  */
 @Composable
 internal fun CommentComposer(
@@ -85,17 +105,32 @@ internal fun CommentComposer(
     onClearReplyTo: () -> Unit,
     isPosting: Boolean,
     postError: String?,
+    uploadNote: String?,
+    isUploading: Boolean,
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
+    onPickFromDevice: () -> Unit,
+    gifPane: @Composable ColumnScope.((String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var previewing by rememberSaveable { mutableStateOf(false) }
-    var attaching by rememberSaveable { mutableStateOf(false) }
+    var pane by rememberSaveable { mutableIntStateOf(PANE_WRITE) }
+    var pendingInsert by remember { mutableStateOf<InsertKind?>(null) }
+    val showingGifs = pane == PANE_GIFS
 
     val verdict = ContentLimits.checkReply(draft.text)
-    val canSend = verdict == ContentLimits.ReplyVerdict.Valid && !isPosting
+    val canSend = verdict == ContentLimits.ReplyVerdict.Valid && !isPosting && !isUploading
 
     fun apply(edit: DraftEdit) = onDraftChange(draft.withDraftEdit(edit))
+
+    fun insertBlockAt(block: String) {
+        apply(insertBlock(draft.text, draft.selection.start, draft.selection.end, block))
+    }
+
+    fun selection(): Pair<Int, Int> {
+        val from = minOf(draft.selection.start, draft.selection.end).coerceIn(0, draft.text.length)
+        val to = maxOf(draft.selection.start, draft.selection.end).coerceIn(from, draft.text.length)
+        return from to to
+    }
 
     // Opening the editor is the reader saying "I am writing", so the field takes
     // focus and the keyboard comes with it. Without this the first tap needed to
@@ -107,8 +142,8 @@ internal fun CommentComposer(
     // frame the pane appears the field is composed but not yet placed, and a
     // focus request against a node with no coordinates is dropped silently.
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(previewing) {
-        if (previewing) return@LaunchedEffect
+    LaunchedEffect(pane) {
+        if (pane != PANE_WRITE) return@LaunchedEffect
         withFrameNanos { }
         // The pane can be dismissed in the same frame the request is made (a
         // fast Cancel, or the sheet closing on a back gesture), and requesting
@@ -119,68 +154,95 @@ internal fun CommentComposer(
     Column(modifier = modifier.fillMaxWidth()) {
         ComposerHeader(
             replyToName = replyToName,
-            previewing = previewing,
+            pane = pane,
             isPosting = isPosting,
             onCancel = onCancel,
-            onTogglePreview = { previewing = !previewing }
+            onPane = { target -> pane = if (pane == target) PANE_WRITE else target }
         )
 
-        ComposerBody(
-            previewing = previewing,
-            replyToName = replyToName,
-            draft = draft,
-            isPosting = isPosting,
-            onDraftChange = onDraftChange,
-            onClearReplyTo = onClearReplyTo,
-            focusRequester = focusRequester
-        )
+        when {
+            showingGifs -> gifPane { url ->
+                insertBlockAt(MediaAttachment.embedMarkdown(url))
+                pane = PANE_WRITE
+            }
+
+            pane == PANE_PREVIEW -> DraftBody(
+                draft = draft,
+                replyToName = replyToName,
+                onClearReplyTo = onClearReplyTo,
+                previewing = true
+            )
+
+            else -> DraftBody(
+                draft = draft,
+                replyToName = replyToName,
+                isPosting = isPosting,
+                onDraftChange = onDraftChange,
+                onClearReplyTo = onClearReplyTo,
+                previewing = false,
+                focusRequester = focusRequester
+            )
+        }
 
         ComposerBottomBar(
             draft = draft,
             verdict = verdict,
             canSend = canSend,
-            isPosting = isPosting,
+            isBusy = isPosting || isUploading,
             postError = postError,
+            uploadNote = uploadNote,
             replyToName = replyToName,
+            gifsOpen = showingGifs,
             onEdit = { apply(it) },
-            onAttach = { attaching = true },
+            onInsertBlock = { block -> insertBlockAt(block) },
+            onAskKind = { kind -> pendingInsert = kind },
+            onPickFromDevice = onPickFromDevice,
+            onToggleGifs = { pane = if (showingGifs) PANE_WRITE else PANE_GIFS },
             onSubmit = onSubmit
         )
     }
 
-    if (attaching) {
-        AttachImageDialog(
-            onDismiss = { attaching = false },
-            onInsert = { url ->
+    pendingInsert?.let { kind ->
+        val (from, to) = selection()
+        InsertMarkupDialog(
+            kind = kind,
+            hasSelection = to > from,
+            onDismiss = { pendingInsert = null },
+            onInsert = { value ->
                 apply(
-                    insertSnippet(
-                        draft.text,
-                        draft.selection.start,
-                        draft.selection.end,
-                        "![image]($url)"
-                    )
+                    if (kind == InsertKind.LINK) {
+                        linkMarkdown(draft.text, from, to, value)
+                    } else {
+                        insertBlock(draft.text, from, to, embedMarkdown(kind, value))
+                    }
                 )
-                attaching = false
+                pendingInsert = null
             }
         )
     }
 }
+
+private const val PANE_WRITE = 0
+private const val PANE_PREVIEW = 1
+private const val PANE_GIFS = 2
 
 /**
  * The Cancel / title / Preview header.
  *
  * The title says Reply rather than Comment when the editor was opened against a
  * comment, because the reader should not have to remember which one they tapped.
- * Preview toggles rather than being a separate pane: the field is the same box,
- * and a toggle keeps the draft in place.
+ * Preview toggles rather than being a separate pane: the field is the same box, and
+ * a toggle keeps the draft in place. The GIF browser is a third pane, entered and
+ * left from the bar - Preview is not offered while it is up, because "preview" of a
+ * results grid is nothing a reader means.
  */
 @Composable
 private fun ComposerHeader(
     replyToName: String?,
-    previewing: Boolean,
+    pane: Int,
     isPosting: Boolean,
     onCancel: () -> Unit,
-    onTogglePreview: () -> Unit
+    onPane: (Int) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -192,36 +254,43 @@ private fun ComposerHeader(
             Text("Cancel")
         }
         Text(
-            text = if (replyToName != null) "Write a Reply" else "Write a Comment",
+            text = when (pane) {
+                PANE_GIFS -> "Choose a GIF"
+                else -> if (replyToName != null) "Write a Reply" else "Write a Comment"
+            },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f)
         )
-        TextButton(onClick = onTogglePreview, enabled = !isPosting) {
-            Text(if (previewing) "Write" else "Preview")
+        TextButton(
+            onClick = { onPane(PANE_PREVIEW) },
+            enabled = !isPosting && pane != PANE_GIFS
+        ) {
+            Text(if (pane == PANE_PREVIEW) "Write" else "Preview")
         }
     }
 }
 
 /**
- * The reply target chip and the editable pane: the rendered preview when the
- * reader is checking, the field when they are writing.
+ * The pane under the header: the field when writing, the rendered draft when
+ * previewing. Both keep the reply chip, because the mention is part of the text
+ * being previewed - it used to be drawn only above the editor, so Preview showed a
+ * comment without the `@name` that threads it.
  */
 @Composable
-private fun ColumnScope.ComposerBody(
-    previewing: Boolean,
-    replyToName: String?,
+private fun ColumnScope.DraftBody(
     draft: TextFieldValue,
-    isPosting: Boolean,
-    onDraftChange: (TextFieldValue) -> Unit,
+    replyToName: String?,
     onClearReplyTo: () -> Unit,
-    focusRequester: FocusRequester
+    previewing: Boolean,
+    isPosting: Boolean = false,
+    onDraftChange: (TextFieldValue) -> Unit = {},
+    focusRequester: FocusRequester? = null
 ) {
     if (replyToName != null) {
         ReplyTargetChip(name = replyToName, onClear = onClearReplyTo)
     }
-
     if (previewing) {
         Column(
             modifier = Modifier
@@ -229,6 +298,7 @@ private fun ColumnScope.ComposerBody(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp)
+                .testTag("activity_comment_preview")
         ) {
             if (draft.text.isBlank()) {
                 Text(
@@ -239,7 +309,8 @@ private fun ColumnScope.ComposerBody(
             } else {
                 // The same renderer the posted comment goes through, so Preview
                 // shows what readers will get rather than an approximation -
-                // including the poster on an AniList title the draft links.
+                // including the poster on an AniList title the draft links, and the
+                // photo or GIF that was just uploaded or chosen.
                 AniListMarkdownWithCovers(markdown = draft.text)
             }
         }
@@ -251,7 +322,7 @@ private fun ColumnScope.ComposerBody(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
-                .focusRequester(focusRequester)
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .testTag("activity_comment_field"),
             placeholder = {
                 Text(if (replyToName != null) "Write a reply..." else "Add a comment")
@@ -264,175 +335,15 @@ private fun ColumnScope.ComposerBody(
 }
 
 /**
- * The reason the send button is off, the error from the last post, and the
- * format controls, counter and Post button.
- *
- * The reason is shown beside the button rather than as a tooltip because a
- * disabled control with no sentence next to it is indistinguishable from one
- * that is broken. The controls scroll horizontally: four 40dp controls, a
- * counter and a pill do not fit a 360dp phone.
- */
-@Composable
-private fun ComposerBottomBar(
-    draft: TextFieldValue,
-    verdict: ContentLimits.ReplyVerdict,
-    canSend: Boolean,
-    isPosting: Boolean,
-    postError: String?,
-    replyToName: String?,
-    onEdit: (DraftEdit) -> Unit,
-    onAttach: () -> Unit,
-    onSubmit: () -> Unit
-) {
-    Column(
-        // The sheet pads for `ime union navigationBars` once, above this pane.
-        // Padding here again put a nav bar's height between the controls and the
-        // keyboard while typing - a gap directly under the Post button.
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // The reason, not just a greyed button. A disabled control with no
-        // sentence next to it is indistinguishable from one that is broken.
-        val reason = when {
-            verdict == ContentLimits.ReplyVerdict.TooShort && draft.text.isNotEmpty() ->
-                "A comment needs at least ${ContentLimits.REPLY_MIN} characters."
-            verdict == ContentLimits.ReplyVerdict.TooLong ->
-                "A comment can be at most ${ContentLimits.REPLY_MAX} characters."
-            else -> null
-        }
-        if (reason != null) {
-            Text(
-                text = reason,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-            )
-        }
-        if (postError != null) {
-            Text(
-                text = postError,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                FormatAction(
-                    icon = AppVectorIcons.AttachImage,
-                    label = "Insert an image",
-                    tag = "comment_format_image",
-                    enabled = !isPosting,
-                    onClick = onAttach
-                )
-                FormatAction(
-                    icon = AppVectorIcons.TextBold,
-                    label = "Bold",
-                    tag = "comment_format_bold",
-                    enabled = !isPosting,
-                    onClick = {
-                        onEdit(
-                            wrapSelection(
-                                draft.text, draft.selection.start, draft.selection.end, "**"
-                            )
-                        )
-                    }
-                )
-                FormatAction(
-                    icon = AppVectorIcons.TextItalic,
-                    label = "Italic",
-                    tag = "comment_format_italic",
-                    enabled = !isPosting,
-                    onClick = {
-                        onEdit(
-                            wrapSelection(
-                                draft.text, draft.selection.start, draft.selection.end, "*"
-                            )
-                        )
-                    }
-                )
-                FormatAction(
-                    icon = AppVectorIcons.TextSpoiler,
-                    label = "Spoiler",
-                    tag = "comment_format_spoiler",
-                    enabled = !isPosting,
-                    onClick = {
-                        onEdit(
-                            wrapSelection(
-                                draft.text, draft.selection.start, draft.selection.end,
-                                "~!", "!~"
-                            )
-                        )
-                    }
-                )
-            }
-
-            Text(
-                // The API's own ceiling, and the field's: they are the same
-                // number because the field clips with `ContentLimits`.
-                text = "${draft.text.length} / ${ContentLimits.REPLY_MAX}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .testTag("activity_comment_counter")
-            )
-
-            Button(
-                onClick = onSubmit,
-                enabled = canSend,
-                shape = RoundedCornerShape(percent = 50),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                modifier = Modifier.testTag("activity_comment_send")
-            ) {
-                if (isPosting) {
-                    ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Icon(
-                        imageVector = AppVectorIcons.ActivitySend,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = when {
-                        isPosting -> "Posting..."
-                        // The same word the header uses. A new comment used to read
-                        // "Post Reply" here, which named a reply that was not being
-                        // written.
-                        replyToName != null -> "Post Reply"
-                        else -> "Post Comment"
-                    }
-                )
-            }
-        }
-    }
-}
-
-/**
- * A toolbar edit as the field's next value, with the caret clamped to the text.
+ * The field's next value, with the caret clamped to the text.
  *
  * `TextFieldValue` *requires* its selection and composing region to fall inside
  * its text - see its `init` - so a value that truncates the text and keeps the
  * old caret throws from the constructor. Every programmatic edit goes through
- * here for that reason: the format bar, the insert dialog, and the `@mention`
- * the sheet adds when the reader taps Reply. A programmatic edit drops the IME's
- * composing range, which no longer describes anything after the text changed.
+ * here for that reason: the format bar, the insert dialog, the attachment the
+ * upload just produced, and the `@mention` the sheet adds when the reader taps
+ * Reply. A programmatic edit drops the IME's composing range, which no longer
+ * describes anything after the text changed.
  */
 internal fun TextFieldValue.withDraftEdit(edit: DraftEdit): TextFieldValue {
     val text = ContentLimits.clipReply(edit.text)
@@ -484,113 +395,8 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
                 imageVector = AppVectorIcons.Close,
                 contentDescription = "Stop replying to $name",
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }
-}
-
-/**
- * One format-bar control.
- *
- * A 40dp visual target inside a 48dp minimum from the bar's padding rather than
- * an [androidx.compose.material3.IconButton], because the bar's height is already
- * fixed by the Post button and an IconButton would add its own 48dp box to it.
- */
-@Composable
-private fun FormatAction(
-    icon: ImageVector,
-    label: String,
-    tag: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val tint = if (enabled) {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-    }
-    // 48dp, the platform's minimum touch target, rather than the 40dp box that
-    // was sized around the glyph. These three sit above a text field where every
-    // keystroke starts, so they are hit far more often than a toolbar normally is;
-    // the icon inside stays the size it was.
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .bouncyPress(pressedScale = 0.88f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                // The spring is the feedback; a ripple on a glyph this small
-                // reads as a second, competing animation.
-                indication = null,
-                enabled = enabled,
-                onClickLabel = label,
-                onClick = onClick
-            )
-            .testTag(tag),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-/**
- * The attach-image step.
- *
- * AniList has no upload endpoint, so "attach" can only mean "insert an image by
- * URL" - and the copy says so rather than opening a picker that would have
- * nowhere to send a file. The URL is checked before Insert is enabled, because a
- * relative path or a `data:` payload inserted into a comment is stored as literal
- * text that the renderer cannot embed: the author would post a broken image and
- * only find out with the comment already sent.
- */
-@Composable
-private fun AttachImageDialog(onDismiss: () -> Unit, onInsert: (String) -> Unit) {
-    var url by rememberSaveable { mutableStateOf("") }
-    val valid = isAttachableImageUrl(url)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Insert an image") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    singleLine = true,
-                    placeholder = { Text("https://...") },
-                    isError = url.isNotBlank() && !valid,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("comment_image_url_field")
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "AniList has no upload, so the image is inserted by URL.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onInsert(url.trim()) },
-                enabled = valid
-            ) {
-                Text("Insert")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }

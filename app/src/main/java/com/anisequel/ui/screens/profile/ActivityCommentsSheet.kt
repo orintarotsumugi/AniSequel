@@ -1,5 +1,8 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,13 +25,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.network.CatboxApi
+import com.anisequel.data.network.OpenverseGifs
+import com.anisequel.data.network.TenorGifs
+import com.anisequel.data.repository.PickedImageReader
+import com.anisequel.domain.usecase.CommentWindow
 import com.anisequel.domain.usecase.ContentLimits
+import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.viewmodel.CommentThreadStore
+import com.anisequel.ui.viewmodel.GifSearchStore
+import kotlinx.coroutines.launch
 
 /**
  * One activity's comment thread, with a composer.
@@ -141,7 +154,28 @@ fun ActivityCommentsSheet(
     /** Confirms the comment deletion. */
     onSubmitReplyDelete: () -> Unit = {},
     /** Closes the manage dialog. */
-    onDismissReplyAction: () -> Unit = {}
+    onDismissReplyAction: () -> Unit = {},
+    /** Reveals the page of comments older than everything on screen. */
+    onLoadOlder: () -> Unit = {},
+    /** Takes in the comments a background check found and clears the count. */
+    onRevealNewComments: () -> Unit = {},
+    /** Runs one background check; the flag says whether the reader is at the end. */
+    onCheckForNewComments: (atBottom: Boolean) -> Unit = {},
+    /** Opens the "liked by" sheet for one comment. */
+    onShowCommentLikers: (Int) -> Unit = {},
+    /**
+     * How often an open sheet asks for new comments, from the store that owns the
+     * interval. Passed in rather than defaulted here so the sheet does not name the
+     * window class the interval lives in, and so a caller cannot silently stop
+     * polling by forgetting a default.
+     */
+    pollIntervalMillis: Long,
+    /** Whether the sheet may ask at all - the reader's Settings switch. */
+    polling: Boolean = true,
+    /** The reader's Tenor key, when they saved one. Blank means the anonymous index. */
+    tenorApiKey: String? = null,
+    /** The profile's minute-tick, so "12m" becomes "1h" while the sheet is open. */
+    nowEpochSecond: Long? = null
 ) {
     val listState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -157,6 +191,64 @@ fun ActivityCommentsSheet(
     // Not saveable: an in-flight request after a rotation is owned by the store,
     // and restoring the "we are waiting" half without it would swallow the answer.
     var awaitingPost by remember { mutableStateOf(false) }
+
+    // Attachments. AniList has nowhere to put a file, so a photo leaves the app for
+    // catbox.moe and comes back as the URL that gets written into the comment -
+    // which is why the note is kept beside the composer rather than in the store:
+    // the reader is looking at the field they are typing, and the upload belongs to
+    // the draft, not to the thread.
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val catbox = remember { CatboxApi() }
+    var isUploading by remember { mutableStateOf(false) }
+    var uploadNote by remember { mutableStateOf<String?>(null) }
+
+    val openverse = remember { OpenverseGifs() }
+    val gifStore = remember(openverse, tenorApiKey) {
+        GifSearchStore(
+            scope = scope,
+            provider = tenorApiKey?.takeIf { it.isNotBlank() }?.let { TenorGifs(it) } ?: openverse
+        )
+    }
+
+    fun insertIntoDraft(edit: DraftEdit) {
+        draft = draft.withDraftEdit(edit)
+    }
+
+    fun embedUrl(url: String) {
+        insertIntoDraft(
+            insertBlock(
+                draft.text,
+                draft.selection.start,
+                draft.selection.end,
+                MediaAttachment.embedMarkdown(url)
+            )
+        )
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        isUploading = true
+        uploadNote = "Uploading…"
+        scope.launch {
+            PickedImageReader.read(context, uri)
+                .mapCatching { image ->
+                    catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                }
+                .fold(
+                    onSuccess = { url ->
+                        embedUrl(url)
+                        uploadNote = null
+                    },
+                    onFailure = { failure ->
+                        uploadNote = failure.message ?: "The upload did not go through."
+                    }
+                )
+            isUploading = false
+        }
+    }
 
     // A post is a round trip, and the editor has to stay open for it: on success
     // the draft is cleared and the thread comes back, on failure the text and the
@@ -214,6 +306,18 @@ fun ActivityCommentsSheet(
                     onClearReplyTo = { replyToName = null },
                     isPosting = state.isPosting,
                     postError = state.postError,
+                    uploadNote = uploadNote,
+                    isUploading = isUploading,
+                    onPickFromDevice = {
+                        photoPicker.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    gifPane = { onUse ->
+                        GifBrowser(store = gifStore, onUse = onUse)
+                    },
                     onCancel = { composing = false },
                     onSubmit = {
                         val text = draft.text.trim()
@@ -241,8 +345,32 @@ fun ActivityCommentsSheet(
                         replyToName = name
                         composing = true
                     },
+                    onQuote = { reply ->
+                        // The quote is an edit like any other the bar makes: it goes
+                        // in at the caret, the draft is clipped to the API's ceiling,
+                        // and the reader keeps typing under it. AniList threads a
+                        // reply by the leading `@name`, which is why quoting offers
+                        // the author's name as the credit line rather than assuming
+                        // the block alone says whose it is.
+                        insertIntoDraft(
+                            insertBlock(
+                                draft.text,
+                                draft.selection.start,
+                                draft.selection.end,
+                                quoteBlock(reply.text.orEmpty(), reply.user?.name)
+                            )
+                        )
+                        composing = true
+                    },
                     onLikeReply = onLikeReply,
-                    onManageReply = onOpenReplyActions
+                    onManageReply = onOpenReplyActions,
+                    onShowCommentLikers = onShowCommentLikers,
+                    onLoadOlder = onLoadOlder,
+                    onRevealNewComments = onRevealNewComments,
+                    onCheckForNewComments = onCheckForNewComments,
+                    pollIntervalMillis = pollIntervalMillis,
+                    polling = polling,
+                    nowEpochSecond = nowEpochSecond
                 )
             }
         }
@@ -331,7 +459,12 @@ private fun ScrollToPostedReply(
         val row = postedReplyRow(
             replies = state.replies,
             postedReplyId = posted,
-            hasRefreshBanner = state.loadError != null
+            // The thread shows one banner row for either failure, and one Older row
+            // when the window does not cover the thread; both push every reply down
+            // by one, and the scroll has to count them the way the list does.
+            hasBannerRow = state.loadError != null || state.windowError != null,
+            hasOlderRow = state.isChatView &&
+                CommentWindow.hiddenCount(state.replyCount, state.replies.size) > 0
         )
         if (row < 0) return@LaunchedEffect
         // An index past the end is clamped by `animateScrollToItem`, so a thread
@@ -344,9 +477,9 @@ private fun ScrollToPostedReply(
  * The row a posted reply occupies in the thread's `LazyColumn`, or -1 when it is
  * not in the list.
  *
- * The list is not the same thing as `replies`: a failed refresh puts a retry
- * banner above them (see `CommentsThread`), and the skeleton and empty states
- * replace the rows entirely. Reading `indexOfFirst` straight into
+ * The list is not the same thing as `replies`: a failed read puts a retry banner
+ * above them, chat view puts an Older row above that, and the skeleton and empty
+ * states replace the rows entirely. Reading `indexOfFirst` straight into
  * `animateScrollToItem` was one row short whenever that banner was up, so the
  * scroll stopped on the comment above the one just posted and left the reader's
  * own reply below the fold. Pulled out of the effect so that arithmetic is
@@ -356,11 +489,12 @@ private fun ScrollToPostedReply(
 internal fun postedReplyRow(
     replies: List<ActivityReply>,
     postedReplyId: Int,
-    hasRefreshBanner: Boolean
+    hasBannerRow: Boolean,
+    hasOlderRow: Boolean = false
 ): Int {
     val index = replies.indexOfFirst { it.id == postedReplyId }
     if (index < 0) return -1
-    return index + if (hasRefreshBanner) 1 else 0
+    return index + (if (hasBannerRow) 1 else 0) + (if (hasOlderRow) 1 else 0)
 }
 
 /**

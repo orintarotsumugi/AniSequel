@@ -602,11 +602,14 @@ object AppCustomVectors {
     }
 
     /**
-     * The composer's attach-image control.
+     * The composer's "insert an image by URL" control.
      *
-     * A picture frame rather than a paperclip: AniList has no upload endpoint,
-     * so this button inserts an image URL, and a clip that cannot attach a file
-     * would be the wrong promise.
+     * A picture frame rather than a paperclip, because it never attached a file:
+     * AniList has no upload endpoint, and a clip that cannot attach a file would be
+     * the wrong promise. That is still true of AniList - this button still only
+     * writes an address into the draft - but it is no longer true of the app, which
+     * now has [AppExtraVectors.PhotoUpload] for the case where the image is a file
+     * on the device and the address has to be made first.
      */
     val AttachImage: ImageVector by lazy {
         ImageVector.Builder(

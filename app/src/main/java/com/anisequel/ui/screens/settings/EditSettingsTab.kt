@@ -23,6 +23,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.data.repository.CommentMediaSettings
+import com.anisequel.data.repository.MediaPreferences
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -120,6 +123,8 @@ fun EditSettingsTab(
         }
 
         AppLockCard(appLockPreferences)
+
+        CommentMediaCard(context = context)
 
         SettingsButton(
             text = if (authState is AuthUiState.Authenticated) "Sign out" else "Sign in",
@@ -348,5 +353,146 @@ private fun ClientIdEditor(
                 testTag = "save_client_id_button"
             )
         }
+    }
+}
+
+/**
+ * How a comment thread opens, and what the composer is allowed to send where.
+ *
+ * Filed under AniList rather than Appearance because all three settings are about
+ * writing to the site: how much of a thread to fetch, whether an open thread keeps
+ * fetching, and which GIF index a search is sent to. The upload host is not a
+ * choice here - catbox.moe is the only one, and it needs no account and no key -
+ * but its retention rule is stated, because a comment's image disappearing two
+ * years after nobody looked at it is a decision the reader made, not one the app
+ * should have made silently on their behalf.
+ */
+@Composable
+private fun CommentMediaCard(context: android.content.Context) {
+    // Built here, at the page that edits it, the same way the About tab builds the
+    // preferences it shows: the DataStore delegate is a property of the file it
+    // names, so a second holder of the same file is fine while every one of them
+    // reads through the application context.
+    val scope = rememberCoroutineScope()
+    val preferences = remember { MediaPreferences(context.applicationContext) }
+    val settings by preferences.settings.collectAsStateWithLifecycle(
+        initialValue = CommentMediaSettings()
+    )
+
+    SectionCard(
+        title = "Comments and attachments",
+        icon = AppVectorIcons.AttachImage,
+        subtitle = "Threads, uploads and the GIF search"
+    ) {
+        SwitchRow(
+            title = "Chat view",
+            subtitle = "Open a thread at its newest comment and load older ones on " +
+                "demand, instead of fetching every comment at once. Long threads " +
+                "open faster; a comment you posted earlier may not be on screen.",
+            checked = settings.chatView,
+            onCheckedChange = { enabled -> scope.launch { preferences.setChatView(enabled) } },
+            modifier = Modifier.testTag("settings_chat_view")
+        )
+        SwitchRow(
+            title = "Check for new comments",
+            subtitle = "While a thread is open, ask every fifteen seconds whether " +
+                "anybody replied. Costs requests on a metered connection; a thread " +
+                "still refreshes when you open it with this off.",
+            checked = settings.pollForNewComments,
+            onCheckedChange = { enabled ->
+                scope.launch { preferences.setPollForNewComments(enabled) }
+            },
+            modifier = Modifier.testTag("settings_poll_comments")
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            text = "Photos you attach are uploaded to catbox.moe and the comment " +
+                "carries the link. Files uploaded without a catbox account are kept " +
+                "until they go two years without a single view, so an image on a " +
+                "comment nobody reads can disappear. GIF searches use Openverse, an " +
+                "anonymous Creative Commons index - it needs no key, and its " +
+                "catalogue is not reaction GIFs. A Tenor key below switches the " +
+                "search to Tenor's own catalogue.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        TenorKeyEditor(
+            currentKey = settings.tenorApiKey,
+            onSave = { key -> scope.launch { preferences.setTenorApiKey(key) } }
+        )
+    }
+}
+
+/**
+ * The optional Tenor key.
+ *
+ * Saved into the keystore-backed field and never echoed back: the field shows
+ * whether one is stored, and a reader who wants to change it types a new one.
+ * Printing the saved key into a text field would put a credential on screen for
+ * anybody looking over a shoulder, which is the same reason the token this app
+ * already stores is never shown either.
+ */
+@Composable
+private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
+    var editing by rememberSaveable { mutableStateOf("") }
+    var saved by remember { mutableStateOf(false) }
+    val trimmed = editing.trim()
+
+    SettingsFieldLabel(text = "Tenor API key (optional)")
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+        value = editing,
+        onValueChange = {
+            editing = it
+            saved = false
+        },
+        singleLine = true,
+        placeholder = { Text(if (currentKey != null) "Stored - paste a new one to replace it" else "Not set") },
+        supportingText = {
+            Text(
+                text = when {
+                    saved -> "Saved on this device, encrypted."
+                    currentKey != null -> "A key is stored. Leave this empty and save to go back to Openverse."
+                    else -> "Free from Google Cloud for Tenor v2. Stored encrypted, never sent anywhere else."
+                },
+                style = MaterialTheme.typography.bodySmall
+            )
+        },
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_tenor_key_field")
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        SettingsButton(
+            text = "Clear",
+            onClick = {
+                onSave("")
+                editing = ""
+                saved = true
+            },
+            enabled = currentKey != null,
+            variant = SettingsButtonVariant.Outlined,
+            modifier = Modifier.weight(1f),
+            testTag = "settings_tenor_key_clear"
+        )
+        SettingsButton(
+            text = if (saved) "Saved" else "Save",
+            onClick = {
+                onSave(trimmed)
+                editing = ""
+                saved = true
+            },
+            enabled = trimmed.isNotBlank(),
+            variant = if (saved) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
+            modifier = Modifier.weight(1f),
+            testTag = "settings_tenor_key_save"
+        )
     }
 }

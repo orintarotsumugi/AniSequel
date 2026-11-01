@@ -261,7 +261,7 @@ class ReplyManagementQueryTest {
         assertTrue(
             "the row it scrolls to accounts for the retry banner a failed refresh " +
                 "puts above the replies, or the scroll stops one row short:\n$sheet",
-            sheet.contains("postedReplyRow(") && sheet.contains("hasRefreshBanner")
+            sheet.contains("postedReplyRow(") && sheet.contains("hasBannerRow")
         )
         assertTrue(
             "the store is what records it, on the post that succeeded:\n$store",

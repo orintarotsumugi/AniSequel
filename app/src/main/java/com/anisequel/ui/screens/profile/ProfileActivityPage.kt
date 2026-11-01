@@ -25,7 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.data.repository.CommentMediaSettings
+import com.anisequel.data.repository.MediaPreferences
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
 import com.anisequel.domain.usecase.ActivityCalendar
@@ -115,6 +119,18 @@ fun ProfileActivityPage(
     val followingState by followingViewModel.state.collectAsStateWithLifecycle()
     val messagesState by messagesViewModel.state.collectAsStateWithLifecycle()
 
+    // Chat view is the reader's call, and it is read at the door a thread is opened
+    // through rather than inside the store: a thread that began as a window stays
+    // one however the switch moves afterwards, and the store has no business
+    // knowing where a preference lives. The application context is what the
+    // DataStore delegate is keyed on, so a second screen asking for the same file
+    // gets the same instance rather than a crash.
+    val mediaPreferences = remember { MediaPreferences(LocalContext.current.applicationContext) }
+    val mediaSettings by mediaPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = CommentMediaSettings()
+    )
+    val chatView = mediaSettings.chatView
+
     // Saved, because the page is disposed and recreated by the profile's own tab
     // switch: a reader who left the inbox on "Sent" and came back should not be
     // handed "All". Not keyed on the profile, deliberately - `ProfileActivityPage`
@@ -145,7 +161,7 @@ fun ProfileActivityPage(
         onRetry = { activityViewModel.retry() },
         onRefresh = { activityViewModel.refresh() },
         onLike = { activityViewModel.toggleLike(it) },
-        onOpenComments = { activityViewModel.openComments(it) },
+        onOpenComments = { id, count -> activityViewModel.openComments(id, count, chatView) },
         onOpenLikers = { activityViewModel.openLikers(it) },
         calendar = calendar,
         userName = userName,
@@ -161,7 +177,7 @@ fun ProfileActivityPage(
         onRetry = { followingViewModel.retry() },
         onRefresh = { followingViewModel.refresh() },
         onLike = { followingViewModel.toggleLike(it) },
-        onOpenComments = { followingViewModel.openComments(it) },
+        onOpenComments = { id, count -> followingViewModel.openComments(id, count, chatView) },
         onOpenLikers = { followingViewModel.openLikers(it) },
         // Every row is a different person in this feed, and each card's
         // author row opens their profile - the same hop the Social tab makes.

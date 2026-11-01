@@ -243,13 +243,29 @@ object AppVectorIcons {
     // the glyph reads as "more of this row" rather than as another line of it.
     val ActivityManage = Icons.Default.MoreHoriz
 
-    // The comment composer's format bar. All four are hand-authored vectors in
-    // `AppCustomVectors`, so one toolbar is not half a font glyph and half paths
-    // that scale with the icon font loading or not.
+    // The comment composer's format bar. Every control is a hand-authored vector,
+    // so one toolbar is not half a font glyph and half paths that scale with the
+    // icon font loading or not. The set covers what AniList's own markup can carry
+    // in a comment - emphasis, a heading, a quote, code, centring, an embed - and
+    // the two things a phone needs and a desktop keyboard has: a photo from the
+    // device, and a GIF search.
     val TextBold = AppCustomVectors.TextBold
     val TextItalic = AppCustomVectors.TextItalic
     val TextSpoiler = AppCustomVectors.TextSpoiler
     val AttachImage = AppCustomVectors.AttachImage
+    val TextUnderline = AppExtraVectors.TextUnderline
+    val TextStrikethrough = AppExtraVectors.TextStrikethrough
+    val TextHeader = AppExtraVectors.TextHeader
+    val TextQuote = AppExtraVectors.TextQuote
+    val TextCode = AppExtraVectors.TextCode
+    val TextCentered = AppExtraVectors.TextCentered
+    val AnimatedGif = AppExtraVectors.AnimatedGif
+    val PhotoUpload = AppExtraVectors.PhotoUpload
+    // The two embeds that need an address the app cannot guess. Named for what
+    // they insert, not for the glyph: a film frame and a marked page are the same
+    // idea two ways, and the reader has to know which one writes `youtube(...)`.
+    val YouTube = AppExtraVectors.YouTubeEmbed
+    val WebmVideo = AppExtraVectors.VideoFile
 
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the

@@ -31,7 +31,7 @@ class PostedReplyRowTest {
     fun `a reply is its own index when the list has no banner`() {
         val replies = listOf(reply(1), reply(2), reply(3))
 
-        assertEquals(2, postedReplyRow(replies, postedReplyId = 3, hasRefreshBanner = false))
+        assertEquals(2, postedReplyRow(replies, postedReplyId = 3, hasBannerRow = false))
     }
 
     @Test
@@ -41,13 +41,13 @@ class PostedReplyRowTest {
         assertEquals(
             "The banner is a list item, so the third reply is the fourth row.",
             3,
-            postedReplyRow(replies, postedReplyId = 3, hasRefreshBanner = true)
+            postedReplyRow(replies, postedReplyId = 3, hasBannerRow = true)
         )
     }
 
     @Test
     fun `the banner shifts the first reply to the second row`() {
-        assertEquals(1, postedReplyRow(listOf(reply(7)), postedReplyId = 7, hasRefreshBanner = true))
+        assertEquals(1, postedReplyRow(listOf(reply(7)), postedReplyId = 7, hasBannerRow = true))
     }
 
     @Test
@@ -56,7 +56,27 @@ class PostedReplyRowTest {
             "Returning an index for a missing reply would scroll somewhere unrelated, " +
                 "which is worse than not scrolling at all.",
             -1,
-            postedReplyRow(listOf(reply(1)), postedReplyId = 99, hasRefreshBanner = true)
+            postedReplyRow(listOf(reply(1)), postedReplyId = 99, hasBannerRow = true)
+        )
+    }
+
+    @Test
+    fun `an older-comments row above the thread counts like the banner does`() {
+        // Chat view opens one page of a long thread and puts an Older control above
+        // it. Both that row and a failure banner sit over the replies, and either
+        // one alone shifts the posted comment down by one - so the arithmetic adds
+        // them rather than choosing one.
+        assertEquals(
+            3,
+            postedReplyRow(replies, postedReplyId = 3, hasBannerRow = false, hasOlderRow = true)
+        )
+        assertEquals(
+            4,
+            postedReplyRow(replies, postedReplyId = 3, hasBannerRow = true, hasOlderRow = true)
+        )
+        assertEquals(
+            -1,
+            postedReplyRow(replies, postedReplyId = 99, hasBannerRow = true, hasOlderRow = true)
         )
     }
 }

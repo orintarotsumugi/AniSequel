@@ -246,7 +246,7 @@ class ReplyLikeQueryTest {
         )
         assertTrue(
             "the thread still opens from the tab, which is what the tap is on",
-            activityTab.contains("onOpenComments(activity.id)")
+            activityTab.contains("source.onOpenComments(activity.id, activity.replyCount ?: 0)")
         )
     }
 

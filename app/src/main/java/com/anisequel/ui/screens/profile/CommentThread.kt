@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,23 +25,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import com.anisequel.domain.usecase.CommentGrouping
+import com.anisequel.domain.usecase.CommentWindow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.CommentThreadStore
@@ -172,15 +176,228 @@ internal fun ColumnScope.CommentsThread(
     CommentEntryBar(canPost = canPost, onClick = onStartCompose)
 }
 
-/**
- * The pinned header: what this list is, how much of it there is, and whether a
- * newer copy is on its way.
- *
- * The count is the thread's whole answer to "should I read this?", so it stays
- * beside the title. The refresh spinner sits at the far end rather than over the
- * list: the rows under it are still valid, and a scrim or a skeleton would say
- * they were not.
- */
+@Composable
+internal fun ColumnScope.CommentsThread(
+    state: CommentThreadStore.CommentsState,
+    viewerId: Int?,
+    canPost: Boolean,
+    listState: LazyListState,
+    pollIntervalMillis: Long,
+    polling: Boolean,
+    nowEpochSecond: Long?,
+    onRetry: () -> Unit,
+    onStartCompose: () -> Unit,
+    onReply: (String) -> Unit,
+    onQuote: (ActivityReply) -> Unit,
+    onLikeReply: (Int) -> Unit,
+    onManageReply: (Int) -> Unit,
+    onShowCommentLikers: (Int) -> Unit,
+    onLoadOlder: () -> Unit,
+    onRevealNewComments: () -> Unit,
+    onCheckForNewComments: (atBottom: Boolean) -> Unit
+) {
+    CommentsHeader(
+        // Chat view prints the thread's own count, because the rows on screen are
+        // deliberately fewer than that: "12 of 900" is the honest answer to how big
+        // the conversation is, and a header that counted only what was fetched
+        // would say 12 and let the reader think that was the whole thread.
+        count = if (state.isChatView && state.replyCount > 0) state.replyCount else state.replies.size,
+        isRefreshing = state.isRefreshing,
+        isLoading = state.isLoading
+    )
+
+    // Computed once per thread, not per row: the answer depends on every earlier
+    // reply, and the list is re-threaded only when the replies change. See
+    // [ReplyThreader]. This has to live above the lazy list - the `LazyListScope`
+    // builder is not composable, so `remember` cannot be called down there.
+    val replyDepths = remember(state.replies) {
+        ReplyThreader.depths(
+            state.replies.map {
+                ReplyThreader.Reply(
+                    id = it.id,
+                    author = it.user?.name,
+                    text = it.text
+                )
+            }
+        )
+    }
+
+    // The window, not the whole fetched list. `shownRows` is what the reader has
+    // asked to see; Older grows it, and a refresh that found new comments grows it
+    // by exactly what arrived so nothing already on screen is pushed off the top.
+    val visible = remember(state.replies, state.shownRows) {
+        if (state.shownRows in 1 until state.replies.size) {
+            state.replies.takeLast(state.shownRows)
+        } else {
+            state.replies
+        }
+    }
+
+    // Which rows continue the one above them. Grouping needs the depth, so it is
+    // taken from the same pass that laid the thread out - a merged header across two
+    // different branches would claim somebody was still speaking when they were not.
+    val continuations = remember(visible, replyDepths) {
+        CommentGrouping.continuationIds(
+            visible.map { reply ->
+                CommentGrouping.Row(
+                    id = reply.id,
+                    authorId = reply.user?.id,
+                    createdAt = reply.createdAt,
+                    depth = replyDepths[reply.id] ?: 0
+                )
+            }
+        )
+    }
+
+    val isAtBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            last == null || last.index >= info.totalItemsCount - 2
+        }
+    }
+
+    // A chat opens at its newest message. AniList's own page opens at the top of
+    // the thread and scrolls you down as replies arrive; in a sheet that has just
+    // fetched one window of a nine-hundred-comment conversation, starting at row
+    // zero would show the reader a windowful of nothing they asked for.
+    //
+    // Keyed on the thread, and one-shot: a reader who scrolls up to read something
+    // and then posts a comment must not be dragged back down, and the posted-reply
+    // scroll in the sheet owns that case.
+    var anchored by remember(state.activityId) { mutableStateOf(false) }
+    LaunchedEffect(state.activityId, state.isLoading, visible.size) {
+        if (
+            state.isChatView && !anchored && !state.isLoading && visible.isNotEmpty()
+        ) {
+            anchored = true
+            // One frame, so the list has measured its items before being placed at
+            // the end of them: `scrollToItem` on a layout that has not run yet
+            // lands on index zero, which is the bug this effect replaces.
+            withFrameNanos { }
+            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+        }
+    }
+
+    // The timer. One per open thread, reading `isAtBottom` when it fires rather
+    // than being rebuilt on every scroll - restarting the effect on a scroll would
+    // reset the interval, and a reader who kept scrolling would keep postponing the
+    // check they are waiting for.
+    if (polling && state.isChatView && !state.isLoading) {
+        LaunchedEffect(state.activityId, pollIntervalMillis) {
+            while (isActive) {
+                delay(pollIntervalMillis)
+                onCheckForNewComments(isAtBottom)
+            }
+        }
+    }
+
+    val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
+
+    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            // The list is keyed by reply id, and a repeated key is a hard
+            // `IllegalArgumentException` in Compose. The store guarantees one entry
+            // per id; see `CommentsState.replies`.
+            state = listState,
+            contentPadding = PaddingValues(bottom = 8.dp)
+        ) {
+            when {
+                state.isLoading -> item(key = "loading") {
+                    // The rows that are coming, at the sizes they will have. A
+                    // spinner here was the one waiting state in the app whose shape
+                    // was already known and thrown away.
+                    //
+                    // The shimmer is owned by this item rather than by the sheet: an
+                    // infinite transition composed above the list kept ticking while
+                    // comments were on screen and while the editor covered them, for
+                    // a skeleton that was not drawn. Composed here, it exists only
+                    // for as long as the waiting state does.
+                    CommentRowsSkeleton(phase = rememberShimmerPhase())
+                }
+
+                state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
+                    ThreadLoadError(message = state.loadError, onRetry = onRetry)
+                }
+
+                state.replies.isEmpty() -> item(key = "empty") {
+                    ThreadEmptyState(canPost = canPost)
+                }
+
+                else -> {
+                    val note = state.windowError ?: state.loadError
+                    if (note != null) {
+                        // Two different failures, one shape: an Older page that did
+                        // not arrive and a refresh that did not arrive both leave the
+                        // rows on screen readable, and both need a retry that does not
+                        // throw away what the reader is looking at.
+                        item(key = if (state.windowError != null) "window_error" else "refresh_error") {
+                            RefreshErrorBanner(
+                                message = note,
+                                onRetry = if (state.windowError != null) onLoadOlder else onRetry
+                            )
+                        }
+                    }
+                    if (state.isChatView && hiddenCount > 0) {
+                        item(key = "older", contentType = "older") {
+                            CommentOlderRow(
+                                hiddenCount = hiddenCount,
+                                isLoading = state.isLoadingOlder,
+                                onClick = onLoadOlder
+                            )
+                        }
+                    }
+                    items(
+                        items = visible,
+                        key = { it.id },
+                        contentType = { "reply" }
+                    ) { reply ->
+                        CommentRow(
+                            reply = reply,
+                            indent = replyDepths[reply.id] ?: 0,
+                            isContinuation = reply.id in continuations,
+                            likePending = reply.id in state.pendingReplyLikes,
+                            canManage = viewerId != null && reply.user?.id == viewerId,
+                            // A reply is addressed by a leading `@name`, so without an
+                            // author name there is nothing to insert, even for a
+                            // signed-in reader.
+                            canReply = canPost && !reply.user?.name.isNullOrBlank(),
+                            canQuote = canPost && !reply.text.isNullOrBlank(),
+                            onLike = { onLikeReply(reply.id) },
+                            onShowLikers = { onShowCommentLikers(reply.id) },
+                            onReply = onReply,
+                            onQuote = { onQuote(reply) },
+                            onManage = { onManageReply(reply.id) },
+                            nowEpochSecond = nowEpochSecond
+                        )
+                    }
+                }
+            }
+        }
+
+        if (state.unseenNewComments > 0) {
+            // Floating over the bottom of the list. A row *in* the list would be
+            // below the newest comment the reader has not seen yet, which is the
+            // wrong way round for something that announces what arrived.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 4.dp)
+            ) {
+                NewCommentsPill(
+                    count = state.unseenNewComments,
+                    onClick = {
+                        onRevealNewComments()
+                    }
+                )
+            }
+        }
+    }
+
+    CommentEntryBar(canPost = canPost, onClick = onStartCompose)
+}
+
 @Composable
 private fun CommentsHeader(count: Int, isRefreshing: Boolean, isLoading: Boolean) {
     Column {
@@ -430,225 +647,5 @@ private fun WriteCommentBar(onClick: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-/**
- * One comment: a face, a name and a time, the body, and the row's controls.
- *
- * The controls are left-aligned under the body rather than pushed to the sheet's
- * edges. A body can be a multi-line quote or an image, and a right-aligned
- * overflow would sit at the end of whatever line happened to be last.
- */
-@Composable
-private fun CommentRow(
-    reply: ActivityReply,
-    indent: Int,
-    likePending: Boolean,
-    canManage: Boolean,
-    canReply: Boolean,
-    onLike: () -> Unit,
-    onReply: (String) -> Unit,
-    onManage: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                // One step per threaded level, capped in [ReplyThreader]. The
-                // mention itself is still in the body, so the indent is an aid
-                // rather than the only record of who is being answered.
-                start = 20.dp + 18.dp * indent,
-                end = 20.dp,
-                top = 10.dp,
-                bottom = 10.dp
-            )
-            .testTag("activity_reply_row"),
-        verticalAlignment = Alignment.Top
-    ) {
-        CommentAvatar(
-            url = reply.user?.avatar?.large ?: reply.user?.avatar?.medium,
-            name = reply.user?.name.orEmpty()
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = reply.user?.name.orEmpty(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (reply.createdAt != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = formatRelativeSeconds(reply.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            ReplyBody(text = reply.text)
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // The same control the activity card draws, shared rather than
-                // re-declared here - `EngagementAction`.
-                EngagementAction(
-                    icon = if (reply.isLiked == true) {
-                        AppVectorIcons.ActivityLiked
-                    } else {
-                        AppVectorIcons.ActivityNotLiked
-                    },
-                    count = reply.likeCount ?: 0,
-                    active = reply.isLiked == true,
-                    // Null `isLiked` means AniList did not answer, which is what a
-                    // signed-out reader gets. Disabled rather than drawn-as-unliked,
-                    // so the control is never something that looks live and does
-                    // nothing.
-                    enabled = reply.isLiked != null && !likePending,
-                    contentDescription = if (reply.isLiked == true) "Unlike comment" else "Like comment",
-                    onClick = onLike,
-                    modifier = Modifier.testTag("activity_reply_like_button")
-                )
-                if (canReply) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    ReplyActionButton(
-                        name = reply.user?.name.orEmpty(),
-                        onClick = { onReply(reply.user?.name.orEmpty()) }
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (canManage) {
-                    CommentManageButton(onClick = onManage)
-                }
-            }
-        }
-    }
-}
-
-/**
- * "Reply", next to the heart.
- *
- * A labelled control rather than a second icon: on this row the heart is a bare
- * icon with a count, and a bare arrow beside it would be another glyph to guess.
- * The label is also what makes the row's two taps distinguishable to a screen
- * reader without a description that says "reply to Bild's comment" on every row.
- */
-@Composable
-private fun ReplyActionButton(name: String, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(MaterialTheme.shapes.small)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClickLabel = "Reply to $name",
-                onClick = onClick
-            )
-            .padding(horizontal = 6.dp, vertical = 4.dp)
-            .testTag("activity_reply_reply_button"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityReplies,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = "Reply",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * The overflow that opens the manage dialog, on the viewer's own comment.
- *
- * A tap target of its own rather than a long press on the row: the sheet's only
- * hold gesture elsewhere (the heart) opens likers, and nothing about a comment's
- * body says "hold me to edit this". 48dp, the platform's minimum touch target,
- * rather than the 36dp box that was sized to its glyph - manage is the one
- * control in the row that changes somebody's comment, and it was also the
- * hardest to hit.
- */
-@Composable
-private fun CommentManageButton(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                // The spring is the feedback. A ripple inside a 48dp circle that is
-                // already scaling reads as a second, competing animation - the same
-                // call the format bar and the reply control make.
-                indication = null,
-                onClick = onClick
-            )
-            .testTag("activity_reply_manage_button"),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityManage,
-            contentDescription = "Comment options",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
-    }
-}
-
-@Composable
-private fun ReplyBody(text: String?) {
-    // A child composable rather than an early return in this one: `remember`
-    // after a return is a conditional composable call, and a reply whose text
-    // AniList omitted would then occupy the slot the parser state wants.
-    if (!text.isNullOrBlank()) MarkdownBody(text)
-}
-
-@Composable
-private fun MarkdownBody(text: String) {
-    // The cover-aware renderer: a comment can link an AniList title, and the card
-    // that link becomes draws a poster only if a loader is in scope. The loader
-    // comes from `LocalMediaCoverLoader`, provided by the sheet's host, and the
-    // document is parsed once inside this call rather than per frame.
-    AniListMarkdownWithCovers(markdown = text)
-}
-
-@Composable
-private fun CommentAvatar(url: String?, name: String) {
-    val shape = CircleShape
-    val base = Modifier
-        .size(34.dp)
-        .clip(shape)
-    if (url != null) {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            modifier = base.background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = base.background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = name.trim().take(1).uppercase(),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
     }
 }

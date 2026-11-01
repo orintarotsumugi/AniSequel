@@ -81,7 +81,7 @@ data class ActivityFeedSource(
      */
     val onRefresh: () -> Unit,
     val onLike: (Int) -> Unit,
-    val onOpenComments: (Int) -> Unit,
+    val onOpenComments: (activityId: Int, knownReplyCount: Int) -> Unit,
     val onOpenLikers: (Int) -> Unit,
     val calendar: ActivityCalendar? = null,
     val userName: String? = null,
@@ -305,7 +305,9 @@ private fun LazyListScope.activityFeedItems(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         onLike = { source.onLike(activity.id) },
-                        onComments = { source.onOpenComments(activity.id) },
+                        onComments = {
+                            source.onOpenComments(activity.id, activity.replyCount ?: 0)
+                        },
                         onOpenLikers = { source.onOpenLikers(activity.id) },
                         onOpenDetail = onOpenDetail,
                         likePending = activity.id in activityState.pendingLikes,
