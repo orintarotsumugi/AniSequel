@@ -55,7 +55,11 @@ class GifSearchParseTest {
 
     @Test
     fun `a search phrase becomes booru tags without losing tags the reader typed`() {
-        assertEquals("spice_and_wolf holo", booruTags("spice and wolf holo"))
+        // Stop words go, because `and` is never part of a tag and a phrase that
+        // carries it matches nothing. The rest is passed through as separate tags -
+        // the site ANDs them - and nothing here tries to know that "spice and wolf"
+        // is one tag, which would need the site's tag list to guess.
+        assertEquals("spice wolf holo", booruTags("spice and wolf holo"))
         assertEquals("holo_(spice_and_wolf) apple", booruTags("holo_(spice_and_wolf) apple"))
         assertEquals("", booruTags("   "))
     }
