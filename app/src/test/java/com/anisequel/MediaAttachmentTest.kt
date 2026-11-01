@@ -120,7 +120,7 @@ class MediaAttachmentTest {
         // decide anything.
         assertEquals(
             "a-b_c.jpg",
-            MediaAttachment.storageFileName("image/jpeg", "../../etc/pa ss\"")
+            MediaAttachment.storageFileName("image/jpeg", "../../etc/pass wd.mp4")
         )
     }
 
