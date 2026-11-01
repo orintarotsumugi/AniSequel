@@ -125,7 +125,8 @@ fun ProfileActivityPage(
     // knowing where a preference lives. The application context is what the
     // DataStore delegate is keyed on, so a second screen asking for the same file
     // gets the same instance rather than a crash.
-    val mediaPreferences = remember { MediaPreferences(LocalContext.current.applicationContext) }
+    val context = LocalContext.current
+    val mediaPreferences = remember(context) { MediaPreferences(context.applicationContext) }
     val mediaSettings by mediaPreferences.settings.collectAsStateWithLifecycle(
         initialValue = CommentMediaSettings()
     )

@@ -494,7 +494,14 @@ internal fun postedReplyRow(
 ): Int {
     val index = replies.indexOfFirst { it.id == postedReplyId }
     if (index < 0) return -1
-    return index + (if (hasBannerRow) 1 else 0) + (if (hasOlderRow) 1 else 0)
+    // Counted with statements rather than `index + (if (...) 1 else 0) + ...`:
+    // dropping the parentheses to satisfy a lint rule changes what the operands
+    // bind to, and keeping them invites the next reader to drop them. Two `if`s
+    // cannot be misread either way.
+    var row = index
+    if (hasBannerRow) row++
+    if (hasOlderRow) row++
+    return row
 }
 
 /**

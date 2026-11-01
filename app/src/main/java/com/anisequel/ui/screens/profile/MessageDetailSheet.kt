@@ -50,6 +50,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
+import com.anisequel.ui.viewmodel.conversationMessages
 
 /**
  * One message read whole, inside the app.

@@ -55,7 +55,17 @@ class MediaPreferences(
     private val cipher: TokenCipher = KeystoreTokenCipher(TENOR_KEY_ALIAS)
 ) {
 
-    private object Keys {
+    /**
+ * Chat view is on by default: a window is strictly less work than the whole
+ * thread, and the reader who wants the old behaviour can turn it off one tap
+ * deeper than the one that would have to be taken to notice it was missing.
+ */
+private const val DEFAULT_CHAT_VIEW = true
+
+/** Polling is on with it, and separately switchable - see [CommentMediaSettings]. */
+private const val DEFAULT_POLLING = true
+
+private object Keys {
         val CHAT_VIEW = booleanPreferencesKey("comment_chat_view")
         val POLL_COMMENTS = booleanPreferencesKey("comment_poll_new")
         val TENOR_KEY_ENCRYPTED = stringPreferencesKey("tenor_api_key_encrypted")
@@ -110,9 +120,6 @@ class MediaPreferences(
     }
 
     companion object {
-        const val DEFAULT_CHAT_VIEW = true
-        const val DEFAULT_POLLING = true
-
         /** Not the AniList token's alias - see the class documentation. */
         const val TENOR_KEY_ALIAS = "anisequel_gif_provider_key"
     }

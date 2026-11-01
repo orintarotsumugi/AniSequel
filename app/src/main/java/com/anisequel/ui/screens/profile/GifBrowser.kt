@@ -85,6 +85,10 @@ internal fun ColumnScope.GifBrowser(
 ) {
     val state by store.state.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
+    // A local, because a smart cast onto `state.error` is not possible: `state` is
+    // a delegated property, so the compiler will not promise it stays non-null
+    // between the check and the use.
+    val errorMessage = state.error
 
     val nearEnd by remember {
         derivedStateOf {
@@ -119,9 +123,9 @@ internal fun ColumnScope.GifBrowser(
     )
 
     when {
-        state.error != null && state.results.isEmpty() -> GifMessage(
+        errorMessage != null && state.results.isEmpty() -> GifMessage(
             icon = AppVectorIcons.Warning,
-            text = state.error,
+            text = errorMessage,
             action = if (state.query.isNotBlank()) {
                 { store.searchNow() }
             } else {
@@ -129,16 +133,17 @@ internal fun ColumnScope.GifBrowser(
             }
         )
 
-        state.isSearching && state.results.isEmpty() -> GifSkeleton()
+        state.isSearching && state.results.isEmpty() -> GifSkeleton(Modifier.weight(1f))
 
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
-            text = state.note ?: state.error ?: "Nothing found.",
-            action = if (state.error != null) {
+            text = state.note ?: errorMessage ?: "Nothing found.",
+            action = if (errorMessage != null) {
                 { store.searchNow() }
             } else {
                 null
-            }
+            },
+            modifier = Modifier.weight(1f)
         )
 
         else -> {
@@ -214,17 +219,15 @@ private fun GifTile(gif: GifResult, onUse: () -> Unit) {
 
 /** The waiting shape: the grid the results will fill, at the sizes they will have. */
 @Composable
-private fun GifSkeleton() {
-    val phase = rememberShimmerPhase()
+private fun GifSkeleton(modifier: Modifier = Modifier) {
+    val phase by rememberShimmerPhase()
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         userScrollEnabled = false,
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f)
+        modifier = modifier.fillMaxWidth()
     ) {
         items(SKELETON_TILES) { index ->
             Box(
@@ -246,11 +249,10 @@ private fun GifSkeleton() {
 
 /** A sentence the browser says instead of a grid, with a retry when one helps. */
 @Composable
-private fun GifMessage(icon: ImageVector, text: String, action: (() -> Unit)?) {
+private fun GifMessage(icon: ImageVector, text: String, action: (() -> Unit)?, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .weight(1f)
             .padding(horizontal = 28.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

@@ -98,13 +98,15 @@ object PickedImageReader {
 
     /** The provider's own idea of the file's name, which may be null or a lie. */
     private fun displayName(resolver: ContentResolver, uri: Uri): String? = runCatching {
-        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME))?.use { cursor ->
-            val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (column >= 0 && cursor.moveToFirst()) {
-                cursor.getString(column)?.takeIf { it.isNotBlank() }
-            } else {
-                null
-            }
+        // `Array<String?>` rather than `Array<String>`: `ContentResolver.query` is
+        // declared against the nullable projection in the platform stubs, and a
+        // non-null array is a different type to Kotlin's invariant generics, not a
+        // wider one - the call simply does not resolve.
+        val projection = arrayOf<String?>(OpenableColumns.DISPLAY_NAME)
+        val cursor = resolver.query(uri, projection) ?: return@runCatching null
+        cursor.use {
+            val column = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (column >= 0 && it.moveToFirst()) it.getString(column)?.takeIf { name -> name.isNotBlank() } else null
         }
     }.getOrNull()
 
@@ -149,7 +151,7 @@ object PickedImageReader {
         try {
             val image = ImageDecoder.decodeBitmap(
                 ImageDecoder.createSource(java.nio.ByteBuffer.wrap(raw))
-            ) { decoder, _ ->
+            ) { decoder, _, _ ->
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 decoder.isMutableRequired = false
             }

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
+import com.anisequel.data.model.isWith
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.Job

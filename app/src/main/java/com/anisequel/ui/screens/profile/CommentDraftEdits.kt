@@ -156,7 +156,7 @@ internal fun prefixLines(
     }
     val newText = text.substring(0, lineStart) + prefixed + text.substring(lineEnd)
     val added = prefixed.length - block.length
-    DraftEdit(newText, from + added, to + added)
+    return DraftEdit(newText, from + added, to + added)
 }
 
 /**
@@ -175,12 +175,18 @@ internal fun insertBlock(
 ): DraftEdit {
     val from = minOf(selectionStart, selectionEnd).coerceIn(0, text.length)
     val to = maxOf(selectionStart, selectionEnd).coerceIn(0, text.length)
-    val needsLeading = from > 0 && text[from - 1] != '\n'
-    val needsTrailing = to < text.length && text[to] != '\n'
-    val snippet = (if (needsLeading) "\n" else "") + block + (if (needsTrailing) "\n" else "")
+    val snippet = buildString {
+        // Newlines are appended conditionally rather than concatenated around
+        // parenthesised `if`s: `x + (if (c) "\n" else "") + y` only reads
+        // correctly with its parentheses, and the version without them silently
+        // folds the tail into the `else` branch.
+        if (from > 0 && text[from - 1] != '\n') append('\n')
+        append(block)
+        if (to < text.length && text[to] != '\n') append('\n')
+    }
     val newText = text.substring(0, from) + snippet + text.substring(to)
     val cursor = from + snippet.length
-    DraftEdit(newText, cursor, cursor)
+    return DraftEdit(newText, cursor, cursor)
 }
 
 /** `[selected](url)`, or `[label](url)` with nothing selected. */

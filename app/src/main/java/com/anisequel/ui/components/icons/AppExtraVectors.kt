@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.icons
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathBuilder
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -353,75 +354,47 @@ object AppExtraVectors {
      * row sits at a different weight and corner radius than its neighbours.
      */
     val TextUnderline: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextUnderline",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("TextUnderline") {
+            stroke {
                 moveTo(7f, 4f)
-                verticalTo(13f)
-                curveToRelative(0f, 2.8f, 2.2f, 4.2f, 5f, 4.2f)
-                curveToRelative(2.8f, 0f, 5f, -1.4f, 5f, -4.2f)
-                verticalTo(4f)
+                lineTo(7f, 13f)
+                curveTo(7f, 16f, 9.5f, 18f, 12f, 18f)
+                curveTo(14.5f, 18f, 17f, 16f, 17f, 13f)
+                lineTo(17f, 4f)
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-                moveTo(6f, 21f)
-                horizontalTo(18f)
-            }
+            rule(6f, 21f, 18f, 21f)
         }
     }
 
-    /** Strikethrough: an "S" with the rule through it. */
+    /** Strikethrough: an S with the rule through it. */
     val TextStrikethrough: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextStrikethrough",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
-                moveTo(16.5f, 7.2f)
-                curveToRelative(-1f, -1.6f, -6f, -1.9f, -6f, 1.4f)
-                curveToRelative(0f, 3f, 6f, 2.2f, 6f, 5.2f)
-                curveToRelative(0f, 3.2f, -5f, 3f, -6f, 1.4f)
+        stroked("TextStrikethrough") {
+            stroke {
+                moveTo(15.5f, 7f)
+                curveTo(15.5f, 5.4f, 12.5f, 4.8f, 10.8f, 5.6f)
+                curveTo(8.8f, 6.6f, 9.2f, 9.4f, 12f, 10.4f)
+                curveTo(15f, 11.4f, 15.6f, 14.2f, 13.4f, 15.6f)
+                curveTo(11.6f, 16.8f, 8.6f, 16.2f, 8.2f, 14.6f)
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-                moveTo(3.5f, 12f)
-                horizontalTo(20.5f)
-            }
-        }.build()
+            rule(3.5f, 12f, 20.5f, 12f)
+        }
     }
 
     /** A heading: the letter H, which every editor's "big text" control shows. */
     val TextHeader: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextHeader",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.9f, strokeLineCap = StrokeCap.Round) {
-                moveTo(7f, 4.5f)
-                verticalTo(19.5f)
-            }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.9f, strokeLineCap = StrokeCap.Round) {
-                moveTo(17f, 4.5f)
-                verticalTo(19.5f)
-            }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.9f, strokeLineCap = StrokeCap.Round) {
-                moveTo(7f, 12f)
-                horizontalTo(17f)
-            }
-        }.build()
+        stroked("TextHeader") {
+            rule(7f, 4.5f, 7f, 19.5f)
+            rule(17f, 4.5f, 17f, 19.5f)
+            rule(7f, 12f, 17f, 12f)
+        }
     }
 
     /**
-     * A quote: two turned blocks.
+     * A quote: two turned blocks over a rule.
      *
-     * Used twice over - the composer's block-quote control and the row's "quote
-     * this comment" action - because both mean the same thing to a reader, and a
-     * second glyph for the same idea is one more to learn.
+     * Used twice over - the composer's block-quote control and the row's "quote this
+     * comment" action - because both mean the same thing to a reader, and a second
+     * glyph for the same idea is one more to learn.
      */
     val TextQuote: ImageVector by lazy {
         ImageVector.Builder(
@@ -429,104 +402,88 @@ object AppExtraVectors {
             defaultWidth = 24.dp, defaultHeight = 24.dp,
             viewportWidth = 24f, viewportHeight = 24f
         ).apply {
-            path(fill = SolidColor(Color.White), pathFillType = PathFillType.NonZero) {
+            fill {
                 moveTo(4f, 15f)
-                horizontalTo(9.5f)
-                verticalTo(9f)
-                horizontalTo(6f)
+                lineTo(9.5f, 15f)
+                lineTo(9.5f, 9f)
+                lineTo(6f, 9f)
                 curveTo(6f, 6.5f, 7.5f, 5f, 10f, 4.5f)
-                verticalTo(2.5f)
+                lineTo(10f, 2.5f)
                 curveTo(5.5f, 3.2f, 3f, 6f, 3f, 9.5f)
-                verticalTo(15f)
+                lineTo(3f, 15f)
                 close()
-                moveTo(13f, 15f)
-                horizontalTo(18.5f)
-                verticalTo(9f)
-                horizontalTo(15f)
-                curveTo(15f, 6.5f, 16.5f, 5f, 19f, 4.5f)
-                verticalTo(2.5f)
-                curveTo(14.5f, 3.2f, 12f, 6f, 12f, 9.5f)
-                verticalTo(15f)
+                moveTo(15f, 15f)
+                lineTo(20.5f, 15f)
+                lineTo(20.5f, 9f)
+                lineTo(17f, 9f)
+                curveTo(17f, 6.5f, 18.5f, 5f, 21f, 4.5f)
+                lineTo(21f, 2.5f)
+                curveTo(16.5f, 3.2f, 14f, 6f, 14f, 9.5f)
+                lineTo(14f, 15f)
                 close()
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.6f, strokeLineCap = StrokeCap.Round) {
-                moveTo(4f, 19f)
-                horizontalTo(15f)
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.6f,
+                strokeLineCap = StrokeCap.Round
+            ) {
+                moveTo(4f, 19.5f)
+                lineTo(15f, 19.5f)
             }
         }.build()
     }
 
-    /** Inline code: a pair of angle brackets and the slash between them. */
+    /** Inline code: a pair of angle brackets, nothing between them. */
     val TextCode: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextCode",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("TextCode") {
+            stroke {
                 moveTo(9f, 7f)
                 lineTo(4f, 12f)
                 lineTo(9f, 17f)
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            stroke {
                 moveTo(15f, 7f)
                 lineTo(20f, 12f)
                 lineTo(15f, 17f)
             }
-        }.build()
+        }
     }
 
     /** Centred text: three lines, each about the same middle. */
     val TextCentered: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextCentered",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            listOf(Triple(3.5f, 20.5f, 6f), Triple(6.5f, 17.5f, 12f), Triple(4.5f, 19.5f, 18f)).forEach {
-                bounds ->
-                path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-                    moveTo(bounds.first, bounds.third)
-                    horizontalTo(bounds.second)
-                }
-            }
-        }.build()
+        stroked("TextCentered") {
+            rule(3.5f, 6f, 20.5f, 6f)
+            rule(6.5f, 12f, 17.5f, 12f)
+            rule(4.5f, 18f, 19.5f, 18f)
+        }
     }
 
     /**
-     * An animated GIF: a frame with something moving inside it.
+     * An animated GIF: a frame with three frames inside it.
      *
      * Named for what the control inserts rather than for the shape, per the app's
-     * icon rule - the three bars inside are frames, and the rounded box is the tile
-     * the picker draws.
+     * icon rule - the bars are the frames, and the rounded box is the tile the
+     * picker draws.
      */
     val AnimatedGif: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "AnimatedGif",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("AnimatedGif") {
+            stroke {
                 moveTo(4f, 7f)
                 curveTo(4f, 5.3f, 5.3f, 4f, 7f, 4f)
-                horizontalTo(17f)
-                curveToRelative(1.7f, 0f, 3f, 1.3f, 3f, 3f)
-                verticalTo(17f)
-                curveToRelative(0f, 1.7f, -1.3f, 3f, -3f, 3f)
-                horizontalTo(7f)
-                curveToRelative(-1.7f, 0f, -3f, -1.3f, -3f, -3f)
+                lineTo(17f, 4f)
+                curveTo(18.7f, 4f, 20f, 5.3f, 20f, 7f)
+                lineTo(20f, 17f)
+                curveTo(20f, 18.7f, 18.7f, 20f, 17f, 20f)
+                lineTo(7f, 20f)
+                curveTo(5.3f, 20f, 4f, 18.7f, 4f, 17f)
                 close()
             }
-            listOf(8.5f, 12f, 15.5f).forEach { x ->
-                path(stroke = SolidColor(Color.White), strokeLineWidth = 2f, strokeLineCap = StrokeCap.Round) {
-                    moveTo(x, 15f)
-                    verticalTo(15f - (x - 6.5f))
-                }
-            }
-        }.build()
+            // Bars of increasing height: still frames are a static tile, and a
+            // picker tile has to say *moving* at 20dp.
+            rule(8.5f, 15f, 8.5f, 13f)
+            rule(12f, 15f, 12f, 9.5f)
+            rule(15.5f, 15f, 15.5f, 6f)
+        }
     }
 
     /**
@@ -535,99 +492,135 @@ object AppExtraVectors {
      * The tray is the device's storage and the arrow is the copy leaving it, which
      * is what the control does: it does not attach a file to AniList, because there
      * is nothing to attach it to, it puts the file somewhere public and pastes the
-     * address.
+     * address back into the comment.
      */
     val PhotoUpload: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "PhotoUpload",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("PhotoUpload") {
+            stroke {
                 moveTo(4f, 14.5f)
-                verticalTo(19f)
-                curveToRelative(0f, 1.1f, 0.9f, 2f, 2f, 2f)
-                horizontalTo(16f)
-                curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
-                verticalTo(14.5f)
+                lineTo(4f, 19f)
+                curveTo(4f, 20.1f, 4.9f, 21f, 6f, 21f)
+                lineTo(16f, 21f)
+                curveTo(17.1f, 21f, 18f, 20.1f, 18f, 19f)
+                lineTo(18f, 14.5f)
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
-                moveTo(12f, 3f)
-                verticalTo(14f)
-            }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            rule(12f, 3f, 12f, 14f)
+            stroke {
                 moveTo(8f, 7f)
                 lineTo(12f, 3f)
                 lineTo(16f, 7f)
             }
-        }.build()
+        }
     }
 
     /**
      * A video embed: a frame with a play mark inside it.
      *
-     * The composer's YouTube control. AniList turns `youtube(id)` into a player
-     * in the comment, so the control promises a video rather than a link, and the
-     * rounded frame is what the reader will see posted.
+     * The composer's YouTube control. AniList turns `youtube(id)` into a player in
+     * the comment, so the control promises a video rather than a link.
      */
     val YouTubeEmbed: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "YouTubeEmbed",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("YouTubeEmbed") {
+            stroke {
                 moveTo(3f, 8f)
                 curveTo(3f, 6.3f, 4.3f, 5f, 6f, 5f)
-                horizontalTo(18f)
-                curveToRelative(1.7f, 0f, 3f, 1.3f, 3f, 3f)
-                verticalTo(16f)
-                curveToRelative(0f, 1.7f, -1.3f, 3f, -3f, 3f)
-                horizontalTo(6f)
-                curveToRelative(-1.7f, 0f, -3f, -1.3f, -3f, -3f)
+                lineTo(18f, 5f)
+                curveTo(19.7f, 5f, 21f, 6.3f, 21f, 8f)
+                lineTo(21f, 16f)
+                curveTo(21f, 17.7f, 19.7f, 19f, 18f, 19f)
+                lineTo(6f, 19f)
+                curveTo(4.3f, 19f, 3f, 17.7f, 3f, 16f)
                 close()
             }
-            path(fill = SolidColor(Color.White), pathFillType = PathFillType.NonZero) {
+            fill {
                 moveTo(10.2f, 9f)
                 lineTo(15.6f, 12f)
                 lineTo(10.2f, 15f)
                 close()
             }
-        }.build()
+        }
     }
 
-    /** A video file rather than a player: a page with a play mark on it. */
+    /** A video *file* rather than a player: a page with a play mark on it. */
     val VideoFile: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "VideoFile",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        stroked("VideoFile") {
+            stroke {
                 moveTo(6f, 3f)
-                horizontalTo(14f)
+                lineTo(14f, 3f)
                 lineTo(19f, 8f)
-                verticalTo(21f)
-                horizontalTo(6f)
+                lineTo(19f, 21f)
+                lineTo(6f, 21f)
                 close()
             }
-            path(stroke = SolidColor(Color.White), strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            stroke {
                 moveTo(14f, 3f)
-                verticalTo(8f)
-                horizontalTo(19f)
+                lineTo(14f, 8f)
+                lineTo(19f, 8f)
             }
-            path(fill = SolidColor(Color.White), pathFillType = PathFillType.NonZero) {
+            fill {
                 moveTo(10f, 12.5f)
                 lineTo(15f, 16f)
                 lineTo(10f, 19.5f)
                 close()
             }
-        }.build()
+        }
+    }
+
+    /**
+     * A 24x24 stroked glyph, and the two primitives its paths are built from.
+     *
+     * `PathBuilder` has no `horizontalTo`/`verticalTo` - those are SVG path
+     * commands, not Compose ones - so a rule is a `lineTo` with both ends named.
+     * That is stated here rather than rediscovered because every icon in this file
+     * wants a straight line, and the SVG spelling is what a browser-derived mockup
+     * hands you.
+     */
+    private inline fun stroked(
+        name: String,
+        contents: Strokes.() -> Unit
+    ): ImageVector = ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        Strokes(this).contents()
+    }.build()
+
+    /**
+     * The two shapes every glyph in this set is made of, with the stroke weight the
+     * composer's other hand-built controls already use.
+     *
+     * `PathBuilder` has no `horizontalTo`/`verticalTo` - those are SVG path commands,
+     * not Compose ones - so a straight line names both ends. That is written down
+     * because every icon here wants a horizontal or vertical rule, and the SVG
+     * spelling is what a browser-derived mockup hands you.
+     */
+    private class Strokes(private val builder: ImageVector.Builder) {
+        fun stroke(block: PathBuilder.() -> Unit) {
+            builder.path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+                block = block
+            )
+        }
+
+        fun fill(block: PathBuilder.() -> Unit) {
+            builder.path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero,
+                block = block
+            )
+        }
+
+        fun rule(x1: Float, y1: Float, x2: Float, y2: Float) {
+            stroke {
+                moveTo(x1, y1)
+                lineTo(x2, y2)
+            }
+        }
     }
 }

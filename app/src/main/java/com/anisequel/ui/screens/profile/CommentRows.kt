@@ -2,8 +2,10 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,7 +130,15 @@ internal fun CommentRow(
             }
             ReplyBody(text = reply.text)
             Spacer(modifier = Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // The action bar scrolls rather than clips. Heart, Reply, Quote, the
+            // timestamp and the manage dot are five targets under one body, and a
+            // threaded comment already starts 56dp in from the edge: on a 360dp
+            // phone the last control ran off the screen, and the one control that
+            // edits or deletes your own comment is the worst one to hide.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 // The same control the activity card draws, shared rather than
                 // re-declared here - `EngagementAction`.
                 EngagementAction(

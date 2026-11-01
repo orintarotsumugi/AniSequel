@@ -125,7 +125,7 @@ class OpenverseGifs(
                     // photo search: Openverse filters the served file's extension,
                     // and a thumbnail-heavy index would otherwise answer with stills.
                     .addQueryParameter("extension", "gif")
-                    .addQueryParameter("page", (cursor?.toIntOrNull() ?: 1).coerceAtLeast(1).toString())
+                    .addQueryParameter("page", firstPageOf(cursor).toString())
                     .addQueryParameter("page_size", PAGE_SIZE.toString())
                     .build()
             }
@@ -155,7 +155,7 @@ class OpenverseGifs(
                         ?: return@withContext Result.failure(
                             GifSearchFailure("The GIF index answered with something unreadable.")
                         )
-                    Result.success(parsed.toGifPage(page = (cursor?.toIntOrNull() ?: 1)))
+                    Result.success(parsed.toGifPage(page = firstPageOf(cursor)))
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -163,6 +163,10 @@ class OpenverseGifs(
                 Result.failure(GifSearchFailure("Could not reach the GIF index."))
             }
         }
+
+    /** The page a cursor names, or the first one. */
+    private fun firstPageOf(cursor: String?): Int =
+        (cursor?.toIntOrNull() ?: 1).coerceAtLeast(1)
 
     private fun describe(status: Int): String = when {
         status == 402 -> "The GIF index has stopped answering anonymous searches."
@@ -288,11 +292,11 @@ internal fun OpenverseResponse.toGifPage(page: Int): GifPage {
                 height = row.height
             )
         }
-        val more = (page_count ?: 0) > page
+        val more = (pageCount ?: 0) > page
         return GifPage(
             results = rows,
             next = if (more) (page + 1).toString() else null,
-            totalCount = result_count
+            totalCount = resultCount
         )
     }
 

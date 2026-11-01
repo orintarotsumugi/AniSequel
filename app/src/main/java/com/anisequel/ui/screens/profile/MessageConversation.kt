@@ -113,43 +113,11 @@ private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Bo
                 .widthIn(max = 460.dp)
                 .testTag("message_conversation_row")
         ) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        if (sent) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        },
-                        RoundedCornerShape(
-                            topStart = if (sent) 18.dp else 6.dp,
-                            topEnd = if (sent) 6.dp else 18.dp,
-                            bottomStart = 18.dp,
-                            bottomEnd = 18.dp
-                        )
-                    )
-                    .then(
-                        if (highlighted) {
-                            Modifier.padding(1.dp).background(
-                                MaterialTheme.colorScheme.primary,
-                                RoundedCornerShape(
-                                    topStart = if (sent) 18.dp else 6.dp,
-                                    topEnd = if (sent) 6.dp else 18.dp,
-                                    bottomStart = 18.dp,
-                                    bottomEnd = 18.dp
-                                )
-                            ).padding(1.dp)
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
+            Box(modifier = bubbleModifier(sent, highlighted)) {
                 // The same renderer the comment thread and the cards use, so a
                 // message with an image, a spoiler or an AniList link in it shows
                 // the image, hides the spoiler and draws the poster - the body of a
-                // message is AniList Markdown, not plain text, whatever the row on
-                // the inbox looked like.
+                // message is AniList Markdown, not plain text.
                 AniListMarkdownWithCovers(
                     markdown = body,
                     modifier = Modifier.fillMaxWidth()
@@ -157,7 +125,7 @@ private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Bo
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = message.createdAt?.let { formatConversationTime(it) } ?: "",
+                text = message.createdAt?.let { formatConversationTime(it) }.orEmpty(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Normal,
@@ -165,6 +133,41 @@ private fun ConversationRow(message: MessageNode, sent: Boolean, highlighted: Bo
                 maxLines = 1
             )
         }
+    }
+}
+
+/**
+ * The bubble's own surface: the colour that says whose, the corner that says which
+ * way it points, and - for the message that was tapped - a rule one pixel wide.
+ *
+ * Pulled out of the row because the row is about a message, and this is about which
+ * of the two sides wrote it. The highlight is drawn as padding rather than as a
+ * border on the text: a message marked by *looking different from itself* is easier
+ * to find in a column of bubbles than one with a caption over it.
+ */
+private fun bubbleModifier(sent: Boolean, highlighted: Boolean): Modifier {
+    val shape = RoundedCornerShape(
+        topStart = if (sent) 18.dp else 6.dp,
+        topEnd = if (sent) 6.dp else 18.dp,
+        bottomStart = 18.dp,
+        bottomEnd = 18.dp
+    )
+    val surface = if (sent) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    return if (highlighted) {
+        Modifier
+            .padding(1.dp)
+            .background(MaterialTheme.colorScheme.primary, shape)
+            .padding(1.dp)
+            .background(surface, shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    } else {
+        Modifier
+            .background(surface, shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     }
 }
 
