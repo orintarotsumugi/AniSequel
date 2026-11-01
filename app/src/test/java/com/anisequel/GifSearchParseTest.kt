@@ -339,7 +339,7 @@ class GifSearchParseTest {
         )
         store.rememberUsed(gif(1, gridUrl = "https://x/sample1.jpg"))
         val recent = store.usedThisSession().single()
-        assertEquals("https://x/embed1.gif", recent.embedUrl)
+        assertEquals("https://x/1.gif", recent.embedUrl)
         assertNotEquals(
             "the strip must not be handed the full animation",
             recent.embedUrl,
@@ -351,7 +351,7 @@ class GifSearchParseTest {
 
     private fun gif(index: Int, gridUrl: String = "https://x/tile$index.gif") = GifResult(
         id = index.toString(),
-        embedUrl = "https://x/embed$index.gif",
+        embedUrl = "https://x/$index.gif",
         gridUrl = gridUrl,
         title = null,
         width = 5200,
