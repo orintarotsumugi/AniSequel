@@ -48,10 +48,12 @@ class CommentMarkupEditsTest {
         assertEquals("> one\n> two\n> three", edit.text)
         // The selection starts where it started - at the first character of the
         // first line - and ends at the same word it ended at, measured in the new
-        // text. Adding one flat offset for the whole block was the bug: a selection
-        // that began mid-block landed past its own end.
-        assertEquals(0, edit.selectionStart)
-        assertEquals("> one\n> two\n> thr", edit.text.substring(0, edit.selectionEnd))
+        // text. It begins on the "o" of the first line - two characters in, behind
+        // the "> " that was just added - and ends three characters into the third
+        // line, exactly where it ended before. A flat offset for the whole block put
+        // the start past the end, which is the bug this pins.
+        assertEquals(2, edit.selectionStart)
+        assertEquals(17, edit.selectionEnd)
 
         val blanks = prefixLines("a\n\nb", 0, 3, "> ")
         assertEquals("> a\n\n> b", blanks.text)
@@ -62,8 +64,8 @@ class CommentMarkupEditsTest {
         val edit = prefixLines("abc\ndef", 5, 5, "# ")
         assertEquals("abc\n# def", edit.text)
         assertEquals(
-            "the caret stays inside the line it was on, just after the marker",
-            5,
+            "the caret stays at the same place in the line, now after the marker",
+            7,
             edit.selectionStart
         )
     }
