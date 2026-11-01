@@ -215,7 +215,12 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
             // cap. Fit keeps the whole image inside the same box.
             contentScale = ContentScale.Fit,
             placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-            error = rememberVectorPainter(AppVectorIcons.AnimeSparkle)
+            // Not the sparkle again. A dead embed - a catbox file past its retention,
+            // a 403 from a hotlink-guarded host, a decode that threw - looked exactly
+            // like a slow one, forever, which is the same invisibility `ImageUserAgentTest`
+            // records as the cause of the original 403 bug: the reader cannot tell a
+            // picture on its way from a picture that is never coming.
+            error = rememberVectorPainter(AppVectorIcons.Warning)
         )
     }
 }
@@ -237,8 +242,8 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
  * that same full width rather than to something zero-sized and invisible.
  */
 private fun imageWidthModifier(width: String?): Modifier {
-    val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull()
-    if (percent != null) return Modifier.fillMaxWidth(percent.coerceIn(1, 100) / 100f)
+    val percent = clampedImageWidthPercent(width)
+    if (percent != null) return Modifier.fillMaxWidth(percent)
     val pixels = clampedImageWidthDp(width)
     return if (pixels != null) Modifier.width(pixels.dp) else Modifier.fillMaxWidth()
 }

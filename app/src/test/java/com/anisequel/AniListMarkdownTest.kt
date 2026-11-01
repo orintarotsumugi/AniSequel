@@ -5,6 +5,8 @@ import com.anisequel.ui.components.markdown.InlineToken
 import com.anisequel.ui.components.markdown.MAX_RICH_IMAGE_WIDTH_DP
 import com.anisequel.ui.components.markdown.MarkdownNode
 import com.anisequel.ui.components.markdown.clampedImageWidthDp
+import com.anisequel.ui.components.markdown.clampedImageWidthPercent
+import com.anisequel.ui.components.markdown.containsEmbeddedImage
 import com.anisequel.ui.components.markdown.tryParseTable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1047,9 +1049,82 @@ class AniListMarkdownTest {
     @Test
     fun `an ordinary image width is preserved`() {
         assertEquals(220, clampedImageWidthDp("220"))
-        assertEquals(0, clampedImageWidthDp("0"))
+        // `img0(...)` is not a narrow image, it is no image: 0 used to clamp to
+        // itself and the renderer asked Compose for a 0dp box, so the embed was
+        // invisible in the posted comment while the composer's preview had shown
+        // it. An unreadable size degrades to the full width, as the KDoc promises,
+        // and a size of nothing is unreadable.
+        assertNull("zero is not a width", clampedImageWidthDp("0"))
+        assertNull("a negative is not a width either", clampedImageWidthDp("-20"))
         assertNull("a size-less image fills the width", clampedImageWidthDp(null))
         assertNull("a percentage is the renderer's job", clampedImageWidthDp("50%"))
+    }
+
+    @Test
+    fun `a percentage width is a fraction of the column, and none is the whole column`() {
+        assertEquals(0.5f, clampedImageWidthPercent("50%"))
+        assertEquals(
+            "a share over the column cannot be drawn past it",
+            1f,
+            clampedImageWidthPercent("150%")
+        )
+        assertNull("an empty percent is no image, not a sliver", clampedImageWidthPercent("0%"))
+        assertNull("pixels are the other helper's job", clampedImageWidthPercent("220"))
+        assertNull(clampedImageWidthPercent(null))
+    }
+
+    /**
+     * A server-drawn SVG banner is an image, on its own line.
+     *
+     * `coil-svg` is registered for exactly this file, `CentredBioImageTest` proves the
+     * same URL renders inside `img100%(…)`, and the extension list these three patterns
+     * share left `svg` out - so the bare line, which is the form AniList's own editor
+     * writes, stayed a blue underline.
+     */
+    @Test
+    fun `a bare svg line is an image and not a link`() {
+        val nodes = AniListMarkdownParser.parse("https://static.anilist.co/card.svg")
+        assertTrue(
+            "expected an ImageBlock, got ${nodes.map { it::class.simpleName }}",
+            nodes.singleOrNull() is MarkdownNode.ImageBlock
+        )
+    }
+
+    /**
+     * An image inside a link is still an image.
+     *
+     * `[![cover](a.gif)](target)` nests the image token inside the link, and the
+     * paragraph only looked at top-level tokens - so a banner bio's linked GIF drew
+     * the word "Image", in the expanded render as much as the collapsed one.
+     */
+    @Test
+    fun `a linked image mid-paragraph counts as an embedded image`() {
+        val nodes = AniListMarkdownParser.parse("look: [![cover](https://x/a.gif)](https://x/t)")
+        val paragraph = nodes.singleOrNull() as? MarkdownNode.Paragraph
+        assertNotNull("the line should still parse as a paragraph", paragraph)
+        assertTrue(
+            "the image is one level down, inside the link",
+            paragraph!!.inlines.containsEmbeddedImage()
+        )
+    }
+
+    @Test
+    fun `a bio that embeds an image is never collapsed`() {
+        // A clamped paragraph is one `Text`, and a `Text` cannot hold a bitmap: the
+        // image came out as its alt text until the reader pressed Show more, which
+        // is the opposite of what a banner bio is for.
+        val withImage = "https://static.anilist.co/banner.gif " + "filler ".repeat(80)
+        val imageNodes = AniListMarkdownParser.parse(withImage)
+        assertFalse(
+            "a long bio with an image in it is shown whole",
+            com.anisequel.ui.screens.profile.isBioCollapsible(withImage, imageNodes)
+        )
+
+        val textOnly = "filler ".repeat(120)
+        assertTrue(
+            "a long bio without one still collapses",
+            com.anisequel.ui.screens.profile.isBioCollapsible(textOnly, AniListMarkdownParser.parse(textOnly))
+        )
     }
 
     /**

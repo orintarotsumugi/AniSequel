@@ -41,6 +41,8 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownView
 import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.markdown.MarkdownNode
+import com.anisequel.ui.components.markdown.containsEmbeddedImage
 
 /**
  * How many lines a collapsed bio shows before the fade takes over.
@@ -63,7 +65,7 @@ private const val COLLAPSED_CHAR_HINT = 280
 /**
  * Whether a bio is long enough to be worth collapsing behind a toggle.
  *
- * Extracted, and taking the parsed block count, because the two halves have to
+ * Extracted, and taking the parsed nodes, because the two halves have to
  * agree and the card is the only place that knows both. Keying off
  * [COLLAPSED_CHAR_HINT] alone was the bug: it disagreed with what
  * [AniListMarkdownView] actually clips, in both directions. A 400-character bio
@@ -72,12 +74,25 @@ private const val COLLAPSED_CHAR_HINT = 280
  * dropped by the renderer with no cue at all, while the toggle that would have
  * explained it stayed hidden.
  *
- * [blockCount] is the parser's node count, not a count of newlines: a bio with
+ * [nodes] is the parser's output, not a count of newlines: a bio with
  * six one-line paragraphs is six blocks and does need collapsing, and a bio that
  * is one paragraph of 400 characters is one block and does not.
+ *
+ * A bio that embeds an image is never collapsed, whatever its length. A clamped
+ * paragraph is one `Text`, and a `Text` has nowhere to put a bitmap - so the GIF a
+ * banner bio carries was drawn as the word "Image", and the picture only appeared
+ * when the reader pressed "Show more". That made the collapse delete the one thing
+ * those bios were written around. Until the clamp learns to embed, a bio with an
+ * image in it is shown whole.
  */
-internal fun isBioCollapsible(about: String, blockCount: Int): Boolean =
-    about.length > COLLAPSED_CHAR_HINT || blockCount > MARKDOWN_COLLAPSED_BLOCK_LIMIT
+internal fun isBioCollapsible(about: String, nodes: List<MarkdownNode>): Boolean {
+    val embedsImage = nodes.any { node ->
+        node is MarkdownNode.Paragraph && node.inlines.containsEmbeddedImage()
+    }
+    if (embedsImage) return false
+    return about.length > COLLAPSED_CHAR_HINT ||
+        nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT
+}
 
 /**
  * The person's own bio, rendered with expressive AniList Markdown support and an optional
@@ -111,7 +126,7 @@ fun AboutCard(
 ) {
     val nodes = remember(about) { AniListMarkdownParser.parse(about) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val isCollapsed = isBioCollapsible(about, nodes.size) && !expanded
+    val isCollapsed = isBioCollapsible(about, nodes) && !expanded
 
     Card(
         modifier = modifier
@@ -145,7 +160,7 @@ fun AboutCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
-                if (isBioCollapsible(about, nodes.size)) {
+                if (isBioCollapsible(about, nodes)) {
                     Text(
                         text = if (expanded) "Show less" else "Show more",
                         style = MaterialTheme.typography.labelMedium,

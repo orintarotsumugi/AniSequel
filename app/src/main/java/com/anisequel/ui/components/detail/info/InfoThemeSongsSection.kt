@@ -113,6 +113,9 @@ fun InfoThemeSongsSection(
 }
 
 @Composable
+/**
+ * One theme: its artwork, its role, and the link that plays it.
+ */
 private fun ThemeSongCard(theme: ThemeSong) {
     val context = LocalContext.current
     val playable = !theme.videoUrl.isNullOrBlank()

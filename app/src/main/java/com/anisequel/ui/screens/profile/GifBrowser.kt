@@ -2,6 +2,7 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.anisequel.data.network.GifResult
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.GifSearchStore
@@ -76,10 +79,10 @@ import com.anisequel.ui.viewmodel.GifSearchStore
  * Adaptive square cells, animated by Coil's decoder. A tile draws
  * [GifResult.gridUrl] - the provider's small copy - and the comment gets the full file
  * at [GifResult.embedUrl]. Which copy is "small" is decided by the provider rather
- * than assumed: on Safebooru the sample is a shrunken animation for most GIFs and a
- * JPEG still for the rest, so the tile moves when it can and shows a still when the
- * only animation on offer is a poster-sized one that would not survive twenty of them
- * on screen at once.
+ * than assumed: on Safebooru most animated posts have no smaller file at all - the
+ * response hands back `sample_url` equal to `file_url` - so the tile falls back to the
+ * thumbnail still rather than the original, and the grid never holds more animation
+ * than a 104dp cell can decode. See `booruTileUrl`.
  */
 @Composable
 internal fun ColumnScope.GifBrowser(
@@ -92,10 +95,12 @@ internal fun ColumnScope.GifBrowser(
     // a delegated property, so the compiler will not promise it stays non-null
     // between the check and the use.
     val errorMessage = state.error
-    // Read once per recomposition: the strip is what an empty search shows, so a
-    // reader who comes back to the picker is looking at their last picks, not at a
-    // blinking "type to search".
-    val recent = store.usedThisSession()
+    // The strip is what an empty search shows, so a reader who comes back to the
+    // picker is looking at their last picks, not at a blinking "type to search".
+    // Collected rather than read once: a pick has to land in the strip while the
+    // pane is still open, and a plain function call here only refreshed when
+    // something else happened to recompose this composition.
+    val recent by store.recent.collectAsStateWithLifecycle()
 
     val nearEnd by remember {
         derivedStateOf {
@@ -129,6 +134,20 @@ internal fun ColumnScope.GifBrowser(
             .testTag("comment_gif_field")
     )
 
+    // A row of reactions for the reader who knows what they want to say and not
+    // which tag says it. The picker's own empty state asks for a search; this hands
+    // over the six words the index is known to answer, so the first visit is a tap
+    // rather than a guess at booru tag spelling.
+    if (state.query.isBlank()) {
+        GifSuggestionRow(onPick = { tag ->
+            // `setQuery` alone would schedule the debounce and leave the reader
+            // looking at the chips for another 450ms; this is a deliberate tap, not
+            // typing, so it goes straight to the search the keyboard's Enter runs.
+            store.setQuery(tag)
+            store.searchNow()
+        })
+    }
+
     when {
         errorMessage != null && state.results.isEmpty() -> GifMessage(
             icon = AppVectorIcons.Warning,
@@ -143,8 +162,13 @@ internal fun ColumnScope.GifBrowser(
         state.isSearching && state.results.isEmpty() -> GifSkeleton(Modifier.weight(1f))
 
         state.query.isBlank() && recent.isNotEmpty() -> RecentGifGrid(
-            urls = recent,
-            onUse = onUse
+            gifs = recent,
+            onPick = { gif ->
+                // Re-picking from the strip moves it to the front, exactly as a pick
+                // out of a search does.
+                store.rememberUsed(gif)
+                onUse(gif.embedUrl)
+            }
         )
 
         state.results.isEmpty() -> GifMessage(
@@ -178,7 +202,22 @@ internal fun ColumnScope.GifBrowser(
                     .testTag("comment_gif_grid")
             ) {
                 items(state.results, key = { it.id }) { gif ->
-                    GifTile(gif = gif, onUse = { onUse(gif.embedUrl) })
+                    GifTile(
+                        modifier = Modifier.animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        ),
+                        gif = gif,
+                        onUse = {
+                            // Recorded here rather than by whoever receives the URL,
+                            // because this is the last place the tile's dimensions are
+                            // known: the strip that shows the pick back has to draw the
+                            // same small copy the grid drew, not the full animation.
+                            store.rememberUsed(gif)
+                            onUse(gif.embedUrl)
+                        }
+                    )
                 }
                 if (state.isLoadingMore) {
                     // Its own item, so the spinner that says "more coming" does not
@@ -210,12 +249,64 @@ internal fun ColumnScope.GifBrowser(
     }
 }
 
+/**
+ * The six reactions offered above an empty search.
+ *
+ * Each one was checked against the live index for posts under `animated_gif
+ * rating:general` before it went in here, and that checking is the whole reason the
+ * list is not the obvious set of words: `smiling` and `wave` answer nothing in that
+ * corner of the catalogue, while `laughing` and `blush` answer plenty. A chip that
+ * searches into an empty grid is worse than no chip at all - it reads as the picker
+ * being broken rather than as a gap in the index, and the empty-state line below it
+ * is the only thing that could explain the difference.
+ */
+@Composable
+private fun GifSuggestionRow(onPick: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        GIF_SUGGESTIONS.forEach { tag ->
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(onClickLabel = "Search for $tag") { onPick(tag) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("comment_gif_suggestion_$tag")
+            ) {
+                Text(
+                    text = tag.replace('_', ' '),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Verified against a live page of `animated_gif rating:general`, not guessed. */
+private val GIF_SUGGESTIONS = listOf("laughing", "crying", "angry", "surprised", "confused", "blush")
+
+/** One animated result, tapped to put it in the comment.
 /** One animated result, tapped to put it in the comment. */
 @Composable
-private fun GifTile(gif: GifResult, onUse: () -> Unit) {
+private fun GifTile(
+    gif: GifResult,
+    onUse: () -> Unit,
+    /**
+     * The grid's item modifier, so a page of results arriving slides rather than
+     * replaces the page before it. `animateItem` has to sit on the item root.
+     */
+    modifier: Modifier = Modifier
+) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(percent = 12))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -306,11 +397,17 @@ private const val SKELETON_TILES = 9
  * picker: the reaction you want is usually one you used earlier in the same
  * conversation. It is session-scoped - see [GifSearchStore.rememberUsed] - so
  * nothing here remembers an image into another session without being told to.
+ *
+ * Each row is the [GifResult] that was picked, so the tile draws the same small copy
+ * the search grid drew. Rebuilding it from the embed URL alone - which is what this
+ * did - handed [GifTile] a full-resolution animation with no dimensions to judge it
+ * by, and twelve of those in one grid is the crash the provider's own tile budget
+ * exists to prevent.
  */
 @Composable
 private fun ColumnScope.RecentGifGrid(
-    urls: List<String>,
-    onUse: (String) -> Unit
+    gifs: List<GifResult>,
+    onPick: (GifResult) -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
@@ -322,18 +419,18 @@ private fun ColumnScope.RecentGifGrid(
             .weight(1f)
             .testTag("comment_gif_recent")
     ) {
-        items(urls, key = { it }) { url ->
+        // Keyed on the embed: the strip is deduplicated by it as it is recorded, so
+        // one key cannot appear twice, and a repeated key in a lazy grid is the
+        // exception that closes the sheet.
+        items(gifs, key = { it.embedUrl }) { gif ->
             GifTile(
-                gif = GifResult(
-                    id = url,
-                    embedUrl = url,
-                    gridUrl = url,
-                    title = null,
-                    width = null,
-                    height = null
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                 ),
-                onUse = { onUse(url) }
-            )
+                gif = gif,
+                onUse = { onPick(gif) }
         }
     }
 }

@@ -155,9 +155,15 @@ object AniListMarkdownParser {
      * before the request is made - and it is matched case-insensitively because
      * hosts are not consistent about the casing. The scheme is optional, for the
      * protocol-relative addresses described above.
+     *
+     * `svg` belongs with the rest: `coil-svg` is registered for exactly the
+     * server-drawn banner a bio links to, and `CentredBioImageTest` proves the same
+     * file renders inside `img100%(…svg)`. It was missing from all three extension
+     * lists, so the bare line - the form AniList's own editor writes - stayed a blue
+     * underline while the tagged form drew.
      */
     private val BARE_IMAGE_URL_PATTERN = Regex(
-        """^(?:https?:)?//\S+\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?$""",
+        """^(?:https?:)?//\S+\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?\S*)?$""",
         RegexOption.IGNORE_CASE
     )
 
@@ -322,7 +328,7 @@ object AniListMarkdownParser {
      * that happens to contain a doubled one.
      */
     private val INLINE_PROTOCOL_RELATIVE_IMAGE = Regex(
-        """(?<![\w:])//\S+?\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?\S*)?""",
+        """(?<![\w:])//\S+?\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?\S*)?""",
         RegexOption.IGNORE_CASE
     )
     /**
@@ -356,7 +362,7 @@ object AniListMarkdownParser {
      */
     private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
     /** Whether an auto-linked URL points at an image, so it can be embedded. */
-    private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
+    private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
     private val INLINE_CODE = Regex("""`([^`]+)`""")
     /**
@@ -513,19 +519,6 @@ object AniListMarkdownParser {
         if (text.isBlank()) emptyList() else listOf(MarkdownNode.Paragraph(listOf(InlineToken.Plain(text))))
 
     /**
-     * The block loop, over text whose line endings and `<br>`s are already
-     * normalised and whose escapes are already decoded.
-     *
-     * Split out of [parse] because a centered block re-parses the slice of lines
-     * it collected, and that slice has been through [decodeHtmlEntities] once
-     * already. Calling [parse] from there decoded it a second time, so
-     * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
-     * happened to sit inside `~~~center`.
-     *
-     * [depth] counts nested centered blocks, the only re-entry point, and is
-     * capped at [MAX_BLOCK_DEPTH].
-     */
-    /**
      * The image a whole line stands for, or null when the line is not one.
      *
      * Extracted from the block walk because the walk has too many branches to read
@@ -600,7 +593,7 @@ object AniListMarkdownParser {
      * Re-parsing the inner text as a block is the whole trick: the whole-line image
      * forms are matched with `matchEntire`, and the inner text *is* a whole line
      * once the tildes are off. Anything that does not come back as exactly one
-     [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
+     * [MarkdownNode.ImageBlock] is not an image span and the caller keeps its current
      * paragraph path, which is what leaves `~~~Just some centred text~~~` and
      * `~~~https://anilist.co/anime/1~~~` drawing what they drew before.
      *
@@ -615,6 +608,19 @@ object AniListMarkdownParser {
         return image.copy(centered = true)
     }
 
+    /**
+     * The block loop, over text whose line endings and `<br>`s are already
+     * normalised and whose escapes are already decoded.
+     *
+     * Split out of [parse] because a centered block re-parses the slice of lines
+     * it collected, and that slice has been through [decodeHtmlEntities] once
+     * already. Calling [parse] from there decoded it a second time, so
+     * `&amp;lt;` - which the reader should see as `&lt;` - came out as `<` if it
+     * happened to sit inside `~~~center`.
+     *
+     * [depth] counts nested centered blocks, the only re-entry point, and is
+     * capped at [MAX_BLOCK_DEPTH].
+     */
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
 

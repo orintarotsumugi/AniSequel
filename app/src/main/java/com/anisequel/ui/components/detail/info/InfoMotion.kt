@@ -82,10 +82,17 @@ fun Modifier.sectionReveal(index: Int, entranceKey: Any? = null): Modifier {
  * Seven, because the hero is section zero and the eighth section lands at 385ms -
  * past which the eye has already stopped reading the top of the page.
  */
+/**
+ * How many sections a first open staggers in. Past this the delay between the
+ * first and the last is longer than the animation itself, and a page that trickles
+ * reads as slow rather than as sequenced - so the tail arrives together.
+ */
 private const val MAX_STAGGERED_SECTIONS = 7
 
+/** The gap between one section's entrance and the next. */
 private const val STAGGER_MILLIS = 55
 
+/** How far a section rises as it comes in, in the draw phase. */
 private val REVEAL_RISE = 26.dp
 
 /**

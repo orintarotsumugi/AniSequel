@@ -409,6 +409,16 @@ internal data class SafebooruPost(
     val rating: String? = null,
     val width: Int? = null,
     val height: Int? = null,
+    /**
+     * The sample's own size, which is the only evidence that a sample exists.
+     *
+     * Asked for because [booruTileUrl] needs it: Safebooru answers `sample_url`
+     * equal to `file_url` with `sample_width: 0` when it never made a smaller copy,
+     * and fifteen of the twenty posts in a live page of `animated_gif` were like
+     * that. Reading the URL alone therefore called the original a thumbnail.
+     */
+    @Json(name = "sample_width") val sampleWidth: Int? = null,
+    @Json(name = "sample_height") val sampleHeight: Int? = null,
     val tags: String? = null
 )
 
@@ -416,9 +426,10 @@ internal data class SafebooruPost(
  * Safebooru's post list, flattened to the two URLs the picker needs.
  *
  * `file_url` is the GIF a comment should carry. The tile is the harder choice and
- * [booruTileUrl] decides it: the site's `sample_url` is a shrunken **animation** for
- * most GIFs and a **still JPEG** for the rest, and the thumbnail is always a JPEG, so
- * "smallest file" and "the thing that moves" are not the same URL.
+ * [booruTileUrl] decides it: the site's `sample_url` is a second, smaller file for
+ * about a quarter of these posts and **the same file as `file_url`** for most of the
+ * rest - and the thumbnail is always a JPEG still - so "smallest file" and "the thing
+ * that moves" are not the same URL, and an extension cannot tell them apart.
  *
  * A post without a file URL cannot be embedded and is dropped; a post whose rating is
  * not in the safe set is dropped too, whatever the query asked for.
@@ -479,27 +490,42 @@ private val SAFE_RATINGS = setOf("g", "general", "s", "safe")
 /**
  * Which copy of a post the picker's tile should draw.
  *
- * Prefer the animated sample. When the sample is a JPEG still - which is a fifth of
- * them - fall back to the post's own GIF, but only while that file is small enough to
- * belong in a 104dp cell: an animated drawable is decoded at its **intrinsic** frame
- * size however it is displayed, and this catalogue carries GIFs up to 5200x5200, so
- * twenty of those in a scrolling grid is a crash rather than a preview. A post whose
- * dimensions the response did not give is treated as too big for the same reason.
+ * Prefer a real animated sample; then the post's own GIF, but only while that file
+ * is small enough to belong in a 104dp cell; and otherwise the thumbnail still. An
+ * animated drawable is decoded at its **intrinsic** frame size however it is
+ * displayed, and this catalogue carries GIFs up to 5200x5200, so twenty of those in
+ * a scrolling grid is a crash rather than a preview. A post whose dimensions the
+ * response did not give is treated as too big for the same reason.
  *
- * For a file over the budget the tile is the still, and the comment still gets
- * [GifResult.embedUrl] - the reader embeds the full animation either way.
+ * ## The failure this replaced
+ *
+ * The rule used to be "is `sample_url` a `.gif`", which is not the same question.
+ * Measured against a live page of `animated_gif rating:general`: fifteen of twenty
+ * posts answer `sample_url` **equal to** `file_url`, with `sample_width: 0` beside
+ * them - the site had no smaller copy to give. Extension-only matching therefore
+ * called the original a thumbnail, returned it, and drew up to twenty full-resolution
+ * animations at once: a picker that stalls, then a sheet that the system kills. The
+ * sample is now taken as a sample only when it is a different file **and** its own
+ * dimensions fit, which is what `sample_width` is on the model for.
+ *
+ * When nothing animated fits, the tile is the JPEG thumbnail - a still that costs
+ * almost nothing - and the comment still gets [GifResult.embedUrl], the full
+ * animation. The reader embeds the moving file either way; only the grid stops
+ * pretending it can hold a 5200x5200 frame in 104dp.
  */
 internal fun booruTileUrl(post: SafebooruPost): String? {
     val sample = post.sampleUrl?.takeIf { it.startsWith("http") }
     val file = post.fileUrl?.takeIf { it.startsWith("http") }
-    val sampleIsAnimation = sample != null && sample.isGifUrl()
-    if (sampleIsAnimation) return sample
+    val preview = post.previewUrl?.takeIf { it.startsWith("http") }
+    val realSample = sample?.takeIf { it != file && it.isGifUrl() }
+    if (realSample != null && fitsTileBudget(post.sampleWidth, post.sampleHeight)) return realSample
     if (file != null && file.isGifUrl() && fitsTileBudget(post.width, post.height)) return file
-    // A still wins over an animation this grid cannot afford. The old fallback
-    // was `sample ?: file` and returned the poster-sized GIF it had just refused
-    // to draw, so the one case the budget existed for was the one case it did not
-    // cover - and a 5200x5200 frame in a 104dp cell is a crash, not a preview.
-    return sample ?: post.previewUrl?.takeIf { it.startsWith("http") } ?: file
+    // A still wins over an animation this grid cannot afford - and leading the
+    // fallback with `sample` was the way to miss that. For most of these posts
+    // `sample_url` IS the full file, so the fallback handed back the poster-sized
+    // GIF the budget had just refused, and a 5200x5200 frame in a 104dp cell is a
+    // crash rather than a preview.
+    return preview ?: realSample ?: file
 }
 
 /**

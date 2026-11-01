@@ -83,15 +83,6 @@ object AppJokes {
     val lines: List<String> = pool.map { it.text }
 
     /**
-     * The lines a draw may use.
-     *
-     * An empty filter means the whole pool, matching
-     * [com.anisequel.domain.jokes.JokeSettings.activeTones]. The fallback is
-     * defensive as well as semantic: an empty candidate list would make every
-     * draw below return nothing, and a quiet toast with no explanation is harder
-     * to diagnose than a slightly wrong filter.
-     */
-    /**
      * The candidate lists, built once per switch combination.
      *
      * `poolFor` used to filter the whole pool on every draw, every preview and every
@@ -111,6 +102,15 @@ object AppJokes {
         }
     }
 
+    /**
+     * The lines a draw may use.
+     *
+     * An empty filter means the whole pool, matching
+     * [com.anisequel.domain.jokes.JokeSettings.activeTones]. The fallback is
+     * defensive as well as semantic: an empty candidate list would make every
+     * draw below return nothing, and a quiet toast with no explanation is harder
+     * to diagnose than a slightly wrong filter.
+     */
     fun poolFor(tones: Set<JokeTone>): List<Joke> {
         if (tones.isEmpty()) return pool
         return poolByTones[tones]?.takeIf { it.isNotEmpty() } ?: pool

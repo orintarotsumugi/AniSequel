@@ -404,6 +404,16 @@ object ExpressiveMotion {
         repeatMode = RepeatMode.Reverse
     )
 
+    /**
+     * The one `Float` spatial spring, resolved against the reader's motion style.
+     *
+     * Every spatial token is this shape: INSTANT snaps, SMOOTH and SNAPPY are both
+     * non-overshooting and differ only in stiffness, and only CHILL takes the
+     * expressive damping and stiffness the caller passes. That is deliberate - the
+     * styles are a single dial the whole app turns together, so a branch added here
+     * changes every spring in the app at once, and a branch added at a call site is
+     * the drift this file exists to prevent.
+     */
     private fun spatial(
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
         expressiveStiffness: Float = Spring.StiffnessMedium
@@ -433,6 +443,13 @@ object ExpressiveMotion {
             )
         }
 
+    /**
+     * The `Float` effects spring - alpha and progress, the half that must not
+     * overshoot even in the expressive styles.
+     *
+     * Kept apart from [spatial] because a fade that bounces past opaque and back is
+     * a visible flicker, whatever the motion style. Only the stiffness varies.
+     */
     private fun effects(
         stiffness: Float
     ): FiniteAnimationSpec<Float> =
@@ -461,6 +478,14 @@ object ExpressiveMotion {
             )
         }
 
+    /**
+     * The [effects] spring for a `Color` target, so a colour token can be aimed at
+     * the same feel as the alpha beside it.
+     *
+     * A separate function rather than a generic one because `spring` for `Color`
+     * resolves through a different type than the `Float` overload, and the whole
+     * point of these tokens is that a call site never has to think about which.
+     */
     private fun colorEffects(
         stiffness: Float
     ): FiniteAnimationSpec<Color> =

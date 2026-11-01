@@ -93,7 +93,7 @@ class CatboxApi(
                         // error shape - there is no status code to branch on, only
                         // the text.
                         Result.failure(
-                            UploadFailure(shorten(text.ifBlank { "The host returned no URL." }))
+                            UploadFailure(readableProse(text) ?: "The host returned no URL.")
                         )
                     }
                 }
@@ -115,16 +115,30 @@ class CatboxApi(
         else -> shorten(text.ifBlank { "catbox.moe refused the upload (HTTP $status)." })
     }
 
-    private fun shorten(text: String): String {
-        val line = text.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-        return if (line.length <= MAX_REASON_CHARS) line else line.take(MAX_REASON_CHARS) + "…"
-    }
+
 
     companion object {
         private const val UPLOAD_URL = "https://catbox.moe/user/api.php"
         private const val SERVED_HOST = "https://files.catbox.moe/"
         private const val MAX_REASON_CHARS = 160
         private const val USER_AGENT = "AniSequel (Android; comment attachments)"
+
+        /**
+         * The host's refusal, as one line a reader can act on - or null.
+         *
+         * catbox answers upload errors as plain prose ("Invalid file type.", "The
+         * file ... is too large"), which says more than "HTTP 200" ever could. The
+         * same position is also what a CDN interstitial page fills when the request
+         * never reached the uploader, and that page's first line is
+         * `<!DOCTYPE html>` - which used to be handed to the reader as the reason
+         * their photo did not upload. Markup is not prose, so it is refused here and
+         * the caller says the plain thing it knows instead.
+         */
+        internal fun readableProse(text: String): String? {
+            val line = text.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+            if (line.isEmpty() || line.startsWith("<")) return null
+            return if (line.length <= MAX_REASON_CHARS) line else line.take(MAX_REASON_CHARS) + "…"
+        }
 
         /** Whether a response body is the URL of the file that was just stored. */
         fun isServedUrl(text: String): Boolean =
@@ -141,7 +155,15 @@ class CatboxApi(
             .writeTimeout(120, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(150, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(false)
+            // True, and it is the reachability that matters rather than the retry
+            // semantics: catbox sits behind a CDN whose DNS answers both families,
+            // and on an LTE bearer with broken IPv6 the first route fails while a
+            // working address is still in the list. With this off OkHttp surfaces
+            // that first failure as "Could not reach catbox.moe" and never tries the
+            // other. A file upload that has begun is not replayed by OkHttp, so the
+            // duplicate-hosting cost this guard was protecting against is not what
+            // it prevents here.
+            .retryOnConnectionFailure(true)
             .build()
     }
 }

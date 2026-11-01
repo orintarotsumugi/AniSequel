@@ -110,8 +110,14 @@ internal fun CommentComposer(
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
     onPickFromDevice: () -> Unit,
-    /** Records a picked GIF so the next empty search offers it again. */
-    onGifUsed: (String) -> Unit = {},
+    /**
+     * The GIF picker, as a pane.
+     *
+     * Handed the "the reader chose this GIF" callback rather than a store: the
+     * browser records the pick itself, because it is where the chosen result still
+     * knows its own tile dimensions - and the strip that shows the pick back has to
+     * draw the small copy, not the full animation.
+     */
     gifPane: @Composable ColumnScope.((String) -> Unit) -> Unit,
     /**
      * Overrides the header's title.
@@ -131,6 +137,10 @@ internal fun CommentComposer(
     // The width a picked GIF is inserted at. Defaulted to the site's own strip
     // width rather than "original": a full-size animation dropped into a comment is
     // the one embed that pushes the whole thread off the screen.
+    //
+    // `""` is Original's spelling, because this is a saveable String and
+    // [MediaAttachment.embedMarkdown] reads any value it cannot parse - the empty
+    // one included - as "no width", which is the bare `img(url)` the site writes.
     var gifWidth by rememberSaveable { mutableStateOf("220") }
     var pendingInsert by remember { mutableStateOf<InsertKind?>(null) }
     val showingGifs = pane == PANE_GIFS
@@ -184,7 +194,6 @@ internal fun CommentComposer(
                 GifWidthRow(gifWidth) { gifWidth = it }
                 gifPane { url ->
                     insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth))
-                    onGifUsed(url)
                     pane = PANE_WRITE
                 }
             }
@@ -450,7 +459,11 @@ private fun GifWidthRow(selected: String, onSelect: (String) -> Unit) {
     ) {
         (listOf<String?>(null) + MediaAttachment.EMBED_WIDTHS).forEach { width ->
             val label = width ?: "Original"
-            val isSelected = width == selected
+            // Compared through the row's own spelling of Original: the selected value
+            // is a `String` in which `""` means Original, and `null` is what this
+            // list stands for it, so the two would never match and picking Original
+            // left every chip in the row looking unchosen.
+            val isSelected = (width ?: "") == selected
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))

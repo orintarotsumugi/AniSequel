@@ -1,6 +1,8 @@
 package com.anisequel
 
 import com.anisequel.data.network.CatboxApi
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,4 +39,28 @@ class CatboxUploadProtocolTest {
         // And a host that merely starts with the same letters is not the host.
         assertFalse(CatboxApi.isServedUrl("https://files.catbox.moe.evil.example/a.gif"))
     }
+
+    /**
+     * The host's prose is shown; its markup is not.
+     *
+     * A Cloudflare interstitial used to reach the composer as
+     * `<!DOCTYPE html>`, because the reason line was "the first non-blank line of
+     * the body" and that is what a browser-facing error page starts with. The reader
+     * is left with a line of markup where the app should have said what it knows.
+     */
+    @Test
+    fun `an html error page is not handed to the reader as the reason`() {
+        assertEquals(
+            "Invalid file type.",
+            CatboxApi.readableProse("Invalid file type.\n")
+        )
+        assertNull(
+            "markup is not prose",
+            CatboxApi.readableProse("<!DOCTYPE html>\n<html><head><title>Attention Required</title>")
+        )
+        assertNull("an empty body is not a reason either", CatboxApi.readableProse("   \n\n"))
+        val long = CatboxApi.readableProse("x".repeat(400)) ?: ""
+        assertTrue("a wall of text is cut to one readable line", long.endsWith("…") && long.length <= 161)
+    }
+
 }

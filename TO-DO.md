@@ -27,16 +27,30 @@ throw, the composer's selection maths is clamped, and the sheet's
 `fillMaxHeight` is a bounded `ModalBottomSheet` height - `ActivityLikersSheet`
 proves that one by working.
 
-What the first step is: **turn on Settings > Info > Diagnostics > "Keep the last
-crash report"** (it is off by default), reproduce once, then come back to that
-card - it shows the exception on one line, with Copy and Show for the whole
-report. The file is `files/diagnostics/last-crash.txt` and the format is pinned
-by `CrashReportsTest`. The exception line names the failing path - an
-`OutOfMemoryError` under `Modifier.blur` on a long feed (see §5.1) is a different
-bug from an `IllegalStateException` in the sheet's composition - and the frames
-say which file to open. Do not guess at a fix before that line exists: a rewrite
-of a 1,900-line surface that cannot be verified locally is how a working screen
-is replaced by a differently broken one.
+**One live candidate has since been found and removed, and it fits the report.**
+The GIF picker's tile budget decides which copy of a Safebooru post is small
+enough to decode into a 104dp cell, and it judged that by the file's *extension*.
+Measured against a live page of `animated_gif rating:general`, fifteen of twenty
+posts answer `sample_url` equal to `file_url` with `sample_width: 0` - there is no
+smaller copy - so the "tile" was the original, up to 5200x5200, and a page asks
+for twenty-four of them. Animated drawables decode at their intrinsic frame size
+however they are displayed, so the memory peak lands while the sheet is opening
+the GIF pane, which reads to the user exactly like "it closes when loading the
+comments". The same class of defect sat in the recent-picks strip, which rebuilt
+each tile from the embed URL and bypassed the budget entirely. Both are fixed, and
+`GifSearchParseTest` pins the rule including the live wire shape.
+
+What the first step is, for a report that survives that fix: **turn on Settings >
+Info > Diagnostics > "Keep the last crash report"** (it is off by default),
+reproduce once, then come back to that card - it shows the exception on one line,
+with Copy and Show for the whole report. The file is
+`files/diagnostics/last-crash.txt` and the format is pinned by `CrashReportsTest`.
+The exception line names the failing path - an `OutOfMemoryError` under
+`Modifier.blur` on a long feed (see §5.1) is a different bug from an
+`IllegalStateException` in the sheet's composition - and the frames say which file
+to open. Do not guess at a fix before that line exists: a rewrite of a 1,900-line
+surface that cannot be verified locally is how a working screen is replaced by a
+differently broken one.
 
 The section numbering is kept rather than shifted so that the `§N.M` references
 throughout this file, and in the code comments that point at it, keep pointing at

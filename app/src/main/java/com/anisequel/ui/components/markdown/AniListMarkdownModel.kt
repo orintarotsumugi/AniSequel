@@ -25,9 +25,51 @@ const val MAX_RICH_IMAGE_HEIGHT_DP = 800
  * this answers only the absolute form. A malformed or
  * absurd number clamps to the ceiling instead of being passed into a layout
  * constraint, and a size-less image answers null (the renderer fills width).
+ *
+ * Zero and a negative answer null too, rather than clamping to `0`: a width of
+ * nothing is the one size that is not a degraded version of the request but its
+ * opposite - an image laid out at 0dp is invisible, and the author finds that out
+ * in the posted comment, where their own preview said it was there. `img0(...)` is
+ * a mistake, and a mistake degrades to the same full width any other unreadable size
+ * degrades to.
  */
 internal fun clampedImageWidthDp(width: String?): Int? =
-    width?.toIntOrNull()?.coerceIn(0, MAX_RICH_IMAGE_WIDTH_DP)
+    width?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(MAX_RICH_IMAGE_WIDTH_DP)
+
+/**
+ * The fraction of the column an `img50%(...)` asks for, or null.
+ *
+ * Same rule as [clampedImageWidthDp] on the other scale: a percent is a share of the
+ * column, so a share of nothing, or a negative one, is not a narrow image - it is no
+ * image - and answers null so the renderer falls back to the full width. A percent
+ * over 100 clamps to the column rather than hanging off the side of it.
+ */
+internal fun clampedImageWidthPercent(width: String?): Float? {
+    val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull() ?: return null
+    return percent.takeIf { it > 0 }?.coerceAtMost(100)?.div(100f)
+}
+
+/**
+ * Whether these inline tokens carry an image a renderer could draw.
+ *
+ * Two callers answer this and they have to agree. The paragraph asks it to decide
+ * between the flow (which embeds a real image) and the single clamped `Text` (which
+ * cannot hold a bitmap at all, and so shows the image's alt text instead); the
+ * profile's about card asks it to decide whether a bio may be collapsed - because a
+ * collapsed bio is exactly that clamped text, and collapsing one that carries a
+ * banner deleted the banner until the reader pressed "Show more".
+ *
+ * A link's children are searched too: `[![cover](x.gif)](https://…)` is a linked
+ * image mid-sentence, which is how AniList's editor writes a banner that opens
+ * something, and the token it produces is a `Link` wrapping one `Image`.
+ */
+internal fun List<InlineToken>.containsEmbeddedImage(): Boolean = any { token ->
+    when (token) {
+        is InlineToken.Image -> true
+        is InlineToken.Link -> token.children.containsEmbeddedImage()
+        else -> false
+    }
+}
 
 /**
  * Structural AST nodes produced by [AniListMarkdownParser].

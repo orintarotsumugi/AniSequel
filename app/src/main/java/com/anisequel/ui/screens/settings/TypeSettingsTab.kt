@@ -1,9 +1,7 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -206,13 +204,16 @@ private fun TextSizeSection(
     // The sample scales in the draw phase rather than by re-styling every text
     // run: multiplying `fontSize` on each drag tick re-laid-out the paragraph on
     // every frame, which made the preview jump and reflow instead of read like a
-    // zoom. One animated factor smooths it, and the committed write still updates
-    // the real scale on release.
-    val previewScale by animateFloatAsState(
-        targetValue = ratio,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "text_size_preview"
-    )
+    // zoom. The committed write still happens once, on release.
+    //
+    // It reads the ratio directly, not through a spring. The version here animated
+    // *toward* `ratio`, and `ratio` moves on every tick of the thumb - which is the
+    // pattern `AGENTS.md` §3 forbids, the one that made the dashboard counter
+    // restart constantly: a spring re-aimed each frame lags the finger it is supposed
+    // to be following and never settles while the drag runs. A slider is the finger.
+    // Only a value that changes discretely - a preset, the reset button, the
+    // committed scale landing - is worth animating toward, and those arrive through
+    // `draft`, which is already the source of this number.
 
     SectionCard(
         title = "Text size",
@@ -248,8 +249,8 @@ private fun TextSizeSection(
         // every frame.
         Column(
             modifier = Modifier.graphicsLayer {
-                scaleX = previewScale
-                scaleY = previewScale
+                scaleX = ratio
+                scaleY = ratio
                 transformOrigin = TransformOrigin(0f, 0f)
             }
         ) {
