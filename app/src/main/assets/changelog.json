@@ -44,10 +44,6 @@
           "detail": "Holding the bar and shoving it sideways moved less than one destination, and the bar asked did it move by whether the highlighted tab had changed - so a short drag counted as a still hold and fired the hold shortcut, which is the jump to Messages. Travel decides it now, a swipe that comes back asks for nothing, and the bar's own ring stops leaking touches to whatever it floats over."
         },
         {
-          "title": "The title hero keeps a picture when there is a banner",
-          "detail": "A banner is a wide strip, about 1900x400, and sizing the hero by it left roughly 76dp of artwork at the top and two hundred more of flat tint underneath - so a title WITH a banner looked emptier than one without. The cover fills that space now, dimmed, as it already did when there is no banner."
-        },
-        {
           "title": "Animated bio images actually animate",
           "detail": "A bio that embeds an image is no longer collapsed behind Show more: a collapsed bio is drawn as plain text, which has nowhere to put a picture, so the banner GIF a bio was built around appeared as the word Image. An image written inside a link renders as the picture and stays tappable, a bare .svg banner line is an image like the tagged form always was, and a dead embed finally looks dead instead of slow."
         },

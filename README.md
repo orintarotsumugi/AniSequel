@@ -25,9 +25,7 @@ middleman server.
 
 ## What's new - 1.7.7
 
-The conversation release: comments on messages as well as posts, a comment thread
-that behaves like a chat to its oldest page, and a GIF picker that stopped
-decoding originals.
+The conversation release: comments on messages as well as posts, a comment thread that behaves like a chat to its oldest page, and a GIF picker that stopped decoding originals.
 
 - **Comment on a message.** A direct message is an activity, and AniList gives it replies like any other one - so the inbox row and the open message both carry a Comments button that opens the same thread the Activity feed uses, with liking, quoting, editing and deleting.
 - **Comments reach their oldest page.** Older stopped one page short: the step back was asked twice, so the first 25 comments of any thread longer than 50 were unreachable while the row above the list kept promising them.
@@ -35,7 +33,7 @@ decoding originals.
 - **A like leaves the comment alone.** Tapping a heart wrote back the whole comment as it was before the tap.
 - **Posting keeps your place in a thread.** Posting into a thread you had scrolled up in revealed every comment the app had fetched.
 - **GIF tiles stop decoding originals.** The picker treated any sample ending in .gif as a thumbnail.
-- **Smaller fixes** - recent GIF picks draw as thumbnails and update live, a dead embed looks dead rather than slow, the composer's GIF width row keeps its selection, iPhone photos attach again, and an image with a zero width still shows.
+- **Smaller fixes** - a comment that lands and an Older page that arrives now slide into place instead of jumping, the text-size preview follows the finger, and the GIF width row keeps showing which width is chosen.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
