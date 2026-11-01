@@ -294,6 +294,51 @@ class UserMessagesViewModel(
     val canReply: Boolean get() = !isDemo && viewerId != null
 
     /**
+     * The comment thread on a message, with the same store the activity feed uses.
+     *
+     * A direct message is a `MessageActivity`, and AniList gives it replies the way
+     * it gives any other activity one - so the sheet, the composer, the window, the
+     * like handling and the moderation controls are the ones already built rather
+     * than a second copy that would drift.
+     *
+     * Handed out whole instead of mirrored method by method: the activity view model
+     * has twenty delegators over this same store, and this file is already at the
+     * line ceiling `AGENTS.md` sets, so a page of pass-throughs would be a second
+     * thing to keep in step with a class that is already public.
+     *
+     * One thread at a time, exactly as the feed's is. The comment sheet is a window
+     * of its own, and a message and an activity post are never both being commented
+     * on.
+     */
+    val comments: CommentThreadStore = CommentThreadStore(
+        repository = aniListRepository,
+        scope = viewModelScope,
+        isDemo = isDemo,
+        viewerId = viewerId
+    )
+
+    /**
+     * Opens the comment thread on [message].
+     *
+     * A message row is an activity id away from the feed's own thread, so this only
+     * aims the store: [knownReplyCount] rides along from the row's `replyCount`
+     * because the window has to be placed by the thread's size before the first
+     * request is made, and a chat that opens at the second-newest message is the bug
+     * that number exists to avoid. `chatView` defaults to the shipped setting rather
+     * than being read here: the sheet obeys the user's switch on open and on retry,
+     * and this is the one call site that does not have the Settings flow's state.
+     */
+    fun openComments(
+        message: MessageNode,
+        knownReplyCount: Int = message.replyCount ?: 0,
+        chatView: Boolean = true
+    ) = comments.open(
+        activityId = message.id,
+        knownReplyCount = knownReplyCount,
+        chatView = chatView
+    )
+
+    /**
      * Sends [text] to the other party of the message the sheet has open.
      *
      * ## Two paths, because there are two situations

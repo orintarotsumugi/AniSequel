@@ -656,7 +656,22 @@ object GraphQLQueries {
     """
 
     /**
-     * Parent fields, by consumer:
+     * The user's media list for one [MediaType].
+     *
+     * One builder rather than an ANIME constant and a MANGA constant: the field
+     * list is long enough that a second copy would be a second thing to forget to
+     * widen when a new field is needed, and the only difference between the two
+     * lists is the `type` argument. `MediaType` is a real GraphQL enum, so it is
+     * passed as a variable and validated by AniList rather than pasted into the
+     * query text.
+     *
+     * `relations` is here for the same reason it is in the anime list - the
+     * detail sheet opens from a Library row and draws a sequel banner from it -
+     * and it is the reason this is the app's heaviest query. It is asked for once
+     * per *page* of a user's own list rather than once per relation node, so the
+     * cost is bounded by the page size.
+     *
+     * ## The media fields it asks for, by consumer
      *
      *  - `episodes` is what the watched detector needs: an entry counts as
      *    watched when its progress reaches the episode count even if the user
@@ -687,22 +702,6 @@ object GraphQLQueries {
      * Measured on a real 142-entry list: 480,034 bytes without the field, 483,990
      * with it. About 0.8% of the most expensive request the app makes, for a chart
      * that is otherwise impossible to draw.
-     */
-    /**
-     * The user's media list for one [MediaType].
-     *
-     * One builder rather than an ANIME constant and a MANGA constant: the field
-     * list is long enough that a second copy would be a second thing to forget to
-     * widen when a new field is needed, and the only difference between the two
-     * lists is the `type` argument. `MediaType` is a real GraphQL enum, so it is
-     * passed as a variable and validated by AniList rather than pasted into the
-     * query text.
-     *
-     * `relations` is here for the same reason it is in the anime list - the
-     * detail sheet opens from a Library row and draws a sequel banner from it -
-     * and it is the reason this is the app's heaviest query. It is asked for once
-     * per *page* of a user's own list rather than once per relation node, so the
-     * cost is bounded by the page size.
      */
     private fun mediaListQuery(queryName: String): String = """
         query $queryName(${'$'}userId: Int, ${'$'}userName: String, ${'$'}chunk: Int, ${'$'}type: MediaType) {
@@ -1405,6 +1404,11 @@ object GraphQLQueries {
      * same way a post is: the message is the activity and the exchange is its
      * replies, which is why `UserMessagesViewModel` reads the conversation from
      * here rather than assembling it from inbox pages.
+     *
+     * [GET_ACTIVITY_REPLY_WINDOW] has to carry the same three. Chat view is the
+     * default, so a thread is opened from the windowed read, not this one - and a
+     * member fragmented only here means a message still reads empty on the path
+     * every reader actually takes.
      */
     val GET_ACTIVITY_REPLIES = """
         query GetActivityReplies(${'$'}activityId: Int) {
@@ -1495,10 +1499,11 @@ object GraphQLQueries {
      * keeps the payload model lowercase like every other model in
      * [com.anisequel.data.model] instead of needing `@Json` on two fields.
      *
-     * `Activity(id:)` returns `ActivityUnion`, so both feed members are still
-     * fragmented here for the same reason [GET_ACTIVITY_REPLIES] fragments them:
-     * a document with only the `ListActivity` member answers a text post's id with
-     * an empty object, which reads as a commentless post.
+     * `Activity(id:)` returns `ActivityUnion`, so every member the sheet can be
+     * opened on is fragmented here for the same reason [GET_ACTIVITY_REPLIES]
+     * fragments them: a document that leaves a member out answers that member's id
+     * with an empty object, which reads as a commentless post - and a message thread
+     * is the third member.
      */
     val GET_ACTIVITY_REPLY_WINDOW = """
         query GetActivityReplyWindow(${'$'}activityId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
@@ -1508,6 +1513,10 @@ object GraphQLQueries {
               replyCount
             }
             ... on TextActivity {
+              id
+              replyCount
+            }
+            ... on MessageActivity {
               id
               replyCount
             }
@@ -1808,17 +1817,6 @@ object GraphQLQueries {
     """
 
     /**
-     * Posts a comment on an activity.
-     *
-     * `SaveActivityReply`, **not** `SaveActivityMessage`. The latter is for
-     * direct messages and takes a `messengerId`; posting a comment through it
-     * would look like a reply to this thread and deliver a private message
-     * instead. The names are close enough that this is worth stating.
-     *
-     * The response is the created reply, which is exactly the shape the sheet
-     * appends to its list, so a successful post needs no refetch.
-     */
-    /**
      * Sends a direct message to `recipientId`.
      *
      * `SaveActivityMessage`, **not** [SAVE_ACTIVITY_REPLY]: the reply mutation
@@ -1843,6 +1841,17 @@ object GraphQLQueries {
         }
     """.trimIndent()
 
+    /**
+     * Posts a comment on an activity.
+     *
+     * `SaveActivityReply`, **not** [SAVE_ACTIVITY_MESSAGE]. The latter is for
+     * direct messages and takes a `recipientId`; posting a comment through it
+     * would look like a reply to this thread and deliver a private message
+     * instead. The names are close enough that this is worth stating.
+     *
+     * The response is the created reply, which is exactly the shape the sheet
+     * appends to its list, so a successful post needs no refetch.
+     */
     val SAVE_ACTIVITY_REPLY = """
         mutation SaveActivityReply(${'$'}activityId: Int, ${'$'}text: String) {
           SaveActivityReply(activityId: ${'$'}activityId, text: ${'$'}text) {

@@ -85,6 +85,31 @@ class CommentWindowTest {
         assertFalse(CommentWindow.hasOlder(page = 1, replyCount = 90, loadedCount = 25))
     }
 
+    /**
+     * [CommentWindow.hasOlder] is asked about the page that is *on screen*.
+     *
+     * The sheet used to step the page back first and then hand that page in, which
+     * made the same question twice and answered "nothing older" while sitting on
+     * page 2 - so page 1, the first 25 comments of any thread longer than 50, could
+     * never be reached. `CommentChatWindowTest` catches the double step at the call
+     * site; this pins the contract here so the two cannot drift apart again.
+     */
+    @Test
+    fun `older is still offered at page two because page one is above it`() {
+        assertTrue(CommentWindow.hasOlder(page = 2, replyCount = 60, loadedCount = 35))
+    }
+
+    @Test
+    fun `the rows drawn are the window rather than everything fetched`() {
+        assertEquals(25, CommentWindow.visibleRowCount(repliesLoaded = 60, shownRows = 25))
+        assertEquals(60, CommentWindow.visibleRowCount(repliesLoaded = 60, shownRows = 60))
+        // A window bigger than the list means the reader has revealed it all.
+        assertEquals(60, CommentWindow.visibleRowCount(repliesLoaded = 60, shownRows = 75))
+        // Full-thread mode keeps no window, and 0 there means the whole list.
+        assertEquals(60, CommentWindow.visibleRowCount(repliesLoaded = 60, shownRows = 0))
+        assertEquals(0, CommentWindow.visibleRowCount(repliesLoaded = 0, shownRows = 25))
+    }
+
     @Test
     fun `the hidden count is what the Older button prints`() {
         assertEquals(65, CommentWindow.hiddenCount(replyCount = 90, loadedCount = 25))

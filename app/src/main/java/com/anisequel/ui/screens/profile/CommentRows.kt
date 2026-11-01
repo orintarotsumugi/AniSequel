@@ -80,10 +80,19 @@ internal fun CommentRow(
     onReply: (String) -> Unit,
     onQuote: () -> Unit,
     onManage: () -> Unit,
-    nowEpochSecond: Long? = null
+    nowEpochSecond: Long? = null,
+    /**
+     * The lazy list's own modifier, handed in so the row can animate its placement.
+     *
+     * `CommentRow` is the item root of the thread's `LazyColumn`, and
+     * `Modifier.animateItem` has to sit on that root: a comment that arrives while
+     * the sheet is open slid into place at nothing before, and the row below the
+     * one that was deleted jumped up instead of closing the gap.
+     */
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(
                 // One step per threaded level, capped in [ReplyThreader]. The

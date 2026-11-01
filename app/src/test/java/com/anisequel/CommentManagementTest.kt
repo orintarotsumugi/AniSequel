@@ -395,6 +395,48 @@ class CommentManagementTest {
             assertTrue(viewModel.comments.value!!.pendingReplyLikes.isEmpty())
         }
 
+    /**
+     * A heart is two fields, not a row.
+     *
+     * The completion wrote back the whole reply object it had captured before the
+     * tap. A thread that refreshed while the request was out - the author edited
+     * their comment, somebody else liked it - therefore had its newer row replaced
+     * by the older one: text that no longer existed came back, and a like count
+     * three short of the truth was printed as though it were the server's answer.
+     */
+    @Test
+    fun `a finished reply like keeps the comment a refresh brought in`() =
+        runTest(testDispatcher) {
+            val repository = FakeCommentRepository(
+                replies = listOf(mineReply(id = 1, text = "as posted", isLiked = false))
+            )
+            val viewModel = buildViewModel(repository)
+            openThread(viewModel)
+
+            val gate = CompletableDeferred<Unit>()
+            repository.replyLikeGates[1] = gate
+            viewModel.toggleReplyLike(1)
+            advanceUntilIdle()
+
+            // The author edits while the like is in flight, and a check lands it.
+            repository.replies = listOf(mineReply(id = 1, text = "edited", isLiked = false))
+            viewModel.checkForNewComments(atBottom = true)
+            advanceUntilIdle()
+            assertEquals(
+                "the row on screen is the refreshed one",
+                "edited",
+                viewModel.comments.value!!.replies.single().text
+            )
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            val row = viewModel.comments.value!!.replies.single()
+            assertEquals("the like must not resurrect the pre-tap text", "edited", row.text)
+            assertTrue(row.isLiked == true)
+            assertEquals(1, row.likeCount ?: 0)
+        }
+
     /** The id the manage tests sign in as; [mineReply] authors their comments. */
     private val viewerId = 7
 

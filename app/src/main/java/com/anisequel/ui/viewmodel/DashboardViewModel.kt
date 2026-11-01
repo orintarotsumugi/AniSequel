@@ -210,6 +210,11 @@ class DashboardViewModel(
     }
 
     /**
+     * The join described by [onForegrounded], kept so [onBackgrounded] can cancel it.
+     */
+    private var foregroundJoin: Job? = null
+
+    /**
      * The app has come to the foreground.
      *
      * Called on every resume and on every return to this destination, which is
@@ -224,11 +229,6 @@ class DashboardViewModel(
      * list had aged. Joining the load instead starts the watch the instant the
      * load settles, without stacking a second fetch on the first.
      */
-    /**
-     * The join described by [onForegrounded], kept so [onBackgrounded] can cancel it.
-     */
-    private var foregroundJoin: Job? = null
-
     fun onForegrounded() {
         if (isDemo) return
         val load = loadJob
@@ -878,15 +878,6 @@ class DashboardViewModel(
         return computed
     }
 
-    /**
-     * Fetches the synopsis, banner and studio for one entry.
-     *
-     * These are the fields the list query leaves out on purpose: they are only
-     * ever rendered for the entry a user opens, and asking AniList for them
-     * across every relation node is what makes it return HTTP 500 on large
-     * accounts. Demo data is already complete, so [MediaDetailStore] skips the
-     * call.
-     */
     /**
      * Fetches the heavy fields for one entry, namespaced by media type.
      *

@@ -222,6 +222,14 @@ class MediaDetailStore(
     fun cached(mediaId: Int, mediaType: String? = null): MediaNode? =
         cache[cacheKey(mediaId, mediaType)]
 
+    /**
+     * Fetches the synopsis, banner and studio for one entry.
+     *
+     * These are the fields the list query leaves out on purpose: they are only
+     * ever rendered for the entry a user opens, and asking AniList for them
+     * across every relation node is what makes it return HTTP 500 on large
+     * accounts. [cached] answers a re-open without repeating that request.
+     */
     fun load(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
         cache[key]?.let { known ->

@@ -74,6 +74,14 @@ internal class CommentThreadWindow(
     private var openJob: Job? = null
 
     /**
+     * The background check for new comments that is in flight, if one is.
+     *
+     * See [checkForNewComments]: the poll fires on a timer, and a check that is
+     * still running when the next one is due would count its own new rows twice.
+     */
+    private var checkJob: Job? = null
+
+    /**
      * Opens the comment thread for [activityId] and loads it.
      *
      * If this is the thread that was just closed, its comments are drawn
@@ -206,7 +214,7 @@ internal class CommentThreadWindow(
                 state.value = if (asRefresh) {
                     current.copy(
                         isRefreshing = false,
-                        windowError = message,
+                        refreshError = message,
                         lastCheckedAtMillis = System.currentTimeMillis()
                     )
                 } else {
@@ -263,7 +271,9 @@ internal class CommentThreadWindow(
         } else {
             0
         }
-        val grown = if (isRefresh && unseen > 0 && shownRows in 1 until replies.size) {
+        val grown = if (isRefresh && unseen > 0 &&
+            CommentWindow.visibleRowCount(replies.size, shownRows) < replies.size
+        ) {
             // The reader had scrolled up into older rows. Taking in new comments
             // silently is the same as moving their place, so the window grows to hold
             // both what was on screen and what arrived.
@@ -286,7 +296,12 @@ internal class CommentThreadWindow(
             shownRows = grown,
             unseenNewComments = if (isRefresh) unseen else unseenNewComments,
             lastCheckedAtMillis = System.currentTimeMillis(),
-            windowError = null,
+            // Each kind of request answers for its own failure only. An Older page
+            // that arrived does not excuse a background check that did not, and the
+            // banner left on screen has to name the request its Retry can actually
+            // make again.
+            windowError = if (isRefresh) windowError else null,
+            refreshError = if (isRefresh) null else refreshError,
             loadError = if (isRefresh) loadError else null
         )
     }
@@ -300,7 +315,9 @@ internal class CommentThreadWindow(
     fun loadOlder() {
         val current = state.value ?: return
         if (current.isLoadingOlder || !current.isChatView) return
-        if (current.shownRows in 1 until current.replies.size) {
+        if (CommentWindow.visibleRowCount(current.replies.size, current.shownRows) <
+            current.replies.size
+        ) {
             state.value = current.copy(
                 shownRows = (current.shownRows + CommentWindow.PAGE_SIZE)
                     .coerceAtMost(current.replies.size)
@@ -308,7 +325,18 @@ internal class CommentThreadWindow(
             return
         }
         val page = CommentWindow.olderPage(current.oldestPage) ?: return
-        if (!CommentWindow.hasOlder(page, current.replyCount, current.replies.size)) return
+        // [CommentWindow.hasOlder] is asked about the page that is *on screen*, and
+        // works out for itself whether an older one exists. Handing it `page` - which
+        // `olderPage` had already moved back one - made it do that twice, so the walk
+        // stopped one page short: at oldestPage 2 it answered "nothing older" and the
+        // first 25 comments of any thread longer than 50 were unreachable, while the
+        // row above the list still said "Older 25" and did nothing when tapped.
+        if (!CommentWindow.hasOlder(
+                page = current.oldestPage,
+                replyCount = current.replyCount,
+                loadedCount = current.replies.size
+            )
+        ) return
         state.value = current.copy(isLoadingOlder = true, windowError = null)
         scope.launch {
             val result = repositoryResult {
@@ -346,7 +374,14 @@ internal class CommentThreadWindow(
     fun checkForNewComments(atBottom: Boolean) {
         val current = state.value ?: return
         if (isDemo || !current.isChatView || current.isLoading || current.isRefreshing) return
-        scope.launch {
+        // A request already out means this one would be answered against rows the
+        // first is about to merge in, and the second count of "what is new" is then
+        // zero - the pill a reader was owed disappears. The guard is a job rather
+        // than `isRefreshing` because that flag is the sheet's "the rows are still
+        // readable" signal, and a background check that ended on an early return
+        // would leave it set and the header spinning.
+        if (checkJob?.isActive == true) return
+        checkJob = scope.launch {
             loadWindow(
                 activityId = current.activityId,
                 page = CommentWindow.lastPage(current.replyCount),

@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -102,6 +103,16 @@ fun MessageDetailSheet(
     onDismiss: () -> Unit,
     /** Opens the counterpart's profile. The face and name are the link, as on the card. */
     onOpenUser: (FollowUser) -> Unit,
+    /**
+     * Opens the comment thread on the message that is open.
+     *
+     * The same sheet the Activity cards and the inbox rows open - a message is a
+     * `MessageActivity`, and its replies are the site's ordinary activity replies.
+     * Only the row itself can be commented on, so a conversation opened from a person
+     * rather than from a message has nothing to hand here, and the control is absent
+     * rather than inert.
+     */
+    onOpenComments: (MessageNode) -> Unit,
     /** What the reply composer is doing; a fresh state hides every outcome. */
     reply: UserMessagesViewModel.ReplyState = UserMessagesViewModel.ReplyState(),
     /** False for the demo: there is no account to send from. */
@@ -210,7 +221,9 @@ fun MessageDetailSheet(
 
             MessageDetailFooter(
                 isPrivate = message?.isPrivate == true,
-                siteUrl = message?.siteUrl
+                siteUrl = message?.siteUrl,
+                replyCount = message?.replyCount,
+                onOpenComments = { message?.let(onOpenComments) }
             )
 
             // The reply belongs to the message that is open, so it lives in this
@@ -409,9 +422,14 @@ private fun MessageDetailHeader(
 @Composable
 private fun MessageDetailFooter(
     isPrivate: Boolean,
-    siteUrl: String?
+    siteUrl: String?,
+    replyCount: Int?,
+    onOpenComments: () -> Unit
 ) {
-    if (!isPrivate && siteUrl == null) return
+    // A conversation opened from a person has no row to comment on, and a row with
+    // neither a flag nor a URL has nothing else to say: the footer is absent rather
+    // than drawn empty.
+    if (replyCount == null && !isPrivate && siteUrl == null) return
     val context = LocalContext.current
 
     Row(
@@ -425,6 +443,19 @@ private fun MessageDetailFooter(
             SequelInfoChip(
                 icon = AppVectorIcons.Privacy,
                 label = "Private"
+            )
+        }
+        // The count is an action even at zero, as it is on the activity card: this
+        // is the control that starts a thread on a message that does not have one.
+        replyCount?.let { count ->
+            EngagementAction(
+                icon = AppVectorIcons.ActivityReplies,
+                count = count,
+                active = false,
+                enabled = true,
+                contentDescription = "Comments",
+                onClick = onOpenComments,
+                modifier = Modifier.testTag("message_detail_comments_button")
             )
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -487,6 +518,10 @@ internal fun MessagesDetailSheetHost(
         detail = open,
         onDismiss = { messagesViewModel.dismissMessage() },
         onOpenUser = onOpenUser,
+        // The host has the ViewModel, so the thread is aimed here rather than
+        // carried through the screen as another callback: commenting on a message is
+        // the inbox's own feature, not the profile's.
+        onOpenComments = { message -> messagesViewModel.openComments(message) },
         reply = reply,
         canReply = messagesViewModel.canReply,
         onSend = messagesViewModel::replyToOpenMessage,

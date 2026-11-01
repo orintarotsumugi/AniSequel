@@ -182,6 +182,73 @@ internal fun ActivityEngagementSheets(
 }
 
 /**
+ * The comment thread on a message, drawn by the same sheet the activity feed uses.
+ *
+ * A direct message is a `MessageActivity`, so commenting on one is not a second
+ * feature: it is the sheet, the composer, the window and the moderation controls
+ * [ActivityEngagementSheets] already drives, pointed at a different id. What is
+ * different here is only which ViewModel holds the thread - the inbox's own - and
+ * the same sibling-of-the-tab rule about `ModalBottomSheet` windows applies, which
+ * is why this sits beside [MessagesDetailSheetHost] rather than inside it.
+ *
+ * The "liked by" sheet is borrowed from [likersViewModel] rather than duplicated:
+ * one `LikersState` slot exists per activity ViewModel, it is keyed on the activity
+ * and reply ids it is opened with, and these two hosts are composed unconditionally
+ * while the screen is up - so a long press on a message's heart lands in a sheet
+ * that is already being drawn. Commenting on a message and on a feed post are never
+ * both on screen, which is the only reason the shared slot is safe.
+ */
+@Composable
+internal fun MessagesCommentsSheetHost(
+    messagesViewModel: UserMessagesViewModel,
+    likersViewModel: UserActivityViewModel,
+    viewerId: Int?,
+    canPost: Boolean
+) {
+    val context = LocalContext.current
+    val mediaPreferences = remember { MediaPreferences(context.applicationContext) }
+    val mediaSettings by mediaPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = CommentMediaSettings()
+    )
+
+    val thread = messagesViewModel.comments
+    val commentsState by thread.state.collectAsStateWithLifecycle()
+    commentsState?.let { comments ->
+        ActivityCommentsSheet(
+            state = comments,
+            canPost = canPost,
+            viewerId = viewerId,
+            onDismiss = { thread.close() },
+            onRetry = {
+                thread.open(
+                    activityId = comments.activityId,
+                    knownReplyCount = comments.replyCount,
+                    chatView = comments.isChatView
+                )
+            },
+            onPost = { thread.post(it) },
+            onLikeReply = { thread.toggleReplyLike(it) },
+            onShowCommentLikers = { replyId ->
+                likersViewModel.openReplyLikers(comments.activityId, replyId)
+            },
+            onLoadOlder = { thread.loadOlder() },
+            onRevealNewComments = { thread.revealNewComments() },
+            onCheckForNewComments = { atBottom -> thread.checkForNewComments(atBottom) },
+            pollIntervalMillis = thread.pollIntervalMillis,
+            polling = mediaSettings.pollForNewComments,
+            tenorApiKey = mediaSettings.tenorApiKey,
+            nowEpochSecond = rememberNowEpochSecond(),
+            onOpenReplyActions = { thread.openReplyActions(it) },
+            onReplyActionMode = { thread.setReplyActionMode(it) },
+            onReplyActionDraft = { thread.updateReplyActionDraft(it) },
+            onSubmitReplyEdit = { thread.submitReplyEdit() },
+            onSubmitReplyDelete = { thread.submitReplyDelete() },
+            onDismissReplyAction = { thread.dismissReplyAction() }
+        )
+    }
+}
+
+/**
  * The profile's tab capsule, the refresh bar, and whichever tab is selected.
  *
  * Split from [UserProfileScreen] for the reason every other profile file is split:

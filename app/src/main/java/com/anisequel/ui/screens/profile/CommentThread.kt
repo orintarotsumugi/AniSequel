@@ -47,6 +47,7 @@ import com.anisequel.data.model.ActivityReply
 import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
@@ -127,11 +128,12 @@ internal fun ColumnScope.CommentsThread(
     // asked to see; Older grows it, and a refresh that found new comments grows it
     // by exactly what arrived so nothing already on screen is pushed off the top.
     val visible = remember(state.replies, state.shownRows) {
-        if (state.shownRows in 1 until state.replies.size) {
-            state.replies.takeLast(state.shownRows)
-        } else {
-            state.replies
-        }
+        state.replies.takeLast(
+            CommentWindow.visibleRowCount(
+                repliesLoaded = state.replies.size,
+                shownRows = state.shownRows
+            )
+        )
     }
 
     // Which rows continue the one above them. Grouping needs the depth, so it is
@@ -558,16 +560,27 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             }
 
             else -> {
-                val note = state.windowError ?: state.loadError
+                val note = state.windowError ?: state.refreshError ?: state.loadError
                 if (note != null) {
-                    // Two different failures, one shape: an Older page that did
-                    // not arrive and a refresh that did not arrive both leave the
-                    // rows on screen readable, and both need a retry that does not
-                    // throw away what the reader is looking at.
-                    item(key = if (state.windowError != null) "window_error" else "refresh_error") {
+                    // Three different failures, one shape: an Older page that did not
+                    // arrive, a background check that did not and a thread that never
+                    // loaded all leave the rows on screen readable, and all need a
+                    // retry that does not throw away what the reader is looking at.
+                    // The retry itself differs, so the banner names the request that
+                    // failed rather than assuming the older one: one field for both
+                    // kinds made a failed refresh offer a Retry that walked the
+                    // thread backwards instead of fetching what had not arrived.
+                    val olderFailed = state.windowError != null
+                    item(
+                        key = when {
+                            olderFailed -> "window_error"
+                            state.refreshError != null -> "refresh_error"
+                            else -> "load_error"
+                        }
+                    ) {
                         RefreshErrorBanner(
                             message = note,
-                            onRetry = if (state.windowError != null) onLoadOlder else onRetry
+                            onRetry = if (olderFailed) onLoadOlder else onRetry
                         )
                     }
                 }
@@ -601,8 +614,21 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         onReply = onReply,
                         onQuote = { onQuote(reply) },
                         onManage = { onManageReply(reply.id) },
-                        nowEpochSecond = nowEpochSecond
-                    )
+                        nowEpochSecond = nowEpochSecond,
+                        // A thread is a live list: a comment that lands while the
+                        // sheet is open arrives at the end, an Older page prepends a
+                        // block above, and a delete takes one out. Without the
+                        // placement spring every survivor jumped to its new index on
+                        // that frame, which reads as the conversation being redrawn
+                        // rather than as the conversation moving. Same tokens the
+                        // library grid uses - a slide on the spatial spring, a fade on
+                        // the effects pair - so a list rearranges the one way in this
+                        // app.
+                        modifier = Modifier.animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
                 }
             }
         }
