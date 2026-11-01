@@ -103,6 +103,24 @@ class GifSearchParseTest {
     }
 
     @Test
+    fun `the recent strip keeps one copy of a pick and drops the oldest`() {
+        val store = com.anisequel.ui.viewmodel.GifSearchStore(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            provider = com.anisequel.data.network.SafebooruGifs()
+        )
+        (1..14).forEach { store.rememberUsed("https://x/$it.gif") }
+        assertEquals(
+            "capped at the sheet's own constant",
+            com.anisequel.ui.viewmodel.GifSearchStore.MAX_USED,
+            store.usedThisSession().size
+        )
+        assertEquals("https://x/14.gif", store.usedThisSession().first())
+        store.rememberUsed("https://x/9.gif")
+        assertEquals("a repeat moves to the front rather than doubling", 1, store.usedThisSession().count { it == "https://x/9.gif" })
+        assertEquals("https://x/9.gif", store.usedThisSession().first())
+    }
+
+    @Test
     fun `an anonymous provider is allowed to have a narrow catalogue`() {
         // The tag-search hint belongs to the booru only; a Tenor miss is a
         // miss, and telling the reader about the CC catalogue would be a guess about
