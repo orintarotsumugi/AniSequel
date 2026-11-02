@@ -69,12 +69,14 @@ class ImgbbUploadProtocolTest {
         )
         assertEquals(
             "an error object the host wrote is the reason",
+            "Image is too large",
             api.parseResponse(
                 """{"status_code":400,"success":false,"error":{"message":"Image is too large","code":313}}"""
             ).exceptionOrNull()?.message
         )
         assertEquals(
             "a status line is a reason too",
+            "Forbidden",
             api.parseResponse("""{"status_code":403,"status_txt":"Forbidden"}""")
                 .exceptionOrNull()?.message
         )

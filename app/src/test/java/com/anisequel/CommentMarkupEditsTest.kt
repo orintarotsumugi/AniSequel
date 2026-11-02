@@ -148,7 +148,7 @@ class CommentMarkupEditsTest {
         val quote = quoteBlock("first\n\nthird", "Bild", addressedTo = "Bild")
         assertEquals(
             "already addressed, so no credit line",
-            "> first\n\nthird\n\n",
+            "> first\n>\n> third\n\n",
             quote
         )
         assertTrue("the blank line is not left as a bare marker", !quote.contains("> \n"))

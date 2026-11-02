@@ -471,7 +471,10 @@ private fun ChatScrollEffects(
             // the end of them: `scrollToItem` on a layout that has not run yet
             // lands on index zero, which is the bug this effect replaces.
             withFrameNanos { }
-            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+            // Guarded: a layout that still reports no items would hand
+            // `scrollToItem` -1, which throws instead of scrolling.
+            val last = listState.layoutInfo.totalItemsCount - 1
+            if (last >= 0) listState.scrollToItem(last)
         }
     }
 

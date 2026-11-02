@@ -71,6 +71,7 @@ class PomfUploadProtocolTest {
         )
         assertEquals(
             "an error field the host wrote is the reason",
+            "file too large",
             api.parseResponse("""{"success":false,"error":"file too large"}""")
                 .exceptionOrNull()?.message
         )

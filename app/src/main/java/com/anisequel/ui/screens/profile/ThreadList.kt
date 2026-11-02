@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -57,6 +60,7 @@ internal fun ColumnScope.ThreadList(
     nowEpochSecond: Long?
 ) {
     val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
+    val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
         LazyColumn(
@@ -144,6 +148,14 @@ internal fun ColumnScope.ThreadList(
                 count = state.unseenNewComments,
                 onClick = {
                     onRevealNewComments()
+                    // The pill promises the newest comments, so it takes the reader
+                    // there: one frame for the revealed rows to be laid out, then a
+                    // scroll to the last item (the head row is item 0, not a reply).
+                    scope.launch {
+                        withFrameNanos { }
+                        val last = listState.layoutInfo.totalItemsCount - 1
+                        if (last >= 0) listState.animateScrollToItem(last)
+                    }
                 }
             )
         }

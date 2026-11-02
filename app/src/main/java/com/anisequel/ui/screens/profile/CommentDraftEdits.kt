@@ -322,11 +322,11 @@ internal fun quoteBlock(
      */
     addressedTo: String? = null
 ): String {
-    // A blank line stays blank, which is the rule `prefixLines` already holds to:
-    // a "> " with nothing after it is a quote mark that quotes nothing, and it
-    // shows up in the posted comment.
+    // A blank line becomes a bare `>`: an unmarked blank line ends the quote, so
+    // the paragraphs after it fell out of the quote bar. A bare marker keeps one
+    // quote with a paragraph break, and has no trailing space to show up.
     val body = text.trim().lines().joinToString("\n") { line ->
-        if (line.isBlank()) line else "> $line"
+        if (line.isBlank()) ">" else "> $line"
     }
     val who = authorName?.trim()?.takeIf { it.isNotEmpty() }
     val alreadyNamed = who != null && (

@@ -291,7 +291,12 @@ private class SessionCookies : CookieJar {
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         synchronized(byHost) {
-            byHost[url.host] = (byHost[url.host].orEmpty() + cookies).distinctBy { it.name }
+            // Newest first so a refreshed cookie replaces the old one, and expired
+            // cookies (including deletions the server sends) are dropped.
+            val now = System.currentTimeMillis()
+            byHost[url.host] = (cookies + byHost[url.host].orEmpty())
+                .distinctBy { it.name }
+                .filter { it.expiresAt > now }
         }
     }
 
