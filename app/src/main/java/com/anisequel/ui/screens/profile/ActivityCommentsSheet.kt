@@ -32,7 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
-import com.anisequel.data.network.CatboxApi
+import com.anisequel.data.network.ImageUploader
 import com.anisequel.data.network.SafebooruGifs
 import com.anisequel.data.network.TenorGifs
 import com.anisequel.data.repository.PickedImageReader
@@ -219,7 +219,7 @@ fun ActivityCommentsSheet(
     }
 
     // Attachments. AniList has nowhere to put a file, so a photo leaves the app
-    // for catbox.moe and comes back as the URL that gets written into the
+    // for an image host and comes back as the URL that gets written into the
     // comment - which is why the note is kept beside the composer rather than
     // in the store: the reader is looking at the field they are typing, and the
     // upload belongs to the draft, not to the thread.
@@ -467,11 +467,15 @@ private fun clipDraft(value: TextFieldValue): TextFieldValue {
 /**
  * One draft's photo picker: the launcher, and the upload it is currently doing.
  *
- * The picker is a round trip through catbox.moe, so it has to report two things
+ * The picker is a round trip through an image host, so it has to report two things
  * the field must draw - "Uploading…" and why an upload failed - beside the
  * composer. Pulled out of [ActivityCommentsSheet] because the edit pane needs
  * the same picker against a different draft, and two copies of the upload would
  * drift the first time either was fixed.
+ *
+ * [ImageUploader] is the host chain, not a single host: catbox has paused anonymous
+ * uploads, and the two fallbacks are what keep this button working while it is
+ * paused.
  */
 private data class PhotoAttachment(
     val launch: () -> Unit,
@@ -483,7 +487,7 @@ private data class PhotoAttachment(
 private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachment {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val catbox = remember { CatboxApi() }
+    val uploader = remember { ImageUploader() }
     var isUploading by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
 
@@ -502,7 +506,7 @@ private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachme
             // disabled by an upload that had already been thrown away.
             try {
                 val image = PickedImageReader.read(context, uri).getOrThrow()
-                val url = catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                val url = uploader.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
                 onUploaded(url)
                 note = null
             } catch (cancelled: CancellationException) {

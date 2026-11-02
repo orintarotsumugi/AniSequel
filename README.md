@@ -31,6 +31,8 @@ One sheet for messages and comments, a bar that stops navigating on a hold, and 
 - **Holding the navigation bar goes nowhere.** A hold exists to start a swipe; letting go of Profile no longer jumps to Messages.
 - **The GIF search types forwards.** The field rebuilt its value on every keystroke and put the caret at the start, so typing `cat` searched `tac`.
 - **A cancelled photo upload actually stops.** The transfer is cancellable now, and the composer cannot be left stuck on Uploading by an upload that was thrown away.
+- **Photos attach again while catbox is paused.** Its anonymous uploads are off, so the file falls back to pomf.lain.la first and imgbb.com after that - no account on any of them.
+- **The controls under a comment fit.** Heart, Reply, Quote and manage wrap instead of hiding off the edge of a phone, Reply and Quote read as capsules, and the like count animates to its new number.
 - **A quote keeps what it quoted** - blank lines survive and a spoiler no longer prints its own `~!...!~` tags, and quoting threads the reply under the person it answers instead of at the root.
 
 The full block-by-block notes live in

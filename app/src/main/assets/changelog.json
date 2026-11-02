@@ -26,6 +26,22 @@
         {
           "title": "A quote threads, and names its author once",
           "detail": "Quoting somebody added the name twice and posted at the root of the thread instead of under the person it answered. A quote is now one credit line and one @mention, and it lands where the conversation was."
+        },
+        {
+          "title": "Photos attach again while catbox is paused",
+          "detail": "catbox.moe stopped accepting anonymous uploads - its API answers every file with \"Uploads paused until I can resolve storage issues\" - so the attach button had nothing to attach to. The app still tries catbox first, then hands the same file to pomf.lain.la, and then to imgbb.com if that is down too. None of them needs an account, and Settings names all three as public hosts that cannot delete a file on request."
+        },
+        {
+          "title": "The controls under a comment fit again",
+          "detail": "The heart, Reply, Quote, timestamp and manage dot were one scrolling line, so the control that edits or deletes your own comment could sit off the edge of a phone. They wrap onto a second line now, Reply and Quote are capsules you can see are buttons, and the like count moves to its new number instead of snapping."
+        },
+        {
+          "title": "A message with no replies says why when it fails",
+          "detail": "A failed reply fetch under a message used to leave the message alone with no sentence and no retry, because the thread had a first row to draw and that path skipped the error. The banner and its Retry are drawn under the message now."
+        },
+        {
+          "title": "New comments, reasons and notes arrive with motion",
+          "detail": "The \"N new\" pill springs in instead of appearing between frames, and the composer's limit, upload and post-error lines expand and collapse instead of re-laying the bar under the Post button in one frame."
         }
       ]
     },

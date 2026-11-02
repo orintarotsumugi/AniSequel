@@ -1,5 +1,10 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -598,7 +603,19 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 }
             }
 
-            state.replies.isEmpty() -> Unit
+            // A message thread with no replies, or whose replies failed. The head
+            // is already readable above, so a failure cannot take the screen - but
+            // it must not vanish either. This branch used to be `Unit`, which left
+            // a failed reply fetch under a message with nothing to retry and no
+            // sentence saying the answers were missing.
+            state.replies.isEmpty() -> {
+                val note = state.windowError ?: state.refreshError ?: state.loadError
+                if (note != null) {
+                    item(key = "empty_thread_error") {
+                        RefreshErrorBanner(message = note, onRetry = onRetry)
+                    }
+                }
+            }
 
             else -> {
                 val note = state.windowError ?: state.refreshError ?: state.loadError
@@ -676,22 +693,31 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
         }
     }
 
-    if (state.unseenNewComments > 0) {
-        // Floating over the bottom of the list. A row *in* the list would be
-        // below the newest comment the reader has not seen yet, which is the
-        // wrong way round for something that announces what arrived.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 4.dp)
-        ) {
-            NewCommentsPill(
-                count = state.unseenNewComments,
-                onClick = {
-                    onRevealNewComments()
-                }
-            )
-        }
+    // Floating over the bottom of the list. A row *in* the list would be below the
+    // newest comment the reader has not seen yet, which is the wrong way round for
+    // something that announces what arrived.
+    //
+    // Animated rather than appearing: the pill lands while the reader is in the
+    // middle of a sentence, and a control that is simply *there* on the next frame
+    // reads as something they missed. It springs up from the bottom and leaves the
+    // same way; the count itself is the only thing that can change while it is up,
+    // and that is a settled number rather than a ticker.
+    AnimatedVisibility(
+        visible = state.unseenNewComments > 0,
+        enter = fadeIn(ExpressiveMotion.FastEffects) +
+            scaleIn(initialScale = 0.8f, animationSpec = ExpressiveMotion.BouncySpatial),
+        exit = fadeOut(ExpressiveMotion.FastEffects) +
+            scaleOut(targetScale = 0.9f, animationSpec = ExpressiveMotion.FastSpatial),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 4.dp)
+    ) {
+        NewCommentsPill(
+            count = state.unseenNewComments,
+            onClick = {
+                onRevealNewComments()
+            }
+        )
     }
 }
 }

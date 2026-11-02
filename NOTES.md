@@ -1688,13 +1688,32 @@ message is one request, and staying current is one every fifteen seconds. AniLis
 budgets roughly thirty requests a minute, so a reader on a metered connection may
 want the first and not the second.
 
-**Attachments go to catbox.moe.** AniList has nowhere to put a file, so "attach"
-means "hand it to a host and paste the address". Catbox takes an anonymous upload -
-no account, no key, no OAuth - and serves the file unchanged at `files.catbox.moe`,
-which is the only reason this can be offered without asking anybody to register for
-a credential. The price is retention: anonymous files are kept until two years of no
-views, so an embed on a comment nobody reads can disappear. Settings says so, because
-a dead image six months later should be a thing the reader chose.
+**Attachments go to catbox.moe, and to pomf when catbox refuses them.** AniList has
+nowhere to put a file, so "attach" means "hand it to a host and paste the address".
+Catbox takes an anonymous upload - no account, no key, no OAuth - and serves the file
+unchanged at `files.catbox.moe`, which is the only reason this can be offered without
+asking anybody to register for a credential. The price is retention: anonymous files
+are kept until two years of no views, so an embed on a comment nobody reads can
+disappear. Settings says so, because a dead image six months later should be a thing
+the reader chose.
+
+In November 2026 that stopped being enough: catbox's API answers every anonymous
+upload with HTTP 200 and "Uploads paused until I can resolve storage issues", so the
+button could not attach anything at all. [ImageUploader](app/src/main/java/com/anisequel/data/network/ImageUploader.kt)
+now tries catbox first, falls back to **pomf.lain.la** and then to **imgbb.com**, and
+takes the first host that stores the file. pomf is an anonymous clone that keeps the
+file permanently (`pomf.lain.la` uploads, `pomf2.lain.la` serves), and imgbb is the
+site's own anonymous form - a token scraped from its homepage and one POST to
+`imgbb.com/json` - rather than its documented API, because API v1 requires a key and
+a key in a public repository is a credential shared by every install. The
+alternatives were tried rather than assumed: catbox's own Litterbox answers 403,
+`0x0.st` has disabled uploads, and uguu.se and tmpfiles.org delete after three hours
+and one hour - an hour-long URL in a comment is a broken image by the time anybody
+reads it. The fallback is a chain, not a setting: the reader is choosing a photo, not
+infrastructure, and a failed host is the app's problem to route around. Each host's
+success test is on its own parsed file domain, because a refusal also arrives as HTTP
+200 and a CDN page must never become the embed; the chains are pinned in
+`CatboxUploadProtocolTest`, `PomfUploadProtocolTest` and `ImgbbUploadProtocolTest`.
 [CatboxApi](app/src/main/java/com/anisequel/data/network/CatboxApi.kt) is its own
 `OkHttpClient` with no interceptors - the shared one attaches the reader's bearer
 token, and a file host has no business receiving it. The host answers a refusal with

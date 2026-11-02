@@ -14,23 +14,34 @@ package com.anisequel.domain.usecase
  * decisions are arithmetic on a mime type and a byte count - no Android, no
  * socket, and testable in a JVM run.
  *
- * ## The limits are the host's, not the app's
+ * ## The limits are the app's, not the hosts'
  *
- * Catbox takes files up to 60 MB, and says plainly that an animated GIF over
- * 20 MB is its own case ("GIF format sucks - use webm if you need an animation
- * bigger than 20 MB"). The numbers here exist so a refusal arrives as a sentence
- * about the reader's file rather than as a mystery from a remote server.
+ * The hosts' ceilings differ - catbox.moe takes up to 200 MB, pomf.lain.la up to
+ * 1 GiB and imgbb.com 32 MB - but none of them is the wall here. This app hands
+ * the bytes to the host from memory: the file is already a `ByteArray` and
+ * multipart adds its own copy, so a limit anywhere near catbox's or pomf's is an
+ * `OutOfMemoryError` on a phone, not an upload. 60 MB is the most that path has
+ * been measured to survive. A file over imgbb's 32 MB ceiling still uploads as
+ * long as one of the two hosts tried before it takes it; imgbb is the last
+ * attempt, not a guarantee that every accepted file fits every host.
+ *
+ * The GIF ceiling is lower for a different reason: an animated GIF is decoded at
+ * full size wherever it is shown, so a 30 MB one is also the thing that makes a
+ * comment thread stutter on a mid-range device. The host itself accepts it
+ * ("GIF format sucks - use webm if you need an animation bigger than 20 MB"), and
+ * the app has no converter, so the refusal is a sentence about the file.
  */
 object MediaAttachment {
 
-    /** Catbox's own ceiling for any one file. */
+    /** The app's own ceiling for any one file, sized for its memory, not a host's. */
     const val MAX_FILE_BYTES: Long = 60L * 1024 * 1024
 
     /**
      * The ceiling for an animated GIF, which is lower than the general one.
      *
-     * A file over this is what the host calls "use webm": the app has no way to
-     * convert it, so it says so instead of uploading 30 MB and taking a rejection.
+     * A GIF this size still renders, but it decodes at its intrinsic size in every
+     * comment thread that shows it; the host would take it, and the app refuses it
+     * so one reader's reaction does not make the app stutter for everybody.
      */
     const val MAX_GIF_BYTES: Long = 20L * 1024 * 1024
 
@@ -64,7 +75,7 @@ object MediaAttachment {
         /** A type outside [SUPPORTED_TYPES]: audio, video, a document, a bare extension. */
         UnsupportedType,
 
-        /** Over the host's limit for its kind. */
+        /** Over the app's limit for its kind. */
         TooLarge
     }
 
