@@ -472,7 +472,14 @@ sealed interface InlineToken {
  * heading, underlined, struck through - and those tokens carry the image one level
  * down as well. Answering "no image" for them is what made the paragraph take its
  * clamped-text branch and print the word *banner* where the animation belongs.
+ *
+ * `@JvmName` because the document-level answer below has the same Kotlin name and
+ * the same erased JVM signature - two `List` extensions are one method to the
+ * bytecode, and the compiler calls that a platform declaration clash rather than
+ * overloading them. The names stay the same for every Kotlin caller, which is the
+ * point: the question is one question, asked of two different lists.
  */
+@JvmName("inlineTokensContainEmbeddedImage")
 internal fun List<InlineToken>.containsEmbeddedImage(): Boolean = any { token ->
     when (token) {
         is InlineToken.Image -> true
