@@ -41,6 +41,7 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.GifSearchStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -493,20 +494,24 @@ private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachme
         isUploading = true
         note = "Uploading…"
         scope.launch {
-            PickedImageReader.read(context, uri)
-                .mapCatching { image ->
-                    catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
-                }
-                .fold(
-                    onSuccess = { url ->
-                        onUploaded(url)
-                        note = null
-                    },
-                    onFailure = { failure ->
-                        note = failure.message ?: "The upload did not go through."
-                    }
-                )
-            isUploading = false
+            // Written with a `finally` rather than `mapCatching`/`fold`, because a
+            // cancelled upload is neither a success nor a failure: `mapCatching`
+            // catches `Throwable`, so closing the sheet mid-transfer took the
+            // cancellation as its "failure", wrote a reason the reader never asked
+            // for, and left `isUploading` true on the way out - a Send button
+            // disabled by an upload that had already been thrown away.
+            try {
+                val image = PickedImageReader.read(context, uri).getOrThrow()
+                val url = catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                onUploaded(url)
+                note = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                note = failure.message ?: "The upload did not go through."
+            } finally {
+                isUploading = false
+            }
         }
     }
 

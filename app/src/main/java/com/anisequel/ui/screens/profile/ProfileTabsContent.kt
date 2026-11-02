@@ -223,7 +223,11 @@ internal fun MessagesCommentsSheetHost(
                 thread.open(
                     activityId = comments.activityId,
                     knownReplyCount = comments.replyCount,
-                    chatView = comments.isChatView
+                    chatView = comments.isChatView,
+                    // The head is not fetched, it is the row that was tapped - so a
+                    // retry has to hand it back or the message disappears from the
+                    // top of its own thread while the replies reload.
+                    head = comments.head
                 )
             },
             onPost = { thread.post(it) },

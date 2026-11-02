@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.7.8",
+      "entries": [
+        {
+          "title": "A message opens in the comment thread",
+          "detail": "Tapping a message, or the Message button on a friend, now opens that message's comment thread with the message itself as its first row, so every line - the message included - can be replied to and quoted. The bubbles-and-a-reply-box sheet is no longer reachable for a conversation that already has messages; it stays only for writing the first one."
+        },
+        {
+          "title": "Holding the navigation bar goes nowhere",
+          "detail": "Holding the Profile tab and letting go opened your inbox, which made the gesture that starts a swipe also be a navigation on a press nobody completed. A hold now only lifts the bar; a tab changes when the finger drags to it."
+        },
+        {
+          "title": "The GIF search types forwards",
+          "detail": "The search field rebuilt its text from the query on every keystroke, which put the caret at the start: typing cat searched tac, and the results were for a word the reader never wrote. The field keeps its own selection now, a new search opens at the top of its results, and the box has a clear button that goes back to your recent picks."
+        },
+        {
+          "title": "A cancelled photo upload actually stops",
+          "detail": "Uploads ran as a blocking call that could not be interrupted, so closing the sheet mid-transfer kept the request and the file's bytes alive until the 150-second timeout, and could leave the composer stuck on Uploading. The transfer is cancellable now, and the flag clears however it ends."
+        },
+        {
+          "title": "A quote keeps what it quoted",
+          "detail": "Quoting a comment flattened it: blank lines disappeared and a spoiler printed its own ~!...!~ tags. The quoted block is re-parsed from the comment, so the reply shows the same picture, spoiler or line breaks the reader chose to quote."
+        },
+        {
+          "title": "A quote threads, and names its author once",
+          "detail": "Quoting somebody added the name twice and posted at the root of the thread instead of under the person it answered. A quote is now one credit line and one @mention, and it lands where the conversation was."
+        }
+      ]
+    },
+    {
       "version": "1.7.7",
       "entries": [
         {

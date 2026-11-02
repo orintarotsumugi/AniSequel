@@ -75,6 +75,15 @@ internal fun CommentRow(
     canManage: Boolean,
     canReply: Boolean,
     canQuote: Boolean,
+    /**
+     * Whether the heart is drawn at all.
+     *
+     * False for a message thread's head row: a message is likeable, but as an
+     * *activity*, and the store only speaks the reply mutation. Drawing the heart
+     * there would offer a control whose request is the wrong one. Defaulted to true
+     * so every reply row is unchanged.
+     */
+    showLikes: Boolean = true,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
     onReply: (String) -> Unit,
@@ -142,6 +151,7 @@ internal fun CommentRow(
                 canManage = canManage,
                 canReply = canReply,
                 canQuote = canQuote,
+                showLikes = showLikes,
                 nowEpochSecond = nowEpochSecond,
                 onLike = onLike,
                 onShowLikers = onShowLikers,
@@ -174,6 +184,7 @@ private fun CommentRowActions(
     canManage: Boolean,
     canReply: Boolean,
     canQuote: Boolean,
+    showLikes: Boolean,
     nowEpochSecond: Long?,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
@@ -186,23 +197,26 @@ private fun CommentRowActions(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // The same control the activity card draws, shared rather than re-declared
-        // here - `EngagementAction`.
-        EngagementAction(
-            icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
-            count = reply.likeCount ?: 0,
-            active = liked,
-            // Null `isLiked` means AniList did not answer, which is what a
-            // signed-out reader gets. Disabled rather than drawn-as-unliked, so the
-            // control is never something that looks live and does nothing.
-            enabled = reply.isLiked != null && !likePending,
-            contentDescription = if (liked) "Unlike comment" else "Like comment",
-            onClick = onLike,
-            // The hold asks whose. A comment's like count used to be the only answer
-            // the row had, while the card above it had always offered the names.
-            onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
-            modifier = Modifier.testTag("activity_reply_like_button")
-        )
+        if (showLikes) {
+            // The same control the activity card draws, shared rather than
+            // re-declared here - `EngagementAction`.
+            EngagementAction(
+                icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
+                count = reply.likeCount ?: 0,
+                active = liked,
+                // Null `isLiked` means AniList did not answer, which is what a
+                // signed-out reader gets. Disabled rather than drawn-as-unliked, so
+                // the control is never something that looks live and does nothing.
+                enabled = reply.isLiked != null && !likePending,
+                contentDescription = if (liked) "Unlike comment" else "Like comment",
+                onClick = onLike,
+                // The hold asks whose. A comment's like count used to be the only
+                // answer the row had, while the card above it had always offered the
+                // names.
+                onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
+                modifier = Modifier.testTag("activity_reply_like_button")
+            )
+        }
         if (canReply) {
             Spacer(modifier = Modifier.width(4.dp))
             val name = reply.user?.name.orEmpty()

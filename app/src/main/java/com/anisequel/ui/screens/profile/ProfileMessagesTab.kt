@@ -93,14 +93,13 @@ import java.time.Instant
  * chip in the footer - because misreading who said what in an inbox is the one
  * mistake that matters.
  *
- * ## A tap reads the message here
+ * ## A tap opens the conversation, in the comment sheet
  *
- * The card opens [MessageDetailSheet], in this app, on the row already on screen.
- * It used to send the reader to AniList's own message page for the rest of a body
- * the app had already downloaded, which is a browser hop for text that was in
- * memory the whole time. The outbound link is still there - as the sheet's
- * secondary action, and as the card's own chip - it is just no longer the only
- * way to finish reading.
+ * Both the card and its comment chip open the message's own comment thread, with
+ * the message itself as the first row. That sheet is the one that quotes a line
+ * and answers it; the bubbles-and-a-reply-box sheet the card used to open showed
+ * the same exchange with neither, and it is gone from this screen. The outbound
+ * link is still a chip, for the reader who wants AniList's own page.
  */
 @Composable
 fun ProfileMessagesTab(
@@ -117,20 +116,14 @@ fun ProfileMessagesTab(
     onRetry: () -> Unit,
     onOpenUser: (FollowUser) -> Unit,
     /**
-     * Opens one message in the detail sheet.
-     *
-     * Handed the row rather than its id: the list this tab is drawing is the
-     * sheet's only source of content, so the sheet can render on the frame the
-     * tap lands rather than waiting on a lookup it would have to do anyway.
-     */
-    onOpenMessage: (MessageNode) -> Unit,
-    /**
-     * Opens the comment thread on one message.
+     * Opens the comment thread on one message - the card's tap, and its chip.
      *
      * A direct message is a `MessageActivity`, and AniList gives it replies the way
      * it gives any other activity one - so this is the same sheet the Activity tab's
-     * comment button opens. The row travels with it for the same reason
-     * [onOpenMessage]'s does: it carries the reply count the thread is aimed with.
+     * comment button opens. The row travels with it because the sheet draws the
+     * message as the thread's first line and aims the window with the row's own
+     * reply count; a lookup by id would be a second pass over a list this call
+     * already holds.
      */
     onOpenComments: (MessageNode) -> Unit,
     contentPadding: PaddingValues,
@@ -233,7 +226,6 @@ fun ProfileMessagesTab(
                         viewerId = state.viewerId,
                         nowEpochSecond = nowEpochSecond,
                         onOpenUser = onOpenUser,
-                        onOpenMessage = onOpenMessage,
                         onOpenComments = onOpenComments,
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)
@@ -340,14 +332,14 @@ private fun FilterChip(
  * The card is clickable as a whole, and the three things inside it that are
  * already controls stay controls: a nested `clickable` or `IconButton` claims its
  * own region, so the counterpart's face still opens their profile, "Read more"
- * still expands in place, and the footer's chip still leaves for AniList. What a
- * tap on the card - the body, the padding, anywhere that is not one of those -
- * now does is open [MessageDetailSheet] with this row in it.
+ * still expands in place, and the footer's chip still leaves for AniList. A tap on
+ * the card - the body, the padding, anywhere that is not one of those - opens the
+ * message's comment thread, with the message as its first row.
  *
- * The note here used to say the opposite: that the card was "deliberately not
- * clickable as a whole, because a message has no thread to open in this app".
- * That was true of the inbox as it stood, and it is exactly the assumption that
- * made reading a long message mean leaving the app.
+ * The note here used to say the card was "deliberately not clickable as a whole,
+ * because a message has no thread to open in this app". That was true of the inbox
+ * as it stood; the thread is the message's activity, and the comment sheet is
+ * where it is answered now.
  */
 @Composable
 private fun MessageCard(
@@ -355,7 +347,6 @@ private fun MessageCard(
     viewerId: Int?,
     nowEpochSecond: Long,
     onOpenUser: (FollowUser) -> Unit,
-    onOpenMessage: (MessageNode) -> Unit,
     onOpenComments: (MessageNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -378,10 +369,10 @@ private fun MessageCard(
             .clickable(
                 interactionSource = interactionSource,
                 // The label a screen reader announces in place of the card's
-                // contents, so the gesture is described as "Read message" rather
-                // than as a nameless group of text.
-                onClickLabel = "Read message",
-                onClick = { onOpenMessage(message) }
+                // contents, so the gesture is described as opening the message's
+                // comments rather than as a nameless group of text.
+                onClickLabel = "Open this message's comments",
+                onClick = { onOpenComments(message) }
             )
             .testTag("message_card"),
         shape = MaterialTheme.shapes.large,

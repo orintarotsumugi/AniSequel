@@ -17,24 +17,21 @@ Not on the Play Store. Every release is a signed universal APK on
 self-contained updater in the app - no Play Services, no AniSequel account, no
 middleman server.
 
-**Jump to:** [What's new](#whats-new---174) | [Features](#features) | [Install](#install) |
+**Jump to:** [What's new](#whats-new---178) | [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
 
 ---
 
-## What's new - 1.7.7
+## What's new - 1.7.8
 
-The conversation release: comments on messages as well as posts, a comment thread that behaves like a chat to its oldest page, and a GIF picker that stopped decoding originals.
+One sheet for messages and comments, a bar that stops navigating on a hold, and a GIF search that types the way you do.
 
-- **Comment on a message.** A direct message is an activity, and AniList gives it replies like any other one - so the inbox row and the open message both carry a Comments button that opens the same thread the Activity feed uses, with liking, quoting, editing and deleting.
-- **Comments reach their oldest page.** Older stopped one page short: the step back was asked twice, so the first 25 comments of any thread longer than 50 were unreachable while the row above the list kept promising them.
-- **A failed refresh retries the refresh.** A background check that did not arrive shared its error field with a missing Older page, so the banner's Retry walked the thread backwards instead of fetching the comments that had not come.
-- **A like leaves the comment alone.** Tapping a heart wrote back the whole comment as it was before the tap.
-- **Posting keeps your place in a thread.** Posting into a thread you had scrolled up in revealed every comment the app had fetched.
-- **GIF tiles stop decoding originals.** The picker treated any sample ending in .gif as a thumbnail.
-- **A spoiler can hold a picture, and the GIF picker decides how an embed sits** - the payload of `~!...!~` is re-parsed as blocks, so a hidden reveal shows the reveal, and a picked GIF can go in normal, centred or spoiled beside its width.
-- **Smaller fixes** - a comment that lands and an Older page that arrives now slide into place instead of jumping, the text-size preview follows the finger, and the GIF width row keeps showing which width is chosen.
+- **A message opens in the comment thread.** Tapping a message, or the Message button on a friend, opens that message's comment thread with the message itself as the first row - so every line can be replied to and quoted, including the message. The old bubbles-and-reply-box sheet is only used to write the first message of a conversation.
+- **Holding the navigation bar goes nowhere.** A hold exists to start a swipe; letting go of Profile no longer jumps to Messages.
+- **The GIF search types forwards.** The field rebuilt its value on every keystroke and put the caret at the start, so typing `cat` searched `tac`.
+- **A cancelled photo upload actually stops.** The transfer is cancellable now, and the composer cannot be left stuck on Uploading by an upload that was thrown away.
+- **A quote keeps what it quoted** - blank lines survive and a spoiler no longer prints its own `~!...!~` tags, and quoting threads the reply under the person it answers instead of at the root.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app

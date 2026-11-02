@@ -52,9 +52,12 @@ object ProfileRoutes {
      * `navigate(OWN)` from the dashboard resolves to the same composable and the
      * two cannot drift. It carries the home-screen widget's request: a tap on the
      * tile asks for the Activity tab, and `"profile"` alone leaves the profile on
-     * its default tab as before. [OWN_SEGMENT_ARG] is the bar's held Profile tab
-     * asking for the inbox one level deeper, so a shortcut to Messages does not
-     * have to open the profile and then tap a chip.
+     * its default tab as before. [OWN_SEGMENT_ARG] opens one level deeper, on a
+     * segment of the Activity tab - the route the bar's held Profile tab used to ask
+     * for when Messages was the one list nobody had a short way to. Nothing in the
+     * app produces it now (the hold navigates nowhere), but the argument stays
+     * because a link that names a segment still arrives with it, and a route pattern
+     * that dropped `&segment=` would match nothing and fail silently.
      *
      * ## Why [OWN_SEGMENT_ARG] defaults to `""` rather than to null
      *
@@ -84,14 +87,6 @@ object ProfileRoutes {
 
     /** [OWN] opening directly on the Activity tab. Used by the widget. */
     const val OWN_ACTIVITY = "profile?tab=activity"
-
-    /**
-     * [OWN] opening directly on the Activity tab's Messages segment.
-     *
-     * The bar's held Profile tab asks for this, and the profile composes on the
-     * inbox from its first frame - see `ProfileActivityPage`'s `initialSegment`.
-     */
-    const val OWN_MESSAGES = "profile?tab=activity&segment=$SEGMENT_MESSAGES"
 
     /**
      * The tab a profile opens on when nothing asks for one in particular.

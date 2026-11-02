@@ -412,31 +412,24 @@ being replaced. Releasing on the tab the swipe started from is not a route chang
 at all, and a cancelled gesture (the tier tab being switched off mid-hold) commits
 nothing: `swipeSelection` returns the destination only on a real finger-up.
 
-**A hold that never moves is the destination's shortcut.** The same gesture with no
-travel is now routed to `ExpressiveNavigationBar`'s optional `onHold` instead of
-`onSelect`, and the main bar uses it for one destination only: holding the bar while
-the profile is the page on screen navigates to
-`profile?tab=activity&segment=messages`, which is the viewer's own inbox — the Activity
-tab's third segment, which before this could only be reached by opening the profile,
-finding the Activity tab and tapping the chip. The hold resolves to the destination it
-*began* on, which is the selected tab, not to the item under the finger: the bar is one
-`pointerInput` over a `Row` whose items are deliberately unequal (the selected pill
-claims more width) and it has no item bounds to test. A swipe that went out and came
-back is *not* the shortcut — `holdThenSwipe` tracks whether the preview ever left the
-tab the hold began on, because that is the finger changing its mind, not asking for
-something. The profile's own four-tab capsule passes no handler, so its hold stays the
-acknowledgement it always was.
+**A hold that never moves is not a shortcut.** It used to be: the main bar routed a
+still hold on the Profile tab to `profile?tab=activity&segment=messages`, so the
+inbox was one press away. That made the gesture that *starts* a swipe also be a
+navigation, and every press held a beat too long and released landed somewhere the
+reader had not asked for — reported as the bar opening Messages on its own. The
+handler, the route (`navigateToProfileMessages`) and its `OWN_MESSAGES` constant
+are gone; a hold now only lifts the bar and ticks, and only travel can choose a
+destination. The `segment` argument stays on the route because a link that names a
+segment still arrives with it — dropping `&segment=` from the pattern would match
+nothing and fail silently.
 
-That route is why `navigateToProfileMessages` is a second function beside
-`navigateToMainTab` rather than the same one with a different string: the early return
-that makes a repeat tap on the current tab a no-op also swallows a hold on the tab you
-are already looking at, and `restoreState` would hand the profile back the segment it
-was left on instead of the one the route asked for. It therefore pops back to Home
-*without* saving, so the replaced profile has no saved state to re-claim its own route
-key from, and the new entry composes on the requested segment on its first frame —
-which is also why the segment is an *initial* value of the page's saved state rather
-than something written to it after composition: the latter shows Activity for a frame
-and then flips.
+The `segment` argument defaults to `""`, **not** to null, and that is load-bearing.
+A query argument whose default is null still has to appear in the URI, which is the
+whole reason every caller here spells `tab=` out — `navigate("profile")` matched
+nothing and left the dashboard's avatar tap dead. Adding the segment the way the tab
+is declared would have silently un-matched `profile?tab=` and
+`profile?tab=activity`, breaking the bar's Profile tab and the home-screen widget
+with no error anywhere.
 
 The `segment` argument defaults to `""`, **not** to null, and that is load-bearing. A
 query argument whose default is null still has to appear in the URI, which is the whole
@@ -1707,6 +1700,26 @@ a dead image six months later should be a thing the reader chose.
 token, and a file host has no business receiving it. The host answers a refusal with
 HTTP 200 and prose, so "is the body a `files.catbox.moe` URL" is the whole success
 test, pinned in `CatboxUploadProtocolTest`.
+
+The upload is `enqueue`d rather than `execute`d, and the call is cancelled from the
+coroutine. A blocking call cannot be interrupted, so closing the sheet mid-transfer
+kept the request, the file's bytes and a thread alive until the 150-second call
+timeout - and the `mapCatching` that wrapped it caught the cancellation as a
+failure, wrote a reason nobody asked for and left `isUploading` true. The `finally`
+clears the flag whatever ends it.
+
+**A message thread is a comment thread.** A direct message is a `MessageActivity`,
+so its body is the activity and the rows under it are the replies AniList gives any
+activity. The messages tab used to draw the body in a second sheet - conversational
+bubbles, one reply box at the bottom of a scroll, no way to answer one line - and
+the comment sheet drew the replies without the message. Two sheets, one exchange,
+and the reader could quote neither. The comment sheet now takes the tapped message
+as `CommentsState.head` (mapped by `MessageNode.asThreadHead`) and draws it with
+the same row as every reply, so the message itself can be replied to and quoted;
+the inbox row and the friend card both route there. The old sheet survives only for
+a conversation with no message yet, where there is no activity to open - that is the
+one place a first `SaveMessage` can be written. The head row draws no heart:
+a message's like is an activity like, and this store only speaks the reply mutation.
 
 GIF search answers from two places: **Safebooru**, anonymous, asked for
 `animated_gif` at `rating:general`, and **Tenor v2** when the reader has pasted a

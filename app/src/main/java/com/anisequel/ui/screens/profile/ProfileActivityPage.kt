@@ -109,10 +109,10 @@ fun ProfileActivityPage(
      *
      * [SEGMENT_ACTIVITY] for every way in that does not name one, which is what
      * leaves the reader's own last choice in charge - this only ever decides the
-     * *first* frame. The app's main bar asks for [SEGMENT_MESSAGES] through the
-     * profile route's `segment` argument so the inbox opens without a tap, and
-     * seeding the saved state here rather than writing to it after composition is
-     * the difference between opening on Messages and flashing Activity first.
+     * *first* frame. A link that names a segment asks for [SEGMENT_MESSAGES] through
+     * the profile route's `segment` argument, and seeding the saved state here rather
+     * than writing to it after composition is the difference between opening on
+     * Messages and flashing Activity first.
      */
     initialSegment: Int = SEGMENT_ACTIVITY,
     calendar: ActivityCalendar?,
@@ -289,12 +289,11 @@ fun ProfileActivityPage(
                     onLoadMore = { messagesViewModel.loadNextPage() },
                     onRetry = { messagesViewModel.retry() },
                     onOpenUser = onOpenUser,
-                    // The row travels to the ViewModel, which is what the detail
-                    // sheet is drawn from - see `MessageDetailSheet` for why that
-                    // means the sheet opens on the tap's own frame.
-                    onOpenMessage = { message -> messagesViewModel.openMessage(message) },
                     // The same sheet the Activity cards open, aimed at the message's
-                    // own activity id - see `UserMessagesViewModel.comments`.
+                    // own activity id - see `UserMessagesViewModel.comments`. It is
+                    // also the card's tap: the bubbles-and-a-reply-box sheet the
+                    // messages tab used to open is no longer reachable from here,
+                    // because this one can quote a line and answer it.
                     onOpenComments = { message -> messagesViewModel.openComments(message) },
                     contentPadding = contentPadding,
                     listState = messagesListState

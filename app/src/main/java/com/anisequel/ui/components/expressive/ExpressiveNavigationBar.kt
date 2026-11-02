@@ -183,22 +183,16 @@ private const val HOLD_TO_SWIPE_MILLIS = 220L
  * the gesture did not register, and it was reported as exactly that. The platform
  * timeout is not ours to change, so the timer here is.
  *
- * ## A hold that does not move is the destination's own shortcut
+ * ## A hold that does not move is nothing at all
  *
- * [onHold] is for that case: a destination can carry one thing it would rather be
- * reached in one gesture than two taps, and the bar already has a gesture that is
- * *nothing but* a hold - the swipe needs travel to have anywhere to go. It is only
- * ever offered to the caller that draws the bar, and only when the hold never
- * moved, so a swipe that wandered off and came back is still the no-op it was: the
- * finger changed its mind, it did not ask for the shortcut. The main bar uses it for
- * the viewer's inbox.
- *
- * It is handed the destination the hold **began** on, which is the current page's
- * tab - the same answer the swipe starts from, and for the same reason: the bar is
- * one `pointerInput` over a `Row` whose items are deliberately unequal (the selected
- * pill claims more width), so it knows which destination is selected, not which one
- * is under a finger. A shortcut therefore belongs to the page you are on, which is
- * also the only page where it means anything.
+ * The bar had a shortcut for that case once - an `onHold` callback offered by the
+ * main bar for the viewer's inbox - and it went. A hold is how a swipe *begins*: the finger goes
+ * down, the bar lifts, and travel decides where to go. Firing a navigation on the
+ * gesture that has no travel meant every press that lasted longer than the hold
+ * window and was then released landed somewhere else, and the reader had not asked
+ * for a destination - they had asked for the bar to lift. The swipe still needs the
+ * hold, so the hold stays; what it does on its own is acknowledge itself with the
+ * lift and the haptic tick and nothing more.
  *
  * The direction is the one a strip of pages has rather than the one a list has:
  * dragging to the right pulls the pages right, so the selection moves *left* to the
@@ -218,13 +212,6 @@ fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    /**
-     * The destination a hold that never moved was made on, if the bar offers one.
-     *
-     * Null for every bar that has no shortcut to offer - the profile's own tab
-     * capsule - which leaves the hold exactly the acknowledgement it always was.
-     */
-    onHold: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -247,10 +234,6 @@ fun ExpressiveNavigationBar(
     // are the values that legitimately change while a finger is down.
     val currentIndex by rememberUpdatedState(selectedIndex)
     val selectTab by rememberUpdatedState(onSelect)
-    // The same reason as the two above: a bar whose shortcut is rebuilt by a
-    // recomposition mid-hold must still fire the callback the caller is holding
-    // now, not the lambda the `pointerInput` was first keyed on.
-    val holdDestination by rememberUpdatedState(onHold)
     val stepPx by rememberUpdatedState(
         // Never zero: the step is the divisor of the travel accumulator, and a
         // bar measured at zero width (before its first layout) would make the
@@ -303,8 +286,7 @@ fun ExpressiveNavigationBar(
                             stepPx = stepPx,
                             haptic = haptic,
                             onPreview = { previewIndex = it },
-                            onSwitch = selectTab,
-                            onHold = holdDestination
+                            onSwitch = selectTab
                         )
                     }
                 }
@@ -361,6 +343,42 @@ fun ExpressiveNavigationBar(
 }
 
 /**
+ * What a finished hold-and-swipe actually asked for: the destination to switch to,
+ * or null for nothing.
+ *
+ * Extracted as a pure decision because the gesture itself cannot be unit tested
+ * here: there is no `androidTest` source set and no `createComposeRule` in the JVM
+ * suite, so the house pattern for pointer behaviour - `TierDragLogicTest`,
+ * `MainTabsTest` - is to pull the arithmetic out and pin that.
+ *
+ * A drag belongs to the destination it ended on, and whether it *was* a drag is
+ * answered by [travelledPx] - the distance the finger covered - and not by whether
+ * the index changed on the way. The index only moves once a drag has passed a whole
+ * destination width (95-126dp on a phone), so judging "did it move" by the index
+ * classified every shorter drag as a still hold, and the ordinary hold-and-shove-left
+ * on the profile ended up firing the inbox shortcut. An out-and-back drag travels
+ * further than slop and settles where it started, so it is the no-op it always was:
+ * nothing was asked for. A hold with no travel is the same no-op, and that is the
+ * whole of what a hold does on its own - see the class documentation.
+ */
+internal fun navGestureDecision(
+    startIndex: Int,
+    settledIndex: Int,
+    travelledPx: Float,
+    touchSlopPx: Float
+): Int? = if (travelledPx > touchSlopPx && settledIndex != startIndex) settledIndex else null
+
+/**
+ * Where a held drag ended, and how far the finger actually went.
+ *
+ * [travelledPx] is the sum of every move, which is not the same number as the
+ * remainder `swipeSelection` banks against whole destination steps and zeroes at
+ * either end of the bar: that one exists to do the tab arithmetic and cannot answer
+ * whether the finger moved at all.
+ */
+private data class SwipeOutcome(val index: Int, val travelledPx: Float)
+
+/**
  * One hold-then-swipe gesture, start to finish.
  *
  * Split out of the bar's `pointerInput` because the whole gesture inline was one
@@ -378,74 +396,19 @@ fun ExpressiveNavigationBar(
  * or the screen leaving) commits nothing and only clears the preview, so an
  * interrupted gesture cannot navigate somewhere the finger never settled on.
  *
- * [onHold] replaces [onSwitch] when the preview never left the destination the hold
- * began on. That is the whole of the difference between the two gestures, and it is
- * why the shortcut cannot live on the tap: the bar's items already switch on tap,
- * and a hold that goes nowhere was, until now, a gesture that only ever lifted the
- * bar and then did nothing.
+ * A hold that never left the destination it began on commits nothing. It used to
+ * fire a shortcut, and the main bar used that shortcut to jump to the inbox - which
+ * made the gesture that *starts* a swipe also be a navigation, so a press held a
+ * beat too long and released landed somewhere else. The lift and the haptic tick are
+ * the whole acknowledgement now, and only travel can choose a destination.
  */
-/**
- * What a finished hold-and-swipe actually asked for.
- *
- * Extracted as a pure decision because the gesture itself cannot be unit tested
- * here: there is no `androidTest` source set and no `createComposeRule` in the JVM
- * suite, so the house pattern for pointer behaviour - `TierDragLogicTest`,
- * `MainTabsTest` - is to pull the arithmetic out and pin that.
- */
-internal sealed interface NavGesture {
-    /** Nothing the bar should act on. */
-    data object None : NavGesture
-
-    /** A finger that stayed where it landed: the hold shortcut. */
-    data class Hold(val index: Int) : NavGesture
-
-    /** A drag that ended on a different destination: switch to it. */
-    data class Switch(val index: Int) : NavGesture
-}
-
-/**
- * The one rule the bar's gesture turns on.
- *
- * The shortcut belongs to a hold the finger never left, and a drag belongs to the
- * destination it ended on - decided by [travelledPx], the distance the finger
- * covered, and not by whether the *index* changed on the way. The index only moves
- * once a drag has passed a whole destination width (95-126dp on a phone), so
- * judging "did it move" by the index classified every shorter drag as a still hold,
- * and the ordinary hold-and-shove-left on the profile ended up firing the inbox
- * shortcut. An out-and-back drag travels further than slop and settles where it
- * started, so it is now the no-op it always was: nothing was asked for.
- */
-internal fun navGestureDecision(
-    startIndex: Int,
-    settledIndex: Int,
-    travelledPx: Float,
-    touchSlopPx: Float,
-    hasHoldShortcut: Boolean
-): NavGesture = when {
-    travelledPx > touchSlopPx ->
-        if (settledIndex == startIndex) NavGesture.None else NavGesture.Switch(settledIndex)
-    hasHoldShortcut -> NavGesture.Hold(settledIndex)
-    else -> NavGesture.None
-}
-
-/**
- * Where a held drag ended, and how far the finger actually went.
- *
- * [travelledPx] is the sum of every move, which is not the same number as the
- * remainder `swipeSelection` banks against whole destination steps and zeroes at
- * either end of the bar: that one exists to do the tab arithmetic and cannot answer
- * whether the finger moved at all.
- */
-private data class SwipeOutcome(val index: Int, val travelledPx: Float)
-
 private suspend fun AwaitPointerEventScope.holdThenSwipe(
     startIndex: () -> Int,
     lastIndex: Int,
     stepPx: Float,
     haptic: HapticFeedback,
     onPreview: (Int?) -> Unit,
-    onSwitch: (Int) -> Unit,
-    onHold: ((Int) -> Unit)?
+    onSwitch: (Int) -> Unit
 ) {
     val down = awaitFirstDown(requireUnconsumed = false)
     if (!awaitHold(down)) return
@@ -458,10 +421,9 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
     onPreview(start)
     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
-    // The gesture is decided once the finger lifts, in [navGestureDecision]: the
-    // shortcut belongs to a hold the finger never left, and a drag that travelled
-    // out and came back is the finger changing its mind rather than asking for
-    // anything.
+    // The gesture is decided once the finger lifts, in [navGestureDecision]: a drag
+    // that travelled out and came back is the finger changing its mind rather than
+    // asking for a destination, and a hold that never travelled asks for nothing.
     var settled: SwipeOutcome? = null
     try {
         settled = swipeSelection(
@@ -482,19 +444,12 @@ private suspend fun AwaitPointerEventScope.holdThenSwipe(
         // the tab the swipe started from between the two writes.
         val outcome = settled
         if (outcome != null) {
-            when (
-                navGestureDecision(
-                    startIndex = start,
-                    settledIndex = outcome.index,
-                    travelledPx = outcome.travelledPx,
-                    touchSlopPx = viewConfiguration.touchSlop,
-                    hasHoldShortcut = onHold != null
-                )
-            ) {
-                is NavGesture.Hold -> onHold?.invoke(outcome.index)
-                is NavGesture.Switch -> onSwitch(outcome.index)
-                NavGesture.None -> Unit
-            }
+            navGestureDecision(
+                startIndex = start,
+                settledIndex = outcome.index,
+                travelledPx = outcome.travelledPx,
+                touchSlopPx = viewConfiguration.touchSlop
+            )?.let(onSwitch)
         }
         onPreview(null)
     }

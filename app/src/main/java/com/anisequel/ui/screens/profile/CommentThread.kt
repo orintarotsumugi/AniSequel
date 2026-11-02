@@ -537,6 +537,36 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
         state = listState,
         contentPadding = PaddingValues(bottom = 8.dp)
     ) {
+        // The message a thread is answering, when the thread is a conversation.
+        // Drawn with the same row as every reply - the same face, body, Reply and
+        // Quote - because it *is* one line of the conversation, just the first.
+        // It comes before the waiting branches so the message stays readable while
+        // its replies are still arriving, and so a failed reply fetch does not erase
+        // the thing the reader tapped. No heart and no manage dot: a message's like
+        // is an activity like, which this store cannot toggle, and its edit/delete
+        // are the inbox's own actions, not a comment's.
+        val head = state.head
+        if (head != null) {
+            item(key = "thread_head", contentType = "head") {
+                CommentRow(
+                    reply = head,
+                    indent = 0,
+                    isContinuation = false,
+                    likePending = false,
+                    canManage = false,
+                    canReply = canPost && !head.user?.name.isNullOrBlank(),
+                    canQuote = canPost && !head.text.isNullOrBlank(),
+                    showLikes = false,
+                    onLike = {},
+                    onShowLikers = {},
+                    onReply = onReply,
+                    onQuote = { onQuote(head) },
+                    onManage = {},
+                    nowEpochSecond = nowEpochSecond
+                )
+            }
+        }
+
         when {
             state.isLoading -> item(key = "loading") {
                 // The rows that are coming, at the sizes they will have. A
@@ -551,13 +581,24 @@ Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 CommentRowsSkeleton(phase = rememberShimmerPhase())
             }
 
-            state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
-                ThreadLoadError(message = state.loadError, onRetry = onRetry)
+            // Only a thread with nothing above it can be wholly replaced by its
+            // failure or its empty state. A message thread already has its first
+            // line drawn above, so "no comments yet" under it would be a second
+            // answer to a question the head already answers, and a load failure
+            // there is the banner below rather than the whole screen.
+            state.replies.isEmpty() && head == null -> {
+                if (state.loadError != null) {
+                    item(key = "load_error") {
+                        ThreadLoadError(message = state.loadError, onRetry = onRetry)
+                    }
+                } else {
+                    item(key = "empty") {
+                        ThreadEmptyState(canPost = canPost)
+                    }
+                }
             }
 
-            state.replies.isEmpty() -> item(key = "empty") {
-                ThreadEmptyState(canPost = canPost)
-            }
+            state.replies.isEmpty() -> Unit
 
             else -> {
                 val note = state.windowError ?: state.refreshError ?: state.loadError

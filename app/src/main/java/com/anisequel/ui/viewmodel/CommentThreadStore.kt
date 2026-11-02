@@ -123,6 +123,23 @@ class CommentThreadStore(
          * `post` each make sure they cannot leave the state holding it twice.
          */
         val replies: List<ActivityReply> = emptyList(),
+        /**
+         * The row every reply is answering, when the thread has one.
+         *
+         * A direct message is a `MessageActivity`, and the message is the activity:
+         * its body is not in `replies`, because a reply list holds only what people
+         * said *under* it. The messages tab used to draw that body in a sheet of its
+         * own - bubbles, a reply box at the bottom of a scroll, and no way to answer
+         * one line without leaving the thread - and the two sheets could not be
+         * reconciled, so one of them went. This is the seam the other one needed: the
+         * tapped row, carried as an [ActivityReply] so the thread draws it with the
+         * same row, the same Reply and the same Quote as every row under it.
+         *
+         * Null for a comment thread on a post, where the card above the sheet already
+         * is the head and drawing it twice would be a duplicate rather than a
+         * conversation's first line.
+         */
+        val head: ActivityReply? = null,
         val loadError: String? = null,
         val isPosting: Boolean = false,
         val postError: String? = null,
@@ -235,10 +252,16 @@ class CommentThreadStore(
      * the newest replies; zero (a caller that does not know) aims at page one, which
      * is the same answer for any thread shorter than a page. [chatView] is the
      * reader's Settings switch, read by the caller rather than here so the store
-     * does not need to know where a preference comes from.
+     * does not need to know where a preference comes from. [head] is the row the
+     * replies answer, for the message threads that draw one - see
+     * [CommentsState.head].
      */
-    fun open(activityId: Int, knownReplyCount: Int = 0, chatView: Boolean = true) =
-        window.open(activityId, knownReplyCount, chatView)
+    fun open(
+        activityId: Int,
+        knownReplyCount: Int = 0,
+        chatView: Boolean = true,
+        head: ActivityReply? = null
+    ) = window.open(activityId, knownReplyCount, chatView, head)
 
     /** The page of comments older than everything on screen. */
     fun loadOlder() = window.loadOlder()
