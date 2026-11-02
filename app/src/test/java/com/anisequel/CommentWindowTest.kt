@@ -157,7 +157,7 @@ class CommentWindowTest {
         // An Older page and a revealed window both add rows at the FRONT, which is the
         // case a chat has to compensate for.
         assertEquals(
-            25,
+            5,
             CommentWindow.prependedRows(
                 previousIds = listOf(26, 27, 28),
                 currentIds = listOf(1, 2, 3, 4, 5, 26, 27, 28)

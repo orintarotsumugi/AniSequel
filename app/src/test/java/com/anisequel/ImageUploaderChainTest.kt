@@ -73,7 +73,11 @@ class ImageUploaderChainTest {
     @Test
     fun `the production chain puts the site-readable host ahead of the one that blocks anilist`() {
         assertEquals(
-            listOf(CatboxApi, ImgbbApi, PomfApi),
+            // `::class`, not the bare names. Each host has a companion object, so
+            // `CatboxApi` is a legal expression here - the companion - and comparing
+            // companions against the `KClass` values the chain maps to fails on
+            // every host at once rather than naming the one that moved.
+            listOf(CatboxApi::class, ImgbbApi::class, PomfApi::class),
             ImageUploader.defaultHosts().map { it::class }
         )
     }

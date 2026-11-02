@@ -420,7 +420,11 @@ class CommentChatWindowTest {
         val state = store.state.value!!
         assertFalse("the rows stayed", state.isRefreshing)
         assertEquals(33, state.replyCount)
-        assertEquals((1..33).toList(), state.replies.map { it.id })
+        // The newest page, not the whole thread: a Refresh re-reads the page the
+        // reader is looking at, and the rows above it stay unfetched - `Older` is
+        // what pays for those, on purpose, because pulling 33 comments to refresh
+        // 8 of them is a second full read of a thread nobody asked to re-open.
+        assertEquals((26..33).toList(), state.replies.map { it.id })
         assertEquals("a reader at the bottom is not owed a pill for rows they can see", 0, state.unseenNewComments)
     }
 

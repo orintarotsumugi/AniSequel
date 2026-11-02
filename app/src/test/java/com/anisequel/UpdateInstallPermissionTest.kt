@@ -100,7 +100,10 @@ class UpdateInstallPermissionTest {
         assertFalse(UpdateInstallation(recorder).openInstallPermissionSettings())
         assertEquals(
             "the walk goes all the way down the list before it gives up",
-            4,
+            // Against the ladder's own size, not a number: a rung added to
+            // `permissionSettingsRoutes` has to be tried by this walk too, and a
+            // literal here would keep a test that no longer describes the list.
+            UpdateInstallation(context).permissionSettingsRoutes().size,
             recorder.started.size
         )
     }
@@ -126,14 +129,21 @@ class UpdateInstallPermissionTest {
 
         assertTrue(UpdateInstallation(recorder).openInstallPermissionSettings())
         assertEquals(
-            "the third route is the same action without a package, then the security page",
+            "package-scoped, then the app's details, then the same action with no " +
+                "package - the rung a re-skinned build keeps - then the security page",
             listOf(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Settings.ACTION_SECURITY_SETTINGS
             ),
             recorder.started.map { it.action }
         )
+        assertNull(
+            "the third attempt is the list of apps, so it must not carry this package",
+            recorder.started[2].data
+        )
+        assertEquals(packageUri, recorder.started[0].data?.toString())
     }
 
     @Test
