@@ -182,13 +182,13 @@ internal fun ColumnScope.GifBrowser(
             caption = "Reactions",
             suggestions = GIF_REACTIONS,
             tagTestPrefix = "comment_gif_suggestion",
-            onPick = onPickSuggestion
+            onPick = { tag -> onPickSuggestion(tag) }
         )
         GifSuggestionRow(
             caption = "Series",
             suggestions = GIF_SERIES,
             tagTestPrefix = "comment_gif_series",
-            onPick = onPickSuggestion
+            onPick = { tag -> onPickSuggestion(tag) }
         )
     }
 
