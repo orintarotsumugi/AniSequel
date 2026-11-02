@@ -42,6 +42,26 @@
         {
           "title": "New comments, reasons and notes arrive with motion",
           "detail": "The \"N new\" pill springs in instead of appearing between frames, and the composer's limit, upload and post-error lines expand and collapse instead of re-laying the bar under the Post button in one frame."
+        },
+        {
+          "title": "A series name finds its GIFs",
+          "detail": "Safebooru searched every word as its own tag, so spice and wolf asked for posts tagged both spice and wolf and found nothing. A search that finds nothing is now asked again as one tag (spice_and_wolf), searches ignore capital letters, and results come best-voted first instead of newest upload first."
+        },
+        {
+          "title": "A GIF search you already ran is instant",
+          "detail": "Going back to a search - a suggestion tapped twice, a letter deleted and typed again - reused the page it already had instead of waiting out the typing delay and asking the site again. Tenor's last page no longer loads the first page a second time underneath it."
+        },
+        {
+          "title": "Photo uploads skip a host that just refused",
+          "detail": "Every photo was sent in full to catbox first, refused while its uploads are paused, and only then sent to the next host. A host that refuses is now skipped for ten minutes, so the next photo goes straight to one that is taking files."
+        },
+        {
+          "title": "Clearer GIF and photo buttons",
+          "detail": "The GIF button was a bar chart and now reads GIF; the photo button was a generic export arrow and is now a picture with an arrow leaving it. While a photo uploads, its button turns into a loading indicator instead of greying out like a disabled control, and an upload failure is always shown in the error colour."
+        },
+        {
+          "title": "Smoother comment composer and GIF picker",
+          "detail": "The GIF button's highlight now fades in and out instead of snapping, GIF tiles and suggestion chips spring when pressed, and the grid dims while a new search is loading so old results are not mistaken for the answer."
         }
       ]
     },

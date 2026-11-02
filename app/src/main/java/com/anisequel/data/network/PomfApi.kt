@@ -43,7 +43,7 @@ import com.squareup.moshi.Moshi
 class PomfApi(
     private val client: OkHttpClient = CatboxApi.defaultClient(),
     moshi: Moshi = NetworkClient.json
-) {
+) : ImageHost {
 
     private val adapter = moshi.adapter(PomfUploadResponse::class.java)
 
@@ -54,7 +54,7 @@ class PomfApi(
      * and a JSON answer listing what was stored. The body is parsed rather than
      * pattern-matched because the host answers `success: false` with the same 200.
      */
-    suspend fun upload(
+    override suspend fun upload(
         bytes: ByteArray,
         fileName: String,
         mimeType: String

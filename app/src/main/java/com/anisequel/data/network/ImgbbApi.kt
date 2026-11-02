@@ -53,7 +53,7 @@ import okhttp3.Response
 class ImgbbApi(
     private val client: OkHttpClient = defaultClient(),
     moshi: Moshi = NetworkClient.json
-) {
+) : ImageHost {
 
     private val adapter = moshi.adapter(ImgbbUploadResponse::class.java)
 
@@ -65,7 +65,7 @@ class ImgbbApi(
      * gave one. The body is parsed rather than pattern-matched because the
      * endpoint answers HTTP 200 for a refusal too.
      */
-    suspend fun upload(
+    override suspend fun upload(
         bytes: ByteArray,
         fileName: String,
         mimeType: String

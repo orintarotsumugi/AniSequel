@@ -19,6 +19,8 @@ package com.anisequel.ui.screens.profile
  */
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -63,6 +65,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -97,6 +100,7 @@ internal fun ComposerBottomBar(
     isBusy: Boolean,
     postError: String?,
     uploadNote: String?,
+    isUploading: Boolean,
     replyToName: String?,
     gifsOpen: Boolean,
     onEdit: (DraftEdit) -> Unit,
@@ -151,7 +155,10 @@ internal fun ComposerBottomBar(
             uploadNote?.let {
                 NoteLine(
                     text = it,
-                    color = if (it.startsWith("Uploading")) {
+                    // Read from the upload's own state: this matched the note's
+                    // text, so a host's reason that began "Uploading..." was drawn
+                    // as progress instead of as the failure it was.
+                    color = if (isUploading) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
                         MaterialTheme.colorScheme.error
@@ -188,9 +195,10 @@ internal fun ComposerBottomBar(
         ) {
                 FormatAction(
                     icon = AppVectorIcons.PhotoUpload,
-                    label = "Attach a photo from the device",
+                    label = if (isUploading) "Uploading the photo" else "Attach a photo from the device",
                     tag = "comment_attach_photo",
                     enabled = !isBusy,
+                    busy = isUploading,
                     onClick = onPickFromDevice
                 )
                 FormatAction(
@@ -429,25 +437,37 @@ private fun FormatAction(
     tag: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    selected: Boolean = false
+    selected: Boolean = false,
+    /** The control's own work is running: the glyph becomes the indicator. */
+    busy: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val tint = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        selected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // Animated toward settled colours: the GIF control used to snap its container
+    // on and off in one frame while every other state change in the bar springs.
+    val tint by animateColorAsState(
+        targetValue = when {
+            busy -> MaterialTheme.colorScheme.primary
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "formatActionTint"
+    )
+    val container by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0f)
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "formatActionContainer"
+    )
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .then(
-                if (selected) {
-                    Modifier.background(MaterialTheme.colorScheme.primaryContainer)
-                } else {
-                    Modifier
-                }
-            )
+            .drawBehind { drawRect(container) }
             .bouncyPress(pressedScale = 0.88f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
@@ -461,16 +481,32 @@ private fun FormatAction(
             .testTag(tag),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            // No `size`: these were drawn at 20dp inside the 48dp target, which
-            // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
-            // built from - visibly smaller than the Material `List` glyph that
-            // sits in the same row. The glyph now uses the vector's own 24dp
-            // default, the same correction the tier-list trophy needed.
-        )
+        // Crossfaded rather than swapped: the upload control is the one place the
+        // reader looks while a photo is going up, and a glyph greyed out like every
+        // other disabled control said "unavailable", not "working".
+        Crossfade(
+            targetState = busy,
+            animationSpec = ExpressiveMotion.FastEffects,
+            label = "formatActionBusy"
+        ) { working ->
+            if (working) {
+                ExpressiveLoadingIndicator(
+                    modifier = Modifier.size(28.dp).testTag("${tag}_busy"),
+                    color = tint
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = tint,
+                    // No `size`: these were drawn at 20dp inside the 48dp target, which
+                    // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
+                    // built from - visibly smaller than the Material `List` glyph that
+                    // sits in the same row. The glyph now uses the vector's own 24dp
+                    // default, the same correction the tier-list trophy needed.
+                )
+            }
+        }
     }
 }
 

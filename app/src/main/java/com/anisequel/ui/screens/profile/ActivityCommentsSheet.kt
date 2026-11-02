@@ -488,7 +488,7 @@ private data class PhotoAttachment(
 private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachment {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val uploader = remember { ImageUploader() }
+    val uploader = ImageUploader.shared
     var isUploading by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
 

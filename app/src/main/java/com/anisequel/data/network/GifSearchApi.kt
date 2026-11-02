@@ -209,7 +209,9 @@ internal fun TenorResponse.toGifPage(): GifPage {
             height = dims?.getOrNull(1)
         )
     }
-    return GifPage(results = rows, next = next?.takeIf { rows.isNotEmpty() })
+    // A blank `next` is Tenor's end of results; passing it back as `pos=` asked for
+    // the first page again and appended it under itself.
+    return GifPage(results = rows, next = next?.takeIf { rows.isNotEmpty() && it.isNotBlank() })
 }
 
 @JsonClass(generateAdapter = true)
@@ -283,64 +285,76 @@ class SafebooruGifs(
         withContext(Dispatchers.IO) {
             val tags = booruTags(query)
             if (tags.isBlank()) return@withContext Result.success(GifPage(emptyList()))
-
-            val built = runCatching {
-                ENDPOINT.toHttpUrl().newBuilder()
-                    .addQueryParameter("page", "dapi")
-                    .addQueryParameter("s", "post")
-                    .addQueryParameter("q", "index")
-                    .addQueryParameter("json", "1")
-                    .addQueryParameter("limit", PAGE_SIZE.toString())
-                    // `pid` is the index here, zero-based: `page` is already taken by
-                    // the API selector, and asking for page 2 of a post list would ask
-                    // the API itself to switch pages.
-                    .addQueryParameter("pid", (cursor?.toIntOrNull() ?: 0).coerceAtLeast(0).toString())
-                    .addQueryParameter("tags", booruSearchTags(query))
-                    .build()
+            val phrase = booruPhraseTag(query)
+            val (phraseMode, pid) = booruCursor(cursor)
+            if (phraseMode && phrase != null) {
+                return@withContext fetchPage(phrase, pid, phraseMode = true)
             }
-            val request = built.getOrNull()?.let {
-                Request.Builder()
-                    .url(it)
-                    .header("Accept", "application/json")
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-            } ?: return@withContext Result.failure(GifSearchFailure("That search could not be built."))
+            val first = fetchPage(tags, pid, phraseMode = false)
+            // "spice and wolf" ANDs `spice` and `wolf`, which no post carries, while
+            // the series is one tag, `spice_and_wolf`. The words are tried as tags
+            // first because that is what most searches are ("holo crying"); only a
+            // first page that found nothing at all is asked again as one tag.
+            val missed = first.getOrNull()?.results?.isEmpty() == true && first.getOrNull()?.next == null
+            if (cursor == null && missed && phrase != null) fetchPage(phrase, 0, phraseMode = true) else first
+        }
 
-            try {
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(
-                            GifSearchFailure("Safebooru refused that search (HTTP ${response.code}).")
-                        )
-                    }
-                    val body = response.body?.string().orEmpty()
-                    // An unknown tag combination answers HTTP 200 with *no body at
-                    // all* - not `[]`, nothing. That is the site's "no matches", and
-                    // it used to fall through to the parser, fail there and tell the
-                    // reader Safebooru had answered with something unreadable.
-                    if (isNoMatchesBody(body)) {
-                        return@withContext Result.success(GifPage(emptyList()))
-                    }
-                    val parsed = runCatching { adapter.fromJson(body) }.getOrNull()
-                        ?: return@withContext Result.failure(
-                            GifSearchFailure("Safebooru answered with something unreadable.")
-                        )
-                    val page = parsed.toGifPage()
-                    // Pagination asks the *server's* page how full it was, not the
-                    // filtered one. Dropping a post for its rating, or a tile for
-                    // having no file, shortens `page.results` below the requested
-                    // limit while the site still had rows behind it, so a search that
-                    // had three pages left would stop after the first.
-                    Result.success(
-                        page.copy(next = booruNextCursor(parsed.size, PAGE_SIZE, cursor))
+    private fun fetchPage(tags: String, pid: Int, phraseMode: Boolean): Result<GifPage> {
+        val built = runCatching {
+            ENDPOINT.toHttpUrl().newBuilder()
+                .addQueryParameter("page", "dapi")
+                .addQueryParameter("s", "post")
+                .addQueryParameter("q", "index")
+                .addQueryParameter("json", "1")
+                .addQueryParameter("limit", PAGE_SIZE.toString())
+                // `pid` is the index here, zero-based: `page` is already taken by
+                // the API selector, and asking for page 2 of a post list would ask
+                // the API itself to switch pages.
+                .addQueryParameter("pid", pid.toString())
+                .addQueryParameter("tags", booruRequestTags(tags))
+                .build()
+        }
+        val request = built.getOrNull()?.let {
+            Request.Builder()
+                .url(it)
+                .header("Accept", "application/json")
+                .header("User-Agent", USER_AGENT)
+                .build()
+        } ?: return Result.failure(GifSearchFailure("That search could not be built."))
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return Result.failure(
+                        GifSearchFailure("Safebooru refused that search (HTTP ${response.code}).")
                     )
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Result.failure(GifSearchFailure("Could not reach Safebooru."))
+                val body = response.body?.string().orEmpty()
+                // An unknown tag combination answers HTTP 200 with *no body at
+                // all* - not `[]`, nothing. That is the site's "no matches", and
+                // it used to fall through to the parser, fail there and tell the
+                // reader Safebooru had answered with something unreadable.
+                if (isNoMatchesBody(body)) return Result.success(GifPage(emptyList()))
+                val parsed = runCatching { adapter.fromJson(body) }.getOrNull()
+                    ?: return Result.failure(
+                        GifSearchFailure("Safebooru answered with something unreadable.")
+                    )
+                // Pagination asks the *server's* page how full it was, not the
+                // filtered one. Dropping a post for its rating, or a tile for
+                // having no file, shortens `results` below the requested limit
+                // while the site still had rows behind it, so a search that had
+                // three pages left would stop after the first.
+                val next = booruNextCursor(parsed.size, PAGE_SIZE, pid.toString())
+                Result.success(
+                    parsed.toGifPage().copy(next = next?.let { if (phraseMode) "$PHRASE_CURSOR$it" else it })
+                )
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(GifSearchFailure("Could not reach Safebooru."))
         }
+    }
 
     companion object {
         private const val ENDPOINT = "https://safebooru.org/index.php"
@@ -370,7 +384,7 @@ class SafebooruGifs(
  * to guess and would guess wrong.
  */
 internal fun booruTags(query: String): String =
-    query.trim()
+    query.trim().lowercase()
         .split(Regex("""\s+"""))
         .filterNot { it.lowercase() in DROP_WORDS }
         .joinToString(" ") { word -> word.ifBlank { return@joinToString "" }.replace(' ', '_') }
@@ -383,7 +397,41 @@ private val DROP_WORDS = setOf("a", "an", "and", "of", "the", "with", "in", "on"
  * Top-level and internal so the rating spelling is pinned by a JVM test: it is
  * the one argument whose wrong value does not fail, it answers an empty page.
  */
-internal fun booruSearchTags(query: String): String = "$REQUIRED_TAGS ${booruTags(query)}".trim()
+internal fun booruSearchTags(query: String): String = booruRequestTags(booruTags(query))
+
+/**
+ * The `tags` parameter for tags that are already in booru form.
+ *
+ * Sorted by score, best first: the index's default order is newest upload, so the
+ * first page of "laughing" was whatever had been posted that week rather than the
+ * reactions people had actually voted up.
+ */
+internal fun booruRequestTags(tags: String): String = "$REQUIRED_TAGS $SORT_TAG $tags".trim()
+
+internal const val SORT_TAG = "sort:score:desc"
+
+/**
+ * A multi-word phrase as one booru tag, or null when it is one word already.
+ *
+ * Stop words are kept here, unlike [booruTags]: they are part of series tags
+ * (`spice_and_wolf`, `kaguya-sama_wa_kokurasetai`), which is exactly the case the
+ * word-by-word search cannot find. Measured live: `spice wolf` answers nothing,
+ * `spice_and_wolf` answers the series.
+ */
+internal fun booruPhraseTag(query: String): String? {
+    val words = query.trim().lowercase().split(Regex("""\s+""")).filter { it.isNotBlank() }
+    return if (words.size < 2) null else words.joinToString("_")
+}
+
+/** Cursor prefix for pages of the phrase-as-one-tag search. */
+internal const val PHRASE_CURSOR = "p:"
+
+/** A cursor as (phrase mode, zero-based post index). */
+internal fun booruCursor(cursor: String?): Pair<Boolean, Int> {
+    val phrase = cursor?.startsWith(PHRASE_CURSOR) == true
+    val index = cursor?.removePrefix(PHRASE_CURSOR)?.toIntOrNull() ?: 0
+    return phrase to index.coerceAtLeast(0)
+}
 
 /**
  * The rating the catalogue is limited to, whatever the tags say.

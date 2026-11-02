@@ -257,7 +257,7 @@ class GifSearchParseTest {
         val tags = booruSearchTags("holo")
         assertTrue("the safe-rating filter has to be in the request", tags.contains("rating:safe"))
         assertFalse("rating:general matches nothing on this index", tags.contains("rating:general"))
-        assertEquals("animated_gif rating:safe holo", tags)
+        assertEquals("animated_gif rating:safe sort:score:desc holo", tags)
     }
 
     @Test

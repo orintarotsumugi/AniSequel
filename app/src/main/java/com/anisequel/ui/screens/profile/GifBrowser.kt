@@ -50,6 +50,9 @@ import coil.compose.AsyncImage
 import com.anisequel.data.network.GifResult
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.bouncyPress
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.GifSearchStore
@@ -242,6 +245,11 @@ private fun ColumnScope.GifResultsGrid(
         if (nearEnd && state.next != null && !state.isLoadingMore) store.loadMore()
     }
 
+    val staleAlpha by animateFloatAsState(
+        targetValue = if (state.isSearching) 0.45f else 1f,
+        animationSpec = ExpressiveMotion.FastEffects,
+        label = "gifGridStale"
+    )
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
         state = gridState,
@@ -251,6 +259,10 @@ private fun ColumnScope.GifResultsGrid(
         modifier = Modifier
             .fillMaxWidth()
             .weight(1f)
+            // A new query over an old grid kept the old GIFs at full strength until
+            // the answer replaced them, so the grid looked like the answer. Dimmed
+            // in the draw phase: alpha is not read by layout.
+            .graphicsLayer { alpha = staleAlpha }
             .testTag("comment_gif_grid")
     ) {
         items(state.results, key = { it.id }) { gif ->
@@ -339,6 +351,7 @@ private fun GifSuggestionRow(onPick: (String) -> Unit) {
         GIF_SUGGESTIONS.forEach { tag ->
             Box(
                 modifier = Modifier
+                    .bouncyPress()
                     .clip(RoundedCornerShape(percent = 50))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     .clickable(onClickLabel = "Search for $tag") { onPick(tag) }
@@ -373,6 +386,9 @@ private fun GifTile(
     Box(
         modifier = modifier
             .aspectRatio(1f)
+            // The tile had `indication = null` and nothing in its place, so a tap
+            // gave no feedback at all until the sheet closed under it.
+            .bouncyPress(pressedScale = 0.92f, interactionSource = interactionSource)
             .clip(RoundedCornerShape(percent = 12))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(

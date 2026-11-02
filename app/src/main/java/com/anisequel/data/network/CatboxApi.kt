@@ -46,7 +46,7 @@ import okhttp3.Response
  */
 class CatboxApi(
     private val client: OkHttpClient = defaultClient()
-) {
+) : ImageHost {
 
     /**
      * Uploads [bytes] as [fileName] and returns the served URL.
@@ -58,7 +58,7 @@ class CatboxApi(
      * limit notice reaches the composer as something they can read instead of a
      * silent spinner that stops.
      */
-    suspend fun upload(
+    override suspend fun upload(
         bytes: ByteArray,
         fileName: String,
         mimeType: String
