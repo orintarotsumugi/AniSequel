@@ -111,6 +111,22 @@ internal class CommentThreadWindow(
      * [head] is the row the replies are answering, and only a message thread has one
      * - see [CommentThreadStore.CommentsState.head]. It rides the open rather than
      * being fetched, because the caller tapped the row that carries it.
+     *
+     * ## A reopen refreshes the newest end, it does not re-read the oldest page
+     *
+     * The cached rows are drawn immediately, and the fetch that follows is a
+     * refresh of the page holding the newest comment the cache has - *not* a
+     * first read of [ThreadWindow.oldestPage]. Those are different pages for a
+     * reader who walked back with Older: aiming at the oldest page fetched one
+     * page of the past and merged it as a first read, which replaced the whole
+     * window with it. The thread reopened on its oldest loaded page, the newer
+     * rows that were on screen a second ago vanished, and the conversation
+     * appeared to jump backwards - and a reopen of a message thread did the same,
+     * because messages go through this same window.
+     *
+     * The cached page is a page only a count can place, so the guess is the
+     * cached count rather than [knownReplyCount]: the feed card's count may be
+     * from before the last thing the reader read.
      */
     fun open(
         activityId: Int,
@@ -129,11 +145,10 @@ internal class CommentThreadWindow(
                 oldestPage = CommentWindow.lastPage(knownReplyCount)
             )
         }
-        val aimPage = if (isCached) {
-            seedWindow.oldestPage
-        } else {
-            CommentWindow.lastPage(knownReplyCount)
-        }
+        // The newest page the cache holds, which is where a reopen refreshes from.
+        // For a thread that was never closed this is the same page a first read
+        // aims at, because `knownReplyCount` and the seeded count are one number.
+        val seedAimPage = CommentWindow.lastPage(seedWindow.replyCount)
         state.value = CommentThreadStore.CommentsState(
             activityId = activityId,
             isLoading = seedReplies.isEmpty(),
@@ -159,8 +174,19 @@ internal class CommentThreadWindow(
                 }
                 return@launch
             }
-            if (chatView) loadWindow(activityId, aimPage, guessCount = knownReplyCount)
-            else loadWholeThread(activityId)
+            if (chatView) {
+                loadWindow(
+                    activityId = activityId,
+                    page = seedAimPage,
+                    guessCount = seedWindow.replyCount,
+                    // A cache with rows is a thread the reader was reading, so its
+                    // fetch has to keep those rows and merge into them. An empty
+                    // cache has nothing to keep and opens as a first read.
+                    asRefresh = isCached && seedReplies.isNotEmpty()
+                )
+            } else {
+                loadWholeThread(activityId)
+            }
         }
     }
 
@@ -190,14 +216,31 @@ internal class CommentThreadWindow(
     }
 
     /**
-     * Fetches one page of the thread and lands it, re-aiming once if the count
-     * that came back disagrees with the page that was asked for.
+     * Fetches one page of the thread and lands it.
+     *
+     * A first read re-aims once when the count that came back disagrees with the
+     * page that was asked for: the aimed page was a guess, so its rows are not
+     * the newest ones and are discarded.
+     *
+     * A refresh does *not* re-aim, because the page in hand is still the right
+     * page - the thread only grew forward from it. When it grew exactly one page
+     * past the page that was refreshed, that page is fetched and merged too, so
+     * no page between the cache and the newest comments is skipped. A jump of
+     * more than one page means the reader was away long enough for comments to
+     * pile up on pages this sheet never fetched; there is no page in hand to
+     * bridge that gap, and merging only the tail would leave a hole in the
+     * conversation that nothing fills. That case opens the newest page as a fresh
+     * window instead.
+     *
+     * [reaimed] is what keeps either walk from becoming a loop around a thread
+     * that is being posted to while it is open, which is normal on a live thread.
      */
     private suspend fun loadWindow(
         activityId: Int,
         page: Int,
         guessCount: Int,
-        asRefresh: Boolean = false
+        asRefresh: Boolean = false,
+        reaimed: Boolean = false
     ) {
         val result = repositoryResult {
             repository.getActivityReplyWindow(activityId, page, CommentWindow.PAGE_SIZE)
@@ -205,15 +248,48 @@ internal class CommentThreadWindow(
         val current = state.value?.takeIf { it.activityId == activityId } ?: return
         result.fold(
             onSuccess = { window ->
-                if (!asRefresh && CommentWindow.needsRetarget(guessCount, window.replyCount)) {
+                val newestPage = CommentWindow.lastPage(window.replyCount)
+                if (!asRefresh && !reaimed &&
+                    CommentWindow.needsRetarget(guessCount, window.replyCount)
+                ) {
                     // The count says the newest replies are on another page. Fetch
                     // that one instead, and only that one: a second re-aim would be
                     // a loop around a thread that is being posted to while it is
                     // open, which is normal on a live thread.
                     loadWindow(
                         activityId = activityId,
-                        page = CommentWindow.lastPage(window.replyCount),
-                        guessCount = window.replyCount
+                        page = newestPage,
+                        guessCount = window.replyCount,
+                        reaimed = true
+                    )
+                    return@fold
+                }
+                if (asRefresh && !reaimed && page < newestPage) {
+                    val behind = newestPage - page
+                    if (behind > 1) {
+                        // Comments kept arriving while the sheet was closed, on
+                        // pages that were never fetched. A refresh of the tail
+                        // would sit above the cached rows with the pages between
+                        // them missing, so this reopens at the newest page exactly
+                        // as a first open would. Older still walks back from there.
+                        loadWindow(
+                            activityId = activityId,
+                            page = newestPage,
+                            guessCount = window.replyCount,
+                            reaimed = true
+                        )
+                        return@fold
+                    }
+                    // Exactly one page ahead: land this page's rows first (it is
+                    // the page the cache ends on, so it fills the rows just below
+                    // the new ones), then ask for the page that follows it.
+                    state.value = current.mergeWindow(window, isRefresh = true)
+                    loadWindow(
+                        activityId = activityId,
+                        page = page + 1,
+                        guessCount = window.replyCount,
+                        asRefresh = true,
+                        reaimed = true
                     )
                     return@fold
                 }
@@ -443,6 +519,48 @@ internal class CommentThreadWindow(
         // readable" signal, and a background check that ended on an early return
         // would leave it set and the header spinning.
         if (checkJob?.isActive == true) return
+        checkJob = scope.launch {
+            loadWindow(
+                activityId = current.activityId,
+                page = CommentWindow.lastPage(current.replyCount),
+                guessCount = current.replyCount,
+                asRefresh = true
+            )
+            if (atBottom) {
+                state.update { latest ->
+                    latest?.takeIf { it.activityId == current.activityId }
+                        ?.copy(unseenNewComments = 0)
+                }
+            }
+        }
+    }
+
+    /**
+     * Re-reads the newest page because the reader asked, rather than because a
+     * timer said to.
+     *
+     * The sheet's Refresh control. It is the same request the poll makes, and it
+     * obeys the same two rules: one at a time, because two checks landing over each
+     * other count the same new comment twice and the pill lies; and the newest page
+     * only, because AniList holds an account at roughly 30 requests a minute and a
+     * reader who taps Refresh three times in a second is spending a budget every
+     * other screen in this app shares. So a tap while a check is in flight does
+     * nothing at all rather than queueing a second request - the spinner that is
+     * already turning is the answer to the tap.
+     */
+    fun refreshNow(atBottom: Boolean) {
+        val current = state.value ?: return
+        if (isDemo || current.isLoading || current.isRefreshing) return
+        if (checkJob?.isActive == true) return
+        if (!current.isChatView) {
+            // Whole-thread mode re-reads the whole thread; a control that did
+            // nothing for a reader who turned chat view off in Settings would be a
+            // button that can only fail, which is the rule every other composer
+            // control here is held to.
+            state.value = current.copy(isRefreshing = true, refreshError = null)
+            checkJob = scope.launch { loadWholeThread(current.activityId) }
+            return
+        }
         checkJob = scope.launch {
             loadWindow(
                 activityId = current.activityId,

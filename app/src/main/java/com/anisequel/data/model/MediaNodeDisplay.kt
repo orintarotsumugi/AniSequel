@@ -843,7 +843,7 @@ fun MediaNode.withListStatus(status: String?): MediaNode {
 }
 
 /**
- * The fetched detail for [summary], but only when it is the same media namespace.
+ * The fetched detail **merged onto** [summary], or null when it is not the same media.
  *
  * `MediaDetailStore` keys its fetch cache by type-and-id because `anime/1` and
  * `manga/1` are different titles. The map the screens read is keyed by id alone,
@@ -865,11 +865,25 @@ fun MediaNode.withListStatus(status: String?): MediaNode {
  * an empty page. The cost is bounded: a typeless summary also fires a typeless
  * `Media(id:)`, so the sheet was already asking an ambiguous question about this
  * id, and this shows that answer rather than discarding it.
+ *
+ * ## Why the answer is merged rather than swapped in
+ *
+ * Returning the detail node alone handed the screen a document that happens to
+ * select every field the summary had - and that is a property of today's query text,
+ * not a contract. The moment a field is trimmed from `MEDIA_DETAIL_FIELDS`, or a
+ * source builds a summary the detail does not know about, the screen silently loses
+ * it: the hero's banner is the clearest case, because the summary can carry one (the
+ * activity feeds select it) while the detail answer for a title with no banner says
+ * `null`, and a swap paints over a banner the reader could already see with nothing.
+ *
+ * [MediaNode.withDetail] is the merge this app already uses everywhere else, and it
+ * is directional in the one way that matters: a field the detail *answered* wins, a
+ * field it left null keeps whatever the summary had.
  */
 fun Map<Int, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
     this[summary.id]?.takeIf { detail ->
         summary.type == null || detail.type.equals(summary.type, ignoreCase = true)
-    }
+    }?.let { detail -> summary.withDetail(detail) }
 
 /** HTML tags AniList interleaves into `description`. */
 private val TAG_PATTERN = Regex("<[^>]*>")

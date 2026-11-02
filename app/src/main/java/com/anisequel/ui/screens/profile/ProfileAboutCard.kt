@@ -83,19 +83,17 @@ private const val COLLAPSED_CHAR_HINT = 280
  * banner bio carries was drawn as the word "Image", and the picture only appeared
  * when the reader pressed "Show more". That made the collapse delete the one thing
  * those bios were written around. Until the clamp learns to embed, a bio with an
- * image in it is shown whole.
+ * image in it is shown whole - and "with an image" has to mean *anywhere* in the
+ * document, because the banner of a centred `~~~` span or a spoilered reveal is not
+ * in a top-level paragraph at all.
  */
 internal fun isBioCollapsible(about: String, nodes: List<MarkdownNode>): Boolean {
-    val embedsImage = nodes.any { node ->
-        // Two forms, because the editor writes two. A whole-line embed - the bare
-        // URL, `img(url)`, `img100%(url)`, a centred `~~~` block - comes back as an
-        // ImageBlock, and that is the shape AniList's own composer produces for a
-        // banner; an image *inside* a sentence is an inline token in a paragraph.
-        // Checking only the second one left the common case collapsed.
-        node is MarkdownNode.ImageBlock ||
-            (node is MarkdownNode.Paragraph && node.inlines.containsEmbeddedImage())
-    }
-    if (embedsImage) return false
+    // The whole document, not the top level: a bio's banner is just as likely to
+    // arrive inside a centred `~~~` span, a `~!…!~` spoiler or a quoted comment, and
+    // each of those hides its image in a child list rather than in a top-level
+    // paragraph. Answering "no image" for those is what collapsed the bio and clipped
+    // the one thing it was written around.
+    if (nodes.containsEmbeddedImage()) return false
     return about.length > COLLAPSED_CHAR_HINT ||
         nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT
 }

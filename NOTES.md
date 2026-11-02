@@ -1688,6 +1688,81 @@ message is one request, and staying current is one every fifteen seconds. AniLis
 budgets roughly thirty requests a minute, so a reader on a metered connection may
 want the first and not the second.
 
+**A reopen refreshes the newest end of the cache, not its oldest page.** The store
+keeps the last closed thread so a dismiss by accident is instant (see
+`CommentThreadStore.close`), and the cache records both `oldestPage` and
+`shownRows`. `open` used to aim the reopen at `oldestPage` - the page a reader
+reached with Older - and merge it as a first read, which *replaces* the window. So
+the sheet came back on the oldest page that was loaded, with every newer row gone,
+and the conversation appeared to jump backwards. Messages kept going through the
+same window and jumped with it. A reopen now aims at `lastPage(cachedReplyCount)` -
+the newest page the cache ends on - and merges as a refresh, so the rows on screen
+stay. A refresh does not re-aim at the current newest page: the page in hand is
+still the right page, and jumping forward would skip the rows between. If the thread
+grew exactly one page meanwhile, that page is fetched too; if it grew by more than
+one, the pages in between were never fetched and there is nothing to bridge them
+with, so the sheet opens the newest page as a fresh window rather than drawing a
+conversation with a hole in the middle that Older can never fill.
+
+**Three things must not move the reader, and each of them did.** A chat is a place
+with a position in it, and this sheet has three code paths that change the rows above
+the position - an Older page, a window that reveals rows it had already fetched, and
+the scroll that follows a comment you just posted. Each one was wrong in its own way,
+and all three were invisible in a screenshot.
+
+- *Rows arriving above you.* `LazyColumn` is not reversed here (replies ascend, and
+  the newest belong at the bottom), so prepending a page keeps `firstVisibleItemIndex`
+  and moves the conversation: the comment being read slides off the top and every
+  placement spring animates the jump. The sheet now remembers which reply was at the
+  top of the viewport and how far into it you had scrolled, and puts that back after
+  the list grows. [CommentWindow.prependedRows](app/src/main/java/com/anisequel/domain/usecase/CommentWindow.kt)
+  decides whether a change is a prepend at all - only a list that *ends* with the old
+  one is - so a refresh that replaced the newest end, a delete, and the first fill of
+  an empty list are left alone rather than "compensated".
+- *The editor closing.* The flag that says "this thread has been placed at its newest
+  row" lived inside the thread, and the thread is *disposed* whenever the composer is
+  up, because the two panes replace each other. Quote a comment five pages back,
+  Cancel, and the flag came back false and the sheet re-ran its open-at-newest scroll:
+  a teleport to the bottom of a conversation you had walked up. It is held by the
+  sheet now, saveable, keyed by the thread. The same effect also stands down when a
+  post is being scrolled to, because two scrolls starting on one frame cancel each
+  other and the reader lands on neither row.
+- *The scroll after you post.* It counted your comment's index in the *fetched* list
+  while the list draws the *window*, so on a thread you had scrolled up in the index
+  pointed past the end - `animateScrollToItem` clamps rather than throwing - and you
+  stopped on the newest comment instead of your own. `CommentWindow.hiddenPrefixRows`
+  is the difference between the two lengths, and the rows above the replies (the
+  message head, the failure banner, the Older control) are counted by the one
+  function the list itself uses.
+
+**Refresh is a button, and it is one request.** The header carries a Refresh control
+beside the line that says when the thread was last checked, because a reader who can
+see "Checked 40s ago" does not need to tap, and one who sees "8m ago" knows the tap
+will answer. It issues exactly the poll's request, and a second tap while one is out
+does nothing: AniList holds a session at roughly thirty requests a minute - verified
+against the live API's `X-RateLimit-Limit: 30` - and every screen in this app spends
+from that one purse. Turning Chat view off re-reads the whole thread instead, since a
+control that only worked in one of the two modes is a control that can only fail.
+
+**A list item's key is a promise about its identity, and three rows broke it.** The
+failure banner above a thread used to be keyed by *which* failure it was
+(`window_error`, `refresh_error`, `load_error`), so a background check failing over an
+Older page that had already failed re-keyed one row: Compose destroyed it and inserted
+another, which ran the banner's fade *and* the placement spring of every reply below
+it - the whole thread sliding because one sentence changed. It is one stable key now,
+with the message and the retry chosen inside the item. The Older control and a
+message's head row had the opposite problem: they were the two rows in the list with
+no placement animation at all, so they popped into existence above rows that did
+animate. And the shimmer over the GIF picker's waiting grid read its animated value
+while *composing* colours, which recomposes the grid every frame - the failure
+`ShimmerBox` exists to prevent, and the reason the picker draws one now.
+
+The header's loader is gated the way every other loop in this app is. Material's
+morphing indicator is an indefinite animation, and the header stays composed under the
+manage dialog and the likers tray, so it ticked for a sheet nobody could see and
+ignored the one setting the reader has about motion; `INSTANT` and a stopped lifecycle
+now get a word instead of a loop.
+
 **Attachments go to catbox.moe, and to pomf when catbox refuses them.** AniList has
 nowhere to put a file, so "attach" means "hand it to a host and paste the address".
 Catbox takes an anonymous upload - no account, no key, no OAuth - and serves the file
@@ -1698,21 +1773,32 @@ disappear. Settings says so, because a dead image six months later should be a t
 the reader chose.
 
 In November 2026 that stopped being enough: catbox's API answers every anonymous
-upload with HTTP 200 and "Uploads paused until I can resolve storage issues", so the
+upload with HTTP 412 and "Uploads paused until I can resolve storage issues", so the
 button could not attach anything at all. [ImageUploader](app/src/main/java/com/anisequel/data/network/ImageUploader.kt)
-now tries catbox first, falls back to **pomf.lain.la** and then to **imgbb.com**, and
-takes the first host that stores the file. pomf is an anonymous clone that keeps the
-file permanently (`pomf.lain.la` uploads, `pomf2.lain.la` serves), and imgbb is the
-site's own anonymous form - a token scraped from its homepage and one POST to
-`imgbb.com/json` - rather than its documented API, because API v1 requires a key and
-a key in a public repository is a credential shared by every install. The
-alternatives were tried rather than assumed: catbox's own Litterbox answers 403,
-`0x0.st` has disabled uploads, and uguu.se and tmpfiles.org delete after three hours
-and one hour - an hour-long URL in a comment is a broken image by the time anybody
-reads it. The fallback is a chain, not a setting: the reader is choosing a photo, not
-infrastructure, and a failed host is the app's problem to route around. Each host's
-success test is on its own parsed file domain, because a refusal also arrives as HTTP
-200 and a CDN page must never become the embed; the chains are pinned in
+tries catbox first, then **imgbb.com**, then **pomf.lain.la**, and takes the first
+host that stores the file. pomf is an anonymous clone that keeps the file permanently
+(`pomf.lain.la` uploads, `pomf2.lain.la` serves), and imgbb is the site's own
+anonymous form - a token scraped from its homepage and one POST to `imgbb.com/json` -
+rather than its documented API, because API v1 requires a key and a key in a public
+repository is a credential shared by every install. The alternatives were tried rather
+than assumed: catbox's own Litterbox answers 403, `0x0.st` has disabled uploads, and
+uguu.se and tmpfiles.org delete after three hours and one hour - an hour-long URL in a
+comment is a broken image by the time anybody reads it.
+
+**The order of that chain is a measurement, not a preference.** pomf *stores* the file
+and then refuses to show it to AniList: a GET of a stored file carrying
+`Referer: https://anilist.co/` is answered by nginx with an HTTP/2 stream reset (curl
+exit 92), while the same file with no referer at all returns 200. This app sends no
+referer, so the photo looked fine here; every browser on the site where the comment was
+posted showed a broken image, which is what "my uploaded image doesn't work on Firefox"
+report actually was. `i.ibb.co` answers 200 to the same referer, so imgbb now goes
+before pomf, and the outcome carries `showsOnAniList` so the composer can say plainly
+when a file landed on a host the site cannot read. `ImageUploaderChainTest` pins both
+halves: the order, and which host declares itself invisible. The fallback stays a
+chain, not a setting: the reader is choosing a photo, not infrastructure, and a failed
+host is the app's problem to route around. Each host's success test is on its own
+parsed file domain, because a refusal also arrives with a body that is prose or a CDN
+page and that page must never become the embed; the chains are pinned in
 `CatboxUploadProtocolTest`, `PomfUploadProtocolTest` and `ImgbbUploadProtocolTest`.
 [CatboxApi](app/src/main/java/com/anisequel/data/network/CatboxApi.kt) is its own
 `OkHttpClient` with no interceptors - the shared one attaches the reader's bearer
@@ -1741,24 +1827,56 @@ one place a first `SaveMessage` can be written. The head row draws no heart:
 a message's like is an activity like, and this store only speaks the reply mutation.
 
 GIF search answers from two places: **Safebooru**, anonymous, asked for
-`animated_gif` at `rating:general`, and **Tenor v2** when the reader has pasted a
+`animated_gif` at `rating:safe`, and **Tenor v2** when the reader has pasted a
 key. Both were chosen by elimination against the live services rather than against
-documentation: Tenor's public key-free API is gone (`g.tenor.com/v1` returns
-`{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
-rejects the same string), Giphy's beta keys answer 401, DuckDuckGo's image endpoint
-replies with a bot challenge, Wikimedia Commons has MIME search disabled at the API
-("Miser Mode"), and **Openverse - which does answer anonymously and was the default
-for one CI cycle - indexes Creative Commons media, so `anime reaction` returns zero
-tiles.** What is left that is anonymous *and* anime is a booru, which is also what
-the browser GIF pickers in this community already use.
+documentation: Tenor's public key-free API is gone (`g.tenor.com/v1` returns HTTP 403
+with `{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
+rejects the same string as `API_KEY_INVALID`), Giphy's historically published beta key
+answers HTTP 403 `"msg":"BANNED"` - the *key* is blacklisted, not the client, since a
+curl, a browser and an OkHttp user agent are refused identically - and a Giphy key
+now needs a signup, starts as a beta key capped at 100 calls an hour, and its
+`media.giphy.com/api/v5` surface is OAuth-issued. DuckDuckGo's image endpoint replies
+with a bot challenge, Wikimedia Commons has MIME search disabled at the API ("Miser
+Mode" - a `filetype:gif` search reports `totalhits: 0`), **Openverse - which does
+answer anonymously and was the default for one CI cycle - indexes Creative Commons
+media, so `anime reaction` returns zero tiles**, Gelbooru's DAPI answers 401 without
+an account-issued key pair, Rule34 answers a CAPTCHA, and **Danbooru, which answers
+200 and hotlinks fine, caps an anonymous search at two tags** - not enough to ask for
+a safe animated series GIF, which is four. What is left that is anonymous *and* anime
+is Safebooru, which is also what the browser GIF pickers in this community already
+use.
 
-Two rules come with that choice. `rating:general` goes into the query **and** a post
-whose own rating field is not general is dropped on the way out: a booru is
-user-tagged, a filter argument is a request rather than a guarantee, and this picker
-puts an image into a comment that other people read. And a phrase is rewritten into
-tags (`spice and wolf holo` becomes `spice_and_wolf holo`) because a booru matches
-tags, not sentences - tags the reader already spelled with underscores are left
-alone, so somebody who knows the syntax is not fighting the rewrite.
+Two rules come with that choice. `rating:safe` goes into the query **and** a post
+whose own rating field is not safe is dropped on the way out: a booru is user-tagged,
+a filter argument is a request rather than a guarantee, and this picker puts an image
+into a comment that other people read. (The spelling is load-bearing: this asked for
+`rating:general`, which the site does not know, so every search answered an empty
+page.) And a phrase is rewritten into tags, because a booru matches tags, not
+sentences.
+
+**The rewrite is three requests, tried in order, not one.** `spice and wolf` ANDs
+`spice` with `wolf`, and no post carries both - the series is the single tag
+`spice_and_wolf`. So a search is asked first as its words, then as the whole phrase
+with the stop words kept and joined by underscores, then as its **first word with a
+`*` on the end**. The third is the one that finds a show whose catalogue name is not
+the name anybody types: `kaguya_sama` and `kaguya sama` both answer nothing, while
+`kaguya*` answers `kaguya_wa_kokurasetai` posts, measured live. A single word gets no
+prefix tier - `holo*` is a wider and worse question than `holo`, and the first tier
+already *is* `holo`. Only a page that found nothing *and* has nothing left falls
+through: a full server page that this app's rating filter emptied is a search that is
+working, and handing it to the next spelling would abandon it over a patch of
+filtered posts. The tier a reader is paging inside is carried in the cursor's prefix,
+because the providers do not page the same way and the spellings must not be mixed
+mid-scroll.
+
+The picker says which index it is answering (`Search Safebooru for a GIF`), because a
+booru's miss and a keyed index's miss deserve different sentences, and naming it is
+also the only visible proof that a Tenor key in Settings took effect. An empty search
+offers two labelled rows rather than a cursor - reactions, for the thing you want to
+say, and series, for the show you have in mind - and every chip in both rows was
+checked against the live index with this app's own request shape before it went in. A
+chip that searches into an empty grid reads as a broken picker rather than as a gap in
+the catalogue.
 
 A key is never committed: `KeystoreIntegrityTest` is not the reason so much as the
 same reasoning - a bundled credential is a shared rate limit and a public secret.
@@ -1793,6 +1911,52 @@ error placeholder over a picture the site itself shows. `coil-svg` registers
 specification**: a card that nests `data:` images, `@font-face` fonts or animated
 WebP inside itself may draw incompletely, which is a limit of the format on Android
 rather than something this registration can fix.
+
+**Every image is a link on AniList, and every image is now tappable here.** The
+renderer only installed `clickable` when the markup wrapped the image in a link
+(`[![cover](img)](target)`), so a plain `img(url)` or `![alt](url)` - the form an
+ordinary screenshot or GIF uses - had no press feedback and opened nothing. The
+author's target wins when there is one, and the image's own URL is the fallback
+(`imageTapUrl`): the parser has already made that address absolute, and it is the
+same URL Coil draws, so the tap opens the picture the reader is looking at.
+
+**A bio's images keep their own sizes, and formatting cannot hide one.** A profile
+bio is the one AniList field that is mostly pictures - a full-bleed banner, a GIF
+between two headings, a spoilered reveal - and the app was the worst place to read
+them, in three ways that produced no error. The API returns a *sized* image as HTML
+(`<img width='100%' src='…'>`), and the parser read only `src` and `alt`: every
+sized image fell through to the renderer's size-less default, so a bio built from a
+100% banner and two 220px strips drew three full-column slabs. The width is captured
+now and carried in the same spelling as `img220(...)` uses, so one pair of clamps
+sizes both kinds - and `?width=` inside a URL is not the image's width, which is why
+the attribute pattern requires preceding whitespace. An image *inside* formatting was
+worse: `**![banner](x.gif)**` is what a bold heading line of a bio produces, and the
+question "does this paragraph hold a bitmap" only looked at top-level tokens and at
+links, so it answered no, the paragraph took its clamped-`Text` branch, and the
+reader saw the alt text as a link. The search is recursive now, over every run that
+can carry children, and opening a run costs only its own styling when it really does
+wrap a bitmap. Third, and the one that deleted content: the about card refuses to
+collapse a bio carrying an image, but it asked that question of the *top level* only -
+so a banner inside a centred `~~~` span, a `~!…!~` spoiler or a quoted comment (each
+of which holds its content in a child list) left the bio looking image-free and
+collapsed it with the picture below the clip. The check walks the document the way the
+renderer does, and `previewKeysIn` - which decides which posters to fetch - walks the
+same three nesting sites, because a collector and a renderer that disagree about where
+content hides produce a card with no artwork, not an error.
+
+**The composer's size commands are for every attachment, not only for GIFs.** The GIF
+pane has always written the width the reader chose - `img220(url)`, `img50%(url)` -
+and centred or spoiler framing with it, because a full-size animation in a comment is
+the one embed that shoves a 360dp thread around. A photo picked from the device went
+through the same `img()` markup and got neither choice: it was always the site's full
+width, always unframed, while the composer had offered the controls for the other
+file type all along. A screenshot of a title card is precisely the image a reader
+wants small and behind a lid. [AttachmentEmbedRows](app/src/main/java/com/anisequel/ui/screens/profile/AttachmentEmbedRows.kt)
+is now one control used by both paths, and the choice is held per draft: a size picked
+for a new comment must not decide the size of a photo inserted into the edit open
+behind it. `""` is the spelling of "Original" throughout, which is also what the chip
+row compares against - comparing the label instead of the value left every chip in the
+row looking unchosen after you picked Original.
 
 ## The window colour, seen only in a fast tap
 

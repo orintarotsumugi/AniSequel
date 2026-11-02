@@ -50,26 +50,24 @@ internal fun clampedImageWidthPercent(width: String?): Float? {
 }
 
 /**
- * Whether these inline tokens carry an image a renderer could draw.
+ * What a tap on [image] opens.
  *
- * Two callers answer this and they have to agree. The paragraph asks it to decide
- * between the flow (which embeds a real image) and the single clamped `Text` (which
- * cannot hold a bitmap at all, and so shows the image's alt text instead); the
- * profile's about card asks it to decide whether a bio may be collapsed - because a
- * collapsed bio is exactly that clamped text, and collapsing one that carries a
- * banner deleted the banner until the reader pressed "Show more".
+ * AniList makes every image a link. A linked image - `[![cover](img)](target)` -
+ * opens the target the author gave it, and a plain `img(url)` or `![alt](url)`
+ * opens the picture itself. This app only wired the first form, so an image with
+ * no explicit target was inert: no browser, no press feedback, no hint that it
+ * could be pressed at all. The same comment on the site opened the picture, which
+ * made the app look like it had dropped the link.
  *
- * A link's children are searched too: `[![cover](x.gif)](https://…)` is a linked
- * image mid-sentence, which is how AniList's editor writes a banner that opens
- * something, and the token it produces is a `Link` wrapping one `Image`.
+ * The image's own URL is the fallback rather than nothing, because
+ * [MarkdownNode.ImageBlock.url] is always an absolute `https` address after parsing
+ * (the parser's `absoluteImageUrl` puts the scheme back on a protocol-relative
+ * source) - it is drawn by Coil from that address already, so handing it to the
+ * browser is the picture the reader is looking at rather than a file path or a
+ * relative slug.
  */
-internal fun List<InlineToken>.containsEmbeddedImage(): Boolean = any { token ->
-    when (token) {
-        is InlineToken.Image -> true
-        is InlineToken.Link -> token.children.containsEmbeddedImage()
-        else -> false
-    }
-}
+internal fun imageTapUrl(image: MarkdownNode.ImageBlock): String =
+    image.targetUrl ?: image.url
 
 /**
  * Structural AST nodes produced by [AniListMarkdownParser].
@@ -285,7 +283,7 @@ internal fun splitMediaLinks(
 }
 
 /** The inner expression of an emphasis run or link label, empty for anything else. */
-private fun InlineToken.nestedTokens(): List<InlineToken> = when (this) {
+internal fun InlineToken.nestedTokens(): List<InlineToken> = when (this) {
     is InlineToken.Bold -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
     is InlineToken.Italic -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
     is InlineToken.BoldItalic -> children.ifEmpty { listOf(InlineToken.Plain(text)) }
@@ -441,6 +439,89 @@ sealed interface InlineToken {
      * animates inline; everywhere a paragraph is not rendered as a flow (a
      * header, a list item, a truncated bio) it degrades to a plain link to [url],
      * which is what [buildInlineAnnotatedString] does with it.
+     *
+     * [width] is the size the author asked for, in the same spelling the block
+     * images use: `220` is pixels, `50%` is a share of the column, and null is
+     * "whatever the file is". It exists because AniList's own API writes inline
+     * images with an HTML width - `<img width='220' src='…'>` - and the token had
+     * nowhere to put it, so a bio of deliberately small strip images came out as
+     * several full-column slabs. Defaulted, so every flat construction of this
+     * token keeps working.
      */
-    data class Image(val url: String, val alt: String? = null) : InlineToken
+    data class Image(
+        val url: String,
+        val alt: String? = null,
+        val width: String? = null
+    ) : InlineToken
+}
+
+/**
+ * Whether these inline tokens carry an image a renderer could draw.
+ *
+ * Two callers answer this and they have to agree. The paragraph asks it to decide
+ * between the flow (which embeds a real image) and the single clamped `Text` (which
+ * cannot hold a bitmap at all, and so shows the image's alt text instead); the
+ * profile's about card asks it to decide whether a bio may be collapsed - because a
+ * collapsed bio is exactly that clamped text, and collapsing one that carries a
+ * banner deleted the banner until the reader pressed "Show more".
+ *
+ * ## Every container is searched, not only the link
+ *
+ * `[![cover](x.gif)](https://…)` is one shape and it was the only one handled. The
+ * site's editor also writes `**![banner](x.gif)**` - a GIF inside a bold run, in a
+ * heading, underlined, struck through - and those tokens carry the image one level
+ * down as well. Answering "no image" for them is what made the paragraph take its
+ * clamped-text branch and print the word *banner* where the animation belongs.
+ *
+ * `@JvmName` because the document-level answer below has the same Kotlin name and
+ * the same erased JVM signature - two `List` extensions are one method to the
+ * bytecode, and the compiler calls that a platform declaration clash rather than
+ * overloading them. The names stay the same for every Kotlin caller, which is the
+ * point: the question is one question, asked of two different lists.
+ */
+@JvmName("inlineTokensContainEmbeddedImage")
+internal fun List<InlineToken>.containsEmbeddedImage(): Boolean = any { token ->
+    when (token) {
+        is InlineToken.Image -> true
+        else -> token.nestedTokens().containsEmbeddedImage()
+    }
+}
+
+/**
+ * Whether a parsed document holds an image anywhere in it.
+ *
+ * [containsEmbeddedImage] answers the question for one paragraph; this answers it
+ * for a whole bio, and the difference is the bug: images that arrive as a *block* -
+ * a `~~~` centred banner, a `~!…!~` spoiler's payload, a quoted comment, a centred
+ * span's own children - are not in any paragraph's token list, so a caller that only
+ * walked top-level paragraphs called a bio image-free and collapsed it, clipping the
+ * banner the bio was written around.
+ *
+ * The walk mirrors the renderer's nesting exactly: [MarkdownNode.CenteredBlock],
+ * [MarkdownNode.Blockquote] and [MarkdownNode.SpoilerBlock] hold children or a
+ * re-parsed block list, and every other node's image lives in its inline tokens.
+ * Same reason `previewKeysIn` walks these three - the collector and the renderer must
+ * not disagree about where content can hide.
+ */
+internal fun List<MarkdownNode>.containsEmbeddedImage(): Boolean = any { node ->
+    when (node) {
+        is MarkdownNode.ImageBlock -> true
+        is MarkdownNode.CenteredBlock -> node.children.containsEmbeddedImage()
+        is MarkdownNode.Blockquote ->
+            node.inlines.containsEmbeddedImage() || node.blocks.containsEmbeddedImage()
+        is MarkdownNode.SpoilerBlock ->
+            node.inlines.containsEmbeddedImage() || node.blocks.containsEmbeddedImage()
+        is MarkdownNode.Paragraph -> node.inlines.containsEmbeddedImage()
+        is MarkdownNode.Header -> node.inlines.containsEmbeddedImage()
+        is MarkdownNode.ListBlock -> node.items.any { it.containsEmbeddedImage() }
+        is MarkdownNode.CheckListBlock ->
+            node.items.any { it.inlines.containsEmbeddedImage() }
+        is MarkdownNode.TableBlock ->
+            node.headers.any { it.containsEmbeddedImage() } ||
+                node.rows.any { row -> row.any { it.containsEmbeddedImage() } }
+        is MarkdownNode.CodeBlock,
+        is MarkdownNode.VideoBlock,
+        is MarkdownNode.AniListPreviewBlock,
+        MarkdownNode.Divider -> false
+    }
 }

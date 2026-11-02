@@ -274,6 +274,213 @@ class CommentChatWindowTest {
             repository.requestedPages.isEmpty()
         )
     }
+
+    /**
+     * Reopening refreshes the newest page in hand, not the oldest one loaded.
+     *
+     * The cache exists so a dismiss by accident costs nothing, and it told `open`
+     * which page to aim at. That page used to be `oldestPage` - the page a reader
+     * reached by pressing Older - and the fetch after it merged as a first read,
+     * which replaces the window rather than adding to it. So the sheet reopened on
+     * the reader's oldest page with the newer rows gone and the conversation
+     * apparently jumping backwards. A message thread goes through this same window,
+     * so opening a conversation from the inbox did it too.
+     */
+    @Test
+    fun `a reopen refreshes the newest page and keeps the older pages in hand`() = runTest {
+        val repository = WindowRepository(thread(60))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+        store.loadOlder()
+        runCurrent()
+        assertEquals(listOf(3, 2), repository.requestedPages)
+        store.close()
+
+        // Somebody posted while the sheet was gone.
+        repository.replies = thread(61)
+        repository.serverCount = 61
+        repository.requestedPages.clear()
+
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+
+        assertEquals(
+            "a reopen asks for the newest page in hand, not the oldest one loaded: " +
+                repository.requestedPages,
+            listOf(3),
+            repository.requestedPages
+        )
+        val state = store.state.value!!
+        assertEquals(
+            "the page Older brought in must not be thrown away by the reopen",
+            2,
+            state.oldestPage
+        )
+        assertEquals("no gap above the oldest page", 26, state.replies.first().id)
+        assertEquals("and the newest comment is the last row", 61, state.replies.last().id)
+        assertEquals(36, state.replies.size)
+        assertFalse(state.isLoading)
+        assertFalse("the reopen is a refresh, not a first read", state.isRefreshing)
+    }
+
+    /**
+     * A reopen that lands exactly one page behind fills that page forward.
+     *
+     * The refreshed page is still the page the cache ends on, and the page after
+     * it holds comments the reader has not seen. Jumping straight at the newest
+     * page would skip the rows in between; walking one page forward keeps the list
+     * whole. This is the case a live thread produces in minutes, so it is the one a
+     * reopen has to get right.
+     */
+    @Test
+    fun `a reopen one page behind fetches that page too, without a hole`() = runTest {
+        val repository = WindowRepository(thread(60))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+        store.close()
+
+        repository.replies = thread(80)
+        repository.serverCount = 80
+        repository.requestedPages.clear()
+
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+
+        assertEquals(
+            "the page in hand is refreshed, then the page after it: " +
+                repository.requestedPages,
+            listOf(3, 4),
+            repository.requestedPages
+        )
+        val state = store.state.value!!
+        assertEquals("the newest page's last row", 80, state.replies.last().id)
+        assertEquals(
+            "25 rows per page and no skipped page: ${state.replies.map { it.id }}",
+            (51..80).toList(),
+            state.replies.map { it.id }
+        )
+    }
+
+    /**
+     * A long absence opens the newest window rather than a thread with a hole in it.
+     *
+     * Several pages of comments can land while the sheet is closed. The cache has
+     * no page that bridges them, so refreshing only the tail would draw the cached
+     * rows directly above the newest page with a whole conversation missing between
+     * them, and Older - which works backwards from `oldestPage` - could never fill
+     * it. The newest page as a fresh window is what a first open would have done.
+     */
+    @Test
+    fun `a reopen several pages behind opens the newest page instead of leaving a hole`() = runTest {
+        val repository = WindowRepository(thread(60))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+        store.close()
+
+        repository.replies = thread(111)
+        repository.serverCount = 111
+        repository.requestedPages.clear()
+
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+
+        assertEquals(listOf(3, 5), repository.requestedPages)
+        val state = store.state.value!!
+        assertEquals("the newest page, not a window stitched across a gap", 5, state.oldestPage)
+        assertEquals((101..111).toList(), state.replies.map { it.id })
+        assertEquals(111, state.replyCount)
+    }
+
+    /**
+     * The header's Refresh button.
+     *
+     * A reader who taps it has decided the thread is stale; the poll's timer has not
+     * agreed yet. Two things have to stay true while serving that: one request at a
+     * time, because AniList holds the session at about 30 a minute and every other
+     * screen spends from the same purse; and the rows already on screen stay drawn,
+     * because a Refresh that blanked the thread would be worse than no Refresh.
+     */
+    @Test
+    fun `a refresh re-reads the newest page over the rows on screen`() = runTest {
+        val repository = WindowRepository(thread(30))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 30, chatView = true)
+        runCurrent()
+        repository.requestedPages.clear()
+
+        repository.replies = thread(33)
+        repository.serverCount = 33
+        store.refreshNow(atBottom = true)
+        runCurrent()
+
+        assertEquals("one request, at the newest page", listOf(2), repository.requestedPages)
+        val state = store.state.value!!
+        assertFalse("the rows stayed", state.isRefreshing)
+        assertEquals(33, state.replyCount)
+        // The newest page, not the whole thread: a Refresh re-reads the page the
+        // reader is looking at, and the rows above it stay unfetched - `Older` is
+        // what pays for those, on purpose, because pulling 33 comments to refresh
+        // 8 of them is a second full read of a thread nobody asked to re-open.
+        assertEquals((26..33).toList(), state.replies.map { it.id })
+        assertEquals("a reader at the bottom is not owed a pill for rows they can see", 0, state.unseenNewComments)
+    }
+
+    @Test
+    fun `a refresh during a request in flight is ignored rather than queued`() = runTest {
+        val repository = WindowRepository(thread(60))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 60, chatView = true)
+        runCurrent()
+        repository.requestedPages.clear()
+
+        // Two taps in the same frame: the second must not start a second read, or the
+        // two answers count the same new comment twice and the pill lies.
+        store.refreshNow(atBottom = false)
+        store.refreshNow(atBottom = false)
+        runCurrent()
+
+        assertEquals(listOf(3), repository.requestedPages)
+    }
+
+    @Test
+    fun `a refresh in full-thread mode re-reads the thread instead of doing nothing`() = runTest {
+        // Chat view off is a real setting, and a header control that only worked with
+        // it on would be a button that can only fail for those readers.
+        val repository = WindowRepository(thread(8))
+        val store = storeFor(repository, this)
+        store.open(activityId = 7, knownReplyCount = 8, chatView = false)
+        runCurrent()
+        repository.wholeThreadReads = 0
+
+        repository.replies = thread(9)
+        store.refreshNow(atBottom = true)
+        runCurrent()
+
+        assertEquals(1, repository.wholeThreadReads)
+        assertEquals("the re-read replaced the rows, whole thread", 9, store.state.value!!.replies.size)
+    }
+
+    @Test
+    fun `a refresh does nothing for a demo thread`() = runTest {
+        val repository = WindowRepository(thread(10))
+        val store = CommentThreadStore(
+            repository = repository,
+            scope = this,
+            isDemo = true,
+            viewerId = 1
+        )
+        store.open(activityId = 7, knownReplyCount = 10, chatView = true)
+        runCurrent()
+        repository.requestedPages.clear()
+
+        store.refreshNow(atBottom = true)
+        runCurrent()
+
+        assertTrue("the demo has no server to ask", repository.requestedPages.isEmpty())
+    }
 }
 
 /**

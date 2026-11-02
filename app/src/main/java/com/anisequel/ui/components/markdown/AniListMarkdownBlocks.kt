@@ -220,20 +220,20 @@ fun RenderImage(image: MarkdownNode.ImageBlock) {
     // made that control stop responding. A comment can carry an image, so this is on
     // the thread's tap path, not only on a bio's.
     val interactionSource = remember { MutableInteractionSource() }
-    val clickableModifier = if (image.targetUrl != null) {
-        Modifier
-            .bouncyPress(interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource) {
-                openExternalUrlOrCopy(context, image.targetUrl)
-            }
-    } else {
-        Modifier
-    }
+    // Every image is tappable, not only a linked one. AniList opens the picture
+    // itself when the markup gives it no target, and this app used to leave those
+    // images with no `clickable` at all - so a comment's screenshot or GIF looked
+    // like a picture and behaved like a decoration. [imageTapUrl] is the one answer
+    // to what the tap opens; see its comment for why the image's own URL is enough.
+    val tapUrl = imageTapUrl(image)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .then(clickableModifier),
+            .bouncyPress(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource) {
+                openExternalUrlOrCopy(context, tapUrl)
+            },
         contentAlignment = if (image.centered) Alignment.Center else Alignment.CenterStart
     ) {
         AsyncImage(

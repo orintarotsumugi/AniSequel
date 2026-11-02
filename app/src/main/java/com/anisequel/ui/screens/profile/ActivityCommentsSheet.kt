@@ -1,8 +1,5 @@
 package com.anisequel.ui.screens.profile
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -17,31 +14,27 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
-import com.anisequel.data.network.ImageUploader
 import com.anisequel.data.network.SafebooruGifs
 import com.anisequel.data.network.TenorGifs
-import com.anisequel.data.repository.PickedImageReader
 import com.anisequel.domain.usecase.CommentWindow
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.GifSearchStore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -162,6 +155,15 @@ fun ActivityCommentsSheet(
     onRevealNewComments: () -> Unit = {},
     /** Runs one background check; the flag says whether the reader is at the end. */
     onCheckForNewComments: (atBottom: Boolean) -> Unit = {},
+    /**
+     * Re-reads the thread because the reader tapped the header's Refresh.
+     *
+     * A separate callback rather than a reuse of the check above, because the store
+     * treats the two differently on one point: a poll is allowed to skip while a
+     * check is already in flight, and so is a tap - but the tap also has to work for
+     * a reader who turned chat view off, where there is no window to poll.
+     */
+    onRefresh: (atBottom: Boolean) -> Unit = {},
     /** Opens the "liked by" sheet for one comment. */
     onShowCommentLikers: (Int) -> Unit = {},
     /**
@@ -192,6 +194,36 @@ fun ActivityCommentsSheet(
     // Not saveable: an in-flight request after a rotation is owned by the store,
     // and restoring the "we are waiting" half without it would swallow the answer.
     var awaitingPost by remember { mutableStateOf(false) }
+
+    /**
+     * Whether this thread has already been placed at its newest row.
+     *
+     * Saveable, and keyed on the thread: the list that reads it is disposed whenever
+     * the editor is up, so a plain `remember` there reset on every Quote-and-Cancel and
+     * threw the reader back to the bottom of a conversation they had walked pages up
+     * through.
+     */
+    val threadAnchor = rememberSaveable(state.activityId) { mutableStateOf(false) }
+
+    /**
+     * How the next picked photo is written into each of the two drafts.
+     *
+     * Two values, because the two drafts are two fields: the size a reader chose for a
+     * screenshot in a new comment must not decide the size of one inserted into an
+     * edit they are rewriting behind it. Both are saveable by their string/enum-name
+     * spelling for the same reason the GIF pane's is - a rotation that reset the choice
+     * to "Original" mid-attachment is a change the reader did not ask for.
+     */
+    var photoWidth by rememberSaveable { mutableStateOf("") }
+    var photoFramingName by rememberSaveable { mutableStateOf(MediaAttachment.EmbedFraming.Plain.name) }
+    var editPhotoWidth by rememberSaveable { mutableStateOf("") }
+    var editPhotoFramingName by rememberSaveable { mutableStateOf(MediaAttachment.EmbedFraming.Plain.name) }
+    val framingOf = { name: String ->
+        MediaAttachment.EmbedFraming.entries.firstOrNull { it.name == name }
+            ?: MediaAttachment.EmbedFraming.Plain
+    }
+    val photoStyle = EmbedStyle(photoWidth, framingOf(photoFramingName))
+    val editPhotoStyle = EmbedStyle(editPhotoWidth, framingOf(editPhotoFramingName))
 
     // Rewriting one of the viewer's own comments is the composer again, not a
     // second editor in an `AlertDialog`. The draft still lives in the store
@@ -233,7 +265,7 @@ fun ActivityCommentsSheet(
                 draft.text,
                 draft.selection.start,
                 draft.selection.end,
-                MediaAttachment.embedMarkdown(url)
+                MediaAttachment.embedMarkdown(url, photoStyle.width, photoStyle.framing)
             )
         )
     }
@@ -243,7 +275,7 @@ fun ActivityCommentsSheet(
                 editDraft.text,
                 editDraft.selection.start,
                 editDraft.selection.end,
-                MediaAttachment.embedMarkdown(url)
+                MediaAttachment.embedMarkdown(url, editPhotoStyle.width, editPhotoStyle.framing)
             )
         )
         editDraft = next
@@ -331,6 +363,11 @@ fun ActivityCommentsSheet(
                     uploadNote = editPhoto.note,
                     isUploading = editPhoto.isUploading,
                     onPickFromDevice = editPhoto.launch,
+                    photoStyle = editPhotoStyle,
+                    onPhotoStyleChange = { next ->
+                        editPhotoWidth = next.width
+                        editPhotoFramingName = next.framing.name
+                    },
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
@@ -351,6 +388,11 @@ fun ActivityCommentsSheet(
                     uploadNote = photo.note,
                     isUploading = photo.isUploading,
                     onPickFromDevice = photo.launch,
+                    photoStyle = photoStyle,
+                    onPhotoStyleChange = { next ->
+                        photoWidth = next.width
+                        photoFramingName = next.framing.name
+                    },
                     gifPane = { onUse ->
                         GifBrowser(store = gifStore, onUse = onUse)
                     },
@@ -371,6 +413,12 @@ fun ActivityCommentsSheet(
                     viewerId = viewerId,
                     canPost = canPost,
                     listState = listState,
+                    // Whether the thread has been placed at its newest row. Held here
+                    // rather than in the list because the list is *not composed* while
+                    // the reader is writing: tap Quote five pages up, Cancel, and a flag
+                    // remembered inside the thread came back false and scrolled the
+                    // reader to the newest comment.
+                    anchor = threadAnchor,
                     onRetry = onRetry,
                     onStartCompose = { composing = true },
                     // The mention is an edit like any toolbar's: it must not push
@@ -419,6 +467,7 @@ fun ActivityCommentsSheet(
                     onLoadOlder = onLoadOlder,
                     onRevealNewComments = onRevealNewComments,
                     onCheckForNewComments = onCheckForNewComments,
+                    onRefresh = onRefresh,
                     pollIntervalMillis = pollIntervalMillis,
                     polling = polling,
                     nowEpochSecond = nowEpochSecond
@@ -462,72 +511,6 @@ private fun clipDraft(value: TextFieldValue): TextFieldValue {
             value.selection.start.coerceIn(0, text.length),
             value.selection.end.coerceIn(0, text.length)
         )
-    )
-}
-
-/**
- * One draft's photo picker: the launcher, and the upload it is currently doing.
- *
- * The picker is a round trip through an image host, so it has to report two things
- * the field must draw - "Uploading…" and why an upload failed - beside the
- * composer. Pulled out of [ActivityCommentsSheet] because the edit pane needs
- * the same picker against a different draft, and two copies of the upload would
- * drift the first time either was fixed.
- *
- * [ImageUploader] is the host chain, not a single host: catbox has paused anonymous
- * uploads, and the two fallbacks are what keep this button working while it is
- * paused.
- */
-private data class PhotoAttachment(
-    val launch: () -> Unit,
-    val isUploading: Boolean,
-    val note: String?
-)
-
-@Composable
-private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachment {
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val uploader = ImageUploader.shared
-    var isUploading by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf<String?>(null) }
-
-    val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        isUploading = true
-        note = "Uploading…"
-        scope.launch {
-            // Written with a `finally` rather than `mapCatching`/`fold`, because a
-            // cancelled upload is neither a success nor a failure: `mapCatching`
-            // catches `Throwable`, so closing the sheet mid-transfer took the
-            // cancellation as its "failure", wrote a reason the reader never asked
-            // for, and left `isUploading` true on the way out - a Send button
-            // disabled by an upload that had already been thrown away.
-            try {
-                val image = PickedImageReader.read(context, uri).getOrThrow()
-                val url = uploader.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
-                onUploaded(url)
-                note = null
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                note = failure.message ?: "The upload did not go through."
-            } finally {
-                isUploading = false
-            }
-        }
-    }
-
-    return PhotoAttachment(
-        launch = {
-            picker.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
-        },
-        isUploading = isUploading,
-        note = note
     )
 }
 
@@ -592,7 +575,17 @@ private fun ScrollToPostedReply(
                     repliesLoaded = state.replies.size,
                     shownRows = state.shownRows
                 )
-            ) > 0
+            ) > 0,
+            // Fetched is not drawn. The list shows the newest `shownRows` of the
+            // thread, so a reply's index in `state.replies` counts every row the
+            // window has not revealed above it as well - and on a thread the reader
+            // had scrolled up in that is a head start of dozens. The index then
+            // pointed past the end of the list, `animateScrollToItem` clamped it, and
+            // the reader stopped on the newest comment instead of their own.
+            hiddenRows = CommentWindow.hiddenPrefixRows(
+                repliesLoaded = state.replies.size,
+                shownRows = state.shownRows
+            )
         )
         if (row < 0) return@LaunchedEffect
         // An index past the end is clamped by `animateScrollToItem`, so a thread
@@ -618,9 +611,17 @@ internal fun postedReplyRow(
     replies: List<ActivityReply>,
     postedReplyId: Int,
     hasBannerRow: Boolean,
-    hasOlderRow: Boolean = false
+    hasOlderRow: Boolean = false,
+    /**
+     * Fetched rows the window has not drawn, and which are therefore not in the list
+     * this index counts.
+     *
+     * Zero when everything fetched is on screen - the common case, and the one every
+     * existing expectation about this function was written for.
+     */
+    hiddenRows: Int = 0
 ): Int {
-    val index = replies.indexOfFirst { it.id == postedReplyId }
+    val index = replies.indexOfFirst { it.id == postedReplyId } - hiddenRows
     if (index < 0) return -1
     // Counted with statements rather than `index + (if (...) 1 else 0) + ...`:
     // dropping the parentheses to satisfy a lint rule changes what the operands

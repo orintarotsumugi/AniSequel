@@ -313,6 +313,30 @@ object AniListMarkdownParser {
     )
 
     /**
+     * The `width` of an [HTML_IMG_TAG_PATTERN] match, in either of the two forms the
+     * site writes.
+     *
+     * `width='220'` is pixels and `width="50%"` is a share of the column, which is
+     * exactly the pair [clampedImageWidthDp] and [clampedImageWidthPercent] already
+     * understand for the `img220(...)` spelling - so the value is kept as written and
+     * the same two clamps apply to it, rather than a third rule invented here.
+     *
+     * This attribute is why the size of a bio image survives the API at all: AniList
+     * stores a sized banner as `<img width='100%' src='…'>` in the description it
+     * returns, and the parser read only `src` and `alt`, so every sized image came out
+     * at the renderer's size-less default.
+     */
+    private val HTML_IMG_WIDTH_PATTERN = Regex(
+        // The lookbehind for whitespace is not decoration: an attribute search that
+        // takes the first `width=` in the tag finds the one inside a URL -
+        // `<img src='https://x/a.jpg?width=100' width='220'>` is a 220 image, and
+        // reading the query string as the size would have drawn a banner at the
+        // wrong scale. An attribute always follows whitespace; a URL does not care.
+        """(?<=\s)width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
      * A protocol-relative image URL between two words.
      *
      * [INLINE_AUTO_URL] requires a scheme, so the `https://` spelling of an
@@ -589,7 +613,11 @@ object AniListMarkdownParser {
         HTML_IMG_TAG_PATTERN.matchEntire(trimmedLine)?.let { match ->
             val htmlImage = htmlTagImage(match.value)
             if (htmlImage != null) {
-                return MarkdownNode.ImageBlock(url = htmlImage.first, alt = htmlImage.second)
+                return MarkdownNode.ImageBlock(
+                    url = htmlImage.url,
+                    alt = htmlImage.alt,
+                    width = htmlImage.width
+                )
             }
         }
 
@@ -1205,19 +1233,52 @@ object AniListMarkdownParser {
         if (url.startsWith("//")) "https:$url" else url
 
     /**
-     * The image an `<img ...>` tag names, as `src` to `alt`, or null when it
-     * names no `src`.
+     * The image an `<img ...>` tag names, or null when it names no `src`.
      *
      * A tag without a usable `src` is not an image at all; the callers keep it
-     * as text rather than dropping the author's line. [alt] is null when the tag
+     * as text rather than dropping the author's line. [HtmlImage.alt] is null when the tag
      * has none or when it is blank, because a blank `contentDescription` is not
      * the same thing as none at all to a screen reader.
+     *
+     * [HtmlImage.width] is the size the tag asked for, in the same spelling the `img220(...)`
+     * forms use, so one pair of clamps sizes every image in the document. See
+     * [HTML_IMG_WIDTH_PATTERN] for why reading it is the difference between a bio
+     * drawing its author's sizes and drawing its author's sizes wrong.
      */
-    private fun htmlTagImage(tag: String): Pair<String, String?>? {
+    private data class HtmlImage(val url: String, val alt: String?, val width: String?)
+
+    private fun htmlTagImage(tag: String): HtmlImage? {
         val src = HTML_IMG_SRC_PATTERN.find(tag)?.htmlAttributeValue()?.takeIf { it.isNotBlank() }
             ?: return null
         val alt = HTML_IMG_ALT_PATTERN.find(tag)?.htmlAttributeValue()?.takeIf { it.isNotBlank() }
-        return absoluteImageUrl(src) to alt
+        return HtmlImage(
+            url = absoluteImageUrl(src),
+            alt = alt,
+            width = htmlImageWidth(HTML_IMG_WIDTH_PATTERN.find(tag)?.htmlAttributeValue())
+        )
+    }
+
+    /**
+     * The tag's `width` as this app spells a size, or null for "the file's own size".
+     *
+     * `220`, `220px` and `50%` all mean what they say; `auto` and anything a number
+     * cannot be are the same as writing no width at all, because the renderer's
+     * size-less default is the site's default too. A negative or zero number is
+     * dropped here rather than clamped: an image the author asked to be drawn at
+     * nothing is a mistake in the bio, and the mistake reads better as the picture
+     * than as a blank line.
+     */
+    internal fun htmlImageWidth(raw: String?): String? {
+        val value = raw?.trim()?.lowercase()?.removeSuffix("px")?.takeIf { it.isNotEmpty() }
+            ?: return null
+        // `auto` is the browser's own default, which is what this app's size-less
+        // branch already is - so it is not a size, and answering null says so once.
+        if (value == "auto") return null
+        val percent = value.endsWith("%")
+        val number = (if (percent) value.dropLast(1) else value).toIntOrNull()
+            ?: return null
+        if (number <= 0) return null
+        return if (percent) "$number%" else number.toString()
     }
 
     /** The first of an attribute's quoted or unquoted spellings that matched. */
@@ -1411,7 +1472,7 @@ object AniListMarkdownParser {
                 "HTML_IMG" -> {
                     val image = htmlTagImage(firstMatch.value)
                     if (image != null) {
-                        tokens.add(InlineToken.Image(image.first, image.second))
+                        tokens.add(InlineToken.Image(image.url, image.alt, image.width))
                     } else {
                         // A tag with no `src` has nothing to draw, so it stays as
                         // the text the author wrote rather than vanishing.

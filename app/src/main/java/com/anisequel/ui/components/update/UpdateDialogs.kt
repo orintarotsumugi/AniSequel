@@ -1,5 +1,7 @@
 package com.anisequel.ui.components.update
 
+import android.os.Build
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.update.formatBytes
 import com.anisequel.data.update.formatRate
 import com.anisequel.data.update.parseReleaseNotes
+import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ReleaseNotes
 
 /**
@@ -41,6 +47,10 @@ import com.anisequel.ui.components.ReleaseNotes
 @Composable
 fun UpdatePromptHost(controller: UpdateController) {
     val state = controller.state
+    // Declared above the early return below, not beside the dialog that reads it: a
+    // `remember` after a conditional return is a conditional composable call, and the
+    // guide's open flag has to keep the same slot whether or not an update is showing.
+    var showPermissionGuide by remember { mutableStateOf(false) }
 
     // Nothing to say in any of these, so nothing is drawn - critically including
     // UpToDate and Failed, which are results the user asked for on the Settings
@@ -138,6 +148,24 @@ fun UpdatePromptHost(controller: UpdateController) {
                     DownloadProgress(state = state)
                 }
 
+                // The permission, said before the button is pressed rather than after.
+                //
+                // This dialog's copy is about the release; in this state the action the
+                // button takes is on another app entirely, and a user who taps "Open
+                // settings" without knowing that lands in a Settings screen asking what
+                // they were sent there to change. The guide is the step-by-step answer,
+                // and it is offered from the button as well for a phone whose row this
+                // text cannot name.
+                if (state is UpdateUiState.NeedsInstallPermission) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = InstallPermissionGuide.summary(APP_NAME),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("update_permission_hint")
+                    )
+                }
+
                 // What went wrong the last time the installer was asked for, if
                 // it did. The download is still on disk and this button is still
                 // the way to install it, so the message sits above both rather
@@ -167,7 +195,12 @@ fun UpdatePromptHost(controller: UpdateController) {
                     when (state) {
                         is UpdateUiState.Available -> controller.download()
                         is UpdateUiState.ReadyToInstall -> controller.install()
-                        is UpdateUiState.NeedsInstallPermission -> controller.requestInstallPermission()
+                        // The steps, not the jump: this is the one place in the app
+                        // that sends the user into another app's screens, and those
+                        // screens are named differently on every manufacturer's build.
+                        // Landing them in Settings with no idea what to tap is how an
+                        // update becomes "this app can't install".
+                        is UpdateUiState.NeedsInstallPermission -> showPermissionGuide = true
                         else -> Unit
                     }
                 },
@@ -177,10 +210,11 @@ fun UpdatePromptHost(controller: UpdateController) {
                 Text(
                     when (state) {
                         is UpdateUiState.ReadyToInstall -> "Install"
-                        // Once the hand-off has been offered, this button means
-                        // "try again" rather than "explain it again".
+                        // Once the hand-off has been offered, the button says so: the
+                        // reader has been to that screen already, and what they need is
+                        // the way back to it.
                         is UpdateUiState.NeedsInstallPermission ->
-                            if (state.sentToSettings) "Try again" else "Open settings"
+                            if (state.sentToSettings) "Open settings again" else "Open settings"
 
                         // Asking for a download that is already running reads as
                         // though the tap did nothing, which it did.
@@ -202,7 +236,101 @@ fun UpdatePromptHost(controller: UpdateController) {
             ) { Text("Later") }
         }
     )
+
+    if (showPermissionGuide) {
+        InstallPermissionGuideDialog(
+            manufacturer = Build.MANUFACTURER,
+            onOpenSettings = {
+                showPermissionGuide = false
+                controller.requestInstallPermission()
+            },
+            onDismiss = { showPermissionGuide = false }
+        )
+    }
 }
+
+/**
+ * The step-by-step guide for the one permission this app cannot ask for.
+ *
+ * Android's grant lives in whichever Settings app the phone's manufacturer shipped,
+ * under a name that changes between them, so the dialog spells the path out for the
+ * brand in hand and keeps a search-box fallback for a build nobody predicted. The
+ * sentences are [InstallPermissionGuide]'s - a pure object, because the only thing
+ * worth verifying without a device is that a Samsung reader is given Samsung's steps
+ * and an unknown reader is not given Samsung's.
+ *
+ * Its confirm button is the actual hand-off, so the user reads the instructions
+ * *before* leaving the app rather than after landing somewhere they cannot explain.
+ */
+@Composable
+fun InstallPermissionGuideDialog(
+    manufacturer: String?,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = modifier.testTag("install_permission_guide"),
+        icon = {
+            Icon(
+                imageVector = AppVectorIcons.Settings,
+                contentDescription = null
+            )
+        },
+        title = { Text(InstallPermissionGuide.title(APP_NAME)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // The step list is five lines on a Samsung and three elsewhere,
+                    // and a dialog cannot grow: without the scroll the last step - the
+                    // search fallback, the one that always works - is the first thing
+                    // to run off the bottom of a short screen.
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = InstallPermissionGuide.summary(APP_NAME),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                InstallPermissionGuide.steps(APP_NAME, manufacturer).forEachIndexed { index, step ->
+                    Text(
+                        text = "${index + 1}.  $step",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                            .testTag("install_permission_step")
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = InstallPermissionGuide.afterGrant(APP_NAME),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.testTag("install_permission_guide_open")
+            ) { Text("Open settings") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("install_permission_guide_close")
+            ) { Text("Not now") }
+        }
+    )
+}
+
+/** The name the permission copy uses for itself; the launcher label is the same. */
+private const val APP_NAME = "AniSequel"
 
 /**
  * The failure message this state is carrying, if any.

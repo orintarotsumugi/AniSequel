@@ -223,7 +223,19 @@ class CommentThreadStore(
          * comments that had not come, and the reader saw nothing happen.
          */
         val refreshError: String? = null
-    )
+    ) {
+        /**
+         * The failure the reader is shown, in the order the banner reads it.
+         *
+         * Three fields, because the three failures are retried differently - see
+         * [refreshError]. One screen shows whichever of them happened, and the row
+         * that draws the banner and the row that counts rows above the replies each
+         * spelled that precedence out. A reopen of a thread that already has rows is
+         * a refresh over them, so its failure arrives in [refreshError]; a caller
+         * that only looked at [loadError] reported the thread as fine.
+         */
+        val bannerError: String? get() = windowError ?: refreshError ?: loadError
+    }
 
     private val _state = MutableStateFlow<CommentsState?>(null)
     val state: StateFlow<CommentsState?> = _state.asStateFlow()
@@ -268,6 +280,15 @@ class CommentThreadStore(
 
     /** Re-reads the newest page; [atBottom] decides whether the reader is moved. */
     fun checkForNewComments(atBottom: Boolean) = window.checkForNewComments(atBottom)
+
+    /**
+     * Re-reads the thread because the reader tapped Refresh.
+     *
+     * Same rules as the background check - one request at a time, and a tap during a
+     * check that is already out is ignored - because AniList holds the session at
+     * about 30 requests a minute and this shares that budget with every other screen.
+     */
+    fun refreshNow(atBottom: Boolean) = window.refreshNow(atBottom)
 
     /** Takes in the comments a background check found, and clears the count. */
     fun revealNewComments() = window.revealNewComments()

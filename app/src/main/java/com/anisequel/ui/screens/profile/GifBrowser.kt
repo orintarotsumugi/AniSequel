@@ -31,10 +31,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.anisequel.data.network.GifResult
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import androidx.compose.ui.graphics.graphicsLayer
@@ -105,6 +107,14 @@ internal fun ColumnScope.GifBrowser(
     // something else happened to recompose this composition.
     val recent by store.recent.collectAsStateWithLifecycle()
 
+    fun onPickSuggestion(tag: String) {
+        // `setQuery` alone would schedule the debounce and leave the reader
+        // looking at the chips for another 450ms; this is a deliberate tap, not
+        // typing, so it goes straight to the search the keyboard's Enter runs.
+        store.setQuery(tag)
+        store.searchNow()
+    }
+
     OutlinedTextField(
         // The `String` overload, not a rebuilt `TextFieldValue`. Wrapping the store's
         // query in `TextFieldValue(state.query)` puts the caret at index 0 on every
@@ -114,7 +124,16 @@ internal fun ColumnScope.GifBrowser(
         // business as long as the value it reports is the value it is given.
         value = state.query,
         onValueChange = { store.setQuery(it) },
-        placeholder = { Text("Search GIFs") },
+        placeholder = {
+            // Names the index whose answer this is, so the grid's results - and
+            // its misses - are visibly the provider's, not the app's. A reader
+            // who has saved a Tenor key sees the switch happen here, which is the
+            // cheapest place to learn the setting took effect.
+            Text(
+                if (store.providerName.isBlank()) "Search GIFs"
+                else "Search ${store.providerName} for a GIF"
+            )
+        },
         singleLine = true,
         leadingIcon = {
             Icon(
@@ -153,17 +172,24 @@ internal fun ColumnScope.GifBrowser(
     )
 
     // A row of reactions for the reader who knows what they want to say and not
-    // which tag says it. The picker's own empty state asks for a search; this hands
-    // over the six words the index is known to answer, so the first visit is a tap
-    // rather than a guess at booru tag spelling.
+    // which tag says it, and a row of series for the one who knows the show and
+    // not its booru tag - `sousou_no_frieren`, which nobody types. Every chip here
+    // was checked against the live index with the app's own request shape before it
+    // went in: a chip that searches into an empty grid reads as the picker being
+    // broken rather than as a gap in the index.
     if (state.query.isBlank()) {
-        GifSuggestionRow(onPick = { tag ->
-            // `setQuery` alone would schedule the debounce and leave the reader
-            // looking at the chips for another 450ms; this is a deliberate tap, not
-            // typing, so it goes straight to the search the keyboard's Enter runs.
-            store.setQuery(tag)
-            store.searchNow()
-        })
+        GifSuggestionRow(
+            caption = "Reactions",
+            suggestions = GIF_REACTIONS,
+            tagTestPrefix = "comment_gif_suggestion",
+            onPick = { tag -> onPickSuggestion(tag) }
+        )
+        GifSuggestionRow(
+            caption = "Series",
+            suggestions = GIF_SERIES,
+            tagTestPrefix = "comment_gif_series",
+            onPick = { tag -> onPickSuggestion(tag) }
+        )
     }
 
     when {
@@ -328,48 +354,100 @@ private fun emptyStateNote(state: GifSearchStore.State, error: String?): String 
     }
 
 /**
- * The six reactions offered above an empty search.
+ * One labelled row of searchable tags.
  *
- * Each one was checked against the live index for posts under `animated_gif
- * rating:general` before it went in here, and that checking is the whole reason the
- * list is not the obvious set of words: `smiling` and `wave` answer nothing in that
- * corner of the catalogue, while `laughing` and `blush` answer plenty. A chip that
- * searches into an empty grid is worse than no chip at all - it reads as the picker
- * being broken rather than as a gap in the index, and the empty-state line below it
- * is the only thing that could explain the difference.
+ * The caption is not decoration: it tells the reader which of the two ways to use
+ * a booru they are being handed - a feeling (`crying`) or a title (`sousou no frieren`) -
+ * and a chip's own label is the tag the index is asked for, shown with its
+ * underscores kept. A reader who learns the spelling here will type it next time.
  */
 @Composable
-private fun GifSuggestionRow(onPick: (String) -> Unit) {
+private fun GifSuggestionRow(
+    caption: String,
+    suggestions: List<String>,
+    tagTestPrefix: String,
+    onPick: (String) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 20.dp)
+            .padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GIF_SUGGESTIONS.forEach { tag ->
-            Box(
-                modifier = Modifier
-                    .bouncyPress()
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clickable(onClickLabel = "Search for $tag") { onPick(tag) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("comment_gif_suggestion_$tag")
-            ) {
-                Text(
-                    text = tag.replace('_', ' '),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Text(
+            text = caption,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            suggestions.forEach { tag ->
+                // One interaction source for the spring and the click. `bouncyPress`
+                // without one installs its own fallback pointer loop on the same
+                // element `clickable` is driving, and the two compete for the tap -
+                // the failure `SpoilerChip` documents, and the reason the picker's
+                // own tiles pass a source while these chips used to not.
+                val interactionSource = remember(tag) { MutableInteractionSource() }
+                Box(
+                    modifier = Modifier
+                        .bouncyPress(interactionSource = interactionSource)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClickLabel = "Search for $tag"
+                        ) { onPick(tag) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .testTag("${tagTestPrefix}_$tag")
+                ) {
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
-/** Verified against a live page of `animated_gif rating:general`, not guessed. */
-private val GIF_SUGGESTIONS = listOf("laughing", "crying", "angry", "surprised", "confused", "blush")
+/**
+ * Reactions: what a reader wants to *say*, checked against the live index.
+ *
+ * This list is not the obvious set of words. `smiling` and `wave` answer nothing in
+ * the `animated_gif rating:safe` corner of the catalogue while `laughing` and
+ * `blush` answer plenty, and a chip that searches into an empty grid is worse than
+ * no chip: it reads as the picker being broken rather than as a gap in the index.
+ */
+private val GIF_REACTIONS = listOf("laughing", "crying", "angry", "surprised", "confused", "blush")
+
+/**
+ * Series: what a reader wants to *watch*, each one a tag the index really carries.
+ *
+ * Typed as booru tags rather than as release titles, because that is what the field
+ * is being taught to accept: `sousou no frieren` is the search a reader types and
+ * `sousou_no_frieren*` is what answers - the app's own phrase tier rewrites the
+ * words, and the prefix tier finds the series when the exact tag is not the one the
+ * site uses (`frieren_beyond_journeys_end` answers nothing; `frieren*` answers the
+ * show). Each entry was measured against the live index with the app's request
+ * shape before it went in, the same rule [GIF_REACTIONS] is held to.
+ */
+private val GIF_SERIES = listOf(
+    "spice_and_wolf",
+    "sousou_no_frieren*",
+    "kaguya*",
+    "evangelion*",
+    "mob_psycho_100*",
+    "boku_no_hero_academia*"
+)
 
 /** One animated result, tapped to put it in the comment. */
 @Composable
@@ -411,7 +489,13 @@ private fun GifTile(
 /** The waiting shape: the grid the results will fill, at the sizes they will have. */
 @Composable
 private fun GifSkeleton(modifier: Modifier = Modifier) {
-    val phase by rememberShimmerPhase()
+    // One driver for the whole grid, and a `ShimmerBox` per tile. The phase used to be
+    // read here while building a `Color`, which is a *composition* read - a full
+    // recomposition of the grid every frame of the shimmer, exactly what
+    // [com.anisequel.ui.components.ShimmerBox] exists to avoid. The tiles are therefore
+    // phase-locked now rather than offset from each other: one sweep across the waiting
+    // grid instead of nine unrelated ones, which is what the shared clock is for.
+    val phase = rememberShimmerPhase()
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -420,19 +504,13 @@ private fun GifSkeleton(modifier: Modifier = Modifier) {
         userScrollEnabled = false,
         modifier = modifier.fillMaxWidth()
     ) {
-        items(SKELETON_TILES) { index ->
-            Box(
-                modifier = Modifier
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(percent = 12))
-                    // The same shimmer the comment skeleton uses, offset per tile so
-                    // a waiting grid is not nine identical grey squares pulsing
-                    // together.
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(
-                            alpha = 0.35f + 0.35f * ((phase + index * 0.11f) % 1f)
-                        )
-                    )
+        items(SKELETON_TILES) {
+            ShimmerBox(
+                modifier = Modifier.aspectRatio(1f),
+                // The tile's own corner, so a waiting cell and the picture that
+                // replaces it are the same shape.
+                shape = RoundedCornerShape(percent = 12),
+                phase = phase
             )
         }
     }

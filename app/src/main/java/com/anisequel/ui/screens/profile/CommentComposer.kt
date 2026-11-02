@@ -2,13 +2,9 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,30 +16,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
 /**
@@ -110,6 +100,17 @@ internal fun CommentComposer(
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
     onPickFromDevice: () -> Unit,
+    /**
+     * How a picked photo is written into the draft: its size and framing.
+     *
+     * Held by the sheet, like the draft itself, because the sheet owns the picker and
+     * the upload - the composer can show the choice, but only the code that receives
+     * the host's URL can use it. Two of these exist in the sheet (the new-comment
+     * draft and the edit draft), and each gets its own style so an attachment made
+     * while editing cannot land in the other field's shape.
+     */
+    photoStyle: EmbedStyle = EmbedStyle(),
+    onPhotoStyleChange: (EmbedStyle) -> Unit = {},
     /**
      * The GIF picker, as a pane.
      *
@@ -197,8 +198,15 @@ internal fun CommentComposer(
 
         when {
             showingGifs -> {
-                GifWidthRow(gifWidth) { gifWidth = it }
-                GifFramingRow(gifFraming) { gifFramingName = it.name }
+                AttachmentEmbedRows(
+                    style = EmbedStyle(gifWidth, gifFraming),
+                    onStyleChange = { next ->
+                        gifWidth = next.width
+                        gifFramingName = next.framing.name
+                    },
+                    caption = "Insert this GIF",
+                    tagPrefix = "comment_gif_embed"
+                )
                 gifPane { url ->
                     insertBlockAt(MediaAttachment.embedMarkdown(url, gifWidth, gifFraming))
                     pane = PANE_WRITE
@@ -220,6 +228,20 @@ internal fun CommentComposer(
                 onClearReplyTo = onClearReplyTo,
                 previewing = false,
                 focusRequester = focusRequester
+            )
+        }
+
+        // The same two commands the GIF pane offers, for the file the attach button
+        // is about to pick. They live on the Write pane because that is where the
+        // button is, and the size has to be chosen before the URL is written - a
+        // reader cannot be expected to retype `img220(` around a link they did not
+        // type. Hidden in Preview, where there is nothing to attach.
+        if (pane == PANE_WRITE) {
+            AttachmentEmbedRows(
+                style = photoStyle,
+                onStyleChange = onPhotoStyleChange,
+                caption = "Attach a photo as",
+                tagPrefix = "comment_photo_embed"
             )
         }
 
@@ -442,114 +464,6 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(14.dp)
             )
-        }
-    }
-}
-
-/**
- * Whether the picked GIF goes in on its own, centred, or behind a spoiler.
- *
- * Beside the width row rather than in the format bar, because it belongs to the
- * embed about to be inserted: a reader choosing a reaction GIF is often choosing
- * one that spoils something, and the alternative - inserting it and then wrapping
- * the line by hand in `~!...!~` on a phone keyboard - is not a thing anybody does.
- */
-@Composable
-private fun GifFramingRow(selected: MediaAttachment.EmbedFraming, onSelect: (MediaAttachment.EmbedFraming) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MediaAttachment.EmbedFraming.entries.forEach { framing ->
-            val label = when (framing) {
-                MediaAttachment.EmbedFraming.Plain -> "Normal"
-                MediaAttachment.EmbedFraming.Centred -> "Centred"
-                MediaAttachment.EmbedFraming.Spoiler -> "Spoiler"
-            }
-            val isSelected = framing == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(
-                        if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        }
-                    )
-                    .clickable(onClickLabel = "Insert as $label") { onSelect(framing) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("comment_gif_framing_$label")
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-        }
-    }
-}
-
-
-/**
- * The widths a picked GIF can be inserted at.
- *
- * AniList's own editor offers exactly this choice, and it matters more on a phone
- * than on a desktop: a comment thread is read on a 360dp screen, so an original
- * 720px animation is a wall that pushes the conversation away. "Original" stays
- * first in the list because some GIFs *are* their size - a 60px sprite row blown up
- * to 220 is a blur - but it is not the default.
- */
-@Composable
-private fun GifWidthRow(selected: String, onSelect: (String) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        (listOf<String?>(null) + MediaAttachment.EMBED_WIDTHS).forEach { width ->
-            val label = width ?: "Original"
-            // Compared through the row's own spelling of Original: the selected value
-            // is a `String` in which `""` means Original, and `null` is what this
-            // list stands for it, so the two would never match and picking Original
-            // left every chip in the row looking unchosen.
-            val isSelected = (width ?: "") == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(
-                        if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        }
-                    )
-                    .clickable(onClickLabel = "Insert at $label width") { onSelect(width ?: "") }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("comment_gif_width_$label")
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
         }
     }
 }

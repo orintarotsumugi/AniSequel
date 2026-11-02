@@ -862,9 +862,31 @@ The `?:` made that true only until the detail response landed: a sheet opened fr
 the dashboard starts on the list node, which has no banner, so the first frames
 drew the poster — and then the banner arrived and replaced the artwork under the
 title mid-entrance, at the cost of a second full-size download, decode and GPU
-upload during the animation. The hero draws the key visual again, and the banner
-is simply not read here. It is still selected by the detail query and merged onto
+upload during the animation. The hero drew the key visual again, and the banner
+was simply not read here. It is still selected by the detail query and merged onto
 the node, which is why `MediaNode.bannerImage` survives the change.
+
+**That last sentence is what has since changed, and it is worth keeping the
+failure above on the record because the fix is narrow.** The banner is read again —
+`InfoHero` passes `bannerImage` to `InfoHeroBackdrop`, which *crossfades* from the
+key visual to the banner instead of swapping it. The crossfade is the difference
+between the two designs: the mid-entrance jump this section describes was caused by
+replacing one image node with another during an animation, not by the banner itself.
+So the slot is not empty by design; it is the key visual until the detail document
+arrives, and the banner dissolves in over it. Two things follow, and both are now
+pinned rather than assumed:
+
+- **A detail answer that says nothing about the banner must not erase a banner the
+  summary already had.** `detailFor` used to hand back the fetched node rather than
+  `summary.withDetail(detail)`, which is safe only while `MEDIA_DETAIL_FIELDS`
+  happens to select every field a summary carries. AniList files no banner for some
+  titles (measured live: `Media(id: 37121).bannerImage` is `null`), and an activity
+  row's media does select `bannerImage` — so a swap could paint over visible artwork
+  with nothing. `MediaNodeDisplayTest` pins both directions of the merge now.
+- **The list query stays lean on purpose.** Adding `bannerImage` there would put the
+  banner on all ~1,500 relation nodes of a 476-entry account for the sake of one
+  opened sheet, which is rule 1 of `GraphQLQueries`. The banner being one request
+  away on a dashboard open is the documented cost of that rule, not a defect.
 
 ### A person's appearance rows asked for the small cover, and the merge kept it
 

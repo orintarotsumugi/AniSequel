@@ -140,6 +140,55 @@ class UpdateDownloadStateTest {
         }
     }
 
+    /**
+     * A Settings app that will not open costs the user a sentence, not the download.
+     *
+     * This used to become `Failed`, which took the file out of the state: the dialog
+     * vanished, the Settings row showed an error as though nothing had been
+     * downloaded, and the only way back was a re-check that happened to rehydrate the
+     * APK. It also blamed the device - "This device has no Settings app" - for what
+     * was, in every reported case, this app's own broken intent. The state now keeps
+     * the file and carries the one instruction that works without us reaching into
+     * anyone's Settings: search for the switch.
+     */
+    @Test
+    fun `a refused settings hand-off keeps the downloaded file and says what to do`() {
+        val alreadyThere = File("anisequel-9999.apk")
+
+        runTest(dispatcher) {
+            val controller = UpdateController(
+                managerReporting(alreadyThere),
+                object : UpdateInstallation(context) {
+                    override fun canInstallPackages(): Boolean = false
+                    override fun openInstallPermissionSettings(): Boolean = false
+                }
+            )
+
+            controller.check()
+            advanceUntilIdle()
+
+            controller.requestInstallPermission()
+
+            val state = controller.state
+            assertTrue(
+                "expected NeedsInstallPermission but was $state",
+                state is UpdateUiState.NeedsInstallPermission
+            )
+            val pending = state as UpdateUiState.NeedsInstallPermission
+            assertEquals("the APK is still the thing to install", alreadyThere, pending.file)
+            assertTrue(
+                "the row stops offering a first visit it could not complete",
+                pending.sentToSettings
+            )
+            val notice = pending.notice
+            assertTrue("a reason is owed: $notice", notice?.contains("install unknown apps") == true)
+            assertTrue(
+                "the file is not lost, so the message must not send them to re-download",
+                notice?.contains("already downloaded") == true
+            )
+        }
+    }
+
     @Test
     fun `rehydration respects a missing install permission`() {
         // Downloading something and then being unable to install it is still the

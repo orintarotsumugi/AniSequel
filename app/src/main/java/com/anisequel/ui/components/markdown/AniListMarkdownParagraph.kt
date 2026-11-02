@@ -110,12 +110,15 @@ fun RenderParagraph(
 
                 // Reuses the block image renderer, so an inline GIF and a
                 // full-line one are the same size, shape and tap target - there is
-                // one image treatment in the markdown stack, not two.
+                // one image treatment in this markdown stack, not two. The width the
+                // author gave *this* file travels with it, so a bio of one 100% banner
+                // and two 220 strips draws one banner and two strips.
                 is InlineSegment.Image -> RenderImage(
                     MarkdownNode.ImageBlock(
                         url = segment.token.url,
                         alt = segment.token.alt,
-                        targetUrl = segment.targetUrl
+                        targetUrl = segment.targetUrl,
+                        width = segment.width
                     )
                 )
             }
@@ -132,13 +135,38 @@ private sealed interface InlineSegment {
      * `[![cover](img)](target)` - so the drawn image keeps the tap the author gave
      * it. `RenderImage` already supports it; the paragraph used to drop the link and
      * show the image's alt text instead.
+     *
+     * [width] is the size the author asked for, carried through to `RenderImage` so
+     * an inline `<img width='220'>` is a 220 strip and not a full-column slab.
      */
-    data class Image(val token: InlineToken.Image, val targetUrl: String? = null) : InlineSegment
+    data class Image(
+        val token: InlineToken.Image,
+        val targetUrl: String? = null,
+        val width: String? = null
+    ) : InlineSegment
 }
 
 /**
  * Groups text tokens into runs so each run is one wrapped `Text` rather than a
- * `Text` per token, which would break a line at every bold word.
+ * `Text` per token, which would break a line at every bold word, and lifts every
+ * image out of whatever it is nested in.
+ *
+ * ## Why the lift has to recurse
+ *
+ * AniList's editor writes a banner three ways: `![alt](x.gif)`,
+ * `[![cover](x.gif)](https://…)`, and `**![banner](x.gif)**` - the last is what a
+ * bold heading line of a bio produces. Only the first two were lifted, so a GIF
+ * inside an emphasis run stayed inside the text token list and the paragraph printed
+ * its alt text as a link instead of the picture.
+ *
+ * ## What it costs
+ *
+ * A container is only opened when it actually holds an image, so the ordinary
+ * `**✨ [#1] [Title](url)**` bio line keeps its bold wrapper untouched. An emphasis
+ * run that *does* wrap a bitmap loses the wrapper for its own words, because a
+ * `Text` cannot be split around a composable in the middle of a line: the text is
+ * drawn unstyled and the image is drawn at its own size, directly after it. Before
+ * this, that same sentence drew no image at all.
  */
 private fun List<InlineToken>.toInlineSegments(): List<InlineSegment> {
     val segments = mutableListOf<InlineSegment>()
@@ -151,24 +179,30 @@ private fun List<InlineToken>.toInlineSegments(): List<InlineSegment> {
         }
     }
 
-    forEach { token ->
-        val embedded = when (token) {
-            is InlineToken.Image -> token to null
-            // A link whose whole label is one image *is* that image, tappable. This
-            // is how a banner bio writes `[![cover](img)](target)`; the token tree
-            // nests the image inside the link, the walker only looked at top-level
-            // tokens, and the paragraph drew the word "Image" instead of the GIF.
-            is InlineToken.Link ->
-                (token.children.singleOrNull() as? InlineToken.Image)?.let { it to token.url }
-            else -> null
-        }
-        if (embedded == null) {
-            run.add(token)
-        } else {
-            flushRun()
-            segments.add(InlineSegment.Image(embedded.first, embedded.second))
+    fun emitImage(image: InlineToken.Image, targetUrl: String?) {
+        // The flush happens inside, so two images in a row are two segments rather
+        // than one segment each appended to a run that never emptied.
+        flushRun()
+        segments.add(InlineSegment.Image(image, targetUrl, image.width))
+    }
+
+    fun walk(tokens: List<InlineToken>, targetUrl: String?) {
+        tokens.forEach { token ->
+            when {
+                token is InlineToken.Image -> emitImage(token, targetUrl)
+                token.nestedTokens().containsEmbeddedImage() ->
+                    // A link's target travels down with its label, which is the whole
+                    // point of `[![cover](img)](target)`: the picture keeps the tap.
+                    walk(
+                        token.nestedTokens(),
+                        (token as? InlineToken.Link)?.url ?: targetUrl
+                    )
+                else -> run.add(token)
+            }
         }
     }
+
+    walk(this, null)
     flushRun()
     return segments
 }

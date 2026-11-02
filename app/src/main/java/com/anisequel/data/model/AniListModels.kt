@@ -357,6 +357,11 @@ data class MediaNode(
         // widget's fixture) used to stay "Unknown Title" through the merge even
         // once the answer was in hand. `?:` keeps whatever this node already had.
         title = detail.title ?: title,
+        // Carried, because `detailFor` accepts a summary whose own type is unknown:
+        // a node fetched from a query that did not select `type` used to merge every
+        // other field and still arrive without the one the sheet branches on, so a
+        // manga opened as an anime - episode count where chapters belong.
+        type = detail.type ?: type,
         description = detail.description ?: description,
         bannerImage = detail.bannerImage ?: bannerImage,
         // The summary's own facts, for the same reason as `title`.

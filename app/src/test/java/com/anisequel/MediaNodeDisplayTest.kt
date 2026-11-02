@@ -450,7 +450,73 @@ class MediaNodeDisplayTest {
         val typeless = MediaNode(id = 1)
         val fetched = MediaNode(id = 1, type = "MANGA", description = "A manga")
 
-        assertEquals(fetched, mapOf(1 to fetched).detailFor(typeless))
+        val merged = mapOf(1 to fetched).detailFor(typeless)
+        assertEquals("A manga", merged?.description)
+        assertEquals("MANGA", merged?.type)
+    }
+
+    /**
+     * The detail is merged onto the summary, not swapped in for it.
+     *
+     * `detailFor` used to hand back the fetched node alone, which worked only because
+     * `MEDIA_DETAIL_FIELDS` happens to select every field a summary node carries. That
+     * is a property of today's query text, not a contract, and the banner is the case
+     * where the difference is visible: an activity row's media carries `bannerImage`,
+     * the detail document can answer `null` for it (AniList files no banner for every
+     * title - measured live on media 37121), and a swap then paints over the artwork
+     * the reader could already see with nothing at all.
+     *
+     * The direction of the merge is the one [MediaNode.withDetail] already promises:
+     * a field the detail *answered* wins, a field it left null keeps the summary's.
+     */
+    @Test
+    fun `a detail that says nothing about a field keeps what the summary already had`() {
+        val summary = MediaNode(
+            id = 7,
+            type = "ANIME",
+            bannerImage = "https://s4.anilist.co/file/summary-banner.jpg",
+            averageScore = 81
+        )
+        // The detail answer for a title with no banner: cover and description present,
+        // `bannerImage` null because the server has none to give.
+        val detail = MediaNode(
+            id = 7,
+            type = "ANIME",
+            description = "The synopsis only the detail query fetches",
+            bannerImage = null
+        )
+
+        val merged = mapOf(7 to detail).detailFor(summary)!!
+
+        assertEquals(
+            "a null in the answer must not erase a banner that was already on screen",
+            summary.bannerImage, merged.bannerImage
+        )
+        assertEquals(
+            "and a field the summary never fetched still arrives from the detail",
+            detail.description, merged.description
+        )
+    }
+
+    @Test
+    fun `where the detail answered, the detail wins`() {
+        val summary = MediaNode(
+            id = 7,
+            type = "ANIME",
+            bannerImage = "https://s4.anilist.co/file/stale.jpg",
+            averageScore = 81
+        )
+        val detail = MediaNode(
+            id = 7,
+            type = "ANIME",
+            bannerImage = "https://s4.anilist.co/file/fresh.jpg",
+            averageScore = 88
+        )
+
+        val merged = mapOf(7 to detail).detailFor(summary)!!
+
+        assertEquals("https://s4.anilist.co/file/fresh.jpg", merged.bannerImage)
+        assertEquals(88, merged.averageScore)
     }
 
     // ---- streamingLinks --------------------------------------------------------------

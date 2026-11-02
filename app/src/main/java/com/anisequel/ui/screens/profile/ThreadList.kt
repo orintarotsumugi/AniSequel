@@ -79,7 +79,12 @@ internal fun ColumnScope.ThreadList(
                         canPost = canPost,
                         onReply = onReply,
                         onQuote = onQuote,
-                        nowEpochSecond = nowEpochSecond
+                        nowEpochSecond = nowEpochSecond,
+                        modifier = Modifier.animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
                     )
                 }
             }
@@ -181,7 +186,9 @@ private fun ThreadHeadRow(
     canPost: Boolean,
     onReply: (String) -> Unit,
     onQuote: (ActivityReply) -> Unit,
-    nowEpochSecond: Long?
+    nowEpochSecond: Long?,
+    /** The item's placement spring; see [CommentOlderRow]'s parameter of the same name. */
+    modifier: Modifier = Modifier
 ) {
     CommentRow(
         reply = head,
@@ -197,7 +204,8 @@ private fun ThreadHeadRow(
         onReply = onReply,
         onQuote = { onQuote(head) },
         onManage = {},
-        nowEpochSecond = nowEpochSecond
+        nowEpochSecond = nowEpochSecond,
+        modifier = modifier
     )
 }
 
@@ -229,7 +237,7 @@ private fun LazyListScope.threadEmptyContent(
         }
         return
     }
-    val note = state.windowError ?: state.refreshError ?: state.loadError
+    val note = state.bannerError
     if (note != null) {
         item(key = "empty_thread_error") {
             RefreshErrorBanner(message = note, onRetry = onRetry)
@@ -265,16 +273,17 @@ private fun LazyListScope.threadReplyItems(
     onShowCommentLikers: (Int) -> Unit,
     nowEpochSecond: Long?
 ) {
-    val note = state.windowError ?: state.refreshError ?: state.loadError
+    val note = state.bannerError
     if (note != null) {
         val olderFailed = state.windowError != null
-        item(
-            key = when {
-                olderFailed -> "window_error"
-                state.refreshError != null -> "refresh_error"
-                else -> "load_error"
-            }
-        ) {
+        // One stable key for the banner slot. It used to be three (`window_error`,
+        // `refresh_error`, `load_error`), so a poll failing over a failed Older page
+        // re-keyed the same row: Compose destroyed it and inserted a new one, which
+        // ran the banner's fade *and* the placement spring of every reply below it -
+        // the whole thread sliding up a notch because one sentence changed. The
+        // message and the retry are chosen inside the item, where a change is a
+        // recomposition of one text row.
+        item(key = "thread_error") {
             RefreshErrorBanner(
                 message = note,
                 onRetry = if (olderFailed) onLoadOlder else onRetry
@@ -286,7 +295,12 @@ private fun LazyListScope.threadReplyItems(
             CommentOlderRow(
                 hiddenCount = hiddenCount,
                 isLoading = state.isLoadingOlder,
-                onClick = onLoadOlder
+                onClick = onLoadOlder,
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                )
             )
         }
     }
@@ -310,6 +324,29 @@ private fun LazyListScope.threadReplyItems(
             nowEpochSecond = nowEpochSecond
         )
     }
+}
+
+/**
+ * How many rows the list draws above its first reply.
+ *
+ * The scroll that keeps a reader's place after an Older page lands has to count these
+ * exactly the way the list does - head row, failure banner, Older row - or it lands
+ * one, two or three rows off the comment it was aiming for. Top-level and shared for
+ * that reason: the list emits these rows in this order, and this is the same rule read
+ * from the outside.
+ */
+internal fun threadRowsAboveReplies(
+    state: CommentThreadStore.CommentsState,
+    drawnCount: Int
+): Int {
+    val hasBanner = state.bannerError != null
+    val hasOlder = state.isChatView &&
+        CommentWindow.hiddenCount(state.replyCount, drawnCount) > 0
+    var rows = 0
+    if (state.head != null) rows++
+    if (hasBanner) rows++
+    if (hasOlder) rows++
+    return rows
 }
 
 /**
