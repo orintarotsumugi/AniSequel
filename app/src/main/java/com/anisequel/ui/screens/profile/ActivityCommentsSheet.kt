@@ -401,7 +401,8 @@ fun ActivityCommentsSheet(
                             authorName = name,
                             addressedTo = name
                         )
-                        draft = mentioned.withDraftEdit(
+                        val addressed = draft.withDraftEdit(mentioned)
+                        draft = addressed.withDraftEdit(
                             insertBlock(
                                 mentioned.text,
                                 mentioned.selectionStart,

@@ -1,6 +1,7 @@
 package com.anisequel.data.network
 
 import java.io.IOException
+import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -84,7 +85,7 @@ class PomfApi(
                 object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         if (!continuation.isActive) return
-                        continuation.resumeWith(
+                        continuation.resume(
                             Result.failure(
                                 UploadFailure("Could not reach the image host - check the connection.")
                             )
@@ -95,7 +96,7 @@ class PomfApi(
                         response.use {
                             if (!continuation.isActive) return
                             val text = runCatching { it.body?.string().orEmpty() }.getOrDefault("")
-                            continuation.resumeWith(
+                            continuation.resume(
                                 if (!it.isSuccessful) {
                                     Result.failure(UploadFailure("The image host refused the upload (HTTP ${it.code})."))
                                 } else {

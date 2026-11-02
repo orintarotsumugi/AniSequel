@@ -1,5 +1,6 @@
 package com.anisequel.data.network
 
+import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -99,7 +100,7 @@ class CatboxApi(
                         // continuation cannot take a result once it is resumed by
                         // cancellation anyway.
                         if (!continuation.isActive) return
-                        continuation.resumeWith(
+                        continuation.resume(
                             Result.failure(
                                 UploadFailure("Could not reach catbox.moe - check the connection.")
                             )
@@ -110,7 +111,7 @@ class CatboxApi(
                         response.use {
                             if (!continuation.isActive) return
                             val text = runCatching { it.body?.string().orEmpty().trim() }.getOrDefault("")
-                            continuation.resumeWith(
+                            continuation.resume(
                                 when {
                                     !it.isSuccessful ->
                                         Result.failure(UploadFailure(describe(it.code, text)))

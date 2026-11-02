@@ -134,7 +134,11 @@ internal fun ColumnScope.ThreadList(
         // frame reads as something they missed. It springs up from the bottom and
         // leaves the same way; the count itself is the only thing that can change
         // while it is up, and that is a settled number rather than a ticker.
-        AnimatedVisibility(
+        //
+        // Fully qualified: inside a `Box` within a `ColumnScope` function, the bare
+        // name resolves to `ColumnScope.AnimatedVisibility`, which cannot be called
+        // with the outer scope as an implicit receiver.
+        androidx.compose.animation.AnimatedVisibility(
             visible = state.unseenNewComments > 0,
             enter = fadeIn(ExpressiveMotion.FastEffects) +
                 scaleIn(initialScale = 0.8f, animationSpec = ExpressiveMotion.BouncySpatial),
@@ -329,7 +333,7 @@ private fun LazyItemScope.ThreadReplyRow(
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
     onReply: (String) -> Unit,
-    onQuote: (ActivityReply) -> Unit,
+    onQuote: () -> Unit,
     onManage: () -> Unit,
     nowEpochSecond: Long?
 ) {
