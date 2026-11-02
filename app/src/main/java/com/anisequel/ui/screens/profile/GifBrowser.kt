@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -42,7 +43,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +50,9 @@ import coil.compose.AsyncImage
 import com.anisequel.data.network.GifResult
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.bouncyPress
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.GifSearchStore
@@ -103,8 +106,14 @@ internal fun ColumnScope.GifBrowser(
     val recent by store.recent.collectAsStateWithLifecycle()
 
     OutlinedTextField(
-        value = TextFieldValue(state.query),
-        onValueChange = { store.setQuery(it.text) },
+        // The `String` overload, not a rebuilt `TextFieldValue`. Wrapping the store's
+        // query in `TextFieldValue(state.query)` puts the caret at index 0 on every
+        // recomposition, so the second keystroke was inserted *before* the first:
+        // typing "cat" into the search box produced "tac", and the search the reader
+        // watched was not the word they typed. The selection is the field's own
+        // business as long as the value it reports is the value it is given.
+        value = state.query,
+        onValueChange = { store.setQuery(it) },
         placeholder = { Text("Search GIFs") },
         singleLine = true,
         leadingIcon = {
@@ -114,6 +123,25 @@ internal fun ColumnScope.GifBrowser(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
+        },
+        trailingIcon = {
+            // A way back to the recent picks without selecting the query and
+            // deleting it on a phone keyboard. It resets the store rather than
+            // emptying the field alone, so the grid the reader was looking at goes
+            // with it and no request for the cleared word can land afterwards.
+            if (state.query.isNotBlank()) {
+                IconButton(
+                    onClick = { store.reset() },
+                    modifier = Modifier.testTag("comment_gif_clear")
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Close,
+                        contentDescription = "Clear the GIF search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { store.searchNow() }),
@@ -196,6 +224,14 @@ private fun ColumnScope.GifResultsGrid(
     onUse: (String) -> Unit
 ) {
     val gridState = rememberLazyGridState()
+    // A new word starts at the top of its own results. The grid state outlives the
+    // query - the pane keeps it while the reader refines the word - and keeping the
+    // scroll *offset* too left a fresh search parked past its first rows, so the
+    // grid looked empty above the reader. Paging does not touch this: only a new
+    // query resets it, or loading the next page would jump back to the top.
+    LaunchedEffect(state.query) {
+        gridState.scrollToItem(0)
+    }
     val nearEnd by remember {
         derivedStateOf {
             val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -209,6 +245,11 @@ private fun ColumnScope.GifResultsGrid(
         if (nearEnd && state.next != null && !state.isLoadingMore) store.loadMore()
     }
 
+    val staleAlpha by animateFloatAsState(
+        targetValue = if (state.isSearching) 0.45f else 1f,
+        animationSpec = ExpressiveMotion.FastEffects,
+        label = "gifGridStale"
+    )
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
         state = gridState,
@@ -218,6 +259,10 @@ private fun ColumnScope.GifResultsGrid(
         modifier = Modifier
             .fillMaxWidth()
             .weight(1f)
+            // A new query over an old grid kept the old GIFs at full strength until
+            // the answer replaced them, so the grid looked like the answer. Dimmed
+            // in the draw phase: alpha is not read by layout.
+            .graphicsLayer { alpha = staleAlpha }
             .testTag("comment_gif_grid")
     ) {
         items(state.results, key = { it.id }) { gif ->
@@ -306,6 +351,7 @@ private fun GifSuggestionRow(onPick: (String) -> Unit) {
         GIF_SUGGESTIONS.forEach { tag ->
             Box(
                 modifier = Modifier
+                    .bouncyPress()
                     .clip(RoundedCornerShape(percent = 50))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     .clickable(onClickLabel = "Search for $tag") { onPick(tag) }
@@ -340,6 +386,9 @@ private fun GifTile(
     Box(
         modifier = modifier
             .aspectRatio(1f)
+            // The tile had `indication = null` and nothing in its place, so a tap
+            // gave no feedback at all until the sheet closed under it.
+            .bouncyPress(pressedScale = 0.92f, interactionSource = interactionSource)
             .clip(RoundedCornerShape(percent = 12))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(

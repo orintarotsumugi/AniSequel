@@ -212,6 +212,12 @@ class ReplyManagementQueryTest {
         File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
+        ).readText() +
+        // And the list moved once more, into ThreadList.kt, when the message thread
+        // started sharing it: the check reads that file too rather than chasing it.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/ThreadList.kt"
         ).readText()
         val store = File(
             findProjectRoot(),

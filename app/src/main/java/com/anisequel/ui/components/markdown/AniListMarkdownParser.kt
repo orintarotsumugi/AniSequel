@@ -361,14 +361,20 @@ object AniListMarkdownParser {
      * to `https://en.wikipedia.org/wiki/Foo_` and leave `(bar)` as prose.
      */
     private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
-    /** Whether an auto-linked URL points at an image, so it can be embedded. */
     /**
-     * Only a cheap "could this be an image" test, so that a text spoiler never
+     * Text that only the block walk can turn into media.
+     *
+     * Only a cheap "could this be an embed" test, so that a text spoiler never
      * pays for a second parse. The block walk makes the real decision; this is a
      * guard against re-parsing "the villain survives" as markdown.
+     *
+     * The video tags belong to the test for the same reason the image forms do:
+     * `youtube(id)` and `webm(url)` are matched whole-line by the block walk, so a
+     * spoiler or a quote whose payload is one of them has to be re-parsed as well.
+     * They were absent, and `~!youtube(dQw4w9WgXcQ)!~` opened on the literal tag.
      */
-    private val IMAGE_MARKUP_HINT = Regex(
-        """(!\[|img\d*\(|\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?|$))""",
+    private val EMBED_MARKUP_HINT = Regex(
+        """(!\[|img\d*\(|youtube\(|webm\(|\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?|$))""",
         RegexOption.IGNORE_CASE
     )
 
@@ -646,7 +652,7 @@ object AniListMarkdownParser {
      */
     private fun spoilerBlocks(inner: String, depth: Int): List<MarkdownNode> {
         if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return emptyList()
-        if (!IMAGE_MARKUP_HINT.containsMatchIn(inner)) return emptyList()
+        if (!EMBED_MARKUP_HINT.containsMatchIn(inner)) return emptyList()
         val parsed = runCatching { parseDecoded(inner, depth + 1) }
             .getOrNull()
             // Only what a `Text` cannot carry. The words stay on the annotated
@@ -660,6 +666,61 @@ object AniListMarkdownParser {
         // reads that as "draw the text you already drew" - so there is nothing to
         // gate here beyond the filter above.
         return parsed
+    }
+
+    /**
+     * The lines of a `>` run, as one blockquote node.
+     *
+     * A quote of a *sentence* is an annotated string and always was: the collector
+     * joins the wrapped lines of one paragraph the way Markdown does, and `> text`
+     * becomes a single italic line. A quote of something with structure in it is
+     * not, and used to print the markup instead. The composer's Quote button
+     * prefixes every line of the comment it quotes, so quoting a comment that
+     * carried an image, an embed or a heading put `img(https://…)` on screen inside
+     * the quote bar - the words survived and the media the reader hid behind the
+     * quote vanished.
+     *
+     * So the content goes back through the block walk whenever there is anything for
+     * that walk to find, and the node keeps the old flat shape when the answer is a
+     * single paragraph: a plain two-line quote renders exactly the pixels it
+     * rendered before, and nothing nested is paid for when there is nothing nested.
+     */
+    private fun blockquoteOf(quoteLines: List<String>, depth: Int): MarkdownNode.Blockquote {
+        val flat = quoteLines.joinToString(" ").trim()
+        if (!quoteNeedsBlockWalk(quoteLines) || depth >= MAX_BLOCK_DEPTH) {
+            return MarkdownNode.Blockquote(parseInlines(flat))
+        }
+        val blocks = runCatching { parseDecoded(quoteLines.joinToString("\n"), depth + 1) }.getOrNull()
+            ?: return MarkdownNode.Blockquote(parseInlines(flat))
+        val onlyParagraph = blocks.singleOrNull() as? MarkdownNode.Paragraph
+        return if (onlyParagraph != null) {
+            MarkdownNode.Blockquote(onlyParagraph.inlines)
+        } else {
+            MarkdownNode.Blockquote(inlines = emptyList(), blocks = blocks)
+        }
+    }
+
+    /**
+     * Whether a quoted run holds anything the block walk would turn into a block.
+     *
+     * The cheap half of [blockquoteOf], and the reason it is cheap rather than
+     * always-true is the same as [spoilerBlocks]'s: a quote of a sentence is the
+     * common case and re-parsing it would cost a second walk over every quoted word.
+     * More than one line is enough on its own - two lines can be two paragraphs, and
+     * a blank between them is a break the joined string cannot say.
+     */
+    private fun quoteNeedsBlockWalk(quoteLines: List<String>): Boolean {
+        if (quoteLines.size > 1) return true
+        val line = quoteLines.single().trim()
+        return EMBED_MARKUP_HINT.containsMatchIn(line) ||
+            ANILIST_SPOILER_BLOCK.matches(line) ||
+            TILDE_CENTER_PATTERN.matches(line) ||
+            HEADER_PATTERN.matches(line) ||
+            HORIZONTAL_RULE_PATTERN.matches(line) ||
+            UNORDERED_LIST_PATTERN.matches(line) ||
+            ORDERED_LIST_PATTERN.matches(line) ||
+            ANILIST_PREVIEW_PATTERN.matches(line) ||
+            BARE_URL_PATTERN.matches(line)
     }
 
     private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
@@ -876,8 +937,7 @@ object AniListMarkdownParser {
                     quoteLines.add(lines[i].trimStart().removePrefix(">").trim())
                     i++
                 }
-                val text = quoteLines.joinToString(" ")
-                nodes.add(MarkdownNode.Blockquote(parseInlines(text)))
+                nodes.add(blockquoteOf(quoteLines, depth))
                 continue
             }
 
@@ -932,10 +992,18 @@ object AniListMarkdownParser {
             val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(trimmedLine)
             if (spoilerMatch != null) {
                 val content = spoilerMatch.groupValues[1].trim()
+                val blocks = spoilerBlocks(content, depth)
                 nodes.add(
                     MarkdownNode.SpoilerBlock(
-                        inlines = parseInlines(content),
-                        blocks = spoilerBlocks(content, depth)
+                        // The payload that became blocks is not also prose: this
+                        // branch only ever sees a single line (`matchEntire` runs on
+                        // one trimmed line), so `blocks` being non-empty means the
+                        // whole payload was the embed, and keeping the inline copy
+                        // printed the literal `img(https://…)` above the picture it
+                        // had just hidden. A multi-line spoiler would have to split
+                        // the two instead of dropping one.
+                        inlines = if (blocks.isEmpty()) parseInlines(content) else emptyList(),
+                        blocks = blocks
                     )
                 )
                 i++

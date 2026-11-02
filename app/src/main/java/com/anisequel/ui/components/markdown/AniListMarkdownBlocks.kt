@@ -46,7 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.EntityPreview
+import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCover
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -74,10 +76,27 @@ fun RenderHeader(header: MarkdownNode.Header) {
     )
 }
 
+/**
+ * A quoted block, in the theme's own quote bar.
+ *
+ * The flat case - a sentence, which is what a quote usually is - is one italic
+ * `Text`, exactly as it has always been. The structured case is the same content
+ * handed back to the block renderer, because the composer's Quote button prefixes
+ * every line of the comment it quotes and that comment can carry an image, an embed
+ * or a paragraph break: a `Text` prints `img(https://…)` where the picture was and
+ * joins two paragraphs into one run-on line.
+ *
+ * The maps come from the host rather than being resolved here, for the reason
+ * [AniListMarkdownView] gives - one batched cover lookup per document, and a quote
+ * is part of the document it is in.
+ */
 @Composable
-fun RenderBlockquote(quote: MarkdownNode.Blockquote) {
+fun RenderBlockquote(
+    quote: MarkdownNode.Blockquote,
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
+    entityPreviews: Map<EntityPreviewKey, EntityPreview> = emptyMap()
+) {
     val context = LocalContext.current
-    val annotated = buildInlineAnnotatedString(quote.inlines, onLinkClick = { openExternalUrlOrCopy(context, it) })
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -93,11 +112,25 @@ fun RenderBlockquote(quote: MarkdownNode.Blockquote) {
                 .background(MaterialTheme.colorScheme.primary)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = annotated,
-            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (quote.inlines.isNotEmpty()) {
+                Text(
+                    text = buildInlineAnnotatedString(
+                        quote.inlines,
+                        onLinkClick = { openExternalUrlOrCopy(context, it) }
+                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (quote.blocks.isNotEmpty()) {
+                AniListMarkdownView(
+                    nodes = quote.blocks,
+                    mediaCovers = mediaCovers,
+                    entityPreviews = entityPreviews
+                )
+            }
+        }
     }
 }
 

@@ -2,12 +2,14 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -16,8 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +38,7 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import java.time.Instant
@@ -75,6 +78,15 @@ internal fun CommentRow(
     canManage: Boolean,
     canReply: Boolean,
     canQuote: Boolean,
+    /**
+     * Whether the heart is drawn at all.
+     *
+     * False for a message thread's head row: a message is likeable, but as an
+     * *activity*, and the store only speaks the reply mutation. Drawing the heart
+     * there would offer a control whose request is the wrong one. Defaulted to true
+     * so every reply row is unchanged.
+     */
+    showLikes: Boolean = true,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
     onReply: (String) -> Unit,
@@ -142,6 +154,7 @@ internal fun CommentRow(
                 canManage = canManage,
                 canReply = canReply,
                 canQuote = canQuote,
+                showLikes = showLikes,
                 nowEpochSecond = nowEpochSecond,
                 onLike = onLike,
                 onShowLikers = onShowLikers,
@@ -161,11 +174,20 @@ internal fun CommentRow(
  * and this is about what the reader can do about it, which is the half that grows
  * every time a control is added.
  *
- * The bar scrolls rather than clips. Heart, Reply, Quote, the timestamp and the
- * manage dot are five targets under one body, and a threaded comment starts 56dp
- * in from the edge: on a 360dp phone the last control ran off the screen, and the
- * one that edits or deletes your own comment is the worst one to hide.
+ * The bar wraps rather than clips or scrolls. Heart, Reply, Quote, the timestamp
+ * and the manage dot are five targets under one body, and a threaded comment starts
+ * 56dp in from the edge: on a 360dp phone the last control either ran off the
+ * screen (a plain row) or sat in a horizontal scroll nobody could see was there.
+ * A `FlowRow` puts the overflow on a second line, which is the one shape where the
+ * control that edits or deletes your own comment is never hidden.
+ *
+ * Reply and Quote are drawn as capsules rather than as bare label-and-glyph pairs: a
+ * sentence of grey text under a comment reads as part of the comment, and these two
+ * are the only controls in the row a reader is meant to press. The capsule is drawn
+ * inside a 48dp target, so the visual weight is small while the touch area stays the
+ * platform minimum.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CommentRowActions(
     reply: ActivityReply,
@@ -174,6 +196,7 @@ private fun CommentRowActions(
     canManage: Boolean,
     canReply: Boolean,
     canQuote: Boolean,
+    showLikes: Boolean,
     nowEpochSecond: Long?,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
@@ -182,27 +205,31 @@ private fun CommentRowActions(
     onManage: () -> Unit
 ) {
     val liked = reply.isLiked == true
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically
+    FlowRow(
+        modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatialSize),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // The same control the activity card draws, shared rather than re-declared
-        // here - `EngagementAction`.
-        EngagementAction(
-            icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
-            count = reply.likeCount ?: 0,
-            active = liked,
-            // Null `isLiked` means AniList did not answer, which is what a
-            // signed-out reader gets. Disabled rather than drawn-as-unliked, so the
-            // control is never something that looks live and does nothing.
-            enabled = reply.isLiked != null && !likePending,
-            contentDescription = if (liked) "Unlike comment" else "Like comment",
-            onClick = onLike,
-            // The hold asks whose. A comment's like count used to be the only answer
-            // the row had, while the card above it had always offered the names.
-            onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
-            modifier = Modifier.testTag("activity_reply_like_button")
-        )
+        if (showLikes) {
+            // The same control the activity card draws, shared rather than
+            // re-declared here - `EngagementAction`.
+            EngagementAction(
+                icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
+                count = reply.likeCount ?: 0,
+                active = liked,
+                // Null `isLiked` means AniList did not answer, which is what a
+                // signed-out reader gets. Disabled rather than drawn-as-unliked, so
+                // the control is never something that looks live and does nothing.
+                enabled = reply.isLiked != null && !likePending,
+                contentDescription = if (liked) "Unlike comment" else "Like comment",
+                onClick = onLike,
+                // The hold asks whose. A comment's like count used to be the only
+                // answer the row had, while the card above it had always offered the
+                // names.
+                onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
+                modifier = Modifier.testTag("activity_reply_like_button")
+            )
+        }
         if (canReply) {
             Spacer(modifier = Modifier.width(4.dp))
             val name = reply.user?.name.orEmpty()
@@ -227,7 +254,6 @@ private fun CommentRowActions(
         if (isContinuation) {
             CommentTimestamp(reply.createdAt, nowEpochSecond)
         }
-        Spacer(modifier = Modifier.weight(1f))
         if (canManage) {
             CommentManageButton(onClick = onManage)
         }
@@ -267,6 +293,11 @@ private fun CommentTimestamp(createdAt: Int?, nowEpochSecond: Long?) {
  * icon with a count, and a bare arrow beside it would be another glyph to guess.
  * The label is also what makes the row's taps distinguishable to a screen reader
  * without a description that says "reply to Bild's comment" on every row.
+ *
+ * The capsule sits inside the 48dp target rather than being it: a filled 48dp block
+ * beside the heart's bare glyph read as a button next to a caption. The press spring
+ * scales the target (the touch area does not move), so the chip still answers the
+ * finger.
  */
 @Composable
 private fun CommentTextAction(
@@ -277,10 +308,10 @@ private fun CommentTextAction(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Row(
+    Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(MaterialTheme.shapes.small)
+            .clip(CircleShape)
             .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
@@ -288,22 +319,29 @@ private fun CommentTextAction(
                 onClickLabel = onClickLabel,
                 onClick = onClick
             )
-            .padding(horizontal = 6.dp, vertical = 4.dp)
             .testTag(tag),
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

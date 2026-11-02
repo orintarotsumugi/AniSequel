@@ -32,7 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
-import com.anisequel.data.network.CatboxApi
+import com.anisequel.data.network.ImageUploader
 import com.anisequel.data.network.SafebooruGifs
 import com.anisequel.data.network.TenorGifs
 import com.anisequel.data.repository.PickedImageReader
@@ -41,6 +41,7 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.GifSearchStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -218,7 +219,7 @@ fun ActivityCommentsSheet(
     }
 
     // Attachments. AniList has nowhere to put a file, so a photo leaves the app
-    // for catbox.moe and comes back as the URL that gets written into the
+    // for an image host and comes back as the URL that gets written into the
     // comment - which is why the note is kept beside the composer rather than
     // in the store: the reader is looking at the field they are typing, and the
     // upload belongs to the draft, not to the thread.
@@ -383,18 +384,33 @@ fun ActivityCommentsSheet(
                     onQuote = { reply ->
                         // The quote is an edit like any other the bar makes: it goes
                         // in at the caret, the draft is clipped to the API's ceiling,
-                        // and the reader keeps typing under it. AniList threads a
-                        // reply by the leading `@name`, which is why quoting offers
-                        // the author's name as the credit line rather than assuming
-                        // the block alone says whose it is.
-                        insertIntoDraft(
+                        // and the reader keeps typing under it.
+                        //
+                        // It also has to thread. AniList puts no parent pointer on a
+                        // reply - the leading `@name` is the whole mechanism - so
+                        // quoting somebody without mentioning them posted a comment at
+                        // the root of the thread, and the grouping then merged it as a
+                        // continuation of the *quoting* reader, which is the one thing
+                        // a quote should not look like. The credit line names the
+                        // author to the reader; the mention is what makes the site
+                        // put the comment under their post.
+                        val name = reply.user?.name?.trim()?.takeIf { it.isNotEmpty() }
+                        val mentioned = startReplyTo(draft.text, name.orEmpty())
+                        val quote = quoteBlock(
+                            text = reply.text.orEmpty(),
+                            authorName = name,
+                            addressedTo = name
+                        )
+                        val addressed = draft.withDraftEdit(mentioned)
+                        draft = addressed.withDraftEdit(
                             insertBlock(
-                                draft.text,
-                                draft.selection.start,
-                                draft.selection.end,
-                                quoteBlock(reply.text.orEmpty(), reply.user?.name)
+                                mentioned.text,
+                                mentioned.selectionStart,
+                                mentioned.selectionEnd,
+                                quote
                             )
                         )
+                        replyToName = name
                         composing = true
                     },
                     onLikeReply = onLikeReply,
@@ -452,11 +468,15 @@ private fun clipDraft(value: TextFieldValue): TextFieldValue {
 /**
  * One draft's photo picker: the launcher, and the upload it is currently doing.
  *
- * The picker is a round trip through catbox.moe, so it has to report two things
+ * The picker is a round trip through an image host, so it has to report two things
  * the field must draw - "Uploading…" and why an upload failed - beside the
  * composer. Pulled out of [ActivityCommentsSheet] because the edit pane needs
  * the same picker against a different draft, and two copies of the upload would
  * drift the first time either was fixed.
+ *
+ * [ImageUploader] is the host chain, not a single host: catbox has paused anonymous
+ * uploads, and the two fallbacks are what keep this button working while it is
+ * paused.
  */
 private data class PhotoAttachment(
     val launch: () -> Unit,
@@ -468,7 +488,7 @@ private data class PhotoAttachment(
 private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachment {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val catbox = remember { CatboxApi() }
+    val uploader = ImageUploader.shared
     var isUploading by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
 
@@ -479,20 +499,24 @@ private fun rememberPhotoAttachment(onUploaded: (String) -> Unit): PhotoAttachme
         isUploading = true
         note = "Uploading…"
         scope.launch {
-            PickedImageReader.read(context, uri)
-                .mapCatching { image ->
-                    catbox.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
-                }
-                .fold(
-                    onSuccess = { url ->
-                        onUploaded(url)
-                        note = null
-                    },
-                    onFailure = { failure ->
-                        note = failure.message ?: "The upload did not go through."
-                    }
-                )
-            isUploading = false
+            // Written with a `finally` rather than `mapCatching`/`fold`, because a
+            // cancelled upload is neither a success nor a failure: `mapCatching`
+            // catches `Throwable`, so closing the sheet mid-transfer took the
+            // cancellation as its "failure", wrote a reason the reader never asked
+            // for, and left `isUploading` true on the way out - a Send button
+            // disabled by an upload that had already been thrown away.
+            try {
+                val image = PickedImageReader.read(context, uri).getOrThrow()
+                val url = uploader.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                onUploaded(url)
+                note = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                note = failure.message ?: "The upload did not go through."
+            } finally {
+                isUploading = false
+            }
         }
     }
 

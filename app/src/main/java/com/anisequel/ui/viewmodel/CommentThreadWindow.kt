@@ -107,8 +107,17 @@ internal class CommentThreadWindow(
      * thread as it now stands, and opening a chat at the second-newest message with
      * the newest one hidden behind a tap would be a bug the reader would blame on
      * the app rather than on their own stale feed.
+     *
+     * [head] is the row the replies are answering, and only a message thread has one
+     * - see [CommentThreadStore.CommentsState.head]. It rides the open rather than
+     * being fetched, because the caller tapped the row that carries it.
      */
-    fun open(activityId: Int, knownReplyCount: Int, chatView: Boolean) {
+    fun open(
+        activityId: Int,
+        knownReplyCount: Int,
+        chatView: Boolean,
+        head: ActivityReply? = null
+    ) {
         openJob?.cancel()
         val isCached = cachedActivityId == activityId
         val seedReplies = if (isCached) cachedReplies else emptyList()
@@ -130,6 +139,7 @@ internal class CommentThreadWindow(
             isLoading = seedReplies.isEmpty(),
             isRefreshing = seedReplies.isNotEmpty(),
             replies = seedReplies,
+            head = head,
             isChatView = chatView,
             replyCount = seedWindow.replyCount,
             oldestPage = seedWindow.oldestPage,

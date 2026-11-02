@@ -129,4 +129,40 @@ class CommentMarkupEditsTest {
         assertEquals(3, edit.text.length)
         assertTrue(edit.selectionStart <= edit.selectionEnd)
     }
+
+    /**
+     * A quote has to say whose words these are, and thread under their post.
+     *
+     * The credit suppression used to compare the quoted comment's own leading
+     * mention against its own author, so it fired only when somebody quoted a reply
+     * to themselves - not the case that comes up - and never when the reader was
+     * already replying to the person they quoted, which is: the draft then opened
+     * "@Bild" and "Bild wrote", the same name twice on one line.
+     *
+     * A blank line inside the quoted text stays blank. `prefixLines` already refuses
+     * to put a marker on an empty line for the same reason: a "> " that quotes
+     * nothing is markup the reader has to notice and delete by hand.
+     */
+    @Test
+    fun `a quote names its author once and leaves blank lines alone`() {
+        val quote = quoteBlock("first\n\nthird", "Bild", addressedTo = "Bild")
+        assertEquals(
+            "already addressed, so no credit line",
+            "> first\n>\n> third\n\n",
+            quote
+        )
+        assertTrue("the blank line is not left as a bare marker", !quote.contains("> \n"))
+
+        val unaddressed = quoteBlock("hello", "Bild", addressedTo = null)
+        assertTrue("otherwise the author is named", unaddressed.startsWith("Bild wrote\n"))
+    }
+
+    @Test
+    fun `a quote of someone else keeps its credit while the mention goes to the thread`() {
+        // Replying to Bild but quoting Sara: both names are load-bearing, so the
+        // suppression must not swallow the credit here.
+        val quote = quoteBlock("spoilers", "Sara", addressedTo = "Bild")
+        assertTrue(quote.startsWith("Sara wrote\n"))
+    }
+
 }

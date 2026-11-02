@@ -230,6 +230,7 @@ internal fun CommentComposer(
             isBusy = isPosting || isUploading,
             postError = postError,
             uploadNote = uploadNote,
+            isUploading = isUploading,
             replyToName = replyToName,
             gifsOpen = showingGifs,
             onEdit = { apply(it) },

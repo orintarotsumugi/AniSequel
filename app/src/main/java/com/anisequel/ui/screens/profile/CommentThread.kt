@@ -3,10 +3,8 @@ package com.anisequel.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,9 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,10 +43,8 @@ import com.anisequel.data.model.ActivityReply
 import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.CommentThreadStore
 
 /**
@@ -244,7 +238,7 @@ private fun CommentsHeader(count: Int, isRefreshing: Boolean, isLoading: Boolean
  * a second button for it.
  */
 @Composable
-private fun ThreadEmptyState(canPost: Boolean) {
+internal fun ThreadEmptyState(canPost: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,7 +277,7 @@ private fun ThreadEmptyState(canPost: Boolean) {
  * to render rather than as a request that had.
  */
 @Composable
-private fun ThreadLoadError(message: String, onRetry: () -> Unit) {
+internal fun ThreadLoadError(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -326,7 +320,7 @@ private fun ThreadLoadError(message: String, onRetry: () -> Unit) {
  * about the top of the list.
  */
 @Composable
-private fun RefreshErrorBanner(message: String, onRetry: () -> Unit) {
+internal fun RefreshErrorBanner(message: String, onRetry: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         shape = MaterialTheme.shapes.small,
@@ -477,7 +471,10 @@ private fun ChatScrollEffects(
             // the end of them: `scrollToItem` on a layout that has not run yet
             // lands on index zero, which is the bug this effect replaces.
             withFrameNanos { }
-            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+            // Guarded: a layout that still reports no items would hand
+            // `scrollToItem` -1, which throws instead of scrolling.
+            val last = listState.layoutInfo.totalItemsCount - 1
+            if (last >= 0) listState.scrollToItem(last)
         }
     }
 
@@ -493,164 +490,4 @@ private fun ChatScrollEffects(
             }
         }
     }
-}
-
-/**
- * The list itself: which waiting state is drawn, the rows that sit above the
- * comments, the comments, and the pill that floats over the bottom of it all.
- *
- * Split out of the thread because the two have different reasons to change. The
- * thread works out *what* is on screen - the window, the depths, the grouping,
- * where the reader is parked; this draws the answer, so a new waiting state or a
- * new row type lands here and a new paging rule lands above. It also keeps the
- * branch count in either function small enough to read in one screen, which is
- * the difference between a list of states you can check and a wall you cannot.
- */
-@Composable
-@Suppress("LongParameterList")
-private fun ColumnScope.ThreadList(
-    state: CommentThreadStore.CommentsState,
-    viewerId: Int?,
-    canPost: Boolean,
-    listState: LazyListState,
-    visible: List<ActivityReply>,
-    replyDepths: Map<Int, Int>,
-    continuations: Set<Int>,
-    onRetry: () -> Unit,
-    onLoadOlder: () -> Unit,
-    onReply: (String) -> Unit,
-    onQuote: (ActivityReply) -> Unit,
-    onLikeReply: (Int) -> Unit,
-    onManageReply: (Int) -> Unit,
-    onShowCommentLikers: (Int) -> Unit,
-    onRevealNewComments: () -> Unit,
-    nowEpochSecond: Long?
-) {
-val hiddenCount = CommentWindow.hiddenCount(state.replyCount, visible.size)
-
-Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
-        // The list is keyed by reply id, and a repeated key is a hard
-        // `IllegalArgumentException` in Compose. The store guarantees one entry
-        // per id; see `CommentsState.replies`.
-        state = listState,
-        contentPadding = PaddingValues(bottom = 8.dp)
-    ) {
-        when {
-            state.isLoading -> item(key = "loading") {
-                // The rows that are coming, at the sizes they will have. A
-                // spinner here was the one waiting state in the app whose shape
-                // was already known and thrown away.
-                //
-                // The shimmer is owned by this item rather than by the sheet: an
-                // infinite transition composed above the list kept ticking while
-                // comments were on screen and while the editor covered them, for
-                // a skeleton that was not drawn. Composed here, it exists only
-                // for as long as the waiting state does.
-                CommentRowsSkeleton(phase = rememberShimmerPhase())
-            }
-
-            state.loadError != null && state.replies.isEmpty() -> item(key = "load_error") {
-                ThreadLoadError(message = state.loadError, onRetry = onRetry)
-            }
-
-            state.replies.isEmpty() -> item(key = "empty") {
-                ThreadEmptyState(canPost = canPost)
-            }
-
-            else -> {
-                val note = state.windowError ?: state.refreshError ?: state.loadError
-                if (note != null) {
-                    // Three different failures, one shape: an Older page that did not
-                    // arrive, a background check that did not and a thread that never
-                    // loaded all leave the rows on screen readable, and all need a
-                    // retry that does not throw away what the reader is looking at.
-                    // The retry itself differs, so the banner names the request that
-                    // failed rather than assuming the older one: one field for both
-                    // kinds made a failed refresh offer a Retry that walked the
-                    // thread backwards instead of fetching what had not arrived.
-                    val olderFailed = state.windowError != null
-                    item(
-                        key = when {
-                            olderFailed -> "window_error"
-                            state.refreshError != null -> "refresh_error"
-                            else -> "load_error"
-                        }
-                    ) {
-                        RefreshErrorBanner(
-                            message = note,
-                            onRetry = if (olderFailed) onLoadOlder else onRetry
-                        )
-                    }
-                }
-                if (state.isChatView && hiddenCount > 0) {
-                    item(key = "older", contentType = "older") {
-                        CommentOlderRow(
-                            hiddenCount = hiddenCount,
-                            isLoading = state.isLoadingOlder,
-                            onClick = onLoadOlder
-                        )
-                    }
-                }
-                items(
-                    items = visible,
-                    key = { it.id },
-                    contentType = { "reply" }
-                ) { reply ->
-                    CommentRow(
-                        reply = reply,
-                        indent = replyDepths[reply.id] ?: 0,
-                        isContinuation = reply.id in continuations,
-                        likePending = reply.id in state.pendingReplyLikes,
-                        canManage = viewerId != null && reply.user?.id == viewerId,
-                        // A reply is addressed by a leading `@name`, so without an
-                        // author name there is nothing to insert, even for a
-                        // signed-in reader.
-                        canReply = canPost && !reply.user?.name.isNullOrBlank(),
-                        canQuote = canPost && !reply.text.isNullOrBlank(),
-                        onLike = { onLikeReply(reply.id) },
-                        onShowLikers = { onShowCommentLikers(reply.id) },
-                        onReply = onReply,
-                        onQuote = { onQuote(reply) },
-                        onManage = { onManageReply(reply.id) },
-                        nowEpochSecond = nowEpochSecond,
-                        // A thread is a live list: a comment that lands while the
-                        // sheet is open arrives at the end, an Older page prepends a
-                        // block above, and a delete takes one out. Without the
-                        // placement spring every survivor jumped to its new index on
-                        // that frame, which reads as the conversation being redrawn
-                        // rather than as the conversation moving. Same tokens the
-                        // library grid uses - a slide on the spatial spring, a fade on
-                        // the effects pair - so a list rearranges the one way in this
-                        // app.
-                        modifier = Modifier.animateItem(
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    if (state.unseenNewComments > 0) {
-        // Floating over the bottom of the list. A row *in* the list would be
-        // below the newest comment the reader has not seen yet, which is the
-        // wrong way round for something that announces what arrived.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 4.dp)
-        ) {
-            NewCommentsPill(
-                count = state.unseenNewComments,
-                onClick = {
-                    onRevealNewComments()
-                }
-            )
-        }
-    }
-}
 }

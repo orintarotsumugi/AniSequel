@@ -80,7 +80,7 @@ fun AniListMarkdownView(
             when (node) {
                 is MarkdownNode.Header -> RenderHeader(node)
                 is MarkdownNode.Paragraph -> RenderParagraph(node, maxLines, onOverflowChange)
-                is MarkdownNode.Blockquote -> RenderBlockquote(node)
+                is MarkdownNode.Blockquote -> RenderBlockquote(node, mediaCovers, entityPreviews)
                 is MarkdownNode.CodeBlock -> RenderCodeBlock(node)
                 is MarkdownNode.ListBlock -> RenderList(node)
                 is MarkdownNode.CheckListBlock -> RenderCheckList(node)

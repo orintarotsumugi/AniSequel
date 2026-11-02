@@ -55,15 +55,23 @@ import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.conversationMessages
 
 /**
- * A message - and the conversation around it - read whole, inside the app.
+ * The compose sheet a conversation starts in, when there is no message yet.
  *
- * ## The row draws first; the replies follow
+ * ## What this is now, and what it used to be
  *
- * Opened from the inbox, the message itself needs no request: it came from the row
- * that was tapped ([UserMessagesViewModel.MessageDetail]), so its body is on
- * screen on frame one. The *conversation* is a request - the message is an AniList
- * activity and its thread is that activity's replies - and it arrives underneath
- * the row, with a retry in its place when it does not.
+ * It used to be the reading UI too: tap a message row and this drew the body with
+ * the conversation under it, bubbles and a reply box at the bottom of a scroll.
+ * The comment sheet can do all of that and quote a line as well, so the inbox and
+ * the friend card route there and this is reached only for a conversation with no
+ * message - the one case where there is no activity to open. It is still a sheet
+ * rather than a route because the only thing it needs is a person, which the
+ * caller already has ([UserMessagesViewModel.MessageDetail]), and it keeps the
+ * same furniture as the other engagement sheets.
+ *
+ * The row-drawing half below is therefore usually empty: `message` is null and the
+ * conversation is what the inbox could assemble (often nothing). The branch that
+ * reads an opened row is kept because a conversation that turns out to exist is
+ * closed and replaced by the comment thread before it is drawn.
  *
  * Opened from a friend's activity, there is no row to draw - the reader tapped a
  * person - so the ViewModel asks for the inbox and the sheet shows the thread it
@@ -483,8 +491,13 @@ private fun MessageDetailFooter(
 }
 
 /**
- * Draws [MessageDetailSheet] when the inbox has an open row or a conversation has
- * been opened from a name, and nothing otherwise.
+ * Draws [MessageDetailSheet] while a conversation is being started from a name, and
+ * nothing otherwise.
+ *
+ * A message that already exists opens in the comment sheet instead - see
+ * [UserMessagesViewModel.openConversation] - so this host is up for the one case
+ * with no activity to comment on, and the ViewModel closes it again if the inbox
+ * turns out to hold a conversation with that person.
  *
  * Its own composable, and called by the screen rather than by the tab, for the
  * reason [ActivityEngagementSheets] gives: a `ModalBottomSheet` is a window of its

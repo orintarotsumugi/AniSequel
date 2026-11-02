@@ -1,8 +1,8 @@
 package com.anisequel
 
-import com.anisequel.ui.components.expressive.NavGesture
 import com.anisequel.ui.components.expressive.navGestureDecision
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -13,44 +13,49 @@ import org.junit.Test
  * the same way `TierDragLogicTest` and `MainTabsTest` pin the arithmetic they were
  * pulled out of.
  *
- * The failure this records: `moved` used to mean "the previewed index changed", and
- * the index only changes once the drag has passed a whole destination width. A hold
- * with a short shove - which is what "hold it and move it left" actually is - left
- * the index where it started, so the gesture was classified as a still hold and the
- * hold shortcut fired. On the main bar the shortcut is the jump to the inbox, so
- * swiping the bar twice on the profile opened a message thread.
+ * Two failures are recorded here, in order.
+ *
+ * The first: `moved` used to mean "the previewed index changed", and the index only
+ * changes once the drag has passed a whole destination width. A hold with a short
+ * shove - which is what "hold it and move it left" actually is - left the index where
+ * it started, so the gesture was classified as a still hold and the hold *shortcut*
+ * fired. Swiping the bar twice on the profile opened a message thread.
+ *
+ * The second: the shortcut itself. Holding Profile and releasing opened the Messages
+ * segment even though the finger never moved, because a bar with a shortcut treats a
+ * still hold as the shortcut. A hold is how a swipe begins - the bar lifts, the
+ * haptic ticks, and that is the whole acknowledgement - so a still hold now asks for
+ * nothing, and the only thing that can navigate out of this gesture is a drag that
+ * ends somewhere else.
  */
 class NavGestureDecisionTest {
 
     @Test
-    fun `a hold the finger never left fires the shortcut`() {
-        assertEquals(
-            NavGesture.Hold(2),
+    fun `a hold the finger never left asks for nothing`() {
+        assertNull(
+            "the bar lifts and ticks, and goes nowhere",
             navGestureDecision(
                 startIndex = 2,
                 settledIndex = 2,
                 travelledPx = 3f,
-                touchSlopPx = 12f,
-                hasHoldShortcut = true
+                touchSlopPx = 12f
             )
         )
     }
 
     /**
-     * The regression. Shorter than a destination step, longer than slop: the index
-     * never moved, so the old rule called this a hold and jumped to Messages.
+     * The first regression. Shorter than a destination step, longer than slop: the
+     * index never moved, so the old rule called this a hold and jumped to Messages.
      */
     @Test
     fun `a short drag that stayed on its tab asks for nothing`() {
-        assertEquals(
+        assertNull(
             "a drag is not a hold, however little it moved",
-            NavGesture.None,
             navGestureDecision(
                 startIndex = 2,
                 settledIndex = 2,
                 travelledPx = 40f,
-                touchSlopPx = 12f,
-                hasHoldShortcut = true
+                touchSlopPx = 12f
             )
         )
     }
@@ -59,30 +64,19 @@ class NavGestureDecisionTest {
     fun `an out-and-back drag is the no-op it always was`() {
         // Travelled three destination widths and came home: the finger changed its
         // mind, it did not ask for the tab it started on.
-        assertEquals(
-            NavGesture.None,
-            navGestureDecision(3, 3, travelledPx = 380f, touchSlopPx = 12f, hasHoldShortcut = true)
-        )
+        assertNull(navGestureDecision(3, 3, travelledPx = 380f, touchSlopPx = 12f))
     }
 
     @Test
     fun `a drag that ends on another destination switches to it`() {
-        assertEquals(
-            NavGesture.Switch(0),
-            navGestureDecision(3, 0, travelledPx = 300f, touchSlopPx = 12f, hasHoldShortcut = true)
-        )
-        assertEquals(
-            "a bar with no shortcut still switches",
-            NavGesture.Switch(4),
-            navGestureDecision(1, 4, travelledPx = 200f, touchSlopPx = 12f, hasHoldShortcut = false)
-        )
+        assertEquals(0, navGestureDecision(3, 0, travelledPx = 300f, touchSlopPx = 12f))
+        assertEquals(4, navGestureDecision(1, 4, travelledPx = 200f, touchSlopPx = 12f))
     }
 
     @Test
-    fun `a still finger on a bar with no shortcut does nothing`() {
-        assertEquals(
-            NavGesture.None,
-            navGestureDecision(1, 1, travelledPx = 0f, touchSlopPx = 12f, hasHoldShortcut = false)
-        )
+    fun `travel measured at exactly the slop has not left the finger yet`() {
+        // `>` and not `>=`: a finger that has moved precisely the slop distance is
+        // still where the tap began, and the bar must not navigate on it.
+        assertNull(navGestureDecision(1, 2, travelledPx = 12f, touchSlopPx = 12f))
     }
 }

@@ -1,5 +1,6 @@
 package com.anisequel.ui.viewmodel
 
+import com.anisequel.data.network.GifPage
 import com.anisequel.data.network.GifResult
 import com.anisequel.data.network.GifSearchApi
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +65,20 @@ class GifSearchStore(
     private var pageJob: Job? = null
 
     /**
+     * First pages already fetched, by normalised query, least recently used first.
+     *
+     * Backspacing "crying" to "cryin" and typing the "g" again sent the same request
+     * twice, and so did every tap on a suggestion chip the reader had already
+     * tried - each one a round trip and a skeleton over a grid that was on screen a
+     * second ago. A cached query is answered at once, without the debounce, because
+     * there is no request left to coalesce.
+     */
+    private val firstPages = object : LinkedHashMap<String, GifPage>(MAX_CACHED_QUERIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, GifPage>?): Boolean =
+            size > MAX_CACHED_QUERIES
+    }
+
+    /**
      * The GIFs this sheet has already put into a draft, newest first.
      *
      * An empty search box shows them, which is the picker's answer to the most
@@ -122,8 +137,9 @@ class GifSearchStore(
             _state.value = State(note = BLANK_QUERY_NOTE)
             return
         }
+        val cached = synchronized(firstPages) { firstPages.containsKey(cacheKey(query)) }
         searchJob = scope.launch {
-            delay(DEBOUNCE_MILLIS)
+            if (!cached) delay(DEBOUNCE_MILLIS)
             runFirstSearch(query)
         }
     }
@@ -139,8 +155,15 @@ class GifSearchStore(
     }
 
     private suspend fun runFirstSearch(query: String) {
-        _state.value = _state.value.copy(isSearching = true, error = null, note = null)
-        val result = repositoryResult { provider.search(query, cursor = null) }
+        val key = cacheKey(query)
+        val hit = synchronized(firstPages) { firstPages[key] }
+        if (hit == null) _state.value = _state.value.copy(isSearching = true, error = null, note = null)
+        val result = if (hit != null) {
+            Result.success(hit)
+        } else {
+            repositoryResult { provider.search(query, cursor = null) }
+                .onSuccess { page -> synchronized(firstPages) { firstPages[key] = page } }
+        }
         val current = _state.value
         if (current.query != query) {
             // The field moved on, so this answer belongs to nothing - but the
@@ -231,6 +254,13 @@ class GifSearchStore(
     companion object {
         /** How long a pause in the field has to be before it counts as a search. */
         const val DEBOUNCE_MILLIS = 450L
+
+        /** A sheet's worth of searches; each entry is one page of URLs, not images. */
+        const val MAX_CACHED_QUERIES = 16
+
+        /** "Holo ", "holo" and "HOLO" are one search on both providers. */
+        internal fun cacheKey(query: String): String =
+            query.trim().lowercase().replace(Regex("\\s+"), " ")
 
         const val BLANK_QUERY_NOTE = "Type to search for a GIF."
 

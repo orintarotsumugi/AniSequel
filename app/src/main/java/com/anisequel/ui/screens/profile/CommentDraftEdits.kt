@@ -307,13 +307,32 @@ internal fun isUsableInsert(kind: InsertKind, raw: String): Boolean {
  * does not already start with a mention, because quoting a reply into a thread that
  * was about to @-mention the same person should not say it twice.
  */
-internal fun quoteBlock(text: String, authorName: String?): String {
-    val body = text.trim().lines().joinToString("\n") { line -> "> $line" }
-    val who = authorName?.trim()?.takeIf { it.isNotEmpty() }
-    val credit = if (who != null && !text.trimStart().startsWith("@$who")) {
-        "$who wrote\n"
-    } else {
-        ""
+internal fun quoteBlock(
+    text: String,
+    authorName: String?,
+    /**
+     * Who the draft is already addressed to, when the caller knows.
+     *
+     * The credit line exists because a quote with no name in it does not say whose
+     * words these are. The suppression test used to look only at the *quoted*
+     * comment - so it fired when somebody quoted their own mention, which is not
+     * the case that comes up, and never when the reader was already replying to
+     * the person they quoted, which is: the result was "@Bild" and "B wrote" on
+     * one line, saying the same thing twice.
+     */
+    addressedTo: String? = null
+): String {
+    // A blank line becomes a bare `>`: an unmarked blank line ends the quote, so
+    // the paragraphs after it fell out of the quote bar. A bare marker keeps one
+    // quote with a paragraph break, and has no trailing space to show up.
+    val body = text.trim().lines().joinToString("\n") { line ->
+        if (line.isBlank()) ">" else "> $line"
     }
+    val who = authorName?.trim()?.takeIf { it.isNotEmpty() }
+    val alreadyNamed = who != null && (
+        text.trimStart().startsWith("@$who") ||
+            addressedTo?.trim()?.equals(who, ignoreCase = true) == true
+        )
+    val credit = if (who != null && !alreadyNamed) "$who wrote\n" else ""
     return "$credit$body\n\n"
 }

@@ -546,6 +546,9 @@ object AppExtraVectors {
      * draws.
      */
     val AnimatedGif: ImageVector by lazy {
+        // Was a rounded square with three rising bars, which is the chart glyph
+        // everywhere else in the app: the GIF control read as "statistics". It is
+        // now the badge every keyboard uses - a landscape frame with "GIF" in it.
         ImageVector.Builder(
             name = "AnimatedGif",
             defaultWidth = 24.dp, defaultHeight = 24.dp,
@@ -557,30 +560,40 @@ object AppExtraVectors {
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(4f, 7f)
-                curveTo(4f, 5.3f, 5.3f, 4f, 7f, 4f)
-                lineTo(17f, 4f)
-                curveTo(18.7f, 4f, 20f, 5.3f, 20f, 7f)
-                lineTo(20f, 17f)
-                curveTo(20f, 18.7f, 18.7f, 20f, 17f, 20f)
-                lineTo(7f, 20f)
-                curveTo(5.3f, 20f, 4f, 18.7f, 4f, 17f)
+                moveTo(5.5f, 5f)
+                lineTo(18.5f, 5f)
+                curveTo(19.9f, 5f, 21f, 6.1f, 21f, 7.5f)
+                lineTo(21f, 16.5f)
+                curveTo(21f, 17.9f, 19.9f, 19f, 18.5f, 19f)
+                lineTo(5.5f, 19f)
+                curveTo(4.1f, 19f, 3f, 17.9f, 3f, 16.5f)
+                lineTo(3f, 7.5f)
+                curveTo(3f, 6.1f, 4.1f, 5f, 5.5f, 5f)
                 close()
-                
             }
             path(
                 stroke = SolidColor(Color.White),
-                strokeLineWidth = 1.8f,
+                strokeLineWidth = 1.6f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(8.5f, 15f)
-                lineTo(8.5f, 13f)
-                moveTo(12f, 15f)
-                lineTo(12f, 9.5f)
-                moveTo(15.5f, 15f)
-                lineTo(15.5f, 6f)
-                
+                // G
+                moveTo(9.8f, 10.1f)
+                curveTo(9.5f, 9.6f, 9f, 9.3f, 8.3f, 9.3f)
+                curveTo(7.2f, 9.3f, 6.4f, 10.4f, 6.4f, 12f)
+                curveTo(6.4f, 13.6f, 7.2f, 14.7f, 8.3f, 14.7f)
+                curveTo(9.2f, 14.7f, 9.8f, 14f, 9.8f, 13f)
+                lineTo(9.8f, 12.4f)
+                lineTo(8.5f, 12.4f)
+                // I
+                moveTo(12.4f, 9.3f)
+                lineTo(12.4f, 14.7f)
+                // F
+                moveTo(15f, 14.7f)
+                lineTo(15f, 9.3f)
+                lineTo(18f, 9.3f)
+                moveTo(15f, 12f)
+                lineTo(17.3f, 12f)
             }
         }.build()
     }
@@ -591,6 +604,9 @@ object AppExtraVectors {
      * to attach it to - it puts the file somewhere public and pastes the address.
      */
     val PhotoUpload: ImageVector by lazy {
+        // Was a bare tray-and-arrow, the generic "share/export" glyph: next to the
+        // GIF and image controls it did not say *photo*. Now a picture frame with
+        // the arrow leaving its corner.
         ImageVector.Builder(
             name = "PhotoUpload",
             defaultWidth = 24.dp, defaultHeight = 24.dp,
@@ -602,18 +618,27 @@ object AppExtraVectors {
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             ) {
-                moveTo(4f, 14.5f)
-                lineTo(4f, 19f)
-                curveTo(4f, 20.1f, 4.9f, 21f, 6f, 21f)
+                // The frame, open at the top-right where the arrow leaves it.
+                moveTo(13f, 5f)
+                lineTo(6f, 5f)
+                curveTo(4.3f, 5f, 3f, 6.3f, 3f, 8f)
+                lineTo(3f, 18f)
+                curveTo(3f, 19.7f, 4.3f, 21f, 6f, 21f)
                 lineTo(16f, 21f)
-                curveTo(17.1f, 21f, 18f, 20.1f, 18f, 19f)
-                lineTo(18f, 14.5f)
-                moveTo(12f, 3f)
-                lineTo(12f, 14f)
-                moveTo(8f, 7f)
-                lineTo(12f, 3f)
-                lineTo(16f, 7f)
-                
+                curveTo(17.7f, 21f, 19f, 19.7f, 19f, 18f)
+                lineTo(19f, 12f)
+                // The landscape inside it.
+                moveTo(3.5f, 17.5f)
+                lineTo(7.5f, 13.5f)
+                lineTo(10.5f, 16.5f)
+                lineTo(13f, 14f)
+                lineTo(18.5f, 19.5f)
+                // The arrow.
+                moveTo(18f, 9f)
+                lineTo(18f, 2.8f)
+                moveTo(15.3f, 5.3f)
+                lineTo(18f, 2.6f)
+                lineTo(20.7f, 5.3f)
             }
         }.build()
     }

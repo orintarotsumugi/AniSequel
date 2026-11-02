@@ -361,11 +361,12 @@ private fun ClientIdEditor(
  *
  * Filed under AniList rather than Appearance because all three settings are about
  * writing to the site: how much of a thread to fetch, whether an open thread keeps
- * fetching, and which GIF index a search is sent to. The upload host is not a
- * choice here - catbox.moe is the only one, and it needs no account and no key -
- * but its retention rule is stated, because a comment's image disappearing two
- * years after nobody looked at it is a decision the reader made, not one the app
- * should have made silently on their behalf.
+ * fetching, and which GIF index a search is sent to. The upload hosts are not a
+ * choice here - the app tries catbox.moe, falls back to pomf.lain.la and then to
+ * imgbb.com, and all three take an anonymous file - but their retention rules are
+ * stated, because a comment's image disappearing after nobody looked at it is a
+ * decision the reader made, not one the app should have made silently on their
+ * behalf.
  */
 @Composable
 private fun CommentMediaCard(context: android.content.Context) {
@@ -422,13 +423,14 @@ private fun CommentMediaCard(context: android.content.Context) {
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "Photos you attach are uploaded to catbox.moe and the comment " +
-                "carries the link. Files uploaded without a catbox account are kept " +
-                "until they go two years without a single view, so an image on a " +
-                "comment nobody reads can disappear. GIF search runs against Safebooru, " +
-                "asked for animated GIFs at general rating only - no key, no " +
-                "account, and an anime catalogue. A Tenor key below switches it to " +
-                "search to Tenor's own catalogue.",
+            text = "Photos you attach are uploaded to an anonymous image host and " +
+                "the comment carries the link. catbox.moe is tried first; if it is " +
+                "paused or down the file goes to pomf.lain.la next, then to imgbb.com. " +
+                "All three are public: anybody with the link can view the file, and " +
+                "none can delete it without an account. GIF search runs " +
+                "against Safebooru, asked for animated GIFs at safe rating only - no " +
+                "key, no account, and an anime catalogue. A Tenor key below switches " +
+                "the search to Tenor's own catalogue.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -7,12 +7,15 @@ import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.UserMessagesPage
+import com.anisequel.data.model.asThreadHead
 import com.anisequel.data.repository.AniListRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * State holder for the Messages tab: what the viewer sent, what arrived, and
@@ -186,14 +189,24 @@ class UserMessagesViewModel(
     }
 
     /**
+     * The wait for a name-opened conversation to learn whether it has a history.
+     * Kept short: the reader tapped a person, and both outcomes below draw a sheet.
+     */
+    private var conversationJob: Job? = null
+
+    /**
      * Opens the conversation with [user], whether or not one exists yet.
      *
-     * This is the way in from a friend's activity card. There is no row to carry
-     * in - the reader tapped a person, not a message - so the sheet opens on the
-     * thread assembled from the inbox and on the reply box underneath it. The
-     * inbox is asked for here rather than left to the Messages segment: a reader
-     * who has never opened that tab still expects the conversation they just
-     * asked for, not an empty sheet until they visit another screen.
+     * This is the way in from a friend's activity card. A conversation that already
+     * exists opens in the comment sheet, on its newest message: that sheet is the
+     * one that can quote a line and answer it, and the old bubbles-and-a-reply-box
+     * sheet showed the same exchange with neither. The inbox is asked for here rather
+     * than left to the Messages segment, because a conversation the reader has
+     * already had is not something they should have to go and load first.
+     *
+     * A conversation that has *not* started has no `MessageActivity`, so there is
+     * nothing to comment on and no thread to open, and that one case keeps the
+     * compose sheet - it is the only place a first `SaveMessage` can be written.
      *
      * Messaging yourself is refused: the server would reject it, and a sheet
      * that offers a reply box for it is a control that can only fail.
@@ -205,6 +218,18 @@ class UserMessagesViewModel(
         // last person's "Sent to ..." - the same rule [openMessage] follows, and
         // the one this path used to skip.
         if (!_reply.value.isSending) _reply.value = ReplyState()
+        conversationJob?.cancel()
+
+        // Answered from what is already loaded, which is every case that started on
+        // the Messages segment: no request, no sheet, no frame of the wrong UI. The
+        // detail sheet is closed first, because opening a thread over the compose
+        // sheet for somebody else would put two sheets on one screen.
+        newestConversationWith(user.id)?.let { newest ->
+            dismissMessage()
+            openComments(newest)
+            return
+        }
+
         loadFirstPages()
         // A conversation that has not started has no activity and therefore no
         // replies. Clearing the previous thread is what stops the sheet from
@@ -216,10 +241,37 @@ class UserMessagesViewModel(
             sent = false,
             counterpart = user
         )
+
+        // A cold inbox - the reader tapped "Message" on the Global feed without
+        // ever opening their messages - is still a conversation, and it now resolves
+        // into the comment sheet the moment the first pages arrive. Without this,
+        // the one person they had talked to before got the sheet the reader had
+        // already asked the app to stop showing them. The timeout is the whole of
+        // the failure handling: an inbox that never answers leaves the compose sheet
+        // up, which is the correct screen for a conversation with no history.
+        conversationJob = viewModelScope.launch {
+            val inbox = withTimeoutOrNull(CONVERSATION_WAIT_MILLIS) {
+                state.first { it.received.loaded && it.sent.loaded }
+            } ?: return@launch
+            val newest = newestConversationWith(user.id, inbox) ?: return@launch
+            // Only the sheet this tap opened: a dismissed sheet, or one reopened on
+            // somebody else, is not ours to replace.
+            val pending = _detail.value
+            if (pending?.message != null || pending?.counterpart?.id != user.id) return@launch
+            _detail.value = null
+            openComments(newest)
+        }
     }
+
+    /** The newest message exchanged with [counterpartId], once both halves are in. */
+    private fun newestConversationWith(
+        counterpartId: Int,
+        inbox: UiState = _state.value
+    ): MessageNode? = conversationMessages(inbox, counterpartId, viewerId).lastOrNull()
 
     /** Closes the detail sheet. */
     fun dismissMessage() {
+        conversationJob?.cancel()
         _detail.value = null
         threadJob?.cancel()
         _thread.value = ThreadState()
@@ -327,6 +379,12 @@ class UserMessagesViewModel(
      * that number exists to avoid. `chatView` defaults to the shipped setting rather
      * than being read here: the sheet obeys the user's switch on open and on retry,
      * and this is the one call site that does not have the Settings flow's state.
+     *
+     * The tapped row rides along as [CommentThreadStore.CommentsState.head], so the
+     * sheet shows the message at the top of its own replies. The messages tab used
+     * to open a second sheet for the body - bubbles, a reply box under a scroll -
+     * and the reader could not quote or answer one line of it. One sheet draws both,
+     * which is the only way "the comment UI" can also be the message UI.
      */
     fun openComments(
         message: MessageNode,
@@ -335,7 +393,8 @@ class UserMessagesViewModel(
     ) = comments.open(
         activityId = message.id,
         knownReplyCount = knownReplyCount,
-        chatView = chatView
+        chatView = chatView,
+        head = message.asThreadHead()
     )
 
     /**
@@ -747,3 +806,14 @@ class UserMessagesViewModel(
         ) as T
     }
 }
+
+/**
+ * How long a name-opened conversation waits on the inbox before giving up and
+ * leaving the compose sheet up.
+ *
+ * Both outcomes already draw a sheet, so the wait only decides *which* one for a
+ * reader whose messages have never been loaded. Four seconds is longer than the
+ * two first pages take on a working connection and short enough that a dead one is
+ * not a tap that appears to have done nothing.
+ */
+private const val CONVERSATION_WAIT_MILLIS = 4_000L

@@ -1,14 +1,17 @@
 package com.anisequel.data.network
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 
 /**
  * Uploads one image to catbox.moe and returns the URL it is served at.
@@ -43,7 +46,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  */
 class CatboxApi(
     private val client: OkHttpClient = defaultClient()
-) {
+) : ImageHost {
 
     /**
      * Uploads [bytes] as [fileName] and returns the served URL.
@@ -55,7 +58,7 @@ class CatboxApi(
      * limit notice reaches the composer as something they can read instead of a
      * silent spinner that stops.
      */
-    suspend fun upload(
+    override suspend fun upload(
         bytes: ByteArray,
         fileName: String,
         mimeType: String
@@ -80,32 +83,51 @@ class CatboxApi(
             .post(body)
             .build()
 
-        return withContext(Dispatchers.IO) {
-            try {
-                client.newCall(request).execute().use { response ->
-                    val text = response.body?.string().orEmpty().trim()
-                    if (!response.isSuccessful) {
-                        Result.failure(UploadFailure(describe(response.code, text)))
-                    } else if (isServedUrl(text)) {
-                        Result.success(text)
-                    } else {
-                        // HTTP 200 with a refusal in the body is this API's normal
-                        // error shape - there is no status code to branch on, only
-                        // the text.
-                        Result.failure(
-                            UploadFailure(readableProse(text) ?: "The host returned no URL.")
+        // `enqueue`, not `execute`: the reader can close the sheet in the middle of a
+        // two-megabyte upload over a phone connection, and a blocking call cannot be
+        // interrupted - it runs to the 150-second call timeout with nobody left to
+        // answer, holding a thread and the file's bytes with it. Cancelled from the
+        // coroutine, the transfer stops on the next chunk.
+        return suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(
+                object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        // A call the coroutine cancelled answers here too, with an
+                        // IOException that says "canceled". Reporting that would blame
+                        // the reader's connection for pressing Back, and the
+                        // continuation cannot take a result once it is resumed by
+                        // cancellation anyway.
+                        if (!continuation.isActive) return
+                        continuation.resume(
+                            Result.failure(
+                                UploadFailure("Could not reach catbox.moe - check the connection.")
+                            )
                         )
                     }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        response.use {
+                            if (!continuation.isActive) return
+                            val text = runCatching { it.body?.string().orEmpty().trim() }.getOrDefault("")
+                            continuation.resume(
+                                when {
+                                    !it.isSuccessful ->
+                                        Result.failure(UploadFailure(describe(it.code, text)))
+                                    isServedUrl(text) -> Result.success(text)
+                                    // HTTP 200 with a refusal in the body is this API's
+                                    // normal error shape - there is no status code to
+                                    // branch on, only the text.
+                                    else -> Result.failure(
+                                        UploadFailure(readableProse(text) ?: "The host returned no URL.")
+                                    )
+                                }
+                            )
+                        }
+                    }
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // A cancelled upload is not a failed one: the reader closed the
-                // sheet or dismissed the composer, and the file is still theirs.
-                throw e
-            } catch (e: IOException) {
-                Result.failure(UploadFailure("Could not reach catbox.moe - check the connection."))
-            } catch (e: Exception) {
-                Result.failure(UploadFailure(e.message ?: "The upload failed."))
-            }
+            )
         }
     }
 

@@ -18,6 +18,13 @@ package com.anisequel.ui.screens.profile
  * then whole-line blocks, then the embeds that need an address.
  */
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -58,6 +65,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -72,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
@@ -91,6 +100,7 @@ internal fun ComposerBottomBar(
     isBusy: Boolean,
     postError: String?,
     uploadNote: String?,
+    isUploading: Boolean,
     replyToName: String?,
     gifsOpen: Boolean,
     onEdit: (DraftEdit) -> Unit,
@@ -115,23 +125,57 @@ internal fun ComposerBottomBar(
                 "A comment can be at most ${ContentLimits.REPLY_MAX} characters."
             else -> null
         }
-        reason?.let { NoteLine(it, MaterialTheme.colorScheme.onSurfaceVariant, null) }
+        // The three notes grow into place and collapse again. They are one-line
+        // status changes in a bar that sits under the field the reader is typing
+        // in, and a line that appears by re-laying the bar out in one frame made
+        // the Post button jump under the thumb that was about to press it. Size is
+        // the only thing animated here - the text itself changes instantly, because
+        // a reason that faded in would be a reason the reader could post before
+        // seeing.
+        AnimatedVisibility(
+            visible = reason != null,
+            enter = expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeIn(ExpressiveMotion.FastEffects),
+            exit = shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeOut(ExpressiveMotion.FastEffects)
+        ) {
+            reason?.let { NoteLine(it, MaterialTheme.colorScheme.onSurfaceVariant, null) }
+        }
         // An upload is a round trip to a third party and it can fail for reasons the
         // reader can act on - a 30 MB GIF, a type the host refuses, a host that is
         // down. It gets its own line rather than the post error's, because "could
         // not upload" is not a complaint about the comment.
-        uploadNote?.let {
-            NoteLine(
-                text = it,
-                color = if (it.startsWith("Uploading")) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-                tag = "activity_comment_upload_note"
-            )
+        AnimatedVisibility(
+            visible = uploadNote != null,
+            enter = expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeIn(ExpressiveMotion.FastEffects),
+            exit = shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeOut(ExpressiveMotion.FastEffects)
+        ) {
+            uploadNote?.let {
+                NoteLine(
+                    text = it,
+                    // Read from the upload's own state: this matched the note's
+                    // text, so a host's reason that began "Uploading..." was drawn
+                    // as progress instead of as the failure it was.
+                    color = if (isUploading) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    tag = "activity_comment_upload_note"
+                )
+            }
         }
-        postError?.let { NoteLine(it, MaterialTheme.colorScheme.error, null) }
+        AnimatedVisibility(
+            visible = postError != null,
+            enter = expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeIn(ExpressiveMotion.FastEffects),
+            exit = shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize) +
+                fadeOut(ExpressiveMotion.FastEffects)
+        ) {
+            postError?.let { NoteLine(it, MaterialTheme.colorScheme.error, null) }
+        }
 
         // The controls get a row of their own.
         //
@@ -151,9 +195,10 @@ internal fun ComposerBottomBar(
         ) {
                 FormatAction(
                     icon = AppVectorIcons.PhotoUpload,
-                    label = "Attach a photo from the device",
+                    label = if (isUploading) "Uploading the photo" else "Attach a photo from the device",
                     tag = "comment_attach_photo",
                     enabled = !isBusy,
+                    busy = isUploading,
                     onClick = onPickFromDevice
                 )
                 FormatAction(
@@ -392,25 +437,37 @@ private fun FormatAction(
     tag: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    selected: Boolean = false
+    selected: Boolean = false,
+    /** The control's own work is running: the glyph becomes the indicator. */
+    busy: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val tint = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        selected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // Animated toward settled colours: the GIF control used to snap its container
+    // on and off in one frame while every other state change in the bar springs.
+    val tint by animateColorAsState(
+        targetValue = when {
+            busy -> MaterialTheme.colorScheme.primary
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "formatActionTint"
+    )
+    val container by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0f)
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "formatActionContainer"
+    )
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .then(
-                if (selected) {
-                    Modifier.background(MaterialTheme.colorScheme.primaryContainer)
-                } else {
-                    Modifier
-                }
-            )
+            .drawBehind { drawRect(container) }
             .bouncyPress(pressedScale = 0.88f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
@@ -424,16 +481,32 @@ private fun FormatAction(
             .testTag(tag),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            // No `size`: these were drawn at 20dp inside the 48dp target, which
-            // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
-            // built from - visibly smaller than the Material `List` glyph that
-            // sits in the same row. The glyph now uses the vector's own 24dp
-            // default, the same correction the tier-list trophy needed.
-        )
+        // Crossfaded rather than swapped: the upload control is the one place the
+        // reader looks while a photo is going up, and a glyph greyed out like every
+        // other disabled control said "unavailable", not "working".
+        Crossfade(
+            targetState = busy,
+            animationSpec = ExpressiveMotion.FastEffects,
+            label = "formatActionBusy"
+        ) { working ->
+            if (working) {
+                ExpressiveLoadingIndicator(
+                    modifier = Modifier.size(28.dp).testTag("${tag}_busy"),
+                    color = tint
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = tint,
+                    // No `size`: these were drawn at 20dp inside the 48dp target, which
+                    // made the 24dp vectors - and the 1.8-1.9f strokes most of them are
+                    // built from - visibly smaller than the Material `List` glyph that
+                    // sits in the same row. The glyph now uses the vector's own 24dp
+                    // default, the same correction the tier-list trophy needed.
+                )
+            }
+        }
     }
 }
 

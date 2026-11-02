@@ -284,7 +284,7 @@ class CommentChatWindowTest {
  * signatures - and a test that accidentally reaches one of them fails loudly with
  * this name in the stack, which is the useful kind of noise.
  */
-private object UnsupportedRepository : AniListRepository {
+internal object UnsupportedRepository : AniListRepository {
     override suspend fun getViewer(): Result<com.anisequel.data.model.ViewerProfile> = throw UnsupportedOperationException()
     override suspend fun getUserByName(userName: String): Result<com.anisequel.data.model.ViewerProfile> = throw UnsupportedOperationException()
     override suspend fun getUserAnimeList(userId: Int, forceRefresh: Boolean): Result<com.anisequel.data.model.MediaListCollection> = throw UnsupportedOperationException()

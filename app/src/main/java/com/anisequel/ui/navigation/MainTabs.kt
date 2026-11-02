@@ -214,17 +214,15 @@ internal fun mainBarClearance(): Dp {
  * The selection morph - the growing label, the springing weight, the press scale -
  * is [ExpressiveNavigationBar]'s and is documented there.
  *
- * ## Holding the bar on the Profile tab
+ * ## Holding the bar, and what a hold is for
  *
- * The bar's own hold gesture (lift the bar, do not swipe) opens the viewer's inbox,
- * and only while the profile is the page on screen: a hold belongs to the destination
- * it began on, which is the selected tab, because the bar cannot tell which of its
- * unequal items a finger is over - see [ExpressiveNavigationBar]. That is the case
- * that matters. The profile's Messages segment used to be three actions deep - open
- * the profile, find the Activity tab, tap the chip - and it is the one list on the
- * bar nobody had a short way to. The hold is already acknowledged by the bar lifting
- * and by the LongPress tick, so the shortcut needs no new motion and no new
- * affordance drawn on the bar.
+ * The bar's held gesture exists to *start a swipe*: lift, then shove left or right
+ * and the preview drags across the bar with the finger. It is not a shortcut and it
+ * goes nowhere on its own. Holding Profile and releasing used to open the Messages
+ * segment, which is the bar navigating on a press nobody completed - a hold belongs
+ * to the gesture that follows it, and a destination arriving on a plain
+ * press-and-release reads as a misfire. The segment is one tap on Profile and one
+ * tap on the chip.
  */
 @Composable
 internal fun MainBar(
@@ -232,13 +230,6 @@ internal fun MainBar(
     tabs: List<MainTab>,
     profileAvatarUrl: String?,
     onSelect: (MainTab) -> Unit,
-    /**
-     * The tab a hold that never swiped was made on.
-     *
-     * Defaults to nothing, so the bar behaves exactly as it did for every tab that
-     * has no shortcut; the host today offers one only for [MainTab.PROFILE].
-     */
-    onHold: (MainTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val destinations = remember(tabs, profileAvatarUrl) {
@@ -260,8 +251,7 @@ internal fun MainBar(
         ExpressiveNavigationBar(
             destinations = destinations,
             selectedIndex = selectedIndex,
-            onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) },
-            onHold = { index -> tabs.getOrNull(index)?.let(onHold) }
+            onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) }
         )
     }
 }
@@ -327,38 +317,5 @@ internal fun NavHostController.navigateToMainTab(tab: MainTab, signedIn: Boolean
         popUpTo(target.homeRoute) { saveState = true }
         launchSingleTop = true
         restoreState = true
-    }
-}
-
-/**
- * A held Profile tab: the viewer's own inbox, on the first frame.
- *
- * Not [navigateToMainTab] with a different route, because the two rules that make a
- * tab *tap* right are the two that make this wrong.
- *
- *  - The early return. `navigateToMainTab` does nothing when its tab is already the
- *    current route - a tap on the tab you are looking at must not rebuild the page -
- *    and holding the Profile tab is something a reader does **while** they are on
- *    the profile, which is precisely when the shortcut is wanted.
- *  - `restoreState`. Returning to a tab restores what it was showing, and a restored
- *    profile has already initialised its segment, so the route's `segment` would be
- *    read and then ignored: the hold would land on whatever the reader last left.
- *    Nothing is saved on the way here for the same reason - the profile's own saved
- *    state is keyed on its route, so saving the entry being replaced would hand it
- *    straight back to the entry that replaces it.
- *
- * What is left is the part of the tab contract this must keep: Home stays at the
- * bottom of the stack (`popUpTo`), so Back from the inbox leaves the reader where
- * Back from the profile always left them, and the held gesture replaces the profile
- * rather than stacking a second copy of it. The list states a rebuilt page would
- * have lost are hoisted above the graph ([AppNavigation]'s library selection and
- * grid), so the one page that pays for `saveState = false` is the profile visit
- * being replaced.
- */
-internal fun NavHostController.navigateToProfileMessages(signedIn: Boolean) {
-    val target = mainTabTarget(MainTab.PROFILE, signedIn)
-    navigate(ProfileRoutes.OWN_MESSAGES) {
-        popUpTo(target.homeRoute)
-        launchSingleTop = false
     }
 }

@@ -173,6 +173,23 @@ class MarkdownMediaPreviewTest {
             mediaCoverKeysIn("https://anilist.co/anime/16498/Death-Note?ref=share")
         )
     }
+
+    /**
+     * A card that is not at the top level of the document.
+     *
+     * The collector walked centered blocks and nothing else, so a link quoted from
+     * another comment - which is what the Quote button produces, and which the block
+     * walk now renders as a card rather than as a line of text - drew its title with
+     * an empty poster frame forever. The renderer and the collector have to agree
+     * about which blocks can hold a card; this is the collector's half.
+     */
+    @Test
+    fun `a card inside a quote is still collected`() {
+        assertEquals(
+            listOf(MediaCoverKey("ANIME", 128893)),
+            mediaCoverKeysIn("> https://anilist.co/anime/128893")
+        )
+    }
 }
 
 /**

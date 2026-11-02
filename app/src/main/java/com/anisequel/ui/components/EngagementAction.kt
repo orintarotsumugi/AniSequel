@@ -1,5 +1,7 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
@@ -12,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -66,7 +70,21 @@ fun EngagementAction(
     modifier: Modifier = Modifier
 ) {
     val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val appearance = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    // Two settled values, not a pulse: the heart's colour and its count both jump
+    // on the tap - the icon swaps in the same frame and the optimistic number is
+    // already correct - so without this the control that confirms a like is the
+    // one thing in the row that does not move. `FastColorEffects` and
+    // `FastSpatialInt` are the house tokens for exactly this pair.
+    val appearance by animateColorAsState(
+        targetValue = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "engagement_tint"
+    )
+    val shownCount by animateIntAsState(
+        targetValue = count,
+        animationSpec = ExpressiveMotion.FastSpatialInt,
+        label = "engagement_count"
+    )
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     Row(
@@ -97,7 +115,7 @@ fun EngagementAction(
         )
         Spacer(modifier = Modifier.width(5.dp))
         Text(
-            text = count.toString(),
+            text = shownCount.toString(),
             style = MaterialTheme.typography.labelMedium,
             color = appearance
         )

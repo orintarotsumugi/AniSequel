@@ -146,3 +146,27 @@ fun MessageNode.isWith(counterpartId: Int?, viewerId: Int?): Boolean {
         (messenger == counterpartId && recipient == viewerId)
 }
 
+/**
+ * This message as the first row of its own comment thread.
+ *
+ * A message is a `MessageActivity`: its body is the activity's, and the rows under
+ * it are the replies AniList gives any activity. The comment sheet draws replies,
+ * so a message opened straight into that sheet would show the answers without the
+ * thing they answer - which is why the messages tab used to have a sheet of its
+ * own for the body. Mapping it to [ActivityReply] is what lets the one sheet draw
+ * both: same avatar, same name, same timestamp, same Reply and Quote.
+ *
+ * [ActivityReply.isLiked] is deliberately null. A message *is* likeable, but its
+ * like is `ToggleLikeV2(activityId)` while a reply's is `ToggleLikeV2(replyId)`,
+ * and the thread store only speaks the second one. Handing the row a value would
+ * enable a heart that likes an activity id through the reply mutation.
+ */
+fun MessageNode.asThreadHead(): ActivityReply = ActivityReply(
+    id = id,
+    text = message,
+    likeCount = likeCount,
+    isLiked = null,
+    createdAt = createdAt,
+    user = messenger
+)
+
