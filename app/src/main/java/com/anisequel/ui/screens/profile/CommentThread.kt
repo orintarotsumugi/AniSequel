@@ -593,7 +593,8 @@ private fun ChatScrollEffects(
             val info = listState.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull { it.key is Int }
                 ?: return@snapshotFlow null
-            (item.key as Int) to (info.viewportStartOffset - item.offset).coerceAtLeast(0)
+            val key = item.key as Int
+            key to (info.viewportStartOffset - item.offset).coerceAtLeast(0)
         }.collect { found -> if (found != null) anchorTop = found }
     }
 

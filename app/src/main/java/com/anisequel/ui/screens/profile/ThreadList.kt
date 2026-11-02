@@ -342,7 +342,11 @@ internal fun threadRowsAboveReplies(
     val hasBanner = state.loadError != null || state.windowError != null || state.refreshError != null
     val hasOlder = state.isChatView &&
         CommentWindow.hiddenCount(state.replyCount, drawnCount) > 0
-    return (if (state.head != null) 1 else 0) + (if (hasBanner) 1 else 0) + (if (hasOlder) 1 else 0)
+    var rows = 0
+    if (state.head != null) rows++
+    if (hasBanner) rows++
+    if (hasOlder) rows++
+    return rows
 }
 
 /**
