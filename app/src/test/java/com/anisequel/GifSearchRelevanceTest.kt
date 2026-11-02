@@ -73,7 +73,9 @@ class GifSearchRelevanceTest {
     @Test
     fun `a query already answered is not sent again`() = runTest {
         val provider = CountingProvider()
-        val store = GifSearchStore(backgroundScope, provider)
+        // The test's own scope, not `backgroundScope`: idle-advancing skips
+        // background work, so the debounced search never ran.
+        val store = GifSearchStore(this, provider)
 
         store.setQuery("crying")
         advanceUntilIdle()
