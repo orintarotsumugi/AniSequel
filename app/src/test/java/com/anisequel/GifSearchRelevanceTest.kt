@@ -4,12 +4,17 @@ import com.anisequel.data.network.GifPage
 import com.anisequel.data.network.GifResult
 import com.anisequel.data.network.GifSearchApi
 import com.anisequel.data.network.PHRASE_CURSOR
+import com.anisequel.data.network.PREFIX_CURSOR
 import com.anisequel.data.network.TenorResponse
 import com.anisequel.data.network.booruCursor
 import com.anisequel.data.network.booruPhraseTag
+import com.anisequel.data.network.booruPrefixTag
 import com.anisequel.data.network.booruTags
+import com.anisequel.data.network.booruTiers
+import com.anisequel.data.network.tierAnswers
 import com.anisequel.data.network.toGifPage
 import com.anisequel.ui.viewmodel.GifSearchStore
+import java.io.IOException
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,6 +28,10 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GifSearchRelevanceTest {
+
+    private val sampleResult =
+        GifResult("1", "https://x/a.gif", "https://x/a.gif", null, 10, 10)
+    private val ioError = IOException("refused")
 
     @Test
     fun `a series name becomes one tag with its stop words kept`() {
@@ -41,10 +50,53 @@ class GifSearchRelevanceTest {
 
     @Test
     fun `a phrase page keeps paging the phrase rather than the words`() {
-        assertEquals(false to 0, booruCursor(null))
-        assertEquals(false to 2, booruCursor("2"))
-        assertEquals(true to 3, booruCursor("${PHRASE_CURSOR}3"))
-        assertEquals(true to 0, booruCursor("${PHRASE_CURSOR}junk"))
+        assertEquals(0 to 0, booruCursor(null))
+        assertEquals(0 to 2, booruCursor("2"))
+        assertEquals(1 to 3, booruCursor("${PHRASE_CURSOR}3"))
+        assertEquals(1 to 0, booruCursor("${PHRASE_CURSOR}junk"))
+        // The prefix tier's cursor must not read as the phrase's: paging `kaguya*`
+        // asked the phrase tag for its third page instead.
+        assertEquals(2 to 3, booruCursor("${PREFIX_CURSOR}3"))
+        assertEquals(2 to 0, booruCursor("${PREFIX_CURSOR}junk"))
+    }
+
+    @Test
+    fun `a phrase is asked three ways and a single word only once`() {
+        // The series case: `spice wolf` matches no post (the site ANDs the words)
+        // and the reader's own words are not the tag, so the phrase and then the
+        // prefix are what can find it.
+        val tiers = booruTiers("Spice and Wolf")
+        assertEquals(
+            listOf("spice wolf" to "", "spice_and_wolf" to PHRASE_CURSOR, "spice*" to PREFIX_CURSOR),
+            tiers.map { it.tagString to it.cursorPrefix }
+        )
+        // A one-word search already is a tag. `holo*` is a wider and worse question,
+        // so it is not asked.
+        assertEquals(
+            listOf("holo" to ""),
+            booruTiers("holo").map { it.tagString to it.cursorPrefix }
+        )
+        assertTrue("a blank query asks nothing", booruTiers("   ").isEmpty())
+    }
+
+    @Test
+    fun `a two-letter first word is not a usable prefix`() {
+        // `pu el`-style queries would prefix-match half the index.
+        assertNull(booruPrefixTag("pi kawaii"))
+        assertEquals("kaguya*", booruPrefixTag("Kaguya sama"))
+        assertNull("one word is never a prefix tier", booruPrefixTag("holo"))
+    }
+
+    @Test
+    fun `a full page that filtered to nothing is not a miss`() {
+        // The server filled the limit and this app dropped every row for its rating:
+        // there are more rows behind it, so the words tier keeps paging rather than
+        // handing the search to the prefix spelling.
+        val more = Result.success(GifPage(emptyList(), next = "1"))
+        assertTrue(tierAnswers(more))
+        assertTrue(tierAnswers(Result.success(GifPage(listOf(sampleResult)))))
+        assertFalse("a genuine empty page falls through", tierAnswers(Result.success(GifPage(emptyList()))))
+        assertTrue("a refusal is an answer, not a miss", tierAnswers(Result.failure(ioError)))
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -17,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.ui.components.update.InstallPermissionGuideDialog
 import com.anisequel.data.update.formatBytes
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.update.DownloadProgress
@@ -27,6 +33,11 @@ import com.anisequel.ui.components.update.rememberUpdateController
 fun UpdateSectionCard(modifier: Modifier = Modifier) {
     val controller = rememberUpdateController()
     val state = controller.state
+    // The same guide the launch prompt shows, for the same reason: the permission
+    // switch lives in another app's screens and is named differently on every
+    // manufacturer's build, so the row sends the user to the steps before it sends
+    // them to Settings.
+    var showPermissionGuide by remember { mutableStateOf(false) }
 
     // `rememberUpdateController()` hands back the process-wide controller, which
     // the launch prompt already checked. So this only fires on a genuinely cold
@@ -193,7 +204,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsButton(
                     text = if (state.sentToSettings) "Open settings again" else "Open settings",
-                    onClick = { controller.requestInstallPermission() },
+                    onClick = { showPermissionGuide = true },
                     icon = AppVectorIcons.Settings,
                     fillWidth = true,
                     testTag = "grant_install_permission_button"
@@ -224,6 +235,17 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             text = "AniSequel asks GitHub for the latest release. Nothing about you is sent.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    if (showPermissionGuide) {
+        InstallPermissionGuideDialog(
+            manufacturer = Build.MANUFACTURER,
+            onOpenSettings = {
+                showPermissionGuide = false
+                controller.requestInstallPermission()
+            },
+            onDismiss = { showPermissionGuide = false }
         )
     }
 }

@@ -636,6 +636,9 @@ class UserActivityViewModel(
     /** Checks the newest page once; the flag says whether the reader is at the end. */
     fun checkForNewComments(atBottom: Boolean) = commentThread.checkForNewComments(atBottom)
 
+    /** Re-reads the open thread because the reader tapped Refresh in the sheet. */
+    fun refreshComments(atBottom: Boolean) = commentThread.refreshNow(atBottom)
+
     /** How long the comment sheet waits between its background checks. */
     val commentPollIntervalMillis: Long get() = commentThread.pollIntervalMillis
 

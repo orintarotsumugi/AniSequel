@@ -158,6 +158,7 @@ internal fun ActivityEngagementSheets(
             onCheckForNewComments = { atBottom ->
                 activityViewModel.checkForNewComments(atBottom)
             },
+            onRefresh = { atBottom -> activityViewModel.refreshComments(atBottom) },
             pollIntervalMillis = activityViewModel.commentPollIntervalMillis,
             polling = mediaSettings.pollForNewComments,
             tenorApiKey = mediaSettings.tenorApiKey,
@@ -238,6 +239,7 @@ internal fun MessagesCommentsSheetHost(
             onLoadOlder = { thread.loadOlder() },
             onRevealNewComments = { thread.revealNewComments() },
             onCheckForNewComments = { atBottom -> thread.checkForNewComments(atBottom) },
+            onRefresh = { atBottom -> thread.refreshNow(atBottom) },
             pollIntervalMillis = thread.pollIntervalMillis,
             polling = mediaSettings.pollForNewComments,
             tenorApiKey = mediaSettings.tenorApiKey,

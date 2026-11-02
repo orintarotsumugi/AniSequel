@@ -61,6 +61,9 @@ class GifSearchStore(
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** Which index the panel is searching, for its hints and placeholder. */
+    val providerName: String get() = provider.providerName
+
     private var searchJob: Job? = null
     private var pageJob: Job? = null
 
@@ -245,10 +248,20 @@ class GifSearchStore(
         _state.value = State(note = BLANK_QUERY_NOTE)
     }
 
+    /**
+     * The sentence for a search that came back empty.
+     *
+     * It has to be true about what the app actually did. The booru asked the query
+     * three ways before this is reached - the words as tags, the whole phrase as one
+     * tag, the first word as a prefix - so the advice is the thing the index still
+     * cannot do by itself: name one tag. Saying "try fewer words" alone would be the
+     * app describing its own failure as the reader's.
+     */
     private fun emptyNote(query: String): String = when {
         !provider.catalogueIsNarrow -> "Nothing found for \"$query\"."
-        else -> "No animated GIF tagged \"$query\" there. Boorus match tags rather " +
-            "than sentences, so try fewer words, or one name like \"holo\"."
+        else -> "No animated GIF matches \"$query\" there - not its words, not the " +
+            "whole phrase as one tag, not its first word. Boorus match tags rather " +
+            "than sentences, so try one name like \"holo\", or \"kaguya\"."
     }
 
     companion object {

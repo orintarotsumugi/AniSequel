@@ -362,10 +362,11 @@ private fun ClientIdEditor(
  * Filed under AniList rather than Appearance because all three settings are about
  * writing to the site: how much of a thread to fetch, whether an open thread keeps
  * fetching, and which GIF index a search is sent to. The upload hosts are not a
- * choice here - the app tries catbox.moe, falls back to pomf.lain.la and then to
- * imgbb.com, and all three take an anonymous file - but their retention rules are
- * stated, because a comment's image disappearing after nobody looked at it is a
- * decision the reader made, not one the app should have made silently on their
+ * choice here - the app tries catbox.moe, falls back to imgbb.com and then to
+ * pomf.lain.la, in that order because the middle one is the last host whose files
+ * AniList can actually read - and all three take an anonymous file. Their retention
+ * rules are stated, because a comment's image disappearing after nobody looked at it
+ * is a decision the reader made, not one the app should have made silently on their
  * behalf.
  */
 @Composable
@@ -425,7 +426,10 @@ private fun CommentMediaCard(context: android.content.Context) {
         Text(
             text = "Photos you attach are uploaded to an anonymous image host and " +
                 "the comment carries the link. catbox.moe is tried first; if it is " +
-                "paused or down the file goes to pomf.lain.la next, then to imgbb.com. " +
+                "paused or down the file goes to imgbb.com next, then to pomf.lain.la. " +
+                "That order is not a preference: pomf.lain.la refuses to serve its " +
+                "files to requests carrying AniList's own address, so a photo stored " +
+                "there looks fine in this app and shows as a broken image on the site. " +
                 "All three are public: anybody with the link can view the file, and " +
                 "none can delete it without an account. GIF search runs " +
                 "against Safebooru, asked for animated GIFs at safe rating only - no " +

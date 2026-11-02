@@ -16,16 +16,19 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import com.anisequel.domain.usecase.CommentGrouping
 import com.anisequel.domain.usecase.CommentWindow
@@ -39,10 +42,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import com.anisequel.data.model.ActivityReply
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.viewmodel.CommentThreadStore
@@ -78,6 +85,13 @@ internal fun ColumnScope.CommentsThread(
     viewerId: Int?,
     canPost: Boolean,
     listState: LazyListState,
+    /**
+     * Whether this thread has been placed at its newest row.
+     *
+     * Owned by the sheet because this composable is disposed whenever the editor is
+     * up; see [ChatScrollEffects].
+     */
+    anchor: MutableState<Boolean>,
     pollIntervalMillis: Long,
     polling: Boolean,
     nowEpochSecond: Long?,
@@ -90,8 +104,23 @@ internal fun ColumnScope.CommentsThread(
     onShowCommentLikers: (Int) -> Unit,
     onLoadOlder: () -> Unit,
     onRevealNewComments: () -> Unit,
-    onCheckForNewComments: (atBottom: Boolean) -> Unit
+    onCheckForNewComments: (atBottom: Boolean) -> Unit,
+    /** Re-reads the thread now, because the reader tapped Refresh. */
+    onRefresh: (atBottom: Boolean) -> Unit
 ) {
+    // Where the reader is, computed once for the whole sheet: the poll needs it to
+    // decide whether to move them, and Refresh needs it for the same question. It
+    // used to live inside the scroll effects, which left the header with no honest
+    // way to answer a tap. Held as a `State`, not a value, so the timer reads the
+    // live answer when it fires instead of the one captured at launch.
+    val isAtBottom = remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= info.totalItemsCount - 2
+        }
+    }
+
     CommentsHeader(
         // Chat view prints the thread's own count, because the rows on screen are
         // deliberately fewer than that: "12 of 900" is the honest answer to how big
@@ -99,7 +128,10 @@ internal fun ColumnScope.CommentsThread(
         // would say 12 and let the reader think that was the whole thread.
         count = if (state.isChatView && state.replyCount > 0) state.replyCount else state.replies.size,
         isRefreshing = state.isRefreshing,
-        isLoading = state.isLoading
+        isLoading = state.isLoading,
+        lastCheckedAtMillis = state.lastCheckedAtMillis,
+        nowEpochSecond = nowEpochSecond,
+        onRefresh = { onRefresh(isAtBottom.value) }
     )
 
     // Computed once per thread, not per row: the answer depends on every earlier
@@ -148,8 +180,11 @@ internal fun ColumnScope.CommentsThread(
 
     ChatScrollEffects(
         state = state,
-        visibleCount = visible.size,
+        drawnIds = visible.map { it.id },
+        rowsAboveReplies = threadRowsAboveReplies(state, visible.size),
         listState = listState,
+        isAtBottom = isAtBottom,
+        anchored = anchor,
         polling = polling,
         pollIntervalMillis = pollIntervalMillis,
         onCheckForNewComments = onCheckForNewComments
@@ -178,12 +213,19 @@ internal fun ColumnScope.CommentsThread(
 }
 
 @Composable
-private fun CommentsHeader(count: Int, isRefreshing: Boolean, isLoading: Boolean) {
+private fun CommentsHeader(
+    count: Int,
+    isRefreshing: Boolean,
+    isLoading: Boolean,
+    lastCheckedAtMillis: Long,
+    nowEpochSecond: Long?,
+    onRefresh: () -> Unit
+) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+                .padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -207,25 +249,86 @@ private fun CommentsHeader(count: Int, isRefreshing: Boolean, isLoading: Boolean
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            if (isRefreshing || isLoading) {
+            // The freshness line is the reason this is a button and not a gesture: a
+            // reader who can see the thread was checked 40 seconds ago does not need
+            // to tap it, and one who sees "8m ago" knows the tap will answer. AniList
+            // holds a session at about 30 requests a minute, so an invisible poll is
+            // a mystery that gets hammered.
+            if (!isLoading && lastCheckedAtMillis > 0) {
                 Text(
-                    text = if (isLoading) "Loading" else "Refreshing",
+                    text = checkedAgoLabel(lastCheckedAtMillis, nowEpochSecond),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("comments_checked_ago")
                 )
                 Spacer(modifier = Modifier.width(6.dp))
+            }
+            if (isRefreshing || isLoading) {
                 // The morphing loader, not a bare `CircularProgressIndicator`:
                 // the body of this same sheet shimmers and the detail sheet's
                 // editor already morphs, so a plain spinner here was the last
                 // thing in the thread that belonged to a different system.
-                ExpressiveLoadingIndicator(
-                    modifier = Modifier.size(14.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                //
+                // It replaces the Refresh icon rather than sitting beside it: two
+                // affordances for one state is a header that reads as busy, and the
+                // control is doing that work right now.
+                //
+                // Gated the way every other loop in this app is. Material's
+                // `LoadingIndicator` is an indefinite morph, and this header stays
+                // composed under the manage dialog and the likers tray - so an
+                // ungated one keeps the frame clock awake for a sheet nobody can
+                // see, and ignores the one setting the reader has about motion.
+                if (rememberIsResumed() && ExpressiveMotion.speed != MotionStyle.INSTANT) {
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text(
+                        text = if (isLoading) "Loading" else "Refreshing",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // One interaction source shared between the button and the spring, the
+                // way `AniTopAppBar` documents it: without one, `bouncyPress` falls back
+                // to its own pointer loop, so a finger that lands here and starts a
+                // scroll squashes the icon for the whole drag.
+                val refreshSource = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier
+                        .bouncyPress(interactionSource = refreshSource)
+                        .testTag("comments_refresh"),
+                    interactionSource = refreshSource
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Refresh,
+                        contentDescription = "Check for new comments",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
+}
+
+/**
+ * "Updated just now" / "Checked 8m ago", from the sheet's own last check.
+ *
+ * Reuses the feed's relative-time formatter so "3m ago" means the same thing here
+ * as it does on every activity card. [nowEpochSecond] is the profile's minute tick:
+ * without it the label is computed against the wall clock on each recomposition and
+ * never changes while the sheet sits open, which is a freshness line that lies.
+ */
+private fun checkedAgoLabel(lastCheckedAtMillis: Long, nowEpochSecond: Long?): String {
+    val checkedEpochSecond = (lastCheckedAtMillis / 1_000L).toInt()
+    val now = nowEpochSecond?.toInt()?.let { Instant.ofEpochSecond(it.toLong()) } ?: Instant.now()
+    val label = formatRelativeSeconds(checkedEpochSecond, now)
+    return if (label == "just now") "Updated just now" else "Checked $label"
 }
 
 /**
@@ -431,30 +534,30 @@ private fun WriteCommentBar(onClick: () -> Unit) {
 
 
 /**
- * The two things a chat does that a list does not: it opens at its newest message,
- * and it keeps asking whether the conversation moved while it was on screen.
+ * The three things a chat does that a list does not: it opens at its newest message,
+ * it keeps asking whether the conversation moved while it was on screen, and it holds
+ * the reader's place when rows arrive *above* them.
  *
- * Split out of the thread because neither has anything to do with drawing rows -
- * both are about *where the reader is*, and they are the part of this sheet that
+ * Split out of the thread because none of it has anything to do with drawing rows -
+ * all three are about *where the reader is*, and they are the part of this sheet that
  * changes when the paging or the polling rules change.
  */
 @Composable
 private fun ChatScrollEffects(
     state: CommentThreadStore.CommentsState,
-    visibleCount: Int,
+    drawnIds: List<Int>,
+    rowsAboveReplies: Int,
     listState: LazyListState,
+    isAtBottom: androidx.compose.runtime.State<Boolean>,
+    // Held by the sheet, not here: this composable is disposed the moment the reader
+    // taps Reply or Quote, and a flag that lived with it came back false on Cancel -
+    // which re-ran the anchor scroll and teleported a reader who had walked five
+    // pages back straight to the newest comment.
+    anchored: MutableState<Boolean>,
     polling: Boolean,
     pollIntervalMillis: Long,
     onCheckForNewComments: (Boolean) -> Unit
 ) {
-    val isAtBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-            last >= info.totalItemsCount - 2
-        }
-    }
-
     // A chat opens at its newest message. AniList's own page opens at the top of
     // the thread and scrolls you down as replies arrive; in a sheet that has just
     // fetched one window of a nine-hundred-comment conversation, starting at row
@@ -462,11 +565,14 @@ private fun ChatScrollEffects(
     //
     // Keyed on the thread, and one-shot: a reader who scrolls up to read something
     // and then posts a comment must not be dragged back down, and the posted-reply
-    // scroll in the sheet owns that case.
-    var anchored by remember(state.activityId) { mutableStateOf(false) }
-    LaunchedEffect(state.activityId, state.isLoading, visibleCount) {
-        if (state.isChatView && !anchored && !state.isLoading && visibleCount > 0) {
-            anchored = true
+    // scroll in the sheet owns that case - so it is skipped here rather than raced
+    // against it. Both scrolls starting on the same frame is how each one cancels
+    // the other and the reader stops on neither row.
+    LaunchedEffect(state.activityId, state.isLoading, drawnIds.size) {
+        if (state.isChatView && !anchored.value && !state.isLoading &&
+            drawnIds.isNotEmpty() && state.postedReplyId == null
+        ) {
+            anchored.value = true
             // One frame, so the list has measured its items before being placed at
             // the end of them: `scrollToItem` on a layout that has not run yet
             // lands on index zero, which is the bug this effect replaces.
@@ -478,15 +584,49 @@ private fun ChatScrollEffects(
         }
     }
 
+    // The reply at the top of the viewport, and how far into it the reader has
+    // scrolled. Tracked continuously because the place has to be recovered *after*
+    // the list grew, when the row that was there is no longer on screen.
+    var anchorTop by remember(state.activityId) { mutableStateOf<Pair<Int, Int>?>(null) }
+    LaunchedEffect(listState, state.activityId) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.key is Int }
+                ?: return@snapshotFlow null
+            (item.key as Int) to (info.viewportStartOffset - item.offset).coerceAtLeast(0)
+        }.collect { found -> if (found != null) anchorTop = found }
+    }
+
+    // The compensation. An Older page, or a window revealing rows it had already
+    // fetched, puts new rows *above* the reader; a `LazyColumn` that is not reversed
+    // keeps its index and moves the conversation, so the row being read slides off
+    // the top of the screen and the placement springs animate the jump. This puts the
+    // anchor back where it was, pixel for pixel.
+    var previousDrawnIds by remember(state.activityId) { mutableStateOf<List<Int>>(emptyList()) }
+    LaunchedEffect(drawnIds) {
+        val rows = CommentWindow.prependedRows(previousDrawnIds, drawnIds)
+        previousDrawnIds = drawnIds
+        if (rows == 0) return@LaunchedEffect
+        val anchor = anchorTop ?: return@LaunchedEffect
+        withFrameNanos { }
+        val target = CommentWindow.drawnRowIndex(anchor.first, drawnIds, rowsAboveReplies)
+        if (target >= 0) listState.scrollToItem(target, anchor.second)
+    }
+
     // The timer. One per open thread, reading `isAtBottom` when it fires rather
     // than being rebuilt on every scroll - restarting the effect on a scroll would
     // reset the interval, and a reader who kept scrolling would keep postponing the
     // check they are waiting for.
+    //
+    // The flag arrives as a `State` rather than a `Boolean` for exactly that reason:
+    // a plain value would be captured by the closure on the frame the effect started
+    // and the poll would answer where the reader was when they opened the sheet, not
+    // where they are now.
     if (polling && state.isChatView && !state.isLoading) {
         LaunchedEffect(state.activityId, pollIntervalMillis) {
             while (isActive) {
                 delay(pollIntervalMillis)
-                onCheckForNewComments(isAtBottom)
+                onCheckForNewComments(isAtBottom.value)
             }
         }
     }

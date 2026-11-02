@@ -177,6 +177,28 @@ GitHub does not run workflows for `GITHUB_TOKEN` pushes.
   last launch.
 - **The grant is observed via `onResume`, never polled.** Nothing in-process is
   told when the user flips a switch in another app's Settings screen.
+- **Open Settings through every route the device might answer, in order.**
+  `ACTION_MANAGE_UNKNOWN_APP_SOURCES` is one permission with several ways in, and a
+  re-skinned build drops the ones you would expect: some phones register the
+  package-scoped screen, some only the all-apps list, some only the app-info page,
+  and some move it under a security page. `UpdateInstallation.permissionSettingsRoutes()`
+  is that ladder — package-scoped, app details, the same action with no package,
+  security, Settings home — and every rung carries `FLAG_ACTIVITY_NEW_TASK`, because
+  these launches come from the *application* context and without the flag the throw
+  is indistinguishable from a device with no Settings app. Adding one route and
+  stopping is how the "your phone has no Settings" complaint stayed alive: on a
+  re-skinned build the first two intents can both be unanswered while the switch sits
+  two screens away. `UpdateInstallPermissionTest` pins the order and the flag.
+- **Say what to tap before sending them there.** The route opens a screen this app
+  cannot see, whose row is named differently by every manufacturer, so
+  `InstallPermissionGuide` writes the steps per brand (Samsung/Xiaomi/oppo/Huawei
+  first, generic otherwise) and closes with the search fallback that is true on every
+  build. The sentences are a pure object over strings for the same reason the query
+  documents are: nothing here can look at a phone, so pin what the user is told.
+- **A refused Settings hand-off keeps the APK and says so.** It stays
+  `NeedsInstallPermission` with a notice; `Failed` would drop the file the user
+  already waited for and send them to re-download it, and the message is the one thing
+  that must never blame the device for our own intent.
 - **Cache APKs by release version** (`UpdateManager.downloadedApkFor`), so the
   Settings round trip costs one download instead of two.
 - **The download directory and the `FileProvider` paths are one contract.**

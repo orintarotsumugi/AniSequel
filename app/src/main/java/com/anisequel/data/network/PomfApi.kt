@@ -21,10 +21,21 @@ import com.squareup.moshi.Moshi
  * ## Why a second host exists at all
  *
  * `catbox.moe` is the host this app was built around, and in November 2026 it
- * stopped accepting anonymous uploads - the API answers HTTP 200 with
+ * stopped accepting anonymous uploads - the API answers HTTP 412 with
  * "Uploads paused until I can resolve storage issues. Sorry!" for every file. An
  * attachment button that cannot attach anything is not a degraded feature, it is a
- * broken one, so [ImageUploader] falls back here before it tries imgbb.com.
+ * broken one, so [ImageUploader] falls back here.
+ *
+ * ## Why last, and not second
+ *
+ * This host **serves its files back to AniList with a connection reset**: a GET of a
+ * stored file carrying `Referer: https://anilist.co/` is killed by nginx (HTTP/2
+ * stream reset), while the same file with no referer - which is how this app's own
+ * image loader asks - returns 200. Measured November 2026. So a photo attached
+ * through here uploads fine, looks fine in this app, and is a broken-image icon for
+ * every reader on the site where the comment actually lives. [ImageUploader]
+ * therefore tries `imgbb.com`, whose `i.ibb.co` answers 200 to the same referer,
+ * before it settles for this one.
  *
  * ## Why this host
  *
@@ -44,6 +55,11 @@ class PomfApi(
     private val client: OkHttpClient = CatboxApi.defaultClient(),
     moshi: Moshi = NetworkClient.json
 ) : ImageHost {
+
+    // Measured, not assumed: `pomf2.lain.la` resets the stream for any GET carrying
+    // `Referer: https://anilist.co/`, so its files are invisible on the site the
+    // comment is posted to. See [ImageHost.showsOnAniList].
+    override val showsOnAniList: Boolean get() = false
 
     private val adapter = moshi.adapter(PomfUploadResponse::class.java)
 

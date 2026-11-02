@@ -99,11 +99,71 @@ open class UpdateInstallation(private val context: Context) {
      *
      * `ACTION_MANAGE_UNKNOWN_APP_SOURCES` is scoped to this package by the data
      * URI, so the user lands on AniSequel's own row rather than a list.
+     *
+     * The `NEW_TASK` flag is not decoration: the update controller holds the
+     * *application* context, and `startActivity` from a non-Activity context throws
+     * `AndroidRuntimeException` without it. That throw was caught by the caller's
+     * `runCatching`, turned into `false`, and reported as "This device has no
+     * Settings app" - on every device, for the one screen the user needed. The
+     * release-page intent beside this one had always carried the flag; this one
+     * had not.
      */
     fun installPermissionSettings(): Intent = Intent(
         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
         Uri.parse("package:${context.packageName}")
-    )
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * The app's own details page, the fallback when the per-app install screen is
+     * not offered.
+     *
+     * `ACTION_MANAGE_UNKNOWN_APP_SOURCES` is a platform action, but the screen
+     * behind it is drawn by whichever Settings app the OEM shipped, and some of
+     * them do not register it for a package-scoped URI. The details page is the
+     * one every device has, and it is where the "Install unknown apps" switch lives
+     * on those builds. Same `NEW_TASK` reason as [installPermissionSettings].
+     */
+    internal fun appDetailsSettings(): Intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * Every Settings screen that can hold the switch, best match first.
+     *
+     * Five of them, because the phone this runs on is not a device this app gets to
+     * see. The package-scoped install-permission screen is the documented route and
+     * the one a Pixel answers; the app-details page is the row an OEM re-skin tends
+     * to keep when it drops the first; the unscoped form of the same action is what a
+     * build that registers only the *list* of apps answers to; the security page is
+     * where the older-skinned builds parked the switch; and the Settings home is the
+     * last one, chosen over "nothing opened" because a user staring at a dead button
+     * has nowhere to go while a user standing in Settings can search for the row -
+     * which is exactly what [InstallPermissionGuide] tells them to type.
+     *
+     * Every route carries `FLAG_ACTIVITY_NEW_TASK`: these are started from the
+     * *application* context, and `startActivity` without the flag throws before
+     * Settings is anywhere near reached. That throw used to be swallowed, so the
+     * update said "This device has no Settings app" on every phone in existence.
+     */
+    internal fun permissionSettingsRoutes(): List<Intent> {
+        // No data on this one: the same action, asked for its list of apps rather
+        // than for one package, because some builds register only that form.
+        @Suppress("DEPRECATION")
+        val unscopedList = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val security = Intent(Settings.ACTION_SECURITY_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val settingsHome = Intent(Settings.ACTION_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return listOf(
+            installPermissionSettings(),
+            appDetailsSettings(),
+            unscopedList,
+            security,
+            settingsHome
+        )
+    }
 
     /**
      * The intents that can open the system installer on [apk], best first.
@@ -166,16 +226,24 @@ open class UpdateInstallation(private val context: Context) {
     }
 
     /**
-     * Sends the user to the per-app install permission setting.
+     * Sends the user to whichever Settings screen this phone actually has.
      *
-     * Returns whether the Settings screen actually opened, so the caller can tell
-     * the difference between "off you go" and "this device has no Settings app",
-     * rather than telling the user to look for a screen that never appeared.
+     * Returns whether one opened, so the caller can tell "off you go" from "nothing on
+     * this device will show that switch", rather than sending the user to a screen that
+     * never appeared.
+     *
+     * [permissionSettingsRoutes] in order, stopping at the first that starts. Trying
+     * several is not belt-and-braces: the primary action is unanswered on some OEM
+     * builds and the details page is unanswered on others, and the only thing that
+     * distinguishes them is the attempt. Only the first failure used to be reported at
+     * all - and before these intents carried `NEW_TASK`, *every* launch failed here, so
+     * the fallback did not exist and the message blamed the user's phone for a bug in
+     * this app.
      */
-    open fun openInstallPermissionSettings(): Boolean {
-        val intent = installPermissionSettings()
-        return runCatching { context.startActivity(intent) }.isSuccess
-    }
+    open fun openInstallPermissionSettings(): Boolean =
+        permissionSettingsRoutes().any { intent ->
+            runCatching { context.startActivity(intent) }.isSuccess
+        }
 
     /**
      * Opens a release's page on GitHub.

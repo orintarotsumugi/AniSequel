@@ -240,9 +240,19 @@ class UpdateController(
     /**
      * Sends the user to the per-app "install unknown apps" setting.
      *
-     * Records that the hand-off has been offered, so the row stops re-offering
-     * the same button to somebody who has already come back without granting
-     * it.
+     * Records that the hand-off has been offered, so the row stops re-offering the
+     * same button to somebody who has already come back without granting it.
+     *
+     * ## What happens when no Settings screen will open
+     *
+     * The state stays [UpdateUiState.NeedsInstallPermission] with a notice, and does
+     * not become [UpdateUiState.Failed]. Two reasons, both learned the hard way here:
+     * the APK is still downloaded and still installable, and a `Failed` would drop the
+     * file from the state and leave the user re-download an update they had already
+     * paid for; and the sentence "This device has no Settings app" was this app's own
+     * bug - a missing `NEW_TASK` flag - reported as a fact about the user's hardware,
+     * on every phone. A launch that genuinely cannot resolve is rare, and what it
+     * needs is the instruction that works without us: search Settings for the switch.
      */
     fun requestInstallPermission() {
         val current = state as? UpdateUiState.NeedsInstallPermission ?: return
@@ -250,7 +260,12 @@ class UpdateController(
         state = current.copy(sentToSettings = true)
 
         if (!installation.openInstallPermissionSettings()) {
-            state = UpdateUiState.Failed("This device has no Settings app.")
+            state = current.copy(
+                sentToSettings = true,
+                notice = "Settings would not open from here. Open it yourself and " +
+                    "search for \"install unknown apps\", then allow AniSequel and " +
+                    "come back - the update is already downloaded."
+            )
         }
     }
 

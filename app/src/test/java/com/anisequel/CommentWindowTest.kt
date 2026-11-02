@@ -133,4 +133,56 @@ class CommentWindowTest {
         // sheet is claiming rows it never asked for.
         assertEquals(CommentWindow.PAGE_SIZE, CommentWindow.INITIAL_ROWS)
     }
+
+    /**
+     * The rows above the drawn ones, which is what a scroll has to skip.
+     *
+     * A posted comment is scrolled to by index. The list draws the newest `shownRows`
+     * of the thread, so the index into `state.replies` counts the rows the window has
+     * not revealed as well; on a thread the reader had scrolled up in, that index
+     * pointed past the end and `animateScrollToItem` clamped it - the reader stopped
+     * on the newest comment instead of the one they had just written.
+     */
+    @Test
+    fun `the hidden prefix is the fetched rows the window has not drawn`() {
+        assertEquals(0, CommentWindow.hiddenPrefixRows(repliesLoaded = 25, shownRows = 25))
+        assertEquals(0, CommentWindow.hiddenPrefixRows(repliesLoaded = 25, shownRows = 0))
+        assertEquals(40, CommentWindow.hiddenPrefixRows(repliesLoaded = 65, shownRows = 25))
+        // Asking to show more than exists draws everything, so nothing is hidden.
+        assertEquals(0, CommentWindow.hiddenPrefixRows(repliesLoaded = 65, shownRows = 90))
+    }
+
+    @Test
+    fun `a list that grew above is counted, and anything else is not`() {
+        // An Older page and a revealed window both add rows at the FRONT, which is the
+        // case a chat has to compensate for.
+        assertEquals(
+            25,
+            CommentWindow.prependedRows(
+                previousIds = listOf(26, 27, 28),
+                currentIds = listOf(1, 2, 3, 4, 5, 26, 27, 28)
+            )
+        )
+        // A refresh that replaced the newest end is not growth above: the rows the
+        // reader was looking at may have changed under them, and moving the viewport
+        // for that would be a scroll nobody asked for.
+        assertEquals(0, CommentWindow.prependedRows(listOf(3, 4, 5), listOf(4, 5, 6, 7)))
+        // A delete, a shorter window, and a different thread are all "nothing to fix".
+        assertEquals(0, CommentWindow.prependedRows(listOf(1, 2, 3), listOf(1, 3)))
+        assertEquals(0, CommentWindow.prependedRows(listOf(1, 2, 3), listOf(1, 2, 3)))
+        assertEquals(0, CommentWindow.prependedRows(emptyList(), listOf(1, 2)))
+    }
+
+    @Test
+    fun `a drawn row counts the head, the banner and the Older row`() {
+        // The three rows that are not replies but sit above them. Getting any of them
+        // wrong lands the scroll one comment off - which is the failure the banner
+        // key already documents, in the other direction.
+        assertEquals(2, CommentWindow.drawnRowIndex(20, listOf(10, 20, 30), rowsAboveReplies = 1))
+        assertEquals(0, CommentWindow.drawnRowIndex(10, listOf(10, 20, 30), rowsAboveReplies = 0))
+        assertEquals(4, CommentWindow.drawnRowIndex(30, listOf(10, 20, 30), rowsAboveReplies = 2))
+        // A reply the window has not drawn has no row to scroll to, and -1 says so
+        // rather than pointing at whatever a clamped index would land on.
+        assertEquals(-1, CommentWindow.drawnRowIndex(99, listOf(10, 20, 30), rowsAboveReplies = 1))
+    }
 }

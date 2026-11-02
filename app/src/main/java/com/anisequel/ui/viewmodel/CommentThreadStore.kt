@@ -269,6 +269,15 @@ class CommentThreadStore(
     /** Re-reads the newest page; [atBottom] decides whether the reader is moved. */
     fun checkForNewComments(atBottom: Boolean) = window.checkForNewComments(atBottom)
 
+    /**
+     * Re-reads the thread because the reader tapped Refresh.
+     *
+     * Same rules as the background check - one request at a time, and a tap during a
+     * check that is already out is ignored - because AniList holds the session at
+     * about 30 requests a minute and this shares that budget with every other screen.
+     */
+    fun refreshNow(atBottom: Boolean) = window.refreshNow(atBottom)
+
     /** Takes in the comments a background check found, and clears the count. */
     fun revealNewComments() = window.revealNewComments()
 

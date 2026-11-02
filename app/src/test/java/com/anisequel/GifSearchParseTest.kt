@@ -361,12 +361,27 @@ class GifSearchParseTest {
     @Test
     fun `the tag index gets the hint about matching tags and the keyed index does not`() {
         // Safebooru matches tags rather than sentences, so an empty answer is usually
-        // a gap in its catalogue and the reader needs the "try fewer words" sentence.
+        // a gap in its catalogue and the reader needs the sentence that says what to
+        // ask a tag index for.
         // This was `false`, which sent every booru miss to the flat "Nothing found"
         // line written for Tenor - so a search for `spice and wolf holo` looked like a
         // broken picker rather than a three-tag AND.
         assertTrue(com.anisequel.data.network.SafebooruGifs().catalogueIsNarrow)
         // A keyed index like Tenor's has no such hole, so a miss there is a miss.
         assertFalse(com.anisequel.data.network.TenorGifs("key").catalogueIsNarrow)
+    }
+
+    /**
+     * The picker names the index it is searching.
+     *
+     * The hint and the placeholder both tell the reader how to search, and the two
+     * answers are different sentences for a booru ("tags, fewer words") than for a
+     * keyed index - so the panel has to know which one it is drawing. Naming the
+     * provider is also the only visible proof that the Settings key took effect.
+     */
+    @Test
+    fun `each provider names itself`() {
+        assertEquals("Safebooru", com.anisequel.data.network.SafebooruGifs().providerName)
+        assertEquals("Tenor", com.anisequel.data.network.TenorGifs("key").providerName)
     }
 }

@@ -439,11 +439,18 @@ private fun CommentAvatar(url: String?, name: String) {
 internal fun CommentOlderRow(
     hiddenCount: Int,
     isLoading: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /**
+     * The grid's item modifier, so an Older row that arrives with a refreshed window
+     * slides into place rather than popping in above rows that then jump. Every other
+     * row in this list animates its placement; this one and the thread's head row were
+     * the two that simply appeared on the frame.
+     */
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center

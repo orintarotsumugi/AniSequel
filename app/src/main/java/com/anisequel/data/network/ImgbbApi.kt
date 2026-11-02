@@ -25,8 +25,14 @@ import okhttp3.Response
  *
  * catbox.moe paused anonymous uploads in November 2026 and pomf.lain.la is one
  * stranger's server; a chain that ends at the second host still ends at a single
- * point of failure. This one is the third attempt in [ImageUploader], for the days
- * when the first host is paused *and* the second one is having its own afternoon.
+ * point of failure.
+ *
+ * It is also the **second** attempt now, ahead of pomf, for a reason that was
+ * measured rather than assumed: `pomf2.lain.la` resets any request carrying
+ * AniList's own referer, so a file stored there is invisible to everybody reading
+ * the comment on the site (`i.ibb.co` answers 200 to the same referer). Imgbb
+ * therefore gets the file when catbox is paused, and pomf is what is left when both
+ * of those are having a bad afternoon. See [ImageHost.showsOnAniList].
  *
  * ## Why the browser endpoint rather than the documented API
  *
