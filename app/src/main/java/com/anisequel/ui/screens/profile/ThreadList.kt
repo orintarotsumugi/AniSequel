@@ -237,7 +237,7 @@ private fun LazyListScope.threadEmptyContent(
         }
         return
     }
-    val note = state.windowError ?: state.refreshError ?: state.loadError
+    val note = state.bannerError
     if (note != null) {
         item(key = "empty_thread_error") {
             RefreshErrorBanner(message = note, onRetry = onRetry)
@@ -273,7 +273,7 @@ private fun LazyListScope.threadReplyItems(
     onShowCommentLikers: (Int) -> Unit,
     nowEpochSecond: Long?
 ) {
-    val note = state.windowError ?: state.refreshError ?: state.loadError
+    val note = state.bannerError
     if (note != null) {
         val olderFailed = state.windowError != null
         // One stable key for the banner slot. It used to be three (`window_error`,
@@ -339,7 +339,7 @@ internal fun threadRowsAboveReplies(
     state: CommentThreadStore.CommentsState,
     drawnCount: Int
 ): Int {
-    val hasBanner = state.loadError != null || state.windowError != null || state.refreshError != null
+    val hasBanner = state.bannerError != null
     val hasOlder = state.isChatView &&
         CommentWindow.hiddenCount(state.replyCount, drawnCount) > 0
     var rows = 0

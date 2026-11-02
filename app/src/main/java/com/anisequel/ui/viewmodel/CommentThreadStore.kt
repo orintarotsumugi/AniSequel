@@ -223,7 +223,19 @@ class CommentThreadStore(
          * comments that had not come, and the reader saw nothing happen.
          */
         val refreshError: String? = null
-    )
+    ) {
+        /**
+         * The failure the reader is shown, in the order the banner reads it.
+         *
+         * Three fields, because the three failures are retried differently - see
+         * [refreshError]. One screen shows whichever of them happened, and the row
+         * that draws the banner and the row that counts rows above the replies each
+         * spelled that precedence out. A reopen of a thread that already has rows is
+         * a refresh over them, so its failure arrives in [refreshError]; a caller
+         * that only looked at [loadError] reported the thread as fine.
+         */
+        val bannerError: String? get() = windowError ?: refreshError ?: loadError
+    }
 
     private val _state = MutableStateFlow<CommentsState?>(null)
     val state: StateFlow<CommentsState?> = _state.asStateFlow()

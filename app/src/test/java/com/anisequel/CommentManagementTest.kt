@@ -341,7 +341,12 @@ class CommentManagementTest {
 
         val state = viewModel.comments.value!!
         assertEquals(listOf("already read"), state.replies.map { it.text })
-        assertEquals("the socket closed under us", state.loadError)
+        // Asked of the banner rather than of one field: a reopen that already has
+        // rows is a refresh *over* them, which is what keeps them on screen, and a
+        // refresh's failure lands in `refreshError`. An assertion on `loadError`
+        // alone pinned the older behaviour, where the error replaced the thread.
+        assertEquals("the socket closed under us", state.bannerError)
+        assertNull(state.loadError)
         assertFalse(state.isRefreshing)
     }
 
