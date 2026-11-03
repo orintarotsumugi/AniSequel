@@ -1,15 +1,13 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -19,17 +17,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -37,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import java.time.Instant
@@ -65,9 +67,22 @@ import java.time.Instant
  *
  * ## Why the controls are where they are
  *
- * Left-aligned under the body rather than pushed to the sheet's edges: a body can
- * be a multi-line quote or an image, and a right-aligned overflow would sit at the
- * end of whatever line happened to be last.
+ * One line under the body, with the two things you press on the left and the two
+ * things that describe the row - the time and the overflow - on the right. A body can
+ * be a multi-line quote or an image, so nothing is allowed to sit at the end of
+ * whatever line happened to be last, and the overflow in particular has to be in the
+ * same place on every row or finding it on your own comment is a search.
+ * [CommentRowActions] is the half that works that out, including what the bar does
+ * when a threaded comment has no room for the words "Reply" and "Quote".
+ *
+ * ## The two rails
+ *
+ * A vertical line runs down the gutter left of every nested comment, in the colour of
+ * whatever the row is: [isReplyTarget] paints it in primary and tints the block,
+ * [isOwnComment] paints it in a faded primary, and an ordinary reply gets the surface
+ * grey. One element carrying three meanings is deliberate - a thread is read by
+ * following lines, and a reader who can see which line theirs is does not have to
+ * remember their own name in a list of forty.
  */
 @Composable
 internal fun CommentRow(
@@ -79,6 +94,25 @@ internal fun CommentRow(
     canReply: Boolean,
     canQuote: Boolean,
     /**
+     * Whether this is the comment the reader is answering.
+     *
+     * Set while the composer is open against it. A thread of forty comments with a
+     * "Replying to YoruC" chip above a field does not tell the reader *which* YoruC
+     * comment they are threading, and the one they quoted three screens up has
+     * already scrolled away - so the row it belongs to is drawn with a rail and a
+     * tint, the same way a comment section marks the parent of a reply in progress.
+     */
+    isReplyTarget: Boolean = false,
+    /**
+     * Whether the viewer wrote this comment.
+     *
+     * The rail is the only difference: a thread of a hundred comments in which you
+     * wrote four is a search, and the search had no cue in it. Not a tint - your own
+     * rows tinted like the reply target would make the two indistinguishable, and
+     * one of them is a temporary state.
+     */
+    isOwnComment: Boolean = false,
+    /**
      * Whether the heart is drawn at all.
      *
      * False for a message thread's head row: a message is likeable, but as an
@@ -89,7 +123,7 @@ internal fun CommentRow(
     showLikes: Boolean = true,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: () -> Unit,
     onManage: () -> Unit,
     nowEpochSecond: Long? = null,
@@ -103,14 +137,54 @@ internal fun CommentRow(
      */
     modifier: Modifier = Modifier
 ) {
+    val rowStart = 20.dp + 18.dp * indent
+    val guide = if (isReplyTarget) {
+        MaterialTheme.colorScheme.primary
+    } else if (isOwnComment) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    // Animated toward a settled colour, and read only by the draw phase. The tint
+    // used to be `clip` + `background` + 16dp of horizontal padding on the content
+    // column, which did two things at once: the body reflowed sideways the moment
+    // the reader tapped Reply, and - because the padded column is what
+    // [CommentRowActions] measures - the bar lost its labels and dropped to glyphs
+    // on exactly the row the reader was answering. Drawing the pill behind the
+    // column changes no measurement at all.
+    val highlight by animateColorAsState(
+        targetValue = if (isReplyTarget) {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.38f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "commentReplyTarget"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // The thread line. An indent alone says a comment is nested; it does not
+            // say *what* it is nested under, and two levels in, on a phone, the four
+            // steps of indentation are the whole relationship a reader has to work
+            // from. The line runs down the gutter the avatar would have used.
+            .drawBehind {
+                if (indent > 0) {
+                    val x = (rowStart - 14.dp).toPx()
+                    drawLine(
+                        color = guide,
+                        start = Offset(x, 6.dp.toPx()),
+                        end = Offset(x, size.height - 6.dp.toPx()),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
             .padding(
                 // One step per threaded level, capped in [ReplyThreader]. The
                 // mention itself is still in the body, so the indent is an aid
                 // rather than the only record of who is being answered.
-                start = 20.dp + 18.dp * indent,
+                start = rowStart,
                 end = 20.dp,
                 top = if (isContinuation) 1.dp else 10.dp,
                 bottom = if (isContinuation) 6.dp else 10.dp
@@ -130,7 +204,25 @@ internal fun CommentRow(
             )
             Spacer(modifier = Modifier.width(12.dp))
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .drawBehind {
+                    if (highlight.alpha > 0f) {
+                        drawRoundRect(
+                            color = highlight,
+                            // Into the gutter and the sheet's end margin, drawn
+                            // outside the measured bounds so nothing moves.
+                            topLeft = Offset(-10.dp.toPx(), 0f),
+                            size = Size(size.width + 16.dp.toPx(), size.height),
+                            cornerRadius = CornerRadius(
+                                x = ExpressiveShapes.SmallCorner.toPx(),
+                                y = ExpressiveShapes.SmallCorner.toPx()
+                            )
+                        )
+                    }
+                }
+        ) {
             if (!isContinuation) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -167,100 +259,6 @@ internal fun CommentRow(
 }
 
 /**
- * The row's controls: heart, Reply, Quote, a continuation's time, and the manage
- * dot.
- *
- * Split out of the row because the row is about *a comment* - who, when, what -
- * and this is about what the reader can do about it, which is the half that grows
- * every time a control is added.
- *
- * The bar wraps rather than clips or scrolls. Heart, Reply, Quote, the timestamp
- * and the manage dot are five targets under one body, and a threaded comment starts
- * 56dp in from the edge: on a 360dp phone the last control either ran off the
- * screen (a plain row) or sat in a horizontal scroll nobody could see was there.
- * A `FlowRow` puts the overflow on a second line, which is the one shape where the
- * control that edits or deletes your own comment is never hidden.
- *
- * Reply and Quote are drawn as capsules rather than as bare label-and-glyph pairs: a
- * sentence of grey text under a comment reads as part of the comment, and these two
- * are the only controls in the row a reader is meant to press. The capsule is drawn
- * inside a 48dp target, so the visual weight is small while the touch area stays the
- * platform minimum.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun CommentRowActions(
-    reply: ActivityReply,
-    isContinuation: Boolean,
-    likePending: Boolean,
-    canManage: Boolean,
-    canReply: Boolean,
-    canQuote: Boolean,
-    showLikes: Boolean,
-    nowEpochSecond: Long?,
-    onLike: () -> Unit,
-    onShowLikers: () -> Unit,
-    onReply: (String) -> Unit,
-    onQuote: () -> Unit,
-    onManage: () -> Unit
-) {
-    val liked = reply.isLiked == true
-    FlowRow(
-        modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatialSize),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        if (showLikes) {
-            // The same control the activity card draws, shared rather than
-            // re-declared here - `EngagementAction`.
-            EngagementAction(
-                icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
-                count = reply.likeCount ?: 0,
-                active = liked,
-                // Null `isLiked` means AniList did not answer, which is what a
-                // signed-out reader gets. Disabled rather than drawn-as-unliked, so
-                // the control is never something that looks live and does nothing.
-                enabled = reply.isLiked != null && !likePending,
-                contentDescription = if (liked) "Unlike comment" else "Like comment",
-                onClick = onLike,
-                // The hold asks whose. A comment's like count used to be the only
-                // answer the row had, while the card above it had always offered the
-                // names.
-                onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
-                modifier = Modifier.testTag("activity_reply_like_button")
-            )
-        }
-        if (canReply) {
-            Spacer(modifier = Modifier.width(4.dp))
-            val name = reply.user?.name.orEmpty()
-            CommentTextAction(
-                label = "Reply",
-                icon = AppVectorIcons.ActivityReplies,
-                onClickLabel = "Reply to $name",
-                tag = "activity_reply_reply_button",
-                onClick = { onReply(name) }
-            )
-        }
-        if (canQuote) {
-            Spacer(modifier = Modifier.width(4.dp))
-            CommentTextAction(
-                label = "Quote",
-                icon = AppVectorIcons.TextQuote,
-                onClickLabel = "Quote this comment",
-                tag = "activity_reply_quote_button",
-                onClick = onQuote
-            )
-        }
-        if (isContinuation) {
-            CommentTimestamp(reply.createdAt, nowEpochSecond)
-        }
-        if (canManage) {
-            CommentManageButton(onClick = onManage)
-        }
-    }
-}
-
-/**
  * The time, after the name on a header row and at the end of the controls on a
  * continuation row.
  *
@@ -269,7 +267,7 @@ private fun CommentRowActions(
  * header that is redundant, not the timestamp.
  */
 @Composable
-private fun CommentTimestamp(createdAt: Int?, nowEpochSecond: Long?) {
+internal fun CommentTimestamp(createdAt: Int?, nowEpochSecond: Long?) {
     if (createdAt == null) return
     Spacer(modifier = Modifier.width(8.dp))
     Text(
@@ -284,102 +282,6 @@ private fun CommentTimestamp(createdAt: Int?, nowEpochSecond: Long?) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1
     )
-}
-
-/**
- * A labelled row control - Reply, Quote.
- *
- * A labelled control rather than a second icon: on this row the heart is a bare
- * icon with a count, and a bare arrow beside it would be another glyph to guess.
- * The label is also what makes the row's taps distinguishable to a screen reader
- * without a description that says "reply to Bild's comment" on every row.
- *
- * The capsule sits inside the 48dp target rather than being it: a filled 48dp block
- * beside the heart's bare glyph read as a button next to a caption. The press spring
- * scales the target (the touch area does not move), so the chip still answers the
- * finger.
- */
-@Composable
-private fun CommentTextAction(
-    label: String,
-    icon: ImageVector,
-    onClickLabel: String,
-    tag: String,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(CircleShape)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClickLabel = onClickLabel,
-                onClick = onClick
-            )
-            .testTag(tag),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(15.dp)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/**
- * The overflow that opens the manage dialog, on the viewer's own comment.
- *
- * A tap target of its own rather than a long press on the row: the sheet's only
- * hold gesture elsewhere (the heart) opens likers, and nothing about a comment's
- * body says "hold me to edit this". 48dp, the platform's minimum touch target,
- * rather than the 36dp box that was sized to its glyph - manage is the one control
- * in the row that changes somebody's comment, and it was also the hardest to hit.
- */
-@Composable
-private fun CommentManageButton(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                // The spring is the feedback. A ripple inside a 48dp circle that is
-                // already scaling reads as a second, competing animation - the same
-                // call the format bar and the reply control make.
-                indication = null,
-                onClick = onClick
-            )
-            .testTag("activity_reply_manage_button"),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = AppVectorIcons.ActivityManage,
-            contentDescription = "Comment options",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
-    }
 }
 
 @Composable
@@ -458,7 +360,10 @@ internal fun CommentOlderRow(
         Row(
             modifier = Modifier
                 .defaultMinSize(minHeight = 40.dp)
-                .clip(CircleShape)
+                // A wide, short row is a capsule, not a circle: `CircleShape` is
+                // percent-50 and happens to agree today, but the token says what
+                // this is meant to be.
+                .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                 .clickable(
@@ -504,7 +409,7 @@ internal fun NewCommentsPill(count: Int, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .defaultMinSize(minHeight = 40.dp)
-            .clip(CircleShape)
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.primary)
             .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .combinedClickable(

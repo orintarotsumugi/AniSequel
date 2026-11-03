@@ -218,6 +218,11 @@ class ReplyManagementQueryTest {
         File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/ThreadList.kt"
+        ).readText() +
+        // The bar under the row is its own file now, and the dot lives there.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentActionRow.kt"
         ).readText()
         val store = File(
             findProjectRoot(),
@@ -231,7 +236,7 @@ class ReplyManagementQueryTest {
         assertTrue(
             "the sheet compares the author against the signed-in viewer, and a null " +
                 "viewer draws no control:\n$sheet",
-            sheet.contains("canManage = viewerId != null && reply.user?.id == viewerId")
+            sheet.contains("val isOwn = viewerId != null && reply.user?.id == viewerId")
         )
         assertTrue(
             "the store repeats the check rather than trusting the caller:\n$store",

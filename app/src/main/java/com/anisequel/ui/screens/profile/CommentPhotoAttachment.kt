@@ -33,7 +33,16 @@ import kotlinx.coroutines.launch
 internal data class PhotoAttachment(
     val launch: () -> Unit,
     val isUploading: Boolean,
-    val note: String?
+    val note: String?,
+    /**
+     * The file the last successful upload put into this draft, or null.
+     *
+     * The composer needs it because the size and framing commands describe *that
+     * file*, and a row of chips above an empty field is a control for nothing - it
+     * read as an image already being attached, and as the composer asking the reader
+     * to choose a size before they have a file.
+     */
+    val attachedUrl: String?
 )
 
 @Composable
@@ -45,6 +54,7 @@ internal fun rememberPhotoAttachment(
     val uploader = ImageUploader.shared
     var isUploading by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    var attachedUrl by remember { mutableStateOf<String?>(null) }
 
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -62,6 +72,7 @@ internal fun rememberPhotoAttachment(
             try {
                 val image = PickedImageReader.read(context, uri).getOrThrow()
                 val outcome = uploader.upload(image.bytes, image.fileName, image.mimeType).getOrThrow()
+                attachedUrl = outcome.url
                 onUploaded(outcome.url)
                 // The file is stored, but not every host lets the site read it back:
                 // pomf answers a request carrying AniList's own referer with a
@@ -92,6 +103,7 @@ internal fun rememberPhotoAttachment(
             )
         },
         isUploading = isUploading,
-        note = note
+        note = note,
+        attachedUrl = attachedUrl
     )
 }

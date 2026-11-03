@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +48,7 @@ import com.anisequel.domain.usecase.ReplyThreader
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -95,9 +95,18 @@ internal fun ColumnScope.CommentsThread(
     pollIntervalMillis: Long,
     polling: Boolean,
     nowEpochSecond: Long?,
+    /**
+     * The comment the open composer is answering, or null.
+     *
+     * The row is painted while the reader is answering it: the chip above the field
+     * says *who*, and on a thread that has been scrolled three pages it does not say
+     * *which*. The id rather than the author's name, because a person can have forty
+     * comments in one thread and only one of them is under the editor.
+     */
+    replyTargetId: Int? = null,
     onRetry: () -> Unit,
     onStartCompose: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: (ActivityReply) -> Unit,
     onLikeReply: (Int) -> Unit,
     onManageReply: (Int) -> Unit,
@@ -198,6 +207,7 @@ internal fun ColumnScope.CommentsThread(
         visible = visible,
         replyDepths = replyDepths,
         continuations = continuations,
+        replyTargetId = replyTargetId,
         onRetry = onRetry,
         onLoadOlder = onLoadOlder,
         onReply = onReply,
@@ -504,7 +514,7 @@ private fun WriteCommentBar(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(percent = 50))
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(

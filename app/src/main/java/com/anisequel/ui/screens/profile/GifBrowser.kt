@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
@@ -52,6 +51,7 @@ import com.anisequel.data.network.GifResult
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
@@ -398,7 +398,7 @@ private fun GifSuggestionRow(
                 Box(
                     modifier = Modifier
                         .bouncyPress(interactionSource = interactionSource)
-                        .clip(RoundedCornerShape(percent = 50))
+                        .clip(ExpressiveShapes.pill)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         .clickable(
                             interactionSource = interactionSource,
@@ -467,7 +467,10 @@ private fun GifTile(
             // The tile had `indication = null` and nothing in its place, so a tap
             // gave no feedback at all until the sheet closed under it.
             .bouncyPress(pressedScale = 0.92f, interactionSource = interactionSource)
-            .clip(RoundedCornerShape(percent = 12))
+            // The theme's small slot. This was `percent = 12`, which scales with the
+            // tile and so disagreed with the skeleton drawn in its place; both are
+            // on the same corner token now.
+            .clip(ExpressiveShapes.small)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(
                 interactionSource = interactionSource,
@@ -509,7 +512,7 @@ private fun GifSkeleton(modifier: Modifier = Modifier) {
                 modifier = Modifier.aspectRatio(1f),
                 // The tile's own corner, so a waiting cell and the picture that
                 // replaces it are the same shape.
-                shape = RoundedCornerShape(percent = 12),
+                shape = ExpressiveShapes.small,
                 phase = phase
             )
         }

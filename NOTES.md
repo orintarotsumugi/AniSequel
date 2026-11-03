@@ -1968,3 +1968,88 @@ was therefore a black screen between two correctly themed screens. The fix is on
 `Modifier.background(MaterialTheme.colorScheme.background)` on that container: the
 cross-fade is the app's motion language and stays, and what was missing was a
 surface behind it.
+
+## A comment row is one line, and what gives way when it is not
+
+The controls under a comment were a `FlowRow`, which is the right answer to "five
+targets under a body of any width" and the wrong one to "where is the button that
+edits my comment". A wide top-level row put the overflow beside Reply and Quote; a
+threaded row ran out of line and dropped it under the timestamp. The control that
+changes your own comment was therefore in a different place depending on how deep
+somebody else's reply was - and the rows that needed it most were the narrow ones.
+
+The bar is one `Row` now, and the order of what gives way is a rule with numbers in
+it: the words "Reply" and "Quote" go first, because their glyphs stay inside the same
+48dp targets, and only a row too narrow even for that loses a continuation's
+timestamp - the one thing on the line that the header above it has already said,
+because a continuation is somebody speaking again within minutes. A *control* is
+never the thing that goes. `commentActionBarForm` is pure and `CommentActionBarTest`
+holds the arithmetic, because there is no device here to measure a phone against.
+
+The same row also carries a line down the gutter its avatar would have used, in one of
+three colours: primary for the comment the open editor is answering, faded primary for
+the viewer's own, surface grey for everybody else. One element with three meanings is
+deliberate. A thread is read by following lines, and a reader who can see which line is
+theirs does not have to hold their own name in working memory across a hundred
+comments - which is what finding your four comments in somebody else's thread actually
+requires today.
+
+The composer's size and framing chips follow the same principle: they describe a file,
+so they appear with a file. The rule is the URL the upload wrote, tested against the
+draft's own text rather than a `hasPhoto` flag, because the reader can delete the
+`img220(...)` the upload inserted and the chips would then be describing a file that is
+no longer in the message. Posting clears the field, and clears them, without the
+editor having to remember to reset anything.
+
+The same reason makes the chips *rewrite* the embed: `embedSpanFor` finds it by its URL
+and `embedMarkdown` writes the new one over the whole span, wrapper included, because a
+row that only sets the style for the next upload is a row that does nothing while you
+look at it. The two share their wrapper spellings - `~!`/`!~` and the fence pair - so
+the row cannot fail to recognise what the upload wrote.
+
+## A seasonal sky is one clock and one seeded list
+
+The overlay above every page - snow, sakura, clover, maple, fireflies, bubbles - is
+deliberately the cheapest thing that can look alive: no per-particle animation objects,
+no `Animatable` per flake, no composition state per frame. `seasonalParticles` builds
+one immutable list from a fixed seed, and `SeasonalParticleLayer` computes every
+position from a single `Float` of elapsed seconds. That single value is read only inside
+the `Canvas` draw lambda, so sixty frames cost sixty repaints of one layer and zero
+recompositions of the page behind it. Adding an animation driver per particle would have
+made the layer the most expensive thing on the screen it decorates.
+
+The seed is fixed rather than re-rolled, for the same reason the dashboard memoises its
+computed rows: the overlay is mounted in the app root, so a list rebuilt on a
+recomposition would visibly re-roll the entire sky whenever anything anywhere in the app
+published a new state. Because the same random stream is consumed in order, raising the
+density *appends* flakes to the end of the list - the ones already falling keep their
+positions. That property is pinned by a test; without it the density slider would read as
+a "re-shuffle" button.
+
+Two gates stop it. `rememberIsResumed()` keeps the loop from ticking behind another app,
+and `MotionStyle.INSTANT` freezes the clock where it is - a still scattering of shapes,
+not an animation that ignores the one setting that says "stop animating". The loop is
+throttled to sixty updates a second so a 120Hz display does not draw the sky twice as
+fast, and a stalled frame is capped so returning from a pause does not teleport every
+particle across the screen at once.
+
+The layer has no pointer input at all. It is drawn above every page, so one `clickable`
+or `pointerInput` in `SeasonalParticleLayer.kt` or `SeasonalParticleHost.kt` would eat
+the first tap everywhere in the app, and the symptom would be blamed on whichever screen
+the tap landed on. `SeasonalParticleHostTest` fails if either file grows one.
+
+Colours are fixed per shape rather than taken from the theme. A snowflake tinted
+`onSurface` is black on the light theme and white on the dark one, which reads as debris
+rather than snow, and a seasonal effect that follows the wallpaper is no longer the
+season the reader chose. What that costs, measured: of the six, only Maple clears
+3:1 against a white surface (Snow 2.12, Sakura 2.57, Bubble 2.66, Clover 2.73,
+Firefly 1.53), while all six clear it against black - and every particle is drawn
+at 0.55 to 1.0 alpha, which takes them lower again. A flake dark enough for 3:1 on
+white is a grey smudge on a true-black page, and this layer carries no
+information, so it is allowed to be quieter on light than on dark. That trade is
+deliberate; the numbers are here so the next reader does not have to re-derive
+them, or believe a claim of "visible on both" that is not true.
+
+The shape chips in Settings draw their glyphs with the same `drawSeasonalParticle`
+the overlay uses, so a chip cannot promise a snowflake the sky does not draw.
+

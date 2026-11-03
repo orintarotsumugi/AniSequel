@@ -13,6 +13,7 @@ import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.screens.settings.SettingsScreen
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -36,6 +37,7 @@ fun NavGraphBuilder.settingsDestinations(
     mainTabPreferences: MainTabPreferences,
     jokePreferences: JokePreferences,
     changelogRepository: ChangelogRepository,
+    seasonalPreferences: SeasonalPreferences,
     aniListRepository: AniListRepository,
     /**
      * The two dashboard counts the Settings header shows.
@@ -60,6 +62,7 @@ fun NavGraphBuilder.settingsDestinations(
             mainTabPreferences = mainTabPreferences,
             jokePreferences = jokePreferences,
             changelogRepository = changelogRepository,
+            seasonalPreferences = seasonalPreferences,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
             totalWatchedCount = totalWatchedCount,

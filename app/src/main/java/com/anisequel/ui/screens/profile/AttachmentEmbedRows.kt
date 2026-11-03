@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,9 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.anisequel.domain.usecase.MediaAttachment
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -41,6 +46,29 @@ internal data class EmbedStyle(
     val width: String = "",
     val framing: MediaAttachment.EmbedFraming = MediaAttachment.EmbedFraming.Plain
 )
+
+/**
+ * Whether the photo's two command rows have a file to describe.
+ *
+ * They used to be drawn on every Write pane, attached or not, and the row read as a
+ * photo already being there - and as the composer asking what size to make a file the
+ * reader has not picked. So the rule is the file itself: while an upload is in flight
+ * the row appears with it, and afterwards only while the URL the upload wrote is
+ * still in the draft.
+ *
+ * The second half is what makes it a rule rather than a flag. The reader can delete
+ * the `img220(…)` the upload inserted, and the chips would then describe a file that
+ * is no longer in the text; a posted comment clears the field, and clears them with
+ * it, without the editor having to remember to reset anything.
+ *
+ * The test is [MediaAttachment.embedSpanFor] rather than `contains`: an address that
+ * survives only as a link, or inside `imgwibble(…)`, is not the picture these chips
+ * describe, and a substring check kept the row up for markup the parser will not
+ * render.
+ */
+internal fun showsPhotoEmbedRows(draftText: String, attachedUrl: String?, isUploading: Boolean): Boolean =
+    isUploading ||
+        (attachedUrl != null && MediaAttachment.embedSpanFor(draftText, attachedUrl) != null)
 
 /**
  * The size and framing commands for an attached image, as two chip rows.
@@ -71,17 +99,46 @@ internal fun AttachmentEmbedRows(
     onStyleChange: (EmbedStyle) -> Unit,
     caption: String,
     tagPrefix: String,
+    /**
+     * The file these two rows describe, drawn beside the caption.
+     *
+     * Null for the GIF pane, where the row is a choice about a GIF that has not been
+     * inserted yet and the results grid above is the thing being looked at. Set it
+     * for an attached photo and the caption stops being a label floating over the
+     * field: the picture is right there, and the chips underneath plainly belong to
+     * it.
+     */
+    thumbnailUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = caption,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(start = 20.dp, top = 4.dp)
-                .testTag("${tagPrefix}_caption")
-        )
+        Row(
+            modifier = Modifier.padding(start = 20.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(30.dp)
+                        // The theme's extra-small slot. An 8dp literal was the one
+                        // corner in this row that did not belong to the app's scale,
+                        // and at thumbnail size it read as a different family from
+                        // the chips below it.
+                        .clip(ExpressiveShapes.extraSmall)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("${tagPrefix}_caption")
+            )
+        }
         EmbedChipRow(
             // "Original" first, as it always was: some files *are* their size, and a
             // 60px sprite row blown up to 220 is a blur. First in the list, but not the
@@ -149,7 +206,10 @@ private fun EmbedChipRow(
             Box(
                 modifier = Modifier
                     .bouncyPress(interactionSource = interactionSource)
-                    .clip(RoundedCornerShape(percent = 50))
+                    // The shared capsule token rather than a literal: the width and
+                    // framing rows are the same control as every other chip in the
+                    // app, and a percent spelled here can drift from [ExpressiveShapes].
+                    .clip(ExpressiveShapes.pill)
                     .background(
                         if (isSelected) {
                             MaterialTheme.colorScheme.primaryContainer

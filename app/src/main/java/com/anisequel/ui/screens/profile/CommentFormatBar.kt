@@ -43,7 +43,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -81,6 +80,7 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
@@ -354,7 +354,7 @@ internal fun ComposerBottomBar(
             Button(
                 onClick = onSubmit,
                 enabled = canSend,
-                shape = RoundedCornerShape(percent = 50),
+                shape = ExpressiveShapes.pill,
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 modifier = Modifier.testTag("activity_comment_send")
             ) {

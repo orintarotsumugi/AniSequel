@@ -168,6 +168,13 @@ class ReplyLikeQueryTest {
         File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
+        ).readText() +
+        // And the controls under the row moved again, into CommentActionRow.kt, when
+        // the bar stopped wrapping: the claim is about the control, so the read
+        // follows it rather than the other way round.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentActionRow.kt"
         ).readText()
 
         assertTrue("the shared control is public:", shared.contains("fun EngagementAction("))
@@ -204,6 +211,13 @@ class ReplyLikeQueryTest {
         File(
             findProjectRoot(),
             "app/src/main/java/com/anisequel/ui/screens/profile/CommentRows.kt"
+        ).readText() +
+        // And the controls under the row moved again, into CommentActionRow.kt, when
+        // the bar stopped wrapping: the claim is about the control, so the read
+        // follows it rather than the other way round.
+        File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/screens/profile/CommentActionRow.kt"
         ).readText()
 
         assertTrue(
