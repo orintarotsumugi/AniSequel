@@ -69,7 +69,7 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
-    SEASONAL("Seasonal effects", "Falling petals, snow and fireflies"),
+    SEASONAL("Seasonal effects", "Snow, leaves and fireflies that follow your touch"),
     LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
     // Updates is its own page rather than the top of About: the update check and
@@ -142,7 +142,7 @@ fun SettingsScreen(
     mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
     /**
-     * The seasonal overlay's shape, density, size and speed.
+     * The seasonal overlay's shape, density, size, speed, settling and wind.
      *
      * The same instance the app root hands to `SeasonalParticleHost`, so the
      * preview on this page and the sky over the app cannot describe two different

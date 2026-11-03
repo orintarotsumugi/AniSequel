@@ -15,12 +15,19 @@ import java.io.File
  *  - **It must not take a tap.** The layer is drawn above every page, so one
  *    `clickable` or `pointerInput` in either file would swallow the first tap
  *    everywhere in the app - and the symptom (settings that need two taps) points
- *    at the settings screen, not at the decoration.
+ *    at the settings screen, not at the decoration. Since 1.8.1 the sky *does*
+ *    react to taps, so the test also pins where that observer lives: on the app's
+ *    root, in the Initial pass, and without a single `consume(`.
  *  - **It must stop.** A frame loop without the resume gate keeps drawing behind a
  *    paused Activity and over a page nobody is looking at; a loop without the
  *    Instant check ignores the one setting that says "stop animating".
  *  - **It must sit between the page and the chrome.** Over the `NavHost`, under
- *    the bar: over the page, under the controls the reader needs.
+ *    the bar: over the page, under the controls the reader needs. The drift uses
+ *    the bar's measured height so it can settle on the bar's top edge without
+ *    painting over the controls.
+ *  - **The settings page has doors for all of it.** A shape grid nobody reaches,
+ *    a settle switch with no test tag, or a wind control that never got wired to
+ *    the layer is a feature that exists only in this repository.
  */
 class SeasonalParticleHostTest {
 
@@ -35,11 +42,14 @@ class SeasonalParticleHostTest {
     private val host: String
         get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticleHost.kt")
 
+    private val ambient: String
+        get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalAmbient.kt")
+
     private val appNavigation: String
         get() = source("app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt")
 
     @Test
-    fun `the overlay never takes a touch`() {
+    fun `the overlay and its host never take a touch`() {
         listOf("SeasonalParticleLayer.kt" to layer, "SeasonalParticleHost.kt" to host)
             .forEach { (name, code) ->
                 // Lower-cased, because `combinedClickable` does not contain the
@@ -56,6 +66,10 @@ class SeasonalParticleHostTest {
                         lowered.contains(forbidden)
                     )
                 }
+                assertFalse(
+                    "$name must not consume anything; it is a sibling of every page",
+                    lowered.contains("consume(")
+                )
             }
     }
 
@@ -84,6 +98,87 @@ class SeasonalParticleHostTest {
         assertTrue(
             "a long stall must not teleport every particle",
             layer.contains("MAX_STEP_SECONDS")
+        )
+    }
+
+    @Test
+    fun `the sky settles and reacts, and the layer is wired to both`() {
+        assertTrue(
+            "the layer never creates a drift, so the settle switch does nothing",
+            layer.contains("SeasonalPile(")
+        )
+        assertTrue(
+            "the layer never draws the drift",
+            layer.contains("drawSeasonalPile(")
+        )
+        assertTrue(
+            "the layer never decays the wind",
+            layer.contains("SeasonalWind.decay(")
+        )
+        assertTrue(
+            "the layer never reads the gust, so scrolling cannot move the sky",
+            layer.contains("SeasonalWind.gust")
+        )
+        assertTrue(
+            "the layer never reads the tap pulse, so tapping cannot move the sky",
+            layer.contains("SeasonalWind.pulse")
+        )
+        assertTrue(
+            "the host does not pass settle to the layer",
+            host.contains("settle = settings.settle")
+        )
+        assertTrue(
+            "the host does not pass wind strength to the layer",
+            host.contains("windStrength = settings.windStrength")
+        )
+    }
+
+    @Test
+    fun `the ambient observer is installed at the root and never consumes a gesture`() {
+        assertTrue(
+            "AppNavigation does not install the scroll/tap observer",
+            appNavigation.contains("rememberSeasonalAmbientModifier()")
+        )
+        assertTrue(
+            "the observer must be part of the root Box that owns every page",
+            appNavigation.contains(".then(seasonalAmbient)")
+        )
+        assertTrue(
+            "the tap observer must read the Initial pass, before buttons consume the tap",
+            ambient.contains("PointerEventPass.Initial")
+        )
+        assertFalse(
+            "the ambient observer must never consume an event; that would break every page",
+            ambient.lowercase().contains("consume(")
+        )
+        assertTrue(
+            "the scroll observer must return the delta it was given, not swallow it",
+            ambient.contains("return Offset.Zero")
+        )
+        assertTrue(
+            "a tap must be able to reach the wind state",
+            ambient.contains("SeasonalWind.tapAt(")
+        )
+        assertTrue(
+            "the scroll connection must actually feed the wind",
+            ambient.contains("SeasonalWind.scroll(consumed)")
+        )
+    }
+
+    @Test
+    fun `the drift can sit on the bar because the bar publishes its height`() {
+        val mainChrome = source("app/src/main/java/com/anisequel/ui/navigation/MainChrome.kt")
+        assertTrue(
+            "the bar never publishes its height, so the drift has no top edge to rest on",
+            mainChrome.contains("SeasonalChrome.publishBarHeight")
+        )
+        assertTrue(
+            "a hidden bar leaves a stale height and the drift floats above the bottom",
+            mainChrome.contains("SeasonalChrome.clearBar")
+        )
+        assertTrue(
+            "the layer never reads the bar height",
+            layer.contains("SeasonalChrome.barHeightPx")
         )
     }
 
@@ -121,6 +216,27 @@ class SeasonalParticleHostTest {
     }
 
     @Test
+    fun `the settings page offers the shape groups, settle depth and wind`() {
+        val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
+        assertTrue(
+            "the shapes are not grouped by season, so the page is a flat wall of chips",
+            tab.contains("seasonalEffectsIn(")
+        )
+        assertTrue(
+            "there is no shortcut to the sky the current season calls for",
+            tab.contains("seasonal_season_button")
+        )
+        assertTrue("no settle switch", tab.contains("seasonal_settle_switch"))
+        assertTrue("no pile depth slider", tab.contains("seasonal_pile_depth_slider"))
+        assertTrue("no wind switch", tab.contains("seasonal_wind_switch"))
+        assertTrue("no wind strength slider", tab.contains("seasonal_wind_strength_slider"))
+        assertTrue(
+            "the preview does not pass settling through",
+            tab.contains("settle = settings.settle")
+        )
+    }
+
+    @Test
     fun `the shape chips draw a vector glyph rather than an emoji`() {
         val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
         assertTrue(
@@ -130,6 +246,19 @@ class SeasonalParticleHostTest {
         assertFalse(
             "no emoji as UI icons: the chips must use the Canvas glyph, never a text character",
             containsEmoji(tab)
+        )
+    }
+
+    @Test
+    fun `bubbles are gone from the shape set`() {
+        val effect = source("app/src/main/java/com/anisequel/domain/seasonal/SeasonalEffect.kt")
+        assertFalse(
+            "BUBBLE was removed in 1.8.1; a leftover enum entry would resurrect it",
+            effect.contains("BUBBLE(")
+        )
+        assertTrue(
+            "the new autumn leaves are missing",
+            effect.contains("OAK(") && effect.contains("GINKGO(")
         )
     }
 

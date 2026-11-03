@@ -1,7 +1,7 @@
 {
-  "version": "1.8.0",
-  "version_code": 499,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v1.8.0",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v1.8.0/anisequel-universal.apk",
-  "notes": "- A seasonal sky, in the shape you pick: Snow, sakura, clover, maple, fireflies and bubbles can drift over every page. Settings > Personalisation > Seasonal effects previews the sky, switches it on and changes the shape. Every shape is a drawn vector, never an emoji, and the overlay never takes a tap.\n- Density, size and drift are yours to set: Sliders choose how many particles fall, how big they are and how fast they travel. The preview follows your finger and writes once when you let go, and raising the density adds flakes rather than re-rolling the ones already falling.\n- The sky stops when you are not looking: It pauses off screen and holds still under Instant motion. Its clock is read in the draw phase, so the page underneath is never recomposed. Off until you switch it on."
+  "version": "1.8.1",
+  "version_code": 500,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v1.8.1",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v1.8.1/anisequel-universal.apk",
+  "notes": "- A sky for all four seasons: Sakura, clover, fireflies, dandelion, maple, oak, ginkgo, snow and starlight are grouped by the season that owns them. Bubbles are gone; oak, ginkgo, dandelion and starlight join the sky.\n- Snow and leaves settle: A new settling drift grows along the bottom edge while you read, decorated with the shapes that fell. Drift depth sets its height, and it rests on the navigation bar when the bar is on screen.\n- The sky moves when you do: Scrolling makes a gust, tapping pushes the particles away from your finger, and changing page stirs a small breeze of its own. Wind strength sets how far a gust carries, and the observers never consume a touch, so every control still works first time.\n- Every shape redrawn: layered snowflakes with three variants, heart-shaped clover, veined maple and oak, a ginkgo fan, a dandelion parachute and a glowing sparkle, each with several palettes."
 }

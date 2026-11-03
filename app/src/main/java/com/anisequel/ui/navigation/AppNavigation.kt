@@ -39,6 +39,7 @@ import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
+import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -459,6 +460,13 @@ fun AppNavigation(
     // profile's About card beside it drew them correctly. Provided here, at
     // the app's only composition root, a surface gets covers by rendering its
     // document with `AniListMarkdownWithCovers` and nothing else.
+    // Scrolls and taps from every page are observed at the root and become wind
+    // for the seasonal sky. This is a *parent* observer: it never consumes the
+    // gesture, so every control under it still gets the tap it always did. It is
+    // installed even while the effect is off because the observers cannot be
+    // added retroactively to a gesture in progress. See SeasonalWind.
+    val seasonalAmbient = rememberSeasonalAmbientModifier()
+
     ProvideMediaCovers(aniListRepository) {
         // Opaque, and that is the point.
         //
@@ -474,6 +482,7 @@ fun AppNavigation(
             modifier = modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .then(seasonalAmbient)
         ) {
             NavHost(
                 navController = navController,

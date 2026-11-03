@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "1.8.1",
+      "entries": [
+        {
+          "title": "A sky for all four seasons",
+          "detail": "The seasonal overlay is arranged by the season that owns each shape: sakura and clover in spring, fireflies and the new dandelion seed in summer, maple, oak and ginkgo in autumn, snow in winter, and starlight for the days that belong to no month. The chips are grouped under those season names instead of sitting in one flat wall. Bubbles are gone - they were the one shape with no season, no convincing direction of travel and a rim that vanished at the size the overlay actually draws. An install that had bubbles selected wakes up to snow rather than to a blank sky."
+        },
+        {
+          "title": "Snow and leaves settle into a drift",
+          "detail": "A new Settling & wind card lets a falling sky gather. Every flake, petal or leaf that reaches the bottom edge adds to a soft drift along the bottom of the screen, which grows while you read, and the heap is decorated with the same shapes that have been falling rather than with a flat hill of colour. Drift depth sets how tall it can grow. When the navigation bar is on screen the drift settles on the bar's top edge; on a pushed page with no bar it settles on the screen's own bottom edge. Fireflies, dandelion seeds and starlight do not land, and the switch says so instead of pretending."
+        },
+        {
+          "title": "The sky moves when you do",
+          "detail": "Scrolling sends a gust through the particles and tapping pushes them away from your finger, with a soft ripple at the point you touched; the drift leans downwind with them, and changing page stirs a small gust of its own. Wind strength controls how far a gust carries, and turning Wind & touch off leaves the sky still. The observers sit on the app's root, in the Initial pointer pass, and never consume a gesture - every button, chip and list still gets its first tap. The wind is one shared force, so the preview on the Settings page feels the same gust as the page behind it."
+        },
+        {
+          "title": "Every shape redrawn with more to see",
+          "detail": "Snow now has three drawings - a branching dendrite, a fern and a hexagonal plate - with a soft under-stroke and bright tips instead of plain lines. Clover leaves are hearts with a lit rim and a stem; maple has shoulders, a stem and veins; oak has rounded lobes; ginkgo is a fan of ribs on its little stem; the dandelion seed carries a parachute of filaments; starlight is a four-point sparkle with a glow and a white core. Sakura petals gained a lit inner face and a vein, and every shape has several palettes and variants, so a sky is a mix rather than sixty-four copies of one stamp."
+        }
+      ]
+    },
+    {
       "version": "1.8.0",
       "entries": [
         {

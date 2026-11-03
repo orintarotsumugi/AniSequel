@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -44,14 +45,22 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.MAX_SEASONAL_DENSITY
+import com.anisequel.domain.seasonal.MAX_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.MAX_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.MAX_SEASONAL_SPEED_SCALE
+import com.anisequel.domain.seasonal.MAX_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.MIN_SEASONAL_DENSITY
+import com.anisequel.domain.seasonal.MIN_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.MIN_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.MIN_SEASONAL_SPEED_SCALE
+import com.anisequel.domain.seasonal.MIN_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalSeason
 import com.anisequel.domain.seasonal.SeasonalSettings
+import com.anisequel.domain.seasonal.defaultEffect
 import com.anisequel.domain.seasonal.particleCountFor
+import com.anisequel.domain.seasonal.seasonalEffectsIn
+import com.anisequel.domain.seasonal.seasonalSeasonForMonth
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -59,6 +68,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.seasonal.SeasonalEffectGlyph
 import com.anisequel.ui.components.seasonal.SeasonalParticleLayer
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import kotlin.math.roundToInt
 
 /**
@@ -66,7 +76,7 @@ import kotlin.math.roundToInt
  *
  * ## Why this is a page of its own
  *
- * It has a preview, four controls and six shapes. Every one of those is a choice
+ * It has a preview, seven controls and nine shapes. Every one of those is a choice
  * that only makes sense next to the drawing it changes - a shape chip without its
  * glyph, or a density slider without flakes to count, asks the reader to set a
  * number and then go and find out what it did.
@@ -81,8 +91,15 @@ import kotlin.math.roundToInt
  * ## Why the preview ignores the on switch
  *
  * The preview always draws, even while the effect is off, so the shape, density,
- * size and speed can be judged before the overlay covers the app. Turning the
- * switch on is the last step, not the first.
+ * size, speed, settle and wind can be judged before the overlay covers the app.
+ * Turning the switch on is the last step, not the first.
+ *
+ * ## Why the controls are split across three cards
+ *
+ * The shape and the season are one decision, the amount of weather is another,
+ * and the way it reacts to the reader is a third. Putting all seven in one card
+ * made a page that had to be read top to bottom to find the switch at the bottom;
+ * the groups are the three questions a reader actually arrives with.
  */
 @Composable
 fun SeasonalSettingsTab(
@@ -98,6 +115,12 @@ fun SeasonalSettingsTab(
     var draftDensity by remember(settings.density) { mutableFloatStateOf(settings.density) }
     var draftSize by remember(settings.sizeScale) { mutableFloatStateOf(settings.sizeScale) }
     var draftSpeed by remember(settings.speedScale) { mutableFloatStateOf(settings.speedScale) }
+    var draftPileDepth by remember(settings.pileDepth) {
+        mutableFloatStateOf(settings.pileDepth)
+    }
+    var draftWind by remember(settings.windStrength) {
+        mutableFloatStateOf(settings.windStrength)
+    }
 
     SettingsScrollColumn(modifier) {
         PreviewCard(
@@ -105,6 +128,8 @@ fun SeasonalSettingsTab(
             density = draftDensity,
             sizeScale = draftSize,
             speedScale = draftSpeed,
+            pileDepth = draftPileDepth,
+            windStrength = draftWind,
             onEnabledChange = { enabled ->
                 scope.launch { seasonalPreferences.setEnabled(enabled) }
             },
@@ -115,6 +140,28 @@ fun SeasonalSettingsTab(
             effect = settings.effect,
             onEffectChange = { effect ->
                 scope.launch { seasonalPreferences.setEffect(effect) }
+            }
+        )
+
+        WeatherCard(
+            settings = settings,
+            pileDepth = draftPileDepth,
+            windStrength = draftWind,
+            onSettleChange = { settle ->
+                scope.launch { seasonalPreferences.setSettle(settle) }
+            },
+            onPileDepthChange = { draftPileDepth = it },
+            onPileDepthCommit = {
+                val target = draftPileDepth
+                scope.launch { seasonalPreferences.setPileDepth(target) }
+            },
+            onWindChange = { reactToWind ->
+                scope.launch { seasonalPreferences.setReactToWind(reactToWind) }
+            },
+            onWindStrengthChange = { draftWind = it },
+            onWindStrengthCommit = {
+                val target = draftWind
+                scope.launch { seasonalPreferences.setWindStrength(target) }
             }
         )
 
@@ -149,6 +196,8 @@ private fun PreviewCard(
     density: Float,
     sizeScale: Float,
     speedScale: Float,
+    pileDepth: Float,
+    windStrength: Float,
     onEnabledChange: (Boolean) -> Unit,
     onReset: () -> Unit
 ) {
@@ -165,13 +214,13 @@ private fun PreviewCard(
     SectionCard(
         title = "Preview",
         icon = AppVectorIcons.Grass,
-        subtitle = "Try a sky before it covers the app",
+        subtitle = "Try a sky before it covers the app - tap or scroll it around",
         badge = resetAction
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(190.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(
                     Brush.verticalGradient(
@@ -187,6 +236,12 @@ private fun PreviewCard(
                 density = density,
                 sizeScale = sizeScale,
                 speedScale = speedScale,
+                settle = settings.settle,
+                pileDepth = pileDepth,
+                reactToWind = settings.reactToWind,
+                windStrength = windStrength,
+                settleOnChrome = false,
+                showTapRipple = false,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("seasonal_preview")
@@ -209,7 +264,7 @@ private fun PreviewCard(
         SwitchRow(
             title = "Seasonal effect",
             subtitle = "Float ${settings.effect.displayName.lowercase()} over every page. " +
-                "It never takes a tap and stops when the app is not on screen.",
+                "It never steals a tap and stops when the app is not on screen.",
             checked = settings.enabled,
             onCheckedChange = onEnabledChange,
             modifier = Modifier.testTag("seasonal_enabled_switch")
@@ -223,10 +278,23 @@ private fun ShapeCard(
     effect: SeasonalEffect,
     onEffectChange: (SeasonalEffect) -> Unit
 ) {
+    // A shortcut to the sky the calendar is currently showing. It is a one-shot
+    // button rather than a "follow the season" mode on purpose: a sky that
+    // changed itself in October would remove a choice the reader made, and the
+    // shortcut is only here so nobody has to remember that March is spring.
+    val seasonNow = remember { seasonalSeasonForMonth(LocalDate.now().monthValue) }
     SectionCard(
-        title = "Shape",
+        title = "Season & shape",
         icon = AppVectorIcons.AnimeSparkle,
-        subtitle = "What falls - or rises - past you"
+        subtitle = "Petals, leaves, snow and light - grouped by the season that owns them",
+        badge = {
+            TextButton(
+                onClick = { onEffectChange(seasonNow.defaultEffect()) },
+                modifier = Modifier.testTag("seasonal_season_button")
+            ) {
+                Text("Use ${seasonNow.displayName}")
+            }
+        }
     ) {
         Text(
             text = effect.blurb,
@@ -235,17 +303,35 @@ private fun ShapeCard(
         )
         Spacer(modifier = Modifier.height(14.dp))
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.testTag("seasonal_shape_row")
-        ) {
-            SeasonalEffect.entries.forEach { option ->
-                SeasonalEffectChip(
-                    effect = option,
-                    selected = option == effect,
-                    onClick = { onEffectChange(option) }
+        Column(modifier = Modifier.testTag("seasonal_shape_row")) {
+            SeasonalSeason.entries.forEach { season ->
+                val options = seasonalEffectsIn(season)
+                if (options.isEmpty()) return@forEach
+                Text(
+                    text = season.displayName,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
+                Text(
+                    text = season.blurb,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    options.forEach { option ->
+                        SeasonalEffectChip(
+                            effect = option,
+                            selected = option == effect,
+                            onClick = { onEffectChange(option) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -322,6 +408,88 @@ private fun SeasonalEffectChip(
     }
 }
 
+/**
+ * Settling and wind.
+ *
+ * Two behaviours with a switch each and one amount under each switch: this is the
+ * card that turns a decorative sky into something the reader can touch. The
+ * switches are disabled rather than hidden for an effect that cannot do it - a
+ * switch that vanishes when a shape is chosen makes the two cards feel unrelated,
+ * while a disabled switch with a sentence says why.
+ */
+@Composable
+private fun WeatherCard(
+    settings: SeasonalSettings,
+    pileDepth: Float,
+    windStrength: Float,
+    onSettleChange: (Boolean) -> Unit,
+    onPileDepthChange: (Float) -> Unit,
+    onPileDepthCommit: () -> Unit,
+    onWindChange: (Boolean) -> Unit,
+    onWindStrengthChange: (Float) -> Unit,
+    onWindStrengthCommit: () -> Unit
+) {
+    val canSettle = settings.effect.settles
+    SectionCard(
+        title = "Settling & wind",
+        icon = AppVectorIcons.SectionMotion,
+        subtitle = "Let it gather, and let it move when you do"
+    ) {
+        SwitchRow(
+            title = "Settle at the bottom",
+            subtitle = if (canSettle) {
+                "Snow, petals and leaves gather in a drift that grows while you read."
+            } else {
+                "${settings.effect.displayName} does not land - choose a falling shape to pile up."
+            },
+            checked = settings.settle && canSettle,
+            onCheckedChange = onSettleChange,
+            enabled = canSettle,
+            modifier = Modifier.testTag("seasonal_settle_switch")
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        SeasonalSlider(
+            title = "Drift depth",
+            valueLabel = percentLabel(pileDepth),
+            value = pileDepth,
+            range = MIN_SEASONAL_PILE_DEPTH..MAX_SEASONAL_PILE_DEPTH,
+            steps = 3,
+            testTag = "seasonal_pile_depth_slider",
+            enabled = canSettle && settings.settle,
+            onValueChange = onPileDepthChange,
+            onValueChangeFinished = onPileDepthCommit
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        SwitchRow(
+            title = "Wind & touch",
+            subtitle = "Scroll for a gust and tap to push the sky away from your finger.",
+            checked = settings.reactToWind,
+            onCheckedChange = onWindChange,
+            modifier = Modifier.testTag("seasonal_wind_switch")
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        SeasonalSlider(
+            title = "Wind strength",
+            valueLabel = scaleLabel(windStrength),
+            value = windStrength,
+            range = MIN_SEASONAL_WIND_STRENGTH..MAX_SEASONAL_WIND_STRENGTH,
+            steps = 3,
+            testTag = "seasonal_wind_strength_slider",
+            enabled = settings.reactToWind,
+            onValueChange = onWindStrengthChange,
+            onValueChangeFinished = onWindStrengthCommit
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "The drift settles on top of the navigation bar when it is on screen, " +
+                "and on the bottom edge when it is not.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun DensityCard(
     density: Float,
@@ -383,7 +551,8 @@ private fun SeasonalSlider(
     steps: Int,
     testTag: String,
     onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
+    onValueChangeFinished: () -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -393,12 +562,15 @@ private fun SeasonalSlider(
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = valueLabel,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary
+            color = if (enabled) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
     Slider(
@@ -407,6 +579,7 @@ private fun SeasonalSlider(
         onValueChangeFinished = onValueChangeFinished,
         valueRange = range,
         steps = steps,
+        enabled = enabled,
         modifier = Modifier.testTag(testTag)
     )
 }
@@ -414,3 +587,6 @@ private fun SeasonalSlider(
 /** "×1.0" rather than a raw float: the multiplier is the thing being changed. */
 private fun scaleLabel(value: Float): String =
     "\u00d7" + ((value * 10f).roundToInt() / 10f)
+
+/** "60%" for a depth: it is a proportion of the tallest drift, not a multiplier. */
+private fun percentLabel(value: Float): String = "${(value * 100f).roundToInt()}%"

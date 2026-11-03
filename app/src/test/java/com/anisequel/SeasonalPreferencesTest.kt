@@ -4,9 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_DENSITY
+import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SPEED_SCALE
+import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_WIND_STRENGTH
+import com.anisequel.domain.seasonal.MAX_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.MAX_SEASONAL_SIZE_SCALE
+import com.anisequel.domain.seasonal.MAX_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.MIN_SEASONAL_DENSITY
 import com.anisequel.domain.seasonal.SeasonalEffect
 import kotlinx.coroutines.flow.first
@@ -23,11 +27,15 @@ import org.robolectric.annotation.Config
 /**
  * What the Seasonal effects page remembers.
  *
- * The page writes five independent keys - on, shape, density, size, speed - and
- * the failure worth pinning is one write resetting another. That is exactly what
- * happens when a settings object is read, edited and written back from a stale
- * copy, and it would look like a slider snapping back to its default the moment a
- * different one was touched.
+ * The page writes nine independent keys - on, shape, density, size, speed, settle,
+ * depth, wind and wind strength - and the failure worth pinning is one write
+ * resetting another. That is exactly what happens when a settings object is read,
+ * edited and written back from a stale copy, and it would look like a slider
+ * snapping back to its default the moment a different one was touched.
+ *
+ * The four 1.8.1 keys are also pinned as *absent by default*: an install that
+ * predates them has no stored values, and the reader's existing snow must start
+ * settling and moving without a migration that rewrites the file on first launch.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -51,6 +59,10 @@ class SeasonalPreferencesTest {
         assertEquals(DEFAULT_SEASONAL_DENSITY, settings.density, 0f)
         assertEquals(DEFAULT_SEASONAL_SIZE_SCALE, settings.sizeScale, 0f)
         assertEquals(DEFAULT_SEASONAL_SPEED_SCALE, settings.speedScale, 0f)
+        assertTrue("snow should settle without the reader finding a switch", settings.settle)
+        assertEquals(DEFAULT_SEASONAL_PILE_DEPTH, settings.pileDepth, 0f)
+        assertTrue("wind is part of the sky, not an add-on", settings.reactToWind)
+        assertEquals(DEFAULT_SEASONAL_WIND_STRENGTH, settings.windStrength, 0f)
     }
 
     @Test
@@ -71,6 +83,18 @@ class SeasonalPreferencesTest {
 
         preferences.setSpeedScale(1.75f)
         assertEquals(1.75f, preferences.settings.first().speedScale, 0.0001f)
+
+        preferences.setSettle(false)
+        assertFalse(preferences.settings.first().settle)
+
+        preferences.setPileDepth(0.8f)
+        assertEquals(0.8f, preferences.settings.first().pileDepth, 0.0001f)
+
+        preferences.setReactToWind(false)
+        assertFalse(preferences.settings.first().reactToWind)
+
+        preferences.setWindStrength(0.75f)
+        assertEquals(0.75f, preferences.settings.first().windStrength, 0.0001f)
     }
 
     @Test
@@ -78,17 +102,25 @@ class SeasonalPreferencesTest {
         val preferences = preferences()
 
         preferences.setEnabled(true)
-        preferences.setEffect(SeasonalEffect.MAPLE)
+        preferences.setEffect(SeasonalEffect.OAK)
         preferences.setDensity(0.9f)
         preferences.setSizeScale(1.25f)
         preferences.setSpeedScale(0.6f)
+        preferences.setSettle(false)
+        preferences.setPileDepth(0.4f)
+        preferences.setReactToWind(false)
+        preferences.setWindStrength(0.25f)
 
         val settings = preferences.settings.first()
         assertTrue(settings.enabled)
-        assertEquals(SeasonalEffect.MAPLE, settings.effect)
+        assertEquals(SeasonalEffect.OAK, settings.effect)
         assertEquals(0.9f, settings.density, 0.0001f)
         assertEquals(1.25f, settings.sizeScale, 0.0001f)
         assertEquals(0.6f, settings.speedScale, 0.0001f)
+        assertFalse(settings.settle)
+        assertEquals(0.4f, settings.pileDepth, 0.0001f)
+        assertFalse(settings.reactToWind)
+        assertEquals(0.25f, settings.windStrength, 0.0001f)
     }
 
     @Test
@@ -108,16 +140,32 @@ class SeasonalPreferencesTest {
             preferences.settings.first().speedScale,
             0.0001f
         )
+
+        preferences.setPileDepth(40f)
+        assertEquals(MAX_SEASONAL_PILE_DEPTH, preferences.settings.first().pileDepth, 0.0001f)
+
+        preferences.setWindStrength(Float.NaN)
+        assertEquals(
+            DEFAULT_SEASONAL_WIND_STRENGTH,
+            preferences.settings.first().windStrength,
+            0.0001f
+        )
+        preferences.setWindStrength(40f)
+        assertEquals(MAX_SEASONAL_WIND_STRENGTH, preferences.settings.first().windStrength, 0.0001f)
     }
 
     @Test
     fun `reset forgets every choice at once`() = runTest {
         val preferences = preferences()
         preferences.setEnabled(true)
-        preferences.setEffect(SeasonalEffect.BUBBLE)
+        preferences.setEffect(SeasonalEffect.GINKGO)
         preferences.setDensity(1f)
         preferences.setSizeScale(2f)
         preferences.setSpeedScale(0.4f)
+        preferences.setSettle(false)
+        preferences.setPileDepth(1f)
+        preferences.setReactToWind(false)
+        preferences.setWindStrength(0f)
 
         preferences.reset()
 
@@ -127,5 +175,9 @@ class SeasonalPreferencesTest {
         assertEquals(DEFAULT_SEASONAL_DENSITY, settings.density, 0.0001f)
         assertEquals(DEFAULT_SEASONAL_SIZE_SCALE, settings.sizeScale, 0.0001f)
         assertEquals(DEFAULT_SEASONAL_SPEED_SCALE, settings.speedScale, 0.0001f)
+        assertTrue(settings.settle)
+        assertEquals(DEFAULT_SEASONAL_PILE_DEPTH, settings.pileDepth, 0.0001f)
+        assertTrue(settings.reactToWind)
+        assertEquals(DEFAULT_SEASONAL_WIND_STRENGTH, settings.windStrength, 0.0001f)
     }
 }
