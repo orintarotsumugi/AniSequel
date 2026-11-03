@@ -2,6 +2,7 @@ package com.anisequel
 
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.screens.profile.EmbedStyle
+import com.anisequel.ui.screens.profile.replaceEmbedSpan
 import com.anisequel.ui.screens.profile.showsPhotoEmbedRows
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,6 +106,17 @@ class PhotoEmbedStyleTest {
             showsPhotoEmbedRows(draftText = "look at this", attachedUrl = url, isUploading = false)
         )
         assertFalse(showsPhotoEmbedRows(draftText = "", attachedUrl = url, isUploading = false))
+        // The address is still in the text, but it is no longer the picture: a link
+        // and a misspelled token are things the parser does not render as this
+        // embed, so the chips would be describing nothing.
+        assertFalse(
+            "a bare address is not the embed the chips describe",
+            showsPhotoEmbedRows(draftText = "the file is $url", attachedUrl = url, isUploading = false)
+        )
+        assertFalse(
+            "and neither is a token the parser does not know",
+            showsPhotoEmbedRows(draftText = "imgwibble($url)", attachedUrl = url, isUploading = false)
+        )
     }
 
     /**
@@ -142,6 +154,59 @@ class PhotoEmbedStyleTest {
                 EmbedStyle("100%", MediaAttachment.EmbedFraming.Spoiler)
             )
         )
+        // The address was mentioned before it was embedded. The first occurrence is
+        // not the embed, and stopping there left the picture at its old size while
+        // the chip said otherwise.
+        assertEquals(
+            "the file is at $url\nimg400($url)",
+            restyle(
+                "the file is at $url\nimg220($url)",
+                url,
+                EmbedStyle("400", MediaAttachment.EmbedFraming.Plain)
+            )
+        )
+        // Same shape, with a misspelled token before the real one.
+        assertEquals(
+            "imgwibble($url)\nimg400($url)",
+            restyle(
+                "imgwibble($url)\nimg220($url)",
+                url,
+                EmbedStyle("400", MediaAttachment.EmbedFraming.Plain)
+            )
+        )
+    }
+
+    /**
+     * Touching a chip must not move the reader out of the sentence they are typing.
+     *
+     * The first version put the caret after the rewritten markup unconditionally, so
+     * asking for a smaller picture while writing the paragraph *below* it jumped the
+     * caret up above that paragraph. The selection is mapped through the replacement
+     * now: untouched before the span, shifted when it follows it, and moved to the
+     * end of the new markup only when it was inside the span that disappeared.
+     */
+    @Test
+    fun `restyling the embed keeps the selection where the reader left it`() {
+        val url = "https://i.ibb.co/x/a.png"
+        val text = "head\n~!img220($url)!~\ntail"
+        val span = MediaAttachment.embedSpanFor(text, url)!!
+        val markup = MediaAttachment.embedMarkdown(url, "400", MediaAttachment.EmbedFraming.Plain)
+        val expected = "head\nimg400($url)\ntail"
+
+        // Caret in the trailing word: it moves with that word, not to the embed.
+        val after = text.indexOf("tail") + 2
+        val afterEdit = replaceEmbedSpan(text, span, markup, after, after)
+        assertEquals(expected, afterEdit.text)
+        assertEquals(expected.indexOf("tail") + 2, afterEdit.selectionStart)
+
+        // Caret before the embed: the rewrite does not move it.
+        val beforeEdit = replaceEmbedSpan(text, span, markup, 2, 2)
+        assertEquals(2, beforeEdit.selectionStart)
+
+        // Caret inside the span that is being replaced: it lands after the new markup.
+        val inside = text.indexOf(url)
+        val insideEdit = replaceEmbedSpan(text, span, markup, inside, inside)
+        assertEquals(span.first + markup.length, insideEdit.selectionStart)
     }
 
     @Test

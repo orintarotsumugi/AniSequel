@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.usecase.MediaAttachment
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
@@ -60,9 +60,15 @@ internal data class EmbedStyle(
  * the `img220(…)` the upload inserted, and the chips would then describe a file that
  * is no longer in the text; a posted comment clears the field, and clears them with
  * it, without the editor having to remember to reset anything.
+ *
+ * The test is [MediaAttachment.embedSpanFor] rather than `contains`: an address that
+ * survives only as a link, or inside `imgwibble(…)`, is not the picture these chips
+ * describe, and a substring check kept the row up for markup the parser will not
+ * render.
  */
 internal fun showsPhotoEmbedRows(draftText: String, attachedUrl: String?, isUploading: Boolean): Boolean =
-    isUploading || (attachedUrl != null && draftText.contains(attachedUrl))
+    isUploading ||
+        (attachedUrl != null && MediaAttachment.embedSpanFor(draftText, attachedUrl) != null)
 
 /**
  * The size and framing commands for an attached image, as two chip rows.
@@ -116,7 +122,11 @@ internal fun AttachmentEmbedRows(
                     contentDescription = null,
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        // The theme's extra-small slot. An 8dp literal was the one
+                        // corner in this row that did not belong to the app's scale,
+                        // and at thumbnail size it read as a different family from
+                        // the chips below it.
+                        .clip(ExpressiveShapes.extraSmall)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentScale = ContentScale.Crop
                 )
@@ -196,7 +206,10 @@ private fun EmbedChipRow(
             Box(
                 modifier = Modifier
                     .bouncyPress(interactionSource = interactionSource)
-                    .clip(RoundedCornerShape(percent = 50))
+                    // The shared capsule token rather than a literal: the width and
+                    // framing rows are the same control as every other chip in the
+                    // app, and a percent spelled here can drift from [ExpressiveShapes].
+                    .clip(ExpressiveShapes.pill)
                     .background(
                         if (isSelected) {
                             MaterialTheme.colorScheme.primaryContainer

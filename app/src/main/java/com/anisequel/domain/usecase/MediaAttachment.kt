@@ -174,42 +174,56 @@ object MediaAttachment {
      *
      * Null when the URL is not embedded - a bare link, or a URL inside a link's
      * label, carries no `img(...)` token - and the caller leaves the draft alone.
+     *
+     * Every occurrence is tried, not just the first: a draft can mention the address
+     * before embedding it ("the file is at $url", then `img220(url)`), and stopping
+     * at the first match found a URL that was not an embed and left the real one
+     * untouched. The row then looked selected while the picture kept the old size.
      */
     fun embedSpanFor(text: String, url: String): Pair<Int, Int>? {
-        val urlAt = text.indexOf(url)
-        if (urlAt < 0) return null
-        val open = urlAt - 1
-        if (open < 0 || text[open] != '(') return null
-        val close = text.indexOf(')', urlAt + url.length)
-        if (close < 0) return null
-
-        // The token before the parenthesis: `img`, digits, and the `%` of a percent
-        // width. Walking back stops at anything else, so a URL inside ordinary
-        // parentheses cannot be mistaken for an embed.
-        var tokenStart = open
-        while (tokenStart > 0 &&
-            (text[tokenStart - 1].isLetterOrDigit() || text[tokenStart - 1] == '%')
-        ) {
-            tokenStart--
+        if (url.isEmpty()) return null
+        var searchFrom = 0
+        while (true) {
+            val urlAt = text.indexOf(url, searchFrom)
+            if (urlAt < 0) return null
+            val open = urlAt - 1
+            if (open >= 0 && text[open] == '(') {
+                val close = text.indexOf(')', urlAt + url.length)
+                if (close >= 0) {
+                    // The token before the parenthesis: `img`, digits, and the `%` of
+                    // a percent width. Walking back stops at anything else, so a URL
+                    // inside ordinary parentheses cannot be mistaken for an embed.
+                    var tokenStart = open
+                    while (tokenStart > 0 &&
+                        (text[tokenStart - 1].isLetterOrDigit() || text[tokenStart - 1] == '%')
+                    ) {
+                        tokenStart--
+                    }
+                    if (EMBED_TOKEN.matches(text.substring(tokenStart, open))) {
+                        var start = tokenStart
+                        var end = close + 1
+                        // Each wrapper is a pair of different strings, so each side is
+                        // checked at its own index rather than with one constant on
+                        // both ends.
+                        if (text.startsWithAt(SPOILER_OPEN, start - SPOILER_OPEN.length) &&
+                            text.startsWith(SPOILER_CLOSE, end)
+                        ) {
+                            start -= SPOILER_OPEN.length
+                            end += SPOILER_CLOSE.length
+                        } else if (text.startsWithAt(CENTRE_OPEN, start - CENTRE_OPEN.length) &&
+                            text.startsWith(CENTRE_CLOSE, end)
+                        ) {
+                            start -= CENTRE_OPEN.length
+                            end += CENTRE_CLOSE.length
+                        }
+                        return start to end
+                    }
+                }
+            }
+            // Move past this occurrence only. Giving up here is what let a bare URL
+            // earlier in the draft hide the embed written after it.
+            searchFrom = urlAt + 1
         }
-        if (!EMBED_TOKEN.matches(text.substring(tokenStart, open))) return null
-
-        var start = tokenStart
-        var end = close + 1
-        // Each wrapper is a pair of different strings, so each side is checked at its
-        // own index rather than with one constant on both ends.
-        if (text.startsWithAt(SPOILER_OPEN, start - SPOILER_OPEN.length) &&
-            text.startsWith(SPOILER_CLOSE, end)
-        ) {
-            start -= SPOILER_OPEN.length
-            end += SPOILER_CLOSE.length
-        } else if (text.startsWithAt(CENTRE_OPEN, start - CENTRE_OPEN.length) &&
-            text.startsWith(CENTRE_CLOSE, end)
-        ) {
-            start -= CENTRE_OPEN.length
-            end += CENTRE_CLOSE.length
-        }
-        return start to end
     }
 
     /** [prefix] at [index], tolerating the negative index a wrapper at the very start of a draft produces. */

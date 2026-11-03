@@ -209,6 +209,40 @@ internal fun insertBlock(
     return DraftEdit(newText, cursor, cursor)
 }
 
+/**
+ * Rewrites one span - an attached image's markup - and keeps the reader's place.
+ *
+ * A chip under the attached photo rewrites markup that is somewhere behind or ahead
+ * of the caret, and the first version moved the caret to the end of the new markup
+ * unconditionally: touching "Spoiler" while typing a paragraph below the picture
+ * threw the reader out of their sentence. So the selection is mapped through the
+ * replacement instead - untouched before it, shifted by the length difference after
+ * it, and dropped at the end of the new markup only when it was inside the span
+ * that disappeared.
+ */
+internal fun replaceEmbedSpan(
+    text: String,
+    span: Pair<Int, Int>,
+    markup: String,
+    selectionStart: Int,
+    selectionEnd: Int
+): DraftEdit {
+    val from = span.first.coerceIn(0, text.length)
+    val to = span.second.coerceIn(from, text.length)
+    val nextText = text.substring(0, from) + markup + text.substring(to)
+    val delta = markup.length - (to - from)
+    fun moved(index: Int): Int = when {
+        index <= from -> index
+        index >= to -> index + delta
+        else -> from + markup.length
+    }
+    return DraftEdit(
+        text = nextText,
+        selectionStart = moved(selectionStart),
+        selectionEnd = moved(selectionEnd)
+    )
+}
+
 /** `[selected](url)`, or `[label](url)` with nothing selected. */
 internal fun linkMarkdown(
     text: String,

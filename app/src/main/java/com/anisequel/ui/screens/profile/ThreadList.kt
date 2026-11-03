@@ -49,11 +49,11 @@ internal fun ColumnScope.ThreadList(
     visible: List<ActivityReply>,
     replyDepths: Map<Int, Int>,
     continuations: Set<Int>,
-    /** The author the open composer is addressing; see [CommentsThread]. */
-    replyTargetName: String? = null,
+    /** The comment the open composer is answering; see [CommentsThread]. */
+    replyTargetId: Int? = null,
     onRetry: () -> Unit,
     onLoadOlder: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: (ActivityReply) -> Unit,
     onLikeReply: (Int) -> Unit,
     onManageReply: (Int) -> Unit,
@@ -79,6 +79,7 @@ internal fun ColumnScope.ThreadList(
                     ThreadHeadRow(
                         head = head,
                         canPost = canPost,
+                        isReplyTarget = replyTargetId != null && head.id == replyTargetId,
                         onReply = onReply,
                         onQuote = onQuote,
                         nowEpochSecond = nowEpochSecond,
@@ -119,7 +120,7 @@ internal fun ColumnScope.ThreadList(
                     visible = visible,
                     replyDepths = replyDepths,
                     continuations = continuations,
-                    replyTargetName = replyTargetName,
+                    replyTargetId = replyTargetId,
                     hiddenCount = hiddenCount,
                     onRetry = onRetry,
                     onLoadOlder = onLoadOlder,
@@ -187,7 +188,8 @@ internal fun ColumnScope.ThreadList(
 private fun ThreadHeadRow(
     head: ActivityReply,
     canPost: Boolean,
-    onReply: (String) -> Unit,
+    isReplyTarget: Boolean,
+    onReply: (ActivityReply) -> Unit,
     onQuote: (ActivityReply) -> Unit,
     nowEpochSecond: Long?,
     /** The item's placement spring; see [CommentOlderRow]'s parameter of the same name. */
@@ -201,6 +203,7 @@ private fun ThreadHeadRow(
         canManage = false,
         canReply = canPost && !head.user?.name.isNullOrBlank(),
         canQuote = canPost && !head.text.isNullOrBlank(),
+        isReplyTarget = isReplyTarget,
         showLikes = false,
         onLike = {},
         onShowLikers = {},
@@ -266,11 +269,11 @@ private fun LazyListScope.threadReplyItems(
     visible: List<ActivityReply>,
     replyDepths: Map<Int, Int>,
     continuations: Set<Int>,
-    replyTargetName: String?,
+    replyTargetId: Int?,
     hiddenCount: Int,
     onRetry: () -> Unit,
     onLoadOlder: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: (ActivityReply) -> Unit,
     onLikeReply: (Int) -> Unit,
     onManageReply: (Int) -> Unit,
@@ -325,7 +328,9 @@ private fun LazyListScope.threadReplyItems(
             likePending = reply.id in state.pendingReplyLikes,
             canManage = isOwn,
             isOwnComment = isOwn,
-            isReplyTarget = replyTargetName != null && reply.user?.name == replyTargetName,
+            // The id, not the author's name: comparing names lit every comment the
+            // same person had written, which is the opposite of "which one".
+            isReplyTarget = replyTargetId != null && reply.id == replyTargetId,
             canPost = canPost,
             onLike = { onLikeReply(reply.id) },
             onShowLikers = { onShowCommentLikers(reply.id) },
@@ -382,7 +387,7 @@ private fun LazyItemScope.ThreadReplyRow(
     canPost: Boolean,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: () -> Unit,
     onManage: () -> Unit,
     nowEpochSecond: Long?

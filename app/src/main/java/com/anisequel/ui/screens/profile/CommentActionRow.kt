@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,19 +29,9 @@ import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
-/**
- * The controls under a comment, and the arithmetic that keeps them on one line.
- *
- * Split out of `CommentRows.kt`, which is about *a comment* - who, when, what -
- * while this is about what the reader can do about it: the half that grows whenever
- * a control is added, and the half with a measurement problem. Five targets under a
- * body that starts 56dp in from the edge of a phone do not fit, and what to give up
- * when they do not is a decision with numbers in it. Those numbers are
- * [commentActionBarWidthDp] and [commentActionBarForm], and they are pure
- * precisely so the decision can be tested without a screen.
- */
 /**
  * The row's controls: heart, Reply, Quote, a continuation's time, and the manage
  * dot.
@@ -87,7 +76,14 @@ internal fun CommentRowActions(
     nowEpochSecond: Long?,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
-    onReply: (String) -> Unit,
+    /**
+     * The comment itself, not only its author's name.
+     *
+     * The composer threads by mention, so the mention needs the name - but the row
+     * that is lit while the editor is open needs the *id*, or every comment the same
+     * person ever wrote is marked as the one being answered.
+     */
+    onReply: (ActivityReply) -> Unit,
     onQuote: () -> Unit,
     onManage: () -> Unit
 ) {
@@ -108,63 +104,107 @@ internal fun CommentRowActions(
             modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatialSize),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (showLikes) {
-                // The same control the activity card draws, shared rather than
-                // re-declared here - `EngagementAction`.
-                EngagementAction(
-                    icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
-                    count = reply.likeCount ?: 0,
-                    active = liked,
-                    // Null `isLiked` means AniList did not answer, which is what a
-                    // signed-out reader gets. Disabled rather than drawn-as-unliked, so
-                    // the control is never something that looks live and does nothing.
-                    enabled = reply.isLiked != null && !likePending,
-                    contentDescription = if (liked) "Unlike comment" else "Like comment",
-                    onClick = onLike,
-                    // The hold asks whose. A comment's like count used to be the only
-                    // answer the row had, while the card above it had always offered the
-                    // names.
-                    onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
-                    modifier = Modifier.testTag("activity_reply_like_button")
-                )
-                if (canReply || canQuote || canManage) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-            }
-            if (canReply) {
-                val name = reply.user?.name.orEmpty()
-                CommentTextAction(
-                    label = "Reply",
-                    icon = AppVectorIcons.ActivityReplies,
-                    onClickLabel = "Reply to $name",
-                    tag = "activity_reply_reply_button",
-                    compact = form != CommentActionBarForm.Full,
-                    onClick = { onReply(name) }
-                )
-            }
-            if (canQuote) {
-                if (canReply) Spacer(modifier = Modifier.width(4.dp))
-                CommentTextAction(
-                    label = "Quote",
-                    icon = AppVectorIcons.TextQuote,
-                    onClickLabel = "Quote this comment",
-                    tag = "activity_reply_quote_button",
-                    compact = form != CommentActionBarForm.Full,
-                    onClick = onQuote
-                )
-            }
+            CommentPressActions(
+                reply = reply,
+                liked = liked,
+                likePending = likePending,
+                showLikes = showLikes,
+                canReply = canReply,
+                canQuote = canQuote,
+                form = form,
+                onLike = onLike,
+                onShowLikers = onShowLikers,
+                onReply = onReply,
+                onQuote = onQuote
+            )
             // The one thing a `FlowRow` could not do: everything the reader might
             // want is on the left, and the space that is left over belongs to the
             // time and the dot, which are always at the end of the line.
             Spacer(modifier = Modifier.weight(1f))
-            if (isContinuation && form != CommentActionBarForm.Minimal) {
-                CommentTimestamp(reply.createdAt, nowEpochSecond)
-            }
-            if (canManage) {
-                CommentManageButton(onClick = onManage)
-            }
+            CommentMetaActions(
+                reply = reply,
+                isContinuation = isContinuation,
+                canManage = canManage,
+                form = form,
+                nowEpochSecond = nowEpochSecond,
+                onManage = onManage
+            )
         }
     }
+}
+
+/** The heart, Reply and Quote - everything that goes on the left of the bar. */
+@Composable
+private fun CommentPressActions(
+    reply: ActivityReply,
+    liked: Boolean,
+    likePending: Boolean,
+    showLikes: Boolean,
+    canReply: Boolean,
+    canQuote: Boolean,
+    form: CommentActionBarForm,
+    onLike: () -> Unit,
+    onShowLikers: () -> Unit,
+    onReply: (ActivityReply) -> Unit,
+    onQuote: () -> Unit
+) {
+    if (showLikes) {
+        // The same control the activity card draws, shared rather than re-declared
+        // here - `EngagementAction`.
+        EngagementAction(
+            icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
+            count = reply.likeCount ?: 0,
+            active = liked,
+            // Null `isLiked` means AniList did not answer, which is what a signed-out
+            // reader gets. Disabled rather than drawn-as-unliked, so the control is
+            // never something that looks live and does nothing.
+            enabled = reply.isLiked != null && !likePending,
+            contentDescription = if (liked) "Unlike comment" else "Like comment",
+            onClick = onLike,
+            // The hold asks whose. A comment's like count used to be the only answer
+            // the row had, while the card above it had always offered the names.
+            onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
+            modifier = Modifier.testTag("activity_reply_like_button")
+        )
+        if (canReply || canQuote) Spacer(modifier = Modifier.width(4.dp))
+    }
+    if (canReply) {
+        CommentTextAction(
+            label = "Reply",
+            icon = AppVectorIcons.ActivityReplies,
+            onClickLabel = "Reply to ${reply.user?.name.orEmpty()}",
+            tag = "activity_reply_reply_button",
+            compact = form != CommentActionBarForm.Full,
+            onClick = { onReply(reply) }
+        )
+    }
+    if (canQuote) {
+        if (canReply) Spacer(modifier = Modifier.width(4.dp))
+        CommentTextAction(
+            label = "Quote",
+            icon = AppVectorIcons.TextQuote,
+            onClickLabel = "Quote this comment",
+            tag = "activity_reply_quote_button",
+            compact = form != CommentActionBarForm.Full,
+            onClick = onQuote
+        )
+    }
+}
+
+/** The time and the overflow - the two things pinned to the trailing edge. */
+@Composable
+private fun CommentMetaActions(
+    reply: ActivityReply,
+    isContinuation: Boolean,
+    canManage: Boolean,
+    form: CommentActionBarForm,
+    nowEpochSecond: Long?,
+    onManage: () -> Unit
+) {
+    if (isContinuation && form != CommentActionBarForm.Minimal) {
+        CommentTimestamp(reply.createdAt, nowEpochSecond)
+    }
+    if (canManage) CommentManageButton(onClick = onManage)
 }
 
 /**
@@ -172,10 +212,15 @@ internal fun CommentRowActions(
  *
  * A `BoxWithConstraints` cannot ask Compose how wide a `Row` *would* be, so the bar
  * measures itself with this arithmetic instead. The numbers are the drawn ones: the
- * heart's target, a 48dp capsule with its label inside, the same capsule without it,
- * and the 4dp the row puts between controls.
+ * heart's 48dp target, a 48dp capsule with its label inside, the same capsule without
+ * it, and the 4dp the row puts between controls.
+ *
+ * The heart was measured at 44, which is not a size it is ever drawn at:
+ * `EngagementAction` sets a 48dp minimum. The bar therefore believed it had four dp
+ * more than it did on every row, and the one row where that matters is the narrow,
+ * nested one this arithmetic exists for.
  */
-private const val LIKE_TARGET_DP = 44f
+private const val LIKE_TARGET_DP = 48f
 private const val ACTION_GAP_DP = 4f
 private const val LABELED_ACTION_DP = 80f
 private const val ICON_ONLY_ACTION_DP = 48f
@@ -289,7 +334,7 @@ private fun CommentTextAction(
     ) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
+                .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically

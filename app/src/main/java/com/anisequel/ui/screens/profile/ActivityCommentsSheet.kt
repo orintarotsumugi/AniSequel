@@ -190,6 +190,14 @@ fun ActivityCommentsSheet(
         mutableStateOf(TextFieldValue(""))
     }
     var replyToName by rememberSaveable { mutableStateOf<String?>(null) }
+    /**
+     * The comment the editor was opened against.
+     *
+     * Separate from [replyToName] because they answer different questions: the name
+     * is what the mention and the chip need, and this is which row in the thread is
+     * lit. The name alone lit every comment its author had written.
+     */
+    var replyTargetId by rememberSaveable { mutableStateOf<Int?>(null) }
     // Not saveable: an in-flight request after a rotation is owned by the store,
     // and restoring the "we are waiting" half without it would swallow the answer.
     var awaitingPost by remember { mutableStateOf(false) }
@@ -304,6 +312,7 @@ fun ActivityCommentsSheet(
         onDraftCleared = {
             draft = TextFieldValue("")
             replyToName = null
+            replyTargetId = null
             composing = false
         },
         onPostSettled = { awaitingPost = false }
@@ -416,17 +425,19 @@ fun ActivityCommentsSheet(
                     anchor = threadAnchor,
                     // The thread paints the comment being answered. Only while the
                     // new-comment composer is up: an edit pane addresses nothing, and
-                    // a stale name from a cancelled reply would light a row up for no
+                    // a stale id from a cancelled reply would light a row up for no
                     // reason.
-                    replyTargetName = if (composing) replyToName else null,
+                    replyTargetId = if (composing) replyTargetId else null,
                     onRetry = onRetry,
                     onStartCompose = { composing = true },
                     // The mention is an edit like any toolbar's: it must not push
                     // the draft past the API's ceiling, and the caret lands after
                     // it so the reader keeps typing their comment.
-                    onReply = { name ->
+                    onReply = { reply ->
+                        val name = reply.user?.name.orEmpty()
                         draft = draft.withDraftEdit(startReplyTo(draft.text, name))
-                        replyToName = name
+                        replyToName = name.trim().takeIf { it.isNotEmpty() }
+                        replyTargetId = reply.id
                         composing = true
                     },
                     onQuote = { reply ->
@@ -459,6 +470,7 @@ fun ActivityCommentsSheet(
                             )
                         )
                         replyToName = name
+                        replyTargetId = reply.id
                         composing = true
                     },
                     onLikeReply = onLikeReply,

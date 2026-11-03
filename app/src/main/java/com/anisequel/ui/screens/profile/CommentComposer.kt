@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 
 /**
@@ -174,21 +174,22 @@ internal fun CommentComposer(
      * rather than before it: the upload wrote `img220(url)` with whatever was selected
      * at that moment, so a reader who taps 400 afterwards would be choosing the size of
      * the next photo while looking at this one. The embed is found by its URL and
-     * replaced whole, wrapper included, and the caret follows the new markup rather
-     * than being left inside it.
+     * replaced whole, wrapper included. The reader's selection is carried through
+     * the rewrite rather than moved to the embed: a chip tap while typing below the
+     * picture used to jump the caret out of the sentence.
      */
     fun restyleAttachedPhoto(url: String, style: EmbedStyle) {
         val span = MediaAttachment.embedSpanFor(draft.text, url) ?: return
         val markup = MediaAttachment.embedMarkdown(url, style.width, style.framing)
-        val next = draft.text.replaceRange(span.first until span.second, markup)
-        val caret = span.first + markup.length
-        apply(DraftEdit(next, caret, caret))
-    }
-
-    fun selection(): Pair<Int, Int> {
-        val from = minOf(draft.selection.start, draft.selection.end).coerceIn(0, draft.text.length)
-        val to = maxOf(draft.selection.start, draft.selection.end).coerceIn(from, draft.text.length)
-        return from to to
+        apply(
+            replaceEmbedSpan(
+                text = draft.text,
+                span = span,
+                markup = markup,
+                selectionStart = draft.selection.start,
+                selectionEnd = draft.selection.end
+            )
+        )
     }
 
     // Opening the editor is the reader saying "I am writing", so the field takes
@@ -265,27 +266,14 @@ internal fun CommentComposer(
         // every single Write pane: five chips and three framing chips above an empty
         // field, reading as a photo already being attached and as the editor asking
         // about a size before there was anything to size. See [showsPhotoEmbedRows].
-        val photoUrl = photo.attachedUrl
-        if (pane == PANE_WRITE &&
-            showsPhotoEmbedRows(draft.text, photoUrl, photo.isUploading)
-        ) {
-            AttachmentEmbedRows(
-                style = photoStyle,
-                onStyleChange = { next ->
-                    onPhotoStyleChange(next)
-                    if (!photo.isUploading && photoUrl != null) {
-                        restyleAttachedPhoto(photoUrl, next)
-                    }
-                },
-                caption = if (photo.isUploading) {
-                    "Uploading a photo…"
-                } else {
-                    "Attached photo"
-                },
-                tagPrefix = "comment_photo_embed",
-                thumbnailUrl = photoUrl.takeIf { !photo.isUploading }
-            )
-        }
+        PhotoEmbedCommands(
+            pane = pane,
+            draftText = draft.text,
+            photo = photo,
+            style = photoStyle,
+            onStyleChange = onPhotoStyleChange,
+            onRestyle = { url, next -> restyleAttachedPhoto(url, next) }
+        )
 
         ComposerBottomBar(
             draft = draft,
@@ -308,24 +296,86 @@ internal fun CommentComposer(
         )
     }
 
-    pendingInsert?.let { kind ->
-        val (from, to) = selection()
-        InsertMarkupDialog(
-            kind = kind,
-            hasSelection = to > from,
-            onDismiss = { pendingInsert = null },
-            onInsert = { value ->
-                apply(
-                    if (kind == InsertKind.LINK) {
-                        linkMarkdown(draft.text, from, to, value)
-                    } else {
-                        insertBlock(draft.text, from, to, embedMarkdown(kind, value))
-                    }
-                )
-                pendingInsert = null
-            }
-        )
+    InsertMarkupHost(
+        kind = pendingInsert,
+        draft = draft,
+        onDismiss = { pendingInsert = null },
+        onEdit = { edit ->
+            apply(edit)
+            pendingInsert = null
+        }
+    )
+}
+
+/**
+ * The photo's size and framing chips, or nothing when there is no photo to describe.
+ *
+ * Split out of [CommentComposer] because it is the one part of the editor whose
+ * visibility rule is about a *file* rather than about a pane: the chips appear with
+ * the upload's URL in the draft and disappear when the reader deletes the embed.
+ * Keeping that rule here also keeps the restyle branch - the chip moved, so rewrite
+ * the embed that is already in the text - out of the composer's own body.
+ */
+@Composable
+private fun PhotoEmbedCommands(
+    pane: Int,
+    draftText: String,
+    photo: PhotoAttachment,
+    style: EmbedStyle,
+    onStyleChange: (EmbedStyle) -> Unit,
+    onRestyle: (String, EmbedStyle) -> Unit
+) {
+    val photoUrl = photo.attachedUrl
+    if (pane != PANE_WRITE ||
+        !showsPhotoEmbedRows(draftText, photoUrl, photo.isUploading)
+    ) {
+        return
     }
+    AttachmentEmbedRows(
+        style = style,
+        onStyleChange = { next ->
+            onStyleChange(next)
+            // In flight there is no embed to rewrite yet: the URL exists only once
+            // the upload answers, and rewriting it early would fight the writer.
+            if (!photo.isUploading && photoUrl != null) onRestyle(photoUrl, next)
+        },
+        caption = if (photo.isUploading) "Uploading a photo…" else "Attached photo",
+        tagPrefix = "comment_photo_embed",
+        thumbnailUrl = photoUrl.takeIf { !photo.isUploading }
+    )
+}
+
+/**
+ * The insert dialog, with the draft's selection read as the span to replace.
+ *
+ * A host of its own rather than an `?.let` in the composer: the dialog is a window
+ * with its own lifetime, and the selection it acts on is a *range*, which is the
+ * part that has to be normalised before it reaches any markup helper.
+ */
+@Composable
+private fun InsertMarkupHost(
+    kind: InsertKind?,
+    draft: TextFieldValue,
+    onDismiss: () -> Unit,
+    onEdit: (DraftEdit) -> Unit
+) {
+    if (kind == null) return
+    val from = minOf(draft.selection.start, draft.selection.end).coerceIn(0, draft.text.length)
+    val to = maxOf(draft.selection.start, draft.selection.end).coerceIn(from, draft.text.length)
+    InsertMarkupDialog(
+        kind = kind,
+        hasSelection = to > from,
+        onDismiss = onDismiss,
+        onInsert = { value ->
+            onEdit(
+                if (kind == InsertKind.LINK) {
+                    linkMarkdown(draft.text, from, to, value)
+                } else {
+                    insertBlock(draft.text, from, to, embedMarkdown(kind, value))
+                }
+            )
+        }
+    )
 }
 
 private const val PANE_WRITE = 0
@@ -474,7 +524,7 @@ private fun ReplyTargetChip(name: String, onClear: () -> Unit) {
     Row(
         modifier = Modifier
             .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(percent = 50))
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.secondaryContainer)
             .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically

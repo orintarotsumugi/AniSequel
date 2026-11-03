@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -16,17 +17,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
@@ -36,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import java.time.Instant
@@ -118,7 +123,7 @@ internal fun CommentRow(
     showLikes: Boolean = true,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
-    onReply: (String) -> Unit,
+    onReply: (ActivityReply) -> Unit,
     onQuote: () -> Unit,
     onManage: () -> Unit,
     nowEpochSecond: Long? = null,
@@ -140,6 +145,22 @@ internal fun CommentRow(
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
+    // Animated toward a settled colour, and read only by the draw phase. The tint
+    // used to be `clip` + `background` + 16dp of horizontal padding on the content
+    // column, which did two things at once: the body reflowed sideways the moment
+    // the reader tapped Reply, and - because the padded column is what
+    // [CommentRowActions] measures - the bar lost its labels and dropped to glyphs
+    // on exactly the row the reader was answering. Drawing the pill behind the
+    // column changes no measurement at all.
+    val highlight by animateColorAsState(
+        targetValue = if (isReplyTarget) {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.38f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "commentReplyTarget"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -186,16 +207,21 @@ internal fun CommentRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .then(
-                    if (isReplyTarget) {
-                        Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.38f))
-                            .padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 4.dp)
-                    } else {
-                        Modifier
+                .drawBehind {
+                    if (highlight.alpha > 0f) {
+                        drawRoundRect(
+                            color = highlight,
+                            // Into the gutter and the sheet's end margin, drawn
+                            // outside the measured bounds so nothing moves.
+                            topLeft = Offset(-10.dp.toPx(), 0f),
+                            size = Size(size.width + 16.dp.toPx(), size.height),
+                            cornerRadius = CornerRadius(
+                                x = ExpressiveShapes.SmallCorner.toPx(),
+                                y = ExpressiveShapes.SmallCorner.toPx()
+                            )
+                        )
                     }
-                )
+                }
         ) {
             if (!isContinuation) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -334,7 +360,10 @@ internal fun CommentOlderRow(
         Row(
             modifier = Modifier
                 .defaultMinSize(minHeight = 40.dp)
-                .clip(CircleShape)
+                // A wide, short row is a capsule, not a circle: `CircleShape` is
+                // percent-50 and happens to agree today, but the token says what
+                // this is meant to be.
+                .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                 .clickable(
@@ -380,7 +409,7 @@ internal fun NewCommentsPill(count: Int, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .defaultMinSize(minHeight = 40.dp)
-            .clip(CircleShape)
+            .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.primary)
             .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .combinedClickable(
