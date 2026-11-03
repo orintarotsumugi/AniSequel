@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -30,6 +31,8 @@ import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.JokeToastHost
 import com.anisequel.ui.components.JokeToastLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.seasonal.SeasonalChrome
+import com.anisequel.ui.components.seasonal.SeasonalWind
 import kotlinx.coroutines.launch
 
 /**
@@ -86,6 +89,10 @@ internal fun BoxScope.MainBarHost(
     // is the only place that knows the route changed.
     LaunchedEffect(currentRoute) {
         if (currentRoute != AppRoutes.TIER_LIST) onTierBoardOpenChange(false)
+        // A page change is the UI moving too, not just a finger. A small
+        // alternating gust keeps the sky from feeling like a screenshot with a
+        // scroll hook.
+        SeasonalWind.stir()
     }
 
     // The last tab the route actually named, kept for the frames the bar spends
@@ -100,8 +107,18 @@ internal fun BoxScope.MainBarHost(
     val lastTab = remember { mutableStateOf(MainTab.HOME) }
     SideEffect { if (currentTab != null) lastTab.value = currentTab }
 
+    // The seasonal drift settles on the bar's top edge rather than behind it.
+    // The bar leaves the composition when it hides, so the height has to be
+    // cleared explicitly; a stale height would leave the drift floating a bar's
+    // height above the bottom of Settings. See SeasonalChrome for why this is a
+    // plain object rather than snapshot state.
+    val barVisible = showsMainBar(currentTab, tierBoardOpen)
+    LaunchedEffect(barVisible) {
+        if (!barVisible) SeasonalChrome.clearBar()
+    }
+
     AnimatedVisibility(
-        visible = showsMainBar(currentTab, tierBoardOpen),
+        visible = barVisible,
         enter = slideInVertically(
             animationSpec = RouteTabSlideSpring,
             initialOffsetY = { height -> height }
@@ -122,7 +139,16 @@ internal fun BoxScope.MainBarHost(
             // The largest the viewer's avatar has; the bar falls back to a glyph
             // while it is still unknown.
             profileAvatarUrl = profileAvatarUrl,
-            onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = signedIn) }
+            onSelect = { tab -> navController.navigateToMainTab(tab, signedIn = signedIn) },
+            // Measured here rather than guessed so the seasonal drift can sit on
+            // the bar's top edge instead of behind it.
+            modifier = Modifier.onSizeChanged { layout ->
+                if (barVisible) {
+                    SeasonalChrome.publishBarHeight(layout.height)
+                } else {
+                    SeasonalChrome.clearBar()
+                }
+            }
             // No hold shortcut. Holding Profile and lifting used to jump the reader to
             // the inbox, which is not what a hold on a tab means: the bar's held gesture
             // exists to *start a swipe*, and a destination nobody asked for arriving on a

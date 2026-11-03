@@ -33,6 +33,8 @@ That is this file. Read the section for the screen before you change it.
 - [Keeping the list fresh](#keeping-the-list-fresh)
 - [What survives closing the app](#what-survives-closing-the-app)
 - [One destination, one copy](#one-destination-one-copy)
+- [A seasonal sky is one clock and one seeded list](#a-seasonal-sky-is-one-clock-and-one-seeded-list)
+- [Snow does not simulate flakes](#snow-does-not-simulate-flakes-it-remembers-where-they-crossed-the-edge)
 
 ---
 
@@ -2009,7 +2011,8 @@ the row cannot fail to recognise what the upload wrote.
 
 ## A seasonal sky is one clock and one seeded list
 
-The overlay above every page - snow, sakura, clover, maple, fireflies, bubbles - is
+The overlay above every page - sakura, clover, fireflies, dandelion, maple, oak,
+ginkgo, snow and starlight, grouped by the season that owns each one - is
 deliberately the cheapest thing that can look alive: no per-particle animation objects,
 no `Animatable` per flake, no composition state per frame. `seasonalParticles` builds
 one immutable list from a fixed seed, and `SeasonalParticleLayer` computes every
@@ -2033,23 +2036,56 @@ throttled to sixty updates a second so a 120Hz display does not draw the sky twi
 fast, and a stalled frame is capped so returning from a pause does not teleport every
 particle across the screen at once.
 
-The layer has no pointer input at all. It is drawn above every page, so one `clickable`
-or `pointerInput` in `SeasonalParticleLayer.kt` or `SeasonalParticleHost.kt` would eat
-the first tap everywhere in the app, and the symptom would be blamed on whichever screen
-the tap landed on. `SeasonalParticleHostTest` fails if either file grows one.
+The layer itself still has no pointer input. It is drawn above every page, so one
+`clickable` or `pointerInput` in `SeasonalParticleLayer.kt` or
+`SeasonalParticleHost.kt` would eat the first tap everywhere in the app, and the
+symptom would be blamed on whichever screen the tap landed on.
+`SeasonalParticleHostTest` fails if either file grows one. Since 1.8.1 the sky does
+react to taps and scrolls, so those observers live in `SeasonalAmbient.kt` and are
+installed on the app root by `rememberSeasonalAmbientModifier`. A *parent* pointer
+observer does not compete with its children: it reads every event in the Initial
+pass and never calls `consume()`, so buttons, chips and lists still get their first
+tap. The scroll side is a `NestedScrollConnection` that observes `onPostScroll` and
+returns `Offset.Zero` - an observer that returned the delta would shorten every
+list in the app. The same test pins both properties. Navigation is a third input
+with no observer of its own: `MainBarHost` stirs the same wind when the route
+changes, so the sky notices the UI moving even without a finger.
 
-Colours are fixed per shape rather than taken from the theme. A snowflake tinted
-`onSurface` is black on the light theme and white on the dark one, which reads as debris
-rather than snow, and a seasonal effect that follows the wallpaper is no longer the
-season the reader chose. What that costs, measured: of the six, only Maple clears
-3:1 against a white surface (Snow 2.12, Sakura 2.57, Bubble 2.66, Clover 2.73,
-Firefly 1.53), while all six clear it against black - and every particle is drawn
-at 0.55 to 1.0 alpha, which takes them lower again. A flake dark enough for 3:1 on
-white is a grey smudge on a true-black page, and this layer carries no
-information, so it is allowed to be quieter on light than on dark. That trade is
-deliberate; the numbers are here so the next reader does not have to re-derive
-them, or believe a claim of "visible on both" that is not true.
+## Snow does not simulate flakes; it remembers where they crossed the edge
+
+A settling drift is the one part of the sky with memory, and the obvious design -
+a particle object per flake with a landing position and collisions - would have
+made the decoration heavier than the pages it covers. `SeasonalPile` instead keeps
+one normalised column of heights. When the clock wraps a falling particle's cycle,
+the layer deposits a small kernel of mass at that particle's lateral position. The
+pile is therefore made of exactly the particles the reader watched go past, without
+a second simulation that could disagree with the drawing. The field is normalised,
+so the depth slider is a multiplier on the drawn height and never resets what has
+already accumulated.
+
+Two details are deliberate. Columns are interpolated in `heightAt`, because drawing
+48 nearest-column samples looks like a bar chart rather than a bank of snow. And
+landings spread across five columns rather than one, because a spike-per-landing
+pile is a comb. The drift's baseline is lifted to the main bar's measured top edge
+(`SeasonalChrome`) when the bar is present, and falls back to the screen's bottom
+edge when it is not; without the measurement the drift sat entirely behind the bar.
+The bar publishes its height from layout as a plain volatile field rather than
+snapshot state because the only reader is the layer's draw lambda, which already
+runs every frame.
+
+Colours are fixed per shape and per variant rather than taken from the theme. A
+snowflake tinted `onSurface` is black on the light theme and white on the dark one,
+which reads as debris rather than snow, and a seasonal effect that follows the
+wallpaper is no longer the season the reader chose. The 1.8.0 palette measured below
+3:1 against a white surface for every shape but maple - and each particle is drawn
+at 0.55 to 1.0 alpha, which takes them lower still. The 1.8.1 palettes keep that
+trade rather than claim it was solved: a flake dark enough for 3:1 on white is a grey
+smudge on a true-black page, and this layer carries no information, so it is allowed
+to be quieter on light than on dark. The numbers are kept as history, not as a
+current measurement; re-derive them before changing a palette and claiming contrast.
 
 The shape chips in Settings draw their glyphs with the same `drawSeasonalParticle`
-the overlay uses, so a chip cannot promise a snowflake the sky does not draw.
+the overlay uses, so a chip cannot promise a snowflake the sky does not draw. Each
+shape also carries its variant count and palettes there, which is why a sky mixes
+three snowflakes instead of stamping one sixty-four times.
 
