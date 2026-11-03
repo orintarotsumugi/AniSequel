@@ -35,7 +35,6 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.GifSearchStore
-import kotlinx.coroutines.launch
 
 /**
  * One activity's comment thread, with a composer.
@@ -360,9 +359,7 @@ fun ActivityCommentsSheet(
                     onClearReplyTo = {},
                     isPosting = editing.isBusy,
                     postError = editing.error,
-                    uploadNote = editPhoto.note,
-                    isUploading = editPhoto.isUploading,
-                    onPickFromDevice = editPhoto.launch,
+                    photo = editPhoto,
                     photoStyle = editPhotoStyle,
                     onPhotoStyleChange = { next ->
                         editPhotoWidth = next.width
@@ -385,9 +382,7 @@ fun ActivityCommentsSheet(
                     onClearReplyTo = { replyToName = null },
                     isPosting = state.isPosting,
                     postError = state.postError,
-                    uploadNote = photo.note,
-                    isUploading = photo.isUploading,
-                    onPickFromDevice = photo.launch,
+                    photo = photo,
                     photoStyle = photoStyle,
                     onPhotoStyleChange = { next ->
                         photoWidth = next.width
@@ -419,6 +414,11 @@ fun ActivityCommentsSheet(
                     // remembered inside the thread came back false and scrolled the
                     // reader to the newest comment.
                     anchor = threadAnchor,
+                    // The thread paints the comment being answered. Only while the
+                    // new-comment composer is up: an edit pane addresses nothing, and
+                    // a stale name from a cancelled reply would light a row up for no
+                    // reason.
+                    replyTargetName = if (composing) replyToName else null,
                     onRetry = onRetry,
                     onStartCompose = { composing = true },
                     // The mention is an edit like any toolbar's: it must not push

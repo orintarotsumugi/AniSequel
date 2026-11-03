@@ -1968,3 +1968,41 @@ was therefore a black screen between two correctly themed screens. The fix is on
 `Modifier.background(MaterialTheme.colorScheme.background)` on that container: the
 cross-fade is the app's motion language and stays, and what was missing was a
 surface behind it.
+
+## A comment row is one line, and what gives way when it is not
+
+The controls under a comment were a `FlowRow`, which is the right answer to "five
+targets under a body of any width" and the wrong one to "where is the button that
+edits my comment". A wide top-level row put the overflow beside Reply and Quote; a
+threaded row ran out of line and dropped it under the timestamp. The control that
+changes your own comment was therefore in a different place depending on how deep
+somebody else's reply was - and the rows that needed it most were the narrow ones.
+
+The bar is one `Row` now, and the order of what gives way is a rule with numbers in
+it: the words "Reply" and "Quote" go first, because their glyphs stay inside the same
+48dp targets, and only a row too narrow even for that loses a continuation's
+timestamp - the one thing on the line that the header above it has already said,
+because a continuation is somebody speaking again within minutes. A *control* is
+never the thing that goes. `commentActionBarForm` is pure and `CommentActionBarTest`
+holds the arithmetic, because there is no device here to measure a phone against.
+
+The same row also carries a line down the gutter its avatar would have used, in one of
+three colours: primary for the comment the open editor is answering, faded primary for
+the viewer's own, surface grey for everybody else. One element with three meanings is
+deliberate. A thread is read by following lines, and a reader who can see which line is
+theirs does not have to hold their own name in working memory across a hundred
+comments - which is what finding your four comments in somebody else's thread actually
+requires today.
+
+The composer's size and framing chips follow the same principle: they describe a file,
+so they appear with a file. The rule is the URL the upload wrote, tested against the
+draft's own text rather than a `hasPhoto` flag, because the reader can delete the
+`img220(...)` the upload inserted and the chips would then be describing a file that is
+no longer in the message. Posting clears the field, and clears them, without the
+editor having to remember to reset anything.
+
+The same reason makes the chips *rewrite* the embed: `embedSpanFor` finds it by its URL
+and `embedMarkdown` writes the new one over the whole span, wrapper included, because a
+row that only sets the style for the next upload is a row that does nothing while you
+look at it. The two share their wrapper spellings - `~!`/`!~` and the fence pair - so
+the row cannot fail to recognise what the upload wrote.

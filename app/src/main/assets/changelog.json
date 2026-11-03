@@ -4,6 +4,18 @@
       "version": "1.7.9",
       "entries": [
         {
+          "title": "The photo's size commands appear with the photo",
+          "detail": "Five size chips and three framing buttons sat above an empty comment field on every reply you wrote, which read as a photo already being attached - and as the editor asking what size to make a file you had not picked yet. They appear with the file now: while it is uploading, and afterwards only while the link the upload wrote is still in your text, with the picture beside them so it is plain which file they describe. Moving a chip resizes the photo already in your comment rather than the next one, and taking a spoiler lid off takes the whole wrapper with it. Delete the image and the row goes with it, and posting clears it."
+        },
+        {
+          "title": "One action bar, in the same place on every comment",
+          "detail": "The button that edits or deletes your own comment sat beside Reply and Quote on a wide comment, and dropped onto a line of its own under the timestamp on a threaded one - so the control you most needed was the one that moved from row to row. The bar is a single line now, with the heart and the two actions on the left and the time and the overflow pinned to the right. Where a nested comment has no room for the words Reply and Quote, the words go and the glyphs stay; where there is no room even for that, it is a repeated comment's timestamp that gives way, because the comment above it already said roughly when."
+        },
+        {
+          "title": "The thread shows which comments are yours and which one you are answering",
+          "detail": "In a thread of a hundred comments, finding the four you wrote was a search with no cue in it, and while you were replying the chip above the field said who you were answering but not which comment - the one you quoted three screens up had already scrolled away. Your own comments now carry a coloured line down the gutter beside them, the comment you are replying to is lit and tinted for as long as the editor is open against it, and every nested comment gets a thread line so the nesting is something you can see instead of rows of indentation you have to count."
+        },
+        {
           "title": "A reopened thread picks up at the newest end",
           "detail": "Dismissing a comment sheet and opening it again refreshed the oldest page you had scrolled back to and replaced the whole window with it, so the conversation appeared to jump backwards and the newest comments vanished. The rows already in hand stay on screen and the newest page is refreshed instead; if comments kept arriving while the sheet was closed, the pages after it are fetched as well, so the thread never reopens with a conversation missing from the middle. Message threads reopen the same way, because they are drawn by the same sheet."
         },

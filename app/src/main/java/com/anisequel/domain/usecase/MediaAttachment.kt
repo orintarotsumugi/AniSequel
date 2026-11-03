@@ -149,13 +149,72 @@ object MediaAttachment {
             // The centred span is a block of its own, fences on lines of their own:
             // `~~~img(...)~~~` on one line is not what the parser matches, and the
             // Centre control on the format bar already writes it this way.
-            EmbedFraming.Centred -> "~~~\n$image\n~~~"
+            EmbedFraming.Centred -> "$CENTRE_OPEN$image$CENTRE_CLOSE"
             // The one-line form, because the block spoiler is matched against a
             // whole line - and the image inside it only renders at all since the
             // spoiler's payload started being re-parsed as blocks.
-            EmbedFraming.Spoiler -> "~!$image!~"
+            EmbedFraming.Spoiler -> "$SPOILER_OPEN$image$SPOILER_CLOSE"
         }
     }
+
+    /**
+     * Where the embed of [url] sits in [text], as `(start, endExclusive)`.
+     *
+     * The composer needs it because the size and framing chips now describe the file
+     * that is *already* in the draft: moving a chip has to rewrite the markup the
+     * upload wrote, or the row is a decoration that changes nothing about the picture
+     * above it.
+     *
+     * The span includes the framing wrapper, because `~!img220(url)!~` is one embed
+     * and replacing only the `img220(url)` part would leave the lid on the wrong
+     * thing. It is found from the URL rather than by parsing the document, for the
+     * same reason the upload wrote it in the first place: the markup is a fixed shape
+     * with the URL inside it, and a full parse of a draft being typed would either
+     * disagree with the caret or throw away text the reader wrote by hand.
+     *
+     * Null when the URL is not embedded - a bare link, or a URL inside a link's
+     * label, carries no `img(...)` token - and the caller leaves the draft alone.
+     */
+    fun embedSpanFor(text: String, url: String): Pair<Int, Int>? {
+        val urlAt = text.indexOf(url)
+        if (urlAt < 0) return null
+        val open = urlAt - 1
+        if (open < 0 || text[open] != '(') return null
+        val close = text.indexOf(')', urlAt + url.length)
+        if (close < 0) return null
+
+        // The token before the parenthesis: `img`, digits, and the `%` of a percent
+        // width. Walking back stops at anything else, so a URL inside ordinary
+        // parentheses cannot be mistaken for an embed.
+        var tokenStart = open
+        while (tokenStart > 0 &&
+            (text[tokenStart - 1].isLetterOrDigit() || text[tokenStart - 1] == '%')
+        ) {
+            tokenStart--
+        }
+        if (!EMBED_TOKEN.matches(text.substring(tokenStart, open))) return null
+
+        var start = tokenStart
+        var end = close + 1
+        // Each wrapper is a pair of different strings, so each side is checked at its
+        // own index rather than with one constant on both ends.
+        if (text.startsWithAt(SPOILER_OPEN, start - SPOILER_OPEN.length) &&
+            text.startsWith(SPOILER_CLOSE, end)
+        ) {
+            start -= SPOILER_OPEN.length
+            end += SPOILER_CLOSE.length
+        } else if (text.startsWithAt(CENTRE_OPEN, start - CENTRE_OPEN.length) &&
+            text.startsWith(CENTRE_CLOSE, end)
+        ) {
+            start -= CENTRE_OPEN.length
+            end += CENTRE_CLOSE.length
+        }
+        return start to end
+    }
+
+    /** [prefix] at [index], tolerating the negative index a wrapper at the very start of a draft produces. */
+    private fun String.startsWithAt(prefix: String, index: Int): Boolean =
+        index >= 0 && startsWith(prefix, index)
 
     /**
      * The widths AniList's own editor writes.
@@ -168,6 +227,17 @@ object MediaAttachment {
     val EMBED_WIDTHS: List<String> = listOf("220", "400", "50%", "100%")
 
     private val WIDTH_PATTERNS = listOf(Regex("""\d+"""), Regex("""\d+%"""))
+
+    /** `img`, optionally with the width the site's own editor puts between it and the parenthesis. */
+    private val EMBED_TOKEN = Regex("""img(\d+%|\d+)?""")
+
+    // The two framings, spelled once each: [embedMarkdown] writes them and
+    // [embedSpanFor] has to recognise exactly what it wrote, so the pair cannot drift
+    // into a row that restyles a plain embed and leaves a lid behind it.
+    private const val SPOILER_OPEN = "~!"
+    private const val SPOILER_CLOSE = "!~"
+    private const val CENTRE_OPEN = "~~~\n"
+    private const val CENTRE_CLOSE = "\n~~~"
 
     /**
      * The part name to send with the file.

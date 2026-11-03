@@ -49,6 +49,8 @@ internal fun ColumnScope.ThreadList(
     visible: List<ActivityReply>,
     replyDepths: Map<Int, Int>,
     continuations: Set<Int>,
+    /** The author the open composer is addressing; see [CommentsThread]. */
+    replyTargetName: String? = null,
     onRetry: () -> Unit,
     onLoadOlder: () -> Unit,
     onReply: (String) -> Unit,
@@ -117,6 +119,7 @@ internal fun ColumnScope.ThreadList(
                     visible = visible,
                     replyDepths = replyDepths,
                     continuations = continuations,
+                    replyTargetName = replyTargetName,
                     hiddenCount = hiddenCount,
                     onRetry = onRetry,
                     onLoadOlder = onLoadOlder,
@@ -263,6 +266,7 @@ private fun LazyListScope.threadReplyItems(
     visible: List<ActivityReply>,
     replyDepths: Map<Int, Int>,
     continuations: Set<Int>,
+    replyTargetName: String?,
     hiddenCount: Int,
     onRetry: () -> Unit,
     onLoadOlder: () -> Unit,
@@ -309,12 +313,19 @@ private fun LazyListScope.threadReplyItems(
         key = { it.id },
         contentType = { "reply" }
     ) { reply ->
+        // One answer to "did the viewer write this", used for two things: the row's
+        // rail, and whether it gets the manage dot. They are the same fact, and a
+        // comment that wears the rail without offering the dot - or the other way
+        // round - is the two drifting apart.
+        val isOwn = viewerId != null && reply.user?.id == viewerId
         ThreadReplyRow(
             reply = reply,
             indent = replyDepths[reply.id] ?: 0,
             isContinuation = reply.id in continuations,
             likePending = reply.id in state.pendingReplyLikes,
-            canManage = viewerId != null && reply.user?.id == viewerId,
+            canManage = isOwn,
+            isOwnComment = isOwn,
+            isReplyTarget = replyTargetName != null && reply.user?.name == replyTargetName,
             canPost = canPost,
             onLike = { onLikeReply(reply.id) },
             onShowLikers = { onShowCommentLikers(reply.id) },
@@ -366,6 +377,8 @@ private fun LazyItemScope.ThreadReplyRow(
     isContinuation: Boolean,
     likePending: Boolean,
     canManage: Boolean,
+    isOwnComment: Boolean,
+    isReplyTarget: Boolean,
     canPost: Boolean,
     onLike: () -> Unit,
     onShowLikers: () -> Unit,
@@ -380,6 +393,8 @@ private fun LazyItemScope.ThreadReplyRow(
         isContinuation = isContinuation,
         likePending = likePending,
         canManage = canManage,
+        isOwnComment = isOwnComment,
+        isReplyTarget = isReplyTarget,
         // A reply is addressed by a leading `@name`, so without an author name
         // there is nothing to insert, even for a signed-in reader.
         canReply = canPost && !reply.user?.name.isNullOrBlank(),

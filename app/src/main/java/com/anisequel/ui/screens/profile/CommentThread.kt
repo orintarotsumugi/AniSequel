@@ -95,6 +95,14 @@ internal fun ColumnScope.CommentsThread(
     pollIntervalMillis: Long,
     polling: Boolean,
     nowEpochSecond: Long?,
+    /**
+     * The author the open composer is addressing, or null.
+     *
+     * The thread paints that comment's row while the reader is answering it: the chip
+     * above the field says *who*, and on a thread that has been scrolled three pages
+     * it does not say *which*.
+     */
+    replyTargetName: String? = null,
     onRetry: () -> Unit,
     onStartCompose: () -> Unit,
     onReply: (String) -> Unit,
@@ -198,6 +206,7 @@ internal fun ColumnScope.CommentsThread(
         visible = visible,
         replyDepths = replyDepths,
         continuations = continuations,
+        replyTargetName = replyTargetName,
         onRetry = onRetry,
         onLoadOlder = onLoadOlder,
         onReply = onReply,
