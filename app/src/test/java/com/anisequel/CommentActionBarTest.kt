@@ -122,8 +122,7 @@ class CommentActionBarTest {
             commentActionBarWidthDp(
                 showLikes = false, canReply = true, canQuote = true,
                 showTimestamp = false, canManage = false, labelled = true
-            ),
-            0.0
+            )
         )
     }
 
