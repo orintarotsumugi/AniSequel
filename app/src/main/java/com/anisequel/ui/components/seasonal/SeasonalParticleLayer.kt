@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.domain.seasonal.ParticleDirection
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalParticle
 import com.anisequel.domain.seasonal.particleSizeDp
 import com.anisequel.domain.seasonal.particleSpeedScale
 import com.anisequel.domain.seasonal.seasonalParticles
@@ -43,6 +44,9 @@ private const val TRAVEL_MARGIN = 0.15f
 
 /** The band at each end of a particle's travel over which it fades in or out. */
 private const val EDGE_FADE = 0.08f
+
+/** Below this a flake is a rounding error on the background, not a drawn shape. */
+private const val MIN_VISIBLE_ALPHA = 0.01f
 
 /** The frame budget: update the clock at most sixty times a second. */
 private const val FRAME_SECONDS = 1f / 60f
@@ -138,29 +142,17 @@ fun SeasonalParticleLayer(
         // and back, finds the sky where it was left rather than restarting it - a
         // layer that jumped to the top every time the app came back would read as
         // a stutter exactly when the reader returned to look at it.
-        var lastFrame = 0L
-        var accumulated = 0f
-        while (true) {
-            val frame = withFrameNanos { it }
-            val elapsed = if (lastFrame == 0L) 0L else frame - lastFrame
-            lastFrame = frame
-            accumulated += elapsed / 1_000_000_000f
-            if (accumulated < FRAME_SECONDS) continue
-            clock += accumulated.coerceAtMost(MAX_STEP_SECONDS)
-            accumulated = 0f
-        }
+        seasonalClock { step -> clock += step }
     }
 
     val color = effectColor(effect)
+    val falling = effect.direction == ParticleDirection.FALL
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val width = size.width
         val height = size.height
         if (width <= 0f || height <= 0f) return@Canvas
         val basePx = baseDp.dp.toPx()
-        val travel = height * TRAVEL_FACTOR
-        val falling = effect.direction == ParticleDirection.FALL
-        val startY = if (falling) -height * TRAVEL_MARGIN else height * (1f + TRAVEL_MARGIN)
 
         // One path for the whole frame: a fresh `Path` per particle per frame is
         // sixty-four allocations sixty times a second while the sky is on screen.
@@ -168,28 +160,85 @@ fun SeasonalParticleLayer(
         val seconds = clock
 
         particles.forEach { particle ->
-            val progress = wrap(particle.y + particle.speed * speed * seconds)
-            val y = if (falling) {
-                startY + progress * travel
-            } else {
-                startY - progress * travel
-            }
-            val x = width * particle.x +
-                sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway * width
-            val edge = min(progress, 1f - progress) / EDGE_FADE
-            val alpha = particle.alpha * edge.coerceIn(0f, 1f)
-            if (alpha <= 0.01f) return@forEach
+            val placed = particlePlacement(particle, seconds, speed, width, height, falling)
+                ?: return@forEach
             drawSeasonalParticle(
                 effect = effect,
-                center = Offset(x, y),
+                center = placed.center,
                 radius = basePx * particle.size,
-                rotationDegrees = (particle.spin * seconds + particle.phase) * RADIANS_TO_DEGREES,
-                alpha = alpha,
+                rotationDegrees = placed.rotationDegrees,
+                alpha = placed.alpha,
                 color = color,
                 path = path
             )
         }
     }
+}
+
+/**
+ * The frame loop, paced.
+ *
+ * A step is only handed on once [FRAME_SECONDS] has accumulated, so a 120Hz display
+ * drives the sky at the same rate as a 60Hz one, and a step is capped at
+ * [MAX_STEP_SECONDS] so a stall - returning from a pause, a breakpoint, a cold
+ * first frame - moves the particles a little rather than flinging them all the way
+ * across the screen.
+ */
+private suspend fun seasonalClock(onStep: (Float) -> Unit) {
+    var lastFrame = 0L
+    var accumulated = 0f
+    while (true) {
+        val frame = withFrameNanos { it }
+        val elapsed = if (lastFrame == 0L) 0L else frame - lastFrame
+        lastFrame = frame
+        accumulated += elapsed / 1_000_000_000f
+        if (accumulated < FRAME_SECONDS) continue
+        onStep(accumulated.coerceAtMost(MAX_STEP_SECONDS))
+        accumulated = 0f
+    }
+}
+
+/** Where one particle sits, and how visible it is. */
+private data class Placement(
+    val center: Offset,
+    val alpha: Float,
+    val rotationDegrees: Float
+)
+
+/**
+ * One particle's place at [seconds], or null when it has faded past drawing.
+ *
+ * The travel is one cycle taller than the screen ([TRAVEL_FACTOR]) and starts
+ * [TRAVEL_MARGIN] outside it, so a flake is never born or killed on screen - it
+ * enters from above, and the [EDGE_FADE] band at each end of the cycle is what the
+ * reader actually sees. Rising shapes run the same geometry backwards.
+ *
+ * Pure, and outside the draw lambda, because the loop that calls it is the layer's
+ * whole cost: leaving the arithmetic inline made the composable the most branchy
+ * function in the app for a computation with no decisions in it.
+ */
+private fun particlePlacement(
+    particle: SeasonalParticle,
+    seconds: Float,
+    speedScale: Float,
+    width: Float,
+    height: Float,
+    falling: Boolean
+): Placement? {
+    val travel = height * TRAVEL_FACTOR
+    val startY = if (falling) -height * TRAVEL_MARGIN else height * (1f + TRAVEL_MARGIN)
+    val progress = wrap(particle.y + particle.speed * speedScale * seconds)
+    val y = if (falling) startY + progress * travel else startY - progress * travel
+    val x = width * particle.x +
+        sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway * width
+    val edge = min(progress, 1f - progress) / EDGE_FADE
+    val alpha = particle.alpha * edge.coerceIn(0f, 1f)
+    if (alpha <= MIN_VISIBLE_ALPHA) return null
+    return Placement(
+        center = Offset(x, y),
+        alpha = alpha,
+        rotationDegrees = (particle.spin * seconds + particle.phase) * RADIANS_TO_DEGREES
+    )
 }
 
 /**
