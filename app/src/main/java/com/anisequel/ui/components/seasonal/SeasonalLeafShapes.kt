@@ -43,7 +43,7 @@ internal fun DrawScope.drawMaple(
 ) {
     path.reset()
     val lobes = 5
-    val step = (2f * PI.toFloat()) / lobes
+    val step = 2f * PI.toFloat() / lobes
     val start = -PI.toFloat() / 2f
     for (lobe in 0 until lobes) {
         val tipAngle = start + lobe * step

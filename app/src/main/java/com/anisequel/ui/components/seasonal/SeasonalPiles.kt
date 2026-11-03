@@ -141,7 +141,7 @@ internal fun DrawScope.drawSeasonalPile(
         drawPath(
             path = path,
             color = ink.rim.copy(alpha = alpha * 0.75f),
-            style = Stroke(width = (1.1f + maxHeightPx * 0.012f))
+            style = Stroke(width = 1.1f + maxHeightPx * 0.012f)
         )
     }
     // A darker band under the surface gives the heap enough weight to sit on the

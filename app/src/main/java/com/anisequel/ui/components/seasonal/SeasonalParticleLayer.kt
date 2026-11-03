@@ -185,24 +185,17 @@ fun SeasonalParticleLayer(
             clock += step
             if (reactToWind) SeasonalWind.decay(step, frameNanos)
             val field = pile ?: return@seasonalClock
-            if (viewport.width <= 0 || effect.direction != ParticleDirection.FALL) {
-                return@seasonalClock
-            }
-            // The same strength multiplier the draw uses, so a landing lands
-            // where the reader saw the shape cross the edge.
-            val gust = if (reactToWind) SeasonalWind.gust * strongWind else 0f
-            particles.forEach { particle ->
-                val previousProgress = wrap(particle.y + particle.speed * speed * previous)
-                val nextProgress = wrap(particle.y + particle.speed * speed * clock)
-                // The wrap is the only moment a falling shape visibly reaches the
-                // floor. Depositing continuously would build a pile from particles
-                // mid-air, which is the one thing a pile cannot be made of.
-                if (nextProgress < previousProgress) {
-                    val sway = sin(clock * particle.swayRate * TAU + particle.phase) * particle.sway
-                    val landing = particle.x + sway + gust * effect.windResponse * GUST_WIDTH
-                    field.deposit(landing.coerceIn(0f, 1f), particle.size)
-                }
-            }
+            settlePile(
+                pile = field,
+                particles = particles,
+                effect = effect,
+                speedScale = speed,
+                previousSeconds = previous,
+                seconds = clock,
+                viewportWidth = viewport.width,
+                wind = thisWind(reactToWind),
+                windStrength = strongWind
+            )
         }
     }
 
@@ -214,72 +207,163 @@ fun SeasonalParticleLayer(
             .fillMaxSize()
             .onSizeChanged { viewport = it }
     ) {
-        val width = size.width
-        val height = size.height
-        if (width <= 0f || height <= 0f) return@Canvas
-        val basePx = baseDp.dp.toPx()
-        val seconds = clock
+        // `clock` is read here, in the draw phase, and nowhere above it: the whole
+        // point of the layer is that a frame costs a repaint rather than a
+        // recomposition of the page behind it.
+        drawSeasonalSky(
+            effect = effect,
+            particles = particles,
+            pile = pile,
+            baseDp = baseDp,
+            seconds = clock,
+            speedScale = speed,
+            falling = falling,
+            settleVisible = settleVisible,
+            settleOnChrome = settleOnChrome,
+            showTapRipple = showTapRipple,
+            wind = thisWind(reactToWind),
+            windStrength = strongWind,
+            pileDepthScale = depth
+        )
+    }
+}
 
-        // Two paths for the whole frame: a fresh `Path` per particle per frame is
-        // sixty-four allocations sixty times a second while the sky is on screen,
-        // and the pile's resting glyphs need a second one because drawing a shape
-        // resets the path it is handed.
-        val path = Path()
-        val glyphPath = Path()
+/** The wind's contribution to one frame, or nothing when interaction is off. */
+private class WindSample(val gust: Float, val lift: Float, val pulse: Float) {
+    companion object {
+        val None = WindSample(0f, 0f, 0f)
+    }
+}
 
-        if (settleVisible && pile != null) {
-            drawSeasonalPile(
-                effect = effect,
-                pile = pile,
-                maxHeightPx = (MAX_SEASONAL_PILE_DP * depth).dp.toPx(),
-                shear = if (reactToWind) SeasonalWind.gust * strongWind else 0f,
-                alpha = 1f,
-                bottomInsetPx = if (settleOnChrome) SeasonalChrome.barHeightPx.toFloat() else 0f,
-                path = path,
-                glyphPath = glyphPath
-            )
+/**
+ * The three wind values, read together.
+ *
+ * Read once per frame rather than at each place they are used: the draw, the drift's
+ * shear and the settling all ask the same question, and four separate
+ * `if (reactToWind)` is four chances for the sky and the pile to disagree about which
+ * gust they are in - which shows up as the drift leaning while the flakes above it do
+ * not.
+ */
+private fun thisWind(reactToWind: Boolean): WindSample =
+    if (!reactToWind) {
+        WindSample.None
+    } else {
+        WindSample(SeasonalWind.gust, SeasonalWind.lift, SeasonalWind.pulse)
+    }
+
+/**
+ * Deposits the shapes whose cycle wrapped during this step.
+ *
+ * The wrap is the only moment a falling shape visibly reaches the floor, so it is the
+ * only moment it adds to the drift: depositing every step would build a pile out of
+ * particles still mid-air. A rising shape has no floor to land on, and a layer that
+ * has not been measured yet has no width to land *across*, so both leave the field
+ * untouched.
+ */
+private fun settlePile(
+    pile: SeasonalPile,
+    particles: List<SeasonalParticle>,
+    effect: SeasonalEffect,
+    speedScale: Float,
+    previousSeconds: Float,
+    seconds: Float,
+    viewportWidth: Int,
+    wind: WindSample,
+    windStrength: Float
+) {
+    if (viewportWidth <= 0 || effect.direction != ParticleDirection.FALL) return
+    // The same strength multiplier the draw uses, so a landing lands where the
+    // reader saw the shape cross the edge.
+    val gust = wind.gust * windStrength
+    particles.forEach { particle ->
+        val previousProgress = wrap(particle.y + particle.speed * speedScale * previousSeconds)
+        val nextProgress = wrap(particle.y + particle.speed * speedScale * seconds)
+        if (nextProgress < previousProgress) {
+            val sway = sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway
+            val landing = particle.x + sway + gust * effect.windResponse * GUST_WIDTH
+            pile.deposit(landing.coerceIn(0f, 1f), particle.size)
         }
+    }
+}
 
-        val gust = if (reactToWind) SeasonalWind.gust else 0f
-        val lift = if (reactToWind) SeasonalWind.lift else 0f
-        val pulse = if (reactToWind) SeasonalWind.pulse else 0f
+/**
+ * One frame of sky, drawn in the layer's own space: the drift, the shapes, the ring.
+ *
+ * The two paths live here rather than at the call site because they are scratch
+ * space for this frame only - a fresh `Path` per particle per frame is sixty-four
+ * allocations sixty times a second - and the pile's resting glyphs need a second one,
+ * because drawing a shape resets the path it is handed.
+ */
+private fun DrawScope.drawSeasonalSky(
+    effect: SeasonalEffect,
+    particles: List<SeasonalParticle>,
+    pile: SeasonalPile?,
+    baseDp: Float,
+    seconds: Float,
+    speedScale: Float,
+    falling: Boolean,
+    settleVisible: Boolean,
+    settleOnChrome: Boolean,
+    showTapRipple: Boolean,
+    wind: WindSample,
+    windStrength: Float,
+    pileDepthScale: Float
+) {
+    val width = size.width
+    val height = size.height
+    if (width <= 0f || height <= 0f) return
+    val basePx = baseDp.dp.toPx()
+    val path = Path()
+    val glyphPath = Path()
 
-        particles.forEach { particle ->
-            val placed = particlePlacement(
-                particle = particle,
-                effect = effect,
-                seconds = seconds,
-                speedScale = speed,
-                width = width,
-                height = height,
-                falling = falling,
-                gust = gust,
-                lift = lift,
-                windStrength = strongWind,
-                pulse = pulse,
-                pulseX = SeasonalWind.pulseX,
-                pulseY = SeasonalWind.pulseY
-            ) ?: return@forEach
-            drawSeasonalParticle(
-                effect = effect,
-                center = placed.center,
-                radius = basePx * particle.size,
-                rotationDegrees = placed.rotationDegrees,
-                alpha = placed.alpha,
-                variant = particle.variant,
-                path = path,
-                twinkle = placed.twinkle
-            )
-        }
+    if (settleVisible && pile != null) {
+        drawSeasonalPile(
+            effect = effect,
+            pile = pile,
+            maxHeightPx = (MAX_SEASONAL_PILE_DP * pileDepthScale).dp.toPx(),
+            shear = wind.gust * windStrength,
+            alpha = 1f,
+            bottomInsetPx = if (settleOnChrome) SeasonalChrome.barHeightPx.toFloat() else 0f,
+            path = path,
+            glyphPath = glyphPath
+        )
+    }
 
-        if (showTapRipple && pulse > 0.01f) {
-            drawTapRipple(
-                effect = effect,
-                pulse = pulse,
-                xFraction = SeasonalWind.pulseX,
-                yFraction = SeasonalWind.pulseY
-            )
-        }
+    particles.forEach { particle ->
+        val placed = particlePlacement(
+            particle = particle,
+            effect = effect,
+            seconds = seconds,
+            speedScale = speedScale,
+            width = width,
+            height = height,
+            falling = falling,
+            gust = wind.gust,
+            lift = wind.lift,
+            windStrength = windStrength,
+            pulse = wind.pulse,
+            pulseX = SeasonalWind.pulseX,
+            pulseY = SeasonalWind.pulseY
+        ) ?: return@forEach
+        drawSeasonalParticle(
+            effect = effect,
+            center = placed.center,
+            radius = basePx * particle.size,
+            rotationDegrees = placed.rotationDegrees,
+            alpha = placed.alpha,
+            variant = particle.variant,
+            path = path,
+            twinkle = placed.twinkle
+        )
+    }
+
+    if (showTapRipple && wind.pulse > 0.01f) {
+        drawTapRipple(
+            effect = effect,
+            pulse = wind.pulse,
+            xFraction = SeasonalWind.pulseX,
+            yFraction = SeasonalWind.pulseY
+        )
     }
 }
 
@@ -305,7 +389,7 @@ private fun DrawScope.drawTapRipple(
         color = palette.light.copy(alpha = fade * 0.7f),
         radius = radius,
         center = center,
-        style = Stroke(width = (1.5f + age * 2.4f))
+        style = Stroke(width = 1.5f + age * 2.4f)
     )
     drawCircle(
         color = palette.base.copy(alpha = fade * 0.35f),
