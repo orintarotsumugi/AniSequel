@@ -35,8 +35,10 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
+import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -150,6 +152,14 @@ fun AppNavigation(
     // disagree with this one about what is filed where.
     val tierListPreferences = remember(context) {
         TierListPreferences(context.applicationContext)
+    }
+
+    // The seasonal overlay's shape, density, size and speed. Application-scoped
+    // for the reason every other preference here is: the host mounted below and
+    // the preview in Settings are two readers of one DataStore, so the page cannot
+    // describe a sky the app is not drawing.
+    val seasonalPreferences = remember(context) {
+        SeasonalPreferences(context.applicationContext)
     }
 
     // Which pages the bar offers. Application-scoped like the rest, because the
@@ -566,12 +576,23 @@ fun AppNavigation(
                     mainTabPreferences = mainTabPreferences,
                     jokePreferences = jokePreferences,
                     changelogRepository = changelogRepository,
+                    seasonalPreferences = seasonalPreferences,
                     aniListRepository = aniListRepository,
                     totalWatchedCount = totalWatchedCount,
                     totalMissedCount = totalMissedCount,
                     signedInViewer = signedInViewer
                 )
             }
+
+            // The seasonal sky is painted between the page and the chrome: over
+            // every screen, under the bar and the joke toast. It draws no pointer
+            // input, so every tap falls through to the page it covers - the one
+            // property a full-screen decoration must have.
+            //
+            // Mounted here rather than inside a route because a screen cannot draw
+            // something that outlives it, and the effect is meant to be one sky
+            // over the whole app rather than a different one per page.
+            SeasonalParticleHost(preferences = seasonalPreferences)
 
             // The bar and the joke toast float over whichever page is on screen
             // rather than living inside a route: a screen cannot draw chrome that

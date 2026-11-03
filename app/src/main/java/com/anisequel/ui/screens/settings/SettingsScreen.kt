@@ -41,6 +41,7 @@ import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -65,6 +66,10 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     // judged by - which is a page, not a switch.
     TYPE("Type & reading", "Font, text size and scrolling titles"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
+    // The one page in Settings that draws something rather than switching it: the
+    // shape, density, size and speed are only judgeable next to the sky they
+    // produce, so it is a page with a preview and not four rows on Appearance.
+    SEASONAL("Seasonal effects", "Falling petals, snow and fireflies"),
     LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
     // Updates is its own page rather than the top of About: the update check and
@@ -136,6 +141,14 @@ fun SettingsScreen(
      */
     mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
+    /**
+     * The seasonal overlay's shape, density, size and speed.
+     *
+     * The same instance the app root hands to `SeasonalParticleHost`, so the
+     * preview on this page and the sky over the app cannot describe two different
+     * settings.
+     */
+    seasonalPreferences: SeasonalPreferences,
     /**
      * The repository's reachability probe, passed as a function so Settings does
      * not need the whole repository to ask one question.
@@ -238,6 +251,7 @@ fun SettingsScreen(
                                     libraryPreferences = libraryPreferences,
                                     mainTabPreferences = mainTabPreferences,
                                     changelogRepository = changelogRepository,
+                                    seasonalPreferences = seasonalPreferences,
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
@@ -305,6 +319,12 @@ private fun SettingsRoot(
                     page = SettingsPage.JOKES,
                     icon = AppVectorIcons.AnimeSparkle,
                     testTag = "settings_row_jokes",
+                    onOpen = onOpen
+                )
+                SettingsRow(
+                    page = SettingsPage.SEASONAL,
+                    icon = AppVectorIcons.Grass,
+                    testTag = "settings_row_seasonal",
                     onOpen = onOpen
                 )
             }
@@ -432,6 +452,7 @@ private fun SettingsPageContent(
     libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
+    seasonalPreferences: SeasonalPreferences,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -441,6 +462,9 @@ private fun SettingsPageContent(
         SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
+        SettingsPage.SEASONAL -> SeasonalSettingsTab(
+            seasonalPreferences = seasonalPreferences
+        )
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,

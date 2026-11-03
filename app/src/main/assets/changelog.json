@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.8.0",
+      "entries": [
+        {
+          "title": "A seasonal sky, in the shape you pick",
+          "detail": "Snow, sakura, clover, maple, fireflies and bubbles can now drift over every page. Settings > Personalisation > Seasonal effects draws a live preview, switches the overlay on, and changes the shape while the sky above the page changes with it. Each one is a hand-built vector - a six-armed snowflake with branches, a notched petal, a four-leaf clover, a five-pointed maple leaf, a glowing firefly and a rimmed bubble - so it looks the same at every screen density and never falls back to an emoji. The overlay never takes a tap either: every control under it still works first time."
+        },
+        {
+          "title": "Density, size and drift are yours to set",
+          "detail": "Three sliders choose how many particles fall - eight at the lightest, sixty-four at the heaviest - how large each one is drawn, and how fast the whole sky travels. The preview follows the slider under your finger and the value is written once, when you let go, so a drag never fights the disk. Raising the density adds flakes to the sky rather than re-rolling it: the ones already falling keep the position and the phase they had, so the slider adds to a scene instead of replacing it."
+        },
+        {
+          "title": "The sky stops when you are not looking",
+          "detail": "The overlay pauses while the app is not on screen and holds completely still under the Instant motion style - a still scattering of shapes rather than an animation that ignores the setting that says stop animating. Its clock is read in the draw phase, so sixty-four particles repaint one layer instead of recomposing the page underneath, and the loop is paced at sixty updates a second so a 120Hz phone does not draw it twice as fast. It is off until you switch it on in Settings."
+        }
+      ]
+    },
+    {
       "version": "1.7.10",
       "entries": [
         {

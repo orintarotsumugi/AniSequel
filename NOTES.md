@@ -2006,3 +2006,50 @@ and `embedMarkdown` writes the new one over the whole span, wrapper included, be
 row that only sets the style for the next upload is a row that does nothing while you
 look at it. The two share their wrapper spellings - `~!`/`!~` and the fence pair - so
 the row cannot fail to recognise what the upload wrote.
+
+## A seasonal sky is one clock and one seeded list
+
+The overlay above every page - snow, sakura, clover, maple, fireflies, bubbles - is
+deliberately the cheapest thing that can look alive: no per-particle animation objects,
+no `Animatable` per flake, no composition state per frame. `seasonalParticles` builds
+one immutable list from a fixed seed, and `SeasonalParticleLayer` computes every
+position from a single `Float` of elapsed seconds. That single value is read only inside
+the `Canvas` draw lambda, so sixty frames cost sixty repaints of one layer and zero
+recompositions of the page behind it. Adding an animation driver per particle would have
+made the layer the most expensive thing on the screen it decorates.
+
+The seed is fixed rather than re-rolled, for the same reason the dashboard memoises its
+computed rows: the overlay is mounted in the app root, so a list rebuilt on a
+recomposition would visibly re-roll the entire sky whenever anything anywhere in the app
+published a new state. Because the same random stream is consumed in order, raising the
+density *appends* flakes to the end of the list - the ones already falling keep their
+positions. That property is pinned by a test; without it the density slider would read as
+a "re-shuffle" button.
+
+Two gates stop it. `rememberIsResumed()` keeps the loop from ticking behind another app,
+and `MotionStyle.INSTANT` freezes the clock where it is - a still scattering of shapes,
+not an animation that ignores the one setting that says "stop animating". The loop is
+throttled to sixty updates a second so a 120Hz display does not draw the sky twice as
+fast, and a stalled frame is capped so returning from a pause does not teleport every
+particle across the screen at once.
+
+The layer has no pointer input at all. It is drawn above every page, so one `clickable`
+or `pointerInput` in `SeasonalParticleLayer.kt` or `SeasonalParticleHost.kt` would eat
+the first tap everywhere in the app, and the symptom would be blamed on whichever screen
+the tap landed on. `SeasonalParticleHostTest` fails if either file grows one.
+
+Colours are fixed per shape rather than taken from the theme. A snowflake tinted
+`onSurface` is black on the light theme and white on the dark one, which reads as debris
+rather than snow, and a seasonal effect that follows the wallpaper is no longer the
+season the reader chose. What that costs, measured: of the six, only Maple clears
+3:1 against a white surface (Snow 2.12, Sakura 2.57, Bubble 2.66, Clover 2.73,
+Firefly 1.53), while all six clear it against black - and every particle is drawn
+at 0.55 to 1.0 alpha, which takes them lower again. A flake dark enough for 3:1 on
+white is a grey smudge on a true-black page, and this layer carries no
+information, so it is allowed to be quieter on light than on dark. That trade is
+deliberate; the numbers are here so the next reader does not have to re-derive
+them, or believe a claim of "visible on both" that is not true.
+
+The shape chips in Settings draw their glyphs with the same `drawSeasonalParticle`
+the overlay uses, so a chip cannot promise a snowflake the sky does not draw.
+
