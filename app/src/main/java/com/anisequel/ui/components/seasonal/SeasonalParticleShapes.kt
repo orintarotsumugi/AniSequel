@@ -237,9 +237,13 @@ private fun DrawScope.drawPlateFlake(
     drawCircle(palette.light.copy(alpha = alpha * 0.075f), radius * 1.2f, center)
     val stroke = (radius * 0.09f).coerceAtLeast(0.5f)
     buildHexagon(path, center, radius * 0.82f)
-    drawPath(palette.base.copy(alpha = alpha), path, style = Stroke(stroke))
+    drawPath(path = path, color = palette.base.copy(alpha = alpha), style = Stroke(stroke))
     buildHexagon(path, center, radius * 0.34f)
-    drawPath(palette.deep.copy(alpha = alpha * 0.65f), path, style = Stroke(stroke))
+    drawPath(
+        path = path,
+        color = palette.deep.copy(alpha = alpha * 0.65f),
+        style = Stroke(stroke)
+    )
     for (arm in 0 until 6) {
         val angle = arm * (PI.toFloat() / 3f) + (PI.toFloat() / 6f)
         val tip = Offset(
