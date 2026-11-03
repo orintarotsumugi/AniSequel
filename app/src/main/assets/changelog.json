@@ -1,7 +1,7 @@
 {
   "versions": [
     {
-      "version": "1.7.9",
+      "version": "1.7.10",
       "entries": [
         {
           "title": "The photo's size commands appear with the photo",
@@ -14,7 +14,12 @@
         {
           "title": "The thread shows which comments are yours and which one you are answering",
           "detail": "In a thread of a hundred comments, finding the four you wrote was a search with no cue in it, and while you were replying the chip above the field said who you were answering but not which comment - the one you quoted three screens up had already scrolled away. Your own comments now carry a coloured line down the gutter beside them, the comment you are replying to is lit and tinted for as long as the editor is open against it, and every nested comment gets a thread line so the nesting is something you can see instead of rows of indentation you have to count."
-        },
+        }
+      ]
+    },
+    {
+      "version": "1.7.9",
+      "entries": [
         {
           "title": "A reopened thread picks up at the newest end",
           "detail": "Dismissing a comment sheet and opening it again refreshed the oldest page you had scrolled back to and replaced the whole window with it, so the conversation appeared to jump backwards and the newest comments vanished. The rows already in hand stay on screen and the newest page is refreshed instead; if comments kept arriving while the sheet was closed, the pages after it are fetched as well, so the thread never reopens with a conversation missing from the middle. Message threads reopen the same way, because they are drawn by the same sheet."
