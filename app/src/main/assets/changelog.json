@@ -4,6 +4,34 @@
       "version": "1.8.2",
       "entries": [
         {
+          "title": "Spoilers pair with their own closing tag, and carry a label",
+          "detail": "The site writes spoilers two ways: an inline <span class=\"markdown-spoiler\" data-label=\"Episode 4\"> inside a sentence, and a block <div class=\"markdown-spoiler\"> around headings, lists and pictures. Both are now read, alongside the older <div rel=\"spoiler\">. An opening pairs with its closest matching close by tag depth, so two spoilers on a page no longer share one lid, and an inner div closes before the spoiler does. Labels are trimmed, an empty label disappears, and a label containing braces, angle brackets or a line break is dropped rather than inked. What is behind the lid is parsed as full Markdown, and lids may nest three deep; a fourth stays as plain text the reader can still read."
+        },
+        {
+          "title": "Five GIF indexes, and Tenor says when it has been retired",
+          "detail": "Klipy and GIPHY join Safebooru, nekos.best and Tenor, and Settings > AniList now names the index a search is sent to instead of inferring it from whichever key happened to be saved. Each key is stored encrypted under its own entry, so switching providers keeps the others, and a keyed provider with no key falls back to the anonymous booru rather than failing under an empty search field. nekos.best answers reaction names and says so when it has nothing; Klipy and GIPHY page properly; Tenor sends a client key, asks for the small copies the grid draws, and explains that its public API was retired in 2026 when Google refuses a saved key."
+        },
+        {
+          "title": "The drift reaches the floor, and then stops growing",
+          "detail": "The heap used to stop at the navigation bar's outer edge, which left a gap of background between the snow and the bottom of the screen, and it grew until it hit the ceiling as a flat white band. It now gathers on the screen's real bottom edge and passes behind the floating bar, so the bar sits in the drift rather than above it. Deposits leave headroom for the columns beside them and each landing compacts the heap a little, so it settles at a stable depth instead of turning into a wall. The low-end quality setting still compacts, just without the smoothing pass."
+        },
+        {
+          "title": "The navigation bar catches the snow",
+          "detail": "While a winter sky is on, the pill gets its own cap: a wavy strip gathered along its real capsule top, a few short drips over its face and a slow pinch of light. It takes its thickness from the heap below it, so the deepest part of the drift is the deepest part of the cap, and it breathes on the sky's own clock instead of running a second animation. The cap is drawn after the bar, from the bar's actual bounds, and the drift is drawn from the screen's bottom edge - the old height-only shortcut lifted the snow to the bar's padded outer top and left it hovering in the gap."
+        },
+        {
+          "title": "The shapes have more to see, and the fall has depth",
+          "detail": "Sakura now includes a five-petal blossom, clover a three-leaf variant, powder snow a shaded crescent, and the crystal plate twelve spokes with a faceted needle. Larger shapes are drawn brighter, fall faster and sit in front of smaller ones, so the field reads as layers instead of one flat sheet. Each shape answers a gust slightly differently, the far half of a turn is dimmed as its underside comes round, and the vertical path eases into the bottom of the screen rather than travelling at one constant speed."
+        },
+        {
+          "title": "Fewer allocations and redraws under the same sky",
+          "detail": "The sky reuses one path and one placement object for every particle in a frame instead of building new ones per flake, and the drift reuses its ink and scratch paths rather than allocating them in the draw callback. Resting glyphs are drawn at a step that follows the quality tier, and the pile runs its smoothing pass only after something has actually landed. The result is the same scene with less garbage and fewer passes over the same pixels."
+        },
+        {
+          "title": "The bar arrives as a surface, and a press lets go when the finger does",
+          "detail": "The floating bar now grows into place with a short spring scale as it slides up, and shrinks slightly on the way out, so it reads as one piece of chrome arriving instead of a strip being uncovered. A press animation also follows the finger that started it: a second finger used to keep the squash alive after the first had lifted, and a control could stay pressed until every hand left the screen."
+        },
+        {
           "title": "Fireflies and starlight are gone, and everything falls",
           "detail": "The two glowing shapes were the only ones that rose. Drawn at the size a particle actually is, a firefly is a soft dot with two slivers on it and a sparkle is a dot with four, so neither is a shape you can name - and the pair of them were the reason the sky carried a direction and a second set of speed bands. Summer is now the dandelion seed, which comes down under its parachute instead of up out of the grass. An install that had fireflies or starlight selected wakes up on snow rather than on a blank sky."
         },

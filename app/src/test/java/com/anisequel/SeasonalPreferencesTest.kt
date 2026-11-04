@@ -33,9 +33,12 @@ import org.robolectric.annotation.Config
  * edited and written back from a stale copy, and it would look like a slider
  * snapping back to its default the moment a different one was touched.
  *
- * The four 1.8.1 keys are also pinned as *absent by default*: an install that
- * predates them has no stored values, and the reader's existing snow must start
- * settling and moving without a migration that rewrites the file on first launch.
+ * The 1.8.2 keys are also pinned as *absent by default*: an install that predates
+ * them has no stored values, and the reader's existing snow must **not** wake up
+ * settling and leaning on every scroll. Both change how the app feels rather than
+ * only what the sky looks like, so the absent value is off - the page that added
+ * them also added the switches, and turning the overlay on is still just shapes in
+ * the air until one of those is touched.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -59,9 +62,9 @@ class SeasonalPreferencesTest {
         assertEquals(DEFAULT_SEASONAL_DENSITY, settings.density, 0f)
         assertEquals(DEFAULT_SEASONAL_SIZE_SCALE, settings.sizeScale, 0f)
         assertEquals(DEFAULT_SEASONAL_SPEED_SCALE, settings.speedScale, 0f)
-        assertTrue("snow should settle without the reader finding a switch", settings.settle)
+        assertFalse("settling is an extra, not something an update turns on", settings.settle)
         assertEquals(DEFAULT_SEASONAL_PILE_DEPTH, settings.pileDepth, 0f)
-        assertTrue("wind is part of the sky, not an add-on", settings.reactToWind)
+        assertFalse("a sky that leans on every scroll must be asked for", settings.reactToWind)
         assertEquals(DEFAULT_SEASONAL_WIND_STRENGTH, settings.windStrength, 0f)
     }
 
@@ -175,9 +178,9 @@ class SeasonalPreferencesTest {
         assertEquals(DEFAULT_SEASONAL_DENSITY, settings.density, 0.0001f)
         assertEquals(DEFAULT_SEASONAL_SIZE_SCALE, settings.sizeScale, 0.0001f)
         assertEquals(DEFAULT_SEASONAL_SPEED_SCALE, settings.speedScale, 0.0001f)
-        assertTrue(settings.settle)
+        assertFalse(settings.settle)
         assertEquals(DEFAULT_SEASONAL_PILE_DEPTH, settings.pileDepth, 0.0001f)
-        assertTrue(settings.reactToWind)
+        assertFalse(settings.reactToWind)
         assertEquals(DEFAULT_SEASONAL_WIND_STRENGTH, settings.windStrength, 0.0001f)
     }
 }

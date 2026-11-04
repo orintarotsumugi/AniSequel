@@ -23,9 +23,10 @@ import java.io.File
  *    paused Activity and over a page nobody is looking at; a loop without the
  *    Instant check ignores the one setting that says "stop animating".
  *  - **It must sit between the page and the chrome.** Over the `NavHost`, under
- *    the bar: over the page, under the controls the reader needs. The drift uses
- *    the bar's measured height so it can settle on the bar's top edge without
- *    painting over the controls.
+ *    the bar: over the page, under the controls the reader needs. The drift gathers
+ *    on the screen's bottom edge; the bar's own cap is a second, non-interactive
+ *    Canvas drawn over the bar, and the pill's real bounds are the only geometry it
+ *    is allowed to use.
  *  - **The settings page has doors for all of it.** A shape grid nobody reaches,
  *    a settle switch with no test tag, or a wind control that never got wired to
  *    the layer is a feature that exists only in this repository.
@@ -49,9 +50,16 @@ class SeasonalParticleHostTest {
     private val appNavigation: String
         get() = source("app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt")
 
+    private val barTrail: String
+        get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalBarTrail.kt")
+
     @Test
-    fun `the overlay and its host never take a touch`() {
-        listOf("SeasonalParticleLayer.kt" to layer, "SeasonalParticleHost.kt" to host)
+    fun `the overlay, its host and the bar cap never take a touch`() {
+        listOf(
+            "SeasonalParticleLayer.kt" to layer,
+            "SeasonalParticleHost.kt" to host,
+            "SeasonalBarTrail.kt" to barTrail
+        )
             .forEach { (name, code) ->
                 // Lower-cased, because `combinedClickable` does not contain the
                 // substring `clickable` and would have passed this test while
@@ -167,19 +175,43 @@ class SeasonalParticleHostTest {
     }
 
     @Test
-    fun `the drift can sit on the bar because the bar publishes its height`() {
+    fun `the drift gathers on the bottom and the bar publishes its own pill`() {
         val mainChrome = source("app/src/main/java/com/anisequel/ui/navigation/MainChrome.kt")
+        val mainTabs = source("app/src/main/java/com/anisequel/ui/navigation/MainTabs.kt")
+
         assertTrue(
-            "the bar never publishes its height, so the drift has no top edge to rest on",
-            mainChrome.contains("SeasonalChrome.publishBarHeight")
+            "the bar never publishes its capsule, so the snow cap has no surface to sit on",
+            mainTabs.contains("SeasonalChrome::publishBar")
         )
         assertTrue(
-            "a hidden bar leaves a stale height and the drift floats above the bottom",
+            "a hidden bar leaves a stale capsule and its cap floats over the next page",
             mainChrome.contains("SeasonalChrome.clearBar")
         )
         assertTrue(
-            "the layer never reads the bar height",
-            layer.contains("SeasonalChrome.barHeightPx")
+            "nothing draws the cap over the bar, so the drift is hidden behind it",
+            mainChrome.contains("SeasonalBarTrail(")
+        )
+        assertTrue(
+            "the cap is drawn before the bar, where the bar's own surface hides it",
+            mainChrome.indexOf("SeasonalBarTrail(") > mainChrome.indexOf("MainBar(")
+        )
+        assertTrue(
+            "the trail does not read the published capsule",
+            barTrail.contains("SeasonalChrome.barBounds")
+        )
+        assertTrue(
+            "the trail does not take its thickness from the drift above it",
+            barTrail.contains("SeasonalChrome.skyPile")
+        )
+        assertTrue(
+            "the app-wide layer never publishes the sky the cap belongs to",
+            layer.contains("SeasonalChrome.publishSky(")
+        )
+        assertFalse(
+            "the Settings preview must not publish, or it would paint its drift on a bar " +
+                "that is not under it and clear the real sky on the way out",
+            source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
+                .contains("publishesBarTrail = true")
         )
     }
 

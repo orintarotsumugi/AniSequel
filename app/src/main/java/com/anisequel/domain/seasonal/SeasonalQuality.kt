@@ -88,7 +88,13 @@ enum class SeasonalQualityTier(
     val detailedDrawing: Boolean,
     /** Draw a resting glyph every N columns. Smaller is denser. */
     val pileGlyphStep: Int,
-    /** Soften neighbouring columns after a landing so mounds spread. */
+    /**
+     * Diffuse neighbouring columns after a landing so mounds spread.
+     *
+     * False on the low tier, but the pass still runs: it also compacts the drift, and
+     * a heap that never compacts reaches the ceiling and turns into a white band. Low
+     * end only skips the diffusion, which is the expensive half.
+     */
     val relaxPiles: Boolean
 ) {
     HIGH(
@@ -96,7 +102,10 @@ enum class SeasonalQualityTier(
         minParticles = MIN_SEASONAL_PARTICLES,
         frameHz = 60,
         detailedDrawing = true,
-        pileGlyphStep = 2,
+        // Three columns rather than two: a glyph every eight dp across a phone is a
+        // carpet of leaf paths, not a drift with things lying on it - and each one is a
+        // full path build per frame. Fewer, better spaced glyphs read as more snow.
+        pileGlyphStep = 3,
         relaxPiles = true
     ),
     MID(
@@ -104,7 +113,7 @@ enum class SeasonalQualityTier(
         minParticles = MIN_SEASONAL_PARTICLES,
         frameHz = 45,
         detailedDrawing = true,
-        pileGlyphStep = 3,
+        pileGlyphStep = 4,
         relaxPiles = true
     ),
     LOW(
@@ -112,7 +121,7 @@ enum class SeasonalQualityTier(
         minParticles = 6,
         frameHz = 30,
         detailedDrawing = false,
-        pileGlyphStep = 5,
+        pileGlyphStep = 6,
         relaxPiles = false
     )
 }

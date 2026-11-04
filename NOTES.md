@@ -2066,12 +2066,27 @@ already accumulated.
 Two details are deliberate. Columns are interpolated in `heightAt`, because drawing
 48 nearest-column samples looks like a bar chart rather than a bank of snow. And
 landings spread across five columns rather than one, because a spike-per-landing
-pile is a comb. The drift's baseline is lifted to the main bar's measured top edge
-(`SeasonalChrome`) when the bar is present, and falls back to the screen's bottom
-edge when it is not; without the measurement the drift sat entirely behind the bar.
-The bar publishes its height from layout as a plain volatile field rather than
-snapshot state because the only reader is the layer's draw lambda, which already
-runs every frame.
+pile is a comb. The drift's baseline is the screen's bottom edge: it gathers on
+the floor and passes behind the floating bar. It used to be lifted to the bar's
+measured top edge, which left a gap the height of the bar's own padding and made a
+drift that should look like it gathered on the floor look like a shelf.
+
+The bar now publishes its actual capsule bounds from its own layout - not a height
+- so a second overlay can draw snow along the surface the bar really has. The
+bridge is `SeasonalChrome`, and its values are snapshot state rather than the old
+plain volatile field: the cap has to invalidate when the sky is switched off or
+its shape changes, and at that point the layer that owned the frame loop is gone.
+Both values are still read only in draw lambdas, so the bar's layout never
+recomposes the page behind it.
+
+The drift also has to stop growing. A deposit adds less the fuller a column already
+is, and every landing frame compacts the field by a small fraction, so the two
+find a stable depth instead of reaching the cap and turning into a flat white
+band. Relaxation still runs on the low tier with no diffusion, because compaction
+is the half that keeps the field below its ceiling. Glyphs on the resting drift are
+drawn at a wider stride than the 1.8.1 version: a full leaf path every two columns
+was a carpet rather than a drift, and it was the most expensive thing in the pile's
+draw.
 
 Colours are fixed per shape and per variant rather than taken from the theme. A
 snowflake tinted `onSurface` is black on the light theme and white on the dark one,
@@ -2136,6 +2151,25 @@ whole drift into one band and spent a full pass plus a fresh `FloatArray` doing 
 runs only on a frame in which something actually landed, into a scratch buffer the pile owns.
 `settlePile` returns the landing count for exactly that decision.
 
+The bar now carries the weather too. `SeasonalBarTrail` draws a cap along the
+capsule's real bounds, over the bar, from the same `SeasonalPile` the drift is drawn
+from - so the thickest snow on the bar is the deepest part of the heap below it. It
+takes no pointer input, runs on the sky's existing clock, and falls back to a thin
+dusting when Settling is off so a snow sky does not leave the pill perfectly clean.
+The layering matters: the drift is a sibling of the bar and paints behind it, while
+the cap paints after it. The two are one composition contract, pinned by
+`SeasonalParticleHostTest`; the old height-only bridge could not tell where the pill
+actually ended, which is how the drift ended up hovering in the bar's padding.
+
+The falling field is no longer flat. Size, fall speed and opacity are rolled together
+(`seasonalParticles`), so a large flake is near, fast and bright while a small one
+hangs back and fades; each particle's gust response varies with its flutter; and the
+far half of a turn is dimmed as its underside comes round. The vertical path is eased
+within each cycle, and every harmonic is evaluated on an angle folded into one turn,
+so a long uptime cannot erode the wave into a fraction of a degree. The draw reuses
+one `Path` and one placement object for the whole frame rather than allocating them
+per flake.
+
 Wind had two bugs of the same family. Gesture gusts were the only wind, so switching
 Wind & touch on with a still page open did nothing at all - which reads as a broken switch,
 not as an unfinished feature; there is now a slow ambient breeze underneath the gestures. And
@@ -2144,4 +2178,41 @@ connection that sees the same delta, so every list storm. The finger owns the dr
 connection owns the fling after lift (`SeasonalWind.fingerDown/fingerUp`) because that is the
 only split that keeps both the pages that participate in nested scroll and the ones that do
 not.
+
+## 1.8.2: spoilers are a nesting problem, and GIF search is a provider problem
+
+AniList writes spoilers as HTML: `<span class="markdown-spoiler" data-label="Episode 4">`
+inside a sentence and `<div class="markdown-spoiler">` around a block, with the older
+`<div rel="spoiler">` still in old posts. The parser now reads all three. The hard half is
+pairing, not recognising: `matchingCloseTag` counts same-named opens by tag depth, so an
+arbitrary `<div>` inside a spoiler closes before the spoiler does and two spoilers on one page
+each get their own lid. A `<span>` whose payload contains a newline is a block, not an inline
+spoiler; the block walk claims it before the paragraph path runs, so the two cannot disagree
+about ownership. Depth is capped at three (`MAX_SPOILER_DEPTH`); a fourth opening is left as
+the author typed it because a control inside a control inside a control inside a control has
+nowhere to put its tap target, while the text is still readable.
+
+The label is metadata, not markup: it is trimmed, an empty one disappears, and one containing
+braces, angle brackets or a line break is dropped whole rather than sanitised. What is behind
+the lid is parsed as a full Markdown document, which is why `RenderSpoilerBlock` now re-enters
+`AniListMarkdownView` with the host's cover and preview maps instead of drawing a paragraph.
+The inline form parses its payload too, but keeps its children out of the link annotation:
+two `LinkAnnotation`s over one run is the shape Compose resolves arbitrarily, so a nested
+inline spoiler is not independently tappable - the block form is.
+
+GIF search changed from "Tenor or the booru" to a provider choice. Tenor's public API was
+retired in June 2026; keeping the saved key is deliberate (losing a credential silently is
+worse than a search that says why it failed), but it no longer decides which index is used.
+`CommentMediaSettings.gifProvider` records the choice, each key lives under its own encrypted
+DataStore entry, and a keyed provider with no key falls back to Safebooru at read time while
+keeping the choice. Klipy and GIPHY are the keyed replacements, and nekos.best is a second
+keyless reaction index. The empty-grid sentence moved onto the provider (`GifSearchApi.emptyHint`)
+because "boorus match tags" is true of Safebooru and false of nekos.best, and the picker used to
+write the booru's advice for every narrow index.
+
+The loading shimmer was allocating a new `LinearGradient` per skeleton per frame. Its sweep is
+a three-stop band with the same colour at both ends, so the frames outside the band are exactly
+`surfaceContainerHigh`; drawing that colour as a solid base and translating one cached band over
+it is the same picture with one shader instead of sixty a second. `drawWithCache` keys the band
+on the box size, and the phase is still read in the draw phase.
 

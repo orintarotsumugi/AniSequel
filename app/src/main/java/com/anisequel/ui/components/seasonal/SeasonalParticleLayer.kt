@@ -3,6 +3,7 @@ package com.anisequel.ui.components.seasonal
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -43,7 +44,6 @@ import kotlin.math.sqrt
 private const val SEASONAL_SEED = 20261103
 
 private const val TAU = 6.2831855f
-private const val RADIANS_TO_DEGREES = 57.29578f
 
 /** One cycle of travel is a little taller than the screen, so nothing pops. */
 private const val TRAVEL_FACTOR = 1.3f
@@ -60,6 +60,9 @@ private const val TUMBLE_RATE = 1.4f
 
 /** The narrowest a turning shape is ever drawn, as a fraction of its own width. */
 private const val MIN_FACE_RATIO = 0.24f
+
+/** How much of its light a shape keeps once it has turned onto its back. */
+private const val UNDER_FACE_LIGHT = 0.78f
 
 /** The frame budget: update the clock at most sixty times a second. */
 private const val FRAME_SECONDS = 1f / 60f
@@ -130,13 +133,15 @@ fun SeasonalParticleLayer(
     windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH,
     quality: SeasonalQualityTier = SeasonalQualityTier.HIGH,
     /**
-     * Whether the drift sits on the app's main bar rather than the layer's edge.
+     * Whether this layer is the app-wide overlay, and may publish the drift to the
+     * navigation bar for its snow cap.
      *
-     * True for the overlay, false for the Settings preview: the preview is a card
-     * in the middle of a scrolling page, and inheriting the bar's height there
-     * lifted its little drift by a bar that is not under it.
+     * True for the overlay, false for the Settings preview. The preview is a card in
+     * the middle of a scrolling page with no bar under it, and publishing from it
+     * would put the preview's drift on a bar it is not part of - or, worse, clear the
+     * real overlay's published drift when the Settings page is torn down.
      */
-    settleOnChrome: Boolean = true,
+    publishesBarTrail: Boolean = true,
     /**
      * Whether a tap draws its ripple in this layer.
      *
@@ -187,6 +192,16 @@ fun SeasonalParticleLayer(
         }
     }
 
+    // The one app-wide layer owns the bar's snow cap. Published from composition
+    // rather than from the frame loop: the pile only changes when the shape or the
+    // switch does, and the trail reads the field's heights directly on every frame.
+    if (publishesBarTrail) {
+        DisposableEffect(effect, pile) {
+            SeasonalChrome.publishSky(effect = effect, pile = pile)
+            onDispose { SeasonalChrome.clearSky() }
+        }
+    }
+
     LaunchedEffect(
         animating, effect, density, speed, settle, reactToWind, windStrength, viewport, quality
     ) {
@@ -195,6 +210,7 @@ fun SeasonalParticleLayer(
             val previous = clock
             clock += step
             if (reactToWind) SeasonalWind.decay(step, frameNanos)
+            if (publishesBarTrail) SeasonalChrome.tick(clock)
             val field = pile ?: return@seasonalClock
             val landed = settlePile(
                 pile = field,
@@ -209,11 +225,21 @@ fun SeasonalParticleLayer(
             )
             // Only after a landing. Relaxing on every frame smoothed the drift into a
             // flat band a minute in, and spent a full pass over the columns doing it.
-            if (landed > 0 && quality.relaxPiles) field.relax()
+            // The pass also compacts, so a low-end sky still runs it with no diffusion
+            // - without that it reaches the cap and turns into a white band.
+            if (landed > 0) field.relax(amount = if (quality.relaxPiles) 0.16f else 0f)
         }
     }
 
     val settleVisible = settle && effect.settles && pile != null
+
+    // Scratch space for the frame, held for the life of the layer. Two paths and one
+    // placement object per frame used to be a steady trickle of garbage from a draw
+    // callback that runs sixty times a second; none of them is allowed to escape the
+    // draw, so there is no reason to build them there either.
+    val path = remember { Path() }
+    val glyphPath = remember { Path() }
+    val placement = remember { Placement() }
 
     Canvas(
         modifier = modifier
@@ -231,12 +257,14 @@ fun SeasonalParticleLayer(
             seconds = clock,
             speedScale = speed,
             settleVisible = settleVisible,
-            settleOnChrome = settleOnChrome,
             showTapRipple = showTapRipple,
             wind = thisWind(reactToWind),
             windStrength = strongWind,
             pileDepthScale = depth,
-            quality = quality
+            quality = quality,
+            path = path,
+            glyphPath = glyphPath,
+            placement = placement
         )
     }
 }
@@ -299,8 +327,13 @@ private fun settlePile(
         val previousProgress = wrap(particle.y + particle.speed * speedScale * previousSeconds)
         val nextProgress = wrap(particle.y + particle.speed * speedScale * seconds)
         if (nextProgress < previousProgress) {
-            val sway = sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway
-            val landing = particle.x + sway + gust * effect.windResponse * GUST_WIDTH
+            val angle = seconds * particle.swayRate * TAU + particle.phase
+            val sway = (
+                sinWrapped(angle) +
+                    sinWrapped(angle * 2.15f) * particle.flutter * 0.42f
+                ) * particle.sway
+            val drift = effect.windResponse * (0.78f + 0.30f * particle.flutter)
+            val landing = particle.x + sway + gust * drift * GUST_WIDTH
             pile.deposit(
                 xFraction = landing.coerceIn(0f, 1f),
                 mass = particle.size,
@@ -333,20 +366,19 @@ private fun DrawScope.drawSeasonalSky(
     seconds: Float,
     speedScale: Float,
     settleVisible: Boolean,
-    settleOnChrome: Boolean,
     showTapRipple: Boolean,
     wind: WindSample,
     windStrength: Float,
     pileDepthScale: Float,
-    quality: SeasonalQualityTier
+    quality: SeasonalQualityTier,
+    path: Path,
+    glyphPath: Path,
+    placement: Placement
 ) {
     val width = size.width
     val height = size.height
     if (width <= 0f || height <= 0f) return
     val basePx = baseDp.dp.toPx()
-    val path = Path()
-    val glyphPath = Path()
-    val placement = Placement()
 
     if (settleVisible && pile != null) {
         drawSeasonalPile(
@@ -355,7 +387,6 @@ private fun DrawScope.drawSeasonalSky(
             maxHeightPx = (MAX_SEASONAL_PILE_DP * pileDepthScale).dp.toPx(),
             shear = wind.gust * windStrength,
             alpha = 1f,
-            bottomInsetPx = if (settleOnChrome) SeasonalChrome.barHeightPx.toFloat() else 0f,
             path = path,
             glyphPath = glyphPath,
             glyphStep = quality.pileGlyphStep,
@@ -517,19 +548,33 @@ private fun particlePlacement(
 ): Placement? {
     val travel = height * TRAVEL_FACTOR
     val progress = wrap(particle.y + particle.speed * speedScale * seconds)
-    var y = progress * travel - height * TRAVEL_MARGIN
+    // A little gravity within one fall. The cycle's position is still linear in time -
+    // the wrap depends on that - but the drawn height eases in, so a flake covers the
+    // top of the screen slightly slower than the bottom. It is a 14% difference at
+    // mid-screen, enough that the field does not look like it is on rails; the fade at
+    // each end hides the restart.
+    val fall = progress * (0.72f + 0.28f * progress)
+    var y = fall * travel - height * TRAVEL_MARGIN
+    // The sine is evaluated on a phase wrapped into one turn. `seconds` grows for as
+    // long as the layer is alive, so every harmonic's argument would otherwise drift
+    // into the part of a float where a fraction of a degree is below the representable
+    // step. Only the argument is wrapped - the frequency stays the same, which is why
+    // the harmonics each wrap their own scaled angle instead of sharing one wrapped
+    // value (wrapping once and multiplying would restart the wave every cycle).
     val swayAngle = seconds * particle.swayRate * TAU + particle.phase
     // Primary sway plus a faster, smaller figure-eight. A single sine is a
     // pendulum; the second harmonic is what makes a leaf tumble instead of
     // slide, and a flake drift instead of march.
     var x = width * particle.x +
-        sin(swayAngle) * particle.sway * width +
-        sin(swayAngle * 2.15f) * particle.sway * particle.flutter * width * 0.42f
-    y += sin(swayAngle * 0.85f + 0.6f) * height * 0.014f * particle.flutter
+        sinWrapped(swayAngle) * particle.sway * width +
+        sinWrapped(swayAngle * 2.15f) * particle.sway * particle.flutter * width * 0.42f
+    y += sinWrapped(swayAngle * 0.85f + 0.6f) * height * 0.014f * particle.flutter
 
     // A leaf catches more air than a flake. The multiplier comes from the shape so
-    // this loop has no per-shape branches.
-    val drift = effect.windResponse * windStrength
+    // this loop has no per-shape branches; the flutter term makes the gust reach an
+    // individual particle slightly differently, so the sky bends as a field rather
+    // than every shape sliding by the same number of pixels.
+    val drift = effect.windResponse * windStrength * (0.78f + 0.30f * particle.flutter)
     x += gust * drift * width * GUST_WIDTH
     y -= lift * drift * height * GUST_HEIGHT
 
@@ -549,23 +594,29 @@ private fun particlePlacement(
         }
     }
 
-    val edge = min(progress, 1f - progress) / EDGE_FADE
-    val alpha = particle.alpha * edge.coerceIn(0f, 1f)
-    if (alpha <= MIN_VISIBLE_ALPHA) return null
-
     // The turn over. A flat shape is drawn squeezed across its own axis as it rolls
     // and mirrored for the second half, so the reader sees the underside come round.
     // [SeasonalEffect.tumbleResponse] decides how far, because a six-armed flake keeps
     // the same face whichever way it drifts. Never squeezed to nothing: a particle
     // that vanishes for a frame reads as a dropped frame, not as an edge-on leaf.
-    val roll = sin(swayAngle * TUMBLE_RATE + particle.phase)
+    val roll = sinWrapped(swayAngle * TUMBLE_RATE + particle.phase)
     val face = (1f - effect.tumbleResponse * (1f - abs(roll))).coerceAtLeast(MIN_FACE_RATIO)
+    val underside = roll < 0f
+
+    val edge = min(progress, 1f - progress) / EDGE_FADE
+    // The far half of a turn is the underside: the same silhouette, less light. The
+    // squeeze alone said "turning", but a leaf coming back round was drawn as bright
+    // as the face it left, which read as a mirror rather than a back side.
+    val alpha = particle.alpha * edge.coerceIn(0f, 1f) *
+        (if (underside) UNDER_FACE_LIGHT else 1f)
+    if (alpha <= MIN_VISIBLE_ALPHA) return null
+
     into.center = Offset(x, y)
     into.alpha = alpha
-    into.rotationDegrees = (particle.spin * seconds + particle.phase) * RADIANS_TO_DEGREES +
+    into.rotationDegrees = wrap((particle.spin * seconds + particle.phase) / TAU) * 360f +
         gust * drift * 34f +
-        sin(swayAngle * 1.35f) * particle.flutter * 22f
-    into.flatten = if (roll < 0f) -face else face
+        sinWrapped(swayAngle * 1.35f) * particle.flutter * 22f
+    into.flatten = if (underside) -face else face
     return into
 }
 
@@ -573,4 +624,11 @@ private fun particlePlacement(
 private fun wrap(value: Float): Float {
     val wrapped = value % 1f
     return if (wrapped < 0f) wrapped + 1f else wrapped
+}
+
+/** `sin` of an angle folded into one turn, so a long uptime cannot erode the wave. */
+private fun sinWrapped(angle: Float): Float {
+    var turn = angle % TAU
+    if (turn < 0f) turn += TAU
+    return sin(turn)
 }

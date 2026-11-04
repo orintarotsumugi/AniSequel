@@ -2,6 +2,7 @@ package com.anisequel.ui.components.seasonal
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -106,9 +107,17 @@ private fun DrawScope.tumble(
     }, block)
 }
 
-/** A chip-sized sample of one shape, used instead of emoji on the shape chips. */
+/**
+ * A chip-sized sample of one shape, used instead of emoji on the shape chips.
+ *
+ * The `Path` is remembered for the life of the chip rather than built in the draw
+ * lambda: the shape code resets whatever path it is handed, so one instance is
+ * enough, and the Settings page draws a glyph per chip. A fresh path per draw was
+ * small, but it was per-chip and per-frame on a page that is nothing but chips.
+ */
 @Composable
 fun SeasonalEffectGlyph(effect: SeasonalEffect, modifier: Modifier = Modifier) {
+    val path = remember { Path() }
     Canvas(modifier = modifier) {
         drawSeasonalParticle(
             effect = effect,
@@ -117,7 +126,7 @@ fun SeasonalEffectGlyph(effect: SeasonalEffect, modifier: Modifier = Modifier) {
             rotationDegrees = 0f,
             alpha = 1f,
             variant = 0,
-            path = Path()
+            path = path
         )
     }
 }
@@ -291,6 +300,25 @@ private fun DrawScope.drawPlateFlake(
         )
         drawCircle(palette.light.copy(alpha = alpha * 0.85f), radius * 0.05f, tip)
     }
+    // Six shorter spokes in the gaps turn the plate from a hexagon with a cross in it
+    // into a twelve-pointed plate. They stop short of the rim so the outline stays the
+    // shape the eye reads first.
+    for (arm in 0 until 6) {
+        val angle = arm * (PI.toFloat() / 3f)
+        drawLine(
+            color = palette.base.copy(alpha = alpha * 0.44f),
+            start = Offset(
+                center.x + cos(angle) * radius * 0.25f,
+                center.y + sin(angle) * radius * 0.25f
+            ),
+            end = Offset(
+                center.x + cos(angle) * radius * 0.61f,
+                center.y + sin(angle) * radius * 0.61f
+            ),
+            strokeWidth = stroke * 0.7f,
+            cap = StrokeCap.Round
+        )
+    }
     drawCircle(palette.light.copy(alpha = alpha), radius * 0.08f, center)
 }
 
@@ -367,6 +395,17 @@ private fun DrawScope.drawNeedleFlake(
         val end = Offset(center.x + dx * length, center.y + dy * length)
         drawLine(soft, start, end, strokeWidth = stroke * 2.2f, cap = StrokeCap.Round)
         drawLine(body, start, end, strokeWidth = stroke, cap = StrokeCap.Round)
+        // One facet down the lit side of the column. Ice is a prism, and the single
+        // highlight is what says so at the size this is drawn - a second outline would
+        // just make the needle wider.
+        val side = Offset(-dy, dx) * (stroke * 0.22f)
+        drawLine(
+            color = palette.light.copy(alpha = alpha * 0.55f),
+            start = start + side,
+            end = end + side,
+            strokeWidth = stroke * 0.28f,
+            cap = StrokeCap.Round
+        )
         drawCircle(palette.light.copy(alpha = alpha * 0.85f), radius * 0.07f, start)
         drawCircle(palette.light.copy(alpha = alpha * 0.85f), radius * 0.07f, end)
     }
@@ -395,6 +434,14 @@ private fun DrawScope.drawPowderFlake(
         else -> 0.90f
     }
     drawCircle(palette.light.copy(alpha = alpha * 0.10f), size * 1.45f, center)
+    // A crescent of shade on the side away from the light. Stacked circles were a flat
+    // disc; a grain of graupel is a small sphere, and one offset shadow is the cheapest
+    // way to say that without a gradient shader per flake.
+    drawCircle(
+        palette.deep.copy(alpha = alpha * 0.20f),
+        size * 0.94f,
+        Offset(center.x + size * 0.16f, center.y + size * 0.18f)
+    )
     drawCircle(palette.base.copy(alpha = alpha * 0.55f), size, center)
     drawCircle(palette.light.copy(alpha = alpha * 0.72f), size * 0.62f, center)
     drawCircle(
@@ -420,12 +467,13 @@ private fun buildHexagon(path: Path, center: Offset, radius: Float) {
 // ---------------------------------------------------------------------------
 
 /**
- * A notched petal with a lit inner face and a single vein.
+ * Sakura: two single petals and, on the third variant, a five-petal blossom.
  *
- * [variant] changes the petal's width, which is the cheapest way to make a
- * blossom look hand-picked rather than stamped: a wide petal and a narrow one
- * side by side read as two flowers, while two rotated copies of one outline read
- * as a repeating pattern.
+ * The blossom was missing for a release while the blurb promised it. A single petal
+ * is the right drawing most of the time - it is what a sakura sky is mostly made of -
+ * but a sky of nothing but single petals reads as confetti. The blossom is five of
+ * the same petal rotated around a pith, which is the cheapest way to get a flower
+ * that still matches the petal beside it.
  */
 private fun DrawScope.drawSakura(
     path: Path,
@@ -436,9 +484,12 @@ private fun DrawScope.drawSakura(
     variant: Int,
     highDetail: Boolean
 ) {
+    if (variant % 3 == 2) {
+        drawSakuraBlossom(path, center, radius, palette, alpha, highDetail)
+        return
+    }
     val width = when (variant % 3) {
         1 -> 0.78f
-        2 -> 1.14f
         else -> 1f
     }
     // A petal's face and veins are the cost, not its silhouette: below this the
@@ -481,6 +532,72 @@ private fun DrawScope.drawSakura(
             }
         }
     }
+}
+
+/**
+ * Five notched petals on a pith.
+ *
+ * The blossoms are built from the same [buildPetal] outline as the falling petals, so
+ * a blossom in the air and a petal beside it are recognisably the same flower. At low
+ * detail the petals are five overlapping circles: the notch is under a pixel there and
+ * five cubic outlines would cost more than the flower is worth.
+ */
+private fun DrawScope.drawSakuraBlossom(
+    path: Path,
+    center: Offset,
+    radius: Float,
+    palette: ParticlePalette,
+    alpha: Float,
+    highDetail: Boolean
+) {
+    val detailed = highDetail && radius > 5f
+    val petalRadius = radius * 0.46f
+    val petalCenter = Offset(center.x, center.y - radius * 0.43f)
+    if (!detailed) {
+        for (index in 0 until 5) {
+            val angle = index * 72f
+            withTransform({ rotate(angle, center) }) {
+                drawCircle(
+                    color = palette.base.copy(alpha = alpha),
+                    radius = petalRadius * 0.72f,
+                    center = petalCenter
+                )
+            }
+        }
+        drawCircle(palette.light.copy(alpha = alpha * 0.92f), radius * 0.14f, center)
+        drawCircle(palette.deep.copy(alpha = alpha * 0.55f), radius * 0.06f, center)
+        return
+    }
+
+    for (index in 0 until 5) {
+        withTransform({ rotate(index * 72f, center) }) {
+            buildPetal(path, petalCenter, petalRadius)
+            drawPath(path, palette.base.copy(alpha = alpha))
+            // The lit face sits toward the pith, which is where a petal curls up.
+            buildPetal(
+                path,
+                Offset(petalCenter.x, petalCenter.y + petalRadius * 0.12f),
+                petalRadius * 0.55f
+            )
+            drawPath(path, palette.light.copy(alpha = alpha * 0.36f))
+        }
+    }
+    val stamen = palette.deep.copy(alpha = alpha * 0.38f)
+    for (index in 0 until 5) {
+        val angle = index * (PI.toFloat() * 2f / 5f)
+        drawLine(
+            color = stamen,
+            start = center,
+            end = Offset(
+                center.x + sin(angle) * radius * 0.18f,
+                center.y - cos(angle) * radius * 0.18f
+            ),
+            strokeWidth = (radius * 0.032f).coerceAtLeast(0.3f),
+            cap = StrokeCap.Round
+        )
+    }
+    drawCircle(palette.light.copy(alpha = alpha * 0.95f), radius * 0.13f, center)
+    drawCircle(palette.deep.copy(alpha = alpha * 0.62f), radius * 0.055f, center)
 }
 
 private fun buildPetal(path: Path, center: Offset, radius: Float) {
@@ -537,13 +654,19 @@ private fun DrawScope.drawClover(
         cap = StrokeCap.Round
     )
 
-    val leaf = radius * if (variant % 2 == 0) 0.54f else 0.50f
+    // Most clovers are lucky enough to carry four leaves; the odd three-leaf one is
+    // what makes the lucky four feel like a find rather than a stamp. The three-leaf
+    // variant uses the same heart, the same size and the same rim - only the count
+    // changes - so the two read as the same plant.
+    val fourLeaf = variant % 2 == 0
+    val leaves = if (fourLeaf) 4 else 3
+    val leaf = radius * if (fourLeaf) 0.54f else 0.58f
     buildCloverHeart(path, leaf)
     val body = palette.base.copy(alpha = alpha)
     val rim = palette.light.copy(alpha = alpha * 0.34f)
-    for (index in 0 until 4) {
+    for (index in 0 until leaves) {
         withTransform({
-            rotate(index * 90f, center)
+            rotate(index * (360f / leaves), center)
             translate(center.x, center.y - radius * 0.40f)
         }) {
             drawPath(path, body)

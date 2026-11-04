@@ -118,7 +118,15 @@ sealed interface MarkdownNode {
      */
     data class SpoilerBlock(
         val inlines: List<InlineToken>,
-        val blocks: List<MarkdownNode> = emptyList()
+        val blocks: List<MarkdownNode> = emptyList(),
+        /**
+         * The `data-label` a spoiler tag carried, already trimmed and validated.
+         *
+         * Null for the AniList `~!...!~` form and for an empty or invalid label, so
+         * the renderer has one answer to "is there a label to draw" rather than
+         * having to re-trim a string on every recomposition.
+         */
+        val label: String? = null
     ) : MarkdownNode
     data class TableBlock(
         val headers: List<List<InlineToken>>,
@@ -428,7 +436,21 @@ sealed interface InlineToken {
         val id: String
     ) : InlineToken
     data class Mention(val username: String) : InlineToken
-    data class Spoiler(val text: String) : InlineToken
+    data class Spoiler(
+        val text: String,
+        /** The `data-label` on a `<span class="markdown-spoiler">`, if it has one. */
+        val label: String? = null,
+        /**
+         * The spoiler's contents parsed as markup.
+         *
+         * A spoiler is a container, not a string: `**bold**` or a link inside one
+         * used to print its asterisks or its brackets because the token only carried
+         * flat text. Empty when the contents had nothing to parse, in which case the
+         * renderer falls back to [text] - which is also what every caller that
+         * constructs this token without children still gets.
+         */
+        val children: List<InlineToken> = emptyList()
+    ) : InlineToken
 
     /**
      * An image or GIF embedded *inside* a paragraph, not on a line of its own.

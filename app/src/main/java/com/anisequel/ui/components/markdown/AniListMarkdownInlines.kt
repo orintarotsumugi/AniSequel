@@ -187,6 +187,31 @@ private class InlineSpoilers(
 }
 
 /**
+ * How many spoilers a payload contains, at every depth.
+ *
+ * The reveal state is keyed by the index a spoiler is walked at, and a closed
+ * spoiler's children are not appended - so without reserving their indices here, a
+ * nested spoiler would be numbered differently depending on whether its parent was
+ * open. The reader would open the first spoiler and find the second one's plot point
+ * already showing, because the second one inherited the first one's index.
+ */
+private fun countInlineSpoilers(tokens: List<InlineToken>): Int {
+    var count = 0
+    fun walk(list: List<InlineToken>) {
+        list.forEach { token ->
+            if (token is InlineToken.Spoiler) {
+                count++
+                walk(token.children)
+            } else {
+                walk(token.nestedTokens())
+            }
+        }
+    }
+    walk(tokens)
+    return count
+}
+
+/**
  * Appends [tokens] under the style they carry, recursing into the nested
  * expression of every emphasis run and link label.
  *
@@ -299,13 +324,46 @@ private fun AnnotatedString.Builder.appendTokens(
                         )
                     ) {
                         if (revealed) {
-                            append(token.text)
+                            // Children are the same payload parsed as markup, so a
+                            // bold run or a link inside an inline spoiler reads as
+                            // one after the lid lifts instead of printing its
+                            // asterisks. `allowLinks = false` because this append is
+                            // already inside the spoiler's own annotation, and two
+                            // links over one run is the shape the framework resolves
+                            // arbitrarily - see `appendLink`.
+                            if (token.children.isNotEmpty()) {
+                                appendTokens(
+                                    tokens = token.children,
+                                    onLinkClick = onLinkClick,
+                                    linkStyles = linkStyles,
+                                    mentionStyles = mentionStyles,
+                                    codeBackground = codeBackground,
+                                    allowLinks = false,
+                                    spoilers = spoilers
+                                )
+                            } else {
+                                append(token.text)
+                            }
                         } else {
                             append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                            // A label is not part of the secret: it is what the
+                            // author chose to say before the lid opens, so it stays
+                            // legible on the obscured run.
+                            token.label?.let { label ->
+                                append(" ")
+                                append(label)
+                            }
+                            // Their runs are not drawn while the lid is closed,
+                            // but their numbers still have to be spent.
+                            spoilers.index += countInlineSpoilers(token.children)
                         }
                     }
                 } else if (revealed) {
+                    // Inside a link label a nested spoiler cannot put an annotation on
+                    // top of the link's, so its flat text is all there is - but its
+                    // numbers still have to be reserved for the siblings after it.
                     append(token.text)
+                    spoilers.index += countInlineSpoilers(token.children)
                 } else {
                     // Inside a link label: two annotations over the same characters
                     // is the one shape the framework resolves arbitrarily (see
@@ -313,6 +371,7 @@ private fun AnnotatedString.Builder.appendTokens(
                     withStyle(spoilers.styles.style ?: SpanStyle()) {
                         append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
                     }
+                    spoilers.index += countInlineSpoilers(token.children)
                 }
             }
 

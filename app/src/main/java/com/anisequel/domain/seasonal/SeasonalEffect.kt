@@ -516,16 +516,27 @@ fun seasonalParticles(
     // particles are pinned to.
     val spinSpan = 0.8f + effect.tumbleResponse * 0.9f
     return List(count) {
+        // Depth is the first number drawn, and the other three follow it. A sky used to
+        // roll size, speed and opacity independently, so a flake could be the largest
+        // thing on screen and the slowest - a big near flake drifting like a far one.
+        // Tying them together costs nothing and gives the field a front and a back: the
+        // large flakes fall faster and brighter, the small ones hang back and fade.
+        val sizeT = random.nextFloat()
+        val size = minSize + sizeT * sizeSpan
+        val speedT = (sizeT * 0.68f + random.nextFloat() * 0.32f).coerceIn(0f, 1f)
         SeasonalParticle(
             x = random.nextFloat(),
             y = random.nextFloat(),
-            size = minSize + random.nextFloat() * sizeSpan,
-            speed = minSpeed + random.nextFloat() * (maxSpeed - minSpeed),
+            size = size,
+            speed = minSpeed + speedT * (maxSpeed - minSpeed),
             sway = (0.008f + random.nextFloat() * 0.042f) * effect.swayResponse,
             swayRate = 0.07f + random.nextFloat() * 0.23f,
             phase = random.nextFloat() * (2f * PI.toFloat()),
             spin = (random.nextFloat() - 0.5f) * spinSpan,
-            alpha = 0.55f + random.nextFloat() * 0.45f,
+            // Never below 0.55: a flake that fades to nothing at the near edge of the
+            // field is invisible, and the depth cue is already carried by size and speed.
+            alpha = (0.58f + sizeT * 0.36f + (random.nextFloat() - 0.5f) * 0.06f)
+                .coerceIn(0.55f, 1f),
             variant = random.nextInt(effect.variantCount.coerceAtLeast(1)),
             flutter = 0.45f + random.nextFloat() * 0.85f
         )

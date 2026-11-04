@@ -19,9 +19,22 @@ import kotlin.random.Random
  * at this depth. The caller supplies pixels, so depth is a drawing choice and a
  * slider change never has to throw the accumulation away.
  *
- * A few starting grains are seeded per column. A drift that begins at exactly
- * zero looks like a bug for the first half-minute, and this is decoration - it
- * should look right the moment the switch is flipped.
+ * A few starting grains are seeded per column, and the starting profile is a
+ * gentle bank rather than independent grains per column. A drift that begins at
+ * exactly zero looks like a bug for the first half-minute, and a drift of
+ * forty-eight independent heights looks like a comb once it is drawn.
+ *
+ * ## Why a landing obeys headroom, and why the heap compacts
+ *
+ * Deposits used to add the same mass every time until a column hit the ceiling,
+ * and the smoothing pass only ran after a landing. At the busiest density a
+ * column reaches the ceiling in about a minute, after which the whole field is a
+ * flat white wall the full depth of the slider - the pile stops looking like
+ * something that accumulated and starts covering the page. A deposit now adds
+ * less the fuller the column already is, and every landing frame lets the field
+ * compact by a small fraction (a real snowpack settles under its own weight).
+ * The two together find a stable depth instead of a wall, and the variation the
+ * particles drop stays visible because the field is never pinned at the cap.
  */
 class SeasonalPile(
     seed: Int = 0,
@@ -34,8 +47,13 @@ class SeasonalPile(
 
     init {
         val random = Random(seed)
+        // One slow swell plus a little grain. The swell is what makes the first
+        // frame read as a bank; the grain is what stops it reading as a sine wave.
+        val swellPhase = random.nextFloat() * 6.2831855f
+        val swellRate = 0.11f + random.nextFloat() * 0.08f
         for (index in 0 until columns) {
-            heights[index] = 0.018f + random.nextFloat() * 0.05f
+            val swell = 0.026f + 0.012f * kotlin.math.sin(index * swellRate + swellPhase)
+            heights[index] = swell + random.nextFloat() * 0.018f
         }
     }
 
@@ -81,8 +99,14 @@ class SeasonalPile(
                 2 -> 0.07f
                 else -> 0.035f
             }
-            heights[index] = (heights[index] + PILE_MASS_PER_LANDING * strength * weight)
-                .coerceAtMost(PILE_HEIGHT_CEILING)
+            // The closer a column is to its ceiling, the less of this landing it
+            // keeps. Without the headroom the field saturates and the drift becomes
+            // a flat band at the slider's maximum depth.
+            val headroom = (PILE_HEIGHT_CEILING - heights[index])
+                .coerceIn(0f, PILE_HEIGHT_CEILING)
+            val gain = PILE_MASS_PER_LANDING * strength * weight *
+                (0.42f + 0.58f * headroom / PILE_HEIGHT_CEILING)
+            heights[index] = (heights[index] + gain).coerceAtMost(PILE_HEIGHT_CEILING)
         }
     }
 
@@ -94,6 +118,10 @@ class SeasonalPile(
      * band within a minute, which is a pile that has stopped looking like snow.
      * Averaging inside [deposit] would flatten a fresh flake before the reader saw it
      * arrive, which is the other way this gets it wrong.
+     *
+     * [amount] may be zero: a low-end sky skips the diffusion pass but still needs the
+     * compaction, or it reaches the ceiling and stays there. The compaction runs first
+     * so a heap that is already at the cap has room for the diffusion to move into.
      */
     fun relax(amount: Float = 0.16f) {
         if (columns < 3) return
@@ -101,10 +129,11 @@ class SeasonalPile(
         // The scratch buffer is reused because this runs on the frame loop. Building a
         // new field every landing was a hundred-odd floats a second of pure garbage.
         for (index in 0 until columns) {
+            val compacted = heights[index] * (1f - PILE_COMPACTION_PER_LANDING)
             val left = heights[(index - 1).coerceAtLeast(0)]
             val right = heights[(index + 1).coerceAtMost(columns - 1)]
             scratch[index] = (
-                heights[index] * (1f - blend) + (left + right) * 0.5f * blend
+                compacted * (1f - blend) + (left + right) * 0.5f * blend
                 ).coerceAtMost(PILE_HEIGHT_CEILING)
         }
         scratch.copyInto(heights)
@@ -125,6 +154,17 @@ class SeasonalPile(
          */
         const val PILE_MASS_PER_LANDING = 0.11f
         const val PILE_HEIGHT_CEILING = 0.98f
+
+        /**
+         * How much a drift settles on each landing frame.
+         *
+         * Steady-state snow: the deposit rate at the busiest sky is about a unit of
+         * height a second spread across the field, so a small per-pass loss is what
+         * holds the average near half depth instead of at the cap. Tuned by arithmetic,
+         * not by eye - there is no phone in this environment - and deliberately tiny:
+         * a compaction a reader could see between frames would read as the snow sinking.
+         */
+        const val PILE_COMPACTION_PER_LANDING = 0.006f
     }
 }
 

@@ -86,7 +86,11 @@ fun AniListMarkdownView(
                 is MarkdownNode.CheckListBlock -> RenderCheckList(node)
                 is MarkdownNode.ImageBlock -> RenderImage(node)
                 is MarkdownNode.VideoBlock -> RenderVideo(node)
-                is MarkdownNode.SpoilerBlock -> RenderSpoilerBlock(node)
+                is MarkdownNode.SpoilerBlock -> RenderSpoilerBlock(
+                    spoiler = node,
+                    mediaCovers = mediaCovers,
+                    entityPreviews = entityPreviews
+                )
                 is MarkdownNode.TableBlock -> RenderTable(node)
                 is MarkdownNode.CenteredBlock -> {
                     Column(

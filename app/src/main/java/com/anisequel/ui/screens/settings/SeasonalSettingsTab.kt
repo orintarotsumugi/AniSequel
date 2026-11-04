@@ -263,7 +263,7 @@ private fun PreviewCard(
                 reactToWind = settings.reactToWind,
                 windStrength = windStrength,
                 quality = quality,
-                settleOnChrome = false,
+                publishesBarTrail = false,
                 showTapRipple = false,
                 modifier = Modifier
                     .fillMaxSize()

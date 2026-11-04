@@ -217,6 +217,43 @@ object AniListMarkdownParser {
      */
     private val TILDE_CENTER_PATTERN = Regex("""^~~~(?!~)(.+?)~~~$""")
     private val ANILIST_SPOILER_BLOCK = Regex("""^~!\s*([\s\S]*?)\s*!~$""")
+
+    /**
+     * An HTML spoiler's opening tag, of either shape the site's editor writes.
+     *
+     * AniList comments can carry the site's own "markdown spoiler" HTML:
+     * `<span class="markdown-spoiler" data-label="…">inline</span>` for a run inside
+     * a sentence and `<div class="markdown-spoiler" data-label="…">…</div>` for a
+     * block. The older `<div rel="spoiler">` is still out there, so it is read too.
+     *
+     * The match is deliberately just the tag: whether it *is* a spoiler depends on its
+     * attributes, which [htmlSpoilerTagInfo] reads. A pattern carrying the whole
+     * attribute grammar would need one alternative per attribute order and would stop
+     * matching the first time the site wrote `data-label` before `class`.
+     */
+    private val HTML_SPOILER_TAG = Regex("""<(div|span)\b[^>]*>""", RegexOption.IGNORE_CASE)
+
+    /** A closing `</div>` or `</span>`, as a tag name and its span. */
+    private val HTML_CLOSE_TAG = Regex("""</(div|span)\s*>""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The three attribute shapes HTML allows, for any attribute this parser reads.
+     *
+     * The lookbehind is the same one `HTML_IMG_SRC_PATTERN` records: without it a
+     * `data-class` or a `data-label` inside a URL is read as the attribute itself.
+     */
+    private val HTML_CLASS_ATTRIBUTE = Regex(
+        """(?<![\w-])class\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
+    private val HTML_REL_ATTRIBUTE = Regex(
+        """(?<![\w-])rel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
+    private val HTML_DATA_LABEL_ATTRIBUTE = Regex(
+        """(?<![\w-])data-label\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""",
+        RegexOption.IGNORE_CASE
+    )
     /**
      * An AniList entity address, which a bio link may carry in its full form.
      *
@@ -645,9 +682,14 @@ object AniListMarkdownParser {
      * `img100%(...)` is a full-bleed banner and `img220(...)` is a fixed strip, and
      * flattening them to "an image" is how a bio's banner became a thumbnail.
      */
-    private fun centredSingleImage(inner: String, depth: Int): MarkdownNode.ImageBlock? {
+    private fun centredSingleImage(
+        inner: String,
+        depth: Int,
+        spoilerDepth: Int
+    ): MarkdownNode.ImageBlock? {
         if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return null
-        val parsed = runCatching { parseDecoded(inner, depth + 1) }.getOrNull() ?: return null
+        val parsed = runCatching { parseDecoded(inner, depth + 1, spoilerDepth) }.getOrNull()
+            ?: return null
         val image = parsed.singleOrNull() as? MarkdownNode.ImageBlock ?: return null
         return image.copy(centered = true)
     }
@@ -678,17 +720,35 @@ object AniListMarkdownParser {
      * spoiler looks or costs. Nested spoilers are dropped for the same reason the
      * centred block caps depth: a lid inside a lid has no readable answer.
      */
-    private fun spoilerBlocks(inner: String, depth: Int): List<MarkdownNode> {
-        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH) return emptyList()
-        if (!EMBED_MARKUP_HINT.containsMatchIn(inner)) return emptyList()
-        val parsed = runCatching { parseDecoded(inner, depth + 1) }
+    private fun spoilerBlocks(
+        inner: String,
+        depth: Int,
+        spoilerDepth: Int
+    ): List<MarkdownNode> {
+        if (inner.isBlank() || depth >= MAX_BLOCK_DEPTH || spoilerDepth >= MAX_SPOILER_DEPTH) {
+            return emptyList()
+        }
+        // The HTML tags are here for the same reason the image forms are: a
+        // `~!` spoiler whose payload is a `<div class="markdown-spoiler">` has to
+        // reach the block walk, or its lid opens on the literal tag.
+        if (!EMBED_MARKUP_HINT.containsMatchIn(inner) &&
+            !HTML_SPOILER_TAG.containsMatchIn(inner) &&
+            !ANILIST_SPOILER_BLOCK.containsMatchIn(inner.trim())
+        ) {
+            return emptyList()
+        }
+        val parsed = runCatching { parseDecoded(inner, depth + 1, spoilerDepth + 1) }
             .getOrNull()
             // Only what a `Text` cannot carry. The words stay on the annotated
             // string they already used, so a text spoiler is untouched by this -
             // and a spoiler whose payload is a title link keeps drawing the link
             // it always drew rather than a cover card the block path would need
             // media lookups to produce.
-            ?.filter { it is MarkdownNode.ImageBlock || it is MarkdownNode.VideoBlock }
+            ?.filter {
+                it is MarkdownNode.ImageBlock ||
+                    it is MarkdownNode.VideoBlock ||
+                    it is MarkdownNode.SpoilerBlock
+            }
             .orEmpty()
         // Empty is the answer for a spoiler with no picture in it, and the renderer
         // reads that as "draw the text you already drew" - so there is nothing to
@@ -713,13 +773,18 @@ object AniListMarkdownParser {
      * single paragraph: a plain two-line quote renders exactly the pixels it
      * rendered before, and nothing nested is paid for when there is nothing nested.
      */
-    private fun blockquoteOf(quoteLines: List<String>, depth: Int): MarkdownNode.Blockquote {
+    private fun blockquoteOf(
+        quoteLines: List<String>,
+        depth: Int,
+        spoilerDepth: Int
+    ): MarkdownNode.Blockquote {
         val flat = quoteLines.joinToString(" ").trim()
         if (!quoteNeedsBlockWalk(quoteLines) || depth >= MAX_BLOCK_DEPTH) {
-            return MarkdownNode.Blockquote(parseInlines(flat))
+            return MarkdownNode.Blockquote(parseInlines(flat, spoilerDepth = spoilerDepth))
         }
-        val blocks = runCatching { parseDecoded(quoteLines.joinToString("\n"), depth + 1) }.getOrNull()
-            ?: return MarkdownNode.Blockquote(parseInlines(flat))
+        val blocks = runCatching {
+            parseDecoded(quoteLines.joinToString("\n"), depth + 1, spoilerDepth)
+        }.getOrNull() ?: return MarkdownNode.Blockquote(parseInlines(flat, spoilerDepth = spoilerDepth))
         val onlyParagraph = blocks.singleOrNull() as? MarkdownNode.Paragraph
         return if (onlyParagraph != null) {
             MarkdownNode.Blockquote(onlyParagraph.inlines)
@@ -741,6 +806,7 @@ object AniListMarkdownParser {
         if (quoteLines.size > 1) return true
         val line = quoteLines.single().trim()
         return EMBED_MARKUP_HINT.containsMatchIn(line) ||
+            HTML_SPOILER_TAG.containsMatchIn(line) ||
             ANILIST_SPOILER_BLOCK.matches(line) ||
             TILDE_CENTER_PATTERN.matches(line) ||
             HEADER_PATTERN.matches(line) ||
@@ -751,8 +817,209 @@ object AniListMarkdownParser {
             BARE_URL_PATTERN.matches(line)
     }
 
-    private fun parseDecoded(clean: String, depth: Int = 0): List<MarkdownNode> {
+    /**
+     * How many spoilers may nest inside each other.
+     *
+     * The outermost spoiler is level one, so a spoiler inside it is level two and one
+     * inside that is level three. A fourth opening is left exactly as the author typed
+     * it - the tags and all - because a lid inside a lid inside a lid inside a lid has
+     * nowhere left to put a control, and silently dropping the text would lose a
+     * paragraph the reader could at least read.
+     */
+    private const val MAX_SPOILER_DEPTH = 3
+
+    /** The class and rel tokens are whitespace-separated, whatever the whitespace is. */
+    private val HTML_ATTRIBUTE_TOKENS = Regex("""\s+""")
+
+    /** What an opening tag turned out to be: which close pairs with it, and its label. */
+    private class SpoilerTagInfo(val tag: String, val label: String?)
+
+    /** A whole block spoiler: the opening tag, its contents, and the closing tag. */
+    private class BlockSpoiler(
+        val openStart: Int,
+        val contentStart: Int,
+        val contentEnd: Int,
+        val closeEnd: Int,
+        val label: String?
+    )
+
+    /**
+     * The value of one attribute in [tag], or null when it is absent or empty.
+     *
+     * `groupValues` returns the empty string for an unmatched alternative, so the same
+     * `ifEmpty` chain the image attributes use picks whichever quoting the author used.
+     */
+    private fun htmlAttribute(tag: String, pattern: Regex): String? {
+        val match = pattern.find(tag) ?: return null
+        val value = match.groupValues[1].ifEmpty {
+            match.groupValues[2].ifEmpty { match.groupValues[3] }
+        }
+        return value.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The label a spoiler may carry, or null when it has none.
+     *
+     * Whitespace is trimmed because `data-label=" Episode 4 "` is the same label as the
+     * unspaced one. A label containing a curly brace, an angle bracket or a line break is
+     * rejected rather than sanitised: those are the characters that would let a label
+     * close the tag it sits in or start markup of its own, and a spoiler with no label is
+     * still a spoiler, while one with half a label is a parsing bug.
+     */
+    private fun spoilerLabel(raw: String?): String? {
+        val trimmed = raw?.trim().orEmpty()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.any { it == '{' || it == '}' || it == '<' || it == '>' || it == '\n' || it == '\r' }) {
+            return null
+        }
+        return trimmed
+    }
+
+    /**
+     * Whether [tag] opens a spoiler, and which close belongs to it.
+     *
+     * `<div rel="spoiler">` is the older spelling. `<div class="markdown-spoiler">` and
+     * `<span class="markdown-spoiler">` are the current one. The class is read as a list
+     * of tokens - `class="markdown-spoiler wide"` is still a spoiler - and the collapsed
+     * spelling without whitespace is accepted as well, because the site's own mobile
+     * output has been seen with `class="markdown- spoiler"` split across two tokens.
+     */
+    private fun htmlSpoilerTagInfo(tag: String): SpoilerTagInfo? {
+        val open = HTML_SPOILER_TAG.matchEntire(tag) ?: return null
+        val name = open.groupValues[1].lowercase(Locale.US)
+        val classes = htmlAttribute(tag, HTML_CLASS_ATTRIBUTE)
+            ?.split(HTML_ATTRIBUTE_TOKENS)
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        val classIsSpoiler = classes.any { it.equals("markdown-spoiler", ignoreCase = true) } ||
+            classes.joinToString("").equals("markdown-spoiler", ignoreCase = true)
+        val relIsSpoiler = name == "div" && htmlAttribute(tag, HTML_REL_ATTRIBUTE)
+            ?.split(HTML_ATTRIBUTE_TOKENS)
+            ?.any { it.equals("spoiler", ignoreCase = true) } == true
+        if (!classIsSpoiler && !relIsSpoiler) return null
+        return SpoilerTagInfo(name, spoilerLabel(htmlAttribute(tag, HTML_DATA_LABEL_ATTRIBUTE)))
+    }
+
+    /**
+     * The close that belongs to the opening tag that ended at [from], by tag depth.
+     *
+     * Every same-named open between here and the close counts, not only the spoiler
+     * ones: a `<div>` inside a spoiler has to close before the spoiler does, or the
+     * spoiler would end in the middle of its own content. That is also what makes
+     * two spoilers on one page pair with their own closes instead of the first opener
+     * swallowing everything up to the last.
+     */
+    private fun matchingCloseTag(source: String, from: Int, tag: String): IntRange? {
+        var depth = 1
+        var cursor = from
+        while (cursor < source.length) {
+            val nestedOpen = HTML_SPOILER_TAG.find(source, cursor)
+            val close = HTML_CLOSE_TAG.find(source, cursor) ?: return null
+            if (nestedOpen != null && nestedOpen.range.first < close.range.first) {
+                if (nestedOpen.groupValues[1].equals(tag, ignoreCase = true)) depth++
+                cursor = nestedOpen.range.last + 1
+                continue
+            }
+            if (close.groupValues[1].equals(tag, ignoreCase = true)) {
+                depth--
+                if (depth == 0) return close.range
+            }
+            cursor = close.range.last + 1
+        }
+        return null
+    }
+
+    /** Whether [index] sits between an opening and a closing ``` fence. */
+    private fun insideFence(source: String, index: Int): Boolean {
+        var fence = false
+        var cursor = 0
+        while (true) {
+            val next = source.indexOf("```", cursor)
+            if (next < 0 || next > index) return fence
+            fence = !fence
+            cursor = next + 3
+        }
+    }
+
+    /**
+     * The first block spoiler in [source], or null when there is none.
+     *
+     * A `<span>` whose contents stay on one line is not a block: it is an inline
+     * spoiler, and [parseInlines] owns it. The scan skips those openers without
+     * consuming them, so a sentence carrying one still reaches the paragraph path.
+     *
+     * An opening tag with no matching close is skipped too: the author's text is
+     * better rendered as the literal tag than as a spoiler that never ends.
+     */
+    private fun nextBlockSpoiler(source: String, from: Int = 0): BlockSpoiler? {
+        var cursor = from
+        while (cursor < source.length) {
+            val open = HTML_SPOILER_TAG.find(source, cursor) ?: return null
+            val info = htmlSpoilerTagInfo(open.value)
+            if (info == null) {
+                cursor = open.range.last + 1
+                continue
+            }
+            // A fenced code block is quoted HTML, not markup. Splitting a spoiler
+            // out of it would cut the fence in half and print the author's example
+            // as a working spoiler, so the scan steps over fences. The check counts
+            // backtick triples before the opener: an odd count is inside one.
+            if (insideFence(source, open.range.first)) {
+                cursor = open.range.last + 1
+                continue
+            }
+            val close = matchingCloseTag(source, open.range.last + 1, info.tag)
+            if (close == null) {
+                cursor = open.range.last + 1
+                continue
+            }
+            val contents = source.substring(open.range.last + 1, close.first)
+            if (info.tag == "span" && !contents.contains('\n')) {
+                cursor = open.range.last + 1
+                continue
+            }
+            return BlockSpoiler(
+                openStart = open.range.first,
+                contentStart = open.range.last + 1,
+                contentEnd = close.first,
+                closeEnd = close.last + 1,
+                label = info.label
+            )
+        }
+        return null
+    }
+
+    private fun parseDecoded(
+        clean: String,
+        depth: Int = 0,
+        spoilerDepth: Int = 0
+    ): List<MarkdownNode> {
         if (clean.isBlank()) return emptyList()
+
+        // A block spoiler is a document inside a document: its contents get the full
+        // block walk, not a paragraph of inline text. Splitting it out before the line
+        // loop is what lets a heading, a list or a picture live behind the lid without
+        // teaching every handler below about a tag that can appear mid-line. The three
+        // chunks are parsed at the *same* depth: opening a spoiler does not make the
+        // text on either side of it any more nested.
+        if (spoilerDepth < MAX_SPOILER_DEPTH) {
+            val spoiler = nextBlockSpoiler(clean)
+            if (spoiler != null) {
+                val nodes = mutableListOf<MarkdownNode>()
+                nodes += parseDecoded(clean.substring(0, spoiler.openStart), depth, spoilerDepth)
+                nodes += MarkdownNode.SpoilerBlock(
+                    inlines = emptyList(),
+                    blocks = parseDecoded(
+                        clean.substring(spoiler.contentStart, spoiler.contentEnd),
+                        depth,
+                        spoilerDepth + 1
+                    ),
+                    label = spoiler.label
+                )
+                nodes += parseDecoded(clean.substring(spoiler.closeEnd), depth, spoilerDepth)
+                return nodes
+            }
+        }
 
         val nodes = mutableListOf<MarkdownNode>()
         val lines = clean.lines()
@@ -781,7 +1048,7 @@ object AniListMarkdownParser {
                 // AniList's own editor writes for a centred banner - used to print
                 // the code as a centred sentence with a link. AniList answers the
                 // same bio with `<center><img width='100%' …></center>`.
-                val centredImage = centredSingleImage(inner, depth)
+                val centredImage = centredSingleImage(inner, depth, spoilerDepth)
                 if (centredImage != null) {
                     nodes.add(centredImage)
                 } else {
@@ -790,7 +1057,7 @@ object AniListMarkdownParser {
                     // branch used to build the `Paragraph` itself and was therefore the
                     // one paragraph path that never lifted media links: identical text
                     // drew a card un-centred and a plain link centred.
-                    nodes.addAll(paragraphNodes(inner, centered = true))
+                    nodes.addAll(paragraphNodes(inner, centered = true, spoilerDepth = spoilerDepth))
                 }
                 i++
                 continue
@@ -826,7 +1093,7 @@ object AniListMarkdownParser {
                 val centerContent = if (depth >= MAX_BLOCK_DEPTH) {
                     listOf(MarkdownNode.Paragraph(listOf(InlineToken.Plain(centerText))))
                 } else {
-                    parseDecoded(centerText, depth + 1)
+                    parseDecoded(centerText, depth + 1, spoilerDepth)
                 }
                 // Images inside the block are marked centred, because nothing else
                 // can: the renderer's Box fills the width and aligns its child to
@@ -891,7 +1158,9 @@ object AniListMarkdownParser {
             if (headerMatch != null) {
                 val level = headerMatch.groupValues[1].length
                 val content = headerMatch.groupValues[2].trim()
-                nodes.add(MarkdownNode.Header(level, parseInlines(content)))
+                nodes.add(
+                    MarkdownNode.Header(level, parseInlines(content, spoilerDepth = spoilerDepth))
+                )
                 i++
                 continue
             }
@@ -965,7 +1234,7 @@ object AniListMarkdownParser {
                     quoteLines.add(lines[i].trimStart().removePrefix(">").trim())
                     i++
                 }
-                nodes.add(blockquoteOf(quoteLines, depth))
+                nodes.add(blockquoteOf(quoteLines, depth, spoilerDepth))
                 continue
             }
 
@@ -976,7 +1245,12 @@ object AniListMarkdownParser {
                     val match = CHECKLIST_PATTERN.matchEntire(lines[i].trim())!!
                     val checked = match.groupValues[1].trim().equals("x", ignoreCase = true)
                     val text = match.groupValues[2]
-                    items.add(CheckListItem(checked = checked, inlines = parseInlines(text)))
+                    items.add(
+                        CheckListItem(
+                            checked = checked,
+                            inlines = parseInlines(text, spoilerDepth = spoilerDepth)
+                        )
+                    )
                     i++
                 }
                 nodes.add(MarkdownNode.CheckListBlock(items = items))
@@ -997,7 +1271,7 @@ object AniListMarkdownParser {
                     !CHECKLIST_PATTERN.matches(lines[i].trim())
                 ) {
                     val itemText = UNORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
-                    items.add(parseInlines(itemText))
+                    items.add(parseInlines(itemText, spoilerDepth = spoilerDepth))
                     i++
                 }
                 nodes.add(MarkdownNode.ListBlock(ordered = false, items = items))
@@ -1009,7 +1283,7 @@ object AniListMarkdownParser {
                 val items = mutableListOf<List<InlineToken>>()
                 while (i < lines.size && ORDERED_LIST_PATTERN.matches(lines[i].trim())) {
                     val itemText = ORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
-                    items.add(parseInlines(itemText))
+                    items.add(parseInlines(itemText, spoilerDepth = spoilerDepth))
                     i++
                 }
                 nodes.add(MarkdownNode.ListBlock(ordered = true, items = items))
@@ -1020,7 +1294,7 @@ object AniListMarkdownParser {
             val spoilerMatch = ANILIST_SPOILER_BLOCK.matchEntire(trimmedLine)
             if (spoilerMatch != null) {
                 val content = spoilerMatch.groupValues[1].trim()
-                val blocks = spoilerBlocks(content, depth)
+                val blocks = spoilerBlocks(content, depth, spoilerDepth)
                 nodes.add(
                     MarkdownNode.SpoilerBlock(
                         // The payload that became blocks is not also prose: this
@@ -1030,7 +1304,11 @@ object AniListMarkdownParser {
                         // printed the literal `img(https://…)` above the picture it
                         // had just hidden. A multi-line spoiler would have to split
                         // the two instead of dropping one.
-                        inlines = if (blocks.isEmpty()) parseInlines(content) else emptyList(),
+                        inlines = if (blocks.isEmpty()) {
+                            parseInlines(content, spoilerDepth = spoilerDepth)
+                        } else {
+                            emptyList()
+                        },
                         blocks = blocks
                     )
                 )
@@ -1044,13 +1322,17 @@ object AniListMarkdownParser {
                 SETEXT_H1_PATTERN.matches(underline) &&
                 !SETEXT_H1_PATTERN.matches(trimmedLine)
             ) {
-                nodes.add(MarkdownNode.Header(1, parseInlines(trimmedLine)))
+                nodes.add(
+                    MarkdownNode.Header(1, parseInlines(trimmedLine, spoilerDepth = spoilerDepth))
+                )
                 i += 2
                 continue
             }
 
             // Markdown Table check
-            val tableResult = tryParseTable(lines, i) { parseInlines(it) }
+            val tableResult = tryParseTable(lines, i) {
+                parseInlines(it, spoilerDepth = spoilerDepth)
+            }
             if (tableResult != null) {
                 nodes.add(tableResult.first)
                 i = tableResult.second
@@ -1078,7 +1360,9 @@ object AniListMarkdownParser {
             // reach the reader as the literal line they wrote.
             val orphanPipeLine = trimmedLine.startsWith("|")
             if (orphanPipeLine) {
-                nodes.add(MarkdownNode.Paragraph(parseInlines(trimmedLine)))
+                nodes.add(
+                    MarkdownNode.Paragraph(parseInlines(trimmedLine, spoilerDepth = spoilerDepth))
+                )
                 i++
                 continue
             }
@@ -1121,7 +1405,12 @@ object AniListMarkdownParser {
                 i++
             }
             if (paragraphLines.isNotEmpty()) {
-                nodes.addAll(paragraphNodes(paragraphLines.joinToString(" ")))
+                nodes.addAll(
+                    paragraphNodes(
+                        paragraphLines.joinToString(" "),
+                        spoilerDepth = spoilerDepth
+                    )
+                )
             } else {
                 // Belt and braces on the ANR above. Every path into this branch is
                 // supposed to have advanced `i` already, and the `|` case is now
@@ -1130,7 +1419,11 @@ object AniListMarkdownParser {
                 // than hanging the main thread. An empty paragraph is never added,
                 // so the visible cost of a bug here is a duplicate line, not a
                 // freeze.
-                nodes.add(MarkdownNode.Paragraph(parseInlines(lines[i].trim())))
+                nodes.add(
+                    MarkdownNode.Paragraph(
+                        parseInlines(lines[i].trim(), spoilerDepth = spoilerDepth)
+                    )
+                )
                 i++
             }
         }
@@ -1153,9 +1446,15 @@ object AniListMarkdownParser {
      * The text paragraph comes first and the cards follow, in document order,
      * which is the reading order the reference clients use.
      */
-    private fun paragraphNodes(text: String, centered: Boolean = false): List<MarkdownNode> {
+    private fun paragraphNodes(
+        text: String,
+        centered: Boolean = false,
+        spoilerDepth: Int = 0
+    ): List<MarkdownNode> {
         if (text.isBlank()) return emptyList()
-        val (kept, mediaLinks) = splitMediaLinks(parseInlines(text))
+        val (kept, mediaLinks) = splitMediaLinks(
+            parseInlines(text, spoilerDepth = spoilerDepth)
+        )
         val nodes = mutableListOf<MarkdownNode>()
         if (kept.isNotEmpty()) {
             nodes += MarkdownNode.Paragraph(inlines = kept, centered = centered)
@@ -1375,7 +1674,8 @@ object AniListMarkdownParser {
      * Parses inline tokens: links, inline images/GIFs, spoilers, bold/italic,
      * underline, code, strikethrough, mentions, auto URLs, and plain text.
      */
-    fun parseInlines(text: String): List<InlineToken> = parseInlines(text, depth = 0)
+    fun parseInlines(text: String): List<InlineToken> =
+        parseInlines(text, depth = 0, spoilerDepth = 0)
 
     /**
      * How deep nested emphasis and link-label parsing may descend before it stops.
@@ -1398,19 +1698,80 @@ object AniListMarkdownParser {
      */
     private const val MAX_BLOCK_DEPTH = 8
 
-    private fun parseInlines(text: String, depth: Int): List<InlineToken> {
+    /** One `<span class="markdown-spoiler">…</span>` found inside a line. */
+    private class InlineSpoilerMatch(
+        val start: Int,
+        val endExclusive: Int,
+        val contents: String,
+        val label: String?
+    )
+
+    /**
+     * The first inline HTML spoiler in [source], or null.
+     *
+     * A `<span>` whose contents contain a newline is not inline: [nextBlockSpoiler]
+     * has already claimed it as a block spoiler before the paragraph path runs, and
+     * skipping it here keeps the two from disagreeing about which one owns it.
+     *
+     * The close is depth-matched by [matchingCloseTag], so a spoiler inside a spoiler
+     * closes at its own `</span>` rather than at the first one after the outer open -
+     * which is the difference between three levels of nesting and one level plus two
+     * literal tags.
+     */
+    private fun findInlineSpoiler(source: String): InlineSpoilerMatch? {
+        var cursor = 0
+        while (cursor < source.length) {
+            val open = HTML_SPOILER_TAG.find(source, cursor) ?: return null
+            val info = htmlSpoilerTagInfo(open.value)
+            if (info == null || info.tag != "span") {
+                cursor = open.range.last + 1
+                continue
+            }
+            val close = matchingCloseTag(source, open.range.last + 1, "span")
+            if (close == null) return null
+            val contents = source.substring(open.range.last + 1, close.first)
+            if (contents.contains('\n')) {
+                cursor = open.range.last + 1
+                continue
+            }
+            return InlineSpoilerMatch(
+                start = open.range.first,
+                endExclusive = close.last + 1,
+                contents = contents,
+                label = info.label
+            )
+        }
+        return null
+    }
+
+    private fun parseInlines(
+        text: String,
+        depth: Int,
+        spoilerDepth: Int = 0
+    ): List<InlineToken> {
         if (text.isEmpty()) return emptyList()
 
         val tokens = mutableListOf<InlineToken>()
         var remaining = text
 
         while (remaining.isNotEmpty()) {
+            val htmlSpoiler = if (spoilerDepth < MAX_SPOILER_DEPTH) {
+                findInlineSpoiler(remaining)
+            } else {
+                null
+            }
             val mdImgMatch = INLINE_MD_IMG.find(remaining)
             val htmlImgMatch = HTML_IMG_TAG_PATTERN.find(remaining)
             val protocolImageMatch = INLINE_PROTOCOL_RELATIVE_IMAGE.find(remaining)
             val linkedImgMatch = INLINE_LINKED_IMG.find(remaining)
             val linkMatch = INLINE_LINK.find(remaining)
-            val spoilerMatch = INLINE_SPOILER.find(remaining)
+            // Past the nesting cap, `~!…!~` is left as the author typed it rather
+            // than becoming a fourth lid.
+            val spoilerMatch = if (spoilerDepth < MAX_SPOILER_DEPTH) {
+                INLINE_SPOILER.find(remaining)
+            } else {
+                null
+            }
             val codeMatch = INLINE_CODE.find(remaining)
             val boldItalicMatch = INLINE_BOLD_ITALIC.find(remaining)
             val boldMatch = INLINE_BOLD.find(remaining)
@@ -1451,6 +1812,31 @@ object AniListMarkdownParser {
                 mentionMatch?.let { it to "MENTION" },
                 autoUrlMatch?.let { it to "AUTO_URL" }
             ).sortedBy { it.first.range.first }
+
+            // The HTML spoiler is not in the match list above because it needs its
+            // computed close rather than a regex's group, but it competes on the same
+            // start offset: whichever markup begins first wins the run.
+            if (htmlSpoiler != null &&
+                (matches.isEmpty() || htmlSpoiler.start < matches.first().first.range.first)
+            ) {
+                if (htmlSpoiler.start > 0) {
+                    tokens.add(InlineToken.Plain(remaining.substring(0, htmlSpoiler.start)))
+                }
+                val contents = htmlSpoiler.contents.trim()
+                tokens.add(
+                    InlineToken.Spoiler(
+                        text = contents,
+                        label = htmlSpoiler.label,
+                        children = if (depth >= MAX_INLINE_DEPTH) {
+                            emptyList()
+                        } else {
+                            parseInlines(contents, depth + 1, spoilerDepth + 1)
+                        }
+                    )
+                )
+                remaining = remaining.substring(htmlSpoiler.endExclusive)
+                continue
+            }
 
             if (matches.isEmpty()) {
                 tokens.add(InlineToken.Plain(remaining))
@@ -1515,7 +1901,7 @@ object AniListMarkdownParser {
                     } else {
                         // A label may itself be emphasised (`[**AniList**](url)`),
                         // which used to print the asterisks verbatim.
-                        tokens.add(InlineToken.Link(label, url, nested(label, depth)))
+                        tokens.add(InlineToken.Link(label, url, nested(label, depth, spoilerDepth)))
                     }
                 }
                 "AUTO_URL" -> {
@@ -1544,14 +1930,28 @@ object AniListMarkdownParser {
                     if (trailing.isNotEmpty()) tokens.add(InlineToken.Plain(trailing))
                 }
                 "SPOILER" -> {
-                    tokens.add(InlineToken.Spoiler(firstMatch.groupValues[1]))
+                    val content = firstMatch.groupValues[1].trim()
+                    tokens.add(
+                        InlineToken.Spoiler(
+                            text = content,
+                            // The payload is parsed again so emphasis and links inside
+                            // an inline spoiler read as markup once it is open. The
+                            // flat `text` stays alongside it for every renderer that
+                            // can only draw a string.
+                            children = if (depth >= MAX_INLINE_DEPTH) {
+                                emptyList()
+                            } else {
+                                parseInlines(content, depth + 1, spoilerDepth + 1)
+                            }
+                        )
+                    )
                 }
                 "CODE" -> {
                     tokens.add(InlineToken.Code(firstMatch.groupValues[1]))
                 }
                 "BOLD_ITALIC" -> {
                     val content = firstMatch.groupValues[1]
-                    tokens.add(InlineToken.BoldItalic(content, nested(content, depth)))
+                    tokens.add(InlineToken.BoldItalic(content, nested(content, depth, spoilerDepth)))
                 }
                 "BOLD" -> {
                     // Groups 1 and 2 are `**` and `__`; 3 and 4 are `<b>` and
@@ -1562,7 +1962,7 @@ object AniListMarkdownParser {
                             firstMatch.groupValues[3].ifEmpty { firstMatch.groupValues[4] }
                         }
                     }
-                    tokens.add(InlineToken.Bold(content, nested(content, depth)))
+                    tokens.add(InlineToken.Bold(content, nested(content, depth, spoilerDepth)))
                 }
                 "ITALIC" -> {
                     // Group 1 for the `*x*` / `_x_` alternation, 2 and 3 for the
@@ -1572,17 +1972,17 @@ object AniListMarkdownParser {
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }
-                    tokens.add(InlineToken.Italic(content, nested(content, depth)))
+                    tokens.add(InlineToken.Italic(content, nested(content, depth, spoilerDepth)))
                 }
                 "UNDERLINE" -> {
                     val content = firstMatch.groupValues[1]
-                    tokens.add(InlineToken.Underline(content, nested(content, depth)))
+                    tokens.add(InlineToken.Underline(content, nested(content, depth, spoilerDepth)))
                 }
                 "STRIKE" -> {
                     val content = firstMatch.groupValues[1].ifEmpty {
                         firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
                     }
-                    tokens.add(InlineToken.Strikethrough(content, nested(content, depth)))
+                    tokens.add(InlineToken.Strikethrough(content, nested(content, depth, spoilerDepth)))
                 }
                 "MENTION" -> {
                     val user = firstMatch.groupValues[1]
@@ -1602,7 +2002,7 @@ object AniListMarkdownParser {
      * Empty once [MAX_INLINE_DEPTH] is reached or the text has nothing to parse,
      * which the renderer reads as "use the flat text this token already holds".
      */
-    private fun nested(text: String, depth: Int): List<InlineToken> =
+    private fun nested(text: String, depth: Int, spoilerDepth: Int): List<InlineToken> =
         if (depth >= MAX_INLINE_DEPTH || text.isBlank()) emptyList()
-        else parseInlines(text, depth + 1)
+        else parseInlines(text, depth + 1, spoilerDepth)
 }

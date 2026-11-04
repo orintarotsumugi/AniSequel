@@ -23,56 +23,74 @@ import kotlin.math.sin
  */
 private class PileInk(val fill: Color, val rim: Color, val shadow: Color)
 
+private val SNOW_INK = PileInk(
+    fill = Color(0xFFDCEBF8),
+    rim = Color(0xFFFBFDFF),
+    shadow = Color(0xFFA8C8E2)
+)
+private val CRYSTAL_INK = PileInk(
+    fill = Color(0xFFD2E8F8),
+    rim = Color(0xFFF7FCFF),
+    shadow = Color(0xFF8FB6D4)
+)
+private val NEEDLE_INK = PileInk(
+    fill = Color(0xFFD8ECF6),
+    rim = Color(0xFFF4FAFF),
+    shadow = Color(0xFF9CBFD8)
+)
+private val SAKURA_INK = PileInk(
+    fill = Color(0xFFEFB4C9),
+    rim = Color(0xFFFFDDE9),
+    shadow = Color(0xFFC77E99)
+)
+private val CLOVER_INK = PileInk(
+    fill = Color(0xFF8FCB90),
+    rim = Color(0xFFD8F0CB),
+    shadow = Color(0xFF4F8A55)
+)
+private val MAPLE_INK = PileInk(
+    fill = Color(0xFFD18446),
+    rim = Color(0xFFF2BE7B),
+    shadow = Color(0xFF93552A)
+)
+private val OAK_INK = PileInk(
+    fill = Color(0xFFC29645),
+    rim = Color(0xFFEBCE8A),
+    shadow = Color(0xFF84622A)
+)
+private val GINKGO_INK = PileInk(
+    fill = Color(0xFFDBB743),
+    rim = Color(0xFFF6E59B),
+    shadow = Color(0xFF9E7C21)
+)
+private val DANDELION_INK = PileInk(
+    fill = Color(0xFFE7DCC0),
+    rim = Color(0xFFFAF4E2),
+    shadow = Color(0xFFA28A62)
+)
+
+/**
+ * The ink for a drift, built once per shape.
+ *
+ * These used to be constructed inside the per-frame draw, which is eight small
+ * objects a second at worst - not a leak, but pure garbage from a draw callback that
+ * has no reason to allocate anything. `Color` is an inline value class, so the cache
+ * itself is nothing but the handful of `PileInk` objects below.
+ */
 private fun pileInk(effect: SeasonalEffect): PileInk = when (effect) {
-    SeasonalEffect.SNOW, SeasonalEffect.POWDER -> PileInk(
-        fill = Color(0xFFDCEBF8),
-        rim = Color(0xFFFBFDFF),
-        shadow = Color(0xFFA8C8E2)
-    )
-    SeasonalEffect.CRYSTAL -> PileInk(
-        fill = Color(0xFFD2E8F8),
-        rim = Color(0xFFF7FCFF),
-        shadow = Color(0xFF8FB6D4)
-    )
-    SeasonalEffect.NEEDLE -> PileInk(
-        fill = Color(0xFFD8ECF6),
-        rim = Color(0xFFF4FAFF),
-        shadow = Color(0xFF9CBFD8)
-    )
-    SeasonalEffect.SAKURA -> PileInk(
-        fill = Color(0xFFEFB4C9),
-        rim = Color(0xFFFFDDE9),
-        shadow = Color(0xFFC77E99)
-    )
-    SeasonalEffect.CLOVER -> PileInk(
-        fill = Color(0xFF8FCB90),
-        rim = Color(0xFFD8F0CB),
-        shadow = Color(0xFF4F8A55)
-    )
-    SeasonalEffect.MAPLE -> PileInk(
-        fill = Color(0xFFD18446),
-        rim = Color(0xFFF2BE7B),
-        shadow = Color(0xFF93552A)
-    )
-    SeasonalEffect.OAK -> PileInk(
-        fill = Color(0xFFC29645),
-        rim = Color(0xFFEBCE8A),
-        shadow = Color(0xFF84622A)
-    )
-    SeasonalEffect.GINKGO -> PileInk(
-        fill = Color(0xFFDBB743),
-        rim = Color(0xFFF6E59B),
-        shadow = Color(0xFF9E7C21)
-    )
+    SeasonalEffect.SNOW, SeasonalEffect.POWDER -> SNOW_INK
+    SeasonalEffect.CRYSTAL -> CRYSTAL_INK
+    SeasonalEffect.NEEDLE -> NEEDLE_INK
+    SeasonalEffect.SAKURA -> SAKURA_INK
+    SeasonalEffect.CLOVER -> CLOVER_INK
+    SeasonalEffect.MAPLE -> MAPLE_INK
+    SeasonalEffect.OAK -> OAK_INK
+    SeasonalEffect.GINKGO -> GINKGO_INK
     // The seed is the one shape that does not settle, so this is only reached if a
     // caller ignores SeasonalEffect.settles. Kept rather than left out because the
     // drawing reads a colour for every shape, and a drift of pale seeds is what it
     // would look like if that ever happened.
-    SeasonalEffect.DANDELION -> PileInk(
-        fill = Color(0xFFE7DCC0),
-        rim = Color(0xFFFAF4E2),
-        shadow = Color(0xFFA28A62)
-    )
+    SeasonalEffect.DANDELION -> DANDELION_INK
 }
 
 /**
@@ -105,8 +123,6 @@ internal fun DrawScope.drawSeasonalPile(
     maxHeightPx: Float,
     shear: Float,
     alpha: Float,
-    /** Where the chrome starts, measured from the bottom of the layer, in px. */
-    bottomInsetPx: Float,
     path: Path,
     glyphPath: Path,
     glyphStep: Int = 3,
@@ -119,12 +135,14 @@ internal fun DrawScope.drawSeasonalPile(
     if (width <= 0f || height <= 0f) return
     val wind = shear.coerceIn(-1f, 1f)
     val step = glyphStep.coerceAtLeast(1)
-    // The drift sits on the top edge of the floating bar when there is one, and
-    // on the screen's own bottom edge when there is not. Clamped so a bar taller
-    // than the layer (a short landscape window) cannot put the ground offscreen.
+    // The drift sits on the screen's own bottom edge, behind the floating bar. It used
+    // to be lifted to the bar's top edge, which left a transparent gap the height of the
+    // bar's own padding between the snow and the screen - and made a drift that should
+    // look like it gathered on the floor look like a shelf. The bar gets its own cap
+    // instead; see SeasonalBarTrail.
     val frame = PileFrame(
         width = width,
-        ground = (height - bottomInsetPx).coerceIn(1f, height),
+        ground = height,
         maxHeightPx = maxHeightPx,
         shear = wind,
         alpha = alpha,
@@ -166,7 +184,11 @@ private class PileFrame(
     /** The drift's normalised height at [index], with a slow settle worked into it. */
     fun surfaceAt(pile: SeasonalPile, index: Int): Float {
         val fraction = (index.toFloat() / columns + samplingShift).coerceIn(0f, 1f)
-        val grain = sin(index * 1.7f) * 0.012f
+        // Two long swells, not one high-frequency jitter. The old `sin(index * 1.7)`
+        // completed a cycle every ~two columns, which at 48 columns is a 40-pixel zigzag
+        // along the crest - a bank drawn with a comb. These wavelengths are 20 and 8
+        // columns, so the surface undulates instead of buzzing.
+        val grain = sin(index * 0.31f + 0.7f) * 0.012f + sin(index * 0.77f + 2.1f) * 0.006f
         return (pile.heightAt(fraction) + grain).coerceIn(0f, 1f)
     }
 
@@ -218,18 +240,18 @@ private fun DrawScope.buildPileSilhouette(pile: SeasonalPile, frame: PileFrame, 
 private fun DrawScope.drawPileBody(path: Path, ink: PileInk, frame: PileFrame) {
     val alpha = frame.alpha
     drawPath(path, ink.fill.copy(alpha = alpha * 0.96f))
+    // One shadow band, not two: the second pass was a full re-tessellation of the
+    // silhouette for a difference the eye cannot separate at this depth, and the rim
+    // stroke below already gives the crest its edge.
     clipRect(top = frame.ground - frame.maxHeightPx * 0.55f) {
-        drawPath(path, ink.shadow.copy(alpha = alpha * 0.14f))
+        drawPath(path, ink.shadow.copy(alpha = alpha * 0.16f))
     }
     clipRect(top = 0f, bottom = frame.ground - 1f) {
         drawPath(
             path = path,
-            color = ink.rim.copy(alpha = alpha * 0.82f),
+            color = ink.rim.copy(alpha = alpha * 0.84f),
             style = Stroke(width = 1.4f + frame.maxHeightPx * 0.016f)
         )
-    }
-    clipRect(top = frame.ground - frame.maxHeightPx * 0.22f) {
-        drawPath(path, ink.shadow.copy(alpha = alpha * 0.12f))
     }
 }
 
@@ -252,8 +274,12 @@ private fun DrawScope.drawRestingGlyphs(
     val buried = if (highDetail) 1 else 0
     for (pass in 0..buried) {
         val buriedPass = pass == 1
+        // The buried pass is half as dense as the surface one. It exists to give the
+        // heap a body, not a second carpet of shapes; at the old shared stride it drew
+        // 36 full glyph paths per frame on the busiest sky.
+        val stride = if (buriedPass) step * 2 else step
         val start = if (buriedPass) step / 2 else 0
-        for (index in start until frame.columns step step) {
+        for (index in start until frame.columns step stride) {
             val level = frame.surfaceAt(pile, index)
             if (level < 0.08f) continue
             val jitter = sin(index * 1.13f + pass * 4.2f) * (frame.width / frame.columns) * 0.35f

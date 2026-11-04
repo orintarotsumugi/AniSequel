@@ -28,8 +28,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.anisequel.data.model.ActivityReply
-import com.anisequel.data.network.SafebooruGifs
-import com.anisequel.data.network.TenorGifs
+import com.anisequel.data.network.gifSearchApiFor
+import com.anisequel.domain.gif.GifProvider
 import com.anisequel.domain.usecase.CommentWindow
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
@@ -174,8 +174,14 @@ fun ActivityCommentsSheet(
     pollIntervalMillis: Long,
     /** Whether the sheet may ask at all - the reader's Settings switch. */
     polling: Boolean = true,
+    /** The index the reader chose. A keyed one without a key falls back to Safebooru. */
+    gifProvider: GifProvider = GifProvider.DEFAULT,
     /** The reader's Tenor key, when they saved one. Blank means the anonymous index. */
     tenorApiKey: String? = null,
+    /** The reader's Klipy key, stored separately so switching keeps both. */
+    klipyApiKey: String? = null,
+    /** The reader's GIPHY key, stored separately so switching keeps both. */
+    giphyApiKey: String? = null,
     /** The profile's minute-tick, so "12m" becomes "1h" while the sheet is open. */
     nowEpochSecond: Long? = null
 ) {
@@ -290,16 +296,16 @@ fun ActivityCommentsSheet(
     }
 
     val scope = rememberCoroutineScope()
-    val safebooru = remember { SafebooruGifs() }
-    // Tenor when the reader has a key for it, Safebooru when they have not. The
-    // booru is the default because it answers with anime GIFs and asks for nothing:
-    // Tenor's public API is discontinued, and a reader who has not registered a
-    // Google key still gets a working picker.
-    val gifStore = remember(safebooru, tenorApiKey) {
-        GifSearchStore(
-            scope = scope,
-            provider = tenorApiKey?.takeIf { it.isNotBlank() }?.let { TenorGifs(it) } ?: safebooru
-        )
+    // The provider the reader chose, or Safebooru when it needs a key they have not
+    // saved yet: the booru answers anime tags and asks for nothing, so a missing
+    // credential never leaves the picker without a search. Tenor is no longer
+    // special-cased - its public API was retired in 2026, and a saved key now goes
+    // through the same factory as the other keyed providers.
+    val gifApi = remember(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey) {
+        gifSearchApiFor(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey)
+    }
+    val gifStore = remember(scope, gifApi) {
+        GifSearchStore(scope = scope, provider = gifApi)
     }
 
     // A post is a round trip, and the editor has to stay open for it: on success
