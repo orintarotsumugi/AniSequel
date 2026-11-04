@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import com.anisequel.domain.seasonal.SeasonalEffect
 import com.anisequel.domain.seasonal.SeasonalPile
 import com.anisequel.domain.seasonal.isWinterSnow
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -116,130 +117,224 @@ internal fun DrawScope.drawSeasonalPile(
     val width = size.width
     val height = size.height
     if (width <= 0f || height <= 0f) return
+    val wind = shear.coerceIn(-1f, 1f)
+    val step = glyphStep.coerceAtLeast(1)
     // The drift sits on the top edge of the floating bar when there is one, and
     // on the screen's own bottom edge when there is not. Clamped so a bar taller
     // than the layer (a short landscape window) cannot put the ground offscreen.
-    val ground = (height - bottomInsetPx).coerceIn(1f, height)
+    val frame = PileFrame(
+        width = width,
+        ground = (height - bottomInsetPx).coerceIn(1f, height),
+        maxHeightPx = maxHeightPx,
+        shear = wind,
+        alpha = alpha,
+        samplingShift = wind * 0.07f,
+        columns = pile.columns
+    )
     val ink = pileInk(effect)
-    val columns = pile.columns
-    val samplingShift = shear.coerceIn(-1f, 1f) * 0.07f
+    val glyphRadius = pileGlyphRadius(effect, maxHeightPx)
 
-    // A slow settle in the silhouette makes the surface look loose without
-    // re-depositing anything: this is grain, not the pile growing and shrinking.
-    fun surfaceHeight(index: Int): Float {
+    buildPileSilhouette(pile, frame, path)
+    drawPileBody(path, ink, frame)
+    drawRestingGlyphs(effect, pile, frame, glyphPath, glyphRadius, step, highDetail)
+    if (effect.isWinterSnow && highDetail) {
+        drawPileSparkle(pile, ink, frame, step + 1, seconds)
+    }
+    if (abs(frame.shear) > 0.18f) {
+        drawBlownGrains(pile, ink, frame, glyphRadius)
+    }
+    drawPileGroundLine(ink, frame)
+}
+
+/**
+ * One frame of the drift: the numbers every part of it asks about.
+ *
+ * Passed down rather than recomputed because the silhouette, the resting glyphs,
+ * the sparkle and the blown grains all measure from the same ground line and the
+ * same shear. [surfaceAt] is the one place the pile is sampled, so the grain that
+ * makes the surface look loose - rather than extruded - lives with the sample.
+ */
+private class PileFrame(
+    val width: Float,
+    val ground: Float,
+    val maxHeightPx: Float,
+    val shear: Float,
+    val alpha: Float,
+    val samplingShift: Float,
+    val columns: Int
+) {
+    /** The drift's normalised height at [index], with a slow settle worked into it. */
+    fun surfaceAt(pile: SeasonalPile, index: Int): Float {
         val fraction = (index.toFloat() / columns + samplingShift).coerceIn(0f, 1f)
         val grain = sin(index * 1.7f) * 0.012f
         return (pile.heightAt(fraction) + grain).coerceIn(0f, 1f)
     }
 
+    fun xAt(index: Int): Float = width * index / columns
+
+    fun heightY(level: Float): Float = ground - level * maxHeightPx
+}
+
+/** The resting glyph's size: snow grains are smaller than leaves, and both bounded. */
+private fun pileGlyphRadius(effect: SeasonalEffect, maxHeightPx: Float): Float {
+    val winter = effect.isWinterSnow
+    val ceiling = if (winter) 6.8f else 9.2f
+    return (maxHeightPx * if (winter) 0.048f else 0.072f).coerceIn(2.4f, ceiling)
+}
+
+/**
+ * The crest as a smooth curve: each column becomes a control point and each
+ * quadratic lands on the midpoint of the pair around it.
+ *
+ * That is the difference between a snow bank and a bar chart, and it costs no path
+ * stroke per sample.
+ */
+private fun DrawScope.buildPileSilhouette(pile: SeasonalPile, frame: PileFrame, path: Path) {
     path.reset()
-    path.moveTo(-2f, ground)
+    path.moveTo(-2f, frame.ground)
     var previousX = 0f
-    var previousY = ground - surfaceHeight(0) * maxHeightPx
+    var previousY = frame.heightY(frame.surfaceAt(pile, 0))
     path.lineTo(previousX, previousY)
-    for (index in 1..columns) {
-        val x = width * index / columns
-        val y = ground - surfaceHeight(index) * maxHeightPx
-        val midX = (previousX + x) / 2f
-        val midY = (previousY + y) / 2f
-        path.quadraticBezierTo(previousX, previousY, midX, midY)
+    for (index in 1..frame.columns) {
+        val x = frame.xAt(index)
+        val y = frame.heightY(frame.surfaceAt(pile, index))
+        path.quadraticBezierTo(previousX, previousY, (previousX + x) / 2f, (previousY + y) / 2f)
         previousX = x
         previousY = y
     }
     path.lineTo(previousX, previousY)
-    path.lineTo(width + 2f, ground)
+    path.lineTo(frame.width + 2f, frame.ground)
     path.close()
+}
 
+/**
+ * The fills and the lit edge.
+ *
+ * A second, slightly darker fill clipped to the lower half of the heap is what makes
+ * snow look banked rather than like a sticker of one colour, and the rim is clipped
+ * to above the ground so the closed path's base line is not drawn across the bar or
+ * the bottom of the screen as a seam.
+ */
+private fun DrawScope.drawPileBody(path: Path, ink: PileInk, frame: PileFrame) {
+    val alpha = frame.alpha
     drawPath(path, ink.fill.copy(alpha = alpha * 0.96f))
-    // A second, slightly darker fill clipped to the lower half of the heap is
-    // what makes snow look banked rather than like a sticker of one colour.
-    clipRect(top = ground - maxHeightPx * 0.55f) {
+    clipRect(top = frame.ground - frame.maxHeightPx * 0.55f) {
         drawPath(path, ink.shadow.copy(alpha = alpha * 0.14f))
     }
-    // The lit top edge. Clipped to above the ground so the closed path's base line
-    // is not drawn across the bar or the bottom of the screen as a seam.
-    clipRect(top = 0f, bottom = ground - 1f) {
+    clipRect(top = 0f, bottom = frame.ground - 1f) {
         drawPath(
             path = path,
             color = ink.rim.copy(alpha = alpha * 0.82f),
-            style = Stroke(width = 1.4f + maxHeightPx * 0.016f)
+            style = Stroke(width = 1.4f + frame.maxHeightPx * 0.016f)
         )
     }
-    clipRect(top = ground - maxHeightPx * 0.22f) {
+    clipRect(top = frame.ground - frame.maxHeightPx * 0.22f) {
         drawPath(path, ink.shadow.copy(alpha = alpha * 0.12f))
     }
+}
 
-    val step = glyphStep.coerceAtLeast(1)
-    val glyphRadius = (maxHeightPx * if (effect.isWinterSnow) 0.048f else 0.072f)
-        .coerceIn(2.4f, if (effect.isWinterSnow) 6.8f else 9.2f)
+/**
+ * Shapes lying on the crest, drawn with the same code as the shapes falling past it.
+ *
+ * Sampled every [step] columns rather than one per column: at 48 columns that would be
+ * a carpet, and the silhouette would disappear under it. The second pass, at half a
+ * step, sinks glyphs into the surface so the heap has a body rather than a top line.
+ */
+private fun DrawScope.drawRestingGlyphs(
+    effect: SeasonalEffect,
+    pile: SeasonalPile,
+    frame: PileFrame,
+    glyphPath: Path,
+    glyphRadius: Float,
+    step: Int,
+    highDetail: Boolean
+) {
     val buried = if (highDetail) 1 else 0
     for (pass in 0..buried) {
         val buriedPass = pass == 1
         val start = if (buriedPass) step / 2 else 0
-        for (index in start until columns step step) {
-            val level = surfaceHeight(index)
+        for (index in start until frame.columns step step) {
+            val level = frame.surfaceAt(pile, index)
             if (level < 0.08f) continue
-            val fraction = index.toFloat() / columns
-            val jitter = sin(index * 1.13f + pass * 4.2f) * (width / columns) * 0.35f
-            val x = width * fraction + jitter
-            val sink = if (buriedPass) glyphRadius * (0.55f + level * 0.4f) else glyphRadius * 0.18f
-            val y = ground - level * maxHeightPx + sink
-            val variant = (index * 31 + effect.ordinal * 7 + pass * 13) % effect.variantCount
-            val rotation = sin(index * 2.31f + pass) * 48f + shear * 22f
+            val jitter = sin(index * 1.13f + pass * 4.2f) * (frame.width / frame.columns) * 0.35f
+            val sink = if (buriedPass) {
+                glyphRadius * (0.55f + level * 0.4f)
+            } else {
+                glyphRadius * 0.18f
+            }
             val radius = glyphRadius * (0.72f + level * 0.55f) * if (buriedPass) 0.82f else 1f
             drawSeasonalParticle(
                 effect = effect,
-                center = Offset(x, y - radius * 0.18f),
+                center = Offset(
+                    frame.xAt(index) + jitter,
+                    frame.heightY(level) + sink - radius * 0.18f
+                ),
                 radius = radius,
-                rotationDegrees = rotation,
-                alpha = alpha * (if (buriedPass) 0.32f else 0.58f) + level * 0.28f,
-                variant = variant,
+                rotationDegrees = sin(index * 2.31f + pass) * 48f + frame.shear * 22f,
+                alpha = frame.alpha * (if (buriedPass) 0.32f else 0.58f) + level * 0.28f,
+                variant = (index * 31 + effect.ordinal * 7 + pass * 13) % effect.variantCount,
                 path = glyphPath,
                 highDetail = highDetail
             )
         }
     }
+}
 
-    if (effect.isWinterSnow && highDetail) {
-        for (index in 0 until columns step (step + 1)) {
-            val level = surfaceHeight(index)
-            if (level < 0.16f) continue
-            val sparkle = 0.45f + 0.55f * sin(seconds * 2.1f + index * 0.7f)
-            if (sparkle < 0.72f) continue
-            val x = width * index / columns
-            val y = ground - level * maxHeightPx - 1.6f
-            drawCircle(
-                color = ink.rim.copy(alpha = alpha * 0.22f * sparkle),
-                radius = 1.15f,
-                center = Offset(x, y)
-            )
-        }
+/** Flakes of light on the crest, a little apart from the resting glyphs themselves. */
+private fun DrawScope.drawPileSparkle(
+    pile: SeasonalPile,
+    ink: PileInk,
+    frame: PileFrame,
+    sparkleStride: Int,
+    seconds: Float
+) {
+    for (index in 0 until frame.columns step sparkleStride) {
+        val level = frame.surfaceAt(pile, index)
+        if (level < 0.16f) continue
+        val sparkle = 0.45f + 0.55f * sin(seconds * 2.1f + index * 0.7f)
+        if (sparkle < 0.72f) continue
+        drawCircle(
+            color = ink.rim.copy(alpha = frame.alpha * 0.22f * sparkle),
+            radius = 1.15f,
+            center = Offset(frame.xAt(index), frame.heightY(level) - 1.6f)
+        )
     }
+}
 
-    // Two or three grains lifted off the crest when the wind is up. They are
-    // drawn rather than simulated: a resting flake that visibly takes off would
-    // need a second particle state, and the pile only has to *look* alive.
-    if (kotlin.math.abs(shear) > 0.18f) {
-        val lift = (kotlin.math.abs(shear) - 0.18f) / 0.82f
-        for (index in 0 until 4) {
-            val fraction = (index + 0.5f) / 4f
-            val column = (fraction * (columns - 1)).toInt()
-            val x = width * fraction
-            val y = ground - surfaceHeight(column) * maxHeightPx - glyphRadius * 1.4f
-            drawCircle(
-                color = ink.rim.copy(alpha = alpha * 0.34f * lift),
-                radius = (glyphRadius * 0.24f).coerceAtLeast(0.6f),
-                center = Offset(x + shear * 8f, y - index * 2.4f)
+/**
+ * Grains lifted off the crest when the wind is up.
+ *
+ * Drawn rather than simulated: a resting flake that visibly takes off would need a
+ * second particle state, and the pile only has to look alive.
+ */
+private fun DrawScope.drawBlownGrains(
+    pile: SeasonalPile,
+    ink: PileInk,
+    frame: PileFrame,
+    glyphRadius: Float
+) {
+    val lift = (abs(frame.shear) - 0.18f) / 0.82f
+    for (index in 0 until 4) {
+        val fraction = (index + 0.5f) / 4f
+        val level = frame.surfaceAt(pile, (fraction * (frame.columns - 1)).toInt())
+        drawCircle(
+            color = ink.rim.copy(alpha = frame.alpha * 0.34f * lift),
+            radius = (glyphRadius * 0.24f).coerceAtLeast(0.6f),
+            center = Offset(
+                frame.width * fraction + frame.shear * 8f,
+                frame.heightY(level) - glyphRadius * 1.4f - index * 2.4f
             )
-        }
+        )
     }
+}
 
-    // A faint line of colour along the very bottom, so the drift reads as thick
-    // where it meets the edge of the screen even on a very light theme.
+/** A faint line of colour along the very bottom, so the drift reads as thick where it
+ * meets the edge of the screen even on a very light theme. */
+private fun DrawScope.drawPileGroundLine(ink: PileInk, frame: PileFrame) {
     drawLine(
-        color = ink.shadow.copy(alpha = alpha * 0.22f),
-        start = Offset(0f, ground - 1f),
-        end = Offset(width, ground - 1f),
+        color = ink.shadow.copy(alpha = frame.alpha * 0.22f),
+        start = Offset(0f, frame.ground - 1f),
+        end = Offset(frame.width, frame.ground - 1f),
         strokeWidth = 1.2f,
         cap = StrokeCap.Round
     )

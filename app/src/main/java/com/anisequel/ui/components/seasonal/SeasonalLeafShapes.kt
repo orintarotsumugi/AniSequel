@@ -161,7 +161,9 @@ internal fun DrawScope.drawMaple(
  *
  * One width function, walked up the right margin and back down the left, so a variant is
  * a different number of lobes or a different spread rather than a different set of
- * hand-placed curves.
+ * hand-placed curves. The outline, the fill and the veins are three functions: with all
+ * three in one body the leaf was the most branchy drawing in the app, and only the
+ * outline is worth reading when a silhouette looks wrong.
  */
 internal fun DrawScope.drawOak(
     path: Path,
@@ -183,10 +185,33 @@ internal fun DrawScope.drawOak(
         2 -> 0.36f
         else -> 0.40f
     }
-    val steps = if (detailed) 10 else 6
-    val baseY = center.y + radius * 0.98f
-    val axis = radius * 1.98f
+    buildOakOutline(path, center, radius, if (detailed) 10 else 6, spread, lobes)
+    drawPath(path, palette.base.copy(alpha = alpha))
+    if (detailed) {
+        // The margin stroked in the light tone, from the same path as the fill.
+        drawPath(path, palette.light.copy(alpha = alpha * 0.13f), style = Stroke(radius * 0.12f))
+    }
+    drawOakVeins(center, radius, palette, alpha, spread, lobes, detailed)
+}
 
+/**
+ * The oak's outline, walked up the right margin and back down the left in one loop.
+ *
+ * Each sample is a control point and each quadratic lands on the midpoint of the pair
+ * around it, which makes the margin tangent-continuous for one quadratic per sample.
+ * Six points a side when the detail flag is off - the lobes are under a pixel there
+ * anyway - and ten when the leaf is big enough for them to be the drawing.
+ */
+private fun buildOakOutline(
+    path: Path,
+    center: Offset,
+    radius: Float,
+    steps: Int,
+    spread: Float,
+    lobes: Float
+) {
+    val baseY = center.y + radius * OAK_BASE_DROP
+    val axis = radius * OAK_AXIS
     path.reset()
     path.moveTo(center.x, baseY)
     var lastX = center.x
@@ -212,25 +237,35 @@ internal fun DrawScope.drawOak(
     }
     path.lineTo(center.x, baseY - axis)
     path.close()
-    drawPath(path, palette.base.copy(alpha = alpha))
+}
 
-    if (detailed) {
-        drawPath(path, palette.light.copy(alpha = alpha * 0.13f), style = Stroke(radius * 0.12f))
-    }
-    val deep = palette.deep
+/**
+ * The stem, the midrib and the side veins.
+ *
+ * The side veins leave the midrib at the waist of a sinus and aim at the lobe beyond it,
+ * which is the pattern the eye reads as oak at nine dp - and which the hardcoded three
+ * pairs this replaced could not follow once a variant changed the number of lobes.
+ */
+private fun DrawScope.drawOakVeins(
+    center: Offset,
+    radius: Float,
+    palette: ParticlePalette,
+    alpha: Float,
+    spread: Float,
+    lobes: Float,
+    detailed: Boolean
+) {
+    val baseY = center.y + radius * OAK_BASE_DROP
+    val axis = radius * OAK_AXIS
+    val vein = palette.deep.copy(alpha = alpha * 0.38f)
+    val veinWidth = (radius * 0.045f).coerceAtLeast(0.32f)
     drawLine(
-        color = deep.copy(alpha = alpha * 0.72f),
+        color = palette.deep.copy(alpha = alpha * 0.72f),
         start = Offset(center.x, baseY),
         end = Offset(center.x, center.y + radius * 1.24f),
         strokeWidth = (radius * 0.085f).coerceAtLeast(0.4f),
         cap = StrokeCap.Round
     )
-    val vein = deep.copy(alpha = alpha * 0.38f)
-    val veinWidth = (radius * 0.045f).coerceAtLeast(0.32f)
-    // The midrib runs the length of the blade. The side veins leave it at the waist of a
-    // sinus and aim at the lobe beyond it, which is the pattern the eye reads as oak at
-    // nine dp - and which the hardcoded three pairs could not follow once a variant
-    // changed the number of lobes.
     drawLine(
         color = vein,
         start = Offset(center.x, baseY - radius * 0.06f),
@@ -254,6 +289,10 @@ internal fun DrawScope.drawOak(
         }
     }
 }
+
+/** Where the stem joins the blade, and how tall the blade is, as fractions of the radius. */
+private const val OAK_BASE_DROP = 0.98f
+private const val OAK_AXIS = 1.98f
 
 /** The oak's half-width at [u] along the blade: a taper with the lobes riding on it. */
 private fun oakHalfWidth(u: Float, radius: Float, spread: Float, lobes: Float): Float {
