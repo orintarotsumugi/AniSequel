@@ -436,9 +436,12 @@ private fun CommentMediaCard(context: android.content.Context) {
                 "there looks fine in this app and shows as a broken image on the site. " +
                 "All three are public: anybody with the link can view the file, and " +
                 "none can delete it without an account. GIF search runs against the " +
-                "index chosen below. Safebooru and nekos.best need no key and ask for " +
-                "safe anime GIFs only; Klipy, GIPHY and Tenor take a key you supply, " +
-                "and each key is stored on this device under its own encrypted entry.",
+                "index chosen below. Safebooru, nekos.best and Konachan need no key and " +
+                "ask for safe anime GIFs only - nekos.best answers reaction words like " +
+                "\"hug\", Konachan answers character tags like \"vocaloid\", and Safebooru " +
+                "is the biggest of the three. Klipy, GIPHY and Tenor take a key you " +
+                "supply, and each key is stored on this device under its own encrypted " +
+                "entry.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -504,7 +507,8 @@ private fun CommentMediaCard(context: android.content.Context) {
                             GifProvider.TENOR -> preferences.setTenorApiKey(key)
                             GifProvider.KLIPY -> preferences.setKlipyApiKey(key)
                             GifProvider.GIPHY -> preferences.setGiphyApiKey(key)
-                            GifProvider.SAFEBOORU, GifProvider.NEKOS_BEST -> Unit
+                            GifProvider.SAFEBOORU, GifProvider.NEKOS_BEST,
+                            GifProvider.KONACHAN -> Unit
                         }
                     }
                 }

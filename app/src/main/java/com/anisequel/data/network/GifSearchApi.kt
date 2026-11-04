@@ -22,6 +22,10 @@ import okhttp3.Request
  * - **nekos.best** is the second keyless index. It is small and reaction-shaped
  *   (`hug`, `pat`, `wave`), and it needs a User-Agent that names the app. See
  *   [NekosBestGifs].
+ * - **Konachan** is the third keyless index - the safe board, tagged by character, so
+ *   the names between nekos.best's words and Safebooru's tags have somewhere to go. Its
+ *   own animated section is thin and its origin is intermittently down. See
+ *   [KonachanGifs].
  * - **Klipy** is the closest drop-in replacement for Tenor: a key in the path,
  *   page-numbered results, and `file.hd` / `file.sm` copies. See [KlipyGifs].
  * - **GIPHY** is the name everyone expects. Every new key is a beta key capped at
@@ -49,7 +53,16 @@ import okhttp3.Request
  * - **Openverse**: responds slowly, caps anonymous callers at 20 a minute, and has
  *   no anime reaction-GIF catalogue.
  * - **DuckDuckGo's** image endpoint: a bot challenge.
- * - **Konachan.net**: HTTP 522, origin not answering.
+ * - **Safebooru's `donmai.us` sibling** and **waifu.pics'** `api.waifu.im` origin: a
+ *   Cloudflare challenge page where JSON was expected, and an empty result set. An
+ *   index the app cannot read is worse than one it can.
+ * - **nekos.moe**: its documented `/search` route no longer resolves, on a host whose
+ *   categories still do - the same half-dead shape nekos.best turned out to have.
+ * - **Konachan**: the `post.json` API on `.net` is implemented above, but a first probe
+ *   of it answered **HTTP 522** (origin not responding) and a later one answered the
+ *   whole catalogue. That flakiness, not the API, is why it is an opt-in index instead
+ *   of the anonymous default; `konachan.com`, the unrestricted instance, is not offered
+ *   at all.
  *
  * ## Never the AniList token
  *
