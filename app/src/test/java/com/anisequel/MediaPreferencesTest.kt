@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.CommentMediaSettings
 import com.anisequel.data.repository.MediaPreferences
 import com.anisequel.data.security.TokenCipher
+import com.anisequel.domain.gif.GifProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -55,6 +56,11 @@ class MediaPreferencesTest {
         assertTrue("chat view is the default: a window is less work than the thread", settings.chatView)
         assertTrue(settings.pollForNewComments)
         assertNull("no third-party key is stored unless the reader pasted one", settings.tenorApiKey)
+        assertEquals(
+            "the anonymous booru is the index that asks for nothing",
+            GifProvider.SAFEBOORU,
+            settings.gifProvider
+        )
     }
 
     @Test
@@ -109,11 +115,66 @@ class MediaPreferencesTest {
     }
 
     @Test
+    fun `a saved tenor key from before the choice existed still selects tenor`() = runTest {
+        val store = preferences()
+        // This is an upgrade case: the old build implied the provider from the key
+        // and stored no choice. Reading it as Safebooru would silently send a reader
+        // who configured Tenor to a different catalogue.
+        store.setTenorApiKey("a-key")
+        assertEquals(GifProvider.TENOR, store.settings.first().gifProvider)
+        assertEquals("a-key", store.settings.first().activeGifKey)
+    }
+
+    @Test
+    fun `each provider key is stored under its own entry and survives a switch`() = runTest {
+        val store = preferences()
+        store.setTenorApiKey("t-key")
+        store.setKlipyApiKey("k-key")
+        store.setGiphyApiKey("g-key")
+        store.setGifProvider(GifProvider.KLIPY)
+
+        val klipy = store.settings.first()
+        assertEquals(GifProvider.KLIPY, klipy.gifProvider)
+        assertEquals("k-key", klipy.activeGifKey)
+        assertEquals("t-key", klipy.tenorApiKey)
+        assertEquals("g-key", klipy.giphyApiKey)
+
+        store.setGifProvider(GifProvider.GIPHY)
+        assertEquals("g-key", store.settings.first().activeGifKey)
+        assertEquals(
+            "switching providers must not delete the key that was not chosen",
+            "k-key",
+            store.settings.first().klipyApiKey
+        )
+    }
+
+    @Test
+    fun `a keyed provider with no key resolves to the anonymous index`() = runTest {
+        val store = preferences()
+        store.setGifProvider(GifProvider.KLIPY)
+        val settings = store.settings.first()
+        assertEquals(
+            "the choice is kept so pasting the key later resumes it",
+            GifProvider.KLIPY,
+            settings.gifProvider
+        )
+        assertEquals(
+            "but a search has to go somewhere that can answer",
+            GifProvider.SAFEBOORU,
+            settings.resolvedGifProvider
+        )
+        assertNull(settings.activeGifKey)
+    }
+
+    @Test
     fun `reset returns every field to the default`() = runTest {
         val store = preferences()
         store.setChatView(false)
         store.setPollForNewComments(false)
         store.setTenorApiKey("a-key")
+        store.setKlipyApiKey("k-key")
+        store.setGiphyApiKey("g-key")
+        store.setGifProvider(GifProvider.GIPHY)
         store.reset()
         assertEquals(CommentMediaSettings(), store.settings.first())
     }

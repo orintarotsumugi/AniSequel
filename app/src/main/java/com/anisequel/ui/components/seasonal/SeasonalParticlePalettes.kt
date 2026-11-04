@@ -47,7 +47,23 @@ internal class ParticlePalette(
 private val SNOW_PALETTES = listOf(
     ParticlePalette(Color(0xFFDCEEFF), Color(0xFFFFFFFF), Color(0xFF9FCBEC)),
     ParticlePalette(Color(0xFFD6EAFB), Color(0xFFF6FCFF), Color(0xFF9CC8E8)),
-    ParticlePalette(Color(0xFFBFDDF4), Color(0xFFEFF9FF), Color(0xFF87B8DE))
+    ParticlePalette(Color(0xFFBFDDF4), Color(0xFFEFF9FF), Color(0xFF87B8DE)),
+    ParticlePalette(Color(0xFFE8F4FF), Color(0xFFFFFFFF), Color(0xFFA6D0EE)),
+    ParticlePalette(Color(0xFFC9E4F6), Color(0xFFF4FBFF), Color(0xFF8BB9DC))
+)
+private val POWDER_PALETTES = listOf(
+    ParticlePalette(Color(0xFFEAF5FF), Color(0xFFFFFFFF), Color(0xFFB7D5EC)),
+    ParticlePalette(Color(0xFFD9ECFA), Color(0xFFF8FCFF), Color(0xFFA4C8E4)),
+    ParticlePalette(Color(0xFFF4FAFF), Color(0xFFFFFFFF), Color(0xFFC2DCEC))
+)
+private val CRYSTAL_PALETTES = listOf(
+    ParticlePalette(Color(0xFFD4ECFF), Color(0xFFFFFFFF), Color(0xFF7FB4DC)),
+    ParticlePalette(Color(0xFFE2F3FF), Color(0xFFF7FCFF), Color(0xFF8EC0E6)),
+    ParticlePalette(Color(0xFFC5E2F8), Color(0xFFEEF8FF), Color(0xFF6EA6D0))
+)
+private val NEEDLE_PALETTES = listOf(
+    ParticlePalette(Color(0xFFD8EEFB), Color(0xFFFFFFFF), Color(0xFF94C2E0)),
+    ParticlePalette(Color(0xFFC7E4F4), Color(0xFFF3FAFF), Color(0xFF7EAFD2))
 )
 private val SAKURA_PALETTES = listOf(
     ParticlePalette(Color(0xFFF2A2C2), Color(0xFFFFE0EC), Color(0xFFCC7097)),
@@ -58,17 +74,14 @@ private val CLOVER_PALETTES = listOf(
     ParticlePalette(Color(0xFF63B168), Color(0xFFB9E6B7), Color(0xFF356E3D)),
     ParticlePalette(Color(0xFF7CC47F), Color(0xFFD2EFC9), Color(0xFF3F8249))
 )
-private val FIREFLY_PALETTES = listOf(
-    ParticlePalette(Color(0xFFFFC85C), Color(0xFFFFF3C2), Color(0xFFD79A2A)),
-    ParticlePalette(Color(0xFFFFD27A), Color(0xFFFFF8D8), Color(0xFFE3A83A))
-)
 private val DANDELION_PALETTES = listOf(
     ParticlePalette(Color(0xFFEADBB8), Color(0xFFFCF5E4), Color(0xFF7C5F3D)),
     ParticlePalette(Color(0xFFF4E9CC), Color(0xFFFFFFFF), Color(0xFF8C6E48))
 )
 private val MAPLE_PALETTES = listOf(
     ParticlePalette(Color(0xFFE57A34), Color(0xFFF6B86A), Color(0xFFAD4A21)),
-    ParticlePalette(Color(0xFFD9662F), Color(0xFFF0A263), Color(0xFFA94422))
+    ParticlePalette(Color(0xFFD9662F), Color(0xFFF0A263), Color(0xFFA94422)),
+    ParticlePalette(Color(0xFFC24E3C), Color(0xFFE98A63), Color(0xFF8E3526))
 )
 private val OAK_PALETTES = listOf(
     ParticlePalette(Color(0xFFD6A348), Color(0xFFF3D590), Color(0xFF96682A)),
@@ -79,23 +92,20 @@ private val GINKGO_PALETTES = listOf(
     ParticlePalette(Color(0xFFEBCB58), Color(0xFFFCF2B5), Color(0xFFB79424)),
     ParticlePalette(Color(0xFFE3BC3B), Color(0xFFF8EA9B), Color(0xFFB28A1E))
 )
-private val STAR_PALETTES = listOf(
-    ParticlePalette(Color(0xFFBFD8FF), Color(0xFFFFFFFF), Color(0xFF7E9FD8)),
-    ParticlePalette(Color(0xFFC9E2FF), Color(0xFFFFFFFF), Color(0xFF84AEE6))
-)
 
 /** The palette one variant of one shape is drawn from. */
 internal fun particlePalette(effect: SeasonalEffect, variant: Int): ParticlePalette {
     val palettes = when (effect) {
         SeasonalEffect.SNOW -> SNOW_PALETTES
+        SeasonalEffect.POWDER -> POWDER_PALETTES
+        SeasonalEffect.CRYSTAL -> CRYSTAL_PALETTES
+        SeasonalEffect.NEEDLE -> NEEDLE_PALETTES
         SeasonalEffect.SAKURA -> SAKURA_PALETTES
         SeasonalEffect.CLOVER -> CLOVER_PALETTES
-        SeasonalEffect.FIREFLY -> FIREFLY_PALETTES
         SeasonalEffect.DANDELION -> DANDELION_PALETTES
         SeasonalEffect.MAPLE -> MAPLE_PALETTES
         SeasonalEffect.OAK -> OAK_PALETTES
         SeasonalEffect.GINKGO -> GINKGO_PALETTES
-        SeasonalEffect.STAR -> STAR_PALETTES
     }
     return palettes[((variant % palettes.size) + palettes.size) % palettes.size]
 }

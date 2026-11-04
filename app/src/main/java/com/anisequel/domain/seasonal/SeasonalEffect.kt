@@ -1,20 +1,10 @@
 package com.anisequel.domain.seasonal
 
 import kotlin.math.PI
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
- * Which way a shape travels across the screen.
- *
- * A snowflake falls; a firefly rises. Encoding it on the effect rather than in
- * the settings means the direction cannot be changed without also changing the
- * shape that implied it - a "rising snow" is not a preference, it is a bug.
- */
-enum class ParticleDirection { FALL, RISE }
-
-/**
- * The part of the year a sky belongs to, plus the shapes that belong to none.
+ * The part of the year a sky belongs to.
  *
  * ## Why this is a group and not the whole setting
  *
@@ -24,16 +14,15 @@ enum class ParticleDirection { FALL, RISE }
  * simply pretty. Grouping them is what lets the page say "this is the winter sky"
  * without pretending the calendar is part of the preference file.
  *
- * The names are the four seasons and [ANYTIME], which is the honest word for a
- * shape that does not take the month personally. No auto-switching: a sky that
- * changed itself in October would remove a choice, not make one.
+ * Four names, because every shape the overlay draws now belongs to one of them.
+ * No auto-switching: a sky that changed itself in October would remove a choice,
+ * not make one.
  */
 enum class SeasonalSeason(val displayName: String, val blurb: String) {
     SPRING("Spring", "Petals and luck on a warming breeze"),
-    SUMMER("Summer", "Living sparks and seeds in the evening air"),
+    SUMMER("Summer", "Seeds on the air of a long evening"),
     AUTUMN("Autumn", "Leaves turning as they come down"),
-    WINTER("Winter", "Snow on a cold, quiet sky"),
-    ANYTIME("Anytime", "Shapes that do not belong to a month")
+    WINTER("Winter", "Snow on a cold, quiet sky")
 }
 
 /**
@@ -54,6 +43,17 @@ enum class SeasonalSeason(val displayName: String, val blurb: String) {
  * shape slots went to leaves - oak and ginkgo beside the maple - and to a
  * dandelion seed, which is the summer sky the bubbles were standing in for.
  *
+ * ## What changed in 1.8.2, and why
+ *
+ * Fireflies and starlight are gone, and nothing rises any more. Both were glow
+ * rather than matter: at the size the overlay draws, a firefly is a soft dot with
+ * two slivers on it and a sparkle is a dot with four, so neither is a shape the
+ * reader can name - and the two of them were the whole reason the layer had a
+ * `ParticleDirection` and a second set of speed bands. Removing them deletes a
+ * sine per particle per frame (the twinkle only ever drove those two) and leaves
+ * one honest motion: everything falls, and what is flat enough to catch air turns
+ * over as it comes down, which is [tumbleResponse].
+ *
  * Deliberately no colours, paths or Compose here. The domain decides *what*
  * exists and *how many*; `SeasonalParticleLayer` decides what it looks like. That
  * keeps this file testable on a plain JVM and keeps a palette change out of the
@@ -64,114 +64,149 @@ enum class SeasonalEffect(
     val displayName: String,
     val blurb: String,
     val season: SeasonalSeason,
-    val direction: ParticleDirection,
     /** How many distinct drawings this shape can produce. At least one. */
     val variantCount: Int,
     /**
      * True when the shape can come to rest in the drift at the bottom edge.
      *
-     * Snow, petals and leaves land. A firefly, a dandelion seed and a sparkle do
-     * not - a pile of lights would be a bug with a nice colour.
+     * Snow, petals and leaves land. A dandelion seed does not: it arrives with its
+     * parachute spread, and a drift of them reads as a mistake rather than as
+     * settle. The pile asks this instead of keeping its own list of landers.
      */
     val settles: Boolean,
     /**
      * How much of a gust this shape takes, relative to a paper-light one.
      *
-     * A ginkgo fan catches more air than a snowflake; a firefly flies through it.
-     * This is a property of the shape, so it lives here rather than in a `when`
-     * branch inside the draw loop.
+     * A ginkgo fan catches more air than a snowflake. This is a property of the
+     * shape, so it lives here rather than in a `when` branch inside the draw loop.
      */
-    val windResponse: Float
+    val windResponse: Float,
+    /**
+     * How wide the sway is for this shape, as a multiplier on the layer's band.
+     *
+     * A leaf falls edge-on and rocks; a powder grain barely drifts sideways. Was a
+     * twelve-branch `when` in [seasonalParticles], which any new shape had to
+     * remember to extend - and a shape that forgot took the default silently.
+     */
+    val swayResponse: Float,
+    /**
+     * How far this shape turns over as it falls, 0 for none to 1 for a full flip.
+     *
+     * A flat leaf caught edge-on shows its underside; a six-armed flake keeps its
+     * face to the reader. The layer reads this to squeeze the drawing across its own
+     * axis, which is what makes the rotation read as a fall rather than a spin.
+     */
+    val tumbleResponse: Float
 ) {
     SAKURA(
         storageValue = "sakura",
         displayName = "Sakura",
         blurb = "Five-petal blossoms and single petals tumbling on a spring breeze.",
         season = SeasonalSeason.SPRING,
-        direction = ParticleDirection.FALL,
         variantCount = 3,
         settles = true,
-        windResponse = 1.15f
+        windResponse = 1.15f,
+        swayResponse = 1.3f,
+        tumbleResponse = 0.95f
     ),
     CLOVER(
         storageValue = "clover",
         displayName = "Clover",
         blurb = "Heart-shaped clovers, most of them lucky enough to carry four leaves.",
         season = SeasonalSeason.SPRING,
-        direction = ParticleDirection.FALL,
         variantCount = 2,
         settles = true,
-        windResponse = 0.72f
-    ),
-    FIREFLY(
-        storageValue = "firefly",
-        displayName = "Fireflies",
-        blurb = "Warm sparks rising out of a summer evening.",
-        season = SeasonalSeason.SUMMER,
-        direction = ParticleDirection.RISE,
-        variantCount = 2,
-        settles = false,
-        windResponse = 0.42f
+        windResponse = 0.72f,
+        swayResponse = 0.8f,
+        tumbleResponse = 0.7f
     ),
     DANDELION(
         storageValue = "dandelion",
         displayName = "Dandelion",
-        blurb = "Seeds riding a warm updraft, parachutes spread.",
+        blurb = "Seeds on a long evening, parachutes spread and turning in the air.",
         season = SeasonalSeason.SUMMER,
-        direction = ParticleDirection.RISE,
         variantCount = 2,
         settles = false,
-        windResponse = 1.3f
+        windResponse = 1.3f,
+        swayResponse = 1.35f,
+        tumbleResponse = 0.45f
     ),
     MAPLE(
         storageValue = "maple",
         displayName = "Maple",
-        blurb = "Five-lobed maple leaves turning as they come down.",
+        blurb = "Five-lobed maple leaves, amber to red, turning as they come down.",
         season = SeasonalSeason.AUTUMN,
-        direction = ParticleDirection.FALL,
-        variantCount = 2,
+        variantCount = 3,
         settles = true,
-        windResponse = 0.95f
+        windResponse = 0.95f,
+        swayResponse = 1.15f,
+        tumbleResponse = 1f
     ),
     OAK(
         storageValue = "oak",
         displayName = "Oak",
         blurb = "Round-lobed oak leaves, heavier than the maple's.",
         season = SeasonalSeason.AUTUMN,
-        direction = ParticleDirection.FALL,
         variantCount = 3,
         settles = true,
-        windResponse = 0.78f
+        windResponse = 0.78f,
+        swayResponse = 0.85f,
+        tumbleResponse = 0.9f
     ),
     GINKGO(
         storageValue = "ginkgo",
         displayName = "Ginkgo",
         blurb = "Golden ginkgo fans, still on their little stems.",
         season = SeasonalSeason.AUTUMN,
-        direction = ParticleDirection.FALL,
         variantCount = 2,
         settles = true,
-        windResponse = 1.1f
+        windResponse = 1.1f,
+        swayResponse = 1.2f,
+        tumbleResponse = 0.85f
     ),
     SNOW(
         storageValue = "snow",
         displayName = "Snow",
-        blurb = "Six-armed flakes - branches, ferns and plates - on a quiet sky.",
+        blurb = "A mixed winter sky: dendrites, ferns, plates, needles and powder.",
         season = SeasonalSeason.WINTER,
-        direction = ParticleDirection.FALL,
+        variantCount = 5,
+        settles = true,
+        windResponse = 0.85f,
+        swayResponse = 0.95f,
+        tumbleResponse = 0.3f
+    ),
+    POWDER(
+        storageValue = "powder",
+        displayName = "Powder",
+        blurb = "Soft round grains, the snow that falls when the air is still.",
+        season = SeasonalSeason.WINTER,
         variantCount = 3,
         settles = true,
-        windResponse = 0.85f
+        windResponse = 1.08f,
+        swayResponse = 0.55f,
+        tumbleResponse = 0.15f
     ),
-    STAR(
-        storageValue = "star",
-        displayName = "Starlight",
-        blurb = "Four-point sparkles for a sky that is not on the calendar.",
-        season = SeasonalSeason.ANYTIME,
-        direction = ParticleDirection.FALL,
+    CRYSTAL(
+        storageValue = "crystal",
+        displayName = "Crystal",
+        blurb = "Large stellar dendrites, each flake its own little window.",
+        season = SeasonalSeason.WINTER,
+        variantCount = 3,
+        settles = true,
+        windResponse = 0.92f,
+        swayResponse = 1.15f,
+        tumbleResponse = 0.35f
+    ),
+    NEEDLE(
+        storageValue = "needle",
+        displayName = "Needles",
+        blurb = "Thin ice columns tumbling end over end.",
+        season = SeasonalSeason.WINTER,
         variantCount = 2,
-        settles = false,
-        windResponse = 0.34f
+        settles = true,
+        windResponse = 0.62f,
+        swayResponse = 0.7f,
+        tumbleResponse = 0.7f
     );
 
     companion object {
@@ -182,8 +217,10 @@ enum class SeasonalEffect(
          *
          * A preference written by a newer build, or a hand-edited file, must not
          * crash the app that reads it. Unknown values land on the shipped shape.
-         * This is also where the removed `bubble` value lands: an install that had
-         * bubbles selected upgrades to snow rather than to a blank sky.
+         * This is also where the removed `bubble`, `firefly` and `star` values
+         * land: an install that had any of them selected upgrades to snow rather
+         * than to a blank sky, because there is no successor shape that is a
+         * substitute for all three.
          */
         fun fromStorage(value: String?): SeasonalEffect =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
@@ -193,6 +230,10 @@ enum class SeasonalEffect(
 /** The shapes a season offers, in enum order. */
 fun seasonalEffectsIn(season: SeasonalSeason): List<SeasonalEffect> =
     SeasonalEffect.entries.filter { it.season == season }
+
+/** True for every winter flake: mixed snow, powder, crystals and needles. */
+val SeasonalEffect.isWinterSnow: Boolean
+    get() = season == SeasonalSeason.WINTER
 
 /**
  * The season a month falls in, for the "use this season's sky" shortcut.
@@ -216,10 +257,9 @@ fun seasonalSeasonForMonth(month: Int): SeasonalSeason = when (month.coerceIn(1,
 /** The shape a season opens with, used by the "use this season" shortcut. */
 fun SeasonalSeason.defaultEffect(): SeasonalEffect = when (this) {
     SeasonalSeason.SPRING -> SeasonalEffect.SAKURA
-    SeasonalSeason.SUMMER -> SeasonalEffect.FIREFLY
+    SeasonalSeason.SUMMER -> SeasonalEffect.DANDELION
     SeasonalSeason.AUTUMN -> SeasonalEffect.MAPLE
     SeasonalSeason.WINTER -> SeasonalEffect.SNOW
-    SeasonalSeason.ANYTIME -> SeasonalEffect.STAR
 }
 
 /** Below this, even the lightest sky looks empty. */
@@ -284,9 +324,14 @@ const val DEFAULT_SEASONAL_WIND_STRENGTH = 0.5f
  * for, not something an update switches on for them; the Settings page draws a
  * preview precisely so the choice can be made before it covers the app.
  *
- * [settle] and [reactToWind] are on by default *within* an effect that is already
- * on: a sky that does not land and does not move is a still picture, and the two
- * switches exist to turn those behaviours off, not to make the reader find them.
+ * [settle] and [reactToWind] are off until asked for. A drift along the bottom
+ * of every page and a sky that leans on every scroll are the two things that
+ * change how the app itself feels, not just how pretty it is; they stay behind
+ * a switch so turning the overlay on is still only "shapes in the air".
+ *
+ * [quality] starts at Auto. The first time the overlay is switched on, Settings
+ * writes the tier this phone actually is, so a low-end device never spends a
+ * session on the flagship sky by accident.
  */
 data class SeasonalSettings(
     val enabled: Boolean = false,
@@ -294,10 +339,11 @@ data class SeasonalSettings(
     val density: Float = DEFAULT_SEASONAL_DENSITY,
     val sizeScale: Float = DEFAULT_SEASONAL_SIZE_SCALE,
     val speedScale: Float = DEFAULT_SEASONAL_SPEED_SCALE,
-    val settle: Boolean = true,
+    val settle: Boolean = false,
     val pileDepth: Float = DEFAULT_SEASONAL_PILE_DEPTH,
-    val reactToWind: Boolean = true,
-    val windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH
+    val reactToWind: Boolean = false,
+    val windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH,
+    val quality: SeasonalQuality = SeasonalQuality.DEFAULT
 ) {
     /**
      * A repaired copy of these settings.
@@ -343,23 +389,29 @@ data class SeasonalParticle(
      * density keeps the variants the sky already had - the first `n` particles
      * are still the same list.
      */
-    val variant: Int
+    val variant: Int,
+    /**
+     * How much extra flutter this particle takes.
+     *
+     * Larger leaves and dendrites rock; powder barely does. Stored so raising
+     * the density keeps the motion the sky already had, the same way [variant]
+     * does.
+     */
+    val flutter: Float
 )
 
 /**
- * How many particles a density asks for.
+ * How many particles a density asks for on the top quality tier.
  *
  * Linear in density, which is the only mapping a slider labelled "density" can
  * honestly use: every millimetre of travel adds the same number of flakes. The
  * floor is not zero because zero is the switch's job, and a density slider whose
  * bottom end is indistinguishable from off is a second off switch.
+ *
+ * Delegates to the tiered overload rather than repeating the arithmetic: the two
+ * formulas were already one edit apart from disagreeing about the default sky.
  */
-fun particleCountFor(density: Float): Int {
-    val clamped = finiteOr(density, DEFAULT_SEASONAL_DENSITY)
-        .coerceIn(MIN_SEASONAL_DENSITY, MAX_SEASONAL_DENSITY)
-    val span = MAX_SEASONAL_PARTICLES - MIN_SEASONAL_PARTICLES
-    return (MIN_SEASONAL_PARTICLES + span * clamped).roundToInt()
-}
+fun particleCountFor(density: Float): Int = particleCountFor(density, SeasonalQualityTier.HIGH)
 
 /** The base size, in dp, for a size multiplier. */
 fun particleSizeDp(sizeScale: Float): Float =
@@ -401,50 +453,92 @@ fun windStrengthScale(windStrength: Float): Float =
 fun seasonalParticles(
     effect: SeasonalEffect,
     density: Float,
-    seed: Int = effect.ordinal * 7919 + 104729
+    seed: Int = effect.ordinal * 7919 + 104729,
+    quality: SeasonalQualityTier = SeasonalQualityTier.HIGH
 ): List<SeasonalParticle> {
-    val count = particleCountFor(density)
+    val count = particleCountFor(density, quality)
     val random = Random(seed)
-    // Rising shapes travel slower: a firefly that crossed the screen in the time
-    // a snowflake does would be a spark thrown upwards, not a living light.
+    // Screen-heights per second. Most shapes share one band and the four whose
+    // mass-to-area ratio makes them a different animal name their own: a dandelion
+    // seed that crossed the screen as fast as a snowflake is a thrown seed, and a
+    // crystal that matched a flake would be the biggest thing in the sky landing
+    // first.
     val minSpeed: Float
     val maxSpeed: Float
-    when (effect.direction) {
-        ParticleDirection.FALL -> {
+    when (effect) {
+        SeasonalEffect.DANDELION -> {
+            minSpeed = 0.028f
+            maxSpeed = 0.062f
+        }
+        SeasonalEffect.POWDER -> {
+            minSpeed = 0.10f
+            maxSpeed = 0.20f
+        }
+        SeasonalEffect.CRYSTAL -> {
+            minSpeed = 0.045f
+            maxSpeed = 0.12f
+        }
+        SeasonalEffect.NEEDLE -> {
+            minSpeed = 0.08f
+            maxSpeed = 0.16f
+        }
+        else -> {
             minSpeed = 0.07f
             maxSpeed = 0.17f
         }
-        ParticleDirection.RISE -> {
-            minSpeed = 0.025f
-            maxSpeed = 0.075f
+    }
+    val minSize: Float
+    val sizeSpan: Float
+    when (effect) {
+        SeasonalEffect.POWDER -> {
+            minSize = 0.50f
+            sizeSpan = 0.42f
+        }
+        SeasonalEffect.CRYSTAL -> {
+            minSize = 0.78f
+            sizeSpan = 0.56f
+        }
+        SeasonalEffect.NEEDLE -> {
+            minSize = 0.52f
+            sizeSpan = 0.58f
+        }
+        SeasonalEffect.DANDELION -> {
+            minSize = 0.62f
+            sizeSpan = 0.60f
+        }
+        else -> {
+            minSize = 0.55f
+            sizeSpan = 0.80f
         }
     }
-    // A leaf rocks further than a flake because it is a flat surface falling
-    // edge-on; a firefly keeps its own path. The direction's base range is the
-    // same, the multiplier is the shape's.
-    val swayScale = when (effect) {
-        SeasonalEffect.SNOW -> 0.9f
-        SeasonalEffect.SAKURA -> 1.3f
-        SeasonalEffect.CLOVER -> 0.8f
-        SeasonalEffect.MAPLE -> 1.15f
-        SeasonalEffect.OAK -> 0.85f
-        SeasonalEffect.GINKGO -> 1.2f
-        SeasonalEffect.FIREFLY -> 0.65f
-        SeasonalEffect.DANDELION -> 1.35f
-        SeasonalEffect.STAR -> 0.55f
-    }
+    // A flat shape turns over as it falls, so the spin band is widest for the ones
+    // that show an underside. Capped so the result stays inside the range the
+    // particles are pinned to.
+    val spinSpan = 0.8f + effect.tumbleResponse * 0.9f
     return List(count) {
+        // Depth is the first number drawn, and the other three follow it. A sky used to
+        // roll size, speed and opacity independently, so a flake could be the largest
+        // thing on screen and the slowest - a big near flake drifting like a far one.
+        // Tying them together costs nothing and gives the field a front and a back: the
+        // large flakes fall faster and brighter, the small ones hang back and fade.
+        val sizeT = random.nextFloat()
+        val size = minSize + sizeT * sizeSpan
+        val speedT = (sizeT * 0.68f + random.nextFloat() * 0.32f).coerceIn(0f, 1f)
         SeasonalParticle(
             x = random.nextFloat(),
             y = random.nextFloat(),
-            size = 0.55f + random.nextFloat() * 0.8f,
-            speed = minSpeed + random.nextFloat() * (maxSpeed - minSpeed),
-            sway = (0.008f + random.nextFloat() * 0.042f) * swayScale,
+            size = size,
+            speed = minSpeed + speedT * (maxSpeed - minSpeed),
+            sway = (0.008f + random.nextFloat() * 0.042f) * effect.swayResponse,
             swayRate = 0.07f + random.nextFloat() * 0.23f,
             phase = random.nextFloat() * (2f * PI.toFloat()),
-            spin = (random.nextFloat() - 0.5f) * 1.6f,
-            alpha = 0.55f + random.nextFloat() * 0.45f,
-            variant = random.nextInt(effect.variantCount.coerceAtLeast(1))
+            spin = (random.nextFloat() - 0.5f) * spinSpan,
+            // Never below 0.55: a flake that fades to nothing at the near edge of the
+            // field is invisible, and the depth cue is already carried by size and speed.
+            alpha = (0.58f + sizeT * 0.36f + (random.nextFloat() - 0.5f) * 0.06f)
+                .coerceIn(0.55f, 1f),
+            variant = random.nextInt(effect.variantCount.coerceAtLeast(1)),
+            flutter = 0.45f + random.nextFloat() * 0.85f
         )
     }
 }

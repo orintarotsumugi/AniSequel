@@ -3,6 +3,8 @@ package com.anisequel.ui.screens.settings
 import android.app.KeyguardManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepositoryImpl
+import com.anisequel.domain.gif.GifProvider
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.RedirectUrlHint
 import com.anisequel.ui.components.StatsBanner
@@ -369,6 +372,7 @@ private fun ClientIdEditor(
  * is a decision the reader made, not one the app should have made silently on their
  * behalf.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CommentMediaCard(context: android.content.Context) {
     // Built here, at the page that edits it, the same way the About tab builds the
@@ -431,39 +435,109 @@ private fun CommentMediaCard(context: android.content.Context) {
                 "files to requests carrying AniList's own address, so a photo stored " +
                 "there looks fine in this app and shows as a broken image on the site. " +
                 "All three are public: anybody with the link can view the file, and " +
-                "none can delete it without an account. GIF search runs " +
-                "against Safebooru, asked for animated GIFs at safe rating only - no " +
-                "key, no account, and an anime catalogue. A Tenor key below switches " +
-                "the search to Tenor's own catalogue.",
+                "none can delete it without an account. GIF search runs against the " +
+                "index chosen below. Safebooru and nekos.best need no key and ask for " +
+                "safe anime GIFs only; Klipy, GIPHY and Tenor take a key you supply, " +
+                "and each key is stored on this device under its own encrypted entry.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        TenorKeyEditor(
-            currentKey = settings.tenorApiKey,
-            onSave = { key -> scope.launch { preferences.setTenorApiKey(key) } }
+        // The choice, not a consequence of holding a key. It used to be implied by
+        // "a Tenor key exists", which could only name one provider; with three keyed
+        // indexes that rule cannot say which one was meant, and saving a Klipy key
+        // would have sent it to Tenor.
+        SettingsFieldLabel(text = "GIF search index")
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            GifProvider.selectable.forEach { provider ->
+                JokeChoiceChip(
+                    label = provider.displayName,
+                    selected = settings.gifProvider == provider,
+                    enabled = true,
+                    onClick = {
+                        scope.launch { preferences.setGifProvider(provider) }
+                    },
+                    testTag = "settings_gif_provider_${provider.storageValue}"
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val currentKey = settings.gifProvider.keyFrom(
+            settings.tenorApiKey,
+            settings.klipyApiKey,
+            settings.giphyApiKey
         )
+        Text(
+            text = when {
+                !settings.gifProvider.needsKey ->
+                    "${settings.gifProvider.displayName} needs no account, so searches " +
+                        "start as soon as you open the picker."
+                currentKey.isNullOrBlank() ->
+                    "${settings.gifProvider.displayName} needs a key. Searches fall " +
+                        "back to Safebooru until one is saved below."
+                else -> "Searches go to ${settings.gifProvider.displayName}."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (settings.gifProvider.needsKey && currentKey.isNullOrBlank()) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+
+        if (settings.gifProvider.needsKey) {
+            Spacer(modifier = Modifier.height(14.dp))
+            GifKeyEditor(
+                provider = settings.gifProvider,
+                currentKey = currentKey,
+                onSave = { key ->
+                    scope.launch {
+                        when (settings.gifProvider) {
+                            GifProvider.TENOR -> preferences.setTenorApiKey(key)
+                            GifProvider.KLIPY -> preferences.setKlipyApiKey(key)
+                            GifProvider.GIPHY -> preferences.setGiphyApiKey(key)
+                            GifProvider.SAFEBOORU, GifProvider.NEKOS_BEST -> Unit
+                        }
+                    }
+                }
+            )
+        }
     }
 }
 
 /**
- * The optional Tenor key.
+ * The key for the chosen provider.
  *
- * Saved into the keystore-backed field and never echoed back: the field shows
- * whether one is stored, and a reader who wants to change it types a new one.
- * Printing the saved key into a text field would put a credential on screen for
- * anybody looking over a shoulder, which is the same reason the token this app
- * already stores is never shown either.
+ * One editor rather than one per provider: the field, the clear and the save are
+ * identical, and three copies is how "leave this empty to clear it" ends up true in
+ * two of them. The saved key is never echoed back - the field says whether one is
+ * stored and a reader who wants to change it types a new one. Printing it would put
+ * a credential on screen for anybody looking over a shoulder, which is the same
+ * reason the token this app already stores is never shown either.
+ *
+ * `remember` is keyed on [provider] so switching chips cannot leave a half-typed
+ * Klipy key sitting under the GIPHY label, where Save would send it to the wrong
+ * service.
  */
 @Composable
-private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
-    var editing by rememberSaveable { mutableStateOf("") }
-    var saved by remember { mutableStateOf(false) }
+private fun GifKeyEditor(
+    provider: GifProvider,
+    currentKey: String?,
+    onSave: (String) -> Unit
+) {
+    var editing by rememberSaveable(provider) { mutableStateOf("") }
+    var saved by remember(provider) { mutableStateOf(false) }
     val trimmed = editing.trim()
 
-    SettingsFieldLabel(text = "Tenor API key (optional)")
+    SettingsFieldLabel(text = provider.keyLabel)
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedTextField(
         value = editing,
@@ -477,8 +551,8 @@ private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
             Text(
                 text = when {
                     saved -> "Saved on this device, encrypted."
-                    currentKey != null -> "A key is stored. Leave this empty and save to go back to Safebooru."
-                    else -> "Free from Google Cloud for Tenor v2. Stored encrypted, never sent anywhere else."
+                    currentKey != null -> "A key is stored. Leave this empty and save to clear it."
+                    else -> provider.keyHint
                 },
                 style = MaterialTheme.typography.bodySmall
             )
@@ -486,7 +560,7 @@ private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("settings_tenor_key_field")
+            .testTag("settings_gif_key_field")
     )
     Spacer(modifier = Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -500,7 +574,7 @@ private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
             enabled = currentKey != null,
             variant = SettingsButtonVariant.Outlined,
             modifier = Modifier.weight(1f),
-            testTag = "settings_tenor_key_clear"
+            testTag = "settings_gif_key_clear"
         )
         SettingsButton(
             text = if (saved) "Saved" else "Save",
@@ -512,7 +586,7 @@ private fun TenorKeyEditor(currentKey: String?, onSave: (String) -> Unit) {
             enabled = trimmed.isNotBlank(),
             variant = if (saved) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
             modifier = Modifier.weight(1f),
-            testTag = "settings_tenor_key_save"
+            testTag = "settings_gif_key_save"
         )
     }
 }

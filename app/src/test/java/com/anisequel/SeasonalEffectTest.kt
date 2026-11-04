@@ -17,8 +17,8 @@ import com.anisequel.domain.seasonal.MIN_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.MIN_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.MIN_SEASONAL_SPEED_SCALE
 import com.anisequel.domain.seasonal.MIN_SEASONAL_WIND_STRENGTH
-import com.anisequel.domain.seasonal.ParticleDirection
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalQualityTier
 import com.anisequel.domain.seasonal.SeasonalSeason
 import com.anisequel.domain.seasonal.SeasonalSettings
 import com.anisequel.domain.seasonal.defaultEffect
@@ -29,8 +29,10 @@ import com.anisequel.domain.seasonal.particleSpeedScale
 import com.anisequel.domain.seasonal.pileDepthScale
 import com.anisequel.domain.seasonal.seasonalEffectsIn
 import com.anisequel.domain.seasonal.seasonalParticles
+import com.anisequel.domain.seasonal.seasonalQualityTierForDevice
 import com.anisequel.domain.seasonal.seasonalSeasonForMonth
 import com.anisequel.domain.seasonal.windStrengthScale
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -55,8 +57,10 @@ import org.junit.Test
  *
  * Since 1.8.1 the shape list also carries the facts the drawing layer must not
  * duplicate: which season owns a shape, which shapes can settle into a drift, how
- * many drawings each one has, and how much a gust moves it. Those are requirements,
- * not preferences - a firefly in a pile is a bug, and a variant index outside the
+ * many drawings each one has, and how much a gust moves it. Since 1.8.2 it carries how
+ * wide a shape sways and how far it turns over, because a shape that forgot those two
+ * silently took another shape's motion. Those are requirements, not preferences - a
+ * seed that will not land must not build a drift, and a variant index outside the
  * shape's count is a palette lookup that should never happen.
  */
 class SeasonalEffectTest {
@@ -79,10 +83,13 @@ class SeasonalEffectTest {
     }
 
     @Test
-    fun `a removed bubble selection becomes the default snow`() {
-        // Bubbles shipped in 1.8.0 and were removed in 1.8.1. An install that had
-        // them selected must land somewhere readable rather than on a blank sky.
+    fun `a removed shape becomes the default snow`() {
+        // Bubble shipped in 1.8.0 and was removed in 1.8.1; firefly and star were
+        // removed in 1.8.2. An install that had any of them selected must land somewhere
+        // readable rather than on a blank sky, and must not crash on the stale string.
         assertEquals(SeasonalEffect.SNOW, SeasonalEffect.fromStorage("bubble"))
+        assertEquals(SeasonalEffect.SNOW, SeasonalEffect.fromStorage("firefly"))
+        assertEquals(SeasonalEffect.SNOW, SeasonalEffect.fromStorage("star"))
     }
 
     @Test
@@ -95,15 +102,30 @@ class SeasonalEffectTest {
         }
         assertTrue(seasonalEffectsIn(SeasonalSeason.SPRING).contains(SeasonalEffect.SAKURA))
         assertTrue(seasonalEffectsIn(SeasonalSeason.SPRING).contains(SeasonalEffect.CLOVER))
+        assertEquals(
+            listOf(SeasonalEffect.DANDELION),
+            seasonalEffectsIn(SeasonalSeason.SUMMER)
+        )
         assertTrue(seasonalEffectsIn(SeasonalSeason.AUTUMN).contains(SeasonalEffect.MAPLE))
         assertTrue(seasonalEffectsIn(SeasonalSeason.AUTUMN).contains(SeasonalEffect.OAK))
         assertTrue(seasonalEffectsIn(SeasonalSeason.AUTUMN).contains(SeasonalEffect.GINKGO))
-        assertEquals(listOf(SeasonalEffect.SNOW), seasonalEffectsIn(SeasonalSeason.WINTER))
-        assertEquals(listOf(SeasonalEffect.STAR), seasonalEffectsIn(SeasonalSeason.ANYTIME))
+        assertEquals(
+            listOf(
+                SeasonalEffect.SNOW,
+                SeasonalEffect.POWDER,
+                SeasonalEffect.CRYSTAL,
+                SeasonalEffect.NEEDLE
+            ),
+            seasonalEffectsIn(SeasonalSeason.WINTER)
+        )
     }
 
     @Test
-    fun `the four seasons and the shapes outside the calendar cover every effect`() {
+    fun `the four seasons cover every shape, and there are only four seasons`() {
+        // Starlight was the fifth group, for the shapes outside the calendar. With
+        // firefly and star gone every shape belongs to a month, so an "anytime" heading
+        // would be a section with nothing under it.
+        assertEquals(4, SeasonalSeason.entries.size)
         val grouped = SeasonalSeason.entries.flatMap { seasonalEffectsIn(it) }
         assertEquals(
             "a shape missing from every group would be unreachable on the settings page",
@@ -125,9 +147,8 @@ class SeasonalEffectTest {
         }
         assertEquals(SeasonalEffect.SNOW, SeasonalSeason.WINTER.defaultEffect())
         assertEquals(SeasonalEffect.SAKURA, SeasonalSeason.SPRING.defaultEffect())
-        assertEquals(SeasonalEffect.FIREFLY, SeasonalSeason.SUMMER.defaultEffect())
+        assertEquals(SeasonalEffect.DANDELION, SeasonalSeason.SUMMER.defaultEffect())
         assertEquals(SeasonalEffect.MAPLE, SeasonalSeason.AUTUMN.defaultEffect())
-        assertEquals(SeasonalEffect.STAR, SeasonalSeason.ANYTIME.defaultEffect())
     }
 
     @Test
@@ -147,22 +168,47 @@ class SeasonalEffectTest {
     }
 
     @Test
-    fun `only falling shapes settle, and the falling set is not empty`() {
+    fun `everything falls, and the seed is the shape that does not settle`() {
+        // There used to be a direction on the shape because fireflies rose and snowflakes fell.
+        // The rising shapes are gone, so "settles but does not fall" is no longer a thing the
+        // drawing has to check - and the pile only asks the shape whether it lands.
         val settling = SeasonalEffect.entries.filter { it.settles }
         assertTrue("nothing can pile up", settling.isNotEmpty())
-        settling.forEach { effect ->
-            assertEquals(
-                "$effect settles but does not fall: a rising shape has no floor to land on",
-                ParticleDirection.FALL,
-                effect.direction
+        assertEquals(
+            "every shape but the seed lands",
+            setOf(SeasonalEffect.DANDELION),
+            SeasonalEffect.entries.filter { !it.settles }.toSet()
+        )
+        assertTrue(SeasonalEffect.SNOW.settles)
+        assertTrue(SeasonalEffect.POWDER.settles)
+        assertTrue(SeasonalEffect.CRYSTAL.settles)
+        assertTrue(SeasonalEffect.NEEDLE.settles)
+        assertTrue(SeasonalEffect.MAPLE.settles)
+    }
+
+    @Test
+    fun `a flat shape turns over and a flake keeps its face`() {
+        // The squeeze the layer draws a turning leaf with. If a shape's tumbling were wired to
+        // its wind response, as it nearly was, an oak in still air would stop rotating - and a
+        // snowflake given a full flip would be drawn edge-on, vanishing every few seconds.
+        assertTrue(
+            "a leaf that does not roll over is a sticker falling",
+            SeasonalEffect.MAPLE.tumbleResponse > SeasonalEffect.SNOW.tumbleResponse
+        )
+        assertTrue(
+            "a powder grain is a blob and has no underside to show",
+            SeasonalEffect.POWDER.tumbleResponse < 0.5f
+        )
+        SeasonalEffect.entries.forEach { effect ->
+            assertTrue(
+                "$effect tumbles outside the range the layer can draw with",
+                effect.tumbleResponse in 0f..1f
+            )
+            assertTrue(
+                "$effect sways outside the band the layer scales",
+                effect.swayResponse in 0.5f..1.5f
             )
         }
-        // The three that must never produce a drift of lights or seeds.
-        listOf(SeasonalEffect.FIREFLY, SeasonalEffect.DANDELION, SeasonalEffect.STAR).forEach {
-            assertTrue("$it must not settle", !it.settles)
-        }
-        assertTrue(SeasonalEffect.SNOW.settles)
-        assertTrue(SeasonalEffect.MAPLE.settles)
     }
 
     @Test
@@ -284,27 +330,45 @@ class SeasonalEffectTest {
     }
 
     @Test
-    fun `rising shapes travel slower than falling ones`() {
-        val fall = seasonalParticles(SeasonalEffect.SNOW, 1f, seed = 5)
-        val rise = seasonalParticles(SeasonalEffect.FIREFLY, 1f, seed = 5)
+    fun `everything falls and the seed is the slowest thing in the sky`() {
+        // Replaces the old "rising shapes travel slower" test. There are no rising shapes
+        // left, but the reasoning survives as a speed band: a seed falls under a parachute,
+        // and it was the RISE direction that used to make that true. Give it the shared band
+        // and the heaviest drawing in the sky arrives before the snow.
+        val snow = seasonalParticles(SeasonalEffect.SNOW, 1f, seed = 5)
+        val seed = seasonalParticles(SeasonalEffect.DANDELION, 1f, seed = 5)
+        val powder = seasonalParticles(SeasonalEffect.POWDER, 1f, seed = 5)
         assertTrue(
-            "falling speeds come from the slow-to-brisk band",
-            fall.all { it.speed in 0.07f..0.17f }
+            "a dandelion seed that crossed the screen at a flake's speed is a thrown seed",
+            seed.all { it.speed in 0.028f..0.062f }
         )
         assertTrue(
-            "rising speeds come from the slower band",
-            rise.all { it.speed in 0.025f..0.075f }
+            "powder is the briskest - it is the snow that falls when the air is still",
+            powder.all { it.speed in 0.10f..0.20f }
         )
         assertTrue(
-            "a firefly that crossed the screen at a snowflake's speed is a spark " +
-                "thrown upwards, not a living light",
-            rise.map { it.speed }.average() < fall.map { it.speed }.average()
+            "the seed must drift down slower than the snow",
+            seed.map { it.speed }.average() < snow.map { it.speed }.average()
         )
-        assertEquals(
-            "a dandelion seed is a rising shape",
-            ParticleDirection.RISE,
-            SeasonalEffect.DANDELION.direction
+    }
+
+    @Test
+    fun `a shape that turns over also spins faster`() {
+        val maple = seasonalParticles(SeasonalEffect.MAPLE, 1f, seed = 5)
+        val powder = seasonalParticles(SeasonalEffect.POWDER, 1f, seed = 5)
+        val mapleSpin = maple.maxOf { abs(it.spin) }
+        val powderSpin = powder.maxOf { abs(it.spin) }
+        assertTrue(
+            "a leaf holding still while a grain spins is the wrong way round",
+            mapleSpin > powderSpin
         )
+        SeasonalEffect.entries.forEach { effect ->
+            val spins = seasonalParticles(effect, 1f, seed = 5).map { it.spin }
+            assertTrue(
+                "$effect spins outside the band the layer is pinned to",
+                spins.all { it in -0.9f..0.9f }
+            )
+        }
     }
 
     @Test
@@ -386,5 +450,49 @@ class SeasonalEffectTest {
         assertEquals(MAX_SEASONAL_SPEED_SCALE, clamped.speedScale)
         assertEquals(MAX_SEASONAL_PILE_DEPTH, clamped.pileDepth)
         assertEquals(MAX_SEASONAL_WIND_STRENGTH, clamped.windStrength)
+    }
+
+    @Test
+    fun `a quality tier caps the sky rather than changing what it looks like`() {
+        // The tier is the answer to "will this phone enjoy sixty detailed flakes". Two
+        // things can go wrong silently: a cap below the floor stops the density slider
+        // doing anything, and a generator that builds the flagship list and truncates it
+        // afterwards pays for flakes it never draws.
+        SeasonalQualityTier.entries.forEach { tier ->
+            val sparse = particleCountFor(MIN_SEASONAL_DENSITY, tier)
+            val dense = particleCountFor(MAX_SEASONAL_DENSITY, tier)
+            assertTrue("$tier has no room between the ends of the slider", dense > sparse)
+            assertTrue(
+                "$tier exceeds the ceiling every layer shares",
+                dense <= MAX_SEASONAL_PARTICLES
+            )
+            assertEquals(
+                "$tier drew a different number of flakes than it asked for",
+                dense,
+                seasonalParticles(
+                    SeasonalEffect.SNOW,
+                    MAX_SEASONAL_DENSITY,
+                    seed = 3,
+                    quality = tier
+                ).size
+            )
+        }
+        assertTrue(
+            "a low-end phone must draw fewer flakes than a flagship",
+            particleCountFor(1f, SeasonalQualityTier.LOW) <
+                particleCountFor(1f, SeasonalQualityTier.HIGH)
+        )
+    }
+
+    @Test
+    fun `the device class falls back to mid-range rather than guessing weak`() {
+        // A stub ActivityManager reports zero, and degrading a flagship because a lookup
+        // came back empty is the same mistake as shipping the heavy sky to a cheap phone -
+        // except it is invisible to the person whose frame rate dropped.
+        assertEquals(SeasonalQualityTier.MID, seasonalQualityTierForDevice(0L, 0))
+        assertEquals(SeasonalQualityTier.LOW, seasonalQualityTierForDevice(3_000L, 8))
+        assertEquals(SeasonalQualityTier.LOW, seasonalQualityTierForDevice(8_000L, 4))
+        assertEquals(SeasonalQualityTier.HIGH, seasonalQualityTierForDevice(8_000L, 8))
+        assertEquals(SeasonalQualityTier.MID, seasonalQualityTierForDevice(5_000L, 8))
     }
 }

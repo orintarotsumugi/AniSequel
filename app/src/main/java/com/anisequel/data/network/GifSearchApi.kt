@@ -11,69 +11,51 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * GIF search, from whichever provider the reader has.
+ * GIF search, from whichever provider the reader has chosen.
  *
- * ## Why there are two of them
+ * ## The provider set, and why it is this one (November 2026)
  *
- * Tenor used to answer anonymous searches - the public key in its documentation was
- * how every hobby client got GIFs - and it does not any more: `g.tenor.com/v1`
- * replies HTTP 403 with `{"code":7,"error":"Tenor API is discontinued"}` and
- * `tenor.googleapis.com` rejects the same string as `API_KEY_INVALID`.
+ * - **Safebooru** is the anonymous default. It is asked for `animated_gif` at
+ *   `rating:safe`, its catalogue is anime, and it needs no account. See
+ *   [SafebooruGifs] and [booruTiers] for how a sentence becomes three tag
+ *   spellings one search is asked as.
+ * - **nekos.best** is the second keyless index. It is small and reaction-shaped
+ *   (`hug`, `pat`, `wave`), and it needs a User-Agent that names the app. See
+ *   [NekosBestGifs].
+ * - **Klipy** is the closest drop-in replacement for Tenor: a key in the path,
+ *   page-numbered results, and `file.hd` / `file.sm` copies. See [KlipyGifs].
+ * - **GIPHY** is the name everyone expects. Every new key is a beta key capped at
+ *   100 calls an hour, its dimensions are JSON **strings**, and its terms forbid
+ *   mixing its results into a grid with another provider's. See [GiphyGifs].
+ * - **Tenor** is kept for an install that already saved a key, but its public API
+ *   was retired in 2026, so it is no longer the default and its failures say so.
  *
- * Giphy is the other name everybody expects here, and it is worth recording how it
- * manages access, because the answer is "not anonymously, and not any more, ever".
- * A key now requires signing up at developers.giphy.com; every new key is a **beta
- * key limited to 100 calls an hour** until Giphy approves an application for
- * production; the `media.giphy.com/api/v5` search surface is OAuth-issued rather
- * than key-authenticated; and the historically published public beta key
- * (`dc6zaTOxFJmzC`) answers HTTP 403 with `"msg":"BANNED"` - identically for a curl,
- * a browser and an OkHttp user agent, which is what makes it a blacklisted *key*
- * rather than a blocked client. A second leaked one is 401. There is no anonymous
- * token endpoint. So there is nothing for this app to hold: the only Giphy path is
- * the reader's own key, which is the same shape as Tenor's, and neither is bundled.
+ * A key is never bundled. The anonymous default is what lets somebody use the app
+ * without handing over a credential, and a committed key would be one rate limit
+ * shared by every install plus a secret in a public repository.
  *
- * The rest of the candidates were measured too, and are recorded so the next reader
- * does not spend an afternoon re-discovering them (November 2026):
+ * ## What was measured and rejected
+ *
+ * Recorded so the next reader does not spend an afternoon re-discovering them:
  *
  * - **Gelbooru** DAPI: HTTP 401 for every anonymous shape; it now needs an
  *   account-issued `api_key` plus `user_id`.
  * - **Rule34**: HTTP 403 with a CAPTCHA page for any user agent.
  * - **Danbooru** `posts.json`: answers 200 anonymously and its CDN hotlinks fine,
- *   but the anonymous search is capped at **two tags per request**, which is not
- *   enough to ask for a safe animated series GIF (`animated_gif rating:general
- *   order:score <series>` is four), and its default result set includes deleted and
- *   `q`-rated posts. It is a poor fit for a picker that must filter safely, so the
- *   app does not use it.
+ *   but the anonymous search is capped at **two tags per request**, and its default
+ *   result set includes deleted and `q`-rated posts.
  * - **Wikimedia Commons**: `mimetype:image/gif` / `filetype:gif` searches return
  *   `totalhits: 0` - MIME search is switched off at the API level.
- * - **Openverse**: responds, but slowly (timeouts on anime queries), caps anonymous
- *   callers at 20 a minute, and has no anime reaction-GIF catalogue to search.
+ * - **Openverse**: responds slowly, caps anonymous callers at 20 a minute, and has
+ *   no anime reaction-GIF catalogue.
  * - **DuckDuckGo's** image endpoint: a bot challenge.
  * - **Konachan.net**: HTTP 522, origin not answering.
  *
- * What is left is the two that actually answer, and both are offered:
- *
- * - **Safebooru**, anonymous, no account and no key, asked for `animated_gif` at
- *   `rating:safe`. Its catalogue is anime, which is what a reader on AniList is
- *   looking for, and this is the source the browser GIF pickers in that community
- *   already use. See [SafebooruGifs] and [booruTiers] for how a sentence becomes the
- *   three tag spellings one search is asked as.
- * - **Tenor v2**, when the reader has pasted their own key in Settings. This is
- *   what a reaction-GIF picker used to be, with the coverage that implies, and the
- *   key is theirs, obtained free from Google.
- *
- * A key is never bundled. The whole point of the anonymous default is that nobody
- * has to hand over a credential to use the app, and a committed key would be a
- * rate limit shared by every install plus a secret in a public repository - which is
- * also exactly what Giphy's 100-an-hour beta ceiling would become: one quota,
- * shared, for every install in the wild.
- *
  * ## Never the AniList token
  *
- * Both clients are their own [OkHttpClient] with no interceptors, the same rule
+ * Every client is its own [OkHttpClient] with no interceptors, the same rule
  * [AnimeThemesApi] and [CatboxApi] record: the shared client attaches the reader's
- * bearer token to everything, and neither a search index nor a file host has any
- * business holding it.
+ * bearer token to everything, and a GIF index has no business holding it.
  */
 interface GifSearchApi {
     /**
@@ -96,6 +78,17 @@ interface GifSearchApi {
      * like Tenor's has no such hole, so it does not get the explanation.
      */
     val catalogueIsNarrow: Boolean get() = false
+
+    /**
+     * The sentence under an empty grid.
+     *
+     * It lives on the provider because the useful advice is specific to the index
+     * that came back empty: a booru needs "name one tag", nekos.best needs "try a
+     * reaction", and a keyed general index needs neither. The picker used to build
+     * the booru sentence itself, which meant the second keyless provider got the
+     * booru's explanation of a failure it does not have.
+     */
+    fun emptyHint(query: String): String = "Nothing found for \"$query\"."
 
     /**
      * One page of results for [query].
@@ -170,12 +163,19 @@ class TenorGifs(
                 ENDPOINT.toHttpUrl().newBuilder()
                     .addQueryParameter("q", term)
                     .addQueryParameter("key", apiKey.trim())
+                    // v2 authenticates with `key` alone; `client_key` is the v1
+                    // identifier and is ignored here. It is sent anyway because a
+                    // proxy or a gateway that still speaks v1 then has the app name
+                    // instead of an anonymous caller.
+                    .addQueryParameter("client_key", CLIENT_KEY)
                     .addQueryParameter("limit", PAGE_SIZE.toString())
                     // Only the formats the picker actually uses. Requesting all of
                     // them makes every response several times bigger for tiles that
-                    // are never drawn.
-                    .addQueryParameter("media_filter", "gif,tinygif,previewgif")
+                    // are never drawn, and `nanogif` is the 90px copy that keeps a
+                    // slow connection scrolling instead of stalled.
+                    .addQueryParameter("media_filter", "gif,tinygif,nanogif,previewgif")
                     .addQueryParameter("contentfilter", CONTENT_FILTER)
+                    .addQueryParameter("locale", LOCALE)
                     .apply { cursor?.let { addQueryParameter("pos", it) } }
                     .build()
             }
@@ -189,10 +189,10 @@ class TenorGifs(
                     if (!response.isSuccessful) {
                         return@withContext Result.failure(
                             GifSearchFailure(
-                                if (response.code == 403 || response.code == 400) {
-                                    "Tenor rejected the saved key. Check it in Settings."
-                                } else {
-                                    "Tenor is not answering right now (HTTP ${response.code})."
+                                when (response.code) {
+                                    400, 401, 403, 404 -> "Tenor refused the saved key. Tenor's public API was retired in 2026, so a key may no longer be accepted; try Klipy or GIPHY in Settings."
+                                    429 -> "Tenor is limiting requests. Wait a minute, then try again."
+                                    else -> "Tenor is not answering right now (HTTP ${response.code})."
                                 }
                             )
                         )
@@ -223,6 +223,12 @@ class TenorGifs(
          */
         private const val CONTENT_FILTER = "medium"
         private const val PAGE_SIZE = 20
+
+        /** The v1 app identifier, harmless on v2 and useful to a v1 gateway. */
+        private const val CLIENT_KEY = "anisequel"
+
+        /** The picker's copy is English; the catalogue still answers other languages. */
+        private const val LOCALE = "en_US"
     }
 }
 
@@ -239,9 +245,10 @@ class TenorGifs(
 internal fun TenorResponse.toGifPage(): GifPage {
     val rows = results.orEmpty().filterNotNull().mapNotNull { entry ->
         val formats = entry.mediaFormats ?: return@mapNotNull null
-        val embed = formats.gif?.url ?: formats.tinygif?.url ?: formats.previewGif?.url
-            ?: return@mapNotNull null
-        val grid = formats.tinygif?.url ?: formats.previewGif?.url ?: embed
+        val embed = formats.gif?.url ?: formats.tinygif?.url ?: formats.nanoGif?.url
+            ?: formats.previewGif?.url ?: return@mapNotNull null
+        val grid = formats.tinygif?.url ?: formats.nanoGif?.url
+            ?: formats.previewGif?.url ?: embed
         val dims = formats.gif?.dims
         GifResult(
             id = entry.id ?: embed,
@@ -274,6 +281,7 @@ internal data class TenorEntry(
 internal data class TenorFormats(
     val gif: TenorFormat? = null,
     val tinygif: TenorFormat? = null,
+    @Json(name = "nanogif") val nanoGif: TenorFormat? = null,
     @Json(name = "previewgif") val previewGif: TenorFormat? = null
 )
 

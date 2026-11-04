@@ -58,6 +58,19 @@ class SafebooruGifs(
     // have said so.
     override val catalogueIsNarrow: Boolean get() = true
 
+    /**
+     * The booru-specific miss.
+     *
+     * The search asked the query three ways before this is reached - the words as
+     * tags, the whole phrase as one tag, the first word as a prefix - so the advice
+     * is the thing a tag index still cannot do by itself: name one tag. "Try fewer
+     * words" alone would be the app describing its own failure as the reader's.
+     */
+    override fun emptyHint(query: String): String =
+        "No animated GIF matches \"$query\" there - not its words, not the whole " +
+            "phrase as one tag, not its first word. Boorus match tags rather than " +
+            "sentences, so try one name like \"holo\", or \"kaguya\"."
+
     override suspend fun search(query: String, cursor: String?): Result<GifPage> =
         withContext(Dispatchers.IO) {
             val tiers = booruTiers(query)

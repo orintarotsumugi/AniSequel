@@ -97,4 +97,72 @@ class SeasonalPileTest {
             assertEquals(first.column(column), second.column(column), 0f)
         }
     }
+
+    @Test
+    fun `smoothing spreads a mound sideways instead of leaving a spike`() {
+        // Six landings in one place, so the mound is far taller than the starting dusting
+        // and the assertion does not depend on which grains the seed happened to draw.
+        val pile = SeasonalPile(seed = 4)
+        repeat(6) { pile.deposit(xFraction = 0.5f, mass = 1.6f, spread = 1) }
+        val peak = pile.column(24)
+        val beside = pile.column(23)
+
+        pile.relax()
+
+        assertTrue(
+            "the peak survived a smoothing pass, so the drift grows combs, not banks",
+            pile.column(24) < peak
+        )
+        assertTrue(
+            "nothing moved sideways into the column beside the mound",
+            pile.column(23) > beside
+        )
+    }
+
+    /**
+     * The bug this pins: a drift that only ever grows reaches the ceiling everywhere
+     * and stops being a drift. At the busiest density the old field was a flat white
+     * band at the slider's full depth inside a minute, which covered the bottom of the
+     * page rather than decorating it.
+     *
+     * The cycle is what the layer actually runs - a landing, then one smoothing pass -
+     * and the assertion is deliberately loose. It does not pin a height the reader
+     * asked for; it pins that the field finds a depth at all.
+     */
+    @Test
+    fun `landing forever finds a stable depth instead of filling to the ceiling`() {
+        val pile = SeasonalPile(seed = 23)
+        repeat(2_000) { index ->
+            val x = index * 37 % 100 / 100f
+            pile.deposit(xFraction = x, mass = 0.75f + index % 7 * 0.1f, spread = 3)
+            pile.relax()
+        }
+        val average = (0 until pile.columns).sumOf { pile.column(it).toDouble() }.toFloat() /
+            pile.columns
+        assertTrue(
+            "the drift reached the cap after two thousand landings; that is the white " +
+                "band the compaction pass exists to prevent",
+            pile.column(24) < 0.80f
+        )
+        assertTrue(
+            "the whole field is near the ceiling, so variation no longer exists",
+            average < 0.65f
+        )
+    }
+
+    @Test
+    fun `smoothing cannot push the drift past its own ceiling`() {
+        val pile = SeasonalPile(seed = 4)
+        pile.fill()
+        repeat(40) {
+            pile.deposit(xFraction = 0.5f, mass = 1.6f, spread = 4)
+            pile.relax()
+        }
+        for (column in 0 until pile.columns) {
+            assertTrue(
+                "column $column passed the ceiling while it was being smoothed",
+                pile.column(column) <= 0.98f
+            )
+        }
+    }
 }

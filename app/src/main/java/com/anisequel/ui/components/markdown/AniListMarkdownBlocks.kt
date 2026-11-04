@@ -369,7 +369,19 @@ fun RenderVideo(video: MarkdownNode.VideoBlock) {
  * close this" cue was an unlabelled `Done` icon, which is a cue nobody guesses.
  */
 @Composable
-fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
+fun RenderSpoilerBlock(
+    spoiler: MarkdownNode.SpoilerBlock,
+    /**
+     * The media covers and entity previews the host already batched.
+     *
+     * A spoiler's contents go back through the full block renderer so a heading, a
+     * list or a link behind the lid reads like the rest of the bio. That renderer
+     * draws preview cards, and a card without its cover would read its own title from
+     * the URL with no artwork - the same miss the surrounding document avoids.
+     */
+    mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
+    entityPreviews: Map<EntityPreviewKey, EntityPreview> = emptyMap()
+) {
     // `rememberSaveable`, not `remember`.
     //
     // This renders inside a profile's `LazyColumn`, and a plain `remember` is discarded
@@ -391,6 +403,7 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
     ) {
         SpoilerChip(
             revealed = revealed,
+            label = spoiler.label,
             onToggle = { revealed = !revealed },
             modifier = Modifier.padding(bottom = if (revealed) 8.dp else 0.dp)
         )
@@ -412,17 +425,17 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    // The picture the reader hid, once the lid is up. These come from
-                    // the same content re-parsed as blocks - see
-                    // [MarkdownNode.SpoilerBlock] - because an annotated string has
-                    // nowhere to put a bitmap and used to print `img(url)` or the
-                    // word "Image" where the reveal was supposed to be.
-                    spoiler.blocks.forEach { node ->
-                        when (node) {
-                            is MarkdownNode.ImageBlock -> RenderImage(node)
-                            is MarkdownNode.VideoBlock -> RenderVideo(node)
-                            else -> Unit
-                        }
+                    // Everything a `Text` cannot carry, once the lid is up: a
+                    // picture, an embed, a nested spoiler, and - for the HTML
+                    // spoiler forms - the whole Markdown document behind the lid.
+                    // The same renderer as the surrounding bio, so a heading or a
+                    // list is not a second dialect.
+                    if (spoiler.blocks.isNotEmpty()) {
+                        AniListMarkdownView(
+                            nodes = spoiler.blocks,
+                            mediaCovers = mediaCovers,
+                            entityPreviews = entityPreviews
+                        )
                     }
                 }
             }
@@ -441,10 +454,16 @@ fun RenderSpoilerBlock(spoiler: MarkdownNode.SpoilerBlock) {
 @Composable
 private fun SpoilerChip(
     revealed: Boolean,
+    label: String?,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val label = if (revealed) "Hide spoiler" else "Show spoiler"
+    val action = if (revealed) "Hide spoiler" else "Show spoiler"
+    // The label says what is behind the lid, not what is in it: "Show spoiler:
+    // Episode 4" is the sentence a reader needs before deciding to open it. It
+    // uses the same colon in both states, so the control still reads as one action
+    // with one subject rather than two different controls.
+    val text = if (label.isNullOrBlank()) action else "$action: $label"
     // The clickable's own `InteractionSource`, handed to `bouncyPress` so the two
     // share one press signal.
     //
@@ -498,7 +517,7 @@ private fun SpoilerChip(
                 modifier = Modifier.size(16.dp)
             )
             Text(
-                text = label,
+                text = text,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

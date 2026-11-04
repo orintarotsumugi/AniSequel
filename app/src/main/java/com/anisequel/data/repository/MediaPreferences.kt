@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.data.security.KeystoreTokenCipher
 import com.anisequel.data.security.TokenCipher
+import com.anisequel.domain.gif.GifProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -51,21 +52,52 @@ private val Context.commentMediaDataStore: DataStore<Preferences> by preferences
  * metered connection may well want the first and not the second. A single switch
  * that meant both would force a choice between the two.
  *
- * [CommentMediaSettings.tenorApiKey] is the one that reaches a third party with a
- * credential of its own, so it is stored encrypted and is never sent anywhere but
- * Tenor. See [TokenCipher] for why a keystore key rather than a plaintext field.
- * The reader's AniList token and this key live under *different* keystore entries:
- * an unreadable GIF key must not be able to destroy the entry the session token is
- * sealed under, which is the reason [KeystoreTokenCipher] takes its alias.
+ * [CommentMediaSettings.tenorApiKey], [CommentMediaSettings.klipyApiKey] and
+ * [CommentMediaSettings.giphyApiKey] are the fields that reach a third party with a
+ * credential of their own. They are stored encrypted and each is sent only to its
+ * own provider. See [TokenCipher] for why a keystore key rather than a plaintext
+ * field. The reader's AniList token and these keys live under *different* keystore
+ * entries: an unreadable GIF key must not be able to destroy the entry the session
+ * token is sealed under, which is the reason [KeystoreTokenCipher] takes its alias.
+ *
+ * ## Why the provider is its own key
+ *
+ * It used to be implied by "a Tenor key exists", so saving a key silently switched
+ * the picker and clearing it switched back. With three keyed providers that rule
+ * cannot say which one was meant. [gifProvider] records the choice; the keys are
+ * independent, so changing provider does not delete a credential the reader may
+ * want again later.
  */
 data class CommentMediaSettings(
     val chatView: Boolean = DEFAULT_CHAT_VIEW,
     val pollForNewComments: Boolean = DEFAULT_POLLING,
     val tenorApiKey: String? = null,
-    val globalActivityFeed: Boolean = DEFAULT_GLOBAL_FEED
+    val globalActivityFeed: Boolean = DEFAULT_GLOBAL_FEED,
+    val gifProvider: GifProvider = GifProvider.DEFAULT,
+    val klipyApiKey: String? = null,
+    val giphyApiKey: String? = null
 ) {
-    /** Whether a GIF picker should use Tenor rather than the anonymous default. */
+    /** Whether a Tenor key is saved, independently of which provider is chosen. */
     val usesTenor: Boolean get() = !tenorApiKey.isNullOrBlank()
+
+    /** The key the chosen provider needs, or null when it needs none. */
+    val activeGifKey: String?
+        get() = gifProvider.keyFrom(tenorApiKey, klipyApiKey, giphyApiKey)
+
+    /**
+     * The provider a picker can actually use.
+     *
+     * A keyed provider with no key is a search that can only fail, so it falls back
+     * to the anonymous default rather than showing an error under the search field
+     * before the reader has typed anything. The stored choice is kept, so pasting
+     * the key later resumes the provider the reader picked.
+     */
+    val resolvedGifProvider: GifProvider
+        get() = if (gifProvider.needsKey && activeGifKey.isNullOrBlank()) {
+            GifProvider.DEFAULT
+        } else {
+            gifProvider
+        }
 }
 
 class MediaPreferences(
@@ -77,18 +109,33 @@ class MediaPreferences(
         val CHAT_VIEW = booleanPreferencesKey("comment_chat_view")
         val POLL_COMMENTS = booleanPreferencesKey("comment_poll_new")
         val TENOR_KEY_ENCRYPTED = stringPreferencesKey("tenor_api_key_encrypted")
+        val KLIPY_KEY_ENCRYPTED = stringPreferencesKey("klipy_api_key_encrypted")
+        val GIPHY_KEY_ENCRYPTED = stringPreferencesKey("giphy_api_key_encrypted")
+        val GIF_PROVIDER = stringPreferencesKey("gif_provider")
         val GLOBAL_FEED = booleanPreferencesKey("global_activity_feed")
     }
 
     val settings: Flow<CommentMediaSettings> = context.commentMediaDataStore.data.map { preferences ->
+        // Unreadable ciphertext means the keystore key was invalidated, which is
+        // not a question to ask again on every read: the value is treated as
+        // never having been set, and the next save overwrites it.
+        val tenorKey = preferences[Keys.TENOR_KEY_ENCRYPTED]
+            ?.let { cipher.decrypt(it) }?.takeIf { it.isNotBlank() }
+        // The provider was implied by the Tenor key before there was a choice. An
+        // install upgrading from that build has a key and no stored choice, and
+        // silently dropping it would send a reader who chose Tenor back to the
+        // booru without saying so.
+        val provider = GifProvider.fromStorage(preferences[Keys.GIF_PROVIDER])
+            ?: if (tenorKey != null) GifProvider.TENOR else GifProvider.DEFAULT
         CommentMediaSettings(
             chatView = preferences[Keys.CHAT_VIEW] ?: DEFAULT_CHAT_VIEW,
             pollForNewComments = preferences[Keys.POLL_COMMENTS] ?: DEFAULT_POLLING,
-            // Unreadable ciphertext means the keystore key was invalidated, which is
-            // not a question to ask again on every read: the value is treated as
-            // never having been set, and the next save overwrites it.
             globalActivityFeed = preferences[Keys.GLOBAL_FEED] ?: DEFAULT_GLOBAL_FEED,
-            tenorApiKey = preferences[Keys.TENOR_KEY_ENCRYPTED]
+            gifProvider = provider,
+            tenorApiKey = tenorKey,
+            klipyApiKey = preferences[Keys.KLIPY_KEY_ENCRYPTED]
+                ?.let { cipher.decrypt(it) }?.takeIf { it.isNotBlank() },
+            giphyApiKey = preferences[Keys.GIPHY_KEY_ENCRYPTED]
                 ?.let { cipher.decrypt(it) }?.takeIf { it.isNotBlank() }
         )
     }
@@ -109,13 +156,41 @@ class MediaPreferences(
      * get the anonymous provider back rather than a saved-but-empty credential that
      * every search then rejects.
      */
-    suspend fun setTenorApiKey(apiKey: String?) {
+    suspend fun setTenorApiKey(apiKey: String?) = setEncryptedKey(Keys.TENOR_KEY_ENCRYPTED, apiKey)
+
+    /** The Klipy key, under its own entry so switching providers keeps both. */
+    suspend fun setKlipyApiKey(apiKey: String?) = setEncryptedKey(Keys.KLIPY_KEY_ENCRYPTED, apiKey)
+
+    /** The GIPHY key, under its own entry so switching providers keeps both. */
+    suspend fun setGiphyApiKey(apiKey: String?) = setEncryptedKey(Keys.GIPHY_KEY_ENCRYPTED, apiKey)
+
+    /**
+     * The index a search is sent to.
+     *
+     * Stored even when the chosen provider has no key: the picker falls back at read
+     * time, and a reader who pastes the key later should not have to pick again.
+     */
+    suspend fun setGifProvider(provider: GifProvider) {
+        context.commentMediaDataStore.edit { preferences ->
+            preferences[Keys.GIF_PROVIDER] = provider.storageValue
+        }
+    }
+
+    /**
+     * Stores [apiKey] encrypted, or clears it when blank.
+     *
+     * The blank case is a real one and it has to leave no ciphertext behind: a
+     * reader who pastes a key, then decides they do not want that provider, should
+     * get the anonymous default back rather than a saved-but-empty credential that
+     * every search then rejects.
+     */
+    private suspend fun setEncryptedKey(key: Preferences.Key<String>, apiKey: String?) {
         val trimmed = apiKey?.trim().orEmpty()
         context.commentMediaDataStore.edit { preferences ->
             if (trimmed.isEmpty()) {
-                preferences.remove(Keys.TENOR_KEY_ENCRYPTED)
+                preferences.remove(key)
             } else {
-                preferences[Keys.TENOR_KEY_ENCRYPTED] = cipher.encrypt(trimmed)
+                preferences[key] = cipher.encrypt(trimmed)
             }
         }
     }
@@ -137,6 +212,9 @@ class MediaPreferences(
             preferences.remove(Keys.CHAT_VIEW)
             preferences.remove(Keys.POLL_COMMENTS)
             preferences.remove(Keys.TENOR_KEY_ENCRYPTED)
+            preferences.remove(Keys.KLIPY_KEY_ENCRYPTED)
+            preferences.remove(Keys.GIPHY_KEY_ENCRYPTED)
+            preferences.remove(Keys.GIF_PROVIDER)
             preferences.remove(Keys.GLOBAL_FEED)
         }
     }

@@ -623,32 +623,36 @@ fun Modifier.bouncyPress(
                             val down = awaitFirstDown(requireUnconsumed = false)
                             isPointerPressed.value = true
                             try {
-                                do {
+                                // The loop follows the finger that started the press,
+                                // not "any pointer on screen". A second finger placed
+                                // elsewhere used to keep this loop alive after the
+                                // first had lifted, so the element stayed squashed
+                                // under a hand that was no longer touching it - and
+                                // the press only released once every finger was up.
+                                var trackedPressed = true
+                                while (trackedPressed) {
                                     val event = awaitPointerEvent(PointerEventPass.Main)
                                     val change = event.changes
                                         .firstOrNull { it.id == down.id }
-                                        // `continue`, not another pointer's change:
-                                        // a second finger anywhere on screen was
-                                        // compared against the first finger's down
-                                        // position, and the squash released under a
-                                        // hand that had not let go.
-                                        ?: continue
-                                    if (change != null) {
-                                        // Squared distance against a squared slop:
-                                        // the comparison never needs the square
-                                        // root, and `Offset.getDistance` is an
-                                        // extension in a package this file does not
-                                        // otherwise import from.
-                                        val dx = change.position.x - down.position.x
-                                        val dy = change.position.y - down.position.y
-                                        if (dx * dx + dy * dy > touchSlop * touchSlop) {
-                                            // Past slop: this is a drag, so the
-                                            // scrollable has it now and this is no
-                                            // longer a press.
-                                            isPointerPressed.value = false
-                                        }
+                                        // The tracked pointer is gone from the event:
+                                        // treat it as lifted rather than waiting for a
+                                        // finger that will never report again.
+                                        ?: break
+                                    trackedPressed = change.pressed
+                                    // Squared distance against a squared slop: the
+                                    // comparison never needs the square root, and
+                                    // `Offset.getDistance` is an extension in a
+                                    // package this file does not otherwise import
+                                    // from.
+                                    val dx = change.position.x - down.position.x
+                                    val dy = change.position.y - down.position.y
+                                    if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                                        // Past slop: this is a drag, so the
+                                        // scrollable has it now and this is no longer
+                                        // a press.
+                                        isPointerPressed.value = false
                                     }
-                                } while (event.changes.any { it.pressed })
+                                }
                             } finally {
                                 isPointerPressed.value = false
                             }

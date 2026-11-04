@@ -6,7 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.SeasonalSettings
 
@@ -46,6 +48,9 @@ import com.anisequel.domain.seasonal.SeasonalSettings
 @Composable
 fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
     val settings by preferences.settings.collectAsState(initial = SeasonalSettings())
+    val context = LocalContext.current
+    val detected = remember { detectSeasonalQualityTier(context) }
+    val quality = remember(settings.quality, detected) { settings.quality.resolve(detected) }
 
     LaunchedEffect(settings.enabled) {
         SeasonalWind.reset()
@@ -62,7 +67,8 @@ fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
             settle = settings.settle,
             pileDepth = settings.pileDepth,
             reactToWind = settings.reactToWind,
-            windStrength = settings.windStrength
+            windStrength = settings.windStrength,
+            quality = quality
         )
     }
 }

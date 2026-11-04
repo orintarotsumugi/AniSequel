@@ -25,10 +25,12 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -109,9 +111,15 @@ fun rememberShimmerPhase(
  * composable scope, so it cannot be called from in here - and reading it per
  * frame would reintroduce the allocation this is here to remove.
  *
- * The gradient itself is still rebuilt each frame, because its endpoints
- * genuinely move. That is one shader allocation in the draw pass, in exchange
- * for no longer being a recomposition plus an allocation in composition.
+ * The gradient is built **once per box size**, not once per frame. The sweep is
+ * a three-stop band with the same colour at both ends, so the pixels outside it
+ * are exactly [MaterialTheme.colorScheme.surfaceContainerHigh]; painting that
+ * colour as a solid base and then translating the cached band over it is the
+ * same picture with one shader instead of sixty a second. The previous version
+ * moved the gradient's own endpoints, which is correct but allocates a new
+ * `LinearGradient` on every frame of every skeleton on screen - the one cost
+ * this modifier could not avoid while it was rebuilding the brush in the draw
+ * body.
  *
  * Pair with `Modifier.clip` *above* this one: the clip wraps the drawBehind
  * output, so the sweep is cut to the box's rounded corners exactly as
@@ -125,16 +133,23 @@ private fun Modifier.shimmerBackground(phase: State<Float>): Modifier {
         listOf(high, lowest.copy(alpha = 0.8f), high)
     }
 
-    return drawBehind {
+    return drawWithCache {
         val bleed = maxOf(size.width, size.height) * SHIMMER_BLEED_FRACTION
-        val centre = -bleed + phase.value * (size.width + 2f * bleed)
-        drawRect(
-            brush = Brush.linearGradient(
-                colors = colors,
-                start = Offset(x = centre - bleed, y = centre - bleed),
-                end = Offset(x = centre + bleed, y = centre + bleed)
-            )
+        val band = Size(bleed * 2f, bleed * 2f)
+        val brush = Brush.linearGradient(
+            colors = colors,
+            start = Offset.Zero,
+            end = Offset(x = bleed * 2f, y = bleed * 2f)
         )
+        onDrawBehind {
+            // The clamped ends of the old gradient were this colour, so a solid
+            // base plus the band is pixel-identical at every phase.
+            drawRect(color = high)
+            val centre = -bleed + phase.value * (size.width + 2f * bleed)
+            translate(left = centre - bleed, top = centre - bleed) {
+                drawRect(brush = brush, size = band)
+            }
+        }
     }
 }
 
