@@ -20,6 +20,15 @@ enum class RelationKind(val apiValue: String, val displayName: String) {
 
 data class MissedSequel(
     val parentId: Int,
+    /**
+     * `ANIME` or `MANGA`, as the parent's own node reported it.
+     *
+     * Carried for the tap on the relation banner: the detail sheet fetches and
+     * merges by media namespace, so a typeless parent id would ask `Media(id:)` -
+     * ambiguous across `anime/` and `manga/` - and the answer would be refused by
+     * `detailFor`, which is the exact failure `FAVOURITE_MEDIA_FIELDS` documents.
+     */
+    val parentType: String? = null,
     val parentTitle: String,
 
     /**
@@ -33,6 +42,18 @@ data class MissedSequel(
      * budget on a picture it already sent us.
      */
     val parentCoverUrl: String? = null,
+
+    /**
+     * The parent's largest art, for the detail sheet the banner opens.
+     *
+     * Both parent URLs travel as strings, so only the one that is actually drawn
+     * costs bytes: the 22dp chip on the row reads [parentCoverUrl] and the sheet's
+     * hero reads this. Leaving the sheet's first frame on the smaller file was the
+     * trade this refuses - the relation walk already has AniList's largest size in
+     * hand, so naming it here is free, and the row that never gets tapped never
+     * downloads it.
+     */
+    val parentCoverLargeUrl: String? = null,
 
     /** AniList's dominant colour for the parent's key visual. */
     val parentCoverColor: String? = null,

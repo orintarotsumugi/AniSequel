@@ -64,6 +64,15 @@ class GifSearchStore(
     /** Which index the panel is searching, for its hints and placeholder. */
     val providerName: String get() = provider.providerName
 
+    /**
+     * Why that index is not the one the reader chose, or null when it is.
+     *
+     * Set when the chosen provider needs a key that is not saved and the anonymous
+     * booru is answering instead - a substitution the placeholder already reveals in
+     * one word and the reader deserves a sentence about.
+     */
+    val substitutionNote: String? get() = provider.substitutionNote
+
     private var searchJob: Job? = null
     private var pageJob: Job? = null
 

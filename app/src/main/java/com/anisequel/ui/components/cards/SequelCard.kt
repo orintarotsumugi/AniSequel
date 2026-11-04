@@ -37,6 +37,14 @@ fun SequelCard(
     onAddToPlanning: () -> Unit,
     /** Stops offering this entry again. Persisted by the ViewModel. */
     onHide: () -> Unit,
+    /**
+     * Opens the entry this one is a sequel *to*.
+     *
+     * Null by default rather than a no-op: the relation row keeps its old
+     * non-interactive shape where a caller has no parent detail to show, instead of
+     * looking tappable and swallowing the tap.
+     */
+    onOpenParent: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onAddToWatching: () -> Unit = {},
     holdDurationSeconds: Int = 3,
@@ -75,7 +83,10 @@ fun SequelCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Relation banner
-            SequelRelationBanner(sequel = sequel)
+            SequelRelationBanner(
+                sequel = sequel,
+                onOpenParent = onOpenParent
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 

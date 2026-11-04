@@ -69,3 +69,28 @@ fun ArrivingEntry.toDetailMedia(): MediaNode = MediaNode(
         null
     }
 )
+
+/**
+ * The "Sequel to …" row's parent, as the detail sheet's subject.
+ *
+ * The dashboard card is about the *sequel*, and the banner above it names the
+ * entry the gap is measured against. Tapping that banner has to open the parent,
+ * and the parent is not in the list the screen holds - the relation walk kept its
+ * id, title, type and cover and dropped the rest, on purpose, because carrying a
+ * second full node per row is what the discovery pass already avoided spending a
+ * request on.
+ *
+ * So this is a summary, and the sheet resolves it the way it resolves an arriving
+ * row's: the fields below draw the first frame and `detailFor` supersedes them
+ * with the fetched page the moment it lands. [MissedSequel.parentType] is the
+ * load-bearing one - see its comment.
+ */
+fun MissedSequel.toParentSummary(): MediaNode = MediaNode(
+    id = parentId,
+    type = parentType,
+    title = MediaTitle(userPreferred = parentTitle),
+    coverImage = MediaCoverImage(
+        large = parentCoverLargeUrl ?: parentCoverUrl,
+        color = parentCoverColor
+    )
+)

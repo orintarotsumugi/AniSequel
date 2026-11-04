@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.dashboard
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,21 +38,23 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.ui.components.AniTopAppBar
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.components.EmptyStateView
 import com.anisequel.ui.components.FilterSortSheet
 import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.StateCrossfade
-import com.anisequel.ui.components.cards.SequelCard
-import com.anisequel.ui.components.detail.SequelDetailSheet
-import com.anisequel.ui.viewmodel.rememberPersonProfileHost
-import com.anisequel.ui.viewmodel.rememberPlanningAddHost
-import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.StatsBanner
+import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.detail.toDetailMedia
+import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.navigation.MainBarClearance
 import com.anisequel.ui.navigation.mainBarClearance
@@ -63,16 +64,14 @@ import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
-import com.anisequel.data.network.ApiReachability
-import com.anisequel.data.network.ApiStatusSnapshot
-import com.anisequel.data.network.isConnectionTrouble
-import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.rememberApiStatusProbe
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
+import com.anisequel.ui.viewmodel.toMediaNode
 import kotlinx.coroutines.flow.collectLatest
-
 private val MaxContentWidth = 640.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -479,6 +478,15 @@ fun DashboardScreen(
                                             swipeEnabled = quickAddSettings.swipeEnabled,
                                             onHide = {
                                                 dashboardViewModel.toggleHideSequel(item)
+                                            },
+                                            // The banner names the parent, and the parent is not in this
+                                            // list - so the tap hands the sheet a summary built from the
+                                            // four fields the relation walk kept, and the sheet's own
+                                            // detail fetch replaces it. Same route an arriving row takes.
+                                            onOpenParent = {
+                                                selectedSequelId = null
+                                                selectedArrivingId = null
+                                                navigatedRelation = item.toParentSummary()
                                             },
                                             modifier = Modifier
                                                 .widthIn(max = MaxContentWidth)

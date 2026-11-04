@@ -7,11 +7,11 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.NextAiringEpisode
 import com.anisequel.data.model.RelationKind
 import com.anisequel.data.model.SimpleMediaListEntry
+import com.anisequel.ui.components.detail.toParentSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-
 /**
  * What the card now tells you about an entry.
  *
@@ -161,5 +161,51 @@ class MissedSequelDetailTest {
         )
         assertEquals("#f1a143", entry.coverColor)
         assertNull(sequel().coverColor)
+    }
+    /**
+     * The row above the card names the parent, and now opens it.
+     *
+     * Two things are pinned: that the summary carries the parent's *namespace* - an
+     * untyped `Media(id:)` is ambiguous across `anime/` and `manga/`, and a manga
+     * parent would answer with the anime sharing its number - and that the sheet's
+     * hero is handed the largest art the relation walk already has, rather than the
+     * 22dp chip's smaller file. The card itself stays about the sequel.
+     */
+    @Test
+    fun `the relation row's summary opens the parent in its own namespace`() {
+        val entry = MissedSequel(
+            parentId = 30013,
+            parentType = "MANGA",
+            parentTitle = "One Piece",
+            parentCoverUrl = "https://s4.anilist.co/manga/cover/medium/bx30013.jpg",
+            parentCoverLargeUrl = "https://s4.anilist.co/manga/cover/extraLarge/bx30013.jpg",
+            parentCoverColor = "#7C4DFF",
+            sequelMedia = MediaNode(id = 2, title = MediaTitle(english = "Season 2"))
+        )
+
+        val summary = entry.toParentSummary()
+        assertEquals(30013, summary.id)
+        assertEquals("MANGA", summary.type)
+        assertEquals("One Piece", summary.title?.userPreferred)
+        assertEquals(
+            "the sheet's hero must not be built from the chip's smaller file",
+            "https://s4.anilist.co/manga/cover/extraLarge/bx30013.jpg",
+            summary.coverImage?.bestUrl
+        )
+        assertEquals("#7C4DFF", summary.coverImage?.color)
+    }
+
+    @Test
+    fun `a parent with no large art still summarises rather than vanishing`() {
+        val entry = MissedSequel(
+            parentId = 5,
+            parentTitle = "Show",
+            parentCoverUrl = "https://s4.anilist.co/medium.jpg",
+            sequelMedia = MediaNode(id = 6)
+        )
+        val summary = entry.toParentSummary()
+        assertEquals(5, summary.id)
+        assertNull("an absent type stays absent rather than being guessed", summary.type)
+        assertEquals("https://s4.anilist.co/medium.jpg", summary.coverImage?.bestUrl)
     }
 }

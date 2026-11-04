@@ -69,6 +69,18 @@ interface GifSearchApi {
     val providerName: String get() = ""
 
     /**
+     * The sentence shown when this index is answering *instead of* the one the
+     * reader chose.
+     *
+     * Null for every client that is answering because it was asked to. Set only on
+     * the anonymous fallback, because a substitution that is not said out loud is
+     * the reader searching Klipy, getting Safebooru's catalogue, and no way to find
+     * out that the difference was a key they never saved. The picker's placeholder
+     * names the index, which says *what*; this says *why* and where to fix it.
+     */
+    val substitutionNote: String? get() = null
+
+    /**
      * Whether an empty answer is a gap in this provider's catalogue rather than a
      * miss.
      *

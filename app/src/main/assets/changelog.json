@@ -38,6 +38,18 @@
         {
           "title": "One hundred and twenty-five more lines",
           "detail": "The joke pool grows from 1061 to 1186. Craft gets the people who notice the layout artist's window and the held frame of a hand; feelings gets the episode that is a walk home; backlog, meta and dark get their share too. Every new line is checked against the whole pool, so nothing repeats a premise that was already there - which is the one thing a large catalogue makes hard."
+        },
+        {
+          "title": "The \"Sequel to ...\" line now opens the title it names",
+          "detail": "Every card on the dashboard is about the sequel, and the line above it names the entry the gap is measured against - which was text, and nothing more. Tapping it now opens that parent title's page: the row carries the parent's id, its namespace, and the largest cover AniList had already sent with it, so the sheet draws its first frame from those and its own fetch fills in the rest. The namespace is the part that matters - without it a parent id is looked up across anime and manga and answers as whichever one AniList prefers."
+        },
+        {
+          "title": "The artwork behind the cover is now a picture you can tap",
+          "detail": "In a title's page the banner or key visual fills the top of the sheet, and only the small poster answered a tap: the rest of the image did nothing, while this app's own comment described the full picture as one tap away. That is now true. Anywhere on the backdrop opens the full-screen viewer, and the poster's hold and the title's copy gesture keep their own regions because they are drawn above it."
+        },
+        {
+          "title": "A GIF index that needs a key says that it never got one",
+          "detail": "Choosing Klipy, GIPHY or Tenor without a saved key kept working - the anonymous booru answers anime tags for nothing, and that fallback is deliberate - but it happened in silence, so the reader picked one index and received another one's catalogue with nothing connecting the two. The picker now names the index it asked for, the one answering, and where to add the key. The refusal sentences the keyed clients carry were unreachable: the factory never builds one without a key, so the note moved to where the substitution actually happens."
         }
       ]
     },

@@ -522,15 +522,27 @@ fun gifSearchApiFor(
     tenorKey: String?,
     klipyKey: String?,
     giphyKey: String?
-): GifSearchApi = when (provider) {
-    GifProvider.SAFEBOORU -> SafebooruGifs()
-    GifProvider.NEKOS_BEST -> NekosBestGifs()
-    GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
-        ?.let { TenorGifs(it) } ?: SafebooruGifs()
+): GifSearchApi {
+    // The keyed clients refuse a blank key in their own `search`, which used to make
+    // their "No Klipy key is saved. Add one in Settings" sentences unreachable: this
+    // factory never builds one without a key, so the substitution happened here, in
+    // silence. It still substitutes - a missing credential must not leave the picker
+    // with no search at all - but it now hands back the line that says which index
+    // was asked for, which one is answering, and where to fix it.
+    fun standingInFor(name: String) =
+        "No ${'$'}name key is saved, so Safebooru is answering instead. " +
+            "Add a key in Settings > AniList, or choose Safebooru to keep using it."
 
-    GifProvider.KLIPY -> klipyKey?.takeIf { it.isNotBlank() }
-        ?.let { KlipyGifs(it) } ?: SafebooruGifs()
+    return when (provider) {
+        GifProvider.SAFEBOORU -> SafebooruGifs()
+        GifProvider.NEKOS_BEST -> NekosBestGifs()
+        GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
+            ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 
-    GifProvider.GIPHY -> giphyKey?.takeIf { it.isNotBlank() }
-        ?.let { GiphyGifs(it) } ?: SafebooruGifs()
+        GifProvider.KLIPY -> klipyKey?.takeIf { it.isNotBlank() }
+            ?.let { KlipyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.KLIPY.displayName))
+
+        GifProvider.GIPHY -> giphyKey?.takeIf { it.isNotBlank() }
+            ?.let { GiphyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.GIPHY.displayName))
+    }
 }

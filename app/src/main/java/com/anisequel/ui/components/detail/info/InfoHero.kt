@@ -239,6 +239,29 @@ fun InfoHero(
             collapse = collapse
         )
 
+        // The whole backdrop is the tap target for the full-screen artwork.
+        //
+        // Until now only the 116dp poster answered a tap, so anywhere else in these
+        // 340dp of image did nothing - while this file's own comment promised the
+        // full picture was "one tap away". Drawn here, before the scrim and the
+        // lockup, so the poster's hold-and-tap and the title's copy gesture are
+        // nearer the finger and keep their regions; this layer only claims the
+        // artwork itself. No ripple: it would ink a rectangle over the banner the
+        // sheet is showing, and the label is what tells a screen reader what the
+        // region does.
+        val backdropInteraction = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable(
+                    interactionSource = backdropInteraction,
+                    indication = null,
+                    role = Role.Button,
+                    onClickLabel = "Open the full-screen artwork",
+                    onClick = onOpenCover
+                )
+        )
+
         // Ends on `surface`, not on black: the hero has to hand over to the page
         // body without a visible seam, and the sheet's own container is `surface`.
         //
@@ -403,8 +426,9 @@ fun InfoHero(
                         .matchParentSize()
                         .unseamedCover()
                 )
-                // Decorative. The poster itself is the clickable thing and carries
-                // the title as its `contentDescription`, so this badge was a second
+                // Decorative. The poster (and the backdrop behind it) are the
+                // clickable things and the poster carries the title as its
+                // `contentDescription`, so this badge was a second
                 // element for a reader using a screen reader to reach - announcing
                 // "Hold to expand" for a control whose actual action is a tap, over
                 // a poster that already said what it was.
