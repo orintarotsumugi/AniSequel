@@ -23,9 +23,11 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,20 +62,24 @@ import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.domain.seasonal.SeasonalQualityTier
 import com.anisequel.domain.seasonal.SeasonalSeason
 import com.anisequel.domain.seasonal.SeasonalSettings
+import com.anisequel.domain.seasonal.availableSeasonalFrameRates
 import com.anisequel.domain.seasonal.defaultEffect
 import com.anisequel.domain.seasonal.particleCountFor
 import com.anisequel.domain.seasonal.seasonalEffectsIn
+import com.anisequel.domain.seasonal.seasonalFrameHz
 import com.anisequel.domain.seasonal.seasonalSeasonForMonth
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.seasonal.detectSeasonalQualityTier
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.seasonal.SeasonalEffectGlyph
 import com.anisequel.ui.components.seasonal.SeasonalParticleLayer
-import kotlinx.coroutines.launch
+import com.anisequel.ui.components.seasonal.detectSeasonalQualityTier
+import com.anisequel.ui.components.seasonal.detectSeasonalScreen
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * Seasonal effects: a sky of falling or rising shapes over every page.
@@ -118,6 +124,20 @@ fun SeasonalSettingsTab(
         settings.quality.resolve(detected)
     }
 
+    // The panel's own numbers, re-read when the app comes back to the foreground.
+    // A reader who goes to the system display settings to unlock 120 Hz and returns
+    // should find the pill here on the way back in, animating into place - a value
+    // taken once at first composition would keep it hidden until the app restarted.
+    val resumed = rememberIsResumed()
+    var screen by remember { mutableStateOf(detectSeasonalScreen(context)) }
+    LaunchedEffect(resumed) { screen = detectSeasonalScreen(context) }
+    val offeredRates = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz)
+    val previewFrameHz = seasonalFrameHz(
+        rate = settings.frameRate,
+        tierHz = resolvedQuality.frameHz,
+        deviceHz = screen.currentHz
+    )
+
     // Drafts rather than the committed values, so a drag is smooth and the preview
     // follows the finger. Keyed on the committed value so a write that lands - or
     // a reset - re-seeds the thumb.
@@ -140,6 +160,7 @@ fun SeasonalSettingsTab(
             pileDepth = draftPileDepth,
             windStrength = draftWind,
             quality = resolvedQuality,
+            frameHz = previewFrameHz,
             onEnabledChange = { enabled ->
                 scope.launch {
                     if (enabled && settings.quality == SeasonalQuality.AUTO) {
@@ -177,6 +198,17 @@ fun SeasonalSettingsTab(
             onWindStrengthCommit = {
                 val target = draftWind
                 scope.launch { seasonalPreferences.setWindStrength(target) }
+            }
+        )
+
+        FrameCard(
+            rate = settings.frameRate,
+            offered = offeredRates,
+            resolvedHz = previewFrameHz,
+            screen = screen,
+            tierName = SeasonalQuality.of(resolvedQuality).displayName.lowercase(),
+            onRateChange = { rate ->
+                scope.launch { seasonalPreferences.setFrameRate(rate) }
             }
         )
 
@@ -220,6 +252,7 @@ private fun PreviewCard(
     pileDepth: Float,
     windStrength: Float,
     quality: SeasonalQualityTier,
+    frameHz: Int,
     onEnabledChange: (Boolean) -> Unit,
     onReset: () -> Unit
 ) {
@@ -235,7 +268,7 @@ private fun PreviewCard(
 
     SectionCard(
         title = "Preview",
-        icon = AppVectorIcons.Grass,
+        icon = AppVectorIcons.Seasonal,
         subtitle = "Try a sky before it covers the app - tap or scroll it around",
         badge = resetAction
     ) {
@@ -263,7 +296,7 @@ private fun PreviewCard(
                 reactToWind = settings.reactToWind,
                 windStrength = windStrength,
                 quality = quality,
-                publishesBarTrail = false,
+                frameHz = frameHz,
                 showTapRipple = false,
                 modifier = Modifier
                     .fillMaxSize()
@@ -505,8 +538,8 @@ private fun WeatherCard(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "The drift settles on top of the navigation bar when it is on screen, " +
-                "and on the bottom edge when it is not.",
+            text = "The drift gathers along the bottom edge of the screen, under the " +
+                "navigation bar rather than on top of it.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -595,48 +628,6 @@ private fun DensityCard(
 }
 
 @Composable
-private fun SeasonalQualityChip(
-    quality: SeasonalQuality,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "seasonal_quality_container"
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "seasonal_quality_content"
-    )
-    val interactionSource = remember { MutableInteractionSource() }
-    Text(
-        text = quality.displayName,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        color = content,
-        modifier = Modifier
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 14.dp, vertical = 9.dp)
-            .semantics {
-                this.selected = selected
-                role = Role.RadioButton
-            }
-            .testTag("seasonal_quality_${quality.storageValue}")
-    )
-}
-
-@Composable
 private fun SeasonalSlider(
     title: String,
     valueLabel: String,
@@ -684,3 +675,4 @@ private fun scaleLabel(value: Float): String =
 
 /** "60%" for a depth: it is a proportion of the tallest drift, not a multiplier. */
 private fun percentLabel(value: Float): String = "${(value * 100f).roundToInt()}%"
+

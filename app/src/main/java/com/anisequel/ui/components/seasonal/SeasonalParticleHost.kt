@@ -1,16 +1,22 @@
 package com.anisequel.ui.components.seasonal
 
+import android.os.Build
+import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import com.anisequel.data.repository.SeasonalPreferences
+import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_FRAME_HZ
 import com.anisequel.domain.seasonal.SeasonalSettings
+import com.anisequel.domain.seasonal.seasonalFrameHz
 
 /**
  * The seasonal sky, floated over every page.
@@ -50,10 +56,47 @@ fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
     val settings by preferences.settings.collectAsState(initial = SeasonalSettings())
     val context = LocalContext.current
     val detected = remember { detectSeasonalQualityTier(context) }
+    // Re-read every time the sky's settings change rather than once for the
+    // process: the active rate is a system setting, and a reader who switches the
+    // panel from 60 to 120 while AniSequel is open should get the frames they just
+    // unlocked without a restart.
+    val screen = detectSeasonalScreen(context)
     val quality = remember(settings.quality, detected) { settings.quality.resolve(detected) }
+    val frameHz = seasonalFrameHz(
+        rate = settings.frameRate,
+        tierHz = quality.frameHz,
+        deviceHz = screen.currentHz
+    )
 
     LaunchedEffect(settings.enabled) {
         SeasonalWind.reset()
+    }
+
+    // Asking the frame loop for 120 is only half of it. The system buckets an app's
+    // window into a refresh-rate category and leaves ordinary content in the default
+    // one, which on many panels means 60 no matter what the app's clock asks for.
+    // Above sixty the overlay therefore asks for the high category on the view that
+    // is actually being composited, and puts it back the moment the sky is off or
+    // capped - the battery cost of a high-rate window is the app's to accept only
+    // while the reader has a sky on screen that needs it.
+    //
+    // The category API is Android 14. On Android 12 and 13 this is a no-op rather
+    // than a wrong answer: the sky still steps at the rate the reader chose, it just
+    // cannot lift the window out of the bucket the platform left it in. Calling it
+    // without the guard is a `NoSuchMethodError` on those releases, and `lintRelease`
+    // does not fail the build, so the check is the only thing standing between this
+    // line and a crash on the two releases before the current one.
+    val root = LocalView.current
+    SideEffect {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            root.setRequestedFrameRate(
+                if (settings.enabled && frameHz > DEFAULT_SEASONAL_FRAME_HZ) {
+                    View.REQUESTED_FRAME_RATE_CATEGORY_HIGH
+                } else {
+                    View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT
+                }
+            )
+        }
     }
 
     if (!settings.enabled) return
@@ -68,7 +111,8 @@ fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
             pileDepth = settings.pileDepth,
             reactToWind = settings.reactToWind,
             windStrength = settings.windStrength,
-            quality = quality
+            quality = quality,
+            frameHz = frameHz
         )
     }
 }

@@ -136,6 +136,11 @@ object AppVectorIcons {
     val BrokenHeart = AppCustomVectors.BrokenHeart
     val HeartMended = AppCustomVectors.HeartMended
     val Grass = AppExtraVectors.GrassTuft
+    // The Seasonal settings page's own glyph. It used to be [Grass], which is the
+    // "go touch grass" recovery action on a failed API call; the two pages need
+    // different pictures, so the settings row has one that cannot be reused by
+    // accident when a third page wants a lawn.
+    val Seasonal = AppExtraVectors.SeasonalSky
     val Play = Icons.Default.PlayArrow
     val Trailer = AppCustomVectors.TrailerPlay
     val Info = Icons.Default.Info

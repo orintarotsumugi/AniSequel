@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,8 +48,6 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -215,8 +212,6 @@ fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    /** The pill's actual bounds in root coordinates, for chrome drawn on the bar. */
-    onCapsuleBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -294,11 +289,6 @@ fun ExpressiveNavigationBar(
                             onSwitch = selectTab
                         )
                     }
-                }
-                // Measured outside the 5dp ring: the snow cap is drawn from these
-                // bounds, and inside the ring it sat below the capsule's real top edge.
-                .onGloballyPositioned { layout ->
-                    onCapsuleBounds?.invoke(layout.boundsInRoot())
                 }
                 .padding(5.dp)
                 .onSizeChanged { barWidth = it.width }

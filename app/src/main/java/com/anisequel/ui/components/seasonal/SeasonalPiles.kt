@@ -138,8 +138,9 @@ internal fun DrawScope.drawSeasonalPile(
     // The drift sits on the screen's own bottom edge, behind the floating bar. It used
     // to be lifted to the bar's top edge, which left a transparent gap the height of the
     // bar's own padding between the snow and the screen - and made a drift that should
-    // look like it gathered on the floor look like a shelf. The bar gets its own cap
-    // instead; see SeasonalBarTrail.
+    // look like it gathered on the floor look like a shelf. Nothing is drawn on the
+    // bar itself: the snow that used to cap the pill covered the control's icons at
+    // a deep drift, and the reader asked the weather to stay off the chrome.
     val frame = PileFrame(
         width = width,
         ground = height,

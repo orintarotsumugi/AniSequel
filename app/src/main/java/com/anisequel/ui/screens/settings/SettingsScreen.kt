@@ -323,7 +323,7 @@ private fun SettingsRoot(
                 )
                 SettingsRow(
                     page = SettingsPage.SEASONAL,
-                    icon = AppVectorIcons.Grass,
+                    icon = AppVectorIcons.Seasonal,
                     testTag = "settings_row_seasonal",
                     onOpen = onOpen
                 )
