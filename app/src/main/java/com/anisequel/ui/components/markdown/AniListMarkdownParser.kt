@@ -1770,6 +1770,35 @@ object AniListMarkdownParser {
     }
 
     /**
+     * Appends one legacy `~!…!~` spoiler.
+     *
+     * Split out of [parseInlines] for the same reason as [appendHtmlSpoiler]: the
+     * branch still has to parse its payload as markup, and that conditional is a
+     * branch the surrounding walk does not need to carry.
+     */
+    private fun appendLegacySpoiler(
+        match: MatchResult,
+        tokens: MutableList<InlineToken>,
+        depth: Int,
+        spoilerDepth: Int
+    ) {
+        val content = match.groupValues[1].trim()
+        tokens.add(
+            InlineToken.Spoiler(
+                text = content,
+                // The payload is parsed again so emphasis and links inside an inline
+                // spoiler read as markup once it is open. The flat `text` stays
+                // alongside it for every renderer that can only draw a string.
+                children = if (depth >= MAX_INLINE_DEPTH) {
+                    emptyList()
+                } else {
+                    parseInlines(content, depth + 1, spoilerDepth + 1)
+                }
+            )
+        )
+    }
+
+    /**
      * Appends the tokens for one inline HTML spoiler and returns what is left.
      *
      * Split out of [parseInlines] to keep that walk's measured complexity where it
@@ -1972,23 +2001,12 @@ object AniListMarkdownParser {
                     )
                     if (trailing.isNotEmpty()) tokens.add(InlineToken.Plain(trailing))
                 }
-                "SPOILER" -> {
-                    val content = firstMatch.groupValues[1].trim()
-                    tokens.add(
-                        InlineToken.Spoiler(
-                            text = content,
-                            // The payload is parsed again so emphasis and links inside
-                            // an inline spoiler read as markup once it is open. The
-                            // flat `text` stays alongside it for every renderer that
-                            // can only draw a string.
-                            children = if (depth >= MAX_INLINE_DEPTH) {
-                                emptyList()
-                            } else {
-                                parseInlines(content, depth + 1, spoilerDepth + 1)
-                            }
-                        )
-                    )
-                }
+                "SPOILER" -> appendLegacySpoiler(
+                    match = firstMatch,
+                    tokens = tokens,
+                    depth = depth,
+                    spoilerDepth = spoilerDepth
+                )
                 "CODE" -> {
                     tokens.add(InlineToken.Code(firstMatch.groupValues[1]))
                 }
