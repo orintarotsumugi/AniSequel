@@ -2,6 +2,8 @@ package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -35,6 +38,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.CoverCacheCeiling
 import com.anisequel.domain.seasonal.SeasonalFrameRate
 import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.ui.components.AppVectorIcons
@@ -45,13 +49,19 @@ import com.anisequel.ui.components.seasonal.SeasonalScreen
 import kotlin.math.roundToInt
 
 /**
- * The seasonal page's choice pills, and the card that puts a ceiling on how often
- * the sky is allowed to move.
+ * The settings page's choice pills, and the card that manages the phone.
  *
  * Split out of [SeasonalSettingsTab] because the file was over the ceiling and the
  * two halves change for different reasons: the page assembles previews and sliders
  * around the current settings, while this is the control vocabulary the page draws
- * with and the one card that reads the phone rather than the preference file.
+ * with and the one card that reads the *device* rather than the preference file.
+ *
+ * ## Why the device facts live on the Seasonal page
+ *
+ * They belong to the heaviest decoration in the app, not to a settings tab of their
+ * own. A reader who comes here is asking "is this sky costing me frames, and is this
+ * app eating my storage" - and the two answers are a refresh rate and a cache size,
+ * which is why they are one card and why the cache pills sit under the rate pills.
  */
 
 /**
@@ -72,19 +82,29 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FrameCard(
+internal fun DeviceCard(
     rate: SeasonalFrameRate,
     offered: List<SeasonalFrameRate>,
     resolvedHz: Int,
     screen: SeasonalScreen,
     tierName: String,
-    onRateChange: (SeasonalFrameRate) -> Unit
+    ceiling: CoverCacheCeiling,
+    usedBytes: Long,
+    onRateChange: (SeasonalFrameRate) -> Unit,
+    onCeilingChange: (CoverCacheCeiling) -> Unit,
+    onClearCache: () -> Unit
 ) {
     SectionCard(
-        title = "Frame rate",
+        title = "Device management",
         icon = AppVectorIcons.Refresh,
-        subtitle = "How often the sky may move, and what this screen reports"
+        subtitle = "What this phone reports, and how hard the app may work on it"
     ) {
+        Text(
+            text = "Frame rate",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
         Text(
             text = screenReport(screen, resolvedHz, tierName),
             style = MaterialTheme.typography.bodySmall,
@@ -136,7 +156,58 @@ internal fun FrameCard(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Cover cache",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("device_cache_row")
+        ) {
+            CoverCacheCeiling.entries.forEach { option ->
+                SeasonalPill(
+                    label = option.displayName,
+                    selected = option == ceiling,
+                    testTag = "device_cache_${option.storageValue}",
+                    colourLabel = "device_cache",
+                    onClick = { onCeilingChange(option) }
+                )
+            }
+        }
+        // The byte count and the note travel with the rung that produced them, so a
+        // tap on 1 GB animates the line under it instead of replacing it.
+        Column(modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatial)) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = cacheReport(ceiling, usedBytes),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Coil fixes a disk cache's ceiling when it builds the loader, so a " +
+                    "new ceiling takes hold the next time the app opens. Clearing empties " +
+                    "what is on disk now.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onClearCache, modifier = Modifier.testTag("device_cache_clear")) {
+                Text("Clear cover cache")
+            }
+        }
     }
+}
+
+/** "412 MB used of 1 GB" - rounded the way a reader reads a storage number. */
+private fun cacheReport(ceiling: CoverCacheCeiling, usedBytes: Long): String {
+    val usedMb = (usedBytes / (1024L * 1024L)).coerceAtLeast(0L)
+    val ceilingMb = ceiling.bytes / (1024L * 1024L)
+    return "$usedMb MB of the $ceilingMb MB you allow is saved on this device."
 }
 
 /**
@@ -198,6 +269,17 @@ internal fun SeasonalPill(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "${colourLabel}_border"
     )
+    // The chosen pill sits a hair larger than its neighbours, on the bouncy token
+    // rather than a plain one: a selection that only changes colour is invisible to a
+    // reader glancing past the row, and the overshoot is what makes it read as the
+    // page *accepting* the tap. Drawn through a graphics layer so the spring never
+    // re-measures the row - an animated value read by layout restarts layout every
+    // frame, and this row is composed of pills that animate at the same time.
+    val settleScale by animateFloatAsState(
+        targetValue = if (selected) 1.04f else 1f,
+        animationSpec = ExpressiveMotion.SuperBouncy,
+        label = "${colourLabel}_scale"
+    )
 
     // One interaction source shared by the press spring and the click, and no
     // ripple: `bouncyPress` without a source installs its own pointer loop on the
@@ -206,6 +288,10 @@ internal fun SeasonalPill(
     val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
+            .graphicsLayer {
+                scaleX = settleScale
+                scaleY = settleScale
+            }
             .clip(ExpressiveShapes.pill)
             .background(container)
             .border(BorderStroke(1.dp, borderColor), shape = ExpressiveShapes.pill)

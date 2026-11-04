@@ -12,6 +12,10 @@
           "detail": "How often the sky moves is now its own choice, separate from how much it draws: Auto, 30, 60, 120 or 144 Hz. The page offers only the rates this screen reports - a 120 Hz pill on a 60 Hz phone is a control with one effect, none - and it re-reads the panel when you come back to the app, so unlocking the rate in the system settings brings the missing pill animating in. Above sixty the app also asks the platform for the high refresh-rate category on Android 14 and later, because a frame loop paced at 120 is still handed sixty frames a second by a window the system left in its default bucket. Auto is the default: an install that never saw the setting keeps the rate it already had."
         },
         {
+          "title": "Device management: this phone's numbers, and how much disk the art may take",
+          "detail": "The Seasonal page now opens with what the device reports - the rate the screen runs at and the rates it can be set to - and adds a cover-cache ceiling you can choose: 256 MB, which is what the app has always kept, up to 5 GB. The cache only ever fills as you browse, so a large rung is room rather than a reservation; a small one is the reason a scroll back re-fetches art you had already. Clearing the cache empties it now; a new ceiling takes hold the next time the app opens, because the image pipeline fixes a disk cache's size when it builds it and there is no honest way to make that instantaneous."
+        },
+        {
           "title": "The snow stays off the navigation bar",
           "detail": "A winter sky used to leave a cap along the bar's own pill, with drips over its face and a sparkle. Readers asked for the weather to stay off the control they press, so the cap is gone - and with it the channel that measured the bar and published its bounds every layout pass. The drift still gathers on the bottom edge of the screen, behind the bar, the way it did anyway."
         },

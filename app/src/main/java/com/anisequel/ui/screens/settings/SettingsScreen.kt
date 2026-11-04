@@ -36,6 +36,7 @@ import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
+import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
@@ -47,7 +48,6 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.AuthViewModel
 import com.anisequel.ui.viewmodel.rememberApiStatusProbe
-
 /** The key the [rememberSaveableStateHolder] files the shelf under. */
 private const val HUB_SAVEABLE_KEY = "settings_hub"
 
@@ -69,7 +69,10 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
-    SEASONAL("Seasonal effects", "Snow, leaves and fireflies that follow your touch"),
+    SEASONAL(
+        "Seasonal effects",
+        "Snow, petals and leaves - and how hard the sky may work on this phone"
+    ),
     LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
     ACCOUNT("AniList account", "Client ID, session and app lock"),
     // Updates is its own page rather than the top of About: the update check and
@@ -149,6 +152,10 @@ fun SettingsScreen(
      * settings.
      */
     seasonalPreferences: SeasonalPreferences,
+    /**
+     * The Device management card's ceiling choice. See [SeasonalSettingsTab].
+     */
+    devicePreferences: DevicePreferences,
     /**
      * The repository's reachability probe, passed as a function so Settings does
      * not need the whole repository to ask one question.
@@ -252,6 +259,7 @@ fun SettingsScreen(
                                     mainTabPreferences = mainTabPreferences,
                                     changelogRepository = changelogRepository,
                                     seasonalPreferences = seasonalPreferences,
+                                    devicePreferences = devicePreferences,
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
@@ -453,6 +461,7 @@ private fun SettingsPageContent(
     mainTabPreferences: MainTabPreferences,
     changelogRepository: ChangelogRepository,
     seasonalPreferences: SeasonalPreferences,
+    devicePreferences: DevicePreferences,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -463,7 +472,8 @@ private fun SettingsPageContent(
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.SEASONAL -> SeasonalSettingsTab(
-            seasonalPreferences = seasonalPreferences
+            seasonalPreferences = seasonalPreferences,
+            devicePreferences = devicePreferences
         )
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,

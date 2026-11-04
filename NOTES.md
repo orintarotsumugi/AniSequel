@@ -2011,8 +2011,8 @@ the row cannot fail to recognise what the upload wrote.
 
 ## A seasonal sky is one clock and one seeded list
 
-The overlay above every page - sakura, clover, fireflies, dandelion, maple, oak,
-ginkgo, snow and starlight, grouped by the season that owns each one - is
+The overlay above every page - snow, powder, crystal, needles, sakura, clover, maple,
+oak, ginkgo and dandelion, grouped by the season that owns each one - is
 deliberately the cheapest thing that can look alive: no per-particle animation objects,
 no `Animatable` per flake, no composition state per frame. `seasonalParticles` builds
 one immutable list from a fixed seed, and `SeasonalParticleLayer` computes every
@@ -2304,6 +2304,23 @@ twelve filaments into one fan.
 The snow family and the glyph moved out of the dispatcher when this landed: that
 file was at 699 lines under a 700 ceiling, and routing, weather and a pictogram
 change for three different reasons.
+
+### A ceiling the loader can only be told once
+
+The Device management card offers 256 MB to 5 GB of cover art, read from a single
+string key. It is a preferences file rather than the DataStore every other
+preference uses because the number is consumed at exactly one moment - Coil
+building the app's image loader in `AniSequelApplication.newImageLoader()`, a
+synchronous factory called from the first image request - and a blocking DataStore
+read there is a stall whose cause nobody can see, since the symptom is a slow first
+screen.
+
+The consequence is stated in the UI rather than hidden: **changing the ceiling does
+not resize the cache that is running now.** `DiskCache` publishes its ceiling as a
+`val` (checked against Coil 2.7.0), so the new size takes hold at the next process
+start, while clearing empties the disk immediately. A pill that appeared to do
+nothing at the moment you tapped it would be the bug; a pill that says when it takes
+effect is a limit of the pipeline.
 
 ### The snow stays off the bar
 

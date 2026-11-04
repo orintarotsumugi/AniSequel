@@ -102,6 +102,27 @@ class CoverCachePersistenceTest {
         )
     }
 
+    /**
+     * The ceiling is the reader's now, and it has to be read where the cache is built.
+     *
+     * A setting the loader never consults is a pill that changes nothing, and the
+     * regression that would make it so is invisible: writing the constant back into
+     * `NetworkClient` compiles, passes lint and shows a settings page that appears to
+     * work until the cache fills.
+     */
+    @Test
+    fun `the cover cache ceiling comes from the reader's choice`() {
+        val network = source(
+            "app/src/main/java/com/anisequel/data/network/NetworkClient.kt"
+        )
+
+        assertTrue(
+            "the disk cache is built with a fixed ceiling again, so the Device " +
+                "management page's choice does nothing",
+            network.contains("maxSizeBytes(CoverCacheCeiling.readBytes(context))")
+        )
+    }
+
     private fun findProjectRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".")
         var candidate: File? = start

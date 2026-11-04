@@ -93,6 +93,8 @@ and the GitHub release body read.
   unless asked for.
   a seasonal sky you can pace: how often it moves is its own setting, and it only
   offers the rates this screen reports.
+  a Device management card that says what this phone reports and lets you choose how
+  much disk the cover art may take - 256 MB up to 5 GB.
   off until you turn it on.
 
 ### Deliberate non-goals
