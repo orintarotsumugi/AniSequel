@@ -26,7 +26,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -58,6 +60,8 @@ import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.viewmodel.MessageFilter
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
+import com.anisequel.ui.viewmodel.hasHiddenMessages
+import com.anisequel.ui.viewmodel.isNewMessage
 import com.anisequel.ui.viewmodel.visibleError
 import com.anisequel.ui.viewmodel.visibleHasMore
 import com.anisequel.ui.viewmodel.visibleLoadMoreError
@@ -106,6 +110,18 @@ fun ProfileMessagesTab(
     state: UserMessagesViewModel.UiState,
     onSelectFilter: (MessageFilter) -> Unit,
     /**
+     * Takes one row out of the reader's list.
+     *
+     * Local to this app: the message stays on AniList and stays visible to the
+     * person on the other end of it, which is the whole reason a dismissal is a
+     * preference rather than a delete.
+     */
+    onHideMessage: (MessageNode) -> Unit,
+    /** Puts every dismissed row back. */
+    onShowHidden: () -> Unit,
+    /** The option: whether a new arrival carries the badge. */
+    onFlagNewChange: (Boolean) -> Unit,
+    /**
      * The segment's entry trigger.
      *
      * Called from a `LaunchedEffect(Unit)`; the ViewModel's own guards make it
@@ -146,6 +162,7 @@ fun ProfileMessagesTab(
     val error = visibleError(state)
     val sourceError = visibleSourceError(state)
     val loadMoreError = visibleLoadMoreError(state)
+    val hasHidden = hasHiddenMessages(state)
 
     // The same six-rows-from-the-end trigger the activity feed uses: far enough
     // that the page usually lands before the reader, near enough that a short
@@ -178,6 +195,10 @@ fun ProfileMessagesTab(
         MessageFilterRow(
             selected = state.filter,
             onSelect = onSelectFilter,
+            hasHidden = hasHidden,
+            onShowHidden = onShowHidden,
+            flagNew = state.visibility.flagNew,
+            onFlagNewChange = onFlagNewChange,
             modifier = Modifier
                 .widthIn(max = ProfileMaxContentWidth)
                 .fillMaxWidth()
@@ -193,16 +214,16 @@ fun ProfileMessagesTab(
         ) {
             if (messages.isEmpty()) {
                 when {
-                    error != null -> item(key = "messages_error") {
+                    error != null -> item(key = "messages_error", contentType = "state") {
                         MessagesError(message = error, onRetry = onRetry)
                     }
                     // Loading covers the first frame too: `loaded` is false until
                     // the sources answer, so the empty orb cannot flash before
                     // the request has even started.
-                    loading || !loaded -> item(key = "messages_loading") {
+                    loading || !loaded -> item(key = "messages_loading", contentType = "state") {
                         MessagesLoading()
                     }
-                    else -> item(key = "messages_empty") {
+                    else -> item(key = "messages_empty", contentType = "state") {
                         MessagesEmpty(filter = state.filter)
                     }
                 }
@@ -212,20 +233,23 @@ fun ProfileMessagesTab(
                     // is missing from throughout the merged list, so the notice
                     // belongs where the reader starts rather than under what
                     // happened to arrive.
-                    item(key = "messages_source_error") {
+                    item(key = "messages_source_error", contentType = "state") {
                         MessagesNotice(message = sourceError, onRetry = onRetry)
                     }
                 }
 
                 items(
                     items = messages,
-                    key = { it.id }
+                    key = { it.id },
+                    contentType = { "message_card" }
                 ) { message ->
                     MessageCard(
                         message = message,
                         viewerId = state.viewerId,
                         nowEpochSecond = nowEpochSecond,
+                        isNew = isNewMessage(state, message),
                         onOpenUser = onOpenUser,
+                        onHide = { onHideMessage(message) },
                         onOpenComments = onOpenComments,
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)
@@ -235,10 +259,10 @@ fun ProfileMessagesTab(
                 }
 
                 when {
-                    loadingMore -> item(key = "messages_more") {
+                    loadingMore -> item(key = "messages_more", contentType = "paging") {
                         MessagesPagingIndicator()
                     }
-                    loadMoreError != null -> item(key = "messages_more_error") {
+                    loadMoreError != null -> item(key = "messages_more_error", contentType = "paging") {
                         MessagesPagingRetry(message = loadMoreError, onRetry = onLoadMore)
                     }
                     // While `hasMore` is true and nothing is in flight, scrolling
@@ -248,7 +272,7 @@ fun ProfileMessagesTab(
                 }
 
                 if (!hasMore && !loadingMore && messages.size >= MESSAGE_END_THRESHOLD) {
-                    item(key = "messages_end") {
+                    item(key = "messages_end", contentType = "paging") {
                         MessagesFeedEnd()
                     }
                 }
@@ -275,34 +299,80 @@ private const val MESSAGE_END_THRESHOLD = 25
 private fun MessageFilterRow(
     selected: MessageFilter,
     onSelect: (MessageFilter) -> Unit,
+    hasHidden: Boolean,
+    onShowHidden: () -> Unit,
+    flagNew: Boolean,
+    onFlagNewChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FilterChip(
-            label = "All",
-            selected = selected == MessageFilter.ALL,
-            onClick = { onSelect(MessageFilter.ALL) },
-            testTag = "message_filter_all",
-            modifier = Modifier.weight(1f)
-        )
-        FilterChip(
-            label = "Received",
-            selected = selected == MessageFilter.RECEIVED,
-            onClick = { onSelect(MessageFilter.RECEIVED) },
-            testTag = "message_filter_received",
-            modifier = Modifier.weight(1f)
-        )
-        FilterChip(
-            label = "Sent",
-            selected = selected == MessageFilter.SENT,
-            onClick = { onSelect(MessageFilter.SENT) },
-            testTag = "message_filter_sent",
-            modifier = Modifier.weight(1f)
-        )
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FilterChip(
+                label = "All",
+                selected = selected == MessageFilter.ALL,
+                onClick = { onSelect(MessageFilter.ALL) },
+                testTag = "message_filter_all",
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                label = "Received",
+                selected = selected == MessageFilter.RECEIVED,
+                onClick = { onSelect(MessageFilter.RECEIVED) },
+                testTag = "message_filter_received",
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                label = "Sent",
+                selected = selected == MessageFilter.SENT,
+                onClick = { onSelect(MessageFilter.SENT) },
+                testTag = "message_filter_sent",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Only when there is something behind it. A "Show hidden" control on an
+            // inbox with nothing dismissed is a button that does nothing, and the
+            // tab has no way to say why.
+            if (hasHidden) {
+                TextButton(
+                    onClick = onShowHidden,
+                    modifier = Modifier.testTag("message_show_hidden")
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Show hidden")
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            // The option the badge answers to. Kept on the tab rather than in
+            // Settings because it is about *this* list, and a reader who wants it
+            // off is looking at the list when they decide that.
+            Text(
+                text = "Flag new",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Switch(
+                checked = flagNew,
+                onCheckedChange = onFlagNewChange,
+                modifier = Modifier.testTag("message_flag_new_switch")
+            )
+        }
     }
 }
 
@@ -329,12 +399,13 @@ private fun FilterChip(
 /**
  * One message, both directions, with the counterpart named on it.
  *
- * The card is clickable as a whole, and the three things inside it that are
- * already controls stay controls: a nested `clickable` or `IconButton` claims its
- * own region, so the counterpart's face still opens their profile, "Read more"
- * still expands in place, and the footer's chip still leaves for AniList. A tap on
- * the card - the body, the padding, anywhere that is not one of those - opens the
- * message's comment thread, with the message as its first row.
+ * The card is clickable as a whole, and the things inside it that are already
+ * controls stay controls: a nested `clickable` or button claims its own region, so
+ * the counterpart's face still opens their profile, "Read more" still expands in
+ * place, the footer's chip still leaves for AniList, and the dismiss button at the
+ * end of the author line takes only its own width off the row. A tap on the card -
+ * the body, the padding, anywhere that is not one of those - opens the message's
+ * comment thread, with the message as its first row.
  *
  * The note here used to say the card was "deliberately not clickable as a whole,
  * because a message has no thread to open in this app". That was true of the inbox
@@ -346,8 +417,10 @@ private fun MessageCard(
     message: MessageNode,
     viewerId: Int?,
     nowEpochSecond: Long,
+    isNew: Boolean,
     onOpenUser: (FollowUser) -> Unit,
     onOpenComments: (MessageNode) -> Unit,
+    onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val body = message.message ?: return
@@ -387,16 +460,29 @@ private fun MessageCard(
                 .animateContentSize(ExpressiveMotion.FastSpatialSize)
                 .padding(14.dp)
         ) {
-            MessageAuthorRow(
-                counterpart = counterpart,
-                sent = sent,
-                createdAt = message.createdAt,
-                nowEpochSecond = nowEpochSecond,
-                onOpenUser = onOpenUser,
+            // The author row and the two marks that belong to the row rather than to
+            // its author, in one line: a badge that sat above the name would read as
+            // part of the sender, and a dismiss button under the body would read as
+            // part of the message.
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 10.dp)
-            )
+                    .padding(bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MessageAuthorRow(
+                    counterpart = counterpart,
+                    sent = sent,
+                    createdAt = message.createdAt,
+                    nowEpochSecond = nowEpochSecond,
+                    onOpenUser = onOpenUser,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isNew) {
+                    NewMessagePill()
+                }
+                MessageHideButton(onHide = onHide)
+            }
 
             AniListMarkdownWithCovers(
                 markdown = body,
@@ -422,6 +508,53 @@ private fun MessageCard(
                 onOpenComments = { onOpenComments(message) }
             )
         }
+    }
+}
+
+/**
+ * The mark on a received message that arrived after the reader last read the inbox.
+ *
+ * A pill rather than a coloured edge: the edge is what the unread convention looks
+ * like in every mail client, and this tab is not a mail client - it shows both
+ * directions, and the thing being marked is *which side of the stamp* the row falls
+ * on. The text carries that for a reader who cannot see the colour difference, and it
+ * is a `Text`, so there is no icon to conflict with the repo's no-emoji rule.
+ */
+@Composable
+private fun NewMessagePill(modifier: Modifier = Modifier) {
+    Text(
+        text = "New",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onPrimary,
+        modifier = modifier
+            .clip(ExpressiveShapes.pill)
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .testTag("message_new_pill")
+    )
+}
+
+/**
+ * Dismisses the row from this list.
+ *
+ * Deliberately not an `IconButton`: the card is one clickable surface with nested
+ * controls that each claim their own region, and a full-size button inside it would
+ * take a thumb-width of the body away from the tap that opens the thread. This is the
+ * same small target the expand toggle uses.
+ */
+@Composable
+private fun MessageHideButton(onHide: () -> Unit, modifier: Modifier = Modifier) {
+    TextButton(
+        onClick = onHide,
+        modifier = modifier.testTag("message_hide")
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.Close,
+            contentDescription = "Hide this message",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 

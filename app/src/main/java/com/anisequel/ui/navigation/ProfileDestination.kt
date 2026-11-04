@@ -3,12 +3,14 @@ package com.anisequel.ui.navigation
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.data.repository.MessageVisibilityPreferences
 import com.anisequel.domain.usecase.profileViewModelKey
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.screens.profile.SEGMENT_ACTIVITY
@@ -299,12 +301,22 @@ fun ProfileDestination(
 
     // The inbox. Takes the viewer id rather than the profile's: the messages are
     // the reader's own, and the screen hides the segment on anybody else's page.
+    //
+    // Its visibility store is built here rather than passed down the route because it
+    // needs a `Context` and this is the only place it is read - the same shape
+    // `SequelDetailSheet` uses for its theme preferences. The application context, so
+    // the DataStore does not hold an Activity.
+    val context = LocalContext.current
+    val messageVisibility = remember(context) {
+        MessageVisibilityPreferences(context.applicationContext)
+    }
     val messagesViewModel: UserMessagesViewModel = viewModel(
         key = "$viewModelKey:messages",
         factory = UserMessagesViewModel.Factory(
             aniListRepository = repository,
             viewerId = viewerId,
-            isDemo = isDemo
+            isDemo = isDemo,
+            visibilityPreferences = messageVisibility
         )
     )
 

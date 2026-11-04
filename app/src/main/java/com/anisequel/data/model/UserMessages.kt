@@ -55,10 +55,29 @@ data class MessageNode(
     fun counterpartFor(viewerId: Int?): FollowUser? =
         if (isSentBy(viewerId)) recipient else messenger
 
+    /**
+     * Which side of the inbox this row belongs to.
+     *
+     * The same [isSentBy] test the card's direction line uses, so the list a row is
+     * hidden from cannot disagree with the way the row is described above it.
+     */
+    fun sideOf(viewerId: Int?): MessageSource =
+        if (isSentBy(viewerId)) MessageSource.SENT else MessageSource.RECEIVED
+
     /** A body the card can actually draw. */
     val hasBody: Boolean
         get() = !message.isNullOrBlank()
 }
+
+/**
+ * Which side of the reader's inbox a message sits on.
+ *
+ * Lives in the model rather than beside the inbox's filter chips because it is a
+ * fact about the row, decided by [MessageNode.isSentBy] against the viewer's id, and
+ * the data layer has to name it to store a dismissal. A `ui` enum reaching in here
+ * would put the presentation layer's chip list inside the persistence rule.
+ */
+enum class MessageSource { SENT, RECEIVED }
 
 /** Payload of the sent-messages query. */
 @JsonClass(generateAdapter = true)
