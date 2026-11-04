@@ -312,68 +312,15 @@ private fun AnnotatedString.Builder.appendTokens(
             // opened fine. (Before *that* it printed `[Spoiler: ...]` in full, which
             // is the opposite failure.) The revealed run stays link-annotated so a
             // second tap closes it again, matching the block chip's toggle.
-            is InlineToken.Spoiler -> {
-                val index = spoilers.index++
-                val revealed = spoilers.revealed.contains(index)
-                if (allowLinks) {
-                    withLink(
-                        LinkAnnotation.Clickable(
-                            tag = "$INLINE_SPOILER_TAG$index",
-                            styles = if (revealed) spoilers.revealedStyles else spoilers.styles,
-                            linkInteractionListener = { spoilers.onToggle(index) }
-                        )
-                    ) {
-                        if (revealed) {
-                            // Children are the same payload parsed as markup, so a
-                            // bold run or a link inside an inline spoiler reads as
-                            // one after the lid lifts instead of printing its
-                            // asterisks. `allowLinks = false` because this append is
-                            // already inside the spoiler's own annotation, and two
-                            // links over one run is the shape the framework resolves
-                            // arbitrarily - see `appendLink`.
-                            if (token.children.isNotEmpty()) {
-                                appendTokens(
-                                    tokens = token.children,
-                                    onLinkClick = onLinkClick,
-                                    linkStyles = linkStyles,
-                                    mentionStyles = mentionStyles,
-                                    codeBackground = codeBackground,
-                                    allowLinks = false,
-                                    spoilers = spoilers
-                                )
-                            } else {
-                                append(token.text)
-                            }
-                        } else {
-                            append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
-                            // A label is not part of the secret: it is what the
-                            // author chose to say before the lid opens, so it stays
-                            // legible on the obscured run.
-                            token.label?.let { label ->
-                                append(" ")
-                                append(label)
-                            }
-                            // Their runs are not drawn while the lid is closed,
-                            // but their numbers still have to be spent.
-                            spoilers.index += countInlineSpoilers(token.children)
-                        }
-                    }
-                } else if (revealed) {
-                    // Inside a link label a nested spoiler cannot put an annotation on
-                    // top of the link's, so its flat text is all there is - but its
-                    // numbers still have to be reserved for the siblings after it.
-                    append(token.text)
-                    spoilers.index += countInlineSpoilers(token.children)
-                } else {
-                    // Inside a link label: two annotations over the same characters
-                    // is the one shape the framework resolves arbitrarily (see
-                    // `appendLink`), so it keeps the obscuring style and no tap.
-                    withStyle(spoilers.styles.style ?: SpanStyle()) {
-                        append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
-                    }
-                    spoilers.index += countInlineSpoilers(token.children)
-                }
-            }
+            is InlineToken.Spoiler -> appendInlineSpoiler(
+                token = token,
+                onLinkClick = onLinkClick,
+                linkStyles = linkStyles,
+                mentionStyles = mentionStyles,
+                codeBackground = codeBackground,
+                allowLinks = allowLinks,
+                spoilers = spoilers
+            )
 
             // The five emphasis runs were already handled above: `decorationStyle`
             // is the single place that says which tokens are emphasis and what
@@ -381,6 +328,82 @@ private fun AnnotatedString.Builder.appendTokens(
             // that early return, and the sealed `when` must name every subtype.
             else -> Unit
         }
+    }
+}
+
+/**
+ * One inline spoiler, closed or revealed.
+ *
+ * Split out of [appendTokens] because the branch is the largest in that walk and
+ * carrying it inline put the walk over CodeFactor's complexity notice. The comments
+ * on each case moved with it - they are the reason the cases exist.
+ */
+private fun AnnotatedString.Builder.appendInlineSpoiler(
+    token: InlineToken.Spoiler,
+    onLinkClick: State<((String) -> Unit)?>,
+    linkStyles: TextLinkStyles,
+    mentionStyles: TextLinkStyles,
+    codeBackground: Color,
+    allowLinks: Boolean,
+    spoilers: InlineSpoilers
+) {
+    val index = spoilers.index++
+    val revealed = spoilers.revealed.contains(index)
+    if (allowLinks) {
+        withLink(
+            LinkAnnotation.Clickable(
+                tag = "$INLINE_SPOILER_TAG$index",
+                styles = if (revealed) spoilers.revealedStyles else spoilers.styles,
+                linkInteractionListener = { spoilers.onToggle(index) }
+            )
+        ) {
+            if (revealed) {
+                // Children are the same payload parsed as markup, so a bold run or
+                // a link inside an inline spoiler reads as one after the lid lifts
+                // instead of printing its asterisks. `allowLinks = false` because
+                // this append is already inside the spoiler's own annotation, and
+                // two links over one run is the shape the framework resolves
+                // arbitrarily - see `appendLink`.
+                if (token.children.isNotEmpty()) {
+                    appendTokens(
+                        tokens = token.children,
+                        onLinkClick = onLinkClick,
+                        linkStyles = linkStyles,
+                        mentionStyles = mentionStyles,
+                        codeBackground = codeBackground,
+                        allowLinks = false,
+                        spoilers = spoilers
+                    )
+                } else {
+                    append(token.text)
+                }
+            } else {
+                append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+                // A label is not part of the secret: it is what the author chose to
+                // say before the lid opens, so it stays legible on the obscured run.
+                token.label?.let { label ->
+                    append(" ")
+                    append(label)
+                }
+                // Their runs are not drawn while the lid is closed, but their
+                // numbers still have to be spent.
+                spoilers.index += countInlineSpoilers(token.children)
+            }
+        }
+    } else if (revealed) {
+        // Inside a link label a nested spoiler cannot put an annotation on top of the
+        // link's, so its flat text is all there is - but its numbers still have to be
+        // reserved for the siblings after it.
+        append(token.text)
+        spoilers.index += countInlineSpoilers(token.children)
+    } else {
+        // Inside a link label: two annotations over the same characters is the one
+        // shape the framework resolves arbitrarily (see `appendLink`), so it keeps
+        // the obscuring style and no tap.
+        withStyle(spoilers.styles.style ?: SpanStyle()) {
+            append(SPOILER_PLACEHOLDER.repeat(token.text.length.coerceAtLeast(1)))
+        }
+        spoilers.index += countInlineSpoilers(token.children)
     }
 }
 

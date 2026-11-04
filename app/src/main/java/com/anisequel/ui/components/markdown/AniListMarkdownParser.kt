@@ -941,34 +941,34 @@ object AniListMarkdownParser {
         }
     }
 
-/**
- * The nodes a block spoiler splits [source] into, or null when there is none.
- *
- * Prefix, spoiler and suffix, in document order. Returning null rather than an empty
- * list is what lets the caller tell "no spoiler here" from "a spoiler with nothing
- * before it" - the second still has to return the spoiler itself.
- */
-private fun blockSpoilerNodes(
-    source: String,
-    depth: Int,
-    spoilerDepth: Int
-): List<MarkdownNode>? {
-    if (spoilerDepth >= MAX_SPOILER_DEPTH) return null
-    val spoiler = nextBlockSpoiler(source) ?: return null
-    val nodes = mutableListOf<MarkdownNode>()
-    nodes += parseDecoded(source.substring(0, spoiler.openStart), depth, spoilerDepth)
-    nodes += MarkdownNode.SpoilerBlock(
-        inlines = emptyList(),
-        blocks = parseDecoded(
-            source.substring(spoiler.contentStart, spoiler.contentEnd),
-            depth,
-            spoilerDepth + 1
-        ),
-        label = spoiler.label
-    )
-    nodes += parseDecoded(source.substring(spoiler.closeEnd), depth, spoilerDepth)
-    return nodes
-}
+    /**
+     * The nodes a block spoiler splits [source] into, or null when there is none.
+     *
+     * Prefix, spoiler and suffix, in document order. Returning null rather than an
+     * empty list is what lets the caller tell "no spoiler here" from "a spoiler with
+     * nothing before it" - the second still has to return the spoiler itself.
+     */
+    private fun blockSpoilerNodes(
+        source: String,
+        depth: Int,
+        spoilerDepth: Int
+    ): List<MarkdownNode>? {
+        if (spoilerDepth >= MAX_SPOILER_DEPTH) return null
+        val spoiler = nextBlockSpoiler(source) ?: return null
+        val nodes = mutableListOf<MarkdownNode>()
+        nodes += parseDecoded(source.substring(0, spoiler.openStart), depth, spoilerDepth)
+        nodes += MarkdownNode.SpoilerBlock(
+            inlines = emptyList(),
+            blocks = parseDecoded(
+                source.substring(spoiler.contentStart, spoiler.contentEnd),
+                depth,
+                spoilerDepth + 1
+            ),
+            label = spoiler.label
+        )
+        nodes += parseDecoded(source.substring(spoiler.closeEnd), depth, spoilerDepth)
+        return nodes
+    }
 
     /**
      * The first block spoiler in [source], or null when there is none.
@@ -1769,6 +1769,39 @@ private fun blockSpoilerNodes(
         return null
     }
 
+    /**
+     * Appends the tokens for one inline HTML spoiler and returns what is left.
+     *
+     * Split out of [parseInlines] to keep that walk's measured complexity where it
+     * was before the HTML form landed. The children are parsed here too: the payload
+     * is markup, and a bold run or a link inside the lid has to read as one after it
+     * opens rather than as its own asterisks.
+     */
+    private fun appendHtmlSpoiler(
+        source: String,
+        match: InlineSpoilerMatch,
+        depth: Int,
+        spoilerDepth: Int,
+        tokens: MutableList<InlineToken>
+    ): String {
+        if (match.start > 0) {
+            tokens.add(InlineToken.Plain(source.substring(0, match.start)))
+        }
+        val contents = match.contents.trim()
+        tokens.add(
+            InlineToken.Spoiler(
+                text = contents,
+                label = match.label,
+                children = if (depth >= MAX_INLINE_DEPTH) {
+                    emptyList()
+                } else {
+                    parseInlines(contents, depth + 1, spoilerDepth + 1)
+                }
+            )
+        )
+        return source.substring(match.endExclusive)
+    }
+
     private fun parseInlines(
         text: String,
         depth: Int,
@@ -1844,22 +1877,7 @@ private fun blockSpoilerNodes(
             if (htmlSpoiler != null &&
                 (matches.isEmpty() || htmlSpoiler.start < matches.first().first.range.first)
             ) {
-                if (htmlSpoiler.start > 0) {
-                    tokens.add(InlineToken.Plain(remaining.substring(0, htmlSpoiler.start)))
-                }
-                val contents = htmlSpoiler.contents.trim()
-                tokens.add(
-                    InlineToken.Spoiler(
-                        text = contents,
-                        label = htmlSpoiler.label,
-                        children = if (depth >= MAX_INLINE_DEPTH) {
-                            emptyList()
-                        } else {
-                            parseInlines(contents, depth + 1, spoilerDepth + 1)
-                        }
-                    )
-                )
-                remaining = remaining.substring(htmlSpoiler.endExclusive)
+                remaining = appendHtmlSpoiler(remaining, htmlSpoiler, depth, spoilerDepth, tokens)
                 continue
             }
 
