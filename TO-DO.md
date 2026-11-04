@@ -102,7 +102,7 @@ The cache half is pure file operations and is the easiest to test — a
 > `internal`, which makes the invariants harder to hold.
 >
 > `UserMessagesViewModel` is exempt on the same grounds, and joined the list in
-> 1.9 when the inbox learned to hide a row: one class holds two independent
+> 1.8.3 when the inbox learned to hide a row: one class holds two independent
 > paged sources (two cursors, two job handles, two error slots), the open
 > message's reply thread, and the composer's send state. The extraction that
 > would work is the second one — the thread and the composer are a unit with

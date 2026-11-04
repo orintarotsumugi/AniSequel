@@ -1,7 +1,7 @@
 {
   "versions": [
     {
-      "version": "1.9.0",
+      "version": "1.8.3",
       "entries": [
         {
           "title": "The received half of the inbox reads its own type now",

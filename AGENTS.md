@@ -154,6 +154,31 @@ Version lives in **three** places and all three must agree:
 forward by hand: the workflow's commit is rejected by branch protection because
 GitHub does not run workflows for `GITHUB_TOKEN` pushes.
 
+### Which number to write: patch first, roll at 9
+
+- **A release is the last digit plus one.** `1.8.2` ships, the next one is
+  `1.8.3` — whatever the size of the change. Bug fixes, a redrawn icon, a new
+  setting, a performance pass: they all take the same step. Do not read
+  *major/minor/patch* off the version number and decide the bump from that;
+  this app has no "breaking release" or "feature release" tier, and a rule that
+  depends on classifying a change is a rule that gets argued every time.
+- **The last digit is a single decimal place, so it rolls at 9.** After `1.8.9`
+  comes `1.9.0`, and after `1.9.9` comes `1.10.0` — the *middle* digit steps up
+  and the last resets to zero. Nothing skips: `1.8.9` is never followed by
+  `1.9.1`, and a release is never labelled with a digit that has already been
+  used.
+- **`versionCode` ignores all of this and goes up by one every release.** It is
+  the GitHub run number, monotonic by construction, and it is the only thing the
+  updater compares — `1.0.9` sorts above `1.0.10` as a string, which is why
+  nobody may compare names (see §7).
+
+**Why the rule is written down:** the number is the release's name in the
+changelog, in `update.json` and in the tag, and a bump that has to be reasoned
+out each time produces a release that repeats or skips a name. `ChangelogTest`
+pins "newest first" and "no version listed twice", which catches the repeat, and
+nothing catches a skipped digit — that only shows up later as a gap nobody can
+explain.
+
 ### Always update the changelog and app version together (MANDATORY)
 
 - **Never ship changes or release a new version without updating `assets/changelog.json`**.
