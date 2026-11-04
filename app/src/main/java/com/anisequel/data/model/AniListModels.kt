@@ -580,6 +580,19 @@ data class MediaCoverImage(
 ) {
     val bestUrl: String?
         get() = extraLarge ?: large ?: medium
+
+    /**
+     * The art for a slot that cannot show more than `medium`.
+     *
+     * Not a downgrade in quality: AniList's `medium` is already around 210x300, and
+     * the relation banner that reads this is 22dp across - about 66 device pixels.
+     * `extraLarge` is eight times the bytes for pixels no screen at that size can
+     * place, and a dashboard row spends one of these per card on every scroll. The
+     * fallbacks stay in the same order so a response that omits the smaller size
+     * still draws something.
+     */
+    val smallSlotUrl: String?
+        get() = medium ?: large ?: extraLarge
 }
 
 @JsonClass(generateAdapter = true)

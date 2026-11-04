@@ -133,7 +133,7 @@ class FindMissedSequelsUseCase {
                         parentTitle = parentTitle,
                         // Both taken from the entry the edge was walked from, so
                         // showing them costs no extra AniList request.
-                        parentCoverUrl = parentMedia.coverImage?.bestUrl,
+                        parentCoverUrl = parentMedia.coverImage?.smallSlotUrl,
                         parentCoverColor = parentMedia.coverImage?.color,
                         parentCompletedYear = parentCompletedYear,
                         sequelMedia = sequelNode,

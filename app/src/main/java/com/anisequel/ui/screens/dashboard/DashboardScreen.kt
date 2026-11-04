@@ -381,7 +381,7 @@ fun DashboardScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 if (state.isDemoMode) {
-                                    item(key = "demo_banner") {
+                                    item(key = "demo_banner", contentType = "banner") {
                                         DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
                                     }
                                 }
@@ -392,7 +392,7 @@ fun DashboardScreen(
                                 // answered and moved every row below it by its
                                 // height. See [AniTopAppBar.showingSavedCopy].
 
-                                item(key = "stats_banner") {
+                                item(key = "stats_banner", contentType = "banner") {
                                     StatsBanner(
                                         totalWatched = state.totalWatchedCount,
                                         missedCount = state.totalMissedCount,
@@ -410,7 +410,7 @@ fun DashboardScreen(
                                 // Settings: disabled means the section - and every
                                 // poster load it draws - is not composed at all.
                                 if (state.arriving.isNotEmpty() && arrivingEnabled) {
-                                    item(key = "arriving_section") {
+                                    item(key = "arriving_section", contentType = "arriving") {
                                         ArrivingSection(
                                             entries = state.arriving,
                                             compact = arrivingCompact,
@@ -424,7 +424,7 @@ fun DashboardScreen(
                                     }
                                 }
 
-                                item(key = "search_bar") {
+                                item(key = "search_bar", contentType = "controls") {
                                     DashboardSearchBar(
                                         query = filterCriteria.searchQuery,
                                         onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
@@ -432,7 +432,7 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                item(key = "quick_filter_bar") {
+                                item(key = "quick_filter_bar", contentType = "controls") {
                                     QuickFilterBar(
                                         filterCriteria = filterCriteria,
                                         onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
@@ -441,7 +441,7 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                item(key = "section_header") {
+                                item(key = "section_header", contentType = "header") {
                                     DashboardSectionHeader(
                                         count = state.missedSequels.size,
                                         filterCriteria = filterCriteria,
@@ -450,7 +450,7 @@ fun DashboardScreen(
                                 }
 
                                 if (state.missedSequels.isEmpty()) {
-                                    item(key = "empty_state") {
+                                    item(key = "empty_state", contentType = "empty") {
                                         EmptyStateView(
                                             // The same predicate as the badge and
                                             // the quick filter row: an empty list
@@ -464,7 +464,8 @@ fun DashboardScreen(
                                 } else {
                                     items(
                                         items = state.missedSequels,
-                                        key = { "${it.parentId}_${it.sequelId}" }
+                                        key = { "${it.parentId}_${it.sequelId}" },
+                                        contentType = { "sequel_card" }
                                     ) { item ->
                                         SequelCard(
                                             sequel = item,

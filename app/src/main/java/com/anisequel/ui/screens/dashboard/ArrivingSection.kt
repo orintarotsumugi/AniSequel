@@ -253,7 +253,7 @@ private fun ArrivingStrip(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        items(items = row.entries, key = { it.mediaId }) { entry ->
+        items(items = row.entries, key = { it.mediaId }, contentType = { "arriving_tile" }) { entry ->
             ArrivingCard(
                 entry = entry,
                 nowMillis = nowMillis,
