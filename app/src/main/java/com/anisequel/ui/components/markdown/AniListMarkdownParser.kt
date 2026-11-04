@@ -1894,6 +1894,168 @@ object AniListMarkdownParser {
         ).sortedBy { it.first.range.first }
     }
 
+    /**
+     * Appends the token for the first inline match on the line.
+     *
+     * The two halves are split because the media arms and the emphasis arms do not
+     * share a single thing except the match they came from, and keeping both in one
+     * `when` was the last branch count CodeFactor reported. The dispatch here is two
+     * branches; each half is under the notice threshold on its own.
+     */
+    private fun appendInlineMatch(
+        type: String,
+        match: MatchResult,
+        tokens: MutableList<InlineToken>,
+        depth: Int,
+        spoilerDepth: Int
+    ) {
+        when (type) {
+            "IMAGE", "HTML_IMG", "PROTOCOL_IMG", "LINKED_IMG", "LINK", "AUTO_URL" ->
+                appendMediaMatch(type, match, tokens, depth, spoilerDepth)
+            else -> appendTextMatch(type, match, tokens, depth, spoilerDepth)
+        }
+    }
+
+    /** The image and link arms of the inline walk. */
+    private fun appendMediaMatch(
+        type: String,
+        match: MatchResult,
+        tokens: MutableList<InlineToken>,
+        depth: Int,
+        spoilerDepth: Int
+    ) {
+        when (type) {
+            "IMAGE" -> {
+                val alt = match.groupValues[1].takeIf { it.isNotBlank() }
+                tokens.add(InlineToken.Image(absoluteImageUrl(match.groupValues[2]), alt))
+            }
+            "HTML_IMG" -> {
+                val image = htmlTagImage(match.value)
+                if (image != null) {
+                    tokens.add(InlineToken.Image(image.url, image.alt, image.width))
+                } else {
+                    // A tag with no `src` has nothing to draw, so it stays as the
+                    // text the author wrote rather than vanishing.
+                    tokens.add(InlineToken.Plain(match.value))
+                }
+            }
+            "PROTOCOL_IMG" -> {
+                tokens.add(InlineToken.Image(absoluteImageUrl(match.value)))
+            }
+            "LINKED_IMG" -> {
+                val alt = match.groupValues[1].takeIf { it.isNotBlank() }
+                val imgUrl = absoluteImageUrl(match.groupValues[2])
+                val targetUrl = match.groupValues[3]
+                // The cover is the label, the title is the target. `INLINE_LINK` alone
+                // would have taken the cover as the target and dropped the title, so
+                // this branch exists to keep both.
+                //
+                // A plain `Link` with the image nested, rather than a `MediaLink`: the
+                // outer URL is what the reader follows, and a `MediaLink` would replace
+                // the whole thing with a cover card and lose the artwork the author
+                // chose. If the target is an AniList entity the card is drawn for it by
+                // the view, which is the same thing the block-level
+                // `[![Alt](img)](target)` does.
+                tokens.add(
+                    InlineToken.Link(
+                        label = "",
+                        url = targetUrl,
+                        children = listOf(InlineToken.Image(imgUrl, alt))
+                    )
+                )
+            }
+            "LINK" -> {
+                val label = match.groupValues[1]
+                val url = match.groupValues[2]
+                // An AniList entity link is kept as a media link so the renderer can
+                // draw a cover card for it; anything else stays a plain link.
+                val mediaLink = anilistMediaLink(label, url)
+                if (mediaLink != null) {
+                    tokens.add(mediaLink)
+                } else {
+                    // A label may itself be emphasised (`[**AniList**](url)`), which
+                    // used to print the asterisks verbatim.
+                    tokens.add(InlineToken.Link(label, url, nested(label, depth, spoilerDepth)))
+                }
+            }
+            "AUTO_URL" -> {
+                val matched = match.value
+                // A URL ending a sentence used to keep the sentence's full stop:
+                // `... anilist.co/anime/1.` linked to a path that does not exist, so
+                // the link the reader tapped was one character too long. The
+                // punctuation is put back as plain text behind it, because the
+                // sentence still needs its full stop.
+                val url = matched.trimEnd('.', ',', ';', ':', '!', '?')
+                val trailing = matched.substring(url.length)
+                val mediaLink = anilistMediaLink(label = "", url = url)
+                tokens.add(
+                    when {
+                        mediaLink != null -> mediaLink
+                        // A bare URL that points at an image gets embedded rather than
+                        // linked, so `https://.../cat.gif` between two words animates.
+                        // This pattern requires a scheme, so the normalisation is a
+                        // no-op here - it is applied anyway so that every
+                        // `InlineToken.Image` in the file comes out of the same place.
+                        IMAGE_EXTENSION.containsMatchIn(url) ->
+                            InlineToken.Image(absoluteImageUrl(url))
+                        else -> InlineToken.Link(url, url)
+                    }
+                )
+                if (trailing.isNotEmpty()) tokens.add(InlineToken.Plain(trailing))
+            }
+        }
+    }
+
+    /** The spoiler, code and emphasis arms of the inline walk. */
+    private fun appendTextMatch(
+        type: String,
+        match: MatchResult,
+        tokens: MutableList<InlineToken>,
+        depth: Int,
+        spoilerDepth: Int
+    ) {
+        when (type) {
+            "SPOILER" -> appendLegacySpoiler(match, tokens, depth, spoilerDepth)
+            "CODE" -> tokens.add(InlineToken.Code(match.groupValues[1]))
+            "BOLD_ITALIC" -> {
+                val content = match.groupValues[1]
+                tokens.add(InlineToken.BoldItalic(content, nested(content, depth, spoilerDepth)))
+            }
+            "BOLD" -> {
+                // Groups 1 and 2 are `**` and `__`; 3 and 4 are `<b>` and
+                // `<strong>`. `groupValues` on an unmatched group is the empty
+                // string, which is why this reads as a chain of `ifEmpty`.
+                val content = match.groupValues[1].ifEmpty {
+                    match.groupValues[2].ifEmpty {
+                        match.groupValues[3].ifEmpty { match.groupValues[4] }
+                    }
+                }
+                tokens.add(InlineToken.Bold(content, nested(content, depth, spoilerDepth)))
+            }
+            "ITALIC" -> {
+                // Group 1 for the `*x*` / `_x_` alternation, 2 and 3 for the `<i>` /
+                // `<em>` spellings. `groupValues` is safe on any of them: an
+                // unmatched group is the empty string, which is why `ifEmpty` chains
+                // read this way.
+                val content = match.groupValues[1].ifEmpty {
+                    match.groupValues[2].ifEmpty { match.groupValues[3] }
+                }
+                tokens.add(InlineToken.Italic(content, nested(content, depth, spoilerDepth)))
+            }
+            "UNDERLINE" -> {
+                val content = match.groupValues[1]
+                tokens.add(InlineToken.Underline(content, nested(content, depth, spoilerDepth)))
+            }
+            "STRIKE" -> {
+                val content = match.groupValues[1].ifEmpty {
+                    match.groupValues[2].ifEmpty { match.groupValues[3] }
+                }
+                tokens.add(InlineToken.Strikethrough(content, nested(content, depth, spoilerDepth)))
+            }
+            "MENTION" -> tokens.add(InlineToken.Mention(match.groupValues[1]))
+        }
+    }
+
     private fun parseInlines(
         text: String,
         depth: Int,
@@ -1934,134 +2096,13 @@ object AniListMarkdownParser {
                 tokens.add(InlineToken.Plain(remaining.substring(0, start)))
             }
 
-            when (type) {
-                "IMAGE" -> {
-                    val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
-                    tokens.add(InlineToken.Image(absoluteImageUrl(firstMatch.groupValues[2]), alt))
-                }
-                "HTML_IMG" -> {
-                    val image = htmlTagImage(firstMatch.value)
-                    if (image != null) {
-                        tokens.add(InlineToken.Image(image.url, image.alt, image.width))
-                    } else {
-                        // A tag with no `src` has nothing to draw, so it stays as
-                        // the text the author wrote rather than vanishing.
-                        tokens.add(InlineToken.Plain(firstMatch.value))
-                    }
-                }
-                "PROTOCOL_IMG" -> {
-                    tokens.add(InlineToken.Image(absoluteImageUrl(firstMatch.value)))
-                }
-                "LINKED_IMG" -> {
-                    val alt = firstMatch.groupValues[1].takeIf { it.isNotBlank() }
-                    val imgUrl = absoluteImageUrl(firstMatch.groupValues[2])
-                    val targetUrl = firstMatch.groupValues[3]
-                    // The cover is the label, the title is the target. `INLINE_LINK`
-                    // alone would have taken the cover as the target and dropped the
-                    // title, so this branch exists to keep both.
-                    //
-                    // A plain `Link` with the image nested, rather than a `MediaLink`:
-                    // the outer URL is what the reader follows, and a `MediaLink` would
-                    // replace the whole thing with a cover card and lose the artwork the
-                    // author chose. If the target is an AniList entity the card is drawn
-                    // for it by the view, which is the same thing the block-level
-                    // `[![Alt](img)](target)` does.
-                    tokens.add(
-                        InlineToken.Link(
-                            label = "",
-                            url = targetUrl,
-                            children = listOf(InlineToken.Image(imgUrl, alt))
-                        )
-                    )
-                }
-                "LINK" -> {
-                    val label = firstMatch.groupValues[1]
-                    val url = firstMatch.groupValues[2]
-                    // An AniList entity link is kept as a media link so the renderer
-                    // can draw a cover card for it; anything else stays a plain link.
-                    val mediaLink = anilistMediaLink(label, url)
-                    if (mediaLink != null) {
-                        tokens.add(mediaLink)
-                    } else {
-                        // A label may itself be emphasised (`[**AniList**](url)`),
-                        // which used to print the asterisks verbatim.
-                        tokens.add(InlineToken.Link(label, url, nested(label, depth, spoilerDepth)))
-                    }
-                }
-                "AUTO_URL" -> {
-                    val matched = firstMatch.value
-                    // A URL ending a sentence used to keep the sentence's full
-                    // stop: `... anilist.co/anime/1.` linked to a path that does
-                    // not exist, so the link the reader tapped was one character
-                    // too long. The punctuation is put back as plain text behind
-                    // it, because the sentence still needs its full stop.
-                    val url = matched.trimEnd('.', ',', ';', ':', '!', '?')
-                    val trailing = matched.substring(url.length)
-                    val mediaLink = anilistMediaLink(label = "", url = url)
-                    tokens.add(
-                        when {
-                            mediaLink != null -> mediaLink
-                            // A bare URL that points at an image gets embedded rather
-                            // than linked, so `https://.../cat.gif` between two words
-                            // animates. This pattern requires a scheme, so the
-                            // normalisation is a no-op here - it is applied anyway so
-                            // that every `InlineToken.Image` in the file comes out of
-                            // the same one place.
-                            IMAGE_EXTENSION.containsMatchIn(url) -> InlineToken.Image(absoluteImageUrl(url))
-                            else -> InlineToken.Link(url, url)
-                        }
-                    )
-                    if (trailing.isNotEmpty()) tokens.add(InlineToken.Plain(trailing))
-                }
-                "SPOILER" -> appendLegacySpoiler(
-                    match = firstMatch,
-                    tokens = tokens,
-                    depth = depth,
-                    spoilerDepth = spoilerDepth
-                )
-                "CODE" -> {
-                    tokens.add(InlineToken.Code(firstMatch.groupValues[1]))
-                }
-                "BOLD_ITALIC" -> {
-                    val content = firstMatch.groupValues[1]
-                    tokens.add(InlineToken.BoldItalic(content, nested(content, depth, spoilerDepth)))
-                }
-                "BOLD" -> {
-                    // Groups 1 and 2 are `**` and `__`; 3 and 4 are `<b>` and
-                    // `<strong>`. `groupValues` on an unmatched group is the empty
-                    // string, which is why this reads as a chain of `ifEmpty`.
-                    val content = firstMatch.groupValues[1].ifEmpty {
-                        firstMatch.groupValues[2].ifEmpty {
-                            firstMatch.groupValues[3].ifEmpty { firstMatch.groupValues[4] }
-                        }
-                    }
-                    tokens.add(InlineToken.Bold(content, nested(content, depth, spoilerDepth)))
-                }
-                "ITALIC" -> {
-                    // Group 1 for the `*x*` / `_x_` alternation, 2 and 3 for the
-                    // `<i>` / `<em>` spellings. `groupValues` is safe on any of
-                    // them: an unmatched group is the empty string, which is why
-                    // `ifEmpty` chains read this way.
-                    val content = firstMatch.groupValues[1].ifEmpty {
-                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
-                    }
-                    tokens.add(InlineToken.Italic(content, nested(content, depth, spoilerDepth)))
-                }
-                "UNDERLINE" -> {
-                    val content = firstMatch.groupValues[1]
-                    tokens.add(InlineToken.Underline(content, nested(content, depth, spoilerDepth)))
-                }
-                "STRIKE" -> {
-                    val content = firstMatch.groupValues[1].ifEmpty {
-                        firstMatch.groupValues[2].ifEmpty { firstMatch.groupValues[3] }
-                    }
-                    tokens.add(InlineToken.Strikethrough(content, nested(content, depth, spoilerDepth)))
-                }
-                "MENTION" -> {
-                    val user = firstMatch.groupValues[1]
-                    tokens.add(InlineToken.Mention(user))
-                }
-            }
+            appendInlineMatch(
+                type = type,
+                match = firstMatch,
+                tokens = tokens,
+                depth = depth,
+                spoilerDepth = spoilerDepth
+            )
 
             remaining = remaining.substring(firstMatch.range.last + 1)
         }
