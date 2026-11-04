@@ -54,6 +54,10 @@
         {
           "title": "nekos.best blames itself rather than the network",
           "detail": "Searching it for a word that is not one of its reaction names used to send a request the API cannot honour: its search needs a category in its type argument, and a word it has no category for has no valid request at all. It answered with \"Invalid type\", and the grid reported \"Could not reach nekos.best\" about a host it had reached perfectly well. It now says which words it does answer and points at the index that can search a title, which is the part a reader can act on."
+        },
+        {
+          "title": "The sliders and sheets moved to the APIs they will keep",
+          "detail": "Material 3 changed how a slider and a bottom sheet hold their own state, and this app was still asking the old way in eighteen places - which compiled, passed every test and shipped. The difference is not cosmetic: the replacement for the value-first slider deliberately ignores a value written from outside it, so a Reset button would move the number under the thumb and leave the thumb where it was. Every slider here is bound instead - its track rebuilt when the range changes, its value pushed in whenever something else writes it - so an entry's score slider still re-ticks when the account's score format changes, and the Seasonal page's Reset still moves all of its sliders at once. The ten sheets now name the stops they can settle in rather than asking to skip one, and a test keeps both retired forms out of the source, because the only symptom of drifting back is a setting that stops answering."
         }
       ]
     },
