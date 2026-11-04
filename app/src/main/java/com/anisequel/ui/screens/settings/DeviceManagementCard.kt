@@ -123,7 +123,7 @@ internal fun DeviceCard(
                     visible = option in offered || option == rate,
                     enter = fadeIn(ExpressiveMotion.FastEffects) +
                         expandHorizontally(
-                            animationSpec = ExpressiveMotion.DefaultSpatial,
+                            animationSpec = ExpressiveMotion.SpatialSize,
                             expandFrom = Alignment.Start
                         ) +
                         scaleIn(
@@ -132,7 +132,7 @@ internal fun DeviceCard(
                         ),
                     exit = fadeOut(ExpressiveMotion.FastEffects) +
                         shrinkHorizontally(
-                            animationSpec = ExpressiveMotion.FastSpatial,
+                            animationSpec = ExpressiveMotion.SpatialSize,
                             shrinkTowards = Alignment.Start
                         ) +
                         scaleOut(

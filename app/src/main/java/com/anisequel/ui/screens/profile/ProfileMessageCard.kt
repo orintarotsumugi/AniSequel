@@ -49,6 +49,9 @@ import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import java.time.Instant
 
+/** Lines of a message a closed card shows before "Read more". */
+private const val MESSAGE_COLLAPSED_LINES = 8
+
 /**
  * One row of the inbox: who it is with, which way it went, and the two marks that
  * belong to the row rather than to its author.
