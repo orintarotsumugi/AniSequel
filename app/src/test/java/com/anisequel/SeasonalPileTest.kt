@@ -133,8 +133,8 @@ class SeasonalPileTest {
     fun `landing forever finds a stable depth instead of filling to the ceiling`() {
         val pile = SeasonalPile(seed = 23)
         repeat(2_000) { index ->
-            val x = ((index * 37) % 100) / 100f
-            pile.deposit(xFraction = x, mass = 0.75f + (index % 7) * 0.1f, spread = 3)
+            val x = index * 37 % 100 / 100f
+            pile.deposit(xFraction = x, mass = 0.75f + index % 7 * 0.1f, spread = 3)
             pile.relax()
         }
         val average = (0 until pile.columns).sumOf { pile.column(it).toDouble() }.toFloat() /

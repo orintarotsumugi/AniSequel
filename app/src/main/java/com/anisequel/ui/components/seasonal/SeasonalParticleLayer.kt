@@ -608,7 +608,7 @@ private fun particlePlacement(
     // squeeze alone said "turning", but a leaf coming back round was drawn as bright
     // as the face it left, which read as a mirror rather than a back side.
     val alpha = particle.alpha * edge.coerceIn(0f, 1f) *
-        (if (underside) UNDER_FACE_LIGHT else 1f)
+        if (underside) UNDER_FACE_LIGHT else 1f
     if (alpha <= MIN_VISIBLE_ALPHA) return null
 
     into.center = Offset(x, y)

@@ -941,6 +941,35 @@ object AniListMarkdownParser {
         }
     }
 
+/**
+ * The nodes a block spoiler splits [source] into, or null when there is none.
+ *
+ * Prefix, spoiler and suffix, in document order. Returning null rather than an empty
+ * list is what lets the caller tell "no spoiler here" from "a spoiler with nothing
+ * before it" - the second still has to return the spoiler itself.
+ */
+private fun blockSpoilerNodes(
+    source: String,
+    depth: Int,
+    spoilerDepth: Int
+): List<MarkdownNode>? {
+    if (spoilerDepth >= MAX_SPOILER_DEPTH) return null
+    val spoiler = nextBlockSpoiler(source) ?: return null
+    val nodes = mutableListOf<MarkdownNode>()
+    nodes += parseDecoded(source.substring(0, spoiler.openStart), depth, spoilerDepth)
+    nodes += MarkdownNode.SpoilerBlock(
+        inlines = emptyList(),
+        blocks = parseDecoded(
+            source.substring(spoiler.contentStart, spoiler.contentEnd),
+            depth,
+            spoilerDepth + 1
+        ),
+        label = spoiler.label
+    )
+    nodes += parseDecoded(source.substring(spoiler.closeEnd), depth, spoilerDepth)
+    return nodes
+}
+
     /**
      * The first block spoiler in [source], or null when there is none.
      *
@@ -997,29 +1026,13 @@ object AniListMarkdownParser {
         if (clean.isBlank()) return emptyList()
 
         // A block spoiler is a document inside a document: its contents get the full
-        // block walk, not a paragraph of inline text. Splitting it out before the line
-        // loop is what lets a heading, a list or a picture live behind the lid without
-        // teaching every handler below about a tag that can appear mid-line. The three
-        // chunks are parsed at the *same* depth: opening a spoiler does not make the
-        // text on either side of it any more nested.
-        if (spoilerDepth < MAX_SPOILER_DEPTH) {
-            val spoiler = nextBlockSpoiler(clean)
-            if (spoiler != null) {
-                val nodes = mutableListOf<MarkdownNode>()
-                nodes += parseDecoded(clean.substring(0, spoiler.openStart), depth, spoilerDepth)
-                nodes += MarkdownNode.SpoilerBlock(
-                    inlines = emptyList(),
-                    blocks = parseDecoded(
-                        clean.substring(spoiler.contentStart, spoiler.contentEnd),
-                        depth,
-                        spoilerDepth + 1
-                    ),
-                    label = spoiler.label
-                )
-                nodes += parseDecoded(clean.substring(spoiler.closeEnd), depth, spoilerDepth)
-                return nodes
-            }
-        }
+        // block walk, not a paragraph of inline text. The split lives in its own
+        // function because this walk already carries every block form the site has,
+        // and adding the spoiler branches inline pushed its measured complexity over
+        // the threshold CodeFactor warns on (63, from 60). The function is still one
+        // decision here; the three chunks are parsed at the *same* depth, because
+        // opening a spoiler does not make the text on either side of it any more nested.
+        blockSpoilerNodes(clean, depth, spoilerDepth)?.let { return it }
 
         val nodes = mutableListOf<MarkdownNode>()
         val lines = clean.lines()

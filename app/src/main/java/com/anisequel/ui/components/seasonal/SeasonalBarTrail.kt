@@ -127,7 +127,7 @@ private fun DrawScope.drawBarSnowCap(
     // A pile of 0..1 grows the cap by about four dp at the deepest. The cap is a
     // garnish on a control, not a second drift: anything taller starts covering the
     // icons it is resting above.
-    val pileDepth = { fraction: Float -> (pile?.heightAt(fraction) ?: 0.055f) }
+    val pileDepth = { fraction: Float -> pile?.heightAt(fraction) ?: 0.055f }
 
     buildCap(path, left, right, top, lift, baseLip, lipSpan, pileDepth, seconds)
     // A soft shadow under the cap, so it reads as a layer of snow on a surface rather
