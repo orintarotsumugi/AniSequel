@@ -1828,12 +1828,14 @@ a conversation with no message yet, where there is no activity to open - that is
 one place a first `SaveMessage` can be written. The head row draws no heart:
 a message's like is an activity like, and this store only speaks the reply mutation.
 
-GIF search answers from two places: **Safebooru**, anonymous, asked for
-`animated_gif` at `rating:safe`, and **Tenor v2** when the reader has pasted a
-key. Both were chosen by elimination against the live services rather than against
-documentation: Tenor's public key-free API is gone (`g.tenor.com/v1` returns HTTP 403
-with `{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
-rejects the same string as `API_KEY_INVALID`), Giphy's historically published beta key
+GIF search answers from five places: **Safebooru**, anonymous, asked for
+`animated_gif` at `rating:safe`; **nekos.best**, also anonymous; and
+**Tenor v2**, **Klipy** and **GIPHY** when the reader has pasted a key. All were chosen
+by elimination against the live services rather than against documentation (the
+rejected hosts are recorded in `GifSearchApi.kt`'s own doc block, so the next reader
+does not re-spend an afternoon on them): Tenor's public key-free API is gone
+(`g.tenor.com/v1` returns HTTP 403 with `{"code":7,"error":"Tenor API is discontinued"}`
+and `tenor.googleapis.com/v2` rejects the same string as `API_KEY_INVALID`), Giphy's historically published beta key
 answers HTTP 403 `"msg":"BANNED"` - the *key* is blacklisted, not the client, since a
 curl, a browser and an OkHttp user agent are refused identically - and a Giphy key
 now needs a signup, starts as a beta key capped at 100 calls an hour, and its
@@ -1847,6 +1849,31 @@ an account-issued key pair, Rule34 answers a CAPTCHA, and **Danbooru, which answ
 a safe animated series GIF, which is four. What is left that is anonymous *and* anime
 is Safebooru, which is also what the browser GIF pickers in this community already
 use.
+
+**The two anonymous indexes are two different shapes, which is the reason there are
+two.** Safebooru has the deepest catalogue and uneven tagging, so whether a character
+name returns anything depends on somebody having put that tag on the file. nekos.best
+is perfectly reliable and answers only its own ~40 reaction words: its metadata search
+needs a *category* in `type`, so `?type=2` - the value its older documentation gave for
+"GIFs" - comes back `"Invalid type"`, and a word it has no category for has no valid
+request at all. It used to send one anyway, take a 400, and the grid reported "Could not
+reach nekos.best" about a host it had reached perfectly well; it now refuses in those
+words and names the index that can search a title.
+
+**The gap between them - a reader typing a character name - was answered once and taken
+out again.** `konachan.net` is the "safe" instance of a danbooru-style wallpaper board,
+its `/post.json` takes no key, and it is tagged by character, so it fitted: measured
+live, `animated order:score` answered 24 rows, 23 of them `.gif`, every one `rating:"s"`
+(it spells its sort `order:score`, where Safebooru's DAPI wants `sort:score:desc`), and
+`sample_url` equals `file_url` for 23 of the 24, which is the tile-budget problem
+`booruTileUrl` describes. The client was written, registered and tested. Then it was
+reverted, because *the rating on that board is assigned by the same community that runs
+its explicit instance*, and "safe" there is a filter on a catalogue rather than a
+guarantee about what a picker will hand a reader. A GIF search that ships into a public
+AniList comment thread is not the place to find out on a case-by-case basis, and no
+per-post rating check I can write changes what the surrounding site is. So the rule for
+the provider set is now stated in the same place as the technical ones: an index is only
+eligible if *what it hosts* is safe, not merely if it has a field that says so.
 
 Two rules come with that choice. `rating:safe` goes into the query **and** a post
 whose own rating field is not safe is dropped on the way out: a booru is user-tagged,
@@ -2011,8 +2038,8 @@ the row cannot fail to recognise what the upload wrote.
 
 ## A seasonal sky is one clock and one seeded list
 
-The overlay above every page - sakura, clover, fireflies, dandelion, maple, oak,
-ginkgo, snow and starlight, grouped by the season that owns each one - is
+The overlay above every page - snow, powder, crystal, needles, sakura, clover, maple,
+oak, ginkgo and dandelion, grouped by the season that owns each one - is
 deliberately the cheapest thing that can look alive: no per-particle animation objects,
 no `Animatable` per flake, no composition state per frame. `seasonalParticles` builds
 one immutable list from a fixed seed, and `SeasonalParticleLayer` computes every
@@ -2216,3 +2243,170 @@ a three-stop band with the same colour at both ends, so the frames outside the b
 it is the same picture with one shader instead of sixty a second. `drawWithCache` keys the band
 on the box size, and the phase is still read in the draw phase.
 
+
+## 1.8.3: the inbox is two queries, and the sky has a frame budget
+
+### The received half of the inbox was never asking for its own type
+
+`Page.activities` has no recipient filter, so a message the reader *received* can
+only be listed through `Page.notifications(type_in: [ACTIVITY_MESSAGE])`, and that
+field answers `NotificationUnion` - not a concrete type. A union has to be told
+which member each row is, and AniList's own documentation says so: `__typename` is
+required. The document did not select it, while
+`MessageNotificationNode` kept reading `@Json("__typename")` and `isUnrecognised`
+kept filtering on it. Three consequences, all silent:
+
+- the guard that decides "this is not a message notification" could never fire,
+  because the field it checked was always absent;
+- the fragment had no discriminator for the union, which is the case AniList warns
+  about rather than the case it handles;
+- every unit test stayed green, because the hand-written fixture supplied the
+  `__typename` the query never asked the server for. That is the exact shape of
+  test the repository rules warn about: it pinned a payload, not a requirement.
+
+The sent half kept working the whole time, which is what made this read as "one tab
+is broken". `Page.activities` answers `ActivityUnion` and the server resolves those
+from the row's own class - measured against the live endpoint with a public query and
+no token at all. So one union resolved and the other did not, and only the half that
+needed authentication *and* the missing field was affected.
+
+The fix is one line in the document, plus the assertion in `FriendsAndMessagesTest`
+that fails without it: `__typename` must appear inside the notifications selection
+set, before the fragment.
+
+### A frame rate is a separate choice from a quality tier
+
+`SeasonalQualityTier` has carried a `frameHz` since 1.8.2 (60/45/30), and it was the
+only answer: the reader could say how much the sky draws but not how often it moves.
+Both are now choices, and they are independent for two reasons a reader actually
+meets. A 120Hz phone may want a full sky stepping at thirty because frame *time* is
+what competes with scrolling. A 60Hz phone cannot be given 120 by any tier, however
+high-end its chipset.
+
+`SeasonalFrameRate` (Auto / 30 / 60 / 120 / 144) resolves through
+`seasonalFrameHz(rate, tierHz, deviceHz)`: what was asked, clamped to the tier's
+range, then clamped to the panel. Rounding rather than truncating is the load-bearing
+part - Android reports 59.94 and 119.81 for the names people use, and pacing a 120
+budget against 119.81 skips a step every second and a half. A device that reports
+nothing (a context with no display, a stub, a fold mid-transition) is read as 60
+rather than as "no ceiling", because the failure being guarded is the overlay asking
+a slow panel for frames it will never hand over.
+
+Above sixty there is a second half to the problem, which is why the host and not the
+layer deals with it: the system buckets a window into a refresh-rate *category* and
+leaves ordinary content in the default one, so Compose can pace its frame loop at 144
+and still be handed sixty frames a second. The host asks the composited view for the
+max category while the sky is on and above sixty, and puts it back otherwise - the
+battery cost of a high-rate window belongs to the state that needs it.
+
+The Settings page offers only the rates the screen reports (`availableSeasonalFrameRates`),
+because a 120 Hz pill on a 60 Hz phone is a control with exactly one effect: none. The
+list is re-read when the app resumes, which is what makes the pill animate in when the
+reader goes and unlocks the rate in the system settings - so unlike the quality tier,
+this reading is deliberately not cached for the process. A choice that has *become*
+unavailable stays drawn and still selected: the system setting can come back, and a
+selected option that has gone silent reads as the app forgetting the choice.
+
+### The chip is a legend, not a frame of the sky
+
+The Settings shape chips draw with `drawSeasonalParticle`, and that stays: the
+day a chip is illustrated separately is the day it can advertise a shape the sky
+does not fall. What was wrong was the *pose*. Every chip asked for `variant` zero
+at a radius of `0.32` of its own box, which had two consequences. For the four
+shapes that share the snow dispatcher, variant zero is one drawing shown four
+times, so the winter row could only be read from the words beside it. And 0.32 of
+an 18dp chip sits about two pixels above the point where each shape drops its
+branches, veins and barbs (`radius > 5f`), so the same saved setting drew a fern
+on one phone and six bare spokes on another.
+
+`seasonalGlyphLegend` is a pose table: a radius fitted to each shape's farthest
+ink (a petiole at 1.2 radii, a seed's halo at 1.3), the variant that *names* the
+shape at chip size, a tilt small enough to stay a posture rather than the sky's
+tumble, and a hairline floor for ink that would otherwise fade under half a
+pixel. The floor is a parameter the dispatcher caps at six percent of the radius
+and defaults to zero, which is what the overlay and the drift pass - so a frame
+of weather pays nothing for a pictogram, and the legend cannot fuse a seed's
+twelve filaments into one fan.
+
+The snow family and the glyph moved out of the dispatcher when this landed: that
+file was at 699 lines under a 700 ceiling, and routing, weather and a pictogram
+change for three different reasons.
+
+### A ceiling the loader can only be told once
+
+The Device management card offers 256 MB to 5 GB of cover art, read from a single
+string key. It is a preferences file rather than the DataStore every other
+preference uses because the number is consumed at exactly one moment - Coil
+building the app's image loader in `AniSequelApplication.newImageLoader()`, a
+synchronous factory called from the first image request - and a blocking DataStore
+read there is a stall whose cause nobody can see, since the symptom is a slow first
+screen.
+
+The consequence is stated in the UI rather than hidden: **changing the ceiling does
+not resize the cache that is running now.** `DiskCache` publishes its ceiling as a
+`val` (checked against Coil 2.7.0), so the new size takes hold at the next process
+start, while clearing empties the disk immediately. A pill that appeared to do
+nothing at the moment you tapped it would be the bug; a pill that says when it takes
+effect is a limit of the pipeline.
+
+### The snow stays off the bar
+
+1.8.2 added a cap of snow on the navigation bar's own pill: a wavy strip along its
+top edge, drips over its face, a sparkle, and the pill's measured bounds published
+from the bar's layout into `SeasonalChrome` so a second Canvas could draw over it.
+The reader asked for the weather to stay off the control they press, and the honest
+way to remove a behaviour like that is to remove the whole channel with it. So
+`SeasonalBarTrail`, `SeasonalChrome`, the layer's `publishesBarTrail`, the bar's
+`onCapsuleBounds` parameter and the `onGloballyPositioned` that fed it are all gone;
+the drift keeps gathering on the screen's real bottom edge, behind the bar, which is
+what the pile was doing anyway. Deleting the publishing path also deletes a layout
+callback that wrote state on every pass.
+
+### Hiding a row is the reader's, not AniList's
+
+The inbox can now dismiss a row and can mark what arrived since the reader last read
+it. Both are preferences (`MessageVisibilityPreferences`), because AniList has no
+"remove this from my inbox": a message deleted server-side stops existing for the
+person who sent it, and a private message that vanishes from one side of an exchange
+is a data loss, not a tidy-up. So:
+
+- A row is hidden under the *side* it belongs to, decided by `MessageNode.sideOf`
+  (the same `isSentBy` test that draws the direction line), not by the chip that was
+  selected - under `All` one list holds both, and dismissing a message the reader
+  wrote must not also hide the reply they received.
+- The stamp is the epoch second a message was *opened*, never the second the tab was
+  drawn: a badge that cleared the moment the list appeared would never be readable,
+  which is the only thing it is for.
+- `resetNotificationCount` is still not sent. AniList's unread count is not this
+  app's to reset.
+- The option switch lives on the tab rather than in Settings because it is about this
+  list, and switching it off does not move the stamp: the two are separate decisions,
+  and turning the badge back on should show what it showed before.
+
+### The paged caches had a TTL and no ceiling
+
+Every cache in the repository expires on the reader's refresh interval, but the
+expiry is only consulted when the *same key* is looked up again. Nothing ever asked
+for page 42 of a feed once it had scrolled away, so nothing released it: the maps
+grew for the whole session, and the cost arrived as a hitch in the middle of a fling.
+`MAX_PAGED_CACHE_ENTRIES` plus `expiredThenOldestKeys` bounds them - expired first
+(an answer outside the TTL is a wrong answer kept around), then the oldest stamps, so
+what stays is what the reader is likely to scroll back into. The rule is a top-level
+`internal` function for the reason `mediaCoverBatches` already is: it is the thing
+that must not regress, and the maps it is applied to are private state.
+
+### Covers: the best art each slot can actually show
+
+`MediaCoverImage.bestUrl` stays `extraLarge` first - the hero, the backdrop and the
+full-screen viewer are the pictures the reader looks at, and they should be the best
+AniList serves. What changed is the 22dp relation chip on a dashboard row: it asked
+for the same file as the backdrop, and AniList's `medium` is already about three times
+the pixels a 66-device-pixel slot can place. `smallSlotUrl` exists for that, and the
+fallback order is unchanged so a response that omits the smaller size still draws.
+
+Two frame-cost fixes came with it. The wavy progress bar rebuilt a fresh `Path` with
+96 segments *per frame per card*, which is how a smooth fling turns into a GC pause
+when a screenful of cards is on screen; it rewinds one remembered path now, the way
+the seasonal shapes already draw. And the lists that mix row types - the dashboard,
+the inbox, the library grid, the arriving rows - name a `contentType`, so a fast
+scroll recycles a slot instead of composing a new one every frame.

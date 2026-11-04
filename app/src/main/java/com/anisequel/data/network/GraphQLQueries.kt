@@ -477,12 +477,22 @@ object GraphQLQueries {
      * `resetNotificationCount` is deliberately **not** sent: it marks the
      * notifications read on the server, and opening the Messages tab must not
      * clear badges the user has not read yet.
+     *
+     * `__typename` is not decoration. `Page.notifications` answers
+     * `NotificationUnion`, and the union must be told which member each row is
+     * (AniList docs: "Yes, `__typename` is required for union types"). It was
+     * missing here while [com.anisequel.data.model.MessageNotificationNode] kept
+     * reading it, so `isUnrecognised` could never fire and the fragment had no
+     * discriminator to resolve against - the inbox came back empty on a real
+     * account while the sent half, whose `ActivityUnion` the server resolves from
+     * the row class anyway, kept working.
      */
     val GET_RECEIVED_MESSAGES = """
         query GetReceivedMessages(${'$'}page: Int, ${'$'}perPage: Int) {
           Page(page: ${'$'}page, perPage: ${'$'}perPage) {
             pageInfo { hasNextPage }
             notifications(type_in: [ACTIVITY_MESSAGE]) {
+              __typename
               ... on ActivityMessageNotification {
                 id
                 activityId

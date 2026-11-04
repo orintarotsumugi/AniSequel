@@ -81,7 +81,8 @@ and the GitHub release body read.
   viewport, with the heading's own show/size/font controls and a lossless SVG
   renderer behind it. The lists save as local projects in a library that offers
   to resume the last one you opened.
-  followers and an inbox you can reply from.
+  followers, and an inbox you can reply from - or dismiss a row out of, and come back to find
+  what arrived since you last read marked as new.
 
 ### Make it yours
 
@@ -90,6 +91,10 @@ and the GitHub release body read.
   palettes, Material You, true black, and background canvases.
   included), and optional typewriter / word-by-word / fade-up reveals - all off
   unless asked for.
+  a seasonal sky you can pace: how often it moves is its own setting, and it only
+  offers the rates this screen reports.
+  a Device management card that says what this phone reports and lets you choose how
+  much disk the cover art may take - 256 MB up to 5 GB.
   off until you turn it on.
 
 ### Deliberate non-goals

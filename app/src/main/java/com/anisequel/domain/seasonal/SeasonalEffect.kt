@@ -343,7 +343,14 @@ data class SeasonalSettings(
     val pileDepth: Float = DEFAULT_SEASONAL_PILE_DEPTH,
     val reactToWind: Boolean = false,
     val windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH,
-    val quality: SeasonalQuality = SeasonalQuality.DEFAULT
+    val quality: SeasonalQuality = SeasonalQuality.DEFAULT,
+    /**
+     * How often the sky is allowed to step, independent of how much it draws.
+     *
+     * Auto keeps the pre-1.9 answer - the tier's own rate - so an install that
+     * never opens this page behaves exactly as it did before the setting existed.
+     */
+    val frameRate: SeasonalFrameRate = SeasonalFrameRate.DEFAULT
 ) {
     /**
      * A repaired copy of these settings.

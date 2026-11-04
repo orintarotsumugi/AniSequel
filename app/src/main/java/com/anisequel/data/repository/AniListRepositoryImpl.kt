@@ -152,6 +152,49 @@ private const val ENTITY_BATCH_KEYS = GraphQLQueries.ENTITY_PREVIEW_PAGE_SIZE
 /** Logcat tag for the entity-preview batches, for the same reason as [COVER_LOG_TAG]. */
 private const val ENTITY_LOG_TAG = "AniSequelPreviews"
 
+/**
+ * The most pages any one paged cache may hold.
+ *
+ * Every paged cache in this repository expires on the reader's refresh interval,
+ * but expiry is only checked when the *same key* is looked up again. A reader who
+ * pages twenty-five titles deep, opens a dozen profiles and never returns to the
+ * first page never asks for those keys again, so nothing ever released them: the
+ * maps grew for the whole session, and the symptom was a hitch while flinging a
+ * list that had been smooth a screen earlier. This is the ceiling that makes the
+ * cache stop being unbounded.
+ *
+ * Forty pages is about a thousand rows of activity or messages held at once, which
+ * is more than a reader can scroll back to inside the TTL window; anything past it
+ * is a page they have effectively left.
+ */
+internal const val MAX_PAGED_CACHE_ENTRIES = 40
+
+/**
+ * The keys to drop so that a paged cache holds no more than [ceiling] entries.
+ *
+ * Expired entries go first - an answer outside the TTL is not a cached answer, it
+ * is a wrong one kept around - and the oldest surviving stamps go after them, so
+ * what stays is what the reader is most likely to scroll back into.
+ *
+ * Pure and `internal` for the same reason [mediaCoverBatches] is: the rule is the
+ * thing that must not regress, and the maps it is applied to are private state.
+ */
+internal fun expiredThenOldestKeys(
+    stamps: Map<String, Long>,
+    nowMillis: Long,
+    ttlMillis: Long,
+    ceiling: Int
+): List<String> {
+    if (stamps.size <= ceiling) return emptyList()
+    val (expired, fresh) = stamps.entries.partition { nowMillis - it.value > ttlMillis }
+    if (expired.size >= stamps.size - ceiling) {
+        return expired.map { it.key }
+    }
+    val needed = stamps.size - ceiling
+    val oldestLive = fresh.sortedBy { it.value }.take(needed - expired.size).map { it.key }
+    return expired.map { it.key } + oldestLive
+}
+
 /** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
 internal fun mediaCoverBatches(keys: List<MediaCoverKey>): List<List<MediaCoverKey>> =
     keys.chunked(MAX_COVER_BATCH_KEYS)
@@ -657,6 +700,19 @@ class AniListRepositoryImpl(
         value: T
     ) {
         cache[key] = CachedValue(value, nowMillis())
+        // Checked before the stamps are read, not after: the eviction pass walks
+        // every entry in the map, and a cache that is under its ceiling is the
+        // ordinary case. Paying an O(n) copy per cached page to decide "no" is how
+        // the fix for one kind of frame hitch makes another.
+        if (cache.size > MAX_PAGED_CACHE_ENTRIES) {
+            val drop = expiredThenOldestKeys(
+                stamps = cache.entries.associate { (k, entry) -> k to entry.storedAtMillis },
+                nowMillis = nowMillis(),
+                ttlMillis = listCacheTtlMillis(),
+                ceiling = MAX_PAGED_CACHE_ENTRIES
+            )
+            drop.forEach(cache::remove)
+        }
     }
 
     private fun cachedOverview(key: String): UserOverview? {

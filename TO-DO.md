@@ -101,10 +101,20 @@ The cache half is pure file operations and is the easiest to test — a
 > private fields, and extraction means threading that state or making it
 > `internal`, which makes the invariants harder to hold.
 >
-> **What is worth doing instead of splitting, and is not done:** assert the
-> relationships the comments describe. The cache-cap eviction and the
-> coalescer's double-request collapse are both behaviour nothing currently pins,
-> and that is a real gap — a smaller one than the line count suggests. The disk
+> `UserMessagesViewModel` is exempt on the same grounds, and joined the list in
+> 1.8.3 when the inbox learned to hide a row: one class holds two independent
+> paged sources (two cursors, two job handles, two error slots), the open
+> message's reply thread, and the composer's send state. The extraction that
+> would work is the second one — the thread and the composer are a unit with
+> nothing in common with paging — and it is not done because the composer writes
+> into the paging state on success (a sent message is appended to the source it
+> belongs to), which is the coupling worth seeing before it is threaded out.
+>
+> **What is worth doing instead of splitting, and is partly done:** assert the
+> relationships the comments describe. The cache-cap eviction is now pinned by
+> `PagedCacheEvictionTest`; the coalescer's double-request collapse is still
+> behaviour nothing pins, and that is a real gap — a smaller one than the line
+> count suggests. The disk
 > tier that arrived with the snapshots is the exception: `SnapshotStoreTest` and
 > `RepositorySnapshotsTest` pin its windows, its invalidation and its sign-out,
 > which is most of what those new lines were for.

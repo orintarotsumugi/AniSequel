@@ -178,6 +178,15 @@ fun WavyProgressBar(
         null
     }
 
+    // One path for the life of the bar, rebuilt in place on every frame.
+    //
+    // It used to be `Path()` inside the draw lambda, so a bar that is animating its
+    // travelling phase allocated a path plus `WAVE_SAMPLES` segments per frame - and
+    // this bar is inside a card, and a dashboard is a screenful of cards, which is
+    // how a smooth fling turned into a GC pause in the middle of it. `buildWave`
+    // rewinds the same object, the way the seasonal shapes already draw.
+    val wave = remember { Path() }
+
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -201,7 +210,8 @@ fun WavyProgressBar(
         // pay for a moving phase.
         val phase = WaveGeometry.phase(if (target > 0f) cycle?.value ?: 0f else 0f)
 
-        val wave = wavePath(
+        buildWave(
+            path = wave,
             width = size.width,
             wavelength = wavelength,
             amplitude = amplitude,
@@ -244,14 +254,15 @@ fun WavyProgressBar(
     }
 }
 
-private fun wavePath(
+private fun buildWave(
+    path: Path,
     width: Float,
     wavelength: Float,
     amplitude: Float,
     phase: Float,
     midY: Float
-): Path {
-    val path = Path()
+) {
+    path.rewind()
     val step = width / WAVE_SAMPLES
     path.moveTo(0f, midY + WaveGeometry.offset(0f, wavelength, amplitude, phase))
     var x = step
@@ -260,7 +271,6 @@ private fun wavePath(
         x += step
     }
     path.lineTo(width, midY + WaveGeometry.offset(width, wavelength, amplitude, phase))
-    return path
 }
 
 /** Two and a half periods across the bar: a wave, not a zigzag, at any width. */

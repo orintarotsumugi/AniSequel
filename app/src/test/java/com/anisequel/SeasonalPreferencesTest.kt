@@ -13,6 +13,7 @@ import com.anisequel.domain.seasonal.MAX_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.MAX_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.MIN_SEASONAL_DENSITY
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalFrameRate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,11 +28,16 @@ import org.robolectric.annotation.Config
 /**
  * What the Seasonal effects page remembers.
  *
- * The page writes nine independent keys - on, shape, density, size, speed, settle,
- * depth, wind and wind strength - and the failure worth pinning is one write
- * resetting another. That is exactly what happens when a settings object is read,
+ * The page writes its keys independently - on, shape, density, size, speed, settle,
+ * depth, wind, wind strength, quality and frame rate - and the failure worth pinning
+ * is one write resetting another. That is exactly what happens when a settings object is read,
  * edited and written back from a stale copy, and it would look like a slider
  * snapping back to its default the moment a different one was touched.
+ *
+ * The frame-rate key is pinned the same way. An install that never saw the setting
+ * has no stored value, and the absent answer is Auto - the tier's own rate - because
+ * a sky that silently started stepping at 120 after an update is a battery drain
+ * nobody opted into, whatever the panel can do.
  *
  * The 1.8.2 keys are also pinned as *absent by default*: an install that predates
  * them has no stored values, and the reader's existing snow must **not** wake up
@@ -169,6 +175,7 @@ class SeasonalPreferencesTest {
         preferences.setPileDepth(1f)
         preferences.setReactToWind(false)
         preferences.setWindStrength(0f)
+        preferences.setFrameRate(SeasonalFrameRate.ONE_TWENTY)
 
         preferences.reset()
 
@@ -182,5 +189,33 @@ class SeasonalPreferencesTest {
         assertEquals(DEFAULT_SEASONAL_PILE_DEPTH, settings.pileDepth, 0.0001f)
         assertFalse(settings.reactToWind)
         assertEquals(DEFAULT_SEASONAL_WIND_STRENGTH, settings.windStrength, 0.0001f)
+        assertEquals(SeasonalFrameRate.DEFAULT, settings.frameRate)
+    }
+
+    @Test
+    fun `the frame rate is absent-by-default and a write leaves the rest alone`() = runTest {
+        val preferences = preferences()
+
+        assertEquals(
+            "an install that never saw this setting must not wake up at a new rate",
+            SeasonalFrameRate.DEFAULT,
+            preferences.settings.first().frameRate
+        )
+
+        preferences.setFrameRate(SeasonalFrameRate.ONE_TWENTY)
+        val settings = preferences.settings.first()
+        assertEquals(SeasonalFrameRate.ONE_TWENTY, settings.frameRate)
+        assertEquals(
+            "choosing a frame rate reset the sky",
+            DEFAULT_SEASONAL_DENSITY,
+            settings.density,
+            0.0001f
+        )
+        assertFalse("choosing a frame rate switched the overlay on", settings.enabled)
+        assertEquals(
+            "choosing a frame rate changed the shape",
+            SeasonalEffect.SNOW,
+            settings.effect
+        )
     }
 }

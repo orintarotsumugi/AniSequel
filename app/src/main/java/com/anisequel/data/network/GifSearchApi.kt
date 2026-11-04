@@ -49,7 +49,18 @@ import okhttp3.Request
  * - **Openverse**: responds slowly, caps anonymous callers at 20 a minute, and has
  *   no anime reaction-GIF catalogue.
  * - **DuckDuckGo's** image endpoint: a bot challenge.
- * - **Konachan.net**: HTTP 522, origin not answering.
+ * - **Konachan.net**: technically the best fit of the ones tried - `/post.json` with no
+ *   key, `animated order:score` answering 24 rows of which 23 were `.gif`, all rated
+ *   `s` - and it was written, registered and tested before being reverted. It is out
+ *   because it is the *filtered instance of a site whose whole catalogue is that site's
+ *   explicit content*, and the `rating` field is assigned by the same community that
+ *   uploads to it. Safebooru is a safe-only board by construction; this one is a policy
+ *   on top of something else, and a picker that posts into a public AniList comment
+ *   thread should not be relying on a per-post flag to tell the two apart. **The rule
+ *   this leaves: an index is eligible when what it hosts is safe, not when it has a
+ *   field that claims so.**
+ * - **Konachan.com**, and every other `danbooru`-engine board with an unrestricted
+ *   instance: same reason, stated before anyone re-derives it from the API shape.
  *
  * ## Never the AniList token
  *
@@ -67,6 +78,18 @@ interface GifSearchApi {
      * index the app does not name, and a picker then says just "a GIF index".
      */
     val providerName: String get() = ""
+
+    /**
+     * The sentence shown when this index is answering *instead of* the one the
+     * reader chose.
+     *
+     * Null for every client that is answering because it was asked to. Set only on
+     * the anonymous fallback, because a substitution that is not said out loud is
+     * the reader searching Klipy, getting Safebooru's catalogue, and no way to find
+     * out that the difference was a key they never saved. The picker's placeholder
+     * names the index, which says *what*; this says *why* and where to fix it.
+     */
+    val substitutionNote: String? get() = null
 
     /**
      * Whether an empty answer is a gap in this provider's catalogue rather than a

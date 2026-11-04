@@ -41,6 +41,7 @@ import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
+import com.anisequel.ui.components.rememberBoundSliderState
 import kotlin.math.roundToInt
 
 /**
@@ -303,13 +304,17 @@ internal fun TierScoreFloorDialog(
                     )
                 }
                 Slider(
-                    value = value,
+                    // Bound: the sheet is re-opened on a different band, and a state that kept
+                    // the first cut points would show one band's numbers over another's handles.
+                    state = rememberBoundSliderState(
+                        value = value,
+                        // 19 steps between the ends is a 5-point grid: scores are
+                        // whole numbers, and a band of 83.7 is a precision the
+                        // seeding rule cannot use.
+                        steps = 19,
+                        trackRange = 0f..100f
+                    ),
                     onValueChange = { value = it },
-                    valueRange = 0f..100f,
-                    // 19 steps between the ends is a 5-point grid: scores are
-                    // whole numbers, and a band of 83.7 is a precision the
-                    // seeding rule cannot use.
-                    steps = 19,
                     enabled = enabled
                 )
                 Text(

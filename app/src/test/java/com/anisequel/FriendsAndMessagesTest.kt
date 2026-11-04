@@ -103,6 +103,15 @@ class FriendsAndMessagesTest {
         // The inbox has no activity listing of its own.
         assertTrue(query.contains("notifications(type_in: [ACTIVITY_MESSAGE])"))
         assertTrue(query.contains("... on ActivityMessageNotification"))
+        // `Page.notifications` answers a union, and the union is only resolvable
+        // when the document asks which member each row is. Without this the
+        // inbox returns nothing on a real account while every unit test here -
+        // which hand-writes `__typename` into its fixture - stays green.
+        assertTrue(
+            "the notifications selection set must select __typename",
+            query.indexOf("__typename") > query.indexOf("notifications(type_in:") &&
+                query.indexOf("__typename") < query.indexOf("... on ActivityMessageNotification")
+        )
         // The notification embeds the whole message; that is what a row draws.
         assertTrue(query.contains("message {"))
         assertTrue(query.contains("createdAt"))

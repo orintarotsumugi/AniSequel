@@ -1,5 +1,4 @@
 package com.anisequel.ui.screens.dashboard
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,22 +37,25 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
+import com.anisequel.data.network.ApiReachability
+import com.anisequel.data.network.ApiStatusSnapshot
+import com.anisequel.data.network.isConnectionTrouble
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.ui.components.AniTopAppBar
+import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.components.EmptyStateView
 import com.anisequel.ui.components.FilterSortSheet
 import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.StateCrossfade
-import com.anisequel.ui.components.cards.SequelCard
-import com.anisequel.ui.components.detail.SequelDetailSheet
-import com.anisequel.ui.viewmodel.rememberPersonProfileHost
-import com.anisequel.ui.viewmodel.rememberPlanningAddHost
-import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.StatsBanner
+import com.anisequel.ui.components.cards.SequelCard
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.detail.toDetailMedia
+import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.navigation.MainBarClearance
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection
@@ -63,16 +64,14 @@ import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
-import com.anisequel.data.network.ApiReachability
-import com.anisequel.data.network.ApiStatusSnapshot
-import com.anisequel.data.network.isConnectionTrouble
-import com.anisequel.ui.components.ApiRecoveryOverlay
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.rememberApiStatusProbe
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.rememberPlanningAddHost
+import com.anisequel.ui.viewmodel.toMediaNode
 import kotlinx.coroutines.flow.collectLatest
-
 private val MaxContentWidth = 640.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,8 +118,8 @@ fun DashboardScreen(
     val profiles = rememberPersonProfileHost(repository)
     val filterCriteria by dashboardViewModel.filterCriteria.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val filterSheetState = rememberFullHeightSheetState()
+    val detailSheetState = rememberFullHeightSheetState()
 
     // Collected unconditionally. The old form short-circuited on a nullable
     // parameter (`prefs?.settings?.collectAsState(...) ?: remember { ... }`),
@@ -381,7 +380,7 @@ fun DashboardScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 if (state.isDemoMode) {
-                                    item(key = "demo_banner") {
+                                    item(key = "demo_banner", contentType = "banner") {
                                         DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
                                     }
                                 }
@@ -392,7 +391,7 @@ fun DashboardScreen(
                                 // answered and moved every row below it by its
                                 // height. See [AniTopAppBar.showingSavedCopy].
 
-                                item(key = "stats_banner") {
+                                item(key = "stats_banner", contentType = "banner") {
                                     StatsBanner(
                                         totalWatched = state.totalWatchedCount,
                                         missedCount = state.totalMissedCount,
@@ -410,7 +409,7 @@ fun DashboardScreen(
                                 // Settings: disabled means the section - and every
                                 // poster load it draws - is not composed at all.
                                 if (state.arriving.isNotEmpty() && arrivingEnabled) {
-                                    item(key = "arriving_section") {
+                                    item(key = "arriving_section", contentType = "arriving") {
                                         ArrivingSection(
                                             entries = state.arriving,
                                             compact = arrivingCompact,
@@ -424,7 +423,7 @@ fun DashboardScreen(
                                     }
                                 }
 
-                                item(key = "search_bar") {
+                                item(key = "search_bar", contentType = "controls") {
                                     DashboardSearchBar(
                                         query = filterCriteria.searchQuery,
                                         onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
@@ -432,7 +431,7 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                item(key = "quick_filter_bar") {
+                                item(key = "quick_filter_bar", contentType = "controls") {
                                     QuickFilterBar(
                                         filterCriteria = filterCriteria,
                                         onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
@@ -441,7 +440,7 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                item(key = "section_header") {
+                                item(key = "section_header", contentType = "header") {
                                     DashboardSectionHeader(
                                         count = state.missedSequels.size,
                                         filterCriteria = filterCriteria,
@@ -450,7 +449,7 @@ fun DashboardScreen(
                                 }
 
                                 if (state.missedSequels.isEmpty()) {
-                                    item(key = "empty_state") {
+                                    item(key = "empty_state", contentType = "empty") {
                                         EmptyStateView(
                                             // The same predicate as the badge and
                                             // the quick filter row: an empty list
@@ -464,7 +463,8 @@ fun DashboardScreen(
                                 } else {
                                     items(
                                         items = state.missedSequels,
-                                        key = { "${it.parentId}_${it.sequelId}" }
+                                        key = { "${it.parentId}_${it.sequelId}" },
+                                        contentType = { "sequel_card" }
                                     ) { item ->
                                         SequelCard(
                                             sequel = item,
@@ -478,6 +478,15 @@ fun DashboardScreen(
                                             swipeEnabled = quickAddSettings.swipeEnabled,
                                             onHide = {
                                                 dashboardViewModel.toggleHideSequel(item)
+                                            },
+                                            // The banner names the parent, and the parent is not in this
+                                            // list - so the tap hands the sheet a summary built from the
+                                            // four fields the relation walk kept, and the sheet's own
+                                            // detail fetch replaces it. Same route an arriving row takes.
+                                            onOpenParent = {
+                                                selectedSequelId = null
+                                                selectedArrivingId = null
+                                                navigatedRelation = item.toParentSummary()
                                             },
                                             modifier = Modifier
                                                 .widthIn(max = MaxContentWidth)

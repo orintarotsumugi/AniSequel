@@ -46,6 +46,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberBoundSliderState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -333,12 +334,18 @@ internal fun DetailEditTab(
                     Column(modifier = Modifier.padding(top = 10.dp)) {
                         if (totalUnits > 0) {
                             Slider(
-                                value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
+                                // Bound state, because the number being dragged is a field of
+                                // the draft: a step button, a cleared date or another row's edit
+                                // moves this thumb, and a state that read only its initial value
+                                // would leave it behind.
+                                state = rememberBoundSliderState(
+                                    value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
+                                    steps = (totalUnits - 1).coerceAtLeast(0),
+                                    trackRange = 0f..totalUnits.toFloat()
+                                ),
                                 onValueChange = {
                                     state.draft = entryState.copy(progress = it.toInt())
                                 },
-                                valueRange = 0f..totalUnits.toFloat(),
-                                steps = (totalUnits - 1).coerceAtLeast(0),
                                 enabled = enabled,
                                 modifier = Modifier.testTag("edit_progress_slider")
                             )
@@ -415,10 +422,20 @@ internal fun DetailEditTab(
                     // scale draws no ticks) landing on whole points.
                     val scale = ScoreScale(entryState.scoreMax, entryState.scoreStep)
                     Slider(
-                        value = entryState.score.coerceIn(0.0, entryState.scoreMax.toDouble()).toFloat(),
-                        onValueChange = { state.draft = entryState.copy(score = scale.quantise(it.toDouble())) },
-                        valueRange = 0f..entryState.scoreMax.toFloat(),
-                        steps = scale.steps,
+                        // The track is rebuilt when the scale changes, which is the reason this
+                        // is not `rememberSliderState`: an entry moving from a ten-point to a
+                        // hundred-point format has to lose the old track, not keep drawing it
+                        // under the new numbers.
+                        state = rememberBoundSliderState(
+                            value = entryState.score
+                                .coerceIn(0.0, entryState.scoreMax.toDouble())
+                                .toFloat(),
+                            steps = scale.steps,
+                            trackRange = 0f..entryState.scoreMax.toFloat()
+                        ),
+                        onValueChange = {
+                            state.draft = entryState.copy(score = scale.quantise(it.toDouble()))
+                        },
                         enabled = enabled,
                         modifier = Modifier.testTag("edit_score_slider")
                     )

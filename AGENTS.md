@@ -93,6 +93,19 @@ It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
   120×44 tab renders a 120×44 *ellipse* from `MaterialShapes.Pill`. Use
   `RoundedCornerShape(percent = 50)` for capsules.
   `ExpressiveShapesTest` guards the geometry.
+- **A slider takes `rememberBoundSliderState`, and a sheet takes
+  `rememberFullHeightSheetState` — never the value-first `Slider(value = …)` or
+  `rememberModalBottomSheetState(skipPartiallyExpanded = …)`.** Material 3 moved both
+  widgets to a state object that *owns* its value, and `rememberSliderState` documents
+  that it then ignores later changes to the value, steps and range it was given. That
+  is right for a slider that is the source of truth and wrong for every slider in this
+  app, which are bound to a draft or a preference: the entry editor re-ticks its score
+  track when the account's format changes, and the Seasonal page's Reset writes every
+  slider on the page at once. The two helpers do what the retired overloads did
+  internally — rebuild on a geometry change, push the incoming value in — and are named
+  once so seventeen call sites cannot drift. `DeprecatedMaterial3CallTest` fails if a
+  retired form comes back, because the only symptom of one is a control that stops
+  answering, and a deprecated call compiles, tests green and ships.
 
 ---
 
@@ -153,6 +166,31 @@ Version lives in **three** places and all three must agree:
 `VersionBaselineTest` enforces it — run it. After a release, bring 1 and 2
 forward by hand: the workflow's commit is rejected by branch protection because
 GitHub does not run workflows for `GITHUB_TOKEN` pushes.
+
+### Which number to write: patch first, roll at 9
+
+- **A release is the last digit plus one.** `1.8.2` ships, the next one is
+  `1.8.3` — whatever the size of the change. Bug fixes, a redrawn icon, a new
+  setting, a performance pass: they all take the same step. Do not read
+  *major/minor/patch* off the version number and decide the bump from that;
+  this app has no "breaking release" or "feature release" tier, and a rule that
+  depends on classifying a change is a rule that gets argued every time.
+- **The last digit is a single decimal place, so it rolls at 9.** After `1.8.9`
+  comes `1.9.0`, and after `1.9.9` comes `1.10.0` — the *middle* digit steps up
+  and the last resets to zero. Nothing skips: `1.8.9` is never followed by
+  `1.9.1`, and a release is never labelled with a digit that has already been
+  used.
+- **`versionCode` ignores all of this and goes up by one every release.** It is
+  the GitHub run number, monotonic by construction, and it is the only thing the
+  updater compares — `1.0.9` sorts above `1.0.10` as a string, which is why
+  nobody may compare names (see §7).
+
+**Why the rule is written down:** the number is the release's name in the
+changelog, in `update.json` and in the tag, and a bump that has to be reasoned
+out each time produces a release that repeats or skips a name. `ChangelogTest`
+pins "newest first" and "no version listed twice", which catches the repeat, and
+nothing catches a skipped digit — that only shows up later as a gap nobody can
+explain.
 
 ### Always update the changelog and app version together (MANDATORY)
 

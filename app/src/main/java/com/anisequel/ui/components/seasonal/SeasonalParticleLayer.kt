@@ -3,7 +3,6 @@ package com.anisequel.ui.components.seasonal
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -20,8 +19,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
+import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_FRAME_HZ
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_WIND_STRENGTH
+import com.anisequel.domain.seasonal.MAX_SEASONAL_FRAME_HZ
 import com.anisequel.domain.seasonal.MAX_SEASONAL_PILE_DP
 import com.anisequel.domain.seasonal.SeasonalEffect
 import com.anisequel.domain.seasonal.SeasonalParticle
@@ -64,8 +65,13 @@ private const val MIN_FACE_RATIO = 0.24f
 /** How much of its light a shape keeps once it has turned onto its back. */
 private const val UNDER_FACE_LIGHT = 0.78f
 
-/** The frame budget: update the clock at most sixty times a second. */
-private const val FRAME_SECONDS = 1f / 60f
+/**
+ * The frame budget the layer falls back to: update the clock at most sixty times a
+ * second. The reader's own cap wins over this - see [frameHz] - and the loop's
+ * floor is `MAX_SEASONAL_FRAME_HZ`, not this number, so a 120 Hz choice can actually
+ * be paced at 120.
+ */
+private const val FRAME_SECONDS = 1f / DEFAULT_SEASONAL_FRAME_HZ
 
 /**
  * A step longer than this is a stall, not a frame - after a pause the clock jumps
@@ -133,15 +139,16 @@ fun SeasonalParticleLayer(
     windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH,
     quality: SeasonalQualityTier = SeasonalQualityTier.HIGH,
     /**
-     * Whether this layer is the app-wide overlay, and may publish the drift to the
-     * navigation bar for its snow cap.
+     * How often the clock may step, in Hz, already resolved against this phone's
+     * screen and the reader's cap.
      *
-     * True for the overlay, false for the Settings preview. The preview is a card in
-     * the middle of a scrolling page with no bar under it, and publishing from it
-     * would put the preview's drift on a bar it is not part of - or, worse, clear the
-     * real overlay's published drift when the Settings page is torn down.
+     * A parameter rather than something the layer reads from [quality] because the
+     * two answer different questions: the tier decides how much is drawn and the
+     * reader decides how often it moves. A 120 Hz sky on a 60 Hz panel is not a
+     * faster sky, it is a loop that never lands the frames it asked for, so the
+     * caller resolves the pair and this draws at whatever the answer was.
      */
-    publishesBarTrail: Boolean = true,
+    frameHz: Int = DEFAULT_SEASONAL_FRAME_HZ,
     /**
      * Whether a tap draws its ripple in this layer.
      *
@@ -192,25 +199,15 @@ fun SeasonalParticleLayer(
         }
     }
 
-    // The one app-wide layer owns the bar's snow cap. Published from composition
-    // rather than from the frame loop: the pile only changes when the shape or the
-    // switch does, and the trail reads the field's heights directly on every frame.
-    if (publishesBarTrail) {
-        DisposableEffect(effect, pile) {
-            SeasonalChrome.publishSky(effect = effect, pile = pile)
-            onDispose { SeasonalChrome.clearSky() }
-        }
-    }
-
     LaunchedEffect(
-        animating, effect, density, speed, settle, reactToWind, windStrength, viewport, quality
+        animating, effect, density, speed, settle, reactToWind, windStrength, viewport,
+        frameHz
     ) {
         if (!animating) return@LaunchedEffect
-        seasonalClock(1f / quality.frameHz) { step, frameNanos ->
+        seasonalClock(1f / frameHz) { step, frameNanos ->
             val previous = clock
             clock += step
             if (reactToWind) SeasonalWind.decay(step, frameNanos)
-            if (publishesBarTrail) SeasonalChrome.tick(clock)
             val field = pile ?: return@seasonalClock
             val landed = settlePile(
                 pile = field,
@@ -482,7 +479,7 @@ private suspend fun seasonalClock(
 ) {
     var lastFrame = 0L
     var accumulated = 0f
-    val budget = frameSeconds.coerceAtLeast(1f / 60f)
+    val budget = frameSeconds.coerceAtLeast(1f / MAX_SEASONAL_FRAME_HZ)
     while (true) {
         val frame = withFrameNanos { it }
         val elapsed = if (lastFrame == 0L) 0L else frame - lastFrame

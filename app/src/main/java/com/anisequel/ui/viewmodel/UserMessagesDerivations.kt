@@ -41,7 +41,30 @@ internal fun visibleMessages(state: UserMessagesViewModel.UiState): List<Message
             .sortedByDescending { it.createdAt ?: 0 }
         MessageFilter.RECEIVED -> state.received.messages
         MessageFilter.SENT -> state.sent.messages
-    }
+    }.filterNot { state.visibility.isHidden(it, state.viewerId) }
+
+/**
+ * True when at least one row the current filter would show has been dismissed.
+ *
+ * Drives the "Show hidden" pill: a dismissal with no way back is the kind of
+ * control that turns into a bug report, and the pill has to appear only where there
+ * is something behind it.
+ */
+internal fun hasHiddenMessages(state: UserMessagesViewModel.UiState): Boolean =
+    state.visibility.hiddenCount > 0
+
+/**
+ * The badge on a row: this arrived after the reader last read the inbox.
+ *
+ * The rule lives beside the list it decorates rather than in the ViewModel because
+ * the ViewModel is already holding two independent paged sources; this is a
+ * comparison of a row against a stamp the row carries, and it is checked here with
+ * the rest of the derivations that decide what the tab draws.
+ */
+internal fun isNewMessage(
+    state: UserMessagesViewModel.UiState,
+    message: MessageNode
+): Boolean = state.visibility.isNew(message, state.viewerId)
 
 /**
  * True once every source the visible filter needs has answered.

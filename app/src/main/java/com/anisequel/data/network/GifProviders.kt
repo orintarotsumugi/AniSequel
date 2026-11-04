@@ -151,7 +151,7 @@ internal fun KlipyResponse.toGifPage(fallbackPage: Int): GifPage {
     // because a content filter dropped rows while the index still has more behind
     // it, and reading the short list as the end stopped the grid early.
     val next = if (data?.hasNext == true && rows.isNotEmpty()) {
-        ((data?.currentPage ?: fallbackPage) + 1).toString()
+        ((data.currentPage ?: fallbackPage) + 1).toString()
     } else {
         null
     }
@@ -409,18 +409,25 @@ class NekosBestGifs(
             if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
 
             val category = term.lowercase().takeIf { it in NEKOS_CATEGORIES }
+            // Asked and answered against the live API: `search` needs a *category*
+            // in `type`, so `?type=2` - the value nekos.best's older documentation
+            // gave for "GIFs" - comes back "Invalid type", and a word that is not
+            // one of these categories has no valid request at all. It used to send
+            // one anyway and take a 400, which the grid then reported as "Could not
+            // reach nekos.best" about a host it had reached perfectly well.
+            if (category == null) {
+                return@withContext Result.failure(
+                    GifSearchFailure(
+                        "nekos.best only answers its reaction words, like " +
+                            NEKOS_HINT.joinToString(", ") +
+                            ". Pick Safebooru to search a title or a feeling."
+                    )
+                )
+            }
             val built = runCatching {
-                if (category != null) {
-                    "$ENDPOINT/$category".toHttpUrl().newBuilder()
-                        .addQueryParameter("amount", PAGE_SIZE.toString())
-                        .build()
-                } else {
-                    "$ENDPOINT/search".toHttpUrl().newBuilder()
-                        .addQueryParameter("query", term)
-                        .addQueryParameter("type", "2") // 2 is GIFs, 1 is still images.
-                        .addQueryParameter("amount", PAGE_SIZE.toString())
-                        .build()
-                }
+                "$ENDPOINT/$category".toHttpUrl().newBuilder()
+                    .addQueryParameter("amount", PAGE_SIZE.toString())
+                    .build()
             }
             val request = built.getOrNull()?.let {
                 Request.Builder()
@@ -460,6 +467,9 @@ class NekosBestGifs(
         }
 
     companion object {
+        /** Named in the refusal above, so the reader has something to type. */
+        private val NEKOS_HINT = listOf("cry", "clap", "blush")
+
         private const val ENDPOINT = "https://nekos.best/api/v2"
         private const val PAGE_SIZE = 20
         private const val USER_AGENT =
@@ -522,15 +532,27 @@ fun gifSearchApiFor(
     tenorKey: String?,
     klipyKey: String?,
     giphyKey: String?
-): GifSearchApi = when (provider) {
-    GifProvider.SAFEBOORU -> SafebooruGifs()
-    GifProvider.NEKOS_BEST -> NekosBestGifs()
-    GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
-        ?.let { TenorGifs(it) } ?: SafebooruGifs()
+): GifSearchApi {
+    // The keyed clients refuse a blank key in their own `search`, which used to make
+    // their "No Klipy key is saved. Add one in Settings" sentences unreachable: this
+    // factory never builds one without a key, so the substitution happened here, in
+    // silence. It still substitutes - a missing credential must not leave the picker
+    // with no search at all - but it now hands back the line that says which index
+    // was asked for, which one is answering, and where to fix it.
+    fun standingInFor(name: String) =
+        "No $name key is saved, so Safebooru is answering instead. " +
+            "Add a key in Settings > AniList, or choose Safebooru to keep using it."
 
-    GifProvider.KLIPY -> klipyKey?.takeIf { it.isNotBlank() }
-        ?.let { KlipyGifs(it) } ?: SafebooruGifs()
+    return when (provider) {
+        GifProvider.SAFEBOORU -> SafebooruGifs()
+        GifProvider.NEKOS_BEST -> NekosBestGifs()
+        GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
+            ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 
-    GifProvider.GIPHY -> giphyKey?.takeIf { it.isNotBlank() }
-        ?.let { GiphyGifs(it) } ?: SafebooruGifs()
+        GifProvider.KLIPY -> klipyKey?.takeIf { it.isNotBlank() }
+            ?.let { KlipyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.KLIPY.displayName))
+
+        GifProvider.GIPHY -> giphyKey?.takeIf { it.isNotBlank() }
+            ?.let { GiphyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.GIPHY.displayName))
+    }
 }

@@ -285,6 +285,9 @@ fun ProfileActivityPage(
                 SEGMENT_MESSAGES -> ProfileMessagesTab(
                     state = messagesState,
                     onSelectFilter = { messagesViewModel.selectFilter(it) },
+                    onHideMessage = { messagesViewModel.hideMessage(it) },
+                    onShowHidden = { messagesViewModel.showHiddenMessages() },
+                    onFlagNewChange = { messagesViewModel.setFlagsNewMessages(it) },
                     onLoadFirstPage = { messagesViewModel.loadFirstPages() },
                     onLoadMore = { messagesViewModel.loadNextPage() },
                     onRetry = { messagesViewModel.retry() },

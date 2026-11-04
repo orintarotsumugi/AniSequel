@@ -130,8 +130,9 @@ internal fun ColumnScope.GifBrowser(
             // who has saved a Tenor key sees the switch happen here, which is the
             // cheapest place to learn the setting took effect.
             Text(
-                if (store.providerName.isBlank()) "Search GIFs"
-                else "Search ${store.providerName} for a GIF"
+                store.substitutionNote
+                    ?: if (store.providerName.isBlank()) "Search GIFs"
+                    else "Search ${store.providerName} for a GIF"
             )
         },
         singleLine = true,

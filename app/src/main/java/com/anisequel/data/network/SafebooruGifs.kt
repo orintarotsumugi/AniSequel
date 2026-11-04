@@ -41,7 +41,9 @@ import okhttp3.Request
  */
 class SafebooruGifs(
     private val client: OkHttpClient = defaultClient(),
-    moshi: Moshi = NetworkClient.json
+    moshi: Moshi = NetworkClient.json,
+    /** Non-null only when this index is standing in for a keyed one it was not chosen for. */
+    override val substitutionNote: String? = null
 ) : GifSearchApi {
 
     override val providerName: String get() = "Safebooru"

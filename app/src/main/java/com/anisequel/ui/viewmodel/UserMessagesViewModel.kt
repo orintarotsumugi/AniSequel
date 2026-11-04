@@ -9,6 +9,8 @@ import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.model.asThreadHead
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.data.repository.MessageVisibility
+import com.anisequel.data.repository.MessageVisibilityPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-
 /**
  * State holder for the Messages tab: what the viewer sent, what arrived, and
  * the filters that separate them.
@@ -43,7 +44,17 @@ import kotlinx.coroutines.withTimeoutOrNull
 class UserMessagesViewModel(
     private val aniListRepository: AniListRepository,
     viewerId: Int?,
-    private val isDemo: Boolean = false
+    private val isDemo: Boolean = false,
+    /**
+     * The reader's own view of their inbox: which rows they dismissed, whether new
+     * arrivals are flagged, and since when they have looked.
+     *
+     * Injected rather than read from a `Context` here because this class is built by
+     * a [Factory] the route owns, and the demo profile has no reader to keep
+     * dismissals for. The demo path passes the preferences anyway - hiding a fixture
+     * row has to behave like hiding a real one, or the two halves of the tab drift.
+     */
+    private val visibilityPreferences: MessageVisibilityPreferences
 ) : ViewModel() {
 
     /**
@@ -84,11 +95,31 @@ class UserMessagesViewModel(
          * does not have to re-derive the demo's viewer id from the route, where
          * it is null by definition.
          */
-        val viewerId: Int? = null
+        val viewerId: Int? = null,
+        /**
+         * What the reader has taken out of the list and what they have not read.
+         *
+         * Held in the state rather than read by the composable from its own flow:
+         * the derivations that decide what the tab draws need it, and a second
+         * subscription would give the list and its empty state two answers about the
+         * same dismissal.
+         */
+        val visibility: MessageVisibility = MessageVisibility()
     )
 
     private val _state = MutableStateFlow(UiState(viewerId = viewerId))
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    init {
+        // Not a network fetch, so the tab's lazy rule is untouched: nothing here
+        // asks AniList for anything, and a profile opened to look at somebody's
+        // favourites still costs one request.
+        viewModelScope.launch {
+            visibilityPreferences.visibility.collect { visibility ->
+                _state.value = _state.value.copy(visibility = visibility)
+            }
+        }
+    }
 
     /**
      * The one message the reader has opened, or null when no sheet is up.
@@ -186,6 +217,9 @@ class UserMessagesViewModel(
         // from a friend's name - that is what makes a private exchange read like
         // the public comment thread it mirrors.
         loadThread(message.id)
+        // The reader is looking at this one, and at everything older than it - which
+        // is what the stamp means, and why it is taken now rather than per row.
+        markInboxSeen(System.currentTimeMillis() / 1000L)
     }
 
     /**
@@ -458,7 +492,10 @@ class UserMessagesViewModel(
                             messages = (listOf(sent) + current.messages).distinctBy { it.id }
                         )
                     }
-                    _reply.value = ReplyState(sentTo = counterpart?.name ?: "them")
+                    // `ifBlank`, not `?:`: the name is a non-null field, so the fallback was
+                    // never reachable as written and the compiler said so. An empty one is the
+                    // case it meant to catch.
+                    _reply.value = ReplyState(sentTo = counterpart.name.ifBlank { "them" })
                 },
                 onFailure = { failure ->
                     _reply.value = ReplyState(
@@ -520,6 +557,41 @@ class UserMessagesViewModel(
     // only the feeds that have been looked at, the same rule the Activity tab
     // follows: refreshing a page nobody opened is a request spent on nothing.
     private var started = false
+
+    /**
+     * Takes [message] out of the side of the inbox it belongs to.
+     *
+     * The side comes from the row's own direction, not from the selected chip: under
+     * `All` one list holds both, and dismissing a message the reader wrote must not
+     * also hide the reply they received. Nothing is sent to AniList - the message
+     * stays exactly where the other party can still see it.
+     */
+    fun hideMessage(message: MessageNode) {
+        viewModelScope.launch {
+            visibilityPreferences.hide(message.sideOf(viewerId), message.id)
+        }
+    }
+
+    /** Puts every dismissed row back on both sides. */
+    fun showHiddenMessages() {
+        viewModelScope.launch { visibilityPreferences.showAll() }
+    }
+
+    /** The option behind the badge: whether a new arrival is marked at all. */
+    fun setFlagsNewMessages(enabled: Boolean) {
+        viewModelScope.launch { visibilityPreferences.setFlagNew(enabled) }
+    }
+
+    /**
+     * Records that the reader has read as far as now.
+     *
+     * Called when a message is opened rather than when the tab is: a badge that
+     * cleared the moment the list appeared would never be readable, which is the one
+     * thing it is for.
+     */
+    fun markInboxSeen(epochSecond: Long) {
+        viewModelScope.launch { visibilityPreferences.markReceivedSeen(epochSecond) }
+    }
 
     /** Switches the visible chip and makes sure the sources it shows are asked for. */
     fun selectFilter(filter: MessageFilter) {
@@ -796,13 +868,15 @@ class UserMessagesViewModel(
     class Factory(
         private val aniListRepository: AniListRepository,
         private val viewerId: Int? = null,
-        private val isDemo: Boolean = false
+        private val isDemo: Boolean = false,
+        private val visibilityPreferences: MessageVisibilityPreferences
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = UserMessagesViewModel(
             aniListRepository = aniListRepository,
             viewerId = viewerId,
-            isDemo = isDemo
+            isDemo = isDemo,
+            visibilityPreferences = visibilityPreferences
         ) as T
     }
 }

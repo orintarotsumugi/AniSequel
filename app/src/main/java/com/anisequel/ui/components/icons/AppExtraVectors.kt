@@ -285,6 +285,77 @@ object AppExtraVectors {
     }
 
     /**
+     * A leaf with three shapes falling past it, for the Seasonal settings page.
+     *
+     * The page used to borrow [GrassTuft], which is the "go touch grass" recovery
+     * action on a failed API call - and still is, in both of those places. A lawn
+     * says *outside*; this setting is a sky of petals, leaves, snow and seeds
+     * drifting over the app, so the glyph carries one shape that is clearly not a
+     * snowflake and three clearly-falling specks.
+     *
+     * The leaf is stroked and the particles filled, at three sizes going down the
+     * right edge. Stroking the leaf rather than filling it keeps the midrib
+     * legible, and the decreasing radii are what make the trio read as motion
+     * rather than as three unrelated dots: filled leaves at this size merge into
+     * a blob next to a stroked outline.
+     */
+    val SeasonalSky: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "SeasonalSky",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            // Leaf: tip upper-right, base lower-left, stalk running out of the base.
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // Right shoulder of the blade.
+                moveTo(13.2f, 9.8f)
+                quadTo(12.6f, 16.4f, 6.2f, 16.8f)
+
+                // Left shoulder, bulging the other way so the blade is a lens.
+                moveTo(13.2f, 9.8f)
+                quadTo(6.6f, 10.4f, 6.2f, 16.8f)
+
+                // Midrib, bowed toward the falling direction.
+                moveTo(13.2f, 9.8f)
+                quadTo(10.2f, 12.8f, 6.2f, 16.8f)
+
+                // Stalk.
+                moveTo(6.2f, 16.8f)
+                lineTo(4.4f, 18.6f)
+            }
+            // The three falling shapes, each a true circle drawn as two half-arcs -
+            // the same idiom as the branch nodes, because a quadTo approximation of
+            // a circle this small reads as a rounded square.
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(17.5f, 6.4f)
+                arcTo(1.5f, 1.5f, 0f, false, true, 20.5f, 6.4f)
+                arcTo(1.5f, 1.5f, 0f, false, true, 17.5f, 6.4f)
+                close()
+
+                moveTo(18.9f, 12.1f)
+                arcTo(1.2f, 1.2f, 0f, false, true, 21.3f, 12.1f)
+                arcTo(1.2f, 1.2f, 0f, false, true, 18.9f, 12.1f)
+                close()
+
+                moveTo(15.7f, 17.6f)
+                arcTo(0.9f, 0.9f, 0f, false, true, 17.5f, 17.6f)
+                arcTo(0.9f, 0.9f, 0f, false, true, 15.7f, 17.6f)
+                close()
+            }
+        }.build()
+    }
+
+    /**
      * Three books on a shelf, for the Library destination.
      *
      * The tab used to borrow the Stats tab's stopwatch (`Icons.Default.Timer`),

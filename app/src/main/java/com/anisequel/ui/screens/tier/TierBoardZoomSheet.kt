@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
+import com.anisequel.ui.components.rememberBoundSliderState
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -90,9 +91,14 @@ internal fun TierZoomSheet(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Slider(
-                value = zoom,
+                // The board owns the zoom - a pinch on the wall, or the sheet re-opening,
+                // moves it without this slider touching it - so the value stays bound rather
+                // than handed to a state that only reads it once.
+                state = rememberBoundSliderState(
+                    value = zoom,
+                    trackRange = TIER_MIN_ZOOM..TIER_MAX_ZOOM
+                ),
                 onValueChange = onZoomChange,
-                valueRange = TIER_MIN_ZOOM..TIER_MAX_ZOOM,
                 modifier = Modifier.testTag("tier_zoom_slider")
             )
             Row(modifier = Modifier.fillMaxWidth()) {

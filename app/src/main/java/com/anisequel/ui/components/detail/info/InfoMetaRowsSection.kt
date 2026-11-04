@@ -31,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +54,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import kotlinx.coroutines.delay
 
 /**
@@ -94,7 +94,7 @@ fun InfoMetaRowsSection(
     if (titleRows.isEmpty() && synonyms.isEmpty() && producers.isEmpty()) return
 
     var open by remember { mutableStateOf<MetaRow?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberFullHeightSheetState()
     val border = BorderStroke(
         1.dp,
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)

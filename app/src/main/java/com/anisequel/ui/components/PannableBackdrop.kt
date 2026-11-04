@@ -134,7 +134,12 @@ fun PannableBackdrop(
     // vertical scroll takes the drag. It opens once the picture is zoomed, where
     // panning is what the user asked for and both axes have slack. A pinch is
     // always consumed, because two fingers on a hero mean zoom and nothing else.
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+    // The centroid the new API hands over is taken and dropped on purpose. It is the pinch's
+    // midpoint, and using it would mean zooming about that point rather than about the
+    // container's centre - which is the nicer gesture, but it changes what the clamp below is
+    // clamping, and a hero image that can be pinched off its own edge is a worse trade than the
+    // warning in the build log this removes.
+    val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         val nextZoom = (zoom * zoomChange).coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
         zoom = nextZoom
 

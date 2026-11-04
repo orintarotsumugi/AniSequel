@@ -32,8 +32,6 @@ import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.JokeToastHost
 import com.anisequel.ui.components.JokeToastLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.seasonal.SeasonalBarTrail
-import com.anisequel.ui.components.seasonal.SeasonalChrome
 import com.anisequel.ui.components.seasonal.SeasonalWind
 import kotlinx.coroutines.launch
 
@@ -109,15 +107,12 @@ internal fun BoxScope.MainBarHost(
     val lastTab = remember { mutableStateOf(MainTab.HOME) }
     SideEffect { if (currentTab != null) lastTab.value = currentTab }
 
-    // The seasonal sky gathers its drift on the screen's bottom edge and draws a
-    // snow cap on the pill itself. The bar leaves the composition when it hides, so
-    // its bounds have to be cleared explicitly; a stale capsule would leave the cap
-    // hanging in the air over Settings. See SeasonalChrome for why the values are
-    // draw-phase state rather than something that recomposes this host.
+    // The seasonal sky gathers its drift on the screen's bottom edge. It used to
+    // draw a second cap on the bar's own pill; the reader asked for the snow off
+    // the control, so the bar publishes nothing to the sky and nothing is painted
+    // over it. See the note in SeasonalPiles about why the drift sits on the
+    // screen edge rather than on the bar.
     val barVisible = showsMainBar(currentTab, tierBoardOpen)
-    LaunchedEffect(barVisible) {
-        if (!barVisible) SeasonalChrome.clearBar()
-    }
 
     AnimatedVisibility(
         visible = barVisible,
@@ -160,15 +155,6 @@ internal fun BoxScope.MainBarHost(
             // is one tap on Profile and one tap on the chip, and that is the whole route.
         )
     }
-
-    // Over the bar, not under it: the cap is snow that has landed on the pill, so
-    // it has to paint after the surface it sits on. It takes no pointer input - it
-    // is a Canvas with only a draw block - so every tab under it still receives the
-    // first tap. Gated on the same visibility rule as the bar itself.
-    SeasonalBarTrail(
-        visible = barVisible,
-        modifier = Modifier.matchParentSize()
-    )
 }
 
 /**

@@ -35,6 +35,7 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
+import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
@@ -161,6 +162,13 @@ fun AppNavigation(
     // describe a sky the app is not drawing.
     val seasonalPreferences = remember(context) {
         SeasonalPreferences(context.applicationContext)
+    }
+
+    // Device facts the Seasonal page reads and writes: the cover-cache ceiling, whose
+    // saved value the image loader is built from at process start. Application-scoped
+    // like the rest, so the page's pill and the pipeline's ceiling are one fact.
+    val devicePreferences = remember(context) {
+        DevicePreferences(context.applicationContext)
     }
 
     // Which pages the bar offers. Application-scoped like the rest, because the
@@ -586,6 +594,7 @@ fun AppNavigation(
                     jokePreferences = jokePreferences,
                     changelogRepository = changelogRepository,
                     seasonalPreferences = seasonalPreferences,
+                    devicePreferences = devicePreferences,
                     aniListRepository = aniListRepository,
                     totalWatchedCount = totalWatchedCount,
                     totalMissedCount = totalMissedCount,

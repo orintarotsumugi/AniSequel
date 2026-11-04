@@ -707,7 +707,7 @@ private fun StudioCreditChip(
                     Modifier
                         .bouncyPress(pressedScale = 0.94f)
                         .clickable(role = Role.Button) {
-                            credit.id?.let { id -> onOpenStudio(id, credit.name) }
+                            onOpenStudio(credit.id, credit.name)
                         }
                 } else {
                     Modifier

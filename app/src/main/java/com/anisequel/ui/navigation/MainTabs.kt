@@ -16,7 +16,6 @@ import androidx.navigation.NavHostController
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
-import com.anisequel.ui.components.seasonal.SeasonalChrome
 
 /**
  * The pages the app's main bar switches between.
@@ -252,10 +251,7 @@ internal fun MainBar(
         ExpressiveNavigationBar(
             destinations = destinations,
             selectedIndex = selectedIndex,
-            onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) },
-            // The seasonal cap needs the pill, not this Box: the Box carries the
-            // navigation inset and is much taller than the thing the snow sits on.
-            onCapsuleBounds = SeasonalChrome::publishBar
+            onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) }
         )
     }
 }

@@ -25,7 +25,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +43,7 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.ActivityComposerStore
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import kotlinx.coroutines.delay
@@ -84,7 +84,7 @@ internal fun ActivityComposerSheet(
     onDismiss: () -> Unit,
     onSubmit: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberFullHeightSheetState()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 

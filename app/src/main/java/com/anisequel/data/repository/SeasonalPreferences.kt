@@ -14,6 +14,7 @@ import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SPEED_SCALE
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalFrameRate
 import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.domain.seasonal.SeasonalSettings
 import com.anisequel.domain.seasonal.particleSizeScale
@@ -63,6 +64,7 @@ class SeasonalPreferences(private val context: Context) {
         val REACT_TO_WIND = booleanPreferencesKey("seasonal_react_to_wind")
         val WIND_STRENGTH = floatPreferencesKey("seasonal_wind_strength")
         val QUALITY = stringPreferencesKey("seasonal_quality")
+        val FRAME_RATE = stringPreferencesKey("seasonal_frame_rate")
     }
 
     val settings: Flow<SeasonalSettings> = context.seasonalDataStore.data.map { preferences ->
@@ -76,7 +78,8 @@ class SeasonalPreferences(private val context: Context) {
             pileDepth = preferences[Keys.PILE_DEPTH] ?: DEFAULT_SEASONAL_PILE_DEPTH,
             reactToWind = preferences[Keys.REACT_TO_WIND] ?: false,
             windStrength = preferences[Keys.WIND_STRENGTH] ?: DEFAULT_SEASONAL_WIND_STRENGTH,
-            quality = SeasonalQuality.fromStorage(preferences[Keys.QUALITY])
+            quality = SeasonalQuality.fromStorage(preferences[Keys.QUALITY]),
+            frameRate = SeasonalFrameRate.fromStorage(preferences[Keys.FRAME_RATE])
         ).sanitised()
     }
 
@@ -141,6 +144,12 @@ class SeasonalPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setFrameRate(rate: SeasonalFrameRate) {
+        context.seasonalDataStore.edit { preferences ->
+            preferences[Keys.FRAME_RATE] = rate.storageValue
+        }
+    }
+
     /** Back to the shipped sky: off, snow, the middle of every slider. */
     suspend fun reset() {
         context.seasonalDataStore.edit { preferences ->
@@ -154,6 +163,7 @@ class SeasonalPreferences(private val context: Context) {
             preferences.remove(Keys.REACT_TO_WIND)
             preferences.remove(Keys.WIND_STRENGTH)
             preferences.remove(Keys.QUALITY)
+            preferences.remove(Keys.FRAME_RATE)
         }
     }
 }

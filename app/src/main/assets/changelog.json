@@ -1,6 +1,67 @@
 {
   "versions": [
     {
+      "version": "1.8.3",
+      "entries": [
+        {
+          "title": "The received half of the inbox reads its own type now",
+          "detail": "Messages you were sent can only be listed through AniList's notifications, and that field answers a union - a set of possible row types - which the server can only resolve when the query names the type it wants. The query never asked for __typename while the model kept reading it, so the guard that rejects a row that is not a message could never fire and the inbox came back empty on a real account. The sent half worked throughout, because the activity union is resolved from the row's own class. One line in the document, and the test that pinned a hand-written payload now pins what is asked of the server."
+        },
+        {
+          "title": "A frame rate you can set, and what this screen says about itself",
+          "detail": "How often the sky moves is now its own choice, separate from how much it draws: Auto, 30, 60, 120 or 144 Hz. The page offers only the rates this screen reports - a 120 Hz pill on a 60 Hz phone is a control with one effect, none - and it re-reads the panel when you come back to the app, so unlocking the rate in the system settings brings the missing pill animating in. Above sixty the app also asks the platform for the high refresh-rate category on Android 14 and later, because a frame loop paced at 120 is still handed sixty frames a second by a window the system left in its default bucket. Auto is the default: an install that never saw the setting keeps the rate it already had."
+        },
+        {
+          "title": "Device management: this phone's numbers, and how much disk the art may take",
+          "detail": "The Seasonal page now opens with what the device reports - the rate the screen runs at and the rates it can be set to - and adds a cover-cache ceiling you can choose: 256 MB, which is what the app has always kept, up to 5 GB. The cache only ever fills as you browse, so a large rung is room rather than a reservation; a small one is the reason a scroll back re-fetches art you had already. Clearing the cache empties it now; a new ceiling takes hold the next time the app opens, because the image pipeline fixes a disk cache's size when it builds it and there is no honest way to make that instantaneous."
+        },
+        {
+          "title": "The snow stays off the navigation bar",
+          "detail": "A winter sky used to leave a cap along the bar's own pill, with drips over its face and a sparkle. Readers asked for the weather to stay off the control they press, so the cap is gone - and with it the channel that measured the bar and published its bounds every layout pass. The drift still gathers on the bottom edge of the screen, behind the bar, the way it did anyway."
+        },
+        {
+          "title": "Hide a message, and see the ones you have not read",
+          "detail": "Each row in Messages can be dismissed from your list, and a switch on the same row decides whether new arrivals are marked at all. Nothing is sent to AniList either way: a message deleted on the server stops existing for the person who sent it, so a dismissal is yours alone and the site's unread badge is still nobody else's to clear. Hiding follows the row's own direction, so dismissing a message you wrote does not also hide the reply you received, and a row you dismissed can be brought back from the same place. A received message is marked new until you open one."
+        },
+        {
+          "title": "Sharp covers, smaller bytes where a slot cannot show more",
+          "detail": "Posters, backdrops and the full-screen viewer still ask AniList for its largest file - those are the pictures you look at. The 22dp relation chip on a dashboard row was asking for the same one, so it now takes the medium size, which is already about three times the pixels that slot can place, with the fallbacks unchanged so a response missing the smaller size still draws. Covers keep arriving from the cache that survives a restart and a cache wipe."
+        },
+        {
+          "title": "Less work in a frame while you scroll",
+          "detail": "The animated progress wave rebuilt a fresh path of 96 segments per frame per card - the way a smooth fling turns into a garbage-collection pause when a screenful of cards is on screen - and reuses one path now. The dashboard, the inbox, the arriving rows and the library grid name their row types, so a fast scroll recycles a slot instead of composing a new one every frame. And the caches that hold feed and inbox pages finally have a ceiling: they expired only when the same page was asked for again, so a session that paged deep and never looked back kept every page it had ever fetched."
+        },
+        {
+          "title": "Ten shapes, ten pictures on the chips",
+          "detail": "Each Seasonal shape chip draws the sky's own ink, and now poses it: a radius fitted to that shape, the variant that names it at eighteen dots, a small tilt, and a hairline floor so the veins and filaments survive a low-density screen instead of fading to a smudge. The winter row used to be one flake shown four times. The page also has an icon of its own now - a falling leaf with three shapes behind it - rather than the tuft of grass it borrowed from the failed-request screen, which keeps being that."
+        },
+        {
+          "title": "One hundred and sixty-three more lines, thirty-eight of them dark",
+          "detail": "The joke pool grows from 1061 to 1224. This batch is the dark tone: 38 new lines about the machinery of plot death rather than death itself - the tutorial village levelled to give the isekai a tragedy, the casualty list that is a cast list somebody edited, the funeral explained by a twelve-episode spin-off. Craft, feelings, backlog and meta got the earlier batch. Every new line is checked against the whole pool, so nothing repeats a premise that was already there, which is the hard part of a catalogue this size."
+        },
+        {
+          "title": "The \"Sequel to ...\" line now opens the title it names",
+          "detail": "Every card on the dashboard is about the sequel, and the line above it names the entry the gap is measured against - which was text, and nothing more. Tapping it now opens that parent title's page: the row carries the parent's id, its namespace, and the largest cover AniList had already sent with it, so the sheet draws its first frame from those and its own fetch fills in the rest. The namespace is the part that matters - without it a parent id is looked up across anime and manga and answers as whichever one AniList prefers."
+        },
+        {
+          "title": "The artwork behind the cover is now a picture you can tap",
+          "detail": "In a title's page the banner or key visual fills the top of the sheet, and only the small poster answered a tap: the rest of the image did nothing, while this app's own comment described the full picture as one tap away. That is now true. Anywhere on the backdrop opens the full-screen viewer, and the poster's hold and the title's copy gesture keep their own regions because they are drawn above it."
+        },
+        {
+          "title": "A GIF index that needs a key says that it never got one",
+          "detail": "Choosing Klipy, GIPHY or Tenor without a saved key kept working - the anonymous booru answers anime tags for nothing, and that fallback is deliberate - but it happened in silence, so the reader picked one index and received another one's catalogue with nothing connecting the two. The picker now names the index it asked for, the one answering, and where to add the key. The refusal sentences the keyed clients carry were unreachable: the factory never builds one without a key, so the note moved to where the substitution actually happens."
+        },
+        {
+          "title": "nekos.best blames itself rather than the network",
+          "detail": "Searching it for a word that is not one of its reaction names used to send a request the API cannot honour: its search needs a category in its type argument, and a word it has no category for has no valid request at all. It answered with \"Invalid type\", and the grid reported \"Could not reach nekos.best\" about a host it had reached perfectly well. It now says which words it does answer and points at the index that can search a title, which is the part a reader can act on."
+        },
+        {
+          "title": "The sliders and sheets moved to the APIs they will keep",
+          "detail": "Material 3 changed how a slider and a bottom sheet hold their own state, and this app was still asking the old way in eighteen places - which compiled, passed every test and shipped. The difference is not cosmetic: the replacement for the value-first slider deliberately ignores a value written from outside it, so a Reset button would move the number under the thumb and leave the thumb where it was. Every slider here is bound instead - its track rebuilt when the range changes, its value pushed in whenever something else writes it - so an entry's score slider still re-ticks when the account's score format changes, and the Seasonal page's Reset still moves all of its sliders at once. The ten sheets now name the stops they can settle in rather than asking to skip one, and a test keeps both retired forms out of the source, because the only symptom of drifting back is a setting that stops answering."
+        }
+      ]
+    },
+    {
       "version": "1.8.2",
       "entries": [
         {

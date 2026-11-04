@@ -8,6 +8,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.anisequel.BuildConfig
 import com.anisequel.data.repository.AuthRepository
+import com.anisequel.data.repository.CoverCacheCeiling
 import com.squareup.moshi.Moshi
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
@@ -218,7 +219,7 @@ object NetworkClient {
                 // in place of the current artwork.
                 DiskCache.Builder()
                     .directory(context.noBackupFilesDir.resolve("anilist_cover_cache"))
-                    .maxSizeBytes(DISK_CACHE_BYTES)
+                    .maxSizeBytes(CoverCacheCeiling.readBytes(context))
                     .build()
             }
             .crossfade(false)
@@ -330,17 +331,11 @@ object NetworkClient {
             )
     }
 
-    /**
-     * How much cover art is kept on disk.
-     *
-     * This is a ceiling, not a target: a title's bytes are only written the first
-     * time it is seen. 256 MB is roughly three to four thousand covers at the
-     * sizes AniList serves, which is several times a large account's list - so a
-     * reader's ordinary library never reaches the point where the LRU starts
-     * dropping a cover they have already seen. The previous 128 MB was already
-     * generous; it was just in a directory Android was allowed to empty.
-     */
-    private const val DISK_CACHE_BYTES = 256L * 1024 * 1024
+    // The disk ceiling is no longer a constant here: it is the reader's choice,
+    // read once per process from `CoverCacheCeiling` (data/repository, with the
+    // reason it is a preferences file and not a DataStore). 256 MB - the value this
+    // constant used to hold, and what an install that never opens the page still
+    // gets - is the smallest rung there.
 
     /**
      * How many covers may decode/fetch at once.

@@ -660,7 +660,7 @@ fun ProfileLibraryTab(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls") {
+        item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls", contentType = "controls") {
             LibraryControls(
                 type = type,
                 filter = filter,
@@ -698,7 +698,7 @@ fun ProfileLibraryTab(
         }
 
         if (awaitingAnime) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending") {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending", contentType = "state") {
                 PendingDataNote("Still fetching this list - these counts are not final yet")
             }
         }
@@ -711,7 +711,7 @@ fun ProfileLibraryTab(
         // asserting the one thing it has the least evidence for. The counts below
         // are still zeroes for the same reason and are not faked here.
         if (scopedError != null && !awaitingAnime) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_error") {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_error", contentType = "state") {
                 PendingDataNote(
                     "Couldn't load this list - $scopedError. Your bio, " +
                         "favourites and stats are still here."
@@ -720,7 +720,7 @@ fun ProfileLibraryTab(
         }
 
         if (visible.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty") {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty", contentType = "state") {
                 LibraryEmpty(
                     isLoading = (type == LibraryType.MANGA && isLoadingManga) ||
                         (awaitingAnime && animeEntries.isEmpty()),
@@ -830,7 +830,7 @@ private fun LibraryControls(
         }
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(LibraryFilter.entries, key = { it.name }) { option ->
+            items(LibraryFilter.entries, key = { it.name }, contentType = { "filter_option" }) { option ->
                 val count = counts[option] ?: 0
                 ExpressiveStateChip(
                     label = "${option.labelFor(scopeIsManga)} ($count)",
@@ -864,7 +864,7 @@ private fun LibraryControls(
                     modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(LibrarySort.entries, key = { it.name }) { option ->
+                    items(LibrarySort.entries, key = { it.name }, contentType = { "sort_option" }) { option ->
                         val active = option == sort
                         ExpressiveStateChip(
                             // The direction is only on the chip that is already

@@ -130,10 +130,12 @@ class FindMissedSequelsUseCase {
                 missedSequels.add(
                     MissedSequel(
                         parentId = parentMedia.id,
+                        parentType = parentMedia.type,
                         parentTitle = parentTitle,
                         // Both taken from the entry the edge was walked from, so
                         // showing them costs no extra AniList request.
-                        parentCoverUrl = parentMedia.coverImage?.bestUrl,
+                        parentCoverUrl = parentMedia.coverImage?.smallSlotUrl,
+                        parentCoverLargeUrl = parentMedia.coverImage?.bestUrl,
                         parentCoverColor = parentMedia.coverImage?.color,
                         parentCompletedYear = parentCompletedYear,
                         sequelMedia = sequelNode,

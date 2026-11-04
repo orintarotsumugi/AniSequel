@@ -21,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 
@@ -72,7 +72,7 @@ fun ActivityLikersSheet(
      */
     onRetry: () -> Unit = {}
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberFullHeightSheetState()
 
     // Nothing de-duplicates a likes list on the way here: `getActivityLikes` maps
     // `activity.likes` straight through, and AniList's favourites connection has
