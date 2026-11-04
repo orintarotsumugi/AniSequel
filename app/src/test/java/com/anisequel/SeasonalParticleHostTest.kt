@@ -271,9 +271,9 @@ class SeasonalParticleHostTest {
     @Test
     fun `the frame rate is a setting the page can reach`() {
         val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
-        val card = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalFrameCard.kt")
+        val card = source("app/src/main/java/com/anisequel/ui/screens/settings/DeviceManagementCard.kt")
 
-        assertTrue("the page does not draw the frame-rate card", tab.contains("FrameCard("))
+        assertTrue("the page does not draw the device card", tab.contains("DeviceCard("))
         assertTrue("the card is not dispatched from the page", tab.contains("onRateChange"))
         assertTrue(
             "the page never re-reads the screen, so a rate unlocked in the system " +
@@ -294,6 +294,13 @@ class SeasonalParticleHostTest {
             "the pills are tagged by their storage value, so the row cannot be driven " +
                 "from a test or a UI check",
             card.contains("\"seasonal_frame_rate_\${option.storageValue}\"")
+        )
+        // The cover-cache row is the same control on the same card, and the file is
+        // named for the card rather than the frame rate now - a rename that dropped
+        // this path would silently stop reading the card at all.
+        assertTrue(
+            "the cache pills are not tagged, so the ceiling cannot be driven from a test",
+            card.contains("\"device_cache_\${option.storageValue}\"")
         )
     }
 
