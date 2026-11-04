@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 
 /**
@@ -43,6 +44,16 @@ import kotlin.math.sin
  * samples are computed in place, and a captured local helper would have meant a closure
  * per particle per frame - so an outline walk is a loop over an index and the width
  * functions take their numbers as arguments.
+ *
+ * ## Why these drawings take a stroke floor at all
+ *
+ * Every width here is a fraction of the radius, which is exactly the trouble the Settings
+ * chip ran into: at eighteen dp on a low-density screen the ginkgo's ribs and the maple's
+ * veins land under half a device pixel, and the rasteriser fades them out. The fan arrives
+ * with no ribs, the seed with no crown - a smudge in the right colour. `strokeFloor` lets
+ * that one caller ask for a hairline; the sky and the drift pass zero and every shape's own
+ * minimum stands where it was. The dispatcher caps the ask at six percent of the radius, so
+ * a floor can rescue a filament without ever fusing two neighbouring ones into a fan.
  */
 
 /** Two radians, in the single precision the rest of the file works in. */
@@ -66,7 +77,9 @@ private fun pointAt(center: Offset, angle: Float, reach: Float): Offset = Offset
  * [variant] trades blade width against notch depth - the difference between a sugar
  * maple's broad palm and a softer, more cut-leaved one. The veins are palmate, all five
  * running from where the stem meets the blade, because that is what says maple at a size
- * where each lobe is three pixels across.
+ * where each lobe is three pixels across. The chip legend takes the most-cut variant for
+ * that reason: at a chip's width the notch depth is the only thing separating a maple from
+ * an oak, and the palmate veins have already merged into the blade.
  */
 internal fun DrawScope.drawMaple(
     path: Path,
@@ -75,7 +88,8 @@ internal fun DrawScope.drawMaple(
     palette: ParticlePalette,
     alpha: Float,
     variant: Int,
-    highDetail: Boolean
+    highDetail: Boolean,
+    strokeFloor: Float
 ) {
     val detailed = highDetail && radius > 5f
     val shoulders = if (variant % 3 == 1) 0.68f else 0.60f
@@ -128,11 +142,11 @@ internal fun DrawScope.drawMaple(
         color = palette.deep.copy(alpha = alpha * 0.8f),
         start = base,
         end = Offset(center.x, center.y + radius * 1.16f),
-        strokeWidth = (radius * 0.09f).coerceAtLeast(0.45f),
+        strokeWidth = (radius * 0.09f).coerceAtLeast(max(0.45f, strokeFloor)),
         cap = StrokeCap.Round
     )
     val vein = palette.deep.copy(alpha = alpha * 0.40f)
-    val veinWidth = (radius * 0.05f).coerceAtLeast(0.35f)
+    val veinWidth = (radius * 0.05f).coerceAtLeast(max(0.35f, strokeFloor))
     for (lobe in 0 until 5) {
         val angle = start + lobe * step
         val reach = radius * MAPLE_REACH[lobe]
@@ -164,6 +178,10 @@ internal fun DrawScope.drawMaple(
  * hand-placed curves. The outline, the fill and the veins are three functions: with all
  * three in one body the leaf was the most branchy drawing in the app, and only the
  * outline is worth reading when a silhouette looks wrong.
+ *
+ * The chip takes the fewest, widest lobes. Seven lobes is the handsomer oak in the sky and
+ * a row of one-pixel bumps on a chip, where five at the widest spread still reads as a
+ * margin that has been cut into.
  */
 internal fun DrawScope.drawOak(
     path: Path,
@@ -172,7 +190,8 @@ internal fun DrawScope.drawOak(
     palette: ParticlePalette,
     alpha: Float,
     variant: Int,
-    highDetail: Boolean
+    highDetail: Boolean,
+    strokeFloor: Float
 ) {
     val detailed = highDetail && radius > 5f
     val lobes = when (variant % 3) {
@@ -191,7 +210,7 @@ internal fun DrawScope.drawOak(
         // The margin stroked in the light tone, from the same path as the fill.
         drawPath(path, palette.light.copy(alpha = alpha * 0.13f), style = Stroke(radius * 0.12f))
     }
-    drawOakVeins(center, radius, palette, alpha, spread, lobes, detailed)
+    drawOakVeins(center, radius, palette, alpha, spread, lobes, detailed, strokeFloor)
 }
 
 /**
@@ -253,17 +272,18 @@ private fun DrawScope.drawOakVeins(
     alpha: Float,
     spread: Float,
     lobes: Float,
-    detailed: Boolean
+    detailed: Boolean,
+    strokeFloor: Float
 ) {
     val baseY = center.y + radius * OAK_BASE_DROP
     val axis = radius * OAK_AXIS
     val vein = palette.deep.copy(alpha = alpha * 0.38f)
-    val veinWidth = (radius * 0.045f).coerceAtLeast(0.32f)
+    val veinWidth = (radius * 0.045f).coerceAtLeast(max(0.32f, strokeFloor))
     drawLine(
         color = palette.deep.copy(alpha = alpha * 0.72f),
         start = Offset(center.x, baseY),
         end = Offset(center.x, center.y + radius * 1.24f),
-        strokeWidth = (radius * 0.085f).coerceAtLeast(0.4f),
+        strokeWidth = (radius * 0.085f).coerceAtLeast(max(0.4f, strokeFloor)),
         cap = StrokeCap.Round
     )
     drawLine(
@@ -306,6 +326,9 @@ private fun oakHalfWidth(u: Float, radius: Float, spread: Float, lobes: Float): 
  * The margin is sampled in polar coordinates about the point the stem joins, which is
  * where the ribs converge - and why the first version, four straight edges and a bite
  * out of the top, read as a paper cutout rather than a leaf.
+ *
+ * The two variants differ in how deep that notch is pulled, which is the one difference a
+ * chip can still show: the ribs and the wave are under a pixel of each other at that size.
  */
 internal fun DrawScope.drawGinkgo(
     path: Path,
@@ -313,7 +336,8 @@ internal fun DrawScope.drawGinkgo(
     radius: Float,
     palette: ParticlePalette,
     alpha: Float,
-    variant: Int
+    variant: Int,
+    strokeFloor: Float
 ) {
     val detailed = radius > 5f
     val notchReach = if (variant % 2 == 0) 0.62f else 0.74f
@@ -355,11 +379,11 @@ internal fun DrawScope.drawGinkgo(
         color = palette.deep.copy(alpha = alpha * 0.75f),
         start = apex,
         end = Offset(apex.x, apex.y + radius * 0.66f),
-        strokeWidth = (radius * 0.08f).coerceAtLeast(0.4f),
+        strokeWidth = (radius * 0.08f).coerceAtLeast(max(0.4f, strokeFloor)),
         cap = StrokeCap.Round
     )
     val vein = palette.deep.copy(alpha = alpha * 0.32f)
-    val veinWidth = (radius * 0.038f).coerceAtLeast(0.3f)
+    val veinWidth = (radius * 0.038f).coerceAtLeast(max(0.3f, strokeFloor))
     val ribs = if (detailed) 7 else 4
     for (rib in 0 until ribs) {
         val angle = (rib.toFloat() / (ribs - 1) - 0.5f) * sweep * 0.92f
@@ -386,6 +410,11 @@ internal fun DrawScope.drawGinkgo(
  * read as a globe of filaments instead of a flat fan of lines. At fourteen dp the pappus
  * is a soft halo; at twice that it is recognisably a seed clock, which is the point of
  * drawing it rather than sprinkling white circles.
+ *
+ * The chip is the exception the floor was added for: the hairs *are* the shape, and they
+ * are the thinnest ink in the app relative to the radius, so at eighteen dp the crown used
+ * to fade to a pale blur. [strokeFloor] keeps them separate, and the twelve-hair variant is
+ * the one with room enough between them to show it.
  */
 internal fun DrawScope.drawDandelion(
     path: Path,
@@ -394,7 +423,8 @@ internal fun DrawScope.drawDandelion(
     palette: ParticlePalette,
     alpha: Float,
     variant: Int,
-    highDetail: Boolean
+    highDetail: Boolean,
+    strokeFloor: Float
 ) {
     val detailed = highDetail && radius > 5f
     val seed = Offset(center.x, center.y + radius * 0.74f)
@@ -421,7 +451,10 @@ internal fun DrawScope.drawDandelion(
     drawPath(
         path = path,
         color = palette.deep.copy(alpha = alpha * 0.66f),
-        style = Stroke((radius * 0.05f).coerceAtLeast(0.3f), cap = StrokeCap.Round)
+        style = Stroke(
+            (radius * 0.05f).coerceAtLeast(max(0.3f, strokeFloor)),
+            cap = StrokeCap.Round
+        )
     )
 
     val rays = when {
@@ -431,7 +464,10 @@ internal fun DrawScope.drawDandelion(
     }
     val spread = 1.62f
     val hair = palette.light.copy(alpha = alpha * 0.58f)
-    val hairWidth = (radius * 0.026f).coerceAtLeast(0.25f)
+    // Eighty percent of the ask: the crown has to stay finer than the beak under it, and
+    // the hairs are spaced by the radius too, so a floor taken whole would close the air
+    // between them and put the blur back.
+    val hairWidth = (radius * 0.026f).coerceAtLeast(max(0.25f, strokeFloor * 0.8f))
     for (index in 0 until rays) {
         val t = index.toFloat() / (rays - 1) - 0.5f
         val angle = -PI.toFloat() / 2f + t * spread

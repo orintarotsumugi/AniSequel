@@ -1,7 +1,11 @@
 package com.anisequel
 
+import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.isWinterSnow
+import com.anisequel.ui.components.seasonal.seasonalGlyphLegend
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -24,14 +28,21 @@ import java.io.File
  *    Instant check ignores the one setting that says "stop animating".
  *  - **It must sit between the page and the chrome.** Over the `NavHost`, under
  *    the bar: over the page, under the controls the reader needs. The drift gathers
- *    on the screen's bottom edge; the bar's own cap is a second, non-interactive
- *    Canvas drawn over the bar, and the pill's real bounds are the only geometry it
- *    is allowed to use.
+ *    on the screen's bottom edge and nothing is painted over the bar - the sky used
+ *    to add a snow cap on the pill itself, and the reader asked for the weather to
+ *    stop dressing the control they press.
  *  - **The settings page has doors for all of it.** A shape grid nobody reaches,
  *    a settle switch with no test tag, or a wind control that never got wired to
  *    the layer is a feature that exists only in this repository.
+ *  - **The ten chips are ten pictures.** The glyph shares the sky's drawing code, and
+ *    that stays; what changed is that it is *posed* by `seasonalGlyphLegend`, and a pose
+ *    table is numbers a JVM can read. The reported failure was variant zero for all ten -
+ *    which, for the four shapes that share the snow dispatcher, is one dendrite four times -
+ *    and a radius fraction of `0.32`, which left the shapes' own five-pixel detail gate two
+ *    pixels away from an eighteen dp chip.
  */
 class SeasonalParticleHostTest {
+
 
     private val root: File = findProjectRoot()
 
@@ -47,18 +58,32 @@ class SeasonalParticleHostTest {
     private val ambient: String
         get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalAmbient.kt")
 
+    private val pileCode: String
+        get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalPiles.kt")
+
+    private val shapes: String
+        get() = source(
+            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticleShapes.kt"
+        )
+
+    private val snow: String
+        get() = source(
+            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalSnowShapes.kt"
+        )
+
+    private val glyph: String
+        get() = source(
+            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalGlyphLegend.kt"
+        )
+
     private val appNavigation: String
         get() = source("app/src/main/java/com/anisequel/ui/navigation/AppNavigation.kt")
 
-    private val barTrail: String
-        get() = source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalBarTrail.kt")
-
     @Test
-    fun `the overlay, its host and the bar cap never take a touch`() {
+    fun `the overlay and its host never take a touch`() {
         listOf(
             "SeasonalParticleLayer.kt" to layer,
-            "SeasonalParticleHost.kt" to host,
-            "SeasonalBarTrail.kt" to barTrail
+            "SeasonalParticleHost.kt" to host
         )
             .forEach { (name, code) ->
                 // Lower-cased, because `combinedClickable` does not contain the
@@ -175,43 +200,100 @@ class SeasonalParticleHostTest {
     }
 
     @Test
-    fun `the drift gathers on the bottom and the bar publishes its own pill`() {
+    fun `the drift gathers on the bottom edge and nothing paints over the bar`() {
         val mainChrome = source("app/src/main/java/com/anisequel/ui/navigation/MainChrome.kt")
         val mainTabs = source("app/src/main/java/com/anisequel/ui/navigation/MainTabs.kt")
+        val bar = source(
+            "app/src/main/java/com/anisequel/ui/components/expressive/ExpressiveNavigationBar.kt"
+        )
 
+        // The drift sits on the screen's own bottom edge, behind the bar, so it
+        // reads as snow that gathered on the floor rather than on a shelf.
         assertTrue(
-            "the bar never publishes its capsule, so the snow cap has no surface to sit on",
-            mainTabs.contains("SeasonalChrome::publishBar")
+            "the drift is no longer drawn from the bottom of the overlay",
+            pileCode.contains("ground = height")
         )
-        assertTrue(
-            "a hidden bar leaves a stale capsule and its cap floats over the next page",
-            mainChrome.contains("SeasonalChrome.clearBar")
-        )
-        assertTrue(
-            "nothing draws the cap over the bar, so the drift is hidden behind it",
+        // And the bar is left alone: no canvas above it, and no layout callback
+        // publishing its capsule to chrome that does not exist.
+        assertFalse(
+            "something still draws over the navigation bar",
             mainChrome.contains("SeasonalBarTrail(")
         )
-        assertTrue(
-            "the cap is drawn before the bar, where the bar's own surface hides it",
-            mainChrome.indexOf("SeasonalBarTrail(") > mainChrome.indexOf("MainBar(")
-        )
-        assertTrue(
-            "the trail does not read the published capsule",
-            barTrail.contains("SeasonalChrome.barBounds")
-        )
-        assertTrue(
-            "the trail does not take its thickness from the drift above it",
-            barTrail.contains("SeasonalChrome.skyPile")
-        )
-        assertTrue(
-            "the app-wide layer never publishes the sky the cap belongs to",
-            layer.contains("SeasonalChrome.publishSky(")
-        )
         assertFalse(
-            "the Settings preview must not publish, or it would paint its drift on a bar " +
-                "that is not under it and clear the real sky on the way out",
-            source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
-                .contains("publishesBarTrail = true")
+            "the bar still publishes its capsule for chrome to draw on",
+            mainTabs.contains("onCapsuleBounds") || bar.contains("onCapsuleBounds")
+        )
+        // The whole publish/observe channel for the cap is gone with it, so a
+        // re-introduction has to be a deliberate change rather than a leftover.
+        assertFalse(
+            "the sky still publishes state for a bar cap to read",
+            layer.contains("SeasonalChrome")
+        )
+    }
+
+    /**
+     * Above sixty hertz is a window policy, not a clock policy. Compose will happily
+     * pace the frame loop at 144 and still be handed sixty frames a second by a
+     * panel the system has bucketed into its default category, so the layer has to
+     * ask for the high category - and put it back when the sky is off, because the
+     * battery cost of a high-rate window outlives the decoration that needed it.
+     */
+    @Test
+    fun `a sky above sixty asks the window for the high frame-rate category`() {
+        assertTrue(
+            "the host never asks the view for a refresh-rate category",
+            host.contains("setRequestedFrameRate")
+        )
+        assertTrue(
+            "the high category is never requested",
+            host.contains("REQUESTED_FRAME_RATE_CATEGORY_HIGH")
+        )
+        // Android 14 owns this API. `lintRelease` is advisory here, so nothing but
+        // this guard stands between the call and a NoSuchMethodError on Android 12
+        // and 13 - the two releases this app still installs on.
+        assertTrue(
+            "the category call is not guarded by an SDK check",
+            host.contains("SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE")
+        )
+        assertTrue(
+            "the category is never released when the sky is off or capped",
+            host.contains("REQUESTED_FRAME_RATE_CATEGORY_DEFAULT")
+        )
+        // The loop's floor used to be sixty seconds of frame time, which ignored a
+        // faster choice rather than honouring it: whatever the reader picked, the
+        // sky stepped sixty times a second.
+        assertTrue(
+            "the frame loop still refuses to pace faster than sixty",
+            layer.contains("1f / MAX_SEASONAL_FRAME_HZ")
+        )
+    }
+
+    @Test
+    fun `the frame rate is a setting the page can reach`() {
+        val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
+        val card = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalFrameCard.kt")
+
+        assertTrue("the page does not draw the frame-rate card", tab.contains("FrameCard("))
+        assertTrue("the card is not dispatched from the page", tab.contains("onRateChange"))
+        assertTrue(
+            "the page never re-reads the screen, so a rate unlocked in the system " +
+                "settings stays hidden until the app restarts",
+            tab.contains("LaunchedEffect(resumed)")
+        )
+        // The choice list comes from the panel, and the pill is the same control the
+        // rest of the page uses.
+        assertTrue(
+            "the card offers rates without asking the screen",
+            card.contains("offered") && tab.contains("availableSeasonalFrameRates(")
+        )
+        assertTrue(
+            "the pills are not animated in and out, so a rate appearing is a layout jump",
+            card.contains("AnimatedVisibility(")
+        )
+        assertTrue(
+            "the pills are tagged by their storage value, so the row cannot be driven " +
+                "from a test or a UI check",
+            card.contains("\"seasonal_frame_rate_\${option.storageValue}\"")
         )
     }
 
@@ -282,12 +364,109 @@ class SeasonalParticleHostTest {
         )
     }
 
+    /**
+     * The chip is a legend, not a frame of the sky - and still the sky's drawing.
+     *
+     * Both halves are requirements, and they pull against each other. A chip that poses
+     * nothing shows what the *first* particle of that sky happens to look like: `variant` zero
+     * gave Snow its stellar dendrite and Crystal its near-identical dendrite, two chips apart,
+     * so the winter row could only be read from its labels; and `0.32` of an eighteen dp chip
+     * is a radius two pixels above the point where every shape drops its branches, veins and
+     * barbs, so the same saved setting drew a fern on one phone and six bare spokes on another.
+     * The pose is the legend's job. The shared call is the chip's promise, and a second
+     * illustration system - an `ImageVector`, a hand-built path - breaks it silently, because
+     * the chip still looks right on the day it is drawn.
+     */
+    @Test
+    fun `the chip legend poses every shape as a picture of its own`() {
+        val legends = SeasonalEffect.entries.associateWith { seasonalGlyphLegend(it) }
+
+        // Ten chips, ten (drawing, posture) pairs. A six-armed flake aliases every sixty
+        // degrees and a blossom every seventy-two, so all ten tilts being different is the
+        // weakest statement that makes the row readable.
+        val poses = legends.values.map { it.variant to it.rotationDegrees }
+        assertEquals(
+            "two chips resolve to the same drawing in the same posture, and the reader is " +
+                "back to choosing a shape from the word beside it",
+            SeasonalEffect.entries.size,
+            poses.toSet().size
+        )
+        assertNotEquals(
+            "Snow and Crystal are one dendrite again",
+            legends.getValue(SeasonalEffect.SNOW).variant,
+            legends.getValue(SeasonalEffect.CRYSTAL).variant
+        )
+        val winter = SeasonalEffect.entries.filter { it.isWinterSnow }
+        assertEquals("the snow family is not four shapes", 4, winter.size)
+        assertTrue(
+            "every winter chip asks for the same variant, which is how the row got smudged",
+            winter.map { legends.getValue(it).variant }.toSet().size > 1
+        )
+
+        SeasonalEffect.entries.forEach { effect ->
+            val legend = legends.getValue(effect)
+            assertTrue(
+                "$effect asks for variant ${legend.variant}, outside the ${effect.variantCount}" +
+                    " drawings it can produce",
+                legend.variant in 0 until effect.variantCount
+            )
+            assertTrue(
+                "$effect's chip radius fraction ${legend.radiusFraction} is not bigger than the" +
+                    " 0.32 that turned the shapes into smudges",
+                legend.radiusFraction > 0.32f
+            )
+            assertTrue(
+                "$effect's legend ink would spill out of the box the chip hands the canvas",
+                legend.radiusFraction <= 0.46f
+            )
+            assertTrue(
+                "$effect's tilt is a posture, not the sky's tumble",
+                legend.rotationDegrees in -30f..30f
+            )
+            assertTrue("$effect asks for no hairline at all", legend.strokeFloor > 0f)
+            assertTrue(
+                "$effect's hairline is thick enough to fill its own shape in",
+                legend.strokeFloor <= 1.5f
+            )
+        }
+
+        // The invariant the legend must not trade away for a prettier picture.
+        assertTrue(
+            "the glyph no longer calls the shared drawing, so a chip can promise a shape the" +
+                " overlay does not draw",
+            glyph.contains("drawSeasonalParticle(")
+        )
+        listOf("ImageVector", "vectorResource", "painterResource", "androidx.compose.ui.res")
+            .forEach { foreign ->
+                assertFalse(
+                    "the particle chips grew a second illustration system ($foreign); the" +
+                        " shapes are Canvas ink and stay Canvas ink",
+                    glyph.contains(foreign)
+                )
+            }
+        assertFalse(
+            "an emoji came back onto the shape chips",
+            containsEmoji(glyph)
+        )
+        // The sky and the drift must still pay nothing for the chip's hairline: the floor is
+        // an ask the caller makes, defaulted off, and the two frame-loop callers never make it.
+        listOf("SeasonalParticleLayer.kt" to layer, "SeasonalPiles.kt" to pileCode)
+            .forEach { (name, code) ->
+                assertFalse(
+                    "$name asks for a stroke floor, so every particle in the frame loop now" +
+                        " draws thicker than the shape was sized for",
+                    code.contains("strokeFloor")
+                )
+            }
+    }
+
     @Test
     fun `the removed shapes stay removed`() {
         val effect = source("app/src/main/java/com/anisequel/domain/seasonal/SeasonalEffect.kt")
-        val shapes = source(
-            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticleShapes.kt"
-        )
+        // The snow family moved to its own file when the chip became a legend; the pin has to
+        // read every file the ink was split across, or a resurrected `drawFirefly` sitting in
+        // the snow file is invisible to it.
+        val drawingCode = shapes + snow
         val leaves = source(
             "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalLeafShapes.kt"
         )
@@ -302,7 +481,7 @@ class SeasonalParticleHostTest {
             assertFalse(
                 "$drawing still builds a shape that nothing can select; the dispatcher" +
                     " cannot reach it, so it is dead ink in a drawing file",
-                shapes.contains("$drawing(") || leaves.contains("DrawScope.$drawing(")
+                drawingCode.contains("$drawing(") || leaves.contains("DrawScope.$drawing(")
             )
         }
         assertTrue(
