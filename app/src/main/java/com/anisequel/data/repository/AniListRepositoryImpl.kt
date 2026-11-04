@@ -191,8 +191,8 @@ internal fun expiredThenOldestKeys(
         return expired.map { it.key }
     }
     val needed = stamps.size - ceiling
-    return (expired.map { it.key } +
-        fresh.sortedBy { it.value }.take(needed - expired.size).map { it.key })
+    val oldestLive = fresh.sortedBy { it.value }.take(needed - expired.size).map { it.key }
+    return expired.map { it.key } + oldestLive
 }
 
 /** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
