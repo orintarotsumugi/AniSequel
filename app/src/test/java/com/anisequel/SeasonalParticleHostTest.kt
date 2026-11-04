@@ -304,8 +304,8 @@ class SeasonalParticleHostTest {
         source("app/src/main/java/com/anisequel/domain/seasonal/SeasonalEffect.kt")
             .lineSequence()
             .forEach { line ->
-                SHAPE_ENTRY.firstMatchIn(line)?.let { shape = it.groupValues[1] }
-                VARIANT_COUNT.firstMatchIn(line)?.let { match ->
+                SHAPE_ENTRY.find(line)?.let { shape = it.groupValues[1] }
+                VARIANT_COUNT.find(line)?.let { match ->
                     if (shape.isNotEmpty()) counts[shape] = match.groupValues[1].toInt()
                 }
             }
@@ -319,7 +319,7 @@ class SeasonalParticleHostTest {
         source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticlePalettes.kt")
             .lineSequence()
             .forEach { line ->
-                PALETTE_BLOCK.firstMatchIn(line)?.let { match ->
+                PALETTE_BLOCK.find(line)?.let { match ->
                     if (shape.isNotEmpty()) sizes[shape] = seen
                     shape = match.groupValues[1]
                     seen = 0
