@@ -97,4 +97,41 @@ class SeasonalPileTest {
             assertEquals(first.column(column), second.column(column), 0f)
         }
     }
+
+    @Test
+    fun `smoothing spreads a mound sideways instead of leaving a spike`() {
+        // Six landings in one place, so the mound is far taller than the starting dusting
+        // and the assertion does not depend on which grains the seed happened to draw.
+        val pile = SeasonalPile(seed = 4)
+        repeat(6) { pile.deposit(xFraction = 0.5f, mass = 1.6f, spread = 1) }
+        val peak = pile.column(24)
+        val beside = pile.column(23)
+
+        pile.relax()
+
+        assertTrue(
+            "the peak survived a smoothing pass, so the drift grows combs, not banks",
+            pile.column(24) < peak
+        )
+        assertTrue(
+            "nothing moved sideways into the column beside the mound",
+            pile.column(23) > beside
+        )
+    }
+
+    @Test
+    fun `smoothing cannot push the drift past its own ceiling`() {
+        val pile = SeasonalPile(seed = 4)
+        pile.fill()
+        repeat(40) {
+            pile.deposit(xFraction = 0.5f, mass = 1.6f, spread = 4)
+            pile.relax()
+        }
+        for (column in 0 until pile.columns) {
+            assertTrue(
+                "column $column passed the ceiling while it was being smoothed",
+                pile.column(column) <= 0.98f
+            )
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.anisequel
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -250,16 +251,83 @@ class SeasonalParticleHostTest {
     }
 
     @Test
-    fun `bubbles are gone from the shape set`() {
+    fun `the removed shapes stay removed`() {
         val effect = source("app/src/main/java/com/anisequel/domain/seasonal/SeasonalEffect.kt")
-        assertFalse(
-            "BUBBLE was removed in 1.8.1; a leftover enum entry would resurrect it",
-            effect.contains("BUBBLE(")
+        val shapes = source(
+            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticleShapes.kt"
         )
+        val leaves = source(
+            "app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalLeafShapes.kt"
+        )
+        listOf("BUBBLE(", "FIREFLY(", "STAR(").forEach { entry ->
+            assertFalse(
+                "$entry was deleted from the shape set; a leftover enum entry would" +
+                    " resurrect a sky with no drawing behind it",
+                effect.contains(entry)
+            )
+        }
+        listOf("drawFirefly", "drawStar").forEach { drawing ->
+            assertFalse(
+                "$drawing still builds a shape that nothing can select; the dispatcher" +
+                    " cannot reach it, so it is dead ink in a drawing file",
+                shapes.contains("$drawing(") || leaves.contains("DrawScope.$drawing(")
+            )
+        }
         assertTrue(
             "the new autumn leaves are missing",
             effect.contains("OAK(") && effect.contains("GINKGO(")
         )
+    }
+
+    /**
+     * The domain's variant count and the palette file's list length have to agree, and
+     * neither is in a position to see the other. A list one entry short is a variant that
+     * silently borrows another shape's colours rather than an error.
+     */
+    @Test
+    fun `every shape has one palette for each drawing it can produce`() {
+        val variants = variantCountsByShape()
+        val paletteSizes = paletteCountsByShape()
+        assertFalse("parsed nothing from the domain file", variants.isEmpty())
+        variants.forEach { (shape, variantCount) ->
+            assertEquals(
+                "$shape can draw $variantCount variants but has ${paletteSizes[shape]} palettes",
+                variantCount,
+                paletteSizes[shape]
+            )
+        }
+    }
+
+    private fun variantCountsByShape(): Map<String, Int> {
+        val counts = mutableMapOf<String, Int>()
+        var shape = ""
+        source("app/src/main/java/com/anisequel/domain/seasonal/SeasonalEffect.kt")
+            .lineSequence()
+            .forEach { line ->
+                SHAPE_ENTRY.firstMatchIn(line)?.let { shape = it.groupValues[1] }
+                VARIANT_COUNT.firstMatchIn(line)?.let { match ->
+                    if (shape.isNotEmpty()) counts[shape] = match.groupValues[1].toInt()
+                }
+            }
+        return counts
+    }
+
+    private fun paletteCountsByShape(): Map<String, Int> {
+        val sizes = mutableMapOf<String, Int>()
+        var shape = ""
+        var seen = 0
+        source("app/src/main/java/com/anisequel/ui/components/seasonal/SeasonalParticlePalettes.kt")
+            .lineSequence()
+            .forEach { line ->
+                PALETTE_BLOCK.firstMatchIn(line)?.let { match ->
+                    if (shape.isNotEmpty()) sizes[shape] = seen
+                    shape = match.groupValues[1]
+                    seen = 0
+                }
+                if (line.contains("ParticlePalette(Color(")) seen++
+            }
+        if (shape.isNotEmpty()) sizes[shape] = seen
+        return sizes
     }
 
     /** True when [code] contains a character from either emoji block. */
@@ -298,5 +366,16 @@ class SeasonalParticleHostTest {
             candidate = candidate.parentFile
         }
         error("could not locate gradle.properties from $start")
+    }
+
+    private companion object {
+        /** An enum entry header in the domain file, with nothing but its name. */
+        val SHAPE_ENTRY = Regex("^    ([A-Z]+)\\($")
+
+        /** The drawing count an entry declares, and nothing else in the file. */
+        val VARIANT_COUNT = Regex("variantCount = (\\d+)")
+
+        /** Which shape a palette list belongs to. */
+        val PALETTE_BLOCK = Regex("private val ([A-Z]+)_PALETTES")
     }
 }
