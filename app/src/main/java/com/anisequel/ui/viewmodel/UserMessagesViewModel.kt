@@ -492,7 +492,7 @@ class UserMessagesViewModel(
                             messages = (listOf(sent) + current.messages).distinctBy { it.id }
                         )
                     }
-                    _reply.value = ReplyState(sentTo = counterpart?.name ?: "them")
+                    _reply.value = ReplyState(sentTo = counterpart.name ?: "them")
                 },
                 onFailure = { failure ->
                     _reply.value = ReplyState(

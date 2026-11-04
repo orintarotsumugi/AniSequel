@@ -150,7 +150,7 @@ fun ProfileErrorView(
     // need this because its retry goes through Loading and disposes this body.
     val attempt = remember { mutableIntStateOf(0) }
     val quipSeed = remember(kind, message, attempt.intValue) { Random.nextInt() }
-    val quip = copy?.quipFor("${kind?.name.orEmpty()}:$message:$quipSeed")
+    val quip = copy?.quipFor("${kind.name}:$message:$quipSeed")
 
     Column(
         modifier = modifier

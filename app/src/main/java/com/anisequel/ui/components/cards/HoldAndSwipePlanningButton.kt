@@ -308,7 +308,7 @@ private fun Modifier.quickAddGestures(
                 if (released) {
                     // User released before hold finished
                     val elapsedFraction = holdProgress.value
-                    holdJob?.cancel()
+                    holdJob.cancel()
                     coroutineScope.launch {
                         holdProgress.animateTo(0f, ExpressiveMotion.FastEffects)
                     }
@@ -320,7 +320,7 @@ private fun Modifier.quickAddGestures(
                         onAddToPlanning()
                     }
                 } else {
-                    holdJob?.cancel()
+                    holdJob.cancel()
                     coroutineScope.launch { holdProgress.snapTo(0f) }
                 }
             }

@@ -275,11 +275,11 @@ private fun buildPetal(path: Path, center: Offset, radius: Float) {
         center.x - radius * 0.34f, center.y - radius * 0.88f
     )
     // The notch at the tip is what says "petal" rather than "leaf".
-    path.quadraticBezierTo(
+    path.quadraticTo(
         center.x - radius * 0.10f, center.y - radius * 1.02f,
         center.x, center.y - radius * 0.55f
     )
-    path.quadraticBezierTo(
+    path.quadraticTo(
         center.x + radius * 0.10f, center.y - radius * 1.02f,
         center.x + radius * 0.34f, center.y - radius * 0.88f
     )
@@ -363,8 +363,8 @@ private fun buildCloverHeart(path: Path, size: Float) {
         -size * 0.92f, -size * 0.86f,
         -size * 0.32f, -size * 0.86f
     )
-    path.quadraticBezierTo(0f, -size * 0.86f, 0f, -size * 0.30f)
-    path.quadraticBezierTo(0f, -size * 0.86f, size * 0.32f, -size * 0.86f)
+    path.quadraticTo(0f, -size * 0.86f, 0f, -size * 0.30f)
+    path.quadraticTo(0f, -size * 0.86f, size * 0.32f, -size * 0.86f)
     path.cubicTo(
         size * 0.92f, -size * 0.86f,
         size * 1.15f, size * 0.18f,

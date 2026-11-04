@@ -191,9 +191,9 @@ internal class TierLibraryPools(
                 // is still `title` alone; these exist only to be searched, which
                 // is what keeps a poster from growing a second line of aliases.
                 alternativeTitles = listOfNotNull(
-                    media.title?.romaji,
-                    media.title?.english,
-                    media.title?.native
+                    media.title.romaji,
+                    media.title.english,
+                    media.title.native
                 ),
                 mediaType = media.mediaTypeOr(requestedType)
             )

@@ -92,7 +92,7 @@ internal fun conversationLines(
             authorId = reply.user?.id,
             authorName = reply.user?.name,
             createdAt = reply.createdAt,
-            sentByViewer = reply.user?.id != null && reply.user?.id == viewerId,
+            sentByViewer = reply.user?.id != null && reply.user.id == viewerId,
             highlight = false
         )
     }

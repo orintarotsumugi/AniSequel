@@ -83,7 +83,7 @@ fun ApiFailureBody(
     // is on screen, and a retry that passes through Loading composes a new body
     // with a new line.
     val quipSeed = remember(kind, message) { Random.nextInt() }
-    val quip = copy?.quipFor("${kind?.name.orEmpty()}:$message:$quipSeed")
+    val quip = copy?.quipFor("${kind.name}:$message:$quipSeed")
     // A broken heart for a connection that failed; a warning for an answer we
     // did not like (dead token, missing profile). Animating heartbreak at a
     // 404 would be a lie about what happened.

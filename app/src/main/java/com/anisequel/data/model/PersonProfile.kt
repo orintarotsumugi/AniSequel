@@ -624,7 +624,7 @@ fun CharacterProfile.toLoadedState(): PersonProfileState.Loaded = PersonProfileS
     description = description,
     siteUrl = siteUrl,
     appearances = media?.titles.orEmpty(),
-    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name?.full },
+    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name.full },
     voiceActors = media?.voiceActorCredits.orEmpty()
 )
 
@@ -643,7 +643,7 @@ fun StaffProfile.toLoadedState(): PersonProfileState.Loaded = PersonProfileState
     // Primary occupations are passed through so a title credited more than once
     // ("Director" and "Script (eps 17, 21)") keeps the role the person is known for.
     appearances = media?.titlesFor(primaryOccupations.orEmpty()).orEmpty(),
-    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name?.full },
+    nativeName = name?.native?.takeIf { it.isNotBlank() && it != name.full },
     occupations = primaryOccupations.orEmpty(),
     // A person is not voiced, so the character-side row stays empty here; what a
     // voice actor *performed* is the other connection and the other row.

@@ -151,7 +151,7 @@ internal fun KlipyResponse.toGifPage(fallbackPage: Int): GifPage {
     // because a content filter dropped rows while the index still has more behind
     // it, and reading the short list as the end stopped the grid early.
     val next = if (data?.hasNext == true && rows.isNotEmpty()) {
-        ((data?.currentPage ?: fallbackPage) + 1).toString()
+        ((data.currentPage ?: fallbackPage) + 1).toString()
     } else {
         null
     }

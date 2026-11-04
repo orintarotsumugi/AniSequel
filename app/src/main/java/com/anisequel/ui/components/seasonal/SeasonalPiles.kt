@@ -221,7 +221,7 @@ private fun DrawScope.buildPileSilhouette(pile: SeasonalPile, frame: PileFrame, 
     for (index in 1..frame.columns) {
         val x = frame.xAt(index)
         val y = frame.heightY(frame.surfaceAt(pile, index))
-        path.quadraticBezierTo(previousX, previousY, (previousX + x) / 2f, (previousY + y) / 2f)
+        path.quadraticTo(previousX, previousY, (previousX + x) / 2f, (previousY + y) / 2f)
         previousX = x
         previousY = y
     }

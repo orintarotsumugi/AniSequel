@@ -324,7 +324,7 @@ private fun exportScale(
     // rows off the edge of the image - and the size the export sheet advertised came
     // from here, so the estimate and the file disagreed too. Applied after the
     // readability floor, because the cap is a hard limit and the floor is not.
-    val byDimension = (MAX_EXPORT_DIMENSION / maxOf(width, height, 1f)).toFloat()
+    val byDimension = MAX_EXPORT_DIMENSION / maxOf(width, height, 1f)
     return min(scale, byDimension)
 }
 

@@ -494,7 +494,7 @@ private val MediaRelationEdge.relationRank: Int
 private val MediaNode.relationStartKey: Int
     get() {
         val year = startDate?.year ?: return Int.MAX_VALUE
-        return year * 10_000 + (startDate?.month ?: 0) * 100 + (startDate?.day ?: 0)
+        return year * 10_000 + (startDate.month ?: 0) * 100 + (startDate.day ?: 0)
     }
 
 /**

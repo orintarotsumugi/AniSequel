@@ -126,9 +126,9 @@ internal fun DrawScope.drawMaple(
         val notchPoint = pointAt(center, tipAngle + step * 0.5f, radius * notch)
         // Shoulder, tip, shoulder, notch - and the notch is a control point rather than a
         // corner, so the cut between two lobes keeps its depth and loses its cog-tooth.
-        path.quadraticBezierTo(outer.x + serration, outer.y, tip.x, tip.y)
-        path.quadraticBezierTo(inner.x, inner.y, right.x, right.y)
-        path.quadraticBezierTo(notchPoint.x, notchPoint.y, joint.x, joint.y)
+        path.quadraticTo(outer.x + serration, outer.y, tip.x, tip.y)
+        path.quadraticTo(inner.x, inner.y, right.x, right.y)
+        path.quadraticTo(notchPoint.x, notchPoint.y, joint.x, joint.y)
     }
     path.close()
     drawPath(path, palette.base.copy(alpha = alpha))
@@ -247,9 +247,9 @@ private fun buildOakOutline(
         val x = center.x + side * oakHalfWidth(u, radius, spread, lobes)
         val y = baseY - axis * u
         if (index == total) {
-            path.quadraticBezierTo(lastX, lastY, x, y)
+            path.quadraticTo(lastX, lastY, x, y)
         } else {
-            path.quadraticBezierTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
+            path.quadraticTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
         }
         lastX = x
         lastY = y
@@ -363,7 +363,7 @@ internal fun DrawScope.drawGinkgo(
         if (index == 0) {
             path.lineTo(x, y)
         } else {
-            path.quadraticBezierTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
+            path.quadraticTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
         }
         lastX = x
         lastY = y
@@ -442,7 +442,7 @@ internal fun DrawScope.drawDandelion(
     // The beak is curved because a seed hanging from a parachute is not on a plumb line.
     path.reset()
     path.moveTo(crown.x, crown.y)
-    path.quadraticBezierTo(
+    path.quadraticTo(
         crown.x + radius * 0.07f,
         crown.y + radius * 0.22f,
         seed.x,
@@ -478,7 +478,7 @@ internal fun DrawScope.drawDandelion(
         val bow = if (index % 2 == 0) 0.12f else -0.12f
         path.reset()
         path.moveTo(crown.x, crown.y)
-        path.quadraticBezierTo(
+        path.quadraticTo(
             crown.x + sin(angle + bow) * reach * 0.55f,
             crown.y - cos(angle + bow) * reach * 0.55f,
             tip.x,
