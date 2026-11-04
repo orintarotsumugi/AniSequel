@@ -53,16 +53,18 @@ class PagedCacheEvictionTest {
     @Test
     fun `a live page is dropped only when the expired ones were not enough`() {
         val stamps = buildMap {
-            (1..38).forEach { index -> put("live$index", now - index * 1_000L) }
+            (1..39).forEach { index -> put("live$index", now - index * 1_000L) }
             put("dead", now - 10 * ttl)
             put("newest", now - 100L)
         }
-        // Forty-one entries against a ceiling of thirty-nine: two have to go, and
-        // one expired page is not enough, so the oldest live page follows it.
+        // Forty-one entries against a ceiling of thirty-nine: two must go, and the
+        // one expired page is not enough, so the oldest live write follows it out.
+        // (Thirty-nine live plus the expired page plus the newest - the count is the
+        // whole test, and it was one short when this first ran.)
         val dropped = expiredThenOldestKeys(stamps, now, ttl, ceiling = 39)
         assertEquals(2, dropped.size)
         assertTrue("the expired page was not dropped", dropped.contains("dead"))
-        assertTrue("live38 was the oldest live write", dropped.contains("live38"))
+        assertTrue("live39 was the oldest live write", dropped.contains("live39"))
     }
 
     @Test
