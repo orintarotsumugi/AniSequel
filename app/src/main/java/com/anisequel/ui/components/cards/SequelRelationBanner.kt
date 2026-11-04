@@ -66,14 +66,16 @@ fun SequelRelationBanner(
                     Modifier
                 } else {
                     Modifier
+                        .testTag("sequel_parent_link_" + sequel.parentId)
                         .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+                        // The `interactionSource`/`indication`/`onClickLabel` overload
+                        // takes no modifier of its own, so the tag belongs in the chain
+                        // above it - that is where the first version of this put nothing
+                        // and CI put the whole call out of the build.
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            onClickLabel = "Open ${'$'}{sequel.parentTitle}",
-                            modifier = Modifier.testTag(
-                                "sequel_parent_link_${'$'}{sequel.parentId}"
-                            )
+                            onClickLabel = "Open " + sequel.parentTitle
                         ) { onOpenParent() }
                 }
             )

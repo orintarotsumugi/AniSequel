@@ -530,7 +530,7 @@ fun gifSearchApiFor(
     // with no search at all - but it now hands back the line that says which index
     // was asked for, which one is answering, and where to fix it.
     fun standingInFor(name: String) =
-        "No ${'$'}name key is saved, so Safebooru is answering instead. " +
+        "No $name key is saved, so Safebooru is answering instead. " +
             "Add a key in Settings > AniList, or choose Safebooru to keep using it."
 
     return when (provider) {
