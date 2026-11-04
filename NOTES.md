@@ -2089,3 +2089,59 @@ the overlay uses, so a chip cannot promise a snowflake the sky does not draw. Ea
 shape also carries its variant count and palettes there, which is why a sky mixes
 three snowflakes instead of stamping one sixty-four times.
 
+## 1.8.2: the sky is matter, and it all falls one way
+
+Ten shapes, four seasons, one direction. Fireflies and starlight were removed, and
+with them `ParticleDirection`: they were the only two shapes that rose, the only two
+drawn from light rather than an outline, and the only two readers could not name at
+fourteen dp - a firefly is a soft dot with two slivers, a sparkle is a dot with four.
+Encoding a second travel direction, a second speed band and a `twinkle` sine that only
+ever drove those two, all to keep two glow shapes in a list of petals and leaves, was
+the more expensive option. A removed shape is still read back as snow rather than as a
+blank sky (`SeasonalEffect.fromStorage`), and `SeasonalParticleHostTest` pins that all
+three deleted entries stay deleted - in the domain *and* in the drawing files, because
+an unreachable `drawFirefly` is dead ink that the next reader will assume is load-bearing.
+
+Everything that is flat enough to catch air now turns over as it falls. The layer
+computes a signed squeeze per particle and the shape dispatcher applies it as a
+horizontal scale *inside the rotated frame* - which is the whole point: a leaf turning
+edge-on narrows along its own stem, not along the side of the screen. It is a matrix
+rather than a re-parameterised path because this runs for every particle on every frame,
+and it never reaches zero (`MIN_FACE_RATIO`): a particle that disappears for a frame
+reads as a dropped frame, not as an edge-on leaf. How far a shape rolls is
+`SeasonalEffect.tumbleResponse`, a property of the shape next to `windResponse` and
+`swayResponse` for the same reason as always - a `when` branch in the draw loop is a
+branch a new shape can forget, and forgetting it takes another shape's motion silently.
+
+The autumn leaves stopped being polygons. Maple, oak and ginkgo are now drawn from
+width functions whose samples are walked as quadratics anchored at the midpoints between
+them, which makes the tangent continuous wherever the reader can see it; the oak's twelve
+hardcoded curves (which is why every oak in the sky was the same oak) are one loop over an
+index instead. Nothing in those builders allocates per particle - no local captured
+helpers, no fresh path per shape - because they run inside the same loop as the placement.
+
+Two rules that look like regressions and are not. **Settling and wind default to off**, and
+`SeasonalPreferences` reads an absent key as false: a drift along the bottom of every page
+and a sky that leans on every scroll change how the app itself feels, so an install that
+predated them must not wake up with both switched on. **Quality is a setting**, resolved
+once per process (`SeasonalDevice` caches the `ActivityManager` read - both the host and
+Settings were making the binder call). `Auto` classifies from RAM and core count and lands
+on mid-range when the reading comes back empty, because guessing "this phone is weak" from a
+stub degrades a flagship invisibly. The tier changes how many particles are generated, how
+often the clock steps, whether a flake gets its branches, and whether the drift gets smoothed.
+
+The last one is a bug fix worth keeping straight: the pile's smoothing pass used to run on
+*every* frame, which is a diffusion stepped at sixty hertz - within a minute it flattened the
+whole drift into one band and spent a full pass plus a fresh `FloatArray` doing it. It now
+runs only on a frame in which something actually landed, into a scratch buffer the pile owns.
+`settlePile` returns the landing count for exactly that decision.
+
+Wind had two bugs of the same family. Gesture gusts were the only wind, so switching
+Wind & touch on with a still page open did nothing at all - which reads as a broken switch,
+not as an unfinished feature; there is now a slow ambient breeze underneath the gestures. And
+a drag was counted twice, once by the pointer observer and once by the nested-scroll
+connection that sees the same delta, so every list storm. The finger owns the drag and the
+connection owns the fling after lift (`SeasonalWind.fingerDown/fingerUp`) because that is the
+only split that keeps both the pages that participate in nested scroll and the ones that do
+not.
+

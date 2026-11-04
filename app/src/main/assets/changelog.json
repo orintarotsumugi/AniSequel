@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.8.2",
+      "entries": [
+        {
+          "title": "Fireflies and starlight are gone, and everything falls",
+          "detail": "The two glowing shapes were the only ones that rose. Drawn at the size a particle actually is, a firefly is a soft dot with two slivers on it and a sparkle is a dot with four, so neither is a shape you can name - and the pair of them were the reason the sky carried a direction and a second set of speed bands. Summer is now the dandelion seed, which comes down under its parachute instead of up out of the grass. An install that had fireflies or starlight selected wakes up on snow rather than on a blank sky."
+        },
+        {
+          "title": "Leaves turn over as they come down",
+          "detail": "Petals, leaves and seeds are now drawn squeezed across their own axis as they rotate, so a maple shows its underside and comes back mirrored instead of winding round like a clock hand. How far a shape rolls is a property of the shape: a leaf turns right over, a snowflake keeps its face to the window, and a seed swings on its parachute rather than flipping."
+        },
+        {
+          "title": "The autumn leaves redrawn",
+          "detail": "Maple, oak and ginkgo were polygons - a five-point star with a squash, one hardcoded oak outline shared by every leaf, a fan with a triangle bitten out of the top. Their margins are now curves sampled from a width function with tangent-continuous joints, so the lobes are rounded, the notches dip without a corner, and the leaf edges catch the light. Maples are palmate, with all five veins running from where the stem joins the blade, and an oak now varies its lobe count and spread. Maple comes in amber, orange and red; sakura gained a curled inner face and side veins; the dandelion's filaments bow both ways so the crown reads as a globe."
+        },
+        {
+          "title": "Three more winter skies, and a quality that picks itself",
+          "detail": "Powder, Crystal and Needles join Snow, each with its own fall speed, size range and drawings, and the mixed snow now cycles five shapes instead of three. A new Quality row (Auto, High-end, Mid-range, Low-end) decides how many flakes are drawn, how often the clock steps and whether a flake keeps its branches: Auto reads this phone's memory and core count the first time you switch the sky on, so a low-end device gets a light sky at thirty updates a second rather than a flagship's sixty."
+        },
+        {
+          "title": "Settling and wind wait to be asked - and the wind now works on a still page",
+          "detail": "Switching the overlay on is only shapes in the air now: the drift along the bottom edge and the reaction to scrolling sit behind their own switches, because both change how the app feels, not just how pretty it is. Wind & touch used to do nothing at all on a page that was not scrolling, and a list flick blew the same gust twice; an ambient breeze now runs underneath the gestures, and a drag and its fling count once. The drift also spreads instead of growing spikes, and stops being smoothed once it has settled."
+        }
+      ]
+    },
+    {
       "version": "1.8.1",
       "entries": [
         {
