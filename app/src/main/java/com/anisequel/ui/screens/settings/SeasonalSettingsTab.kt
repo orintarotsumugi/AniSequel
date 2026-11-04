@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -55,6 +56,8 @@ import com.anisequel.domain.seasonal.MIN_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.MIN_SEASONAL_SPEED_SCALE
 import com.anisequel.domain.seasonal.MIN_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalQuality
+import com.anisequel.domain.seasonal.SeasonalQualityTier
 import com.anisequel.domain.seasonal.SeasonalSeason
 import com.anisequel.domain.seasonal.SeasonalSettings
 import com.anisequel.domain.seasonal.defaultEffect
@@ -62,6 +65,7 @@ import com.anisequel.domain.seasonal.particleCountFor
 import com.anisequel.domain.seasonal.seasonalEffectsIn
 import com.anisequel.domain.seasonal.seasonalSeasonForMonth
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.seasonal.detectSeasonalQualityTier
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -108,6 +112,11 @@ fun SeasonalSettingsTab(
 ) {
     val scope = rememberCoroutineScope()
     val settings by seasonalPreferences.settings.collectAsState(initial = SeasonalSettings())
+    val context = LocalContext.current
+    val detected = remember { detectSeasonalQualityTier(context) }
+    val resolvedQuality = remember(settings.quality, detected) {
+        settings.quality.resolve(detected)
+    }
 
     // Drafts rather than the committed values, so a drag is smooth and the preview
     // follows the finger. Keyed on the committed value so a write that lands - or
@@ -130,8 +139,14 @@ fun SeasonalSettingsTab(
             speedScale = draftSpeed,
             pileDepth = draftPileDepth,
             windStrength = draftWind,
+            quality = resolvedQuality,
             onEnabledChange = { enabled ->
-                scope.launch { seasonalPreferences.setEnabled(enabled) }
+                scope.launch {
+                    if (enabled && settings.quality == SeasonalQuality.AUTO) {
+                        seasonalPreferences.setQuality(SeasonalQuality.of(detected))
+                    }
+                    seasonalPreferences.setEnabled(enabled)
+                }
             },
             onReset = { scope.launch { seasonalPreferences.reset() } }
         )
@@ -166,9 +181,15 @@ fun SeasonalSettingsTab(
         )
 
         DensityCard(
+            quality = settings.quality,
+            detectedName = SeasonalQuality.of(detected).displayName,
+            resolvedCount = particleCountFor(draftDensity, resolvedQuality),
             density = draftDensity,
             sizeScale = draftSize,
             speedScale = draftSpeed,
+            onQualityChange = { quality ->
+                scope.launch { seasonalPreferences.setQuality(quality) }
+            },
             onDensityChange = { draftDensity = it },
             onDensityCommit = {
                 val target = draftDensity
@@ -198,6 +219,7 @@ private fun PreviewCard(
     speedScale: Float,
     pileDepth: Float,
     windStrength: Float,
+    quality: SeasonalQualityTier,
     onEnabledChange: (Boolean) -> Unit,
     onReset: () -> Unit
 ) {
@@ -240,6 +262,7 @@ private fun PreviewCard(
                 pileDepth = pileDepth,
                 reactToWind = settings.reactToWind,
                 windStrength = windStrength,
+                quality = quality,
                 settleOnChrome = false,
                 showTapRipple = false,
                 modifier = Modifier
@@ -286,7 +309,7 @@ private fun ShapeCard(
     SectionCard(
         title = "Season & shape",
         icon = AppVectorIcons.AnimeSparkle,
-        subtitle = "Petals, leaves, snow and light - grouped by the season that owns them",
+        subtitle = "Petals, leaves and snow - grouped by the season that owns them",
         badge = {
             TextButton(
                 onClick = { onEffectChange(seasonNow.defaultEffect()) },
@@ -463,7 +486,7 @@ private fun WeatherCard(
         Spacer(modifier = Modifier.height(14.dp))
         SwitchRow(
             title = "Wind & touch",
-            subtitle = "Scroll for a gust and tap to push the sky away from your finger.",
+            subtitle = "A breeze of its own, plus a gust when you scroll and a push when you tap.",
             checked = settings.reactToWind,
             onCheckedChange = onWindChange,
             modifier = Modifier.testTag("seasonal_wind_switch")
@@ -490,11 +513,16 @@ private fun WeatherCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DensityCard(
+    quality: SeasonalQuality,
+    detectedName: String,
+    resolvedCount: Int,
     density: Float,
     sizeScale: Float,
     speedScale: Float,
+    onQualityChange: (SeasonalQuality) -> Unit,
     onDensityChange: (Float) -> Unit,
     onDensityCommit: () -> Unit,
     onSizeChange: (Float) -> Unit,
@@ -505,11 +533,35 @@ private fun DensityCard(
     SectionCard(
         title = "Density & size",
         icon = AppVectorIcons.Tune,
-        subtitle = "How many, how big, and how fast"
+        subtitle = "How hard this phone works, then how many, how big, and how fast"
     ) {
+        Text(
+            text = if (quality == SeasonalQuality.AUTO) {
+                "Auto is drawing the $detectedName sky on this phone."
+            } else {
+                quality.blurb
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("seasonal_quality_row")
+        ) {
+            SeasonalQuality.entries.forEach { option ->
+                SeasonalQualityChip(
+                    quality = option,
+                    selected = option == quality,
+                    onClick = { onQualityChange(option) }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
         SeasonalSlider(
             title = "Density",
-            valueLabel = "${particleCountFor(density)} particles",
+            valueLabel = "$resolvedCount particles",
             value = density,
             range = MIN_SEASONAL_DENSITY..MAX_SEASONAL_DENSITY,
             steps = 7,
@@ -540,6 +592,48 @@ private fun DensityCard(
             onValueChangeFinished = onSpeedCommit
         )
     }
+}
+
+@Composable
+private fun SeasonalQualityChip(
+    quality: SeasonalQuality,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "seasonal_quality_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "seasonal_quality_content"
+    )
+    val interactionSource = remember { MutableInteractionSource() }
+    Text(
+        text = quality.displayName,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        color = content,
+        modifier = Modifier
+            .clip(ExpressiveShapes.pill)
+            .background(container)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+            .semantics {
+                this.selected = selected
+                role = Role.RadioButton
+            }
+            .testTag("seasonal_quality_${quality.storageValue}")
+    )
 }
 
 @Composable

@@ -14,6 +14,7 @@ import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SIZE_SCALE
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_SPEED_SCALE
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.SeasonalEffect
+import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.domain.seasonal.SeasonalSettings
 import com.anisequel.domain.seasonal.particleSizeScale
 import com.anisequel.domain.seasonal.particleSpeedScale
@@ -43,9 +44,11 @@ private val Context.seasonalDataStore: DataStore<Preferences> by preferencesData
  * runs on read, because a `NaN` reaching a draw radius is a crash rather than a
  * strange-looking particle.
  *
- * The four 1.8.1 keys default sensibly when absent, which is what keeps an
- * install that predates them from needing a migration: snow settles and the sky
- * takes a gust out of the box, and a shrug of the switch turns each off.
+ * The 1.8.2 keys default off when absent. An install that predates settling and
+ * wind must not wake up with a drift on the bar and a sky that leans on every
+ * scroll - those are extras, and the page that added them also added the
+ * switches. Quality is Auto when absent, which is the same as "we have not
+ * chosen yet" and is what lets the first enable pick a tier for this phone.
  */
 class SeasonalPreferences(private val context: Context) {
 
@@ -59,6 +62,7 @@ class SeasonalPreferences(private val context: Context) {
         val PILE_DEPTH = floatPreferencesKey("seasonal_pile_depth")
         val REACT_TO_WIND = booleanPreferencesKey("seasonal_react_to_wind")
         val WIND_STRENGTH = floatPreferencesKey("seasonal_wind_strength")
+        val QUALITY = stringPreferencesKey("seasonal_quality")
     }
 
     val settings: Flow<SeasonalSettings> = context.seasonalDataStore.data.map { preferences ->
@@ -68,10 +72,11 @@ class SeasonalPreferences(private val context: Context) {
             density = preferences[Keys.DENSITY] ?: DEFAULT_SEASONAL_DENSITY,
             sizeScale = preferences[Keys.SIZE_SCALE] ?: DEFAULT_SEASONAL_SIZE_SCALE,
             speedScale = preferences[Keys.SPEED_SCALE] ?: DEFAULT_SEASONAL_SPEED_SCALE,
-            settle = preferences[Keys.SETTLE] ?: true,
+            settle = preferences[Keys.SETTLE] ?: false,
             pileDepth = preferences[Keys.PILE_DEPTH] ?: DEFAULT_SEASONAL_PILE_DEPTH,
-            reactToWind = preferences[Keys.REACT_TO_WIND] ?: true,
-            windStrength = preferences[Keys.WIND_STRENGTH] ?: DEFAULT_SEASONAL_WIND_STRENGTH
+            reactToWind = preferences[Keys.REACT_TO_WIND] ?: false,
+            windStrength = preferences[Keys.WIND_STRENGTH] ?: DEFAULT_SEASONAL_WIND_STRENGTH,
+            quality = SeasonalQuality.fromStorage(preferences[Keys.QUALITY])
         ).sanitised()
     }
 
@@ -130,6 +135,12 @@ class SeasonalPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setQuality(quality: SeasonalQuality) {
+        context.seasonalDataStore.edit { preferences ->
+            preferences[Keys.QUALITY] = quality.storageValue
+        }
+    }
+
     /** Back to the shipped sky: off, snow, the middle of every slider. */
     suspend fun reset() {
         context.seasonalDataStore.edit { preferences ->
@@ -142,6 +153,7 @@ class SeasonalPreferences(private val context: Context) {
             preferences.remove(Keys.PILE_DEPTH)
             preferences.remove(Keys.REACT_TO_WIND)
             preferences.remove(Keys.WIND_STRENGTH)
+            preferences.remove(Keys.QUALITY)
         }
     }
 }
