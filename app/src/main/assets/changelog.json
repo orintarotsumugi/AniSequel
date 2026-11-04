@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "1.9.0",
+      "entries": [
+        {
+          "title": "The received half of the inbox reads its own type now",
+          "detail": "Messages you were sent can only be listed through AniList's notifications, and that field answers a union - a set of possible row types - which the server can only resolve when the query names the type it wants. The query never asked for __typename while the model kept reading it, so the guard that rejects a row that is not a message could never fire and the inbox came back empty on a real account. The sent half worked throughout, because the activity union is resolved from the row's own class. One line in the document, and the test that pinned a hand-written payload now pins what is asked of the server."
+        },
+        {
+          "title": "A frame rate you can set, and what this screen says about itself",
+          "detail": "How often the sky moves is now its own choice, separate from how much it draws: Auto, 30, 60, 120 or 144 Hz. The page offers only the rates this screen reports - a 120 Hz pill on a 60 Hz phone is a control with one effect, none - and it re-reads the panel when you come back to the app, so unlocking the rate in the system settings brings the missing pill animating in. Above sixty the app also asks the platform for the high refresh-rate category on Android 14 and later, because a frame loop paced at 120 is still handed sixty frames a second by a window the system left in its default bucket. Auto is the default: an install that never saw the setting keeps the rate it already had."
+        },
+        {
+          "title": "The snow stays off the navigation bar",
+          "detail": "A winter sky used to leave a cap along the bar's own pill, with drips over its face and a sparkle. Readers asked for the weather to stay off the control they press, so the cap is gone - and with it the channel that measured the bar and published its bounds every layout pass. The drift still gathers on the bottom edge of the screen, behind the bar, the way it did anyway."
+        },
+        {
+          "title": "Hide a message, and see the ones you have not read",
+          "detail": "Each row in Messages can be dismissed from your list, and a switch on the same row decides whether new arrivals are marked at all. Nothing is sent to AniList either way: a message deleted on the server stops existing for the person who sent it, so a dismissal is yours alone and the site's unread badge is still nobody else's to clear. Hiding follows the row's own direction, so dismissing a message you wrote does not also hide the reply you received, and a row you dismissed can be brought back from the same place. A received message is marked new until you open one."
+        },
+        {
+          "title": "Sharp covers, smaller bytes where a slot cannot show more",
+          "detail": "Posters, backdrops and the full-screen viewer still ask AniList for its largest file - those are the pictures you look at. The 22dp relation chip on a dashboard row was asking for the same one, so it now takes the medium size, which is already about three times the pixels that slot can place, with the fallbacks unchanged so a response missing the smaller size still draws. Covers keep arriving from the cache that survives a restart and a cache wipe."
+        },
+        {
+          "title": "Less work in a frame while you scroll",
+          "detail": "The animated progress wave rebuilt a fresh path of 96 segments per frame per card - the way a smooth fling turns into a garbage-collection pause when a screenful of cards is on screen - and reuses one path now. The dashboard, the inbox, the arriving rows and the library grid name their row types, so a fast scroll recycles a slot instead of composing a new one every frame. And the caches that hold feed and inbox pages finally have a ceiling: they expired only when the same page was asked for again, so a session that paged deep and never looked back kept every page it had ever fetched."
+        },
+        {
+          "title": "Ten shapes, ten pictures on the chips",
+          "detail": "Each Seasonal shape chip draws the sky's own ink, and now poses it: a radius fitted to that shape, the variant that names it at eighteen dots, a small tilt, and a hairline floor so the veins and filaments survive a low-density screen instead of fading to a smudge. The winter row used to be one flake shown four times. The page also has an icon of its own now - a falling leaf with three shapes behind it - rather than the tuft of grass it borrowed from the failed-request screen, which keeps being that."
+        },
+        {
+          "title": "One hundred and twenty-five more lines",
+          "detail": "The joke pool grows from 1061 to 1186. Craft gets the people who notice the layout artist's window and the held frame of a hand; feelings gets the episode that is a walk home; backlog, meta and dark get their share too. Every new line is checked against the whole pool, so nothing repeats a premise that was already there - which is the one thing a large catalogue makes hard."
+        }
+      ]
+    },
+    {
       "version": "1.8.2",
       "entries": [
         {
