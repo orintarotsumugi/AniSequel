@@ -132,7 +132,12 @@ private fun DrawScope.drawBarSnowCap(
     buildCap(path, left, right, top, lift, baseLip, lipSpan, pileDepth, seconds)
     // A soft shadow under the cap, so it reads as a layer of snow on a surface rather
     // than a white stripe printed on the pill.
-    withTransform({ translate(0f, 1.4.dp.toPx()) }) {
+    //
+    // The offset is converted outside the `withTransform` lambda: that lambda runs
+    // with a `DrawTransform` receiver, not a `DrawScope`, so `Dp.toPx()` has no
+    // density in scope there - the first build failed on exactly this line.
+    val shadowLift = 1.4.dp.toPx()
+    withTransform({ translate(0f, shadowLift) }) {
         drawPath(path, ink.shadow.copy(alpha = 0.28f))
     }
     drawPath(path, ink.fill.copy(alpha = 0.96f))

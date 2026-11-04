@@ -780,11 +780,11 @@ object AniListMarkdownParser {
     ): MarkdownNode.Blockquote {
         val flat = quoteLines.joinToString(" ").trim()
         if (!quoteNeedsBlockWalk(quoteLines) || depth >= MAX_BLOCK_DEPTH) {
-            return MarkdownNode.Blockquote(parseInlines(flat, spoilerDepth = spoilerDepth))
+            return MarkdownNode.Blockquote(parseInlinesAt(flat, spoilerDepth))
         }
         val blocks = runCatching {
             parseDecoded(quoteLines.joinToString("\n"), depth + 1, spoilerDepth)
-        }.getOrNull() ?: return MarkdownNode.Blockquote(parseInlines(flat, spoilerDepth = spoilerDepth))
+        }.getOrNull() ?: return MarkdownNode.Blockquote(parseInlinesAt(flat, spoilerDepth))
         val onlyParagraph = blocks.singleOrNull() as? MarkdownNode.Paragraph
         return if (onlyParagraph != null) {
             MarkdownNode.Blockquote(onlyParagraph.inlines)
@@ -1159,7 +1159,7 @@ object AniListMarkdownParser {
                 val level = headerMatch.groupValues[1].length
                 val content = headerMatch.groupValues[2].trim()
                 nodes.add(
-                    MarkdownNode.Header(level, parseInlines(content, spoilerDepth = spoilerDepth))
+                    MarkdownNode.Header(level, parseInlinesAt(content, spoilerDepth))
                 )
                 i++
                 continue
@@ -1248,7 +1248,7 @@ object AniListMarkdownParser {
                     items.add(
                         CheckListItem(
                             checked = checked,
-                            inlines = parseInlines(text, spoilerDepth = spoilerDepth)
+                            inlines = parseInlinesAt(text, spoilerDepth)
                         )
                     )
                     i++
@@ -1271,7 +1271,7 @@ object AniListMarkdownParser {
                     !CHECKLIST_PATTERN.matches(lines[i].trim())
                 ) {
                     val itemText = UNORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
-                    items.add(parseInlines(itemText, spoilerDepth = spoilerDepth))
+                    items.add(parseInlinesAt(itemText, spoilerDepth))
                     i++
                 }
                 nodes.add(MarkdownNode.ListBlock(ordered = false, items = items))
@@ -1283,7 +1283,7 @@ object AniListMarkdownParser {
                 val items = mutableListOf<List<InlineToken>>()
                 while (i < lines.size && ORDERED_LIST_PATTERN.matches(lines[i].trim())) {
                     val itemText = ORDERED_LIST_PATTERN.matchEntire(lines[i].trim())!!.groupValues[1]
-                    items.add(parseInlines(itemText, spoilerDepth = spoilerDepth))
+                    items.add(parseInlinesAt(itemText, spoilerDepth))
                     i++
                 }
                 nodes.add(MarkdownNode.ListBlock(ordered = true, items = items))
@@ -1305,7 +1305,7 @@ object AniListMarkdownParser {
                         // had just hidden. A multi-line spoiler would have to split
                         // the two instead of dropping one.
                         inlines = if (blocks.isEmpty()) {
-                            parseInlines(content, spoilerDepth = spoilerDepth)
+                            parseInlinesAt(content, spoilerDepth)
                         } else {
                             emptyList()
                         },
@@ -1323,7 +1323,7 @@ object AniListMarkdownParser {
                 !SETEXT_H1_PATTERN.matches(trimmedLine)
             ) {
                 nodes.add(
-                    MarkdownNode.Header(1, parseInlines(trimmedLine, spoilerDepth = spoilerDepth))
+                    MarkdownNode.Header(1, parseInlinesAt(trimmedLine, spoilerDepth))
                 )
                 i += 2
                 continue
@@ -1331,7 +1331,7 @@ object AniListMarkdownParser {
 
             // Markdown Table check
             val tableResult = tryParseTable(lines, i) {
-                parseInlines(it, spoilerDepth = spoilerDepth)
+                parseInlinesAt(it, spoilerDepth)
             }
             if (tableResult != null) {
                 nodes.add(tableResult.first)
@@ -1361,7 +1361,7 @@ object AniListMarkdownParser {
             val orphanPipeLine = trimmedLine.startsWith("|")
             if (orphanPipeLine) {
                 nodes.add(
-                    MarkdownNode.Paragraph(parseInlines(trimmedLine, spoilerDepth = spoilerDepth))
+                    MarkdownNode.Paragraph(parseInlinesAt(trimmedLine, spoilerDepth))
                 )
                 i++
                 continue
@@ -1421,7 +1421,7 @@ object AniListMarkdownParser {
                 // freeze.
                 nodes.add(
                     MarkdownNode.Paragraph(
-                        parseInlines(lines[i].trim(), spoilerDepth = spoilerDepth)
+                        parseInlinesAt(lines[i].trim(), spoilerDepth)
                     )
                 )
                 i++
@@ -1453,7 +1453,7 @@ object AniListMarkdownParser {
     ): List<MarkdownNode> {
         if (text.isBlank()) return emptyList()
         val (kept, mediaLinks) = splitMediaLinks(
-            parseInlines(text, spoilerDepth = spoilerDepth)
+            parseInlinesAt(text, spoilerDepth)
         )
         val nodes = mutableListOf<MarkdownNode>()
         if (kept.isNotEmpty()) {
@@ -1676,6 +1676,18 @@ object AniListMarkdownParser {
      */
     fun parseInlines(text: String): List<InlineToken> =
         parseInlines(text, depth = 0, spoilerDepth = 0)
+
+    /**
+     * Inline tokens from a block handler, at the start of the inline nesting budget.
+     *
+     * The public one-argument [parseInlines] deliberately has no spoiler depth - it is
+     * the entry point a test or a preview calls - so a block that needs to carry the
+     * depth it is already inside has to name it through the private overload. The
+     * inline depth is zero: a heading or a list item is a fresh inline run, and its
+     * block nesting has nothing to say about how deep `**` may nest.
+     */
+    private fun parseInlinesAt(text: String, spoilerDepth: Int): List<InlineToken> =
+        parseInlines(text, depth = 0, spoilerDepth = spoilerDepth)
 
     /**
      * How deep nested emphasis and link-label parsing may descend before it stops.
