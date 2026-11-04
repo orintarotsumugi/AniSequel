@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.sin
 
 /**
  * The weather the reader makes: gusts from scrolling, and the pulse from a tap.
@@ -71,6 +72,18 @@ object SeasonalWind {
     internal var pulseY: Float = 0.5f
         private set
 
+    /**
+     * A slow ambient breeze, -1..1, independent of the reader's finger.
+     *
+     * Gesture gusts used to be the only wind. Turning Wind & touch on with a
+     * still page then did nothing, which read as the switch being broken. The
+     * breeze is what makes the sky lean on its own; [gust] still stacks on top
+     * when the reader scrolls or taps.
+     */
+    @Volatile
+    internal var breeze: Float = 0f
+        private set
+
     private var viewportWidth: Int = 1
     private var viewportHeight: Int = 1
 
@@ -87,6 +100,11 @@ object SeasonalWind {
      */
     private var lastDecayNanos: Long = 0L
 
+    /** True while a finger is driving the wind, so a nested-scroll fling does not double it. */
+    private var fingerDriving: Boolean = false
+
+    private var breezePhase: Float = 0f
+
     internal fun resize(width: Int, height: Int) {
         viewportWidth = width.coerceAtLeast(1)
         viewportHeight = height.coerceAtLeast(1)
@@ -101,12 +119,26 @@ object SeasonalWind {
      * smaller than the horizontal one, because a list flick is a much larger
      * gesture than a horizontal one and would otherwise read as a storm.
      */
-    internal fun scroll(consumed: Offset) {
+    internal fun scroll(consumed: Offset, fromFinger: Boolean = false) {
         if (consumed == Offset.Zero) return
+        // Nested-scroll deltas and the pointer observer both see the same drag.
+        // Counting both makes every list storm; counting only nested scroll
+        // makes every page that does not participate (pagers, a still Settings
+        // preview) look like wind is broken. The finger owns the drag; nested
+        // scroll owns the fling after lift.
+        if (!fromFinger && fingerDriving) return
         val horizontal = consumed.x / viewportWidth
         val vertical = consumed.y / viewportHeight
         gust = (gust + horizontal * 1.6f + vertical * 0.18f).coerceIn(-1f, 1f)
         lift = (lift + vertical * 0.9f).coerceIn(-1f, 1f)
+    }
+
+    internal fun fingerDown() {
+        fingerDriving = true
+    }
+
+    internal fun fingerUp() {
+        fingerDriving = false
     }
 
     /** Turns a tap in layer pixels into a pulse at that point. */
@@ -154,6 +186,13 @@ object SeasonalWind {
         if (abs(gust) < 0.002f) gust = 0f
         if (abs(lift) < 0.002f) lift = 0f
         if (pulse < 0.002f) pulse = 0f
+        breezePhase += step
+        // Two slow sines, not a single period: a breeze that repeats every few
+        // seconds reads as a pendulum, not as air.
+        breeze = (
+            sin(breezePhase * 0.37f) * 0.34f +
+                sin(breezePhase * 0.13f + 1.7f) * 0.18f
+            ).coerceIn(-1f, 1f)
     }
 
     /** Forgets every force, used when the sky is switched off. */
@@ -161,6 +200,8 @@ object SeasonalWind {
         gust = 0f
         lift = 0f
         pulse = 0f
+        breeze = 0f
+        fingerDriving = false
         lastDecayNanos = 0L
     }
 }
@@ -190,6 +231,7 @@ fun rememberSeasonalAmbientModifier(): Modifier = remember {
             awaitPointerEventScope {
                 var trackedId: PointerId? = null
                 var down = Offset.Zero
+                var last = Offset.Zero
                 var downTime = 0L
                 var travelled = 0f
                 while (true) {
@@ -208,15 +250,25 @@ fun rememberSeasonalAmbientModifier(): Modifier = remember {
                             if (change.changedToDownIgnoreConsumed()) {
                                 trackedId = change.id
                                 down = change.position
+                                last = change.position
                                 downTime = change.uptimeMillis
                                 travelled = 0f
+                                SeasonalWind.fingerDown()
                             }
                         } else if (change.id == tracking) {
                             if (change.pressed) {
+                                val delta = change.position - last
+                                last = change.position
                                 travelled = max(
                                     travelled,
                                     (change.position - down).getDistance()
                                 )
+                                // Past slop this is a drag, not a tap. Feed it
+                                // as wind so pages whose scroll never reaches
+                                // the nested-scroll connection still lean.
+                                if (travelled > slop && delta != Offset.Zero) {
+                                    SeasonalWind.scroll(delta, fromFinger = true)
+                                }
                             }
                             val lifted = change.changedToUpIgnoreConsumed()
                             // `!pressed` also covers a cancelled pointer, which
@@ -227,6 +279,7 @@ fun rememberSeasonalAmbientModifier(): Modifier = remember {
                                 if (lifted && travelled <= slop && quick) {
                                     SeasonalWind.tapAt(change.position)
                                 }
+                                SeasonalWind.fingerUp()
                                 trackedId = null
                             }
                         }

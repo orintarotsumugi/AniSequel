@@ -22,10 +22,11 @@ import com.anisequel.data.repository.MotionStyle
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_PILE_DEPTH
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_WIND_STRENGTH
 import com.anisequel.domain.seasonal.MAX_SEASONAL_PILE_DP
-import com.anisequel.domain.seasonal.ParticleDirection
 import com.anisequel.domain.seasonal.SeasonalEffect
 import com.anisequel.domain.seasonal.SeasonalParticle
 import com.anisequel.domain.seasonal.SeasonalPile
+import com.anisequel.domain.seasonal.SeasonalQualityTier
+import com.anisequel.domain.seasonal.isWinterSnow
 import com.anisequel.domain.seasonal.particleSizeDp
 import com.anisequel.domain.seasonal.particleSpeedScale
 import com.anisequel.domain.seasonal.pileDepthScale
@@ -33,6 +34,7 @@ import com.anisequel.domain.seasonal.seasonalParticles
 import com.anisequel.domain.seasonal.windStrengthScale
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.rememberIsResumed
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -52,6 +54,12 @@ private const val EDGE_FADE = 0.08f
 
 /** Below this a flake is a rounding error on the background, not a drawn shape. */
 private const val MIN_VISIBLE_ALPHA = 0.01f
+
+/** How many times faster than the sway a shape rolls over: one roll is two sways. */
+private const val TUMBLE_RATE = 1.4f
+
+/** The narrowest a turning shape is ever drawn, as a fraction of its own width. */
+private const val MIN_FACE_RATIO = 0.24f
 
 /** The frame budget: update the clock at most sixty times a second. */
 private const val FRAME_SECONDS = 1f / 60f
@@ -116,10 +124,11 @@ fun SeasonalParticleLayer(
     density: Float,
     sizeScale: Float = 1f,
     speedScale: Float = 1f,
-    settle: Boolean = true,
+    settle: Boolean = false,
     pileDepth: Float = DEFAULT_SEASONAL_PILE_DEPTH,
-    reactToWind: Boolean = true,
+    reactToWind: Boolean = false,
     windStrength: Float = DEFAULT_SEASONAL_WIND_STRENGTH,
+    quality: SeasonalQualityTier = SeasonalQualityTier.HIGH,
     /**
      * Whether the drift sits on the app's main bar rather than the layer's edge.
      *
@@ -142,11 +151,13 @@ fun SeasonalParticleLayer(
     val resumed = rememberIsResumed()
     val animating = resumed && ExpressiveMotion.speed != MotionStyle.INSTANT
 
-    // Regenerated only when the shape or the count changes, and never on a frame.
-    // The seed is fixed, so raising the density adds flakes instead of re-rolling
-    // the ones already on screen.
-    val particles = remember(effect, density, seed) {
-        seasonalParticles(effect = effect, density = density, seed = seed)
+    // Regenerated only when the shape, the count or the tier changes, and never on
+    // a frame. The seed is fixed, so raising the density adds flakes instead of
+    // re-rolling the ones already on screen. The tier goes into the generator
+    // rather than truncating afterwards: a low-end sky used to build sixty-four
+    // particles and draw eighteen of them.
+    val particles = remember(effect, density, seed, quality) {
+        seasonalParticles(effect = effect, density = density, seed = seed, quality = quality)
     }
     val baseDp = remember(sizeScale) { particleSizeDp(sizeScale) }
     val speed = remember(speedScale) { particleSpeedScale(speedScale) }
@@ -177,15 +188,15 @@ fun SeasonalParticleLayer(
     }
 
     LaunchedEffect(
-        animating, effect, density, speed, settle, reactToWind, windStrength, viewport
+        animating, effect, density, speed, settle, reactToWind, windStrength, viewport, quality
     ) {
         if (!animating) return@LaunchedEffect
-        seasonalClock { step, frameNanos ->
+        seasonalClock(1f / quality.frameHz) { step, frameNanos ->
             val previous = clock
             clock += step
             if (reactToWind) SeasonalWind.decay(step, frameNanos)
             val field = pile ?: return@seasonalClock
-            settlePile(
+            val landed = settlePile(
                 pile = field,
                 particles = particles,
                 effect = effect,
@@ -196,10 +207,12 @@ fun SeasonalParticleLayer(
                 wind = thisWind(reactToWind),
                 windStrength = strongWind
             )
+            // Only after a landing. Relaxing on every frame smoothed the drift into a
+            // flat band a minute in, and spent a full pass over the columns doing it.
+            if (landed > 0 && quality.relaxPiles) field.relax()
         }
     }
 
-    val falling = effect.direction == ParticleDirection.FALL
     val settleVisible = settle && effect.settles && pile != null
 
     Canvas(
@@ -217,13 +230,13 @@ fun SeasonalParticleLayer(
             baseDp = baseDp,
             seconds = clock,
             speedScale = speed,
-            falling = falling,
             settleVisible = settleVisible,
             settleOnChrome = settleOnChrome,
             showTapRipple = showTapRipple,
             wind = thisWind(reactToWind),
             windStrength = strongWind,
-            pileDepthScale = depth
+            pileDepthScale = depth,
+            quality = quality
         )
     }
 }
@@ -248,7 +261,11 @@ private fun thisWind(reactToWind: Boolean): WindSample =
     if (!reactToWind) {
         WindSample.None
     } else {
-        WindSample(SeasonalWind.gust, SeasonalWind.lift, SeasonalWind.pulse)
+        WindSample(
+            gust = (SeasonalWind.gust + SeasonalWind.breeze * 0.62f).coerceIn(-1f, 1f),
+            lift = SeasonalWind.lift,
+            pulse = SeasonalWind.pulse
+        )
     }
 
 /**
@@ -256,9 +273,11 @@ private fun thisWind(reactToWind: Boolean): WindSample =
  *
  * The wrap is the only moment a falling shape visibly reaches the floor, so it is the
  * only moment it adds to the drift: depositing every step would build a pile out of
- * particles still mid-air. A rising shape has no floor to land on, and a layer that
- * has not been measured yet has no width to land *across*, so both leave the field
- * untouched.
+ * particles still mid-air. A layer that has not been measured yet has no width to
+ * land *across*, so it leaves the field untouched.
+ *
+ * Returns how many shapes landed, which is what tells the caller whether the drift
+ * is worth a smoothing pass this frame.
  */
 private fun settlePile(
     pile: SeasonalPile,
@@ -270,20 +289,27 @@ private fun settlePile(
     viewportWidth: Int,
     wind: WindSample,
     windStrength: Float
-) {
-    if (viewportWidth <= 0 || effect.direction != ParticleDirection.FALL) return
+): Int {
+    if (viewportWidth <= 0) return 0
     // The same strength multiplier the draw uses, so a landing lands where the
     // reader saw the shape cross the edge.
     val gust = wind.gust * windStrength
+    var landed = 0
     particles.forEach { particle ->
         val previousProgress = wrap(particle.y + particle.speed * speedScale * previousSeconds)
         val nextProgress = wrap(particle.y + particle.speed * speedScale * seconds)
         if (nextProgress < previousProgress) {
             val sway = sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway
             val landing = particle.x + sway + gust * effect.windResponse * GUST_WIDTH
-            pile.deposit(landing.coerceIn(0f, 1f), particle.size)
+            pile.deposit(
+                xFraction = landing.coerceIn(0f, 1f),
+                mass = particle.size,
+                spread = if (effect.isWinterSnow) 3 else 2
+            )
+            landed++
         }
     }
+    return landed
 }
 
 /**
@@ -293,6 +319,11 @@ private fun settlePile(
  * space for this frame only - a fresh `Path` per particle per frame is sixty-four
  * allocations sixty times a second - and the pile's resting glyphs need a second one,
  * because drawing a shape resets the path it is handed.
+ *
+ * [placement] is the same scratch object for every particle in the frame, filled by
+ * [particlePlacement] and read immediately after: the loop used to build one small
+ * object per visible flake per frame, which is thirty-six hundred of them a second at
+ * the heaviest setting, and they were all garbage by the next one.
  */
 private fun DrawScope.drawSeasonalSky(
     effect: SeasonalEffect,
@@ -301,13 +332,13 @@ private fun DrawScope.drawSeasonalSky(
     baseDp: Float,
     seconds: Float,
     speedScale: Float,
-    falling: Boolean,
     settleVisible: Boolean,
     settleOnChrome: Boolean,
     showTapRipple: Boolean,
     wind: WindSample,
     windStrength: Float,
-    pileDepthScale: Float
+    pileDepthScale: Float,
+    quality: SeasonalQualityTier
 ) {
     val width = size.width
     val height = size.height
@@ -315,6 +346,7 @@ private fun DrawScope.drawSeasonalSky(
     val basePx = baseDp.dp.toPx()
     val path = Path()
     val glyphPath = Path()
+    val placement = Placement()
 
     if (settleVisible && pile != null) {
         drawSeasonalPile(
@@ -325,35 +357,39 @@ private fun DrawScope.drawSeasonalSky(
             alpha = 1f,
             bottomInsetPx = if (settleOnChrome) SeasonalChrome.barHeightPx.toFloat() else 0f,
             path = path,
-            glyphPath = glyphPath
+            glyphPath = glyphPath,
+            glyphStep = quality.pileGlyphStep,
+            highDetail = quality.detailedDrawing,
+            seconds = seconds
         )
     }
 
     particles.forEach { particle ->
-        val placed = particlePlacement(
+        particlePlacement(
             particle = particle,
             effect = effect,
             seconds = seconds,
             speedScale = speedScale,
             width = width,
             height = height,
-            falling = falling,
             gust = wind.gust,
             lift = wind.lift,
             windStrength = windStrength,
             pulse = wind.pulse,
             pulseX = SeasonalWind.pulseX,
-            pulseY = SeasonalWind.pulseY
+            pulseY = SeasonalWind.pulseY,
+            into = placement
         ) ?: return@forEach
         drawSeasonalParticle(
             effect = effect,
-            center = placed.center,
+            center = placement.center,
             radius = basePx * particle.size,
-            rotationDegrees = placed.rotationDegrees,
-            alpha = placed.alpha,
+            rotationDegrees = placement.rotationDegrees,
+            alpha = placement.alpha,
             variant = particle.variant,
             path = path,
-            twinkle = placed.twinkle
+            flatten = placement.flatten,
+            highDetail = quality.detailedDrawing
         )
     }
 
@@ -409,35 +445,51 @@ private fun DrawScope.drawTapRipple(
  * across the screen. The raw frame timestamp goes with the step because the wind
  * has to decay exactly once per frame even when two layers are alive.
  */
-private suspend fun seasonalClock(onStep: (step: Float, frameNanos: Long) -> Unit) {
+private suspend fun seasonalClock(
+    frameSeconds: Float = FRAME_SECONDS,
+    onStep: (step: Float, frameNanos: Long) -> Unit
+) {
     var lastFrame = 0L
     var accumulated = 0f
+    val budget = frameSeconds.coerceAtLeast(1f / 60f)
     while (true) {
         val frame = withFrameNanos { it }
         val elapsed = if (lastFrame == 0L) 0L else frame - lastFrame
         lastFrame = frame
         accumulated += elapsed / 1_000_000_000f
-        if (accumulated < FRAME_SECONDS) continue
+        if (accumulated < budget) continue
         onStep(accumulated.coerceAtMost(MAX_STEP_SECONDS), frame)
         accumulated = 0f
     }
 }
 
-/** Where one particle sits, how visible it is, and how bright it twinkles. */
-private data class Placement(
-    val center: Offset,
-    val alpha: Float,
-    val rotationDegrees: Float,
-    val twinkle: Float
-)
+/**
+ * Where one particle sits and how it is turned, filled in by [particlePlacement].
+ *
+ * A class rather than a data class because it is scratch space: the draw loop hands
+ * the same instance to every flake in the frame and reads it straight back.
+ */
+private class Placement {
+    var center: Offset = Offset.Zero
+    var alpha: Float = 0f
+    var rotationDegrees: Float = 0f
+
+    /**
+     * The shape's own horizontal squeeze, negative when it has turned past edge-on.
+     *
+     * This is the rotation the reader actually sees on a leaf: the drawing narrows to
+     * its stem axis and comes back mirrored, which is a turn over rather than a spin.
+     */
+    var flatten: Float = 1f
+}
 
 /**
  * One particle's place at [seconds], or null when it has faded past drawing.
  *
  * The travel is one cycle taller than the screen ([TRAVEL_FACTOR]) and starts
- * [TRAVEL_MARGIN] outside it, so a flake is never born or killed on screen - it
+ * [TRAVEL_MARGIN] above it, so a flake is never born or killed on screen - it
  * enters from above, and the [EDGE_FADE] band at each end of the cycle is what the
- * reader actually sees. Rising shapes run the same geometry backwards.
+ * reader actually sees.
  *
  * Wind is layered on top of the closed-form path rather than integrated into it:
  * the gust is an offset that decays to zero, so the sky leans and comes back
@@ -455,23 +507,28 @@ private fun particlePlacement(
     speedScale: Float,
     width: Float,
     height: Float,
-    falling: Boolean,
     gust: Float,
     lift: Float,
     windStrength: Float,
     pulse: Float,
     pulseX: Float,
-    pulseY: Float
+    pulseY: Float,
+    into: Placement
 ): Placement? {
     val travel = height * TRAVEL_FACTOR
-    val startY = if (falling) -height * TRAVEL_MARGIN else height * (1f + TRAVEL_MARGIN)
     val progress = wrap(particle.y + particle.speed * speedScale * seconds)
-    var y = if (falling) startY + progress * travel else startY - progress * travel
+    var y = progress * travel - height * TRAVEL_MARGIN
+    val swayAngle = seconds * particle.swayRate * TAU + particle.phase
+    // Primary sway plus a faster, smaller figure-eight. A single sine is a
+    // pendulum; the second harmonic is what makes a leaf tumble instead of
+    // slide, and a flake drift instead of march.
     var x = width * particle.x +
-        sin(seconds * particle.swayRate * TAU + particle.phase) * particle.sway * width
+        sin(swayAngle) * particle.sway * width +
+        sin(swayAngle * 2.15f) * particle.sway * particle.flutter * width * 0.42f
+    y += sin(swayAngle * 0.85f + 0.6f) * height * 0.014f * particle.flutter
 
-    // A leaf catches more air than a flake, and a firefly barely notices. The
-    // multiplier comes from the shape so this loop has no per-shape branches.
+    // A leaf catches more air than a flake. The multiplier comes from the shape so
+    // this loop has no per-shape branches.
     val drift = effect.windResponse * windStrength
     x += gust * drift * width * GUST_WIDTH
     y -= lift * drift * height * GUST_HEIGHT
@@ -496,14 +553,20 @@ private fun particlePlacement(
     val alpha = particle.alpha * edge.coerceIn(0f, 1f)
     if (alpha <= MIN_VISIBLE_ALPHA) return null
 
-    val twinkle = 0.72f + 0.28f * sin(seconds * 2.6f + particle.phase)
-    return Placement(
-        center = Offset(x, y),
-        alpha = alpha,
-        rotationDegrees = (particle.spin * seconds + particle.phase) * RADIANS_TO_DEGREES +
-            gust * drift * 34f,
-        twinkle = twinkle
-    )
+    // The turn over. A flat shape is drawn squeezed across its own axis as it rolls
+    // and mirrored for the second half, so the reader sees the underside come round.
+    // [SeasonalEffect.tumbleResponse] decides how far, because a six-armed flake keeps
+    // the same face whichever way it drifts. Never squeezed to nothing: a particle
+    // that vanishes for a frame reads as a dropped frame, not as an edge-on leaf.
+    val roll = sin(swayAngle * TUMBLE_RATE + particle.phase)
+    val face = (1f - effect.tumbleResponse * (1f - abs(roll))).coerceAtLeast(MIN_FACE_RATIO)
+    into.center = Offset(x, y)
+    into.alpha = alpha
+    into.rotationDegrees = (particle.spin * seconds + particle.phase) * RADIANS_TO_DEGREES +
+        gust * drift * 34f +
+        sin(swayAngle * 1.35f) * particle.flutter * 22f
+    into.flatten = if (roll < 0f) -face else face
+    return into
 }
 
 /** Folds a value into `0 until 1`, including a negative one. */
