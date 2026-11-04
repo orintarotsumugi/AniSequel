@@ -89,9 +89,12 @@ internal data class GlyphLegend(
  *
  * Each `variant` is the drawing that best *names* the shape at chip size, which is not
  * always the one its blurb leads with - the mixed snow sky opens on a dendrite, but a chip
- * showing a dendrite next to the Crystal chip's dendrite names nothing at all. Where a shape
- * has several palettes the variant also picks the readable end of them, because a chip is the
- * one place a near-white flake has to stand on a light surface with no neighbours to help it.
+ * showing a dendrite next to the Crystal chip's dendrite names nothing at all. Where the
+ * naming drawing and a darker palette agree, the variant takes the darker one too - snow's
+ * plate is the most saturated of its five, the maple's cut leaf its reddest, the blossom its
+ * deepest pink - because a chip is the one place a near-white flake has to stand on a light
+ * surface with no neighbours to help it. Oak and ginkgo give that up to keep the lobes and
+ * the notch readable, which is the right trade: a dark blob is still a blob.
  */
 internal fun seasonalGlyphLegend(effect: SeasonalEffect): GlyphLegend = when (effect) {
     // A plate: the mixed sky's flattest, most hexagonal flake, on the darkest of its five

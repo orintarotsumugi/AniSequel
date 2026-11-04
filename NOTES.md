@@ -2280,6 +2280,31 @@ this reading is deliberately not cached for the process. A choice that has *beco
 unavailable stays drawn and still selected: the system setting can come back, and a
 selected option that has gone silent reads as the app forgetting the choice.
 
+### The chip is a legend, not a frame of the sky
+
+The Settings shape chips draw with `drawSeasonalParticle`, and that stays: the
+day a chip is illustrated separately is the day it can advertise a shape the sky
+does not fall. What was wrong was the *pose*. Every chip asked for `variant` zero
+at a radius of `0.32` of its own box, which had two consequences. For the four
+shapes that share the snow dispatcher, variant zero is one drawing shown four
+times, so the winter row could only be read from the words beside it. And 0.32 of
+an 18dp chip sits about two pixels above the point where each shape drops its
+branches, veins and barbs (`radius > 5f`), so the same saved setting drew a fern
+on one phone and six bare spokes on another.
+
+`seasonalGlyphLegend` is a pose table: a radius fitted to each shape's farthest
+ink (a petiole at 1.2 radii, a seed's halo at 1.3), the variant that *names* the
+shape at chip size, a tilt small enough to stay a posture rather than the sky's
+tumble, and a hairline floor for ink that would otherwise fade under half a
+pixel. The floor is a parameter the dispatcher caps at six percent of the radius
+and defaults to zero, which is what the overlay and the drift pass - so a frame
+of weather pays nothing for a pictogram, and the legend cannot fuse a seed's
+twelve filaments into one fan.
+
+The snow family and the glyph moved out of the dispatcher when this landed: that
+file was at 699 lines under a 700 ceiling, and routing, weather and a pictogram
+change for three different reasons.
+
 ### The snow stays off the bar
 
 1.8.2 added a cap of snow on the navigation bar's own pill: a wavy strip along its
