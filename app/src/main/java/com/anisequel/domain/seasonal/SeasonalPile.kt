@@ -29,6 +29,9 @@ class SeasonalPile(
 ) {
     private val heights = FloatArray(columns)
 
+    /** Second buffer for [relax], kept so a smoothing pass allocates nothing. */
+    private val scratch = FloatArray(columns)
+
     init {
         val random = Random(seed)
         for (index in 0 until columns) {
@@ -64,20 +67,47 @@ class SeasonalPile(
      * spikes and 48 perfect gaps is a comb, not a drift. The weights sum to more
      * than one on purpose so a column visibly reacts to its own landing.
      */
-    fun deposit(xFraction: Float, mass: Float = 1f) {
+    fun deposit(xFraction: Float, mass: Float = 1f, spread: Int = 2) {
         val center = (xFraction.coerceIn(0f, 0.9999f) * columns).toInt()
         val strength = mass.coerceIn(0.2f, 1.6f)
-        for (offset in -2..2) {
+        val radius = spread.coerceIn(1, 4)
+        for (offset in -radius..radius) {
             val index = center + offset
             if (index !in 0 until columns) continue
-            val weight = when (offset) {
+            val distance = kotlin.math.abs(offset)
+            val weight = when (distance) {
                 0 -> 0.62f
-                -1, 1 -> 0.22f
-                else -> 0.07f
+                1 -> 0.22f
+                2 -> 0.07f
+                else -> 0.035f
             }
             heights[index] = (heights[index] + PILE_MASS_PER_LANDING * strength * weight)
                 .coerceAtMost(PILE_HEIGHT_CEILING)
         }
+    }
+
+    /**
+     * Softens neighbouring columns so a mound spreads instead of growing a spike.
+     *
+     * Called only on a frame in which something actually landed, not every frame: a
+     * diffusion stepped at sixty hertz a second smoothed the whole drift into one flat
+     * band within a minute, which is a pile that has stopped looking like snow.
+     * Averaging inside [deposit] would flatten a fresh flake before the reader saw it
+     * arrive, which is the other way this gets it wrong.
+     */
+    fun relax(amount: Float = 0.16f) {
+        if (columns < 3) return
+        val blend = amount.coerceIn(0f, 0.45f)
+        // The scratch buffer is reused because this runs on the frame loop. Building a
+        // new field every landing was a hundred-odd floats a second of pure garbage.
+        for (index in 0 until columns) {
+            val left = heights[(index - 1).coerceAtLeast(0)]
+            val right = heights[(index + 1).coerceAtMost(columns - 1)]
+            scratch[index] = (
+                heights[index] * (1f - blend) + (left + right) * 0.5f * blend
+                ).coerceAtMost(PILE_HEIGHT_CEILING)
+        }
+        scratch.copyInto(heights)
     }
 
     /** Every column at the ceiling, for a test that needs a finished drift. */

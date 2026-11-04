@@ -5,200 +5,269 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The autumn leaves and the shapes that are light rather than matter.
+ * The autumn leaves and the dandelion seed.
  *
  * ## Why the leaves share a file
  *
- * Maple, oak and ginkgo are three answers to the same drawing problem: a flat
- * leaf seen face-on, falling, at roughly fourteen dp. They share a stem, a set of
- * veins and a rule that the silhouette has to survive at seven dp. Putting them
- * together means the next leaf is a shape in the family rather than a fourth
- * dialect of leaf.
+ * Maple, oak and ginkgo are three answers to the same drawing problem: a flat leaf
+ * seen face-on, falling, at roughly fourteen dp. They share a stem, a set of veins
+ * and a rule that the silhouette has to survive at seven dp. Putting them together
+ * means the next leaf is a shape in the family rather than a fourth dialect of leaf.
  *
- * Firefly, dandelion and starlight are the other half of the same question: a
- * shape made of glow or filaments rather than an opaque outline. They are drawn
- * with stacked translucent fills because a gradient or a blur mask would allocate
- * a shader per particle per frame.
+ * ## What 1.8.2 changed about them
+ *
+ * The first versions were polygonal. The maple alternated one outer and one inner
+ * point around a circle - a five-point star with a squash, straight lines between every
+ * corner. The oak hardcoded twelve quadratics for one outline, so every oak in the sky
+ * was the same oak. The ginkgo was four straight edges with a triangle's bite out of the
+ * top. A real leaf margin is a curve that happens to be wavy, so the oak and the ginkgo
+ * now walk an outline sampled from a width function, and the maple keeps its five points
+ * but joins every shoulder and every notch with a quadratic. Both use one construction:
+ * each sample is a control point and each curve lands on the midpoint of the pair around
+ * it, which makes the tangent continuous wherever the reader can see it and costs one
+ * quadratic per sample instead of a spline solve per segment.
+ *
+ * Firefly and starlight are gone, and with them the shapes that were glow rather than
+ * matter. The dandelion stays: it is the one figure built from filaments instead of an
+ * outline, and it is drawn with strokes and dots because a radial gradient per seed per
+ * frame would allocate a shader inside the draw loop.
+ *
+ * Nothing here allocates per particle. The path is the caller's scratch space, the
+ * samples are computed in place, and a captured local helper would have meant a closure
+ * per particle per frame - so an outline walk is a loop over an index and the width
+ * functions take their numbers as arguments.
  */
 
+/** Two radians, in the single precision the rest of the file works in. */
+private const val TAU = 6.2831855f
+
+/** How far a maple's shoulder sits from its tip, in radians. */
+private const val MAPLE_SHOULDER = 0.30f
+
+/** The maple's five lobes: longest at the top, shortest at the base. */
+private val MAPLE_REACH = floatArrayOf(1.00f, 0.86f, 0.66f, 0.66f, 0.86f)
+
+/** A point at [reach] from [center] at [angle], in canvas space. */
+private fun pointAt(center: Offset, angle: Float, reach: Float): Offset = Offset(
+    center.x + cos(angle) * reach,
+    center.y + sin(angle) * reach
+)
+
 /**
- * A five-lobed maple with shoulders, not a five-point star.
+ * A five-lobed maple with rounded shoulders and a deep notch between each pair.
  *
- * The first version alternated one outer and one inner point around a circle,
- * which is a star with a squash. A maple leaf's silhouette comes from three
- * points per lobe - shoulder, tip, shoulder - with a deep V between lobes, and
- * the veins are what stop the bigger silhouette reading as a flat sticker.
+ * [variant] trades blade width against notch depth - the difference between a sugar
+ * maple's broad palm and a softer, more cut-leaved one. The veins are palmate, all five
+ * running from where the stem meets the blade, because that is what says maple at a size
+ * where each lobe is three pixels across.
  */
 internal fun DrawScope.drawMaple(
     path: Path,
     center: Offset,
     radius: Float,
     palette: ParticlePalette,
-    alpha: Float
+    alpha: Float,
+    variant: Int,
+    highDetail: Boolean
 ) {
-    path.reset()
-    val lobes = 5
-    val step = 2f * PI.toFloat() / lobes
+    val detailed = highDetail && radius > 5f
+    val shoulders = if (variant % 3 == 1) 0.68f else 0.60f
+    val notch = when (variant % 3) {
+        1 -> 0.24f
+        2 -> 0.34f
+        else -> 0.28f
+    }
+    // The outward bulge on the leading edge of a lobe. Sub-pixel at the default size, and
+    // the thing that makes a large leaf look serrated rather than extruded.
+    val serration = if (detailed) radius * 0.05f else 0f
+    val step = TAU / 5f
     val start = -PI.toFloat() / 2f
-    for (lobe in 0 until lobes) {
+    // The petiole joins at the bottom notch, so every vein, and the stem itself, runs out
+    // of this one point rather than out of the middle of the blade.
+    val base = Offset(center.x, center.y + radius * notch)
+
+    val first = pointAt(center, start - MAPLE_SHOULDER, radius * MAPLE_REACH[0] * shoulders)
+    path.reset()
+    path.moveTo(first.x, first.y)
+    for (lobe in 0 until 5) {
         val tipAngle = start + lobe * step
-        val shoulderLeft = tipAngle - 0.26f
-        val shoulderRight = tipAngle + 0.26f
-        val notch = tipAngle + step * 0.5f
-        val shoulder = Offset(
-            center.x + cos(shoulderLeft) * radius * 0.64f,
-            center.y + sin(shoulderLeft) * radius * 0.64f
+        val reach = radius * MAPLE_REACH[lobe]
+        val nextLobe = if (lobe == 4) 0 else lobe + 1
+        val joint = pointAt(
+            center,
+            start + nextLobe * step - MAPLE_SHOULDER,
+            radius * MAPLE_REACH[nextLobe] * shoulders
         )
-        val tip = Offset(
-            center.x + cos(tipAngle) * radius,
-            center.y + sin(tipAngle) * radius
-        )
-        val shoulder2 = Offset(
-            center.x + cos(shoulderRight) * radius * 0.64f,
-            center.y + sin(shoulderRight) * radius * 0.64f
-        )
-        val notchPoint = Offset(
-            center.x + cos(notch) * radius * 0.30f,
-            center.y + sin(notch) * radius * 0.30f
-        )
-        if (lobe == 0) path.moveTo(shoulder.x, shoulder.y) else path.lineTo(shoulder.x, shoulder.y)
-        path.lineTo(tip.x, tip.y)
-        path.lineTo(shoulder2.x, shoulder2.y)
-        path.lineTo(notchPoint.x, notchPoint.y)
+        val tip = pointAt(center, tipAngle, reach)
+        val outer = pointAt(center, tipAngle - MAPLE_SHOULDER * 0.5f, reach * (shoulders + 0.20f))
+        val right = pointAt(center, tipAngle + MAPLE_SHOULDER, reach * shoulders)
+        val inner = pointAt(center, tipAngle + MAPLE_SHOULDER * 0.5f, reach * (shoulders + 0.04f))
+        val notchPoint = pointAt(center, tipAngle + step * 0.5f, radius * notch)
+        // Shoulder, tip, shoulder, notch - and the notch is a control point rather than a
+        // corner, so the cut between two lobes keeps its depth and loses its cog-tooth.
+        path.quadraticBezierTo(outer.x + serration, outer.y, tip.x, tip.y)
+        path.quadraticBezierTo(inner.x, inner.y, right.x, right.y)
+        path.quadraticBezierTo(notchPoint.x, notchPoint.y, joint.x, joint.y)
     }
     path.close()
     drawPath(path, palette.base.copy(alpha = alpha))
 
-    // Stem and veins in the deep tone. The stem hangs below the leaf, which is
-    // what says "this came off a tree" at a size where the lobes are only a few
-    // pixels wide.
+    if (detailed) {
+        // The same outline stroked in the light tone is a rim that catches the sky. It
+        // cannot drift out of step with the blade, because it is the same path.
+        drawPath(path, palette.light.copy(alpha = alpha * 0.18f), style = Stroke(radius * 0.15f))
+    }
     drawLine(
         color = palette.deep.copy(alpha = alpha * 0.8f),
-        start = Offset(center.x, center.y + radius * 0.10f),
-        end = Offset(center.x, center.y + radius * 1.18f),
-        strokeWidth = (radius * 0.10f).coerceAtLeast(0.45f),
+        start = base,
+        end = Offset(center.x, center.y + radius * 1.16f),
+        strokeWidth = (radius * 0.09f).coerceAtLeast(0.45f),
         cap = StrokeCap.Round
     )
-    val vein = palette.deep.copy(alpha = alpha * 0.42f)
-    for (lobe in 0 until lobes) {
+    val vein = palette.deep.copy(alpha = alpha * 0.40f)
+    val veinWidth = (radius * 0.05f).coerceAtLeast(0.35f)
+    for (lobe in 0 until 5) {
         val angle = start + lobe * step
+        val reach = radius * MAPLE_REACH[lobe]
         drawLine(
             color = vein,
-            start = Offset(center.x, center.y + radius * 0.08f),
-            end = Offset(
-                center.x + cos(angle) * radius * 0.82f,
-                center.y + sin(angle) * radius * 0.82f
-            ),
-            strokeWidth = (radius * 0.045f).coerceAtLeast(0.35f),
+            start = base,
+            end = pointAt(center, angle, reach * 0.78f),
+            strokeWidth = veinWidth,
+            cap = StrokeCap.Round
+        )
+        if (!detailed) continue
+        // One secondary vein per lobe, aimed at its own shoulder. Five extra strokes is
+        // the whole cost, and it is what stops a large maple reading as a flat cut-out.
+        drawLine(
+            color = vein.copy(alpha = alpha * 0.24f),
+            start = pointAt(center, angle, reach * 0.42f),
+            end = pointAt(center, angle + MAPLE_SHOULDER, reach * 0.62f),
+            strokeWidth = veinWidth * 0.6f,
             cap = StrokeCap.Round
         )
     }
 }
 
-/** An oak leaf: a long wavy outline rather than five points. */
+/**
+ * An oak: a spindle with rounded lobes down each side and a point at the tip.
+ *
+ * One width function, walked up the right margin and back down the left, so a variant is
+ * a different number of lobes or a different spread rather than a different set of
+ * hand-placed curves.
+ */
 internal fun DrawScope.drawOak(
     path: Path,
     center: Offset,
     radius: Float,
     palette: ParticlePalette,
     alpha: Float,
-    variant: Int
+    variant: Int,
+    highDetail: Boolean
 ) {
-    val width = when (variant % 3) {
-        1 -> 0.86f
-        2 -> 1.10f
-        else -> 1f
+    val detailed = highDetail && radius > 5f
+    val lobes = when (variant % 3) {
+        1 -> 5f
+        2 -> 7f
+        else -> 6f
     }
-    val r = radius
+    val spread = when (variant % 3) {
+        1 -> 0.44f
+        2 -> 0.36f
+        else -> 0.40f
+    }
+    val steps = if (detailed) 10 else 6
+    val baseY = center.y + radius * 0.98f
+    val axis = radius * 1.98f
+
     path.reset()
-    path.moveTo(center.x, center.y - r)
-    // Right side, tip to base: each pair of quadratics is one rounded lobe.
-    path.quadraticBezierTo(
-        center.x + width * 0.52f * r, center.y - r * 0.86f,
-        center.x + width * 0.54f * r, center.y - r * 0.62f
-    )
-    path.quadraticBezierTo(
-        center.x + width * 0.26f * r, center.y - r * 0.52f,
-        center.x + width * 0.44f * r, center.y - r * 0.36f
-    )
-    path.quadraticBezierTo(
-        center.x + width * 0.94f * r, center.y - r * 0.26f,
-        center.x + width * 0.80f * r, center.y - r * 0.02f
-    )
-    path.quadraticBezierTo(
-        center.x + width * 0.44f * r, center.y + r * 0.06f,
-        center.x + width * 0.60f * r, center.y + r * 0.24f
-    )
-    path.quadraticBezierTo(
-        center.x + width * 0.66f * r, center.y + r * 0.44f,
-        center.x + width * 0.40f * r, center.y + r * 0.58f
-    )
-    path.quadraticBezierTo(
-        center.x + width * 0.22f * r, center.y + r * 0.78f,
-        center.x, center.y + r * 0.96f
-    )
-    // Left side, base to tip: the mirror of the same six curves.
-    path.quadraticBezierTo(
-        center.x - width * 0.22f * r, center.y + r * 0.78f,
-        center.x - width * 0.40f * r, center.y + r * 0.58f
-    )
-    path.quadraticBezierTo(
-        center.x - width * 0.66f * r, center.y + r * 0.44f,
-        center.x - width * 0.60f * r, center.y + r * 0.24f
-    )
-    path.quadraticBezierTo(
-        center.x - width * 0.44f * r, center.y + r * 0.06f,
-        center.x - width * 0.80f * r, center.y - r * 0.02f
-    )
-    path.quadraticBezierTo(
-        center.x - width * 0.94f * r, center.y - r * 0.26f,
-        center.x - width * 0.44f * r, center.y - r * 0.36f
-    )
-    path.quadraticBezierTo(
-        center.x - width * 0.26f * r, center.y - r * 0.52f,
-        center.x - width * 0.54f * r, center.y - r * 0.62f
-    )
-    path.quadraticBezierTo(
-        center.x - width * 0.52f * r, center.y - r * 0.86f,
-        center.x, center.y - r
-    )
+    path.moveTo(center.x, baseY)
+    var lastX = center.x
+    var lastY = baseY
+    val total = steps * 2
+    for (index in 1..total) {
+        val ascending = index <= steps
+        val u = if (ascending) {
+            index.toFloat() / steps
+        } else {
+            (total - index).toFloat() / steps
+        }
+        val side = if (ascending) 1f else -1f
+        val x = center.x + side * oakHalfWidth(u, radius, spread, lobes)
+        val y = baseY - axis * u
+        if (index == total) {
+            path.quadraticBezierTo(lastX, lastY, x, y)
+        } else {
+            path.quadraticBezierTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
+        }
+        lastX = x
+        lastY = y
+    }
+    path.lineTo(center.x, baseY - axis)
     path.close()
     drawPath(path, palette.base.copy(alpha = alpha))
 
-    val vein = palette.deep.copy(alpha = alpha * 0.40f)
+    if (detailed) {
+        drawPath(path, palette.light.copy(alpha = alpha * 0.13f), style = Stroke(radius * 0.12f))
+    }
+    val deep = palette.deep
     drawLine(
-        color = palette.deep.copy(alpha = alpha * 0.72f),
-        start = Offset(center.x, center.y + r * 0.20f),
-        end = Offset(center.x, center.y + r * 1.14f),
-        strokeWidth = (r * 0.09f).coerceAtLeast(0.4f),
+        color = deep.copy(alpha = alpha * 0.72f),
+        start = Offset(center.x, baseY),
+        end = Offset(center.x, center.y + radius * 1.24f),
+        strokeWidth = (radius * 0.085f).coerceAtLeast(0.4f),
         cap = StrokeCap.Round
     )
+    val vein = deep.copy(alpha = alpha * 0.38f)
+    val veinWidth = (radius * 0.045f).coerceAtLeast(0.32f)
+    // The midrib runs the length of the blade. The side veins leave it at the waist of a
+    // sinus and aim at the lobe beyond it, which is the pattern the eye reads as oak at
+    // nine dp - and which the hardcoded three pairs could not follow once a variant
+    // changed the number of lobes.
     drawLine(
         color = vein,
-        start = Offset(center.x, center.y + r * 0.88f),
-        end = Offset(center.x, center.y - r * 0.88f),
-        strokeWidth = (r * 0.05f).coerceAtLeast(0.35f)
+        start = Offset(center.x, baseY - radius * 0.06f),
+        end = Offset(center.x, baseY - axis * 0.92f),
+        strokeWidth = veinWidth,
+        cap = StrokeCap.Round
     )
-    for (level in 0 until 3) {
-        val at = -0.52f + level * 0.46f
-        val sideVein = width * (0.48f + level * 0.09f) * r
+    if (!detailed) return
+    val pairs = (lobes.toInt() - 1).coerceAtLeast(2)
+    for (pair in 0 until pairs) {
+        val u = 0.18f + pair * (0.64f / pairs)
+        val reach = oakHalfWidth(u, radius, spread, lobes) * 0.86f
         for (side in -1..1 step 2) {
             drawLine(
-                color = vein,
-                start = Offset(center.x, center.y + r * at),
-                end = Offset(center.x + side * sideVein, center.y + r * (at - 0.26f)),
-                strokeWidth = (r * 0.035f).coerceAtLeast(0.3f)
+                color = vein.copy(alpha = alpha * 0.26f),
+                start = Offset(center.x, baseY - axis * u),
+                end = Offset(center.x + side * reach, baseY - axis * (u + 0.09f)),
+                strokeWidth = veinWidth * 0.7f,
+                cap = StrokeCap.Round
             )
         }
     }
 }
 
-/** A ginkgo fan on its stem: a wide arc with a notch and radiating veins. */
+/** The oak's half-width at [u] along the blade: a taper with the lobes riding on it. */
+private fun oakHalfWidth(u: Float, radius: Float, spread: Float, lobes: Float): Float {
+    val taper = sin((u * 0.94f + 0.04f) * PI.toFloat())
+    return radius * spread * taper * (1f + 0.20f * sin(u * PI.toFloat() * lobes))
+}
+
+/**
+ * A ginkgo fan on its stem: a wavy arc, a notch at the top, ribs out of the apex.
+ *
+ * The margin is sampled in polar coordinates about the point the stem joins, which is
+ * where the ribs converge - and why the first version, four straight edges and a bite
+ * out of the top, read as a paper cutout rather than a leaf.
+ */
 internal fun DrawScope.drawGinkgo(
     path: Path,
     center: Offset,
@@ -207,171 +276,158 @@ internal fun DrawScope.drawGinkgo(
     alpha: Float,
     variant: Int
 ) {
-    val notch = if (variant % 2 == 0) 0.58f else 0.70f
+    val detailed = radius > 5f
+    val notchReach = if (variant % 2 == 0) 0.62f else 0.74f
+    val sweep = 1.78f
+    val steps = if (detailed) 12 else 7
+    val apex = Offset(center.x, center.y + radius * 0.46f)
+    val margin = radius * 1.06f
+
     path.reset()
-    path.moveTo(center.x, center.y + radius * 0.52f)
-    path.lineTo(center.x - radius * 0.95f, center.y - radius * 0.34f)
-    path.quadraticBezierTo(
-        center.x - radius * 0.48f, center.y - radius * 0.98f,
-        center.x - radius * 0.13f, center.y - radius * 0.72f
-    )
-    path.lineTo(center.x, center.y - radius * notch)
-    path.lineTo(center.x + radius * 0.13f, center.y - radius * 0.72f)
-    path.quadraticBezierTo(
-        center.x + radius * 0.48f, center.y - radius * 0.98f,
-        center.x + radius * 0.95f, center.y - radius * 0.34f
-    )
-    path.lineTo(center.x, center.y + radius * 0.52f)
+    path.moveTo(apex.x, apex.y)
+    var lastX = apex.x
+    var lastY = apex.y
+    for (index in 0..steps) {
+        val t = index.toFloat() / steps - 0.5f
+        val angle = t * sweep
+        // The notch is the middle of the margin pulled toward the apex, so each half of
+        // the fan stays one curve and the dip has no corner in it.
+        val notchShare = 1f - (abs(angle) / (sweep * 0.22f)).coerceIn(0f, 1f)
+        val wave = if (detailed) 1f + 0.035f * sin(angle * 5f) else 1f
+        val reach = margin * wave * (1f - notchShare * (1f - notchReach))
+        val x = apex.x + sin(angle) * reach
+        val y = apex.y - cos(angle) * reach
+        if (index == 0) {
+            path.lineTo(x, y)
+        } else {
+            path.quadraticBezierTo(lastX, lastY, (lastX + x) * 0.5f, (lastY + y) * 0.5f)
+        }
+        lastX = x
+        lastY = y
+    }
+    path.lineTo(apex.x, apex.y)
     path.close()
     drawPath(path, palette.base.copy(alpha = alpha))
 
+    if (detailed) {
+        drawPath(path, palette.light.copy(alpha = alpha * 0.20f), style = Stroke(radius * 0.10f))
+    }
     drawLine(
         color = palette.deep.copy(alpha = alpha * 0.75f),
-        start = Offset(center.x, center.y + radius * 0.42f),
-        end = Offset(center.x, center.y + radius * 1.10f),
+        start = apex,
+        end = Offset(apex.x, apex.y + radius * 0.66f),
         strokeWidth = (radius * 0.08f).coerceAtLeast(0.4f),
         cap = StrokeCap.Round
     )
-    val vein = palette.deep.copy(alpha = alpha * 0.34f)
-    // Five ribs fanning out of the apex, which is what makes the fan read as a
-    // leaf rather than as a triangle with a bite out of it.
-    for (index in 0 until 5) {
-        val spread = (index - 2) * 0.33f
+    val vein = palette.deep.copy(alpha = alpha * 0.32f)
+    val veinWidth = (radius * 0.038f).coerceAtLeast(0.3f)
+    val ribs = if (detailed) 7 else 4
+    for (rib in 0 until ribs) {
+        val angle = (rib.toFloat() / (ribs - 1) - 0.5f) * sweep * 0.92f
+        // A ginkgo's ribs are radial - they fan straight out of the apex - so a line is
+        // both the cheaper drawing and the truer one.
         drawLine(
             color = vein,
-            start = Offset(center.x, center.y + radius * 0.40f),
+            start = apex,
             end = Offset(
-                center.x + sin(spread) * radius * 0.82f,
-                center.y + radius * 0.40f - cos(spread) * radius * 0.92f
+                apex.x + sin(angle) * margin * 0.84f,
+                apex.y - cos(angle) * margin * 0.84f
             ),
-            strokeWidth = (radius * 0.04f).coerceAtLeast(0.3f),
+            strokeWidth = veinWidth,
             cap = StrokeCap.Round
         )
     }
-}
-
-internal fun DrawScope.drawFirefly(
-    center: Offset,
-    radius: Float,
-    palette: ParticlePalette,
-    alpha: Float,
-    twinkle: Float
-) {
-    val pulse = (0.72f + 0.28f * twinkle).coerceIn(0.5f, 1.2f)
-    // Three rings rather than a blur: a radial gradient per firefly per frame is a
-    // shader allocation inside the loop. Stacked translucent circles read the same
-    // at this size and cost three fills.
-    drawCircle(palette.base.copy(alpha = alpha * 0.10f * pulse), radius * 3.1f, center)
-    drawCircle(palette.base.copy(alpha = alpha * 0.20f * pulse), radius * 1.8f, center)
-    drawCircle(palette.base.copy(alpha = alpha * 0.78f), radius * 0.72f, center)
-    drawCircle(palette.light.copy(alpha = alpha * 0.92f), radius * 0.26f, center)
-    // The wings are two faint slivers; at this size they are the difference
-    // between a glowing dot and a living thing.
-    drawOval(
-        color = palette.light.copy(alpha = alpha * 0.22f),
-        topLeft = Offset(center.x - radius * 0.62f, center.y - radius * 0.32f),
-        size = Size(radius * 0.58f, radius * 0.24f)
-    )
-    drawOval(
-        color = palette.light.copy(alpha = alpha * 0.22f),
-        topLeft = Offset(center.x + radius * 0.04f, center.y - radius * 0.32f),
-        size = Size(radius * 0.58f, radius * 0.24f)
-    )
 }
 
 /**
- * A dandelion seed: a small dark seed, a stalk, and a parachute of filaments.
+ * A dandelion seed: a small dark seed, a curved beak, a parachute of filaments.
  *
- * The filaments are drawn from a point above the seed and fan upward, each with a
- * tiny terminal dot and a secondary hair. At fourteen dp the pappus is a soft
- * halo; at twice that it is recognisably a seed clock, which is the point of
+ * It falls rather than rises, so the pappus is above the seed and the whole thing hangs.
+ * The hairs are quadratics with a small alternating bow, which is what makes the crown
+ * read as a globe of filaments instead of a flat fan of lines. At fourteen dp the pappus
+ * is a soft halo; at twice that it is recognisably a seed clock, which is the point of
  * drawing it rather than sprinkling white circles.
  */
 internal fun DrawScope.drawDandelion(
-    center: Offset,
-    radius: Float,
-    palette: ParticlePalette,
-    alpha: Float,
-    variant: Int
-) {
-    val seed = Offset(center.x, center.y + radius * 0.62f)
-    drawCircle(palette.light.copy(alpha = alpha * 0.07f), radius * 1.35f, center)
-    drawOval(
-        color = palette.deep.copy(alpha = alpha * 0.85f),
-        topLeft = Offset(seed.x - radius * 0.09f, seed.y - radius * 0.20f),
-        size = Size(radius * 0.18f, radius * 0.42f)
-    )
-    val crown = Offset(center.x, center.y + radius * 0.18f)
-    drawLine(
-        color = palette.deep.copy(alpha = alpha * 0.7f),
-        start = seed,
-        end = crown,
-        strokeWidth = (radius * 0.055f).coerceAtLeast(0.35f),
-        cap = StrokeCap.Round
-    )
-
-    val filaments = if (variant % 2 == 0) 7 else 9
-    val spread = radius * 1.02f
-    for (index in 0 until filaments) {
-        val offset = index - (filaments - 1) / 2f
-        val angle = -PI.toFloat() / 2f + offset * 0.23f
-        val end = Offset(
-            crown.x + cos(angle) * spread,
-            crown.y + sin(angle) * spread
-        )
-        drawLine(
-            color = palette.light.copy(alpha = alpha * 0.62f),
-            start = crown,
-            end = end,
-            strokeWidth = (radius * 0.032f).coerceAtLeast(0.3f),
-            cap = StrokeCap.Round
-        )
-        drawCircle(palette.light.copy(alpha = alpha * 0.85f), radius * 0.045f, end)
-        if (radius > 5f) {
-            for (side in -1..1 step 2) {
-                val hairStart = Offset(
-                    crown.x + cos(angle) * spread * 0.62f,
-                    crown.y + sin(angle) * spread * 0.62f
-                )
-                val hairAngle = angle + side * 0.34f
-                drawLine(
-                    color = palette.light.copy(alpha = alpha * 0.34f),
-                    start = hairStart,
-                    end = Offset(
-                        hairStart.x + cos(hairAngle) * radius * 0.22f,
-                        hairStart.y + sin(hairAngle) * radius * 0.22f
-                    ),
-                    strokeWidth = (radius * 0.022f).coerceAtLeast(0.25f),
-                    cap = StrokeCap.Round
-                )
-            }
-        }
-    }
-}
-
-/** A four-point sparkle with a glow and a white core. */
-internal fun DrawScope.drawStar(
     path: Path,
     center: Offset,
     radius: Float,
     palette: ParticlePalette,
     alpha: Float,
     variant: Int,
-    twinkle: Float
+    highDetail: Boolean
 ) {
-    val pulse = (0.7f + 0.3f * twinkle).coerceIn(0.5f, 1.15f)
-    drawCircle(palette.base.copy(alpha = alpha * 0.10f * pulse), radius * 2.4f, center)
-    drawCircle(palette.base.copy(alpha = alpha * 0.18f * pulse), radius * 1.35f, center)
+    val detailed = highDetail && radius > 5f
+    val seed = Offset(center.x, center.y + radius * 0.74f)
+    val crown = Offset(center.x, center.y + radius * 0.16f)
+    drawCircle(
+        palette.light.copy(alpha = alpha * 0.07f),
+        radius * 1.18f,
+        Offset(center.x, center.y - radius * 0.10f)
+    )
+    drawOval(
+        color = palette.deep.copy(alpha = alpha * 0.88f),
+        topLeft = Offset(seed.x - radius * 0.10f, seed.y - radius * 0.20f),
+        size = Size(radius * 0.20f, radius * 0.44f)
+    )
+    // The beak is curved because a seed hanging from a parachute is not on a plumb line.
     path.reset()
-    val rotation = if (variant % 2 == 0) 0f else PI.toFloat() / 4f
-    for (index in 0 until 8) {
-        val angle = rotation + index * (PI.toFloat() / 4f) - PI.toFloat() / 2f
-        val reach = if (index % 2 == 0) radius else radius * 0.18f
-        val x = center.x + cos(angle) * reach
-        val y = center.y + sin(angle) * reach
-        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    path.moveTo(crown.x, crown.y)
+    path.quadraticBezierTo(
+        crown.x + radius * 0.07f,
+        crown.y + radius * 0.22f,
+        seed.x,
+        seed.y - radius * 0.16f
+    )
+    drawPath(
+        path = path,
+        color = palette.deep.copy(alpha = alpha * 0.66f),
+        style = Stroke((radius * 0.05f).coerceAtLeast(0.3f), cap = StrokeCap.Round)
+    )
+
+    val rays = when {
+        !detailed -> 8
+        variant % 2 == 0 -> 12
+        else -> 14
     }
-    path.close()
-    drawPath(path, palette.base.copy(alpha = alpha * 0.95f))
-    drawCircle(palette.light.copy(alpha = alpha), radius * 0.18f, center)
+    val spread = 1.62f
+    val hair = palette.light.copy(alpha = alpha * 0.58f)
+    val hairWidth = (radius * 0.026f).coerceAtLeast(0.25f)
+    for (index in 0 until rays) {
+        val t = index.toFloat() / (rays - 1) - 0.5f
+        val angle = -PI.toFloat() / 2f + t * spread
+        val reach = radius * (0.96f + 0.10f * cos(t * PI.toFloat()))
+        val tip = Offset(crown.x + sin(angle) * reach, crown.y - cos(angle) * reach)
+        // Half the hairs bow one way and half the other, so the silhouette has depth
+        // rather than one flat fan of radii.
+        val bow = if (index % 2 == 0) 0.12f else -0.12f
+        path.reset()
+        path.moveTo(crown.x, crown.y)
+        path.quadraticBezierTo(
+            crown.x + sin(angle + bow) * reach * 0.55f,
+            crown.y - cos(angle + bow) * reach * 0.55f,
+            tip.x,
+            tip.y
+        )
+        drawPath(path = path, color = hair, style = Stroke(hairWidth, cap = StrokeCap.Round))
+        drawCircle(palette.light.copy(alpha = alpha * 0.8f), radius * 0.04f, tip)
+        if (!detailed) continue
+        for (side in -1..1 step 2) {
+            val barbAngle = angle + side * 0.42f
+            drawLine(
+                color = palette.light.copy(alpha = alpha * 0.30f),
+                start = Offset(
+                    crown.x + sin(angle) * reach * 0.80f,
+                    crown.y - cos(angle) * reach * 0.80f
+                ),
+                end = Offset(
+                    crown.x + sin(barbAngle) * reach * 0.98f,
+                    crown.y - cos(barbAngle) * reach * 0.98f
+                ),
+                strokeWidth = hairWidth * 0.8f,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+    drawCircle(palette.deep.copy(alpha = alpha * 0.55f), radius * 0.06f, crown)
 }
