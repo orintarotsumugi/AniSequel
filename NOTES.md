@@ -1828,12 +1828,14 @@ a conversation with no message yet, where there is no activity to open - that is
 one place a first `SaveMessage` can be written. The head row draws no heart:
 a message's like is an activity like, and this store only speaks the reply mutation.
 
-GIF search answers from two places: **Safebooru**, anonymous, asked for
-`animated_gif` at `rating:safe`, and **Tenor v2** when the reader has pasted a
-key. Both were chosen by elimination against the live services rather than against
-documentation: Tenor's public key-free API is gone (`g.tenor.com/v1` returns HTTP 403
-with `{"code":7,"error":"Tenor API is discontinued"}` and `tenor.googleapis.com/v2`
-rejects the same string as `API_KEY_INVALID`), Giphy's historically published beta key
+GIF search answers from six places: **Safebooru**, anonymous, asked for
+`animated_gif` at `rating:safe`; **nekos.best** and **Konachan**, also anonymous; and
+**Tenor v2**, **Klipy** and **GIPHY** when the reader has pasted a key. All were chosen
+by elimination against the live services rather than against documentation (the
+rejected hosts are recorded in `GifSearchApi.kt`'s own doc block, so the next reader
+does not re-spend an afternoon on them): Tenor's public key-free API is gone
+(`g.tenor.com/v1` returns HTTP 403 with `{"code":7,"error":"Tenor API is discontinued"}`
+and `tenor.googleapis.com/v2` rejects the same string as `API_KEY_INVALID`), Giphy's historically published beta key
 answers HTTP 403 `"msg":"BANNED"` - the *key* is blacklisted, not the client, since a
 curl, a browser and an OkHttp user agent are refused identically - and a Giphy key
 now needs a signup, starts as a beta key capped at 100 calls an hour, and its
@@ -1847,6 +1849,26 @@ an account-issued key pair, Rule34 answers a CAPTCHA, and **Danbooru, which answ
 a safe animated series GIF, which is four. What is left that is anonymous *and* anime
 is Safebooru, which is also what the browser GIF pickers in this community already
 use.
+
+**The three anonymous indexes are three different shapes, which is the whole reason
+there are three.** Safebooru has the deepest catalogue and uneven tagging, so whether a
+character name returns anything depends on somebody having put that tag on the file.
+nekos.best is perfectly reliable and answers only its own ~40 reaction words: its
+metadata search needs a *category* in `type`, so `?type=2` - the value its older
+documentation gave for "GIFs" - comes back `"Invalid type"`, and a word it has no
+category for has no valid request at all. It used to send one anyway, take a 400, and
+the grid reported "Could not reach nekos.best" about a host it had reached perfectly
+well; it now refuses in those words and names the index that can search a title.
+Konachan's `.net` instance is the safe-only board of a danbooru-style site, tagged by
+character, needing no account: `animated order:score` measured 24 rows with 23 `.gif`
+files and every rating `s`, while `spice_and_wolf` and `miku` both answer nothing.
+So it is offered rather than defaulted - its animated section is thin and the origin
+answered HTTP 522 on one probe and the full catalogue on the next - and it asks the
+same three tag spellings Safebooru is asked with, because the failure is the same
+failure. It also sends the board's `animated` tag rather than Safebooru's
+`animated_gif`, and `order:score` rather than `sort:score:desc`, because the two
+engines spell the same request differently and neither rejects the other's word; it
+silently matches nothing.
 
 Two rules come with that choice. `rating:safe` goes into the query **and** a post
 whose own rating field is not safe is dropped on the way out: a booru is user-tagged,
