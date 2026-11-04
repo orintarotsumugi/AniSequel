@@ -1831,6 +1831,69 @@ object AniListMarkdownParser {
         return source.substring(match.endExclusive)
     }
 
+    /**
+     * Every inline match in [remaining], ordered by the offset it starts at.
+     *
+     * Moved out of [parseInlines] because fifteen `?.let` calls are fifteen
+     * branches, and the walk's own job is choosing which one starts first - not
+     * remembering which patterns exist. The ordering is the contract: `**bold**`
+     * has to beat `*italic*` on the earlier start offset, and every form competes
+     * with every other rather than in the declaration order below.
+     */
+    private fun inlineMatches(
+        remaining: String,
+        spoilerDepth: Int
+    ): List<Pair<MatchResult, String>> {
+        val mdImgMatch = INLINE_MD_IMG.find(remaining)
+        val htmlImgMatch = HTML_IMG_TAG_PATTERN.find(remaining)
+        val protocolImageMatch = INLINE_PROTOCOL_RELATIVE_IMAGE.find(remaining)
+        val linkedImgMatch = INLINE_LINKED_IMG.find(remaining)
+        val linkMatch = INLINE_LINK.find(remaining)
+        // Past the nesting cap, `~!…!~` is left as the author typed it rather than
+        // becoming a fourth lid.
+        val spoilerMatch = if (spoilerDepth < MAX_SPOILER_DEPTH) {
+            INLINE_SPOILER.find(remaining)
+        } else {
+            null
+        }
+        val codeMatch = INLINE_CODE.find(remaining)
+        val boldItalicMatch = INLINE_BOLD_ITALIC.find(remaining)
+        val boldMatch = INLINE_BOLD.find(remaining)
+        val italicMatch = INLINE_ITALIC.find(remaining)
+        // Tried as a separate pattern so the word-boundary rule applies to `_`
+        // alone. Both `*italic*` and `_italic_` are matched here and the earlier one
+        // wins by start offset, so `*x*` and `_x_` still produce a single Italic
+        // token each.
+        val underscoreItalicMatch = INLINE_UNDERSCORE_ITALIC.find(remaining)
+        // The same reason, for the same reason as the italic split: the single bold
+        // pattern paired `**` with `__` freely, so `___text_` matched with an opening
+        // run of three and a closing run of one and the stray underscore was dropped
+        // from the bio. Each pattern now spells out one delimiter pair per
+        // alternative.
+        val underlineMatch = INLINE_UNDERLINE.find(remaining)
+        val strikeMatch = INLINE_STRIKETHROUGH.find(remaining)
+        val mentionMatch = INLINE_MENTION.find(remaining)
+        val autoUrlMatch = INLINE_AUTO_URL.find(remaining)
+
+        return listOfNotNull(
+            mdImgMatch?.let { it to "IMAGE" },
+            htmlImgMatch?.let { it to "HTML_IMG" },
+            protocolImageMatch?.let { it to "PROTOCOL_IMG" },
+            linkedImgMatch?.let { it to "LINKED_IMG" },
+            linkMatch?.let { it to "LINK" },
+            spoilerMatch?.let { it to "SPOILER" },
+            codeMatch?.let { it to "CODE" },
+            boldItalicMatch?.let { it to "BOLD_ITALIC" },
+            boldMatch?.let { it to "BOLD" },
+            italicMatch?.let { it to "ITALIC" },
+            underscoreItalicMatch?.let { it to "ITALIC" },
+            underlineMatch?.let { it to "UNDERLINE" },
+            strikeMatch?.let { it to "STRIKE" },
+            mentionMatch?.let { it to "MENTION" },
+            autoUrlMatch?.let { it to "AUTO_URL" }
+        ).sortedBy { it.first.range.first }
+    }
+
     private fun parseInlines(
         text: String,
         depth: Int,
@@ -1847,58 +1910,7 @@ object AniListMarkdownParser {
             } else {
                 null
             }
-            val mdImgMatch = INLINE_MD_IMG.find(remaining)
-            val htmlImgMatch = HTML_IMG_TAG_PATTERN.find(remaining)
-            val protocolImageMatch = INLINE_PROTOCOL_RELATIVE_IMAGE.find(remaining)
-            val linkedImgMatch = INLINE_LINKED_IMG.find(remaining)
-            val linkMatch = INLINE_LINK.find(remaining)
-            // Past the nesting cap, `~!…!~` is left as the author typed it rather
-            // than becoming a fourth lid.
-            val spoilerMatch = if (spoilerDepth < MAX_SPOILER_DEPTH) {
-                INLINE_SPOILER.find(remaining)
-            } else {
-                null
-            }
-            val codeMatch = INLINE_CODE.find(remaining)
-            val boldItalicMatch = INLINE_BOLD_ITALIC.find(remaining)
-            val boldMatch = INLINE_BOLD.find(remaining)
-            val italicMatch = INLINE_ITALIC.find(remaining)
-            // Tried as a separate pattern so the word-boundary rule applies to `_`
-            // alone. Both `*italic*` and `_italic_` are matched here and the
-            // earlier one wins by start offset, so `*x*` and `_x_` still produce a
-            // single Italic token each.
-            val underscoreItalicMatch = INLINE_UNDERSCORE_ITALIC.find(remaining)
-            // The same reason, for the same reason as the italic split: the single
-            // bold pattern paired `**` with `__` freely, so `___text_` matched with
-            // an opening run of three and a closing run of one and the stray
-            // underscore was dropped from the bio. Each pattern now spells out one
-            // delimiter pair per alternative.
-            //
-            // `**bold**` is checked before italic and wins on the earlier start
-            // offset, so bold is never stolen by the italic rule - the reason the
-            // sort below exists at all.
-            val underlineMatch = INLINE_UNDERLINE.find(remaining)
-            val strikeMatch = INLINE_STRIKETHROUGH.find(remaining)
-            val mentionMatch = INLINE_MENTION.find(remaining)
-            val autoUrlMatch = INLINE_AUTO_URL.find(remaining)
-
-            val matches = listOfNotNull(
-                mdImgMatch?.let { it to "IMAGE" },
-                htmlImgMatch?.let { it to "HTML_IMG" },
-                protocolImageMatch?.let { it to "PROTOCOL_IMG" },
-                linkedImgMatch?.let { it to "LINKED_IMG" },
-                linkMatch?.let { it to "LINK" },
-                spoilerMatch?.let { it to "SPOILER" },
-                codeMatch?.let { it to "CODE" },
-                boldItalicMatch?.let { it to "BOLD_ITALIC" },
-                boldMatch?.let { it to "BOLD" },
-                italicMatch?.let { it to "ITALIC" },
-                underscoreItalicMatch?.let { it to "ITALIC" },
-                underlineMatch?.let { it to "UNDERLINE" },
-                strikeMatch?.let { it to "STRIKE" },
-                mentionMatch?.let { it to "MENTION" },
-                autoUrlMatch?.let { it to "AUTO_URL" }
-            ).sortedBy { it.first.range.first }
+            val matches = inlineMatches(remaining, spoilerDepth)
 
             // The HTML spoiler is not in the match list above because it needs its
             // computed close rather than a regex's group, but it competes on the same
