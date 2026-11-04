@@ -264,33 +264,6 @@ object ExpressiveMotion {
         }
 
     /**
-     * The [DefaultSpatial] counterpart for `IntSize`-based reveals: `expandHorizontally`
-     * and `shrinkHorizontally` take an `IntSize` spec, so no `Float` token fits - the
-     * same trap [FastSpatialOffset] exists for, one type further along. Here rather
-     * than inlined because the Motion style has to reach this animation too.
-     */
-    val SpatialSize: FiniteAnimationSpec<IntSize> get() =
-        when (speed) {
-            com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
-            com.anisequel.data.repository.MotionStyle.SMOOTH -> spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-            com.anisequel.data.repository.MotionStyle.CHILL -> spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        }
-
-    /**
      * Item appearance and disappearance for lazy list items.
      *
      * `LazyItemScope.animateItem` takes `fadeInSpec`/`fadeOutSpec` parameters

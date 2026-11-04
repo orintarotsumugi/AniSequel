@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -123,7 +125,7 @@ internal fun DeviceCard(
                     visible = option in offered || option == rate,
                     enter = fadeIn(ExpressiveMotion.FastEffects) +
                         expandHorizontally(
-                            animationSpec = ExpressiveMotion.SpatialSize,
+                            animationSpec = ExpressiveMotion.FastSpatialSize,
                             expandFrom = Alignment.Start
                         ) +
                         scaleIn(
@@ -132,7 +134,7 @@ internal fun DeviceCard(
                         ),
                     exit = fadeOut(ExpressiveMotion.FastEffects) +
                         shrinkHorizontally(
-                            animationSpec = ExpressiveMotion.SpatialSize,
+                            animationSpec = ExpressiveMotion.FastSpatialSize,
                             shrinkTowards = Alignment.Start
                         ) +
                         scaleOut(
@@ -181,7 +183,7 @@ internal fun DeviceCard(
         }
         // The byte count and the note travel with the rung that produced them, so a
         // tap on 1 GB animates the line under it instead of replacing it.
-        Column(modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatial)) {
+        Column(modifier = Modifier.animateContentSize(ExpressiveMotion.FastSpatialSize)) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = cacheReport(ceiling, usedBytes),
