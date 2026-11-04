@@ -470,14 +470,7 @@ internal fun fitsTileBudget(width: Int?, height: Int?): Boolean {
         maxOf(width, height) <= TILE_MAX_EDGE
 }
 
-/**
- * Whether a URL names a GIF, ignoring any query the host put on it.
- *
- * Internal rather than file-private because both booru clients need it. Konachan reads
- * its own `file_ext` field first and this only for a response that omits it, so the two
- * spellings of "is this the animation" are checked in one place.
- */
-internal fun String.isGifUrl(): Boolean = substringBefore('?').endsWith(".gif", ignoreCase = true)
+private fun String.isGifUrl(): Boolean = endsWith(".gif", ignoreCase = true)
 
 /** Roughly the largest sample the site serves, so an animated sample is always in. */
 private const val TILE_MAX_PIXELS = 1_500_000L

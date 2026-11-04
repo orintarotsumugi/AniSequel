@@ -1828,8 +1828,8 @@ a conversation with no message yet, where there is no activity to open - that is
 one place a first `SaveMessage` can be written. The head row draws no heart:
 a message's like is an activity like, and this store only speaks the reply mutation.
 
-GIF search answers from six places: **Safebooru**, anonymous, asked for
-`animated_gif` at `rating:safe`; **nekos.best** and **Konachan**, also anonymous; and
+GIF search answers from five places: **Safebooru**, anonymous, asked for
+`animated_gif` at `rating:safe`; **nekos.best**, also anonymous; and
 **Tenor v2**, **Klipy** and **GIPHY** when the reader has pasted a key. All were chosen
 by elimination against the live services rather than against documentation (the
 rejected hosts are recorded in `GifSearchApi.kt`'s own doc block, so the next reader
@@ -1850,25 +1850,30 @@ a safe animated series GIF, which is four. What is left that is anonymous *and* 
 is Safebooru, which is also what the browser GIF pickers in this community already
 use.
 
-**The three anonymous indexes are three different shapes, which is the whole reason
-there are three.** Safebooru has the deepest catalogue and uneven tagging, so whether a
-character name returns anything depends on somebody having put that tag on the file.
-nekos.best is perfectly reliable and answers only its own ~40 reaction words: its
-metadata search needs a *category* in `type`, so `?type=2` - the value its older
-documentation gave for "GIFs" - comes back `"Invalid type"`, and a word it has no
-category for has no valid request at all. It used to send one anyway, take a 400, and
-the grid reported "Could not reach nekos.best" about a host it had reached perfectly
-well; it now refuses in those words and names the index that can search a title.
-Konachan's `.net` instance is the safe-only board of a danbooru-style site, tagged by
-character, needing no account: `animated order:score` measured 24 rows with 23 `.gif`
-files and every rating `s`, while `spice_and_wolf` and `miku` both answer nothing.
-So it is offered rather than defaulted - its animated section is thin and the origin
-answered HTTP 522 on one probe and the full catalogue on the next - and it asks the
-same three tag spellings Safebooru is asked with, because the failure is the same
-failure. It also sends the board's `animated` tag rather than Safebooru's
-`animated_gif`, and `order:score` rather than `sort:score:desc`, because the two
-engines spell the same request differently and neither rejects the other's word; it
-silently matches nothing.
+**The two anonymous indexes are two different shapes, which is the reason there are
+two.** Safebooru has the deepest catalogue and uneven tagging, so whether a character
+name returns anything depends on somebody having put that tag on the file. nekos.best
+is perfectly reliable and answers only its own ~40 reaction words: its metadata search
+needs a *category* in `type`, so `?type=2` - the value its older documentation gave for
+"GIFs" - comes back `"Invalid type"`, and a word it has no category for has no valid
+request at all. It used to send one anyway, take a 400, and the grid reported "Could not
+reach nekos.best" about a host it had reached perfectly well; it now refuses in those
+words and names the index that can search a title.
+
+**The gap between them - a reader typing a character name - was answered once and taken
+out again.** `konachan.net` is the "safe" instance of a danbooru-style wallpaper board,
+its `/post.json` takes no key, and it is tagged by character, so it fitted: measured
+live, `animated order:score` answered 24 rows, 23 of them `.gif`, every one `rating:"s"`
+(it spells its sort `order:score`, where Safebooru's DAPI wants `sort:score:desc`), and
+`sample_url` equals `file_url` for 23 of the 24, which is the tile-budget problem
+`booruTileUrl` describes. The client was written, registered and tested. Then it was
+reverted, because *the rating on that board is assigned by the same community that runs
+its explicit instance*, and "safe" there is a filter on a catalogue rather than a
+guarantee about what a picker will hand a reader. A GIF search that ships into a public
+AniList comment thread is not the place to find out on a case-by-case basis, and no
+per-post rating check I can write changes what the surrounding site is. So the rule for
+the provider set is now stated in the same place as the technical ones: an index is only
+eligible if *what it hosts* is safe, not merely if it has a field that says so.
 
 Two rules come with that choice. `rating:safe` goes into the query **and** a post
 whose own rating field is not safe is dropped on the way out: a booru is user-tagged,

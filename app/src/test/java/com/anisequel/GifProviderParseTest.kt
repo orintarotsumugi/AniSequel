@@ -2,17 +2,11 @@ package com.anisequel
 
 import com.anisequel.data.network.GiphyResponse
 import com.anisequel.data.network.KlipyResponse
-import com.anisequel.data.network.KonachanPost
 import com.anisequel.data.network.NekosResponse
 import com.anisequel.data.network.NetworkClient
-import com.anisequel.data.network.booruNextCursor
-import com.anisequel.data.network.booruPhraseTag
-import com.anisequel.data.network.booruTags
 import com.anisequel.data.network.gifSearchApiFor
-import com.anisequel.data.network.konachanRequestTags
 import com.anisequel.data.network.toGifPage
 import com.anisequel.domain.gif.GifProvider
-import com.squareup.moshi.Types
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -115,105 +109,6 @@ class GifProviderParseTest {
         assertNull("the API has no cursor", page.next)
     }
 
-    /**
-     * Konachan answers a *bare array* of posts, so the test reads it the way the
-     * client does: one parameterized adapter, no envelope to unwrap.
-     */
-    private fun konachanPage(json: String) = NetworkClient.json
-        .adapter<List<KonachanPost?>>(Types.newParameterizedType(List::class.java, KonachanPost::class.java))
-        .fromJson(json)!!
-        .toGifPage()
-
-    @Test
-    fun `konachan embeds the board gif and tiles it with the preview still`() {
-        // Shaped from a live row: file_url is a 1920x1080 gif whose path carries the
-        // tag list percent-encoded, sample_url is the SAME file, and the preview is a
-        // 150px jpg. Choosing the sample because it is named "sample" is the failure
-        // booruTileUrl documents, so the tile has to be the preview.
-        val json = """
-            [{"id":309459,"file_ext":"gif","rating":"s","width":1920,"height":1080,
-              "file_url":"https://konachan.net/image/0fe/Konachan.com%20-%20309459%20animated%20hatsune_miku.gif",
-              "sample_url":"https://konachan.net/image/0fe/Konachan.com%20-%20309459%20animated%20hatsune_miku.gif",
-              "preview_url":"https://konachan.net/data/preview/0f/e5/0fe599e.jpg",
-              "tags":"animated blue_eyes hatsune_miku source:some_board third-party_edit twintails vocaloid"}]
-        """.trimIndent()
-        val row = konachanPage(json).results.single()
-
-        assertEquals("the comment carries the moving file", true, row.embedUrl.endsWith(".gif"))
-        assertEquals("the tile is the still, not a 1080p frame", "https://konachan.net/data/preview/0f/e5/0fe599e.jpg", row.gridUrl)
-        assertEquals("309459", row.id)
-        assertEquals(1920, row.width)
-        assertEquals(
-            "a namespace tag and the tag that made the hit are not captions, and an " +
-                "underscore is not a word",
-            "blue eyes hatsune miku third-party edit twintails",
-            row.title
-        )
-    }
-
-    @Test
-    fun `konachan drops what is unsafe and what is not a gif`() {
-        // Measured on one live page of `animated`: 23 rows were gif and one was a PNG
-        // (an APNG). The picker promises GIFs and the rating is a request the board can
-        // ignore, so both checks run on the way out.
-        val json = """
-            [
-              {"id":1,"file_ext":"gif","rating":"s","file_url":"https://k/1.gif"},
-              {"id":2,"file_ext":"png","rating":"s","file_url":"https://k/2.png"},
-              {"id":3,"file_ext":"gif","rating":"q","file_url":"https://k/3.gif"},
-              {"id":4,"file_ext":"gif","rating":"s","file_url":null},
-              {"id":5,"file_ext":"gif","rating":"s","file_url":"//k/5.gif"},
-              {"id":6,"rating":"s","file_url":"https://k/6.gif"},
-              null
-            ]
-        """.trimIndent()
-
-        assertEquals(
-            "only the safe gif survives, and a row with no file_ext is read from its URL",
-            listOf("1", "6"),
-            konachanPage(json).results.map { it.id }
-        )
-    }
-
-    @Test
-    fun `konachan asks for animated files best-voted first`() {
-        // Both words fail silently: without `animated` the board answers wallpapers and
-        // the picker embeds a still as a GIF; without `order:score` it answers newest
-        // uploads (measured scores 8, 28, 22 against 321, 273, 270).
-        assertEquals(
-            "animated order:score hatsune_miku",
-            konachanRequestTags("hatsune_miku")
-        )
-        assertEquals(
-            "the words tier is what a board actually gets",
-            "animated order:score spice wolf",
-            konachanRequestTags(booruTags("spice and wolf"))
-        )
-        assertEquals(
-            "and the phrase tier is the one that can hit a series tag",
-            "animated order:score spice_and_wolf",
-            konachanRequestTags(booruPhraseTag("spice and wolf")!!)
-        )
-        assertTrue("a blank query adds no trailing space", konachanRequestTags("").startsWith("animated"))
-    }
-
-    @Test
-    fun `konachan pages from the board count not the filtered one`() {
-        // A full page of rows this app then drops is still a page with more behind it;
-        // reading the filtered length as the end stopped the grid after one page.
-        val full = (1..24).joinToString(",", "[", "]") {
-            """{"id":$it,"file_ext":"png","rating":"s","file_url":"https://k/$it.png"}"""
-        }
-        val page = konachanPage(full)
-        assertTrue("every row was filtered out", page.results.isEmpty())
-        assertEquals(
-            "twenty-four raw rows means ask for the next page",
-            "2",
-            booruNextCursor(24, 24, "1")
-        )
-        assertNull(booruNextCursor(23, 24, "1"))
-    }
-
     @Test
     fun `a chosen provider without its key searches the anonymous index`() {
         assertEquals(
@@ -236,11 +131,6 @@ class GifProviderParseTest {
             "nekos.best",
             gifSearchApiFor(GifProvider.NEKOS_BEST, null, null, null).providerName
         )
-        assertEquals(
-            "a third keyless index answers for itself, never for a missing key",
-            "Konachan",
-            gifSearchApiFor(GifProvider.KONACHAN, null, null, null).providerName
-        )
     }
 
     @Test
@@ -249,11 +139,9 @@ class GifProviderParseTest {
         assertEquals("k", GifProvider.KLIPY.keyFrom("t", "k", "g"))
         assertEquals("g", GifProvider.GIPHY.keyFrom("t", "k", "g"))
         assertNull("a keyless index has no credential to look for", GifProvider.SAFEBOORU.keyFrom("t", "k", "g"))
-        assertNull("as does the board", GifProvider.KONACHAN.keyFrom("t", "k", "g"))
         assertTrue(GifProvider.selectable.first().needsKey.not())
         assertEquals(GifProvider.SAFEBOORU, GifProvider.DEFAULT)
         assertEquals(GifProvider.KLIPY, GifProvider.fromStorage("klipy"))
-        assertEquals(GifProvider.KONACHAN, GifProvider.fromStorage("konachan"))
         assertNull(GifProvider.fromStorage("not-a-provider"))
     }
 }

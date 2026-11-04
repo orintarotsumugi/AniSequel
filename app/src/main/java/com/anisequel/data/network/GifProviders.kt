@@ -32,16 +32,7 @@ import okhttp3.Request
  * - **nekos.best** is the second keyless index. It has no page cursor: a request
  *   returns up to twenty reaction GIFs. Its category endpoints (`hug`, `pat`, `wave`)
  *   are the reliable half, so a one-word search that names a category goes there and
- *   anything else is refused with the sentence that says so - its `/search` needs a
- *   category in `type`, and there is no valid request for a word it has no category
- *   for.
- * - **Konachan** is the third keyless index: the safe instance of a danbooru-style
- *   board, whose `/post.json` takes no key and is tagged by character. Measured live,
- *   `animated order:score` answers 24 rows with 23 `.gif` files and every rating `s`,
- *   and its miss shape is `[]` rather than Safebooru's empty body. Its animated section
- *   is thin (`miku` answers nothing where `vocaloid` answers four) and the origin has
- *   answered HTTP 522 on one probe and 200 on the next, so it is offered in Settings
- *   rather than defaulted. See [KonachanGifs].
+ *   anything else goes to its metadata search.
  *
  * ## Never the AniList token
  *
@@ -555,7 +546,6 @@ fun gifSearchApiFor(
     return when (provider) {
         GifProvider.SAFEBOORU -> SafebooruGifs()
         GifProvider.NEKOS_BEST -> NekosBestGifs()
-        GifProvider.KONACHAN -> KonachanGifs()
         GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
             ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 

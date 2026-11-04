@@ -11,10 +11,7 @@ package com.anisequel.domain.gif
  * retired in 2026, so an install that only offered Tenor now offers a search that
  * cannot answer. Klipy and GIPHY are the two replacements a reader can bring a key
  * for, and nekos.best is a second anonymous index for the reaction shapes anime
- * comments use most. Konachan is the third: its safe board is tagged by character, so
- * it reaches the names that fall between nekos.best's category words and Safebooru's
- * uneven tag coverage - and its catalogue is thinner than either, which is why it is
- * offered rather than defaulted.
+ * comments use most.
  *
  * ## Why the key is per-provider
  *
@@ -50,13 +47,6 @@ enum class GifProvider(
         keyLabel = "",
         keyHint = ""
     ),
-    KONACHAN(
-        storageValue = "konachan",
-        displayName = "Konachan",
-        needsKey = false,
-        keyLabel = "",
-        keyHint = ""
-    ),
     TENOR(
         storageValue = "tenor",
         displayName = "Tenor",
@@ -88,7 +78,7 @@ enum class GifProvider(
         klipyKey: String?,
         giphyKey: String?
     ): String? = when (this) {
-        SAFEBOORU, NEKOS_BEST, KONACHAN -> null
+        SAFEBOORU, NEKOS_BEST -> null
         TENOR -> tenorKey
         KLIPY -> klipyKey
         GIPHY -> giphyKey
